@@ -76,3 +76,16 @@ local_db/
 .cache/
 .temp/
 .vite/
+
+# Linter and formatter cache files
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets

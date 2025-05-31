@@ -1,15 +1,20 @@
 # PosalPro MVP2 - Application
 
 ## 🎯 Project Overview
-PosalPro MVP2 is an AI-assisted development platform with systematic learning capture and knowledge preservation. This Next.js application provides the user interface and core functionality for the platform.
+
+PosalPro MVP2 is an AI-assisted development platform with systematic learning
+capture and knowledge preservation. This Next.js application provides the user
+interface and core functionality for the platform.
 
 **Technology Stack:**
+
 - Next.js 15 (App Router)
 - TypeScript
 - Tailwind CSS
 - ESLint for code quality
 
 **Platform Context:**
+
 - Built using platform engineering golden paths
 - Integrated with Internal Developer Platform (IDP)
 - Systematic learning capture and documentation-driven development
@@ -19,32 +24,36 @@ PosalPro MVP2 is an AI-assisted development platform with systematic learning ca
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
+
+- Node.js 18+
 - npm or yarn package manager
 - Git
 
 ### Installation & Setup
 
 1. **Clone and Setup**
+
    ```bash
    # If cloning fresh (already initialized in this case)
    git clone <repository-url>
    cd posalpro-app
-   
+
    # Install dependencies
    npm install
    ```
 
 2. **Environment Configuration**
+
    ```bash
    # Copy environment template (when available)
    cp .env.example .env.local
-   
+
    # Edit environment variables as needed
    nano .env.local
    ```
 
 3. **Run Development Server**
+
    ```bash
    npm run dev
    # or
@@ -53,8 +62,8 @@ PosalPro MVP2 is an AI-assisted development platform with systematic learning ca
    pnpm dev
    ```
 
-4. **Open Application**
-   Navigate to [http://localhost:3000](http://localhost:3000) to see the application.
+4. **Open Application** Navigate to
+   [http://localhost:3000](http://localhost:3000) to see the application.
 
 ---
 
@@ -89,6 +98,7 @@ npm run type-check   # TypeScript type checking
 ```
 
 ### Code Quality
+
 - **ESLint**: Configured with Next.js recommended rules
 - **TypeScript**: Strict type checking enabled
 - **Tailwind CSS**: Utility-first CSS framework
@@ -101,14 +111,18 @@ npm run type-check   # TypeScript type checking
 This application is built using the PosalPro platform engineering foundation:
 
 ### Golden Path Templates
+
 - Follows platform engineering best practices
 - Standardized project structure and configuration
 - Integrated with platform metrics and monitoring
 
 ### Documentation Links
+
 - [Project Reference](../PROJECT_REFERENCE.md) - Central navigation hub
-- [Platform Engineering Guide](../docs/guides/platform-engineering-foundation-guide.md) - IDP implementation
-- [AI Development Patterns](../PROMPT_PATTERNS.md) - AI-assisted development patterns
+- [Platform Engineering Guide](../docs/guides/platform-engineering-foundation-guide.md) -
+  IDP implementation
+- [AI Development Patterns](../PROMPT_PATTERNS.md) - AI-assisted development
+  patterns
 - [Lessons Learned](../LESSONS_LEARNED.md) - Project insights and wisdom
 
 ---
@@ -116,13 +130,15 @@ This application is built using the PosalPro platform engineering foundation:
 ## 🔧 Configuration
 
 ### Environment Variables
+
 Create `.env.local` for local development:
+
 ```bash
 # API Configuration (when available)
 NEXT_PUBLIC_API_URL=http://localhost:3001
 API_SECRET=your-api-secret
 
-# Database Configuration (when available)  
+# Database Configuration (when available)
 DATABASE_URL=your-database-url
 
 # Monitoring & Analytics (when available)
@@ -130,6 +146,7 @@ NEXT_PUBLIC_ANALYTICS_ID=your-analytics-id
 ```
 
 ### TypeScript Configuration
+
 - Strict mode enabled
 - Path aliases configured (`@/*` for `src/*`)
 - Next.js TypeScript plugin included
@@ -139,11 +156,13 @@ NEXT_PUBLIC_ANALYTICS_ID=your-analytics-id
 ## 📊 Monitoring & Metrics
 
 ### Performance Monitoring
+
 - Next.js built-in performance metrics
 - Web Vitals tracking (to be implemented)
 - Platform DX metrics integration
 
 ### Development Experience
+
 - Hot reload and fast refresh
 - TypeScript error reporting
 - ESLint integration with editor
@@ -153,13 +172,16 @@ NEXT_PUBLIC_ANALYTICS_ID=your-analytics-id
 ## 🚀 Deployment
 
 ### Platform Deployment
+
 This application will be deployed using the platform's golden path templates:
+
 - Automated CI/CD pipeline
 - Infrastructure as Code
 - Monitoring and observability
 - Cost optimization
 
 ### Manual Deployment
+
 ```bash
 # Build application
 npm run build
@@ -174,12 +196,15 @@ vercel deploy
 ## 🤝 Contributing
 
 ### Development Workflow
-1. Reference [AI Development Patterns](../PROMPT_PATTERNS.md) for AI-assisted development
+
+1. Reference [AI Development Patterns](../PROMPT_PATTERNS.md) for AI-assisted
+   development
 2. Follow platform engineering guidelines
 3. Update documentation as you develop
 4. Capture learnings in [LESSONS_LEARNED.md](../LESSONS_LEARNED.md)
 
 ### Code Standards
+
 - Follow ESLint configuration
 - Use TypeScript strictly
 - Follow Next.js best practices
@@ -190,15 +215,19 @@ vercel deploy
 ## 📚 Learn More
 
 ### Next.js Resources
+
 - [Next.js Documentation](https://nextjs.org/docs) - Next.js features and API
 - [Learn Next.js](https://nextjs.org/learn) - Interactive Next.js tutorial
-- [Next.js GitHub](https://github.com/vercel/next.js) - Source code and contributions
+- [Next.js GitHub](https://github.com/vercel/next.js) - Source code and
+  contributions
 
 ### Platform Resources
+
 - [Platform Engineering Foundation](../docs/guides/platform-engineering-foundation-guide.md)
 - [Developer Experience Metrics](../platform/metrics/developer-experience/)
 - [Cost Optimization](../platform/services/cost-optimization/)
 
 ---
 
-**Built with ❤️ using platform engineering best practices and AI-assisted development patterns.**
+**Built with ❤️ using platform engineering best practices and AI-assisted
+development patterns.**
