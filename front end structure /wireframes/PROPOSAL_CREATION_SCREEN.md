@@ -1,5 +1,149 @@
 # Proposal Creation Screen - Refined Layout
 
+## User Story Traceability
+
+**Primary User Stories**: US-4.1, US-2.2 **Hypothesis Coverage**: H7 (Deadline
+Management - 40% on-time improvement), H4 (Cross-Department Coordination - 40%
+effort reduction) **Test Cases**: TC-H7-001, TC-H4-001
+
+### User Story Details
+
+- **US-4.1**: Intelligent timeline creation (Proposal Manager)
+  - _Acceptance Criteria_: Complexity-based estimates, critical path, ≥40%
+    on-time improvement
+- **US-2.2**: Intelligent assignment management (Proposal Manager)
+  - _Acceptance Criteria_: Smart contributor suggestions, status tracking, ≥40%
+    coordination reduction
+
+### Acceptance Criteria Implementation Mapping
+
+- **AC-4.1.1**: Timeline based on complexity →
+  `ProposalWizard.complexityEstimation()`
+- **AC-4.1.2**: Critical path identification →
+  `TeamAssignmentStep.criticalPath()`
+- **AC-4.1.3**: On-time completion improvement ≥40% → Instrumentation in
+  `useProposalCreation()`
+- **AC-2.2.1**: Smart contributor suggestions →
+  `SMEAssignmentPanel.suggestContributors()`
+- **AC-2.2.2**: Real-time status tracking →
+  `ProposalWizard.initializeTracking()`
+- **AC-2.2.3**: Coordination effort reduction ≥40% → Instrumentation in
+  `useTeamCoordination()`
+
+### Component Traceability Matrix
+
+```typescript
+// Proposal Creation Interface Components - User Story Mapping
+interface ComponentMapping {
+  ProposalWizard: {
+    userStories: ['US-4.1', 'US-2.2'];
+    acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.3', 'AC-2.2.2'];
+    methods: [
+      'complexityEstimation()',
+      'initializeTracking()',
+      'createProposal()',
+    ];
+  };
+  TeamAssignmentStep: {
+    userStories: ['US-2.2', 'US-4.1'];
+    acceptanceCriteria: ['AC-2.2.1', 'AC-4.1.2'];
+    methods: ['suggestContributors()', 'criticalPath()', 'assignTeamMembers()'];
+  };
+  SMEAssignmentPanel: {
+    userStories: ['US-2.2'];
+    acceptanceCriteria: ['AC-2.2.1', 'AC-2.2.3'];
+    methods: ['suggestContributors()', 'trackAssignmentTime()'];
+  };
+  ContentSelectionStep: {
+    userStories: ['US-1.2'];
+    acceptanceCriteria: ['AC-1.2.1', 'AC-1.2.2'];
+    methods: ['suggestContent()', 'categorizeContent()'];
+  };
+  ValidationStep: {
+    userStories: ['US-3.1'];
+    acceptanceCriteria: ['AC-3.1.1'];
+    methods: ['validateProposal()', 'checkCompliance()'];
+  };
+  TimelineEstimator: {
+    userStories: ['US-4.1'];
+    acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.3'];
+    methods: ['estimateTimeline()', 'calculateComplexity()'];
+  };
+}
+```
+
+### Measurement Instrumentation Requirements
+
+```typescript
+// Analytics for Hypotheses H7 & H4 Validation
+interface ProposalCreationMetrics {
+  // US-4.1 Measurements (Timeline Management)
+  proposalId: string;
+  creationTime: number; // Total time to create proposal
+  complexityScore: number; // Calculated complexity (1-10)
+  estimatedTimeline: number; // AI-generated timeline estimate
+  teamAssignmentTime: number; // Time to assign team
+  coordinationSetupTime: number; // Target: ≥40% reduction
+
+  // US-2.2 Measurements (Team Assignment)
+  teamSize: number;
+  aiSuggestionsAccepted: number;
+  manualAssignments: number;
+  assignmentAccuracy: number; // How often suggestions are accepted
+
+  // Content and Validation Integration
+  contentSuggestionsUsed: number;
+  validationIssuesFound: number;
+  wizardCompletionRate: number;
+}
+
+// Implementation Hooks
+const useProposalCreationAnalytics = () => {
+  const trackCreation = (metrics: ProposalCreationMetrics) => {
+    analytics.track('proposal_creation_performance', {
+      ...metrics,
+      timestamp: Date.now(),
+      userId: user.id,
+      userRole: user.role,
+    });
+  };
+
+  const trackWizardStep = (step: string, timeSpent: number) => {
+    analytics.track('wizard_step_performance', {
+      step,
+      timeSpent,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackCreation, trackWizardStep };
+};
+
+const useTeamCoordinationAnalytics = () => {
+  const trackAssignmentEfficiency = (
+    aiSuggestions: number,
+    manualChanges: number
+  ) => {
+    const efficiency = (aiSuggestions - manualChanges) / aiSuggestions;
+    analytics.track('assignment_efficiency', {
+      efficiency,
+      aiSuggestions,
+      manualChanges,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackAssignmentEfficiency };
+};
+```
+
+### Testing Scenario Integration
+
+- **TC-H7-001**: Timeline management validation (US-4.1)
+- **TC-H4-001**: Coordination effort reduction validation (US-2.2)
+
+---
+
 ## Selected Design: Version A (Step-by-Step Wizard)
 
 ```

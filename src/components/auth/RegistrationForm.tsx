@@ -1,0 +1,933 @@
+'use client';
+
+/**
+ * PosalPro MVP2 - Registration Form Component
+ * Based on USER_REGISTRATION_SCREEN.md wireframe specifications
+ * Progressive disclosure design with role assignment workflow
+ */
+
+import { useUserRegistrationAnalytics } from '@/hooks/auth/useUserRegistrationAnalytics';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { AlertCircle, ArrowLeft, ArrowRight, Check, Lightbulb, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+
+// Component Traceability Matrix
+const COMPONENT_MAPPING = {
+  userStories: ['US-2.3'],
+  acceptanceCriteria: ['AC-2.3.1', 'AC-2.3.2'],
+  methods: ['createUser()', 'configureAccess()', 'configureSecuritySettings()'],
+  hypotheses: ['H4'],
+  testCases: ['TC-H4-002'],
+};
+
+// Multi-step form schema
+const registrationSchema = z.object({
+  // User Information Step
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Please enter a valid email address'),
+  title: z.string().optional(),
+  department: z.string().min(1, 'Department is required'),
+  office: z.string().optional(),
+  phone: z.string().optional(),
+  languages: z.array(z.string()).optional(),
+  profileImage: z.string().optional(),
+  passwordSetting: z.enum(['system', 'first_login', 'admin_set']),
+
+  // Role & Access Step
+  primaryRole: z.string().min(1, 'Primary role is required'),
+  additionalRoles: z.array(z.string()).optional(),
+  teamAssignments: z.array(z.string()).optional(),
+  permissionOverrides: z.array(z.string()).optional(),
+  accessLevel: z.enum(['standard', 'power', 'admin']),
+
+  // Notifications Step
+  emailNotifications: z.array(z.string()).optional(),
+  inAppNotifications: z.array(z.string()).optional(),
+  mobileNotifications: z.array(z.string()).optional(),
+  digestPreferences: z.array(z.string()).optional(),
+
+  // Terms and Privacy
+  acceptTerms: z.boolean().refine(val => val === true, 'You must accept the terms'),
+  marketingConsent: z.boolean().optional(),
+});
+
+type RegistrationFormData = z.infer<typeof registrationSchema>;
+
+// Form steps
+const REGISTRATION_STEPS = [
+  { id: 'user_info', title: 'User Info', description: 'Basic information' },
+  { id: 'role_access', title: 'Role & Access', description: 'Permissions and teams' },
+  { id: 'notifications', title: 'Notifications', description: 'Communication preferences' },
+  { id: 'confirmation', title: 'Confirmation', description: 'Review and confirm' },
+];
+
+// Available roles and teams
+const AVAILABLE_ROLES = [
+  'Proposal Manager',
+  'Technical SME',
+  'Presales Engineer',
+  'Bid Manager',
+  'Technical Director',
+  'Business Development Manager',
+  'Proposal Specialist',
+  'SME Contributor',
+  'Approver',
+  'Executive Reviewer',
+  'RFP Analyst',
+];
+
+const AVAILABLE_TEAMS = [
+  'Healthcare Solutions Team',
+  'Enterprise Proposals Team',
+  'Government Contracts Team',
+  'Financial Services Team',
+];
+
+const DEPARTMENTS = [
+  'Sales Engineering',
+  'Business Development',
+  'Technical Services',
+  'Marketing',
+  'Operations',
+  'Finance',
+  'Legal',
+];
+
+const OFFICES = [
+  'Northeast Regional',
+  'Southeast Regional',
+  'Midwest Regional',
+  'West Coast Regional',
+  'International',
+];
+
+interface RegistrationFormProps {
+  className?: string;
+  onSuccess?: (userId: string) => void;
+}
+
+export function RegistrationForm({ className = '', onSuccess }: RegistrationFormProps) {
+  const router = useRouter();
+  const analytics = useUserRegistrationAnalytics();
+
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [stepStartTime, setStepStartTime] = useState<number>(Date.now());
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+    setValue,
+    watch,
+    trigger,
+    getValues,
+  } = useForm<RegistrationFormData>({
+    resolver: zodResolver(registrationSchema),
+    mode: 'onChange',
+    defaultValues: {
+      passwordSetting: 'first_login',
+      accessLevel: 'power',
+      additionalRoles: [],
+      teamAssignments: [],
+      permissionOverrides: [],
+      emailNotifications: ['proposals', 'approvals', 'tasks'],
+      inAppNotifications: ['proposals', 'approvals', 'tasks', 'announcements'],
+      mobileNotifications: ['approvals', 'deadlines'],
+      digestPreferences: ['daily'],
+      acceptTerms: false,
+      marketingConsent: false,
+    },
+  });
+
+  const watchedFields = watch();
+
+  // AI Suggestions based on email domain and title
+  useEffect(() => {
+    const email = watchedFields.email;
+    const title = watchedFields.title;
+
+    if (email?.includes('@healthcare')) {
+      setAiSuggestions(prev => ({
+        ...prev,
+        office:
+          '💡 Based on the email domain, this user is likely in the Northeast Regional office.',
+      }));
+    }
+
+    if (title?.toLowerCase().includes('engineer')) {
+      setAiSuggestions(prev => ({
+        ...prev,
+        department:
+          '💡 Similar users with this title are typically in the Sales Engineering department.',
+      }));
+    }
+  }, [watchedFields.email, watchedFields.title]);
+
+  // Track step progression
+  const handleStepChange = useCallback(
+    (newStep: number) => {
+      const stepDuration = Date.now() - stepStartTime;
+      const currentStepId = REGISTRATION_STEPS[currentStep].id;
+
+      analytics.trackPageProgression(currentStepId, REGISTRATION_STEPS[newStep].id, stepDuration);
+
+      analytics.trackRegistrationStep({
+        step: currentStepId,
+        completionTime: stepDuration,
+        errors: Object.keys(errors).length,
+        aiSuggestionsUsed: Object.keys(aiSuggestions).length,
+      });
+
+      setCurrentStep(newStep);
+      setStepStartTime(Date.now());
+    },
+    [currentStep, stepStartTime, analytics, errors, aiSuggestions]
+  );
+
+  // Handle next step
+  const handleNext = async () => {
+    const isStepValid = await trigger();
+    if (isStepValid && currentStep < REGISTRATION_STEPS.length - 1) {
+      handleStepChange(currentStep + 1);
+    }
+  };
+
+  // Handle previous step
+  const handlePrevious = () => {
+    if (currentStep > 0) {
+      handleStepChange(currentStep - 1);
+    }
+  };
+
+  // Handle form submission
+  const onSubmit = async (data: RegistrationFormData) => {
+    setIsLoading(true);
+    setSubmitError(null);
+
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...data,
+          roles: [data.primaryRole, ...(data.additionalRoles || [])],
+          notificationChannels: ['EMAIL', 'PUSH', 'IN_APP'],
+          notificationFrequency: data.digestPreferences?.includes('daily') ? 'daily' : 'weekly',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Registration failed');
+      }
+
+      const result = await response.json();
+
+      // Track successful registration
+      analytics.trackOnboardingSuccess({
+        userId: result.userId,
+        completionRate: 100,
+        timeToFirstLogin: 0, // Will be updated on first login
+        stepsCompleted: REGISTRATION_STEPS.map(step => step.id),
+      });
+
+      analytics.trackRoleAssignment({
+        userId: result.userId,
+        roles: [data.primaryRole, ...(data.additionalRoles || [])],
+        teamCount: data.teamAssignments?.length || 0,
+        permissionOverrides: data.permissionOverrides || [],
+        aiRecommendationsAccepted: Object.keys(aiSuggestions).length,
+      });
+
+      onSuccess?.(result.userId);
+      router.push('/auth/login?registered=true');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      setSubmitError(errorMessage);
+
+      analytics.trackFormValidation('form', errorMessage, 'confirmation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Render step content
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0:
+        return <UserInfoStep register={register} errors={errors} aiSuggestions={aiSuggestions} />;
+      case 1:
+        return (
+          <RoleAccessStep register={register} errors={errors} setValue={setValue} watch={watch} />
+        );
+      case 2:
+        return (
+          <NotificationsStep
+            register={register}
+            errors={errors}
+            setValue={setValue}
+            watch={watch}
+          />
+        );
+      case 3:
+        return <ConfirmationStep data={getValues()} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className={`min-h-screen bg-gray-50 ${className}`}>
+      <div className="max-w-4xl mx-auto py-8 px-4">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">POSALPRO</h1>
+          <h2 className="text-xl font-semibold text-gray-700 mt-2">User Registration</h2>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="mb-8">
+          <div className="flex items-center justify-center space-x-4">
+            {REGISTRATION_STEPS.map((step, index) => (
+              <div key={step.id} className="flex items-center">
+                <div
+                  className={`
+                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+                  ${index <= currentStep ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}
+                `}
+                >
+                  {index < currentStep ? <Check className="w-4 h-4" /> : index + 1}
+                </div>
+                <div className="ml-2 hidden sm:block">
+                  <div
+                    className={`text-sm font-medium ${
+                      index <= currentStep ? 'text-blue-600' : 'text-gray-500'
+                    }`}
+                  >
+                    {step.title}
+                  </div>
+                  <div className="text-xs text-gray-500">{step.description}</div>
+                </div>
+                {index < REGISTRATION_STEPS.length - 1 && (
+                  <div
+                    className={`w-12 h-px mx-4 ${
+                      index < currentStep ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Error Alert */}
+        {submitError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-800 font-medium">Registration Failed</p>
+              <p className="text-red-700 text-sm mt-1">{submitError}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Form Content */}
+        <div className="bg-white rounded-lg shadow-sm border p-8">
+          <form onSubmit={handleSubmit(onSubmit)}>
+            {renderStepContent()}
+
+            {/* Navigation */}
+            <div className="flex justify-between mt-8 pt-6 border-t">
+              <button
+                type="button"
+                onClick={handlePrevious}
+                disabled={currentStep === 0}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+                  currentStep === 0
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+
+              {currentStep < REGISTRATION_STEPS.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <span>Continue to {REGISTRATION_STEPS[currentStep + 1].title}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isLoading || !isValid}
+                  className={`flex items-center space-x-2 px-6 py-2 rounded-md transition-colors ${
+                    isValid && !isLoading
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Creating Account...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Create User Account</span>
+                      <Check className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// User Information Step Component
+function UserInfoStep({
+  register,
+  errors,
+  aiSuggestions,
+}: {
+  register: any;
+  errors: any;
+  aiSuggestions: Record<string, string>;
+}) {
+  return (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-gray-900">User Information</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+          <input
+            {...register('firstName')}
+            type="text"
+            className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.firstName ? 'border-red-300' : 'border-gray-300'
+            }`}
+          />
+          {errors.firstName && (
+            <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+          <input
+            {...register('lastName')}
+            type="text"
+            className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.lastName ? 'border-red-300' : 'border-gray-300'
+            }`}
+          />
+          {errors.lastName && (
+            <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+          <input
+            {...register('email')}
+            type="email"
+            className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.email ? 'border-red-300' : 'border-gray-300'
+            }`}
+          />
+          {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+          <input
+            {...register('title')}
+            type="text"
+            className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Department *</label>
+          <select
+            {...register('department')}
+            className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.department ? 'border-red-300' : 'border-gray-300'
+            }`}
+          >
+            <option value="">Select Department</option>
+            {DEPARTMENTS.map(dept => (
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
+            ))}
+          </select>
+          {errors.department && (
+            <p className="mt-1 text-sm text-red-600">{errors.department.message}</p>
+          )}
+          {aiSuggestions.department && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-start space-x-2">
+                <Lightbulb className="w-4 h-4 text-blue-500 mt-0.5" />
+                <p className="text-sm text-blue-700">{aiSuggestions.department}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Office</label>
+          <select
+            {...register('office')}
+            className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Select Office</option>
+            {OFFICES.map(office => (
+              <option key={office} value={office}>
+                {office}
+              </option>
+            ))}
+          </select>
+          {aiSuggestions.office && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-start space-x-2">
+                <Lightbulb className="w-4 h-4 text-blue-500 mt-0.5" />
+                <p className="text-sm text-blue-700">{aiSuggestions.office}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+          <input
+            {...register('phone')}
+            type="tel"
+            className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Password Setting */}
+      <div className="mt-8">
+        <label className="block text-sm font-medium text-gray-700 mb-4">
+          Initial Password Setting:
+        </label>
+        <div className="space-y-3">
+          <label className="flex items-center">
+            <input
+              {...register('passwordSetting')}
+              type="radio"
+              value="system"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-3 text-sm text-gray-700">System Generated (Email)</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              {...register('passwordSetting')}
+              type="radio"
+              value="first_login"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-3 text-sm text-gray-700">User Sets at First Login</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              {...register('passwordSetting')}
+              type="radio"
+              value="admin_set"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-3 text-sm text-gray-700">Admin Sets Password</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Role & Access Step Component
+function RoleAccessStep({
+  register,
+  errors,
+  setValue,
+  watch,
+}: {
+  register: any;
+  errors: any;
+  setValue: any;
+  watch: any;
+}) {
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
+
+  const handleRoleToggle = (role: string) => {
+    const newRoles = selectedRoles.includes(role)
+      ? selectedRoles.filter(r => r !== role)
+      : [...selectedRoles, role];
+    setSelectedRoles(newRoles);
+    setValue('additionalRoles', newRoles);
+  };
+
+  const handleTeamToggle = (team: string) => {
+    const newTeams = selectedTeams.includes(team)
+      ? selectedTeams.filter(t => t !== team)
+      : [...selectedTeams, team];
+    setSelectedTeams(newTeams);
+    setValue('teamAssignments', newTeams);
+  };
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-gray-900">Role & Access</h3>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Primary Role *</label>
+        <select
+          {...register('primaryRole')}
+          className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.primaryRole ? 'border-red-300' : 'border-gray-300'
+          }`}
+        >
+          <option value="">Select Primary Role</option>
+          {AVAILABLE_ROLES.map(role => (
+            <option key={role} value={role}>
+              {role}
+            </option>
+          ))}
+        </select>
+        {errors.primaryRole && (
+          <p className="mt-1 text-sm text-red-600">{errors.primaryRole.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-4">Additional Roles:</label>
+        <div className="grid grid-cols-2 gap-3">
+          {['SME Contributor', 'Approver', 'Executive Reviewer', 'RFP Analyst'].map(role => (
+            <label key={role} className="flex items-center">
+              <input
+                type="checkbox"
+                checked={selectedRoles.includes(role)}
+                onChange={() => handleRoleToggle(role)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="ml-3 text-sm text-gray-700">{role}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-4">Team Assignments:</label>
+        <div className="space-y-3">
+          {AVAILABLE_TEAMS.map(team => (
+            <label key={team} className="flex items-center">
+              <input
+                type="checkbox"
+                checked={selectedTeams.includes(team)}
+                onChange={() => handleTeamToggle(team)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="ml-3 text-sm text-gray-700">{team}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-4">System Access Level:</label>
+        <div className="space-y-3">
+          <label className="flex items-center">
+            <input
+              {...register('accessLevel')}
+              type="radio"
+              value="standard"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-3 text-sm text-gray-700">Standard User</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              {...register('accessLevel')}
+              type="radio"
+              value="power"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-3 text-sm text-gray-700">Power User</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              {...register('accessLevel')}
+              type="radio"
+              value="admin"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-3 text-sm text-gray-700">System Administrator</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Notifications Step Component
+function NotificationsStep({
+  register,
+  errors,
+  setValue,
+  watch,
+}: {
+  register: any;
+  errors: any;
+  setValue: any;
+  watch: any;
+}) {
+  return (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-gray-900">Default Notification Settings</h3>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-4">Email Notifications:</label>
+        <div className="space-y-3">
+          {[
+            { value: 'proposals', label: 'Proposal status changes' },
+            { value: 'approvals', label: 'Approval requests' },
+            { value: 'tasks', label: 'Task assignments' },
+            { value: 'announcements', label: 'System announcements' },
+            { value: 'teams', label: 'Team updates' },
+          ].map(({ value, label }) => (
+            <label key={value} className="flex items-center">
+              <input
+                {...register('emailNotifications')}
+                type="checkbox"
+                value={value}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="ml-3 text-sm text-gray-700">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-4">
+          In-App Notifications:
+        </label>
+        <div className="space-y-3">
+          {[
+            { value: 'proposals', label: 'Proposal status changes' },
+            { value: 'approvals', label: 'Approval requests' },
+            { value: 'tasks', label: 'Task assignments' },
+            { value: 'announcements', label: 'System announcements' },
+            { value: 'teams', label: 'Team updates' },
+          ].map(({ value, label }) => (
+            <label key={value} className="flex items-center">
+              <input
+                {...register('inAppNotifications')}
+                type="checkbox"
+                value={value}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="ml-3 text-sm text-gray-700">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-4">
+          Mobile Push Notifications:
+        </label>
+        <div className="space-y-3">
+          {[
+            { value: 'approvals', label: 'Approval requests' },
+            { value: 'deadlines', label: 'Critical deadlines' },
+            { value: 'announcements', label: 'System announcements' },
+            { value: 'teams', label: 'Team updates' },
+          ].map(({ value, label }) => (
+            <label key={value} className="flex items-center">
+              <input
+                {...register('mobileNotifications')}
+                type="checkbox"
+                value={value}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="ml-3 text-sm text-gray-700">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-4">
+          Default Digest Preferences:
+        </label>
+        <div className="space-y-3">
+          <label className="flex items-center">
+            <input
+              {...register('digestPreferences')}
+              type="checkbox"
+              value="daily"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="ml-3 text-sm text-gray-700">Daily summary email</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              {...register('digestPreferences')}
+              type="checkbox"
+              value="weekly"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="ml-3 text-sm text-gray-700">Weekly activity report</span>
+          </label>
+        </div>
+      </div>
+
+      {/* AI Recommendation */}
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+        <div className="flex items-start space-x-2">
+          <Lightbulb className="w-5 h-5 text-blue-500 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-blue-800">AI Recommendation:</p>
+            <p className="text-sm text-blue-700 mt-1">
+              Similar users in this role typically enable daily summaries and disable system
+              announcements for reduced email volume.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Terms and Privacy */}
+      <div className="border-t pt-6 mt-8">
+        <div className="space-y-4">
+          <label className="flex items-start">
+            <input
+              {...register('acceptTerms')}
+              type="checkbox"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+            />
+            <span className="ml-3 text-sm text-gray-700">
+              I accept the{' '}
+              <a href="#" className="text-blue-600 hover:underline">
+                Terms of Service
+              </a>{' '}
+              and{' '}
+              <a href="#" className="text-blue-600 hover:underline">
+                Privacy Policy
+              </a>{' '}
+              *
+            </span>
+          </label>
+          {errors.acceptTerms && (
+            <p className="ml-7 text-sm text-red-600">{errors.acceptTerms.message}</p>
+          )}
+
+          <label className="flex items-start">
+            <input
+              {...register('marketingConsent')}
+              type="checkbox"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+            />
+            <span className="ml-3 text-sm text-gray-700">
+              I would like to receive product updates and marketing communications
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Confirmation Step Component
+function ConfirmationStep({ data }: { data: RegistrationFormData }) {
+  return (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-gray-900">Confirm New User Details</h3>
+
+      <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+        <div>
+          <h4 className="font-medium text-gray-900">User Information:</h4>
+          <div className="mt-2 text-sm text-gray-600 space-y-1">
+            <p>
+              {data.firstName} {data.lastName}
+            </p>
+            <p>{data.title}</p>
+            <p>{data.email}</p>
+            <p>{data.department}</p>
+            <p>{data.office}</p>
+            <p>{data.phone}</p>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="font-medium text-gray-900">Role & Access:</h4>
+          <div className="mt-2 text-sm text-gray-600 space-y-1">
+            <p>Primary Role: {data.primaryRole}</p>
+            <p>Teams: {data.teamAssignments?.join(', ') || 'None'}</p>
+            <p>Access Level: {data.accessLevel}</p>
+            <p>Additional Roles: {data.additionalRoles?.join(', ') || 'None'}</p>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="font-medium text-gray-900">Notifications:</h4>
+          <div className="mt-2 text-sm text-gray-600 space-y-1">
+            <p>Email: {data.emailNotifications?.join(', ')}</p>
+            <p>In-App: All enabled</p>
+            <p>Mobile: {data.mobileNotifications?.join(', ')}</p>
+            <p>Digest: {data.digestPreferences?.join(', ')}</p>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="font-medium text-gray-900">Initial Access:</h4>
+          <div className="mt-2 text-sm text-gray-600 space-y-1">
+            <p>
+              Password:{' '}
+              {data.passwordSetting === 'first_login'
+                ? 'Set at first login'
+                : data.passwordSetting === 'system'
+                ? 'System generated'
+                : 'Admin set'}
+            </p>
+            <p>MFA: Required</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Onboarding Process */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="font-medium text-blue-900 mb-2">Onboarding Process:</h4>
+        <div className="text-sm text-blue-800 space-y-1">
+          <p>Upon creation:</p>
+          <p>1. Welcome email will be sent</p>
+          <p>2. User sets password & MFA</p>
+          <p>3. Training materials provided</p>
+          <p>4. Manager notified</p>
+        </div>
+      </div>
+    </div>
+  );
+}

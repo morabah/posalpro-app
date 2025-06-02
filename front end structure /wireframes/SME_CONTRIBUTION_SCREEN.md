@@ -1,5 +1,115 @@
 # SME Contribution Screen - Refined Layout
 
+## User Story Traceability
+
+**Primary User Stories**: US-2.1 **Hypothesis Coverage**: H3 (SME Contribution
+Efficiency - 50% time reduction) **Test Cases**: TC-H3-001
+
+### User Story Details
+
+- **US-2.1**: AI-assisted technical contributions (Technical SME)
+  - _Acceptance Criteria_: AI-generated drafts, template guidance, ≥50% time
+    reduction, clear context
+
+### Acceptance Criteria Implementation Mapping
+
+- **AC-2.1.1**: Context about proposal and client →
+  `AssignmentHeader.contextDisplay()`
+- **AC-2.1.2**: AI generates draft responses →
+  `AIAssistedEditor.generateDraft()`
+- **AC-2.1.3**: Template guidance → `TemplateSelector.guideInput()`
+- **AC-2.1.4**: Time reduction ≥50% → Instrumentation in `useSMEContribution()`
+
+### Component Traceability Matrix
+
+```typescript
+// SME Interface Components - User Story Mapping
+interface ComponentMapping {
+  AssignmentHeader: {
+    userStories: ['US-2.1'];
+    acceptanceCriteria: ['AC-2.1.1'];
+    methods: ['contextDisplay()', 'showDeadline()', 'displayRequirements()'];
+  };
+  RequirementsPanel: {
+    userStories: ['US-2.1'];
+    acceptanceCriteria: ['AC-2.1.1'];
+    methods: ['displayRequirements()', 'highlightKeyPoints()'];
+  };
+  AIAssistedEditor: {
+    userStories: ['US-2.1'];
+    acceptanceCriteria: ['AC-2.1.2', 'AC-2.1.4'];
+    methods: ['generateDraft()', 'trackEditingTime()', 'autoSave()'];
+  };
+  TemplateSelector: {
+    userStories: ['US-2.1'];
+    acceptanceCriteria: ['AC-2.1.3'];
+    methods: ['guideInput()', 'suggestTemplate()', 'populateStructure()'];
+  };
+  ResourcesPanel: {
+    userStories: ['US-2.1'];
+    acceptanceCriteria: ['AC-2.1.1'];
+    methods: ['loadReferences()', 'searchKnowledgeBase()'];
+  };
+  VersionHistory: {
+    userStories: ['US-2.1'];
+    acceptanceCriteria: ['AC-2.1.4'];
+    methods: ['trackProgress()', 'saveVersions()', 'compareChanges()'];
+  };
+}
+```
+
+### Measurement Instrumentation Requirements
+
+```typescript
+// Analytics for Hypothesis H3 Validation
+interface SMEContributionMetrics {
+  // US-2.1 Measurements (Contribution Time Reduction)
+  assignmentId: string;
+  timeToStart: number; // Time from notification to first action
+  activeEditingTime: number; // Target: ≥50% reduction vs baseline
+  aiDraftUsed: boolean;
+  aiDraftUtilization: number; // Percentage of AI content retained
+  templateUsed: boolean;
+  templateType: string;
+  contributionQuality: number; // Target: >7/10 scale
+  submissionTime: number; // Total time from start to submission
+
+  // Context and Support Metrics
+  requirementsViewTime: number;
+  resourcesAccessed: number;
+  knowledgeBaseSearches: number;
+  versionsCreated: number;
+}
+
+// Implementation Hook
+const useSMEContributionAnalytics = () => {
+  const trackContribution = (metrics: SMEContributionMetrics) => {
+    analytics.track('sme_contribution_performance', {
+      ...metrics,
+      timestamp: Date.now(),
+      userId: user.id,
+      proposalId: assignment.proposalId,
+    });
+  };
+
+  const startContributionTimer = () => {
+    const startTime = Date.now();
+    return {
+      stop: () => Date.now() - startTime,
+      getElapsed: () => Date.now() - startTime,
+    };
+  };
+
+  return { trackContribution, startContributionTimer };
+};
+```
+
+### Testing Scenario Integration
+
+- **TC-H3-001**: SME contribution time reduction validation (US-2.1)
+
+---
+
 ## Selected Design: Version C (Guided Contribution View)
 
 ```

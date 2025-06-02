@@ -1,5 +1,199 @@
 # Product Management Screen - Refined Layout
 
+## User Story Traceability
+
+**Primary User Stories**: US-3.2, Supporting US-3.1, US-1.2 **Hypothesis
+Coverage**: H8 (Technical Configuration Validation), Supporting H1 (Content
+Discovery) **Test Cases**: TC-H8-002, Supporting TC-H8-001, TC-H1-002
+
+### User Story Details
+
+- **US-3.2**: License requirement validation (Bid Manager)
+  - _Acceptance Criteria_: Auto-detection, missing component warnings, ≥20%
+    validation speed improvement
+- **Supporting Functions**: Product catalog management for content discovery and
+  configuration validation
+
+### Acceptance Criteria Implementation Mapping
+
+- **AC-3.2.1**: Auto license requirement detection →
+  `ProductCatalog.autoDetectLicenses()`
+- **AC-3.2.2**: Missing component warnings →
+  `ProductValidator.checkDependencies()`
+- **AC-3.2.3**: Pricing and licensing impact →
+  `PricingCalculator.calculateImpact()`
+- **AC-3.2.4**: Validation speed improvement ≥20% → Instrumentation in
+  `useProductManagement()`
+
+### Component Traceability Matrix
+
+```typescript
+// Product Management Interface Components - User Story Mapping
+interface ComponentMapping {
+  ProductCatalog: {
+    userStories: ['US-3.2', 'US-1.2'];
+    acceptanceCriteria: ['AC-3.2.1', 'AC-1.2.1'];
+    methods: [
+      'autoDetectLicenses()',
+      'searchProducts()',
+      'categorizeProducts()',
+    ];
+  };
+  ProductValidator: {
+    userStories: ['US-3.1', 'US-3.2'];
+    acceptanceCriteria: ['AC-3.1.1', 'AC-3.2.2'];
+    methods: [
+      'checkDependencies()',
+      'validateConfiguration()',
+      'generateWarnings()',
+    ];
+  };
+  PricingCalculator: {
+    userStories: ['US-3.2'];
+    acceptanceCriteria: ['AC-3.2.3', 'AC-3.2.4'];
+    methods: [
+      'calculateImpact()',
+      'assessLicensing()',
+      'trackCalculationTime()',
+    ];
+  };
+  ProductCreationModal: {
+    userStories: ['US-3.2'];
+    acceptanceCriteria: ['AC-3.2.1', 'AC-3.2.3'];
+    methods: [
+      'configureLicensing()',
+      'setPricingModel()',
+      'validateProductConfig()',
+    ];
+  };
+  RelationshipManager: {
+    userStories: ['US-3.1', 'US-3.2'];
+    acceptanceCriteria: ['AC-3.1.1', 'AC-3.2.2'];
+    methods: [
+      'manageDependencies()',
+      'checkCompatibility()',
+      'mapRelationships()',
+    ];
+  };
+  InventoryTracker: {
+    userStories: ['US-3.2'];
+    acceptanceCriteria: ['AC-3.2.2', 'AC-3.2.4'];
+    methods: ['trackAvailability()', 'checkLicensePool()', 'monitorUsage()'];
+  };
+}
+```
+
+### Measurement Instrumentation Requirements
+
+```typescript
+// Analytics for Product Management Supporting Validation Hypotheses
+interface ProductManagementMetrics {
+  // US-3.2 Measurements (License Requirement Validation)
+  licenseDetectionTime: number; // Target: ≥20% improvement
+  dependencyCheckDuration: number;
+  missingComponentsDetected: number;
+  pricingCalculationAccuracy: number;
+  validationSpeedImprovement: number;
+
+  // Product Catalog Performance
+  productSearchTime: number;
+  catalogBrowsingEfficiency: number;
+  configurationComplexity: number;
+  validationRuleCount: number;
+
+  // Configuration Validation Metrics
+  compatibilityChecks: number;
+  dependencyMappingAccuracy: number;
+  licensePoolUtilization: number;
+  pricingVariations: number;
+
+  // User Interaction Metrics
+  productCreationTime: number;
+  configurationChanges: number;
+  validationOverrides: number;
+  exportOperations: number;
+}
+
+// Implementation Hooks
+const useProductManagementAnalytics = () => {
+  const trackProductOperation = (metrics: ProductManagementMetrics) => {
+    analytics.track('product_management_performance', {
+      ...metrics,
+      timestamp: Date.now(),
+      userId: user.id,
+      userRole: user.role,
+    });
+  };
+
+  const trackLicenseValidation = (
+    productId: string,
+    detectionTime: number,
+    issuesFound: number
+  ) => {
+    analytics.track('license_validation_performance', {
+      productId,
+      detectionTime,
+      issuesFound,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackDependencyCheck = (
+    productId: string,
+    dependencyCount: number,
+    conflicts: number
+  ) => {
+    analytics.track('dependency_validation', {
+      productId,
+      dependencyCount,
+      conflicts,
+      timestamp: Date.now(),
+    });
+  };
+
+  return {
+    trackProductOperation,
+    trackLicenseValidation,
+    trackDependencyCheck,
+  };
+};
+
+const usePricingValidation = () => {
+  const trackPricingCalculation = (
+    complexity: number,
+    calculationTime: number
+  ) => {
+    analytics.track('pricing_calculation_performance', {
+      complexity,
+      calculationTime,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackLicenseImpact = (
+    licenseChanges: number,
+    pricingImpact: number
+  ) => {
+    analytics.track('license_pricing_impact', {
+      licenseChanges,
+      pricingImpact,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackPricingCalculation, trackLicenseImpact };
+};
+```
+
+### Testing Scenario Integration
+
+- **TC-H8-002**: License requirement validation performance (US-3.2)
+- **Supporting TC-H8-001**: Product configuration dependency validation (US-3.1)
+- **Supporting TC-H1-002**: Product catalog content discovery optimization
+  (US-1.2)
+
+---
+
 ## Selected Design: Tabbed Interface with Action Panel
 
 ```

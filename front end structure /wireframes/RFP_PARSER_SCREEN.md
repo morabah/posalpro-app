@@ -1,5 +1,132 @@
 # RFP Requirement Parser Screen - Refined Layout
 
+## User Story Traceability
+
+**Primary User Stories**: US-4.2 **Hypothesis Coverage**: H6 (Automated
+Requirement Extraction - 30% completeness improvement) **Test Cases**: TC-H6-001
+
+### User Story Details
+
+- **US-4.2**: Automated requirement extraction (Bid Manager)
+  - _Acceptance Criteria_: PDF extraction, compliance tracking, ≥30%
+    completeness improvement
+
+### Acceptance Criteria Implementation Mapping
+
+- **AC-4.2.1**: PDF extraction with NLP processing →
+  `DocumentProcessor.extractRequirements()`
+- **AC-4.2.2**: Automated compliance tracking →
+  `ComplianceTracker.assessCompliance()`
+- **AC-4.2.3**: Requirements categorization →
+  `RequirementClassifier.categorizeRequirements()`
+- **AC-4.2.4**: Completeness improvement ≥30% → Instrumentation in
+  `useRequirementExtraction()`
+
+### Component Traceability Matrix
+
+```typescript
+// RFP Parser Interface Components - User Story Mapping
+interface ComponentMapping {
+  DocumentProcessor: {
+    userStories: ['US-4.2'];
+    acceptanceCriteria: ['AC-4.2.1', 'AC-4.2.4'];
+    methods: [
+      'extractRequirements()',
+      'trackExtractionTime()',
+      'processDocument()',
+    ];
+  };
+  RequirementTable: {
+    userStories: ['US-4.2'];
+    acceptanceCriteria: ['AC-4.2.3', 'AC-4.2.4'];
+    methods: ['displayRequirements()', 'categorizeRequirements()'];
+  };
+  ComplianceTracker: {
+    userStories: ['US-4.2'];
+    acceptanceCriteria: ['AC-4.2.2', 'AC-4.2.4'];
+    methods: ['assessCompliance()', 'trackComplianceStatus()'];
+  };
+  AIAnalysisPanel: {
+    userStories: ['US-4.2'];
+    acceptanceCriteria: ['AC-4.2.1', 'AC-4.2.3'];
+    methods: ['generateInsights()', 'recommendActions()'];
+  };
+  SourceTextMapping: {
+    userStories: ['US-4.2'];
+    acceptanceCriteria: ['AC-4.2.1'];
+    methods: ['mapToSource()', 'highlightContext()'];
+  };
+}
+```
+
+### Measurement Instrumentation Requirements
+
+```typescript
+// Analytics for Hypothesis H6 Validation
+interface RequirementExtractionMetrics {
+  // US-4.2 Measurements (Requirement Extraction Completeness)
+  documentId: string;
+  extractionTime: number; // Time to complete extraction
+  requirementsFound: number;
+  requirementsValidated: number; // Manual validation count
+  extractionAccuracy: number; // Validated requirements / total found
+  completenessImprovement: number; // Target: ≥30% vs manual process
+  processingSpeed: number; // Pages per minute
+
+  // Document Analysis Metrics
+  documentPages: number;
+  documentComplexity: number; // 1-10 scale
+  requirementTypes: string[]; // Functional, Technical, Business, etc.
+  complianceIssuesFound: number;
+  sourceTextMappingAccuracy: number;
+}
+
+// Implementation Hook
+const useRequirementExtractionAnalytics = () => {
+  const trackExtraction = (metrics: RequirementExtractionMetrics) => {
+    analytics.track('requirement_extraction_performance', {
+      ...metrics,
+      timestamp: Date.now(),
+      userId: user.id,
+      proposalId: currentProposal?.id,
+    });
+  };
+
+  const startExtractionTimer = () => {
+    const startTime = Date.now();
+    return {
+      stop: () => Date.now() - startTime,
+      getElapsed: () => Date.now() - startTime,
+    };
+  };
+
+  const trackCompletenessImprovement = (
+    manualCount: number,
+    automatedCount: number
+  ) => {
+    const improvement = ((automatedCount - manualCount) / manualCount) * 100;
+    analytics.track('completeness_improvement', {
+      improvement,
+      manualCount,
+      automatedCount,
+      timestamp: Date.now(),
+    });
+  };
+
+  return {
+    trackExtraction,
+    startExtractionTimer,
+    trackCompletenessImprovement,
+  };
+};
+```
+
+### Testing Scenario Integration
+
+- **TC-H6-001**: Requirement extraction completeness validation (US-4.2)
+
+---
+
 ## Selected Design: Version A (Intelligent Parsing View)
 
 ```

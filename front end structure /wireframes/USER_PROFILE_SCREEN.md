@@ -1,5 +1,172 @@
 # User Profile Screen - Refined Layout
 
+## User Story Traceability
+
+**Primary User Stories**: US-2.3, Supporting US-2.1, US-4.3 **Hypothesis
+Coverage**: Supporting H3 (SME Contribution Efficiency), H4 (Cross-Department
+Coordination) **Test Cases**: Supporting TC-H3-001, TC-H4-002
+
+### User Story Details
+
+- **US-2.3**: Business insight integration (Business Development Manager)
+  - _Acceptance Criteria_: Role-based visibility, client-specific guidance,
+    secure information handling
+- **Supporting Functions**: User profile management for SME expertise tracking
+  and role-based content delivery
+
+### Acceptance Criteria Implementation Mapping
+
+- **AC-2.3.1**: Role-based content visibility →
+  `ProfileManager.configureRoleAccess()`
+- **AC-2.3.2**: Secure information handling →
+  `SecuritySettings.configurePrivacy()`
+- **AC-2.1.1**: SME expertise tracking → `ExpertiseSelector.updateSkills()`
+- **AC-4.3.1**: User preferences for priority algorithms →
+  `PreferenceManager.setWorkflowSettings()`
+
+### Component Traceability Matrix
+
+```typescript
+// User Profile Interface Components - User Story Mapping
+interface ComponentMapping {
+  ProfileManager: {
+    userStories: ['US-2.3'];
+    acceptanceCriteria: ['AC-2.3.1', 'AC-2.3.2'];
+    methods: [
+      'configureRoleAccess()',
+      'updatePersonalInfo()',
+      'manageVisibility()',
+    ];
+  };
+  ExpertiseSelector: {
+    userStories: ['US-2.1'];
+    acceptanceCriteria: ['AC-2.1.1'];
+    methods: ['updateSkills()', 'trackExpertise()', 'suggestAreas()'];
+  };
+  PreferenceManager: {
+    userStories: ['US-4.3'];
+    acceptanceCriteria: ['AC-4.3.1'];
+    methods: [
+      'setWorkflowSettings()',
+      'configureNotifications()',
+      'customizeInterface()',
+    ];
+  };
+  SecuritySettings: {
+    userStories: ['US-2.3'];
+    acceptanceCriteria: ['AC-2.3.2'];
+    methods: ['configurePrivacy()', 'manageAccess()', 'auditActivity()'];
+  };
+  ActivityTracker: {
+    userStories: ['US-2.1', 'US-4.3'];
+    acceptanceCriteria: ['AC-2.1.4', 'AC-4.3.3'];
+    methods: ['logActivity()', 'trackContributions()', 'measurePerformance()'];
+  };
+  TeamMemberships: {
+    userStories: ['US-2.3'];
+    acceptanceCriteria: ['AC-2.3.1'];
+    methods: ['manageTeams()', 'roleBasedAccess()', 'updatePermissions()'];
+  };
+}
+```
+
+### Measurement Instrumentation Requirements
+
+```typescript
+// Analytics for User Profile Supporting Hypotheses
+interface UserProfileMetrics {
+  // US-2.3 Measurements (Role-based Information Handling)
+  roleAccessCount: number;
+  securitySettingsUpdated: number;
+  clientSpecificDataAccess: number;
+  informationSharingEvents: number;
+
+  // US-2.1 Support Measurements (SME Expertise Tracking)
+  expertiseAreasUpdated: number;
+  skillsVerified: number;
+  contributionQualityScore: number;
+  expertiseUtilization: number;
+
+  // User Experience Metrics
+  profileCompleteness: number; // 0-100%
+  preferencesCustomized: number;
+  securitySettingsConfigured: number;
+  workflowOptimization: number;
+
+  // Privacy and Security Metrics
+  privacySettingsUsage: number;
+  securityEventTracking: number;
+  accessControlModifications: number;
+}
+
+// Implementation Hooks
+const useUserProfileAnalytics = () => {
+  const trackProfileUsage = (metrics: UserProfileMetrics) => {
+    analytics.track('user_profile_performance', {
+      ...metrics,
+      timestamp: Date.now(),
+      userId: user.id,
+      userRole: user.role,
+    });
+  };
+
+  const trackExpertiseUpdate = (area: string, action: string) => {
+    analytics.track('expertise_management', {
+      expertiseArea: area,
+      action,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackSecurityConfiguration = (setting: string, value: boolean) => {
+    analytics.track('security_configuration', {
+      setting,
+      value,
+      timestamp: Date.now(),
+    });
+  };
+
+  return {
+    trackProfileUsage,
+    trackExpertiseUpdate,
+    trackSecurityConfiguration,
+  };
+};
+
+const useRoleBasedAccess = () => {
+  const trackRoleBasedView = (contentType: string, accessLevel: string) => {
+    analytics.track('role_based_access', {
+      contentType,
+      accessLevel,
+      userRole: user.role,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackInformationSecurity = (
+    event: string,
+    sensitivityLevel: string
+  ) => {
+    analytics.track('information_security', {
+      event,
+      sensitivityLevel,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackRoleBasedView, trackInformationSecurity };
+};
+```
+
+### Testing Scenario Integration
+
+- **Supporting TC-H3-001**: User expertise configuration for SME contribution
+  efficiency
+- **Supporting TC-H4-002**: Role-based access configuration for coordination
+  optimization
+
+---
+
 ## Selected Design: Version A (Multi-Tab Profile Management)
 
 ```

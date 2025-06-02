@@ -1,0 +1,574 @@
+// PosalPro MVP2 - Database Schema
+// Based on DATA_MODEL.md specifications
+// Enhanced RBAC with analytics and audit capabilities
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================
+// CORE USER MANAGEMENT ENTITIES
+// ========================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String   // Hashed with bcrypt
+  department String
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLogin DateTime?
+
+  // Relationships
+  roles               UserRole[]
+  permissions         UserPermission[]
+  preferences         UserPreferences?
+  analyticsProfile    UserAnalyticsProfile?
+  temporaryAccess     TemporaryAccess[]
+
+  // Audit and Security
+  auditLogs           AuditLog[]
+  securityEvents      SecurityEvent[]
+  sessions            UserSession[]
+
+  // Communication
+  communicationPrefs  CommunicationPreferences?
+  notificationDeliveries NotificationDelivery[]
+
+  // Accessibility
+  accessibilityConfig AccessibilityConfiguration?
+
+  // Analytics Events
+  hypothesisEvents    HypothesisValidationEvent[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  level       Int      // Hierarchy level
+  isSystem    Boolean  @default(false) // System roles cannot be modified
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Hierarchy
+  parentId    String?
+  parent      Role?    @relation("RoleHierarchy", fields: [parentId], references: [id])
+  children    Role[]   @relation("RoleHierarchy")
+
+  // Relationships
+  permissions RolePermission[]
+  userRoles   UserRole[]
+  contextRules ContextRule[]
+
+  // Performance Expectations
+  performanceExpectations Json? // Record<string, number>
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String   // e.g., 'proposals', 'products'
+  action      String   // e.g., 'create', 'read', 'update', 'delete'
+  scope       PermissionScope @default(ALL)
+  constraints Json?    // Additional constraints
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@unique([resource, action, scope])
+  @@map("permissions")
+}
+
+// ========================================
+// RBAC JUNCTION TABLES
+// ========================================
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+  assignedBy String
+  expiresAt  DateTime?
+  isActive   Boolean  @default(true)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  grantedAt DateTime @default(now())
+  grantedBy String
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  id           String @id @default(cuid())
+  userId       String
+  permissionId String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  grantedAt DateTime @default(now())
+  grantedBy String
+  expiresAt DateTime?
+  isActive  Boolean  @default(true)
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+}
+
+// ========================================
+// ENHANCED RBAC FEATURES
+// ========================================
+
+model ContextRule {
+  id       String @id @default(cuid())
+  roleId   String
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  attribute String // e.g., 'time', 'location', 'customerTier'
+  operator  ContextOperator
+  value     Json   // Flexible value storage
+  effect    ContextEffect
+
+  createdAt DateTime @default(now())
+
+  @@map("context_rules")
+}
+
+model TemporaryAccess {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  grantedBy String
+  reason    String
+  expiresAt DateTime
+  status    TemporaryAccessStatus @default(ACTIVE)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  revokedBy String?
+
+  @@map("temporary_access")
+}
+
+// ========================================
+// USER PREFERENCES AND ANALYTICS
+// ========================================
+
+model UserPreferences {
+  id       String @id @default(cuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  theme                String  @default("system") // 'light' | 'dark' | 'system'
+  language             String  @default("en")
+  analyticsConsent     Boolean @default(false)
+  performanceTracking  Boolean @default(false)
+
+  // Dashboard Layout
+  dashboardLayout Json? // LayoutConfiguration
+
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model UserAnalyticsProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  performanceMetrics    Json // Record<string, number>
+  hypothesisContributions Json // Record<string, number>
+  skillAssessments      Json // Record<string, number>
+  efficiencyRatings     Json // Record<string, number>
+
+  lastAssessment DateTime @default(now())
+
+  // Relationships
+  performanceTrends PerformanceTrend[]
+
+  @@map("user_analytics_profiles")
+}
+
+model PerformanceTrend {
+  id       String @id @default(cuid())
+  profileId String
+  profile  UserAnalyticsProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  metric     String
+  values     Json // Array<{ date: Date; value: number }>
+  trend      TrendDirection
+  confidence Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("performance_trends")
+}
+
+// ========================================
+// SECURITY AND AUDIT
+// ========================================
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sessionToken String   @unique
+  refreshToken String?  @unique
+  ipAddress    String
+  userAgent    String
+  isActive     Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  lastUsed  DateTime @default(now())
+
+  @@map("user_sessions")
+}
+
+model AuditLog {
+  id       String @id @default(cuid())
+  userId   String?
+  user     User?  @relation(fields: [userId], references: [id])
+
+  userRole   String?
+  action     String
+  entity     String
+  entityId   String
+  changes    Json   // AuditChange[]
+  ipAddress  String
+  userAgent  String
+  success    Boolean
+  errorMessage String?
+
+  severity AuditSeverity
+  category AuditCategory
+
+  timestamp DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@index([entity, entityId])
+  @@index([timestamp, severity])
+  @@map("audit_logs")
+}
+
+model SecurityEvent {
+  id      String @id @default(cuid())
+  userId  String?
+  user    User?  @relation(fields: [userId], references: [id])
+
+  type        SecurityEventType
+  ipAddress   String
+  details     Json // Record<string, any>
+  riskLevel   RiskLevel
+  status      SecurityEventStatus @default(DETECTED)
+
+  timestamp DateTime @default(now())
+
+  // Response tracking
+  responses SecurityResponse[]
+
+  @@index([timestamp, riskLevel])
+  @@index([type, status])
+  @@map("security_events")
+}
+
+model SecurityResponse {
+  id      String @id @default(cuid())
+  eventId String
+  event   SecurityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  action      String
+  performedBy String
+  result      String
+  notes       String?
+
+  timestamp DateTime @default(now())
+
+  @@map("security_responses")
+}
+
+// ========================================
+// COMMUNICATION AND NOTIFICATIONS
+// ========================================
+
+model CommunicationPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  language  String @default("en")
+  timezone  String @default("UTC")
+
+  // Quiet Hours
+  quietHoursStart String? // HH:MM format
+  quietHoursEnd   String? // HH:MM format
+
+  // Preferences stored as JSON
+  channels    Json // ChannelPreference[]
+  frequency   Json // FrequencySettings
+  categories  Json // CategoryPreference[]
+
+  updatedAt DateTime @updatedAt
+
+  @@map("communication_preferences")
+}
+
+model NotificationDelivery {
+  id           String @id @default(cuid())
+  templateId   String
+  recipientId  String
+  recipient    User   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  recipientType NotificationRecipientType
+  channel       NotificationChannel
+  status        NotificationStatus @default(PENDING)
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  attempts    Int       @default(0)
+  errorMessage String?
+  metadata    Json?
+
+  @@index([status, sentAt])
+  @@index([recipientId, readAt])
+  @@map("notification_deliveries")
+}
+
+// ========================================
+// ACCESSIBILITY
+// ========================================
+
+model AccessibilityConfiguration {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  complianceLevel AccessibilityLevel @default(AA)
+
+  // Preferences stored as JSON
+  preferences        Json // AccessibilityPreferences
+  assistiveTechnology Json // AssistiveTechInfo[]
+  customizations     Json // UICustomization[]
+
+  lastUpdated DateTime @updatedAt
+
+  // Test Results
+  testResults AccessibilityTestResult[]
+
+  @@map("accessibility_configurations")
+}
+
+model AccessibilityTestResult {
+  id     String @id @default(cuid())
+  configId String
+  config AccessibilityConfiguration @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  testType   AccessibilityTestType
+  standard   AccessibilityStandard
+  component  String
+  passed     Boolean
+  violations Json // AccessibilityViolation[]
+
+  testedAt    DateTime @default(now())
+  testedBy    String
+  environment String
+
+  @@map("accessibility_test_results")
+}
+
+// ========================================
+// ANALYTICS AND MEASUREMENT
+// ========================================
+
+model HypothesisValidationEvent {
+  id         String @id @default(cuid())
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  hypothesis      HypothesisType
+  userStoryId     String
+  componentId     String
+  action          String
+  measurementData Json
+  targetValue     Float
+  actualValue     Float
+  performanceImprovement Float
+
+  userRole  String
+  sessionId String
+  testCaseId String?
+
+  timestamp DateTime @default(now())
+
+  @@index([hypothesis, timestamp])
+  @@index([userId, hypothesis])
+  @@map("hypothesis_validation_events")
+}
+
+// ========================================
+// ENUMS
+// ========================================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+  DELETED
+}
+
+enum PermissionScope {
+  ALL
+  TEAM
+  OWN
+}
+
+enum ContextOperator {
+  EQUALS
+  NOT_EQUALS
+  CONTAINS
+  GREATER_THAN
+  LESS_THAN
+}
+
+enum ContextEffect {
+  GRANT
+  DENY
+}
+
+enum TemporaryAccessStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum TrendDirection {
+  IMPROVING
+  DECLINING
+  STABLE
+}
+
+enum AuditSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AuditCategory {
+  DATA
+  ACCESS
+  CONFIGURATION
+  SECURITY
+  SYSTEM
+}
+
+enum SecurityEventType {
+  LOGIN_ATTEMPT
+  PERMISSION_DENIED
+  DATA_ACCESS
+  CONFIG_CHANGE
+  SUSPICIOUS_ACTIVITY
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SecurityEventStatus {
+  DETECTED
+  INVESTIGATING
+  RESOLVED
+  FALSE_POSITIVE
+}
+
+enum NotificationRecipientType {
+  USER
+  ROLE
+  GROUP
+  EXTERNAL
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+  READ
+}
+
+enum AccessibilityLevel {
+  AA
+  AAA
+}
+
+enum AccessibilityTestType {
+  AUTOMATED
+  MANUAL
+  USER_TESTING
+}
+
+enum AccessibilityStandard {
+  WCAG_2_1_AA
+  WCAG_2_1_AAA
+  SECTION_508
+  EN_301_549
+}
+
+enum HypothesisType {
+  H1
+  H3
+  H4
+  H6
+  H7
+  H8
+}

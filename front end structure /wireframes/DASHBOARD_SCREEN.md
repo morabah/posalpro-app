@@ -1,5 +1,179 @@
 # Dashboard Screen - Refined Layout
 
+## User Story Traceability
+
+**Primary User Stories**: US-4.1, US-4.3, Supporting Overview for US-1.1,
+US-2.1, US-3.1 **Hypothesis Coverage**: H7 (Deadline Management), Supporting H1,
+H3, H4, H8 **Test Cases**: TC-H7-001, TC-H7-002, Supporting all test cases
+
+### User Story Details
+
+- **US-4.1**: Intelligent timeline creation (Proposal Manager)
+  - _Acceptance Criteria_: Complexity-based estimates, critical path, ≥40%
+    on-time improvement
+- **US-4.3**: Intelligent task prioritization (Proposal Specialist)
+  - _Acceptance Criteria_: Priority algorithms, dependency mapping, progress
+    tracking
+- **Supporting Functions**: Overview dashboard for all user activities and
+  performance metrics
+
+### Acceptance Criteria Implementation Mapping
+
+- **AC-4.1.1**: Timeline overview visualization →
+  `ProposalStatusChart.timelineVisualization()`
+- **AC-4.1.3**: On-time completion tracking →
+  `PerformanceMetrics.trackOnTimeCompletion()`
+- **AC-4.3.1**: Priority visualization → `TaskPriorityPanel.displayPriorities()`
+- **AC-4.3.3**: Progress tracking overview → `ActivityFeed.trackProgress()`
+
+### Component Traceability Matrix
+
+```typescript
+// Dashboard Interface Components - User Story Mapping
+interface ComponentMapping {
+  ProposalStatusChart: {
+    userStories: ['US-4.1'];
+    acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.3'];
+    methods: [
+      'timelineVisualization()',
+      'trackOnTimeCompletion()',
+      'displayStatus()',
+    ];
+  };
+  TaskPriorityPanel: {
+    userStories: ['US-4.3'];
+    acceptanceCriteria: ['AC-4.3.1', 'AC-4.3.3'];
+    methods: ['displayPriorities()', 'trackProgress()', 'highlightUrgent()'];
+  };
+  QuickActions: {
+    userStories: ['US-1.1', 'US-2.1', 'US-3.1', 'US-4.1'];
+    acceptanceCriteria: ['AC-1.1.1', 'AC-2.1.1', 'AC-3.1.1', 'AC-4.1.1'];
+    methods: [
+      'launchSearch()',
+      'startAssignment()',
+      'runValidation()',
+      'createProposal()',
+    ];
+  };
+  PerformanceMetrics: {
+    userStories: ['US-4.1', 'US-4.3'];
+    acceptanceCriteria: ['AC-4.1.3', 'AC-4.3.3'];
+    methods: [
+      'trackOnTimeCompletion()',
+      'measureProductivity()',
+      'calculateEfficiency()',
+    ];
+  };
+  ActivityFeed: {
+    userStories: ['US-4.3'];
+    acceptanceCriteria: ['AC-4.3.3'];
+    methods: ['trackProgress()', 'updateStatus()', 'notifyChanges()'];
+  };
+  RoleBasedContent: {
+    userStories: ['US-2.3'];
+    acceptanceCriteria: ['AC-2.3.1'];
+    methods: ['displayRoleContent()', 'filterByRole()', 'customizeView()'];
+  };
+}
+```
+
+### Measurement Instrumentation Requirements
+
+```typescript
+// Analytics for Multi-Hypothesis Overview
+interface DashboardMetrics {
+  // US-4.1 Overview Measurements (Timeline Management)
+  proposalsInProgress: number;
+  avgCompletionTime: number; // Target: ≥40% improvement
+  onTimeCompletionRate: number;
+  criticalPathProposals: number;
+
+  // US-4.3 Overview Measurements (Task Prioritization)
+  highPriorityTasks: number;
+  taskCompletionRate: number;
+  priorityAccuracy: number;
+  overdueTasks: number;
+
+  // User Activity Metrics
+  dailyActiveTime: number;
+  featureUsageDistribution: Record<string, number>;
+  quickActionUsage: Record<string, number>;
+  navigationPatterns: string[];
+
+  // Cross-Hypothesis Support Metrics
+  searchQueries: number; // H1 support
+  smeAssignments: number; // H3 support
+  validationRuns: number; // H8 support
+  coordinationActions: number; // H4 support
+}
+
+// Implementation Hooks
+const useDashboardAnalytics = () => {
+  const trackDashboardView = (metrics: DashboardMetrics) => {
+    analytics.track('dashboard_overview_performance', {
+      ...metrics,
+      timestamp: Date.now(),
+      userId: user.id,
+      userRole: user.role,
+    });
+  };
+
+  const trackQuickAction = (action: string, context: string) => {
+    analytics.track('quick_action_usage', {
+      action,
+      context,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackNavigation = (from: string, to: string, method: string) => {
+    analytics.track('navigation_pattern', {
+      from,
+      to,
+      method,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackDashboardView, trackQuickAction, trackNavigation };
+};
+
+const useRoleBasedMetrics = () => {
+  const trackRoleSpecificUsage = (feature: string, timeSpent: number) => {
+    analytics.track('role_specific_usage', {
+      feature,
+      timeSpent,
+      userRole: user.role,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackProductivityMetrics = (
+    tasksCompleted: number,
+    timeActive: number
+  ) => {
+    const productivity = tasksCompleted / timeActive;
+    analytics.track('user_productivity', {
+      tasksCompleted,
+      timeActive,
+      productivity,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackRoleSpecificUsage, trackProductivityMetrics };
+};
+```
+
+### Testing Scenario Integration
+
+- **TC-H7-001**: Timeline management validation (US-4.1)
+- **TC-H7-002**: Task prioritization validation (US-4.3)
+- **Supporting all test cases**: Dashboard provides overview metrics for all
+  hypothesis validation
+
+---
+
 ## Selected Design: Version B (Sidebar Navigation)
 
 ```

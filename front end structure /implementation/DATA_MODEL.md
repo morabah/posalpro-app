@@ -4,9 +4,173 @@
 
 This document defines the data model schema for PosalPro MVP2, detailing entity
 relationships, attributes, and validation rules. The schema supports all
-features defined in the wireframes, with special attention to the complex logic
-requirements of the Product Relationships, Approval Workflow, and Predictive
-Validation modules.
+features defined in the enhanced wireframes with comprehensive user story
+traceability, with special attention to analytics instrumentation for hypothesis
+validation and the complex logic requirements of the Product Relationships,
+Approval Workflow, and Predictive Validation modules.
+
+## User Story Traceability Schema
+
+### Analytics and Measurement Entities
+
+```typescript
+interface HypothesisValidationEvent {
+  id: string;
+  hypothesis: 'H1' | 'H3' | 'H4' | 'H6' | 'H7' | 'H8';
+  userStoryId: string;
+  componentId: string;
+  action: string;
+  measurementData: Record<string, any>;
+  targetValue: number;
+  actualValue: number;
+  performanceImprovement: number;
+  timestamp: Date;
+  userId: string;
+  userRole: string;
+  sessionId: string;
+  testCaseId?: string;
+}
+
+interface UserStoryMetrics {
+  id: string;
+  userStoryId: string;
+  hypothesis: string[];
+  acceptanceCriteria: string[];
+  performanceTargets: Record<string, number>;
+  actualPerformance: Record<string, number>;
+  completionRate: number;
+  passedCriteria: string[];
+  failedCriteria: string[];
+  testResults: TestExecutionResult[];
+  baselineMetrics: Record<string, number>;
+  lastUpdated: Date;
+}
+
+interface PerformanceBaseline {
+  id: string;
+  hypothesis: string;
+  metricName: string;
+  baselineValue: number;
+  targetImprovement: number;
+  currentValue: number;
+  improvementPercentage: number;
+  measurementUnit: string;
+  collectionDate: Date;
+  validUntil: Date;
+  sampleSize: number;
+  confidence: number;
+}
+
+interface TestExecutionResult {
+  id: string;
+  testCaseId: string;
+  userStoryId: string;
+  hypothesis: string;
+  executed: boolean;
+  passed: boolean;
+  executionTime: number;
+  metrics: Record<string, any>;
+  errors: string[];
+  timestamp: Date;
+  environment: string;
+}
+
+interface ComponentTraceability {
+  id: string;
+  componentName: string;
+  userStories: string[];
+  acceptanceCriteria: string[];
+  methods: string[];
+  hypotheses: string[];
+  testCases: string[];
+  analyticsHooks: string[];
+  lastValidated: Date;
+  validationStatus: 'valid' | 'invalid' | 'pending';
+}
+```
+
+### Analytics Event Types
+
+```typescript
+interface ContentSearchAnalytics {
+  searchQuery: string;
+  searchDuration: number;
+  resultsCount: number;
+  selectedResultRank: number;
+  relevanceScore: number;
+  userSatisfaction: number;
+  filterUsage: string[];
+  aiRecommendationsShown: number;
+  aiRecommendationsClicked: number;
+  saveActions: number;
+  userStory: 'US-1.1' | 'US-1.2' | 'US-1.3';
+  hypothesis: 'H1';
+  targetReduction: 0.45;
+}
+
+interface SMEContributionAnalytics {
+  assignmentId: string;
+  totalContributionTime: number;
+  activeEditingTime: number;
+  aiDraftGenerated: boolean;
+  aiDraftAccepted: boolean;
+  templateUsed: boolean;
+  templateId?: string;
+  contributionQuality: number;
+  iterationCount: number;
+  resourcesAccessed: string[];
+  userStory: 'US-2.1';
+  hypothesis: 'H3';
+  targetReduction: 0.5;
+}
+
+interface CoordinationAnalytics {
+  proposalId: string;
+  coordinationTime: number;
+  teamSize: number;
+  assignmentCount: number;
+  communicationVolume: number;
+  followUpMessages: number;
+  bottlenecksDetected: number;
+  timelineAccuracy: number;
+  estimatedTime: number;
+  actualTime: number;
+  userStory: 'US-2.2' | 'US-2.3' | 'US-4.1' | 'US-4.3';
+  hypothesis: 'H4' | 'H7';
+  targetImprovement: 0.4;
+}
+
+interface ValidationAnalytics {
+  configurationId: string;
+  validationType: string;
+  validationTime: number;
+  errorsDetected: number;
+  errorsFixed: number;
+  fixSuggestionsGenerated: number;
+  fixSuggestionsAccepted: number;
+  falsePositives: number;
+  manualReviewTime: number;
+  automationSavings: number;
+  userStory: 'US-3.1' | 'US-3.2' | 'US-3.3';
+  hypothesis: 'H8';
+  targetReduction: 0.5;
+}
+
+interface RequirementExtractionAnalytics {
+  documentId: string;
+  documentSize: number;
+  extractionTime: number;
+  requirementsExtracted: number;
+  manualRequirements: number;
+  extractionAccuracy: number;
+  categorizationAccuracy: number;
+  complianceScore: number;
+  reviewTime: number;
+  userStory: 'US-4.2';
+  hypothesis: 'H6';
+  targetImprovement: 0.3;
+}
+```
 
 ## Core Entities
 
@@ -26,6 +190,24 @@ interface User {
   lastLogin?: Date;
   status: 'active' | 'inactive' | 'pending';
   temporaryAccess?: TemporaryAccess[];
+  analyticsProfile: UserAnalyticsProfile;
+}
+
+interface UserAnalyticsProfile {
+  userId: string;
+  performanceMetrics: Record<string, number>;
+  hypothesisContributions: Record<string, number>;
+  skillAssessments: Record<string, number>;
+  efficiencyRatings: Record<string, number>;
+  lastAssessment: Date;
+  improvementTrends: PerformanceTrend[];
+}
+
+interface PerformanceTrend {
+  metric: string;
+  values: Array<{ date: Date; value: number }>;
+  trend: 'improving' | 'declining' | 'stable';
+  confidence: number;
 }
 
 interface UserPreferences {
@@ -33,6 +215,8 @@ interface UserPreferences {
   notifications: NotificationPreferences;
   dashboardLayout: LayoutConfiguration;
   language: string;
+  analyticsConsent: boolean;
+  performanceTracking: boolean;
 }
 
 interface TemporaryAccess {
@@ -58,6 +242,7 @@ interface Role {
   createdAt: Date;
   updatedAt: Date;
   contextRules?: ContextRule[]; // For ABAC extension
+  performanceExpectations: Record<string, number>;
 }
 
 interface ContextRule {
@@ -102,6 +287,37 @@ interface Proposal {
   lifecycle: ProposalLifecycleEvent[];
   tags: string[];
   riskScore?: number; // From predictive validation
+  performanceMetrics: ProposalPerformanceMetrics;
+  userStoryTracking: UserStoryTracking[];
+}
+
+interface ProposalPerformanceMetrics {
+  proposalId: string;
+  creationTime: number;
+  coordinationEffort: number;
+  validationTime: number;
+  approvalTime: number;
+  timelineAccuracy: number;
+  stakeholderEngagement: number;
+  hypothesesValidated: string[];
+  performanceScores: Record<string, number>;
+}
+
+interface UserStoryTracking {
+  userStoryId: string;
+  componentUsage: ComponentUsage[];
+  performanceData: Record<string, any>;
+  criteriaStatus: Record<string, boolean>;
+  testResults: TestResult[];
+}
+
+interface ComponentUsage {
+  componentName: string;
+  usageCount: number;
+  totalTime: number;
+  averageTime: number;
+  errorCount: number;
+  successRate: number;
 }
 
 type ProposalStatus =
@@ -122,6 +338,17 @@ interface ProposalSection {
   type: 'text' | 'products' | 'terms' | 'pricing' | 'custom';
   metadata: Record<string, any>;
   validationStatus: 'valid' | 'invalid' | 'warning' | 'not_validated';
+  analyticsData: SectionAnalytics;
+}
+
+interface SectionAnalytics {
+  sectionId: string;
+  editTime: number;
+  revisionCount: number;
+  collaboratorCount: number;
+  aiAssistanceUsed: boolean;
+  qualityScore: number;
+  userStoryContributions: string[];
 }
 
 interface ProposalProduct {
@@ -133,6 +360,16 @@ interface ProposalProduct {
   total: number;
   configuration: Record<string, any>;
   validationIssues: ValidationIssue[];
+  selectionAnalytics: ProductSelectionAnalytics;
+}
+
+interface ProductSelectionAnalytics {
+  selectionTime: number;
+  alternativesConsidered: number;
+  validationChecks: number;
+  configurationChanges: number;
+  aiRecommendationsUsed: boolean;
+  userStory: string[];
 }
 
 interface ProposalLifecycleEvent {
@@ -142,6 +379,8 @@ interface ProposalLifecycleEvent {
   userId: string;
   notes?: string;
   metadata: Record<string, any>;
+  performanceImpact: Record<string, number>;
+  hypothesesAffected: string[];
 }
 ```
 
@@ -164,6 +403,19 @@ interface Product {
   version: number;
   relationships: ProductRelationship[];
   validationRules: ValidationRule[];
+  usageAnalytics: ProductUsageAnalytics;
+  userStoryMappings: string[];
+}
+
+interface ProductUsageAnalytics {
+  productId: string;
+  totalUsage: number;
+  successRate: number;
+  averageConfigurationTime: number;
+  validationFailures: number;
+  relationshipIssues: number;
+  hypothesesSupported: string[];
+  performanceMetrics: Record<string, number>;
 }
 
 interface ProductRelationship {
@@ -176,6 +428,24 @@ interface ProductRelationship {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID
+  validationHistory: RelationshipValidationHistory[];
+  performanceImpact: RelationshipPerformanceImpact;
+}
+
+interface RelationshipValidationHistory {
+  timestamp: Date;
+  validationResult: boolean;
+  performance: number;
+  userStory: string;
+  hypothesis: string;
+  testCase: string;
+}
+
+interface RelationshipPerformanceImpact {
+  validationSpeedImprovement: number;
+  errorReduction: number;
+  configurationEfficiency: number;
+  userSatisfaction: number;
 }
 
 interface RelationshipCondition {
@@ -198,383 +468,931 @@ interface ValidationRule {
   name: string;
   description: string;
   category: string;
-  severity: 'critical' | 'warning' | 'info';
-  condition: RuleCondition;
-  message: string;
-  suggestedFixes: SuggestedFix[];
+  ruleType:
+    | 'compatibility'
+    | 'license'
+    | 'configuration'
+    | 'compliance'
+    | 'custom';
+  conditions: ValidationCondition[];
+  actions: ValidationAction[];
+  severity: 'error' | 'warning' | 'info';
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  createdBy: string; // User ID
-  isActive: boolean;
-  metadata: Record<string, any>;
-  aiGenerated: boolean;
-  confidence?: number; // For AI-generated rules
+  createdBy: string;
+  executionStats: RuleExecutionStats;
+  userStoryMappings: string[];
+  hypothesesSupported: string[];
 }
 
-interface RuleCondition {
-  rules: ConditionRule[];
-  operator: 'and' | 'or';
+interface RuleExecutionStats {
+  ruleId: string;
+  executionCount: number;
+  successRate: number;
+  averageExecutionTime: number;
+  errorCount: number;
+  performanceImprovement: number;
+  hypothesisValidation: Record<string, number>;
+  userStoryImpact: Record<string, number>;
 }
 
-interface SuggestedFix {
+interface ValidationCondition {
   id: string;
-  description: string;
-  actionType:
-    | 'add_product'
-    | 'remove_product'
-    | 'change_configuration'
-    | 'document_exception';
-  actionParams: Record<string, any>;
-  autoApplicable: boolean;
+  attribute: string;
+  operator:
+    | 'equals'
+    | 'notEquals'
+    | 'contains'
+    | 'greaterThan'
+    | 'lessThan'
+    | 'exists'
+    | 'notExists';
+  value: any;
+  logicalOperator?: 'and' | 'or';
+}
+
+interface ValidationAction {
+  id: string;
+  type: 'block' | 'warn' | 'fix' | 'notify';
+  message: string;
+  fixSuggestion?: string;
+  autoFix?: boolean;
+  notificationTargets?: string[];
 }
 
 interface ValidationIssue {
   id: string;
+  entityId: string;
+  entityType: 'proposal' | 'product' | 'configuration';
   ruleId: string;
-  entityId: string; // ID of entity being validated (e.g., proposal ID)
-  entityType: 'proposal' | 'product' | 'section';
+  severity: 'error' | 'warning' | 'info';
   message: string;
-  severity: 'critical' | 'warning' | 'info';
-  status: 'open' | 'resolved' | 'suppressed';
-  createdAt: Date;
+  fixSuggestion?: string;
+  status: 'open' | 'resolved' | 'ignored' | 'false_positive';
+  detectedAt: Date;
   resolvedAt?: Date;
-  resolvedBy?: string; // User ID
-  resolution?: string;
-  suggestedFixes: SuggestedFix[];
-  context: Record<string, any>;
+  resolvedBy?: string;
+  resolutionMethod?: 'auto' | 'manual' | 'suggestion';
+  performanceMetrics: IssuePerformanceMetrics;
+  userStoryContext: string[];
+}
+
+interface IssuePerformanceMetrics {
+  detectionTime: number;
+  resolutionTime: number;
+  accuracyScore: number;
+  userSatisfaction: number;
+  hypothesisContribution: Record<string, number>;
+}
+
+interface ValidationExecution {
+  id: string;
+  entityId: string;
+  entityType: string;
+  rulesExecuted: string[];
+  executionTime: number;
+  issuesFound: number;
+  issuesResolved: number;
+  performanceScore: number;
+  timestamp: Date;
+  triggeredBy: string;
+  userStoryContext: string[];
+  hypothesesValidated: string[];
 }
 ```
 
-### Approval
-
-```typescript
-interface ApprovalWorkflow {
-  id: string;
-  name: string;
-  description: string;
-  stages: ApprovalStage[];
-  isTemplate: boolean;
-  applicableTypes: string[]; // Types of entities this workflow applies to
-  conditions: WorkflowCondition[];
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string; // User ID
-  version: number;
-}
-
-interface ApprovalStage {
-  id: string;
-  name: string;
-  description: string;
-  approvers: Approver[];
-  order: number;
-  requiredApprovals: number; // Number of approvals needed to proceed
-  sla?: number; // Time in hours to complete this stage
-  conditionalExecution?: StageCondition;
-  escalation?: EscalationRule;
-}
-
-interface Approver {
-  type: 'user' | 'role';
-  id: string; // User ID or Role ID
-  delegationAllowed: boolean;
-}
-
-interface StageCondition {
-  rules: ConditionRule[];
-  operator: 'and' | 'or';
-}
-
-interface EscalationRule {
-  triggerAfterHours: number;
-  escalateToType: 'user' | 'role';
-  escalateToId: string; // User ID or Role ID
-  notifications: boolean;
-}
-
-interface WorkflowCondition {
-  rules: ConditionRule[];
-  operator: 'and' | 'or';
-}
-
-interface ApprovalStatus {
-  workflowId: string;
-  currentStage: string;
-  stages: StageStatus[];
-  startedAt: Date;
-  completedAt?: Date;
-  status: 'not_started' | 'in_progress' | 'completed' | 'rejected';
-  overallDecision?: 'approved' | 'rejected';
-}
-
-interface StageStatus {
-  stageId: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
-  approvals: ApprovalDecision[];
-  startedAt?: Date;
-  completedAt?: Date;
-  slaStatus: 'within' | 'warning' | 'exceeded';
-}
-
-interface ApprovalDecision {
-  approverId: string;
-  decision?: 'approved' | 'rejected' | 'changes_requested';
-  timestamp?: Date;
-  comments?: string;
-  delegatedTo?: string;
-  attachments?: string[];
-}
-```
-
-### Customer
-
-```typescript
-interface Customer {
-  id: string;
-  name: string;
-  industry: string;
-  tier: 'standard' | 'premium' | 'enterprise';
-  contacts: Contact[];
-  addresses: Address[];
-  createdAt: Date;
-  updatedAt: Date;
-  primaryContact?: string; // Contact ID
-  metadata: Record<string, any>;
-  tags: string[];
-}
-
-interface Contact {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  position?: string;
-  isPrimary: boolean;
-}
-
-interface Address {
-  id: string;
-  type: 'billing' | 'shipping' | 'headquarters';
-  street: string;
-  city: string;
-  state?: string;
-  postalCode: string;
-  country: string;
-  isPrimary: boolean;
-}
-```
-
-### Content
+### Content Management
 
 ```typescript
 interface Content {
   id: string;
   title: string;
   description: string;
-  body: string;
-  type: 'text' | 'image' | 'video' | 'document';
+  type: 'text' | 'template' | 'image' | 'document' | 'media';
+  content: string;
   tags: string[];
-  categories: string[];
+  category: string[];
+  quality: ContentQuality;
+  usage: ContentUsage;
+  access: ContentAccess;
   createdAt: Date;
   updatedAt: Date;
-  createdBy: string; // User ID
-  approvedBy?: string; // User ID
-  status: 'draft' | 'review' | 'approved' | 'archived';
+  createdBy: string;
   version: number;
-  metadata: Record<string, any>;
-  aiMetadata?: AIContentMetadata;
+  searchOptimization: ContentSearchOptimization;
+  userStoryTracking: ContentUserStoryTracking;
 }
 
-interface AIContentMetadata {
-  generatedSections?: string[];
-  suggestedKeywords?: string[];
-  similarContent?: string[]; // Content IDs
-  relevanceScore?: number;
+interface ContentQuality {
+  score: number;
+  winRate: number;
+  usageFrequency: number;
+  userRating: number;
+  aiQualityScore: number;
+  performanceMetrics: Record<string, number>;
+  hypothesesSupported: string[];
+}
+
+interface ContentUsage {
+  totalViews: number;
+  totalUses: number;
+  avgUsageTime: number;
+  searchRanking: number;
+  clickThroughRate: number;
+  conversionRate: number;
+  userStoryContributions: Record<string, number>;
+}
+
+interface ContentAccess {
+  isPublic: boolean;
+  allowedRoles: string[];
+  restrictedUsers: string[];
+  accessLog: ContentAccessLog[];
+}
+
+interface ContentAccessLog {
+  userId: string;
+  accessType: 'view' | 'edit' | 'use' | 'download';
+  timestamp: Date;
+  userStory?: string;
+  performanceImpact?: number;
+}
+
+interface ContentSearchOptimization {
+  searchableText: string;
+  keywords: string[];
+  semanticTags: string[];
+  relevanceScore: number;
+  aiCategorization: string[];
+  searchPerformance: SearchPerformanceMetrics;
+}
+
+interface SearchPerformanceMetrics {
+  averageSearchTime: number;
+  clickThroughRate: number;
+  relevanceScore: number;
+  userSatisfaction: number;
+  hypothesisContribution: Record<string, number>;
+}
+
+interface ContentUserStoryTracking {
+  contentId: string;
+  searchEfficiency: number;
+  discoveryTime: number;
+  usagePatterns: Record<string, any>;
+  qualityImpact: number;
+  userStories: string[];
+  hypothesesSupported: string[];
 }
 ```
 
-### PredictiveValidation
+### Approval Workflow
 
 ```typescript
-interface ValidationPattern {
+interface ApprovalWorkflow {
   id: string;
   name: string;
   description: string;
-  issueType: string;
-  frequency: number;
-  commonResolutions: Resolution[];
-  affectedEntityTypes: string[];
+  entityType: 'proposal' | 'product' | 'content' | 'configuration';
+  stages: WorkflowStage[];
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  confidence: number;
-  status: 'active' | 'inactive' | 'proposed';
+  createdBy: string;
+  executionStats: WorkflowExecutionStats;
+  performanceMetrics: WorkflowPerformanceMetrics;
+  userStoryMappings: string[];
 }
 
-interface Resolution {
+interface WorkflowExecutionStats {
+  workflowId: string;
+  totalExecutions: number;
+  averageCompletionTime: number;
+  successRate: number;
+  bottleneckStages: string[];
+  slaCompliance: number;
+  hypothesesValidated: string[];
+  performanceImprovements: Record<string, number>;
+}
+
+interface WorkflowPerformanceMetrics {
+  timelineAccuracy: number;
+  resourceUtilization: number;
+  stakeholderSatisfaction: number;
+  errorRate: number;
+  automationEfficiency: number;
+  userStoryImpact: Record<string, number>;
+}
+
+interface WorkflowStage {
   id: string;
-  type: string;
+  name: string;
   description: string;
-  effectiveness: number; // 0-100 scale
-  applicationCount: number;
+  order: number;
+  approvers: string[];
+  conditions: StageCondition[];
+  actions: StageAction[];
+  slaHours: number;
+  isParallel: boolean;
+  isOptional: boolean;
+  escalationRules: EscalationRule[];
+  performanceTracking: StagePerformanceTracking;
 }
 
-interface RiskAnalysis {
+interface StagePerformanceTracking {
+  stageId: string;
+  averageTime: number;
+  completionRate: number;
+  escalationRate: number;
+  userSatisfaction: number;
+  hypothesesSupported: string[];
+  efficiencyMetrics: Record<string, number>;
+}
+
+interface StageCondition {
+  attribute: string;
+  operator: string;
+  value: any;
+  logicalOperator?: 'and' | 'or';
+}
+
+interface StageAction {
+  type: 'approve' | 'reject' | 'delegate' | 'escalate' | 'notify';
+  automaticExecution: boolean;
+  notificationTemplate?: string;
+  escalationTarget?: string;
+}
+
+interface EscalationRule {
+  triggerAfterHours: number;
+  escalateTo: string[];
+  notificationMessage: string;
+  autoApprove: boolean;
+  performanceImpact: number;
+}
+
+interface ApprovalExecution {
+  id: string;
+  workflowId: string;
+  entityId: string;
+  currentStage: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'escalated';
+  startedAt: Date;
+  completedAt?: Date;
+  decisions: ApprovalDecision[];
+  slaCompliance: boolean;
+  performanceMetrics: ExecutionPerformanceMetrics;
+  userStoryContext: string[];
+}
+
+interface ExecutionPerformanceMetrics {
+  totalTime: number;
+  stageEfficiency: Record<string, number>;
+  resourceUtilization: number;
+  qualityScore: number;
+  hypothesesValidated: string[];
+  userStoryContributions: Record<string, number>;
+}
+
+interface ApprovalDecision {
+  id: string;
+  stageId: string;
+  approverId: string;
+  decision: 'approve' | 'reject' | 'delegate' | 'request_changes';
+  comments?: string;
+  timestamp: Date;
+  timeToDecision: number;
+  qualityScore: number;
+  performanceImpact: number;
+}
+```
+
+### System Analytics
+
+```typescript
+interface SystemAnalytics {
+  id: string;
+  date: Date;
+  userMetrics: SystemUserMetrics;
+  performanceMetrics: SystemPerformanceMetrics;
+  hypothesisMetrics: HypothesisMetrics;
+  userStoryMetrics: UserStoryMetrics[];
+  systemHealth: SystemHealthMetrics;
+}
+
+interface SystemUserMetrics {
+  activeUsers: number;
+  newUsers: number;
+  userSessions: number;
+  averageSessionDuration: number;
+  featureUsage: Record<string, number>;
+  userSatisfaction: number;
+  rolewiseMetrics: Record<string, UserRoleMetrics>;
+}
+
+interface UserRoleMetrics {
+  role: string;
+  userCount: number;
+  avgPerformance: Record<string, number>;
+  hypothesesContributed: string[];
+  efficiencyScore: number;
+}
+
+interface SystemPerformanceMetrics {
+  averageResponseTime: number;
+  errorRate: number;
+  throughput: number;
+  availability: number;
+  dataProcessingTime: number;
+  analyticsLatency: number;
+  hypothesisValidationSpeed: number;
+}
+
+interface HypothesisMetrics {
+  hypotheses: Record<string, HypothesisStatus>;
+  overallProgress: number;
+  targetsMet: number;
+  totalTargets: number;
+  confidenceScore: number;
+}
+
+interface HypothesisStatus {
+  hypothesis: string;
+  targetValue: number;
+  currentValue: number;
+  progress: number;
+  confidence: number;
+  lastUpdated: Date;
+  contributingUserStories: string[];
+  status: 'on_track' | 'at_risk' | 'met' | 'failed';
+}
+
+interface SystemHealthMetrics {
+  cpuUsage: number;
+  memoryUsage: number;
+  diskUsage: number;
+  networkLatency: number;
+  databasePerformance: number;
+  analyticsProcessingHealth: number;
+  userExperienceScore: number;
+}
+```
+
+### Testing and Quality Assurance
+
+```typescript
+interface TestCase {
+  id: string; // TC-HX-XXX format
+  userStory: string; // US-X.X format
+  hypothesis: string; // HX format with description
+  actor: string; // Primary user role
+  preconditions: string[]; // Setup requirements
+  testSteps: string[]; // Execution steps
+  acceptanceCriteria: string[]; // Success conditions
+  measurementPoints: MetricDefinition[];
+  successThresholds: Thresholds;
+  instrumentationRequirements: string[];
+  status: 'draft' | 'active' | 'executed' | 'passed' | 'failed';
+  executionHistory: TestExecution[];
+  lastExecuted?: Date;
+  passRate: number;
+}
+
+interface MetricDefinition {
+  metric: string;
+  formula: string;
+  target: string;
+  critical: boolean;
+  currentValue?: number;
+  baselineValue?: number;
+}
+
+interface Thresholds {
+  primary: string;
+  secondary: string;
+  minimum: string;
+}
+
+interface TestExecution {
+  id: string;
+  testCaseId: string;
+  executedBy: string;
+  executedAt: Date;
+  duration: number;
+  passed: boolean;
+  results: TestResult[];
+  metrics: Record<string, any>;
+  environment: string;
+  notes?: string;
+}
+
+interface TestResult {
+  stepId: string;
+  stepDescription: string;
+  expected: string;
+  actual: string;
+  passed: boolean;
+  metrics?: Record<string, any>;
+  screenshot?: string;
+  errorDetails?: string;
+}
+
+interface BaselineMetrics {
+  id: string;
+  hypothesis: string;
+  metric: string;
+  value: number;
+  unit: string;
+  collectedAt: Date;
+  validUntil: Date;
+  sampleSize: number;
+  environment: string;
+  methodology: string;
+}
+```
+
+### Predictive Validation
+
+```typescript
+interface PredictiveValidationModel {
+  id: string;
+  name: string;
+  description: string;
+  type:
+    | 'risk_assessment'
+    | 'error_prediction'
+    | 'bottleneck_detection'
+    | 'timeline_forecasting';
+  algorithm: string;
+  version: string;
+  trainingData: TrainingDataset[];
+  accuracy: number;
+  confidenceThreshold: number;
+  isActive: boolean;
+  lastUpdated: Date;
+  predictionHistory: PredictionResult[];
+  performanceMetrics: ModelPerformanceMetrics;
+}
+
+interface TrainingDataset {
+  id: string;
+  name: string;
+  size: number;
+  features: string[];
+  labels: string[];
+  createdAt: Date;
+  validationScore: number;
+  source: 'historical_data' | 'synthetic' | 'manual_labels';
+}
+
+interface PredictionResult {
+  id: string;
+  modelId: string;
+  entityId: string;
+  entityType: string;
+  prediction: any;
+  confidence: number;
+  timestamp: Date;
+  actualOutcome?: any;
+  accuracy?: number;
+  feedback?: 'correct' | 'incorrect' | 'partially_correct';
+}
+
+interface ModelPerformanceMetrics {
+  modelId: string;
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1Score: number;
+  falsePositiveRate: number;
+  falseNegativeRate: number;
+  predictionSpeed: number;
+  lastEvaluated: Date;
+  improvementTrend: 'improving' | 'declining' | 'stable';
+}
+
+interface RiskAssessment {
   id: string;
   entityId: string;
-  entityType: 'proposal' | 'product';
-  riskScore: number; // 0-100 scale
-  factors: RiskFactor[];
-  predictedIssues: PredictedIssue[];
-  createdAt: Date;
-  recommendedActions: RecommendedAction[];
+  entityType: 'proposal' | 'product' | 'customer' | 'timeline';
+  riskScore: number; // 0-100
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  riskFactors: RiskFactor[];
+  mitigation: MitigationStrategy[];
+  confidence: number;
+  assessedAt: Date;
+  validUntil: Date;
+  assessedBy: 'ai_model' | 'human' | 'hybrid';
 }
 
 interface RiskFactor {
-  name: string;
-  impact: number; // 0-100 scale
-  description: string;
-}
-
-interface PredictedIssue {
-  type: string;
-  description: string;
-  confidence: number; // 0-100 scale
-  severity: 'critical' | 'warning' | 'info';
-  suggestedFixes: SuggestedFix[];
-}
-
-interface RecommendedAction {
   id: string;
+  factor: string;
+  impact: number; // 0-10
+  probability: number; // 0-1
   description: string;
-  type: string;
-  impact: number; // 0-100 scale
-  difficulty: 'easy' | 'medium' | 'hard';
+  category: 'technical' | 'business' | 'timeline' | 'resource' | 'compliance';
+  evidence: string[];
+}
+
+interface MitigationStrategy {
+  id: string;
+  strategy: string;
+  effectiveness: number; // 0-1
+  effort: 'low' | 'medium' | 'high';
+  timeline: string;
+  responsibility: string;
+  status: 'proposed' | 'approved' | 'implemented' | 'verified';
 }
 ```
 
-## Entity Relationships
+### Administrative and Audit
 
-### Core Relationships
+```typescript
+interface AuditLog {
+  id: string;
+  userId: string;
+  userRole: string;
+  action: string;
+  entity: string;
+  entityId: string;
+  changes: AuditChange[];
+  timestamp: Date;
+  ipAddress: string;
+  userAgent: string;
+  success: boolean;
+  errorMessage?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  category: 'data' | 'access' | 'configuration' | 'security' | 'system';
+}
 
-1. **User to Role (Many-to-Many)**
+interface AuditChange {
+  field: string;
+  oldValue: any;
+  newValue: any;
+  changeType: 'create' | 'update' | 'delete';
+}
 
-   - Users can have multiple roles
-   - Roles can be assigned to multiple users
+interface SystemConfiguration {
+  id: string;
+  category: string;
+  key: string;
+  value: any;
+  dataType: 'string' | 'number' | 'boolean' | 'json' | 'array';
+  description: string;
+  isSecret: boolean;
+  lastModified: Date;
+  modifiedBy: string;
+  validationRules?: ConfigValidationRule[];
+  environment: 'development' | 'staging' | 'production';
+}
 
-2. **Role to Permission (Many-to-Many)**
+interface ConfigValidationRule {
+  rule: string;
+  errorMessage: string;
+  severity: 'error' | 'warning';
+}
 
-   - Roles consist of multiple permissions
-   - Permissions can be included in multiple roles
+interface SecurityEvent {
+  id: string;
+  type:
+    | 'login_attempt'
+    | 'permission_denied'
+    | 'data_access'
+    | 'config_change'
+    | 'suspicious_activity';
+  userId?: string;
+  ipAddress: string;
+  timestamp: Date;
+  details: Record<string, any>;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  status: 'detected' | 'investigating' | 'resolved' | 'false_positive';
+  response: SecurityResponse[];
+}
 
-3. **Role to Role (Many-to-One)**
+interface SecurityResponse {
+  action: string;
+  timestamp: Date;
+  performedBy: string;
+  result: string;
+  notes?: string;
+}
 
-   - Roles can inherit from parent roles in the hierarchy
-
-4. **Proposal to Customer (Many-to-One)**
-
-   - Proposals are associated with a single customer
-   - Customers can have multiple proposals
-
-5. **Proposal to User (Many-to-Many)**
-
-   - Proposals can be assigned to multiple users
-   - Users can be assigned to multiple proposals
-
-6. **Proposal to Product (Many-to-Many)**
-
-   - Proposals include multiple products
-   - Products can be included in multiple proposals
-
-7. **Product to Product (Many-to-Many)**
-
-   - Products can have relationships with other products
-   - Relationships include dependencies, compatibility, etc.
-
-8. **Proposal to ApprovalWorkflow (Many-to-One)**
-
-   - Proposals follow a specific approval workflow
-   - Approval workflows can be applied to multiple proposals
-
-9. **Proposal to ValidationIssue (One-to-Many)**
-
-   - Proposals can have multiple validation issues
-   - Each validation issue is associated with a specific proposal
-
-10. **ValidationRule to ValidationIssue (One-to-Many)**
-    - Validation rules can generate multiple validation issues
-    - Each validation issue is generated by a specific rule
-
-## Schema Diagrams
-
+interface BackupRecord {
+  id: string;
+  type: 'full' | 'incremental' | 'differential';
+  status: 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled';
+  startTime: Date;
+  endTime?: Date;
+  duration?: number;
+  size: number;
+  location: string;
+  checksum: string;
+  retentionPolicy: string;
+  errorMessage?: string;
+  restoredAt?: Date;
+  restoredBy?: string;
+}
 ```
-User ---> Role ---> Permission
- |         |
- v         v
-Proposal <--- ApprovalWorkflow
- |    |
- |    v
- |  ValidationIssue <--- ValidationRule
- v
-Customer
 
-Product <---> Product (Relationships)
-  ^
-  |
-Proposal
-  |
-  v
-Content
+### Accessibility and User Experience
+
+```typescript
+interface AccessibilityConfiguration {
+  userId: string;
+  preferences: AccessibilityPreferences;
+  assistiveTechnology: AssistiveTechInfo[];
+  customizations: UICustomization[];
+  lastUpdated: Date;
+  complianceLevel: 'AA' | 'AAA';
+  testResults: AccessibilityTestResult[];
+}
+
+interface AccessibilityPreferences {
+  highContrast: boolean;
+  largeText: boolean;
+  reducedMotion: boolean;
+  screenReaderOptimized: boolean;
+  keyboardNavigation: boolean;
+  colorBlindnessType?:
+    | 'protanopia'
+    | 'deuteranopia'
+    | 'tritanopia'
+    | 'achromatopsia';
+  textScaling: number; // 1.0 to 3.0
+  focusIndicatorStyle: 'default' | 'enhanced' | 'custom';
+  audioDescriptions: boolean;
+  captions: boolean;
+}
+
+interface AssistiveTechInfo {
+  type:
+    | 'screen_reader'
+    | 'voice_control'
+    | 'eye_tracking'
+    | 'switch_control'
+    | 'magnifier';
+  name: string;
+  version: string;
+  compatibility: 'full' | 'partial' | 'limited' | 'unknown';
+  optimizations: string[];
+}
+
+interface UICustomization {
+  component: string;
+  property: string;
+  value: any;
+  reason: string;
+  appliedAt: Date;
+}
+
+interface AccessibilityTestResult {
+  id: string;
+  testType: 'automated' | 'manual' | 'user_testing';
+  standard: 'WCAG_2_1_AA' | 'WCAG_2_1_AAA' | 'Section_508' | 'EN_301_549';
+  component: string;
+  passed: boolean;
+  violations: AccessibilityViolation[];
+  testedAt: Date;
+  testedBy: string;
+  environment: string;
+}
+
+interface AccessibilityViolation {
+  rule: string;
+  severity: 'critical' | 'serious' | 'moderate' | 'minor';
+  description: string;
+  element: string;
+  suggestion: string;
+  impact: string;
+  helpUrl: string;
+}
 ```
 
-## Validation Rules
+### Communication and Notifications
 
-1. **Product Relationship Validation**
+```typescript
+interface NotificationTemplate {
+  id: string;
+  name: string;
+  type: 'email' | 'sms' | 'push' | 'in_app' | 'webhook';
+  category: 'system' | 'workflow' | 'security' | 'reminder' | 'alert';
+  subject: string;
+  body: string;
+  variables: TemplateVariable[];
+  isActive: boolean;
+  createdAt: Date;
+  lastModified: Date;
+  usageCount: number;
+  deliverySettings: DeliverySettings;
+}
 
-   - Required products must be included in a proposal
-   - Incompatible products cannot be in the same proposal
-   - Quantity rules must be satisfied (e.g., 2 licenses per server)
-   - Conditional rules based on product configurations
+interface TemplateVariable {
+  name: string;
+  description: string;
+  type: 'string' | 'number' | 'date' | 'boolean' | 'array' | 'object';
+  required: boolean;
+  defaultValue?: any;
+}
 
-2. **Proposal Validation**
+interface DeliverySettings {
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  retryAttempts: number;
+  batchSize: number;
+  throttleLimit: number;
+  deliveryWindow?: TimeWindow;
+}
 
-   - Required sections must be completed
-   - Pricing must align with product catalog and discount policies
-   - Approval workflows must match proposal characteristics
-   - Customer information must be complete
+interface TimeWindow {
+  startTime: string; // HH:MM format
+  endTime: string; // HH:MM format
+  timezone: string;
+  days: string[]; // ['monday', 'tuesday', etc.]
+}
 
-3. **Permission Validation**
+interface NotificationDelivery {
+  id: string;
+  templateId: string;
+  recipientId: string;
+  recipientType: 'user' | 'role' | 'group' | 'external';
+  channel: 'email' | 'sms' | 'push' | 'in_app' | 'webhook';
+  status: 'pending' | 'sent' | 'delivered' | 'failed' | 'bounced' | 'read';
+  sentAt?: Date;
+  deliveredAt?: Date;
+  readAt?: Date;
+  attempts: number;
+  errorMessage?: string;
+  metadata: Record<string, any>;
+}
 
-   - Separation of duties conflicts must be prevented
-   - Role hierarchy must be respected
-   - Contextual permissions must be evaluated with current context
+interface CommunicationPreferences {
+  userId: string;
+  channels: ChannelPreference[];
+  frequency: FrequencySettings;
+  quietHours: TimeWindow;
+  categories: CategoryPreference[];
+  language: string;
+  timezone: string;
+}
 
-4. **Approval Workflow Validation**
-   - Workflow stages must have valid approvers
-   - Conditional execution rules must be valid
-   - SLA definitions must be reasonable
-   - Escalation rules must refer to valid users/roles
+interface ChannelPreference {
+  channel: 'email' | 'sms' | 'push' | 'in_app';
+  enabled: boolean;
+  address?: string; // email address or phone number
+  verified: boolean;
+  primary: boolean;
+}
 
-## Technical Considerations
+interface FrequencySettings {
+  immediate: string[]; // categories for immediate delivery
+  daily: string[]; // categories for daily digest
+  weekly: string[]; // categories for weekly digest
+  disabled: string[]; // disabled categories
+}
 
-1. **Performance**
+interface CategoryPreference {
+  category: string;
+  enabled: boolean;
+  channels: string[];
+  frequency: 'immediate' | 'daily' | 'weekly' | 'disabled';
+}
+```
 
-   - Optimize query patterns for relationship-heavy operations
-   - Index frequently accessed fields
-   - Consider denormalization for complex approval and validation states
+## Enhanced Database Relationships
 
-2. **Security**
+```typescript
+// Key relationships for analytics and traceability
+interface DatabaseRelationships {
+  // User Story to Component mapping
+  userStoryComponents: {
+    userStoryId: string;
+    componentId: string;
+    relationship: 'primary' | 'supporting';
+  };
 
-   - Strict validation of permission checks
-   - Audit logging for all critical operations
-   - Data access controls based on RBAC model
+  // Hypothesis to User Story mapping
+  hypothesisUserStories: {
+    hypothesis: string;
+    userStoryId: string;
+    targetValue: number;
+    weight: number;
+  };
 
-3. **Scalability**
+  // Component to Analytics mapping
+  componentAnalytics: {
+    componentId: string;
+    analyticsEventId: string;
+    measurementType: string;
+  };
 
-   - Separation of read and write models for high-volume operations
-   - Pagination for large data sets
-   - Optimized relationship traversal
+  // Test Case to Hypothesis mapping
+  testHypothesis: {
+    testCaseId: string;
+    hypothesis: string;
+    validationType: 'functional' | 'performance' | 'integration';
+  };
 
-4. **AI Integration**
-   - Storage for training data and learned patterns
-   - Confidence scoring for predictions
-   - Feedback mechanisms for improving recommendations
+  // Performance Baseline relationships
+  baselineComparisons: {
+    baselineId: string;
+    currentMeasurementId: string;
+    improvementPercentage: number;
+    trend: 'improving' | 'declining' | 'stable';
+  };
+}
+
+// Additional relationships for new entities
+interface EnhancedDatabaseRelationships extends DatabaseRelationships {
+  // Testing relationships
+  testHypothesisMapping: {
+    testCaseId: string;
+    hypothesis: string;
+    userStoryId: string;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+  };
+
+  // Predictive model relationships
+  modelPredictionAccuracy: {
+    modelId: string;
+    predictionId: string;
+    actualOutcome: any;
+    accuracyScore: number;
+    feedbackDate: Date;
+  };
+
+  // Accessibility relationships
+  userAccessibilityProfile: {
+    userId: string;
+    configurationId: string;
+    lastUsed: Date;
+    effectiveness: number;
+  };
+
+  // Audit trail relationships
+  auditEntityRelation: {
+    auditLogId: string;
+    entityType: string;
+    entityId: string;
+    changeImpact: 'minor' | 'major' | 'critical';
+  };
+
+  // Communication relationships
+  notificationUserPreference: {
+    notificationTemplateId: string;
+    userId: string;
+    personalizedSettings: Record<string, any>;
+  };
+
+  // Risk assessment relationships
+  riskMitigationTracking: {
+    riskAssessmentId: string;
+    mitigationStrategyId: string;
+    implementationProgress: number;
+    effectiveness: number;
+  };
+}
+```
+
+## Enhanced Indexes and Constraints
+
+```sql
+-- Performance-critical indexes for analytics queries
+CREATE INDEX idx_hypothesis_events_timestamp ON hypothesis_validation_events(timestamp, hypothesis);
+CREATE INDEX idx_user_story_metrics_completion ON user_story_metrics(completion_rate, user_story_id);
+CREATE INDEX idx_performance_baselines_hypothesis ON performance_baselines(hypothesis, metric_name);
+CREATE INDEX idx_component_traceability_user_stories ON component_traceability(user_stories);
+CREATE INDEX idx_analytics_events_user_session ON content_search_analytics(user_id, session_id, timestamp);
+
+-- Unique constraints for data integrity
+ALTER TABLE component_traceability ADD CONSTRAINT unique_component_name UNIQUE (component_name);
+ALTER TABLE hypothesis_validation_events ADD CONSTRAINT unique_event_per_session UNIQUE (session_id, component_id, action, timestamp);
+ALTER TABLE performance_baselines ADD CONSTRAINT unique_baseline_metric UNIQUE (hypothesis, metric_name, collection_date);
+
+-- Testing and quality assurance indexes
+CREATE INDEX idx_test_cases_hypothesis ON test_cases(hypothesis, status);
+CREATE INDEX idx_test_execution_results ON test_executions(test_case_id, passed, executed_at);
+CREATE INDEX idx_baseline_metrics_hypothesis ON baseline_metrics(hypothesis, metric, collected_at);
+
+-- Predictive validation indexes
+CREATE INDEX idx_predictions_confidence ON prediction_results(model_id, confidence, timestamp);
+CREATE INDEX idx_risk_assessments_score ON risk_assessments(entity_type, risk_score, assessed_at);
+CREATE INDEX idx_model_performance ON model_performance_metrics(model_id, accuracy, last_evaluated);
+
+-- Administrative and audit indexes
+CREATE INDEX idx_audit_logs_user_action ON audit_logs(user_id, action, timestamp);
+CREATE INDEX idx_security_events_risk ON security_events(risk_level, timestamp, status);
+CREATE INDEX idx_system_config_category ON system_configuration(category, environment);
+
+-- Accessibility indexes
+CREATE INDEX idx_accessibility_user ON accessibility_configuration(user_id, compliance_level);
+CREATE INDEX idx_accessibility_tests ON accessibility_test_results(component, standard, passed);
+
+-- Communication indexes
+CREATE INDEX idx_notification_delivery_status ON notification_delivery(status, sent_at);
+CREATE INDEX idx_notification_templates_category ON notification_templates(category, is_active);
+```
+
+This enhanced data model provides comprehensive support for all wireframe
+requirements while maintaining system integrity and performance through proper
+indexing and relationship management.

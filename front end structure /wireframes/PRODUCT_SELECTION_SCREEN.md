@@ -1,5 +1,196 @@
 # Product Selection Screen - Refined Layout
 
+## User Story Traceability
+
+**Primary User Stories**: US-1.2, US-3.1, Supporting US-4.1 **Hypothesis
+Coverage**: H1 (Content Discovery - 45% search time reduction), H8 (Technical
+Configuration Validation), Supporting H7 (Deadline Management) **Test Cases**:
+TC-H1-002, TC-H8-001, Supporting TC-H7-001
+
+### User Story Details
+
+- **US-1.2**: AI-suggested content browsing (Proposal Manager)
+  - _Acceptance Criteria_: Auto-categorization, related content suggestions,
+    filtering options
+- **US-3.1**: Configuration validation (Presales Engineer)
+  - _Acceptance Criteria_: Compatibility checking, fix suggestions, ≥50% error
+    reduction
+- **Supporting Functions**: Product catalog browsing, AI recommendations,
+  selection validation
+
+### Acceptance Criteria Implementation Mapping
+
+- **AC-1.2.1**: Auto-categorization by topic and type →
+  `ProductCatalog.aiCategories()`
+- **AC-1.2.2**: Related content suggestions →
+  `AIRecommendations.suggestProducts()`
+- **AC-1.2.3**: Multi-dimensional filtering →
+  `ProductFilter.multiDimensionalFilters()`
+- **AC-3.1.1**: Flags incompatible combinations →
+  `ProductValidator.compatibilityCheck()`
+- **AC-3.1.2**: Suggestions for resolving issues →
+  `ProductValidator.fixSuggestions()`
+
+### Component Traceability Matrix
+
+```typescript
+// Product Selection Interface Components - User Story Mapping
+interface ComponentMapping {
+  ProductCatalog: {
+    userStories: ['US-1.2'];
+    acceptanceCriteria: ['AC-1.2.1', 'AC-1.2.3'];
+    methods: [
+      'aiCategories()',
+      'searchProducts()',
+      'multiDimensionalFilters()',
+    ];
+  };
+  AIRecommendations: {
+    userStories: ['US-1.2', 'US-4.1'];
+    acceptanceCriteria: ['AC-1.2.2', 'AC-4.1.1'];
+    methods: [
+      'suggestProducts()',
+      'generateBundles()',
+      'contextualRecommendations()',
+    ];
+  };
+  ProductValidator: {
+    userStories: ['US-3.1'];
+    acceptanceCriteria: ['AC-3.1.1', 'AC-3.1.2'];
+    methods: [
+      'compatibilityCheck()',
+      'fixSuggestions()',
+      'validateSelection()',
+    ];
+  };
+  ProductDetailModal: {
+    userStories: ['US-1.2', 'US-3.1'];
+    acceptanceCriteria: ['AC-1.2.4', 'AC-3.1.3'];
+    methods: ['displayDetails()', 'configureOptions()', 'calculateSubtotal()'];
+  };
+  SelectedProductsPanel: {
+    userStories: ['US-3.1', 'US-4.1'];
+    acceptanceCriteria: ['AC-3.1.1', 'AC-4.1.2'];
+    methods: ['trackSelection()', 'validateCombination()', 'calculateTotal()'];
+  };
+  ProductSearch: {
+    userStories: ['US-1.2'];
+    acceptanceCriteria: ['AC-1.2.1', 'AC-1.2.3'];
+    methods: ['semanticSearch()', 'filterResults()', 'rankByRelevance()'];
+  };
+}
+```
+
+### Measurement Instrumentation Requirements
+
+```typescript
+// Analytics for Product Selection Supporting Discovery & Validation
+interface ProductSelectionMetrics {
+  // US-1.2 Measurements (Content Discovery)
+  productSearchTime: number; // Target: ≥45% reduction
+  filterUsageRate: number;
+  recommendationAcceptanceRate: number;
+  categoryBrowsingEfficiency: number;
+
+  // US-3.1 Measurements (Configuration Validation)
+  compatibilityCheckTime: number;
+  validationErrorsDetected: number;
+  fixSuggestionUtilization: number;
+  configurationAccuracy: number;
+
+  // Product Selection Performance
+  selectionCompletionTime: number;
+  productComparisonCount: number;
+  customizationOptionsUsed: number;
+  averageProductsPerProposal: number;
+
+  // AI Assistance Metrics
+  aiRecommendationClicks: number;
+  bundleSuggestionAcceptance: number;
+  contextualRelevanceScore: number;
+  searchToSelectionRatio: number;
+}
+
+// Implementation Hooks
+const useProductSelectionAnalytics = () => {
+  const trackProductSelection = (metrics: ProductSelectionMetrics) => {
+    analytics.track('product_selection_performance', {
+      ...metrics,
+      timestamp: Date.now(),
+      userId: user.id,
+      userRole: user.role,
+    });
+  };
+
+  const trackProductSearch = (
+    searchQuery: string,
+    resultsCount: number,
+    selectionTime: number
+  ) => {
+    analytics.track('product_search_performance', {
+      searchQuery,
+      resultsCount,
+      selectionTime,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackValidationUsage = (
+    productId: string,
+    errorsDetected: number,
+    fixesApplied: number
+  ) => {
+    analytics.track('product_validation', {
+      productId,
+      errorsDetected,
+      fixesApplied,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackProductSelection, trackProductSearch, trackValidationUsage };
+};
+
+const useAIRecommendations = () => {
+  const trackRecommendationInteraction = (
+    recommendationType: string,
+    accepted: boolean,
+    relevanceScore: number
+  ) => {
+    analytics.track('ai_recommendation_interaction', {
+      recommendationType,
+      accepted,
+      relevanceScore,
+      timestamp: Date.now(),
+    });
+  };
+
+  const trackBundleSuggestion = (
+    bundleId: string,
+    productsCount: number,
+    accepted: boolean
+  ) => {
+    analytics.track('bundle_suggestion', {
+      bundleId,
+      productsCount,
+      accepted,
+      timestamp: Date.now(),
+    });
+  };
+
+  return { trackRecommendationInteraction, trackBundleSuggestion };
+};
+```
+
+### Testing Scenario Integration
+
+- **TC-H1-002**: Product catalog content discovery optimization (US-1.2)
+- **TC-H8-001**: Product configuration compatibility validation (US-3.1)
+- **Supporting TC-H7-001**: Product selection impact on timeline estimation
+  (US-4.1)
+
+---
+
 ## Design: Integrated Catalog Browser with Selection
 
 ```
