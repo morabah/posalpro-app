@@ -252,6 +252,34 @@ export const proposalWizardStep2Schema = z.object({
 export type ProposalWizardStep2Data = z.infer<typeof proposalWizardStep2Schema>;
 
 /**
+ * Proposal Wizard Step 3 validation schema (Content Selection)
+ */
+export const proposalWizardStep3Schema = z.object({
+  selectedContent: z
+    .array(
+      z.object({
+        item: z.object({
+          id: z.string().uuid(),
+          title: validationUtils.stringWithLength(1, 200, 'Content title'),
+          type: z.enum(['case_study', 'template', 'reference', 'methodology', 'compliance']),
+          relevanceScore: z.number().min(0).max(100),
+          section: z.string().min(1, 'Section is required'),
+          tags: z.array(z.string()),
+          content: z.string().min(1, 'Content is required'),
+        }),
+        section: validationUtils.stringWithLength(1, 100, 'Section assignment'),
+        customizations: z.array(z.string()).optional(),
+        assignedTo: z.string().optional(),
+      })
+    )
+    .min(1, 'At least one content item must be selected'),
+
+  searchHistory: z.array(z.string()).max(20, 'Search history limited to 20 items'),
+});
+
+export type ProposalWizardStep3Data = z.infer<typeof proposalWizardStep3Schema>;
+
+/**
  * Complete proposal entity validation schema
  */
 export const proposalEntitySchema = baseEntitySchema.extend({
