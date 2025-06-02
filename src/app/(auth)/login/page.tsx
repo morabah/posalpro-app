@@ -258,7 +258,7 @@ function LoginPageContent() {
           {/* Footer Links */}
           <div className="mt-6 text-center">
             <p className="text-sm text-neutral-600">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <a
                 href="/auth/register"
                 className="text-primary-600 hover:text-primary-500 font-medium"

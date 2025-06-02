@@ -91,7 +91,7 @@ export function ProtectedLayout({
         <div className="text-center">
           <div className="text-red-600 text-6xl mb-4">🚫</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600">You don't have permission to access this page.</p>
+          <p className="text-gray-600">You&apos;re not authorized to access this page.</p>
         </div>
       </div>
     );
