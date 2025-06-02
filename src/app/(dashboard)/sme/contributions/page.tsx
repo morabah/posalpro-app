@@ -368,28 +368,6 @@ export default function SMEContributionInterface() {
   // Auto-save functionality
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const handleContentChange = useCallback(
-    (newContent: string) => {
-      if (!editingStartTime.current) {
-        editingStartTime.current = Date.now();
-      }
-
-      setContent(newContent);
-      setWordCount(newContent.trim().split(/\s+/).length);
-      setHasUnsavedChanges(true);
-
-      // Clear existing timer and set new one
-      if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current);
-      }
-
-      autoSaveTimer.current = setTimeout(() => {
-        handleAutoSave(newContent);
-      }, 30000); // Auto-save every 30 seconds
-    },
-    [handleAutoSave]
-  );
-
   const handleAutoSave = useCallback((contentToSave: string) => {
     console.log('Auto-saving content...');
     setLastSaved(new Date());
@@ -411,6 +389,28 @@ export default function SMEContributionInterface() {
       timestamp: Date.now(),
     });
   }, []);
+
+  const handleContentChange = useCallback(
+    (newContent: string) => {
+      if (!editingStartTime.current) {
+        editingStartTime.current = Date.now();
+      }
+
+      setContent(newContent);
+      setWordCount(newContent.trim().split(/\s+/).length);
+      setHasUnsavedChanges(true);
+
+      // Clear existing timer and set new one
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+      }
+
+      autoSaveTimer.current = setTimeout(() => {
+        handleAutoSave(newContent);
+      }, 30000); // Auto-save every 30 seconds
+    },
+    [handleAutoSave]
+  );
 
   // Analytics tracking
   const trackAction = useCallback(
