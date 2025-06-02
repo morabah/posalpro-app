@@ -350,6 +350,72 @@ export const proposalWizardStep5Schema = z.object({
 export type ProposalWizardStep5Data = z.infer<typeof proposalWizardStep5Schema>;
 
 /**
+ * Proposal Wizard Step 6 validation schema (Review & Finalization)
+ */
+export const proposalWizardStep6Schema = z.object({
+  finalValidation: z.object({
+    isValid: z.boolean(),
+    completeness: z.number().min(0).max(100),
+    issues: z.array(
+      z.object({
+        severity: z.enum(['error', 'warning', 'info']),
+        message: validationUtils.stringWithLength(1, 500, 'Issue message'),
+        field: z.string().optional(),
+        suggestions: z.array(z.string()).optional(),
+      })
+    ),
+    complianceChecks: z.array(
+      z.object({
+        requirement: validationUtils.stringWithLength(1, 200, 'Requirement'),
+        passed: z.boolean(),
+        details: z.string().optional(),
+      })
+    ),
+  }),
+
+  approvals: z.array(
+    z.object({
+      reviewer: validationUtils.stringWithLength(1, 100, 'Reviewer name'),
+      approved: z.boolean(),
+      comments: z.string().max(1000, 'Comments must be less than 1000 characters').optional(),
+      timestamp: z.date().optional(),
+    })
+  ),
+
+  insights: z.object({
+    complexity: z.enum(['low', 'medium', 'high']),
+    winProbability: z.number().min(0).max(100),
+    estimatedEffort: z.number().min(0),
+    similarProposals: z
+      .array(
+        z.object({
+          id: z.string().uuid(),
+          title: validationUtils.stringWithLength(1, 200, 'Proposal title'),
+          winRate: z.number().min(0).max(100),
+          similarity: z.number().min(0).max(100),
+        })
+      )
+      .max(5, 'Maximum 5 similar proposals'),
+    keyDifferentiators: z.array(z.string()).max(10, 'Maximum 10 differentiators'),
+    suggestedFocusAreas: z.array(z.string()).max(10, 'Maximum 10 focus areas'),
+    riskFactors: z.array(z.string()).max(10, 'Maximum 10 risk factors'),
+  }),
+
+  exportOptions: z
+    .object({
+      format: z.enum(['pdf', 'docx', 'html']).default('pdf'),
+      includeAppendices: z.boolean().default(true),
+      includeTeamDetails: z.boolean().default(true),
+      includeTimeline: z.boolean().default(true),
+    })
+    .optional(),
+
+  finalReviewComplete: z.boolean().default(false),
+});
+
+export type ProposalWizardStep6Data = z.infer<typeof proposalWizardStep6Schema>;
+
+/**
  * Complete proposal entity validation schema
  */
 export const proposalEntitySchema = baseEntitySchema.extend({
