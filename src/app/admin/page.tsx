@@ -1,0 +1,940 @@
+/**
+ * PosalPro MVP2 - Admin System Interface
+ * Based on ADMIN_SCREEN.md wireframe specifications
+ * Supports component traceability and analytics integration for platform foundation
+ */
+
+'use client';
+
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/forms/Button';
+import {
+  CheckCircleIcon,
+  ClockIcon,
+  CogIcon,
+  ExclamationTriangleIcon,
+  EyeIcon,
+  MagnifyingGlassIcon,
+  PencilIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+  TrashIcon,
+  UserGroupIcon,
+  UsersIcon,
+  XCircleIcon,
+} from '@heroicons/react/24/outline';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+// Component Traceability Matrix
+const COMPONENT_MAPPING = {
+  userStories: ['US-2.3', 'Platform Foundation'],
+  acceptanceCriteria: [
+    'AC-2.3.1',
+    'AC-2.3.2',
+    'System Health',
+    'Performance Monitoring',
+    'User Management',
+    'Security Configuration',
+    'System Integration',
+    'Audit Trail',
+    'Data Protection',
+  ],
+  methods: [
+    'monitorSystem()',
+    'trackPerformance()',
+    'displayMetrics()',
+    'createUser()',
+    'assignRoles()',
+    'manageAccess()',
+    'configureAccess()',
+    'definePermissions()',
+    'manageRoles()',
+    'configurePermissions()',
+    'auditAccess()',
+    'manageEncryption()',
+    'configureAPIs()',
+    'manageConnections()',
+    'monitorIntegrations()',
+    'logActivity()',
+    'trackChanges()',
+    'generateReports()',
+    'scheduleBackups()',
+    'restoreData()',
+    'verifyIntegrity()',
+  ],
+  hypotheses: ['Supporting H4', 'Infrastructure for All Hypotheses'],
+  testCases: ['Supporting TC-H4-002', 'Infrastructure for All Test Cases'],
+};
+
+// Enums and interfaces
+enum UserStatus {
+  ACTIVE = 'Active',
+  INACTIVE = 'Inactive',
+  PENDING = 'Pending',
+  SUSPENDED = 'Suspended',
+}
+
+enum SystemHealth {
+  OPERATIONAL = 'Operational',
+  WARNING = 'Warning',
+  CRITICAL = 'Critical',
+  MAINTENANCE = 'Maintenance',
+}
+
+interface SystemUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  department: string;
+  status: UserStatus;
+  lastActive: Date;
+  createdAt: Date;
+  permissions: string[];
+}
+
+interface Role {
+  id: string;
+  name: string;
+  description: string;
+  userCount: number;
+  accessLevel: 'Full' | 'High' | 'Medium' | 'Limited' | 'Low';
+  permissions: Record<string, boolean>;
+  lastModified: Date;
+}
+
+interface SystemMetrics {
+  apiStatus: SystemHealth;
+  databaseStatus: SystemHealth;
+  storageUsed: number;
+  storageTotal: number;
+  activeUsers: number;
+  responseTime: number;
+  lastBackup: Date;
+  uptime: number;
+}
+
+interface AuditLogEntry {
+  id: string;
+  timestamp: Date;
+  user: string;
+  type: 'Security' | 'Config' | 'Data' | 'Error' | 'Backup';
+  severity: 'Low' | 'Medium' | 'High' | 'Critical';
+  action: string;
+  details: string;
+  ipAddress: string;
+}
+
+// Mock data
+const MOCK_USERS: SystemUser[] = [
+  {
+    id: '1',
+    name: 'Mohamed Rabah',
+    email: 'admin@posalpro.com',
+    role: 'Administrator',
+    department: 'IT',
+    status: UserStatus.ACTIVE,
+    lastActive: new Date(),
+    createdAt: new Date('2024-01-15'),
+    permissions: ['*:*'],
+  },
+  {
+    id: '2',
+    name: 'Sarah Johnson',
+    email: 'manager@posalpro.com',
+    role: 'Proposal Manager',
+    department: 'Business Development',
+    status: UserStatus.ACTIVE,
+    lastActive: new Date(Date.now() - 5 * 60 * 1000),
+    createdAt: new Date('2024-02-10'),
+    permissions: ['proposals:read', 'proposals:write', 'proposals:manage'],
+  },
+  {
+    id: '3',
+    name: 'Alex Chen',
+    email: 'sme@posalpro.com',
+    role: 'Subject Matter Expert',
+    department: 'Technical',
+    status: UserStatus.ACTIVE,
+    lastActive: new Date(Date.now() - 60 * 60 * 1000),
+    createdAt: new Date('2024-03-05'),
+    permissions: ['content:read', 'content:write', 'validation:execute'],
+  },
+  {
+    id: '4',
+    name: 'Lisa Miller',
+    email: 'lisa.miller@posalpro.com',
+    role: 'Legal Reviewer',
+    department: 'Legal',
+    status: UserStatus.INACTIVE,
+    lastActive: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    createdAt: new Date('2024-02-20'),
+    permissions: ['legal:review', 'approval:legal'],
+  },
+  {
+    id: '5',
+    name: 'Thomas Wilson',
+    email: 'thomas.wilson@posalpro.com',
+    role: 'Finance Approver',
+    department: 'Finance',
+    status: UserStatus.PENDING,
+    lastActive: new Date(0),
+    createdAt: new Date('2024-05-28'),
+    permissions: ['finance:review', 'approval:financial'],
+  },
+];
+
+const MOCK_ROLES: Role[] = [
+  {
+    id: 'admin',
+    name: 'Administrator',
+    description: 'Full system access and administration privileges',
+    userCount: 2,
+    accessLevel: 'Full',
+    permissions: {
+      'users:manage': true,
+      'roles:manage': true,
+      'system:configure': true,
+      'data:backup': true,
+      'audit:view': true,
+    },
+    lastModified: new Date('2024-05-20'),
+  },
+  {
+    id: 'proposal-mgr',
+    name: 'Proposal Manager',
+    description: 'Proposal creation and management',
+    userCount: 8,
+    accessLevel: 'High',
+    permissions: {
+      'proposals:create': true,
+      'proposals:edit': true,
+      'proposals:view': true,
+      'customers:manage': true,
+      'content:create': true,
+    },
+    lastModified: new Date('2024-05-15'),
+  },
+  {
+    id: 'product-mgr',
+    name: 'Product Manager',
+    description: 'Product catalog and configuration management',
+    userCount: 3,
+    accessLevel: 'Medium',
+    permissions: {
+      'products:manage': true,
+      'products:configure': true,
+      'integrations:view': true,
+      'reports:create': true,
+    },
+    lastModified: new Date('2024-04-10'),
+  },
+  {
+    id: 'sme',
+    name: 'Subject Matter Expert',
+    description: 'Technical content creation and validation',
+    userCount: 12,
+    accessLevel: 'Limited',
+    permissions: {
+      'content:create': true,
+      'content:edit': true,
+      'validation:execute': true,
+      'proposals:review': true,
+    },
+    lastModified: new Date('2024-03-22'),
+  },
+];
+
+const MOCK_SYSTEM_METRICS: SystemMetrics = {
+  apiStatus: SystemHealth.OPERATIONAL,
+  databaseStatus: SystemHealth.OPERATIONAL,
+  storageUsed: 3.2,
+  storageTotal: 4.0,
+  activeUsers: 47,
+  responseTime: 238,
+  lastBackup: new Date(Date.now() - 7 * 60 * 60 * 1000),
+  uptime: 99.97,
+};
+
+const MOCK_AUDIT_LOGS: AuditLogEntry[] = [
+  {
+    id: '1',
+    timestamp: new Date(Date.now() - 2 * 60 * 1000),
+    user: 'admin@posalpro.com',
+    type: 'Security',
+    severity: 'Medium',
+    action: 'User Created',
+    details: 'New user Thomas Wilson added to Finance Approver role',
+    ipAddress: '192.168.1.100',
+  },
+  {
+    id: '2',
+    timestamp: new Date(Date.now() - 15 * 60 * 1000),
+    user: 'admin@posalpro.com',
+    type: 'Config',
+    severity: 'Low',
+    action: 'Role Modified',
+    details: 'Updated permissions for Proposal Manager role',
+    ipAddress: '192.168.1.100',
+  },
+  {
+    id: '3',
+    timestamp: new Date(Date.now() - 60 * 60 * 1000),
+    user: 'system',
+    type: 'Security',
+    severity: 'Low',
+    action: 'API Key Rotated',
+    details: 'Automatic API key rotation for Salesforce integration',
+    ipAddress: 'system',
+  },
+  {
+    id: '4',
+    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    user: 'manager@posalpro.com',
+    type: 'Config',
+    severity: 'Medium',
+    action: 'Config Changed',
+    details: 'Modified proposal workflow approval settings',
+    ipAddress: '192.168.1.105',
+  },
+  {
+    id: '5',
+    timestamp: new Date(Date.now() - 7 * 60 * 60 * 1000),
+    user: 'system',
+    type: 'Backup',
+    severity: 'Low',
+    action: 'Backup Completed',
+    details: 'Daily automatic backup completed successfully (4.2GB)',
+    ipAddress: 'system',
+  },
+];
+
+export default function AdminSystem() {
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'users' | 'roles' | 'integration' | 'config' | 'logs' | 'backups'
+  >('overview');
+  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userFilter, setUserFilter] = useState<{ role: string; status: string }>({
+    role: 'All',
+    status: 'All',
+  });
+  const [sessionStartTime] = useState(Date.now());
+
+  // Analytics tracking
+  const trackAdminAction = useCallback(
+    (action: string, metadata: any = {}) => {
+      console.log('Admin System Analytics:', {
+        action,
+        metadata,
+        timestamp: Date.now(),
+        sessionDuration: Date.now() - sessionStartTime,
+      });
+    },
+    [sessionStartTime]
+  );
+
+  // System health status
+  const systemHealthSummary = useMemo(() => {
+    const healthStatuses = [MOCK_SYSTEM_METRICS.apiStatus, MOCK_SYSTEM_METRICS.databaseStatus];
+
+    if (healthStatuses.includes(SystemHealth.CRITICAL)) return SystemHealth.CRITICAL;
+    if (healthStatuses.includes(SystemHealth.WARNING)) return SystemHealth.WARNING;
+    return SystemHealth.OPERATIONAL;
+  }, []);
+
+  // Filtered users
+  const filteredUsers = useMemo(() => {
+    return MOCK_USERS.filter(user => {
+      const matchesSearch =
+        !searchQuery ||
+        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.role.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesRole = userFilter.role === 'All' || user.role === userFilter.role;
+      const matchesStatus = userFilter.status === 'All' || user.status === userFilter.status;
+
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [searchQuery, userFilter]);
+
+  // Status indicators
+  const getStatusIcon = (status: UserStatus | SystemHealth) => {
+    switch (status) {
+      case UserStatus.ACTIVE:
+      case SystemHealth.OPERATIONAL:
+        return <CheckCircleIcon className="w-5 h-5 text-green-600" />;
+      case UserStatus.INACTIVE:
+      case SystemHealth.WARNING:
+        return <ExclamationTriangleIcon className="w-5 h-5 text-amber-600" />;
+      case UserStatus.PENDING:
+        return <ClockIcon className="w-5 h-5 text-blue-600" />;
+      case UserStatus.SUSPENDED:
+      case SystemHealth.CRITICAL:
+        return <XCircleIcon className="w-5 h-5 text-red-600" />;
+      default:
+        return <div className="w-5 h-5 bg-gray-400 rounded" />;
+    }
+  };
+
+  const getStatusColor = (status: UserStatus | SystemHealth) => {
+    switch (status) {
+      case UserStatus.ACTIVE:
+      case SystemHealth.OPERATIONAL:
+        return 'text-green-600 bg-green-100';
+      case UserStatus.INACTIVE:
+      case SystemHealth.WARNING:
+        return 'text-amber-600 bg-amber-100';
+      case UserStatus.PENDING:
+        return 'text-blue-600 bg-blue-100';
+      case UserStatus.SUSPENDED:
+      case SystemHealth.CRITICAL:
+        return 'text-red-600 bg-red-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  // Handle actions
+  const handleAction = useCallback(
+    (action: string, target?: any) => {
+      trackAdminAction(`admin_${action}`, {
+        targetId: target?.id,
+        targetType: target?.constructor?.name,
+      });
+
+      switch (action) {
+        case 'create_user':
+          console.log('Create new user');
+          break;
+        case 'edit_user':
+          console.log('Edit user:', target?.id);
+          break;
+        case 'delete_user':
+          console.log('Delete user:', target?.id);
+          break;
+        case 'create_role':
+          console.log('Create new role');
+          break;
+        case 'edit_role':
+          console.log('Edit role:', target?.id);
+          break;
+        case 'system_backup':
+          console.log('Initiate system backup');
+          break;
+        default:
+          console.log(`${action}:`, target?.id);
+      }
+    },
+    [trackAdminAction]
+  );
+
+  // Format time ago
+  const formatTimeAgo = (date: Date) => {
+    const now = Date.now();
+    const diff = now - date.getTime();
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (minutes < 1) return 'Now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  };
+
+  // Track page load
+  useEffect(() => {
+    trackAdminAction('admin_system_loaded', {
+      systemHealth: systemHealthSummary,
+      activeUsers: MOCK_SYSTEM_METRICS.activeUsers,
+      totalUsers: MOCK_USERS.length,
+      totalRoles: MOCK_ROLES.length,
+    });
+  }, [systemHealthSummary, trackAdminAction]);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Admin System</h1>
+              <p className="text-gray-600">
+                System Management • {MOCK_SYSTEM_METRICS.uptime}% uptime •{' '}
+                {MOCK_SYSTEM_METRICS.activeUsers} active users
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Button
+                onClick={() => handleAction('system_backup')}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <ShieldCheckIcon className="w-4 h-4 mr-2" />
+                Backup Now
+              </Button>
+              <Button
+                onClick={() => handleAction('create_user')}
+                variant="secondary"
+                className="border-gray-300"
+              >
+                <PlusIcon className="w-4 h-4 mr-2" />
+                New User
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            {[
+              { id: 'overview', label: 'Overview', icon: CogIcon },
+              { id: 'users', label: 'Users', icon: UsersIcon, count: MOCK_USERS.length },
+              { id: 'roles', label: 'Roles', icon: UserGroupIcon, count: MOCK_ROLES.length },
+              { id: 'integration', label: 'Integration', icon: CogIcon },
+              { id: 'config', label: 'Config', icon: CogIcon },
+              { id: 'logs', label: 'Logs', icon: EyeIcon, count: MOCK_AUDIT_LOGS.length },
+              { id: 'backups', label: 'Backups', icon: ShieldCheckIcon },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon className="w-4 h-4 mr-2" />
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className="ml-2 py-0.5 px-2 text-xs bg-gray-100 rounded-full">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* System Health */}
+            <div className="lg:col-span-2">
+              <Card>
+                <div className="p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">System Health</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center mb-2">
+                        {getStatusIcon(MOCK_SYSTEM_METRICS.apiStatus)}
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">API Status</div>
+                      <div className="text-xs text-gray-600">{MOCK_SYSTEM_METRICS.apiStatus}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center mb-2">
+                        {getStatusIcon(MOCK_SYSTEM_METRICS.databaseStatus)}
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">Database</div>
+                      <div className="text-xs text-gray-600">
+                        {MOCK_SYSTEM_METRICS.databaseStatus}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-900">
+                        {Math.round(
+                          (MOCK_SYSTEM_METRICS.storageUsed / MOCK_SYSTEM_METRICS.storageTotal) * 100
+                        )}
+                        %
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">Storage</div>
+                      <div className="text-xs text-gray-600">
+                        {MOCK_SYSTEM_METRICS.storageUsed}TB/{MOCK_SYSTEM_METRICS.storageTotal}TB
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-900">
+                        {MOCK_SYSTEM_METRICS.activeUsers}
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">Active Users</div>
+                      <div className="text-xs text-gray-600">
+                        {MOCK_SYSTEM_METRICS.responseTime}ms avg
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6 pt-4 border-t">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Last Backup:</span>
+                      <span className="font-medium">
+                        {formatTimeAgo(MOCK_SYSTEM_METRICS.lastBackup)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Recent Activity */}
+            <div>
+              <Card>
+                <div className="p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+                  <div className="space-y-3">
+                    {MOCK_AUDIT_LOGS.slice(0, 5).map(log => (
+                      <div key={log.id} className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              log.severity === 'High' || log.severity === 'Critical'
+                                ? 'bg-red-500'
+                                : log.severity === 'Medium'
+                                ? 'bg-amber-500'
+                                : 'bg-green-500'
+                            }`}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{log.action}</p>
+                          <p className="text-xs text-gray-600">{formatTimeAgo(log.timestamp)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === 'users' && (
+          <div className="space-y-6">
+            {/* Search and Filters */}
+            <Card>
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="relative col-span-2">
+                    <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search users..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <select
+                    value={userFilter.role}
+                    onChange={e => setUserFilter(prev => ({ ...prev, role: e.target.value }))}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="All">All Roles</option>
+                    {MOCK_ROLES.map(role => (
+                      <option key={role.id} value={role.name}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={userFilter.status}
+                    onChange={e => setUserFilter(prev => ({ ...prev, status: e.target.value }))}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="All">All Statuses</option>
+                    {Object.values(UserStatus).map(status => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </Card>
+
+            {/* Users Table */}
+            <Card>
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Users ({filteredUsers.length})
+                  </h3>
+                  <Button
+                    onClick={() => handleAction('create_user')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    New User
+                  </Button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Name
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Role
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Last Active
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredUsers.map(user => (
+                        <tr
+                          key={user.id}
+                          className={`cursor-pointer hover:bg-gray-50 ${
+                            selectedUser?.id === user.id ? 'bg-blue-50' : ''
+                          }`}
+                          onClick={() => setSelectedUser(user)}
+                        >
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                              <div className="text-sm text-gray-500">{user.email}</div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center space-x-2">
+                              {getStatusIcon(user.status)}
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                                  user.status
+                                )}`}
+                              >
+                                {user.status}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatTimeAgo(user.lastActive)}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleAction('edit_user', user);
+                                }}
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <PencilIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleAction('delete_user', user);
+                                }}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Roles Tab */}
+        {activeTab === 'roles' && (
+          <div className="space-y-6">
+            <Card>
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Role Management ({MOCK_ROLES.length})
+                  </h3>
+                  <Button
+                    onClick={() => handleAction('create_role')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    New Role
+                  </Button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Role
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Users
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Access Level
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Last Modified
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {MOCK_ROLES.map(role => (
+                        <tr
+                          key={role.id}
+                          className={`cursor-pointer hover:bg-gray-50 ${
+                            selectedRole?.id === role.id ? 'bg-blue-50' : ''
+                          }`}
+                          onClick={() => setSelectedRole(role)}
+                        >
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{role.name}</div>
+                              <div className="text-sm text-gray-500">{role.description}</div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {role.userCount}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                role.accessLevel === 'Full'
+                                  ? 'bg-red-100 text-red-800'
+                                  : role.accessLevel === 'High'
+                                  ? 'bg-orange-100 text-orange-800'
+                                  : role.accessLevel === 'Medium'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {role.accessLevel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {role.lastModified.toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleAction('edit_role', role);
+                                }}
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <PencilIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleAction('delete_role', role);
+                                }}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Logs Tab */}
+        {activeTab === 'logs' && (
+          <Card>
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                System Logs & Audit Trail ({MOCK_AUDIT_LOGS.length})
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Timestamp
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        User
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Action
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Details
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {MOCK_AUDIT_LOGS.map(log => (
+                      <tr key={log.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {log.timestamp.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {log.user}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${
+                              log.type === 'Security'
+                                ? 'bg-red-100 text-red-800'
+                                : log.type === 'Config'
+                                ? 'bg-blue-100 text-blue-800'
+                                : log.type === 'Error'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {log.type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {log.action}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600 max-w-md truncate">
+                          {log.details}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
