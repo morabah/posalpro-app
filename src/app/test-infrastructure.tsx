@@ -37,10 +37,10 @@ export default function TestInfrastructurePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-neutral-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">
+          <h1 className="text-3xl font-bold text-neutral-900 mb-6">
             Infrastructure Testing Dashboard
           </h1>
 
@@ -50,7 +50,7 @@ export default function TestInfrastructurePage() {
               disabled={isRunning}
               className={`px-4 py-2 rounded-md font-medium ${
                 isRunning
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
@@ -119,7 +119,7 @@ export default function TestInfrastructurePage() {
 
               {/* Test Results Details */}
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Test Results</h2>
+                <h2 className="text-xl font-semibold text-neutral-900 mb-4">Test Results</h2>
                 <div className="space-y-2">
                   {testResults.results.map((result, index) => (
                     <div
@@ -136,10 +136,10 @@ export default function TestInfrastructurePage() {
                             result.status === 'success' ? 'bg-green-500' : 'bg-red-500'
                           }`}
                         />
-                        <span className="font-medium text-gray-900">{result.testName}</span>
+                        <span className="font-medium text-neutral-900">{result.testName}</span>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-neutral-600">
                           {result.duration.toFixed(2)}ms
                         </span>
                         <span
@@ -181,17 +181,17 @@ export default function TestInfrastructurePage() {
 
               {/* Performance Summary */}
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Performance Summary</h2>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <h2 className="text-xl font-semibold text-neutral-900 mb-4">Performance Summary</h2>
+                <div className="bg-neutral-50 rounded-lg p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm text-gray-600">Total Duration:</span>
+                      <span className="text-sm text-neutral-600">Total Duration:</span>
                       <span className="ml-2 font-medium">
                         {testResults.totalDuration.toFixed(2)}ms
                       </span>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600">Average per Test:</span>
+                      <span className="text-sm text-neutral-600">Average per Test:</span>
                       <span className="ml-2 font-medium">
                         {(testResults.totalDuration / testResults.totalTests).toFixed(2)}ms
                       </span>
@@ -205,7 +205,7 @@ export default function TestInfrastructurePage() {
           {isRunning && (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600">Running infrastructure tests...</span>
+              <span className="ml-3 text-neutral-600">Running infrastructure tests...</span>
             </div>
           )}
         </div>

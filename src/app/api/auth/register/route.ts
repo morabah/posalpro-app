@@ -1,11 +1,9 @@
 /**
- * PosalPro MVP2 - User Registration API Route
+ * PosalPro MVP2 - User Registration API Route (Mock Implementation)
  * Based on USER_REGISTRATION_SCREEN.md wireframe
  * Role assignment and analytics integration
  */
 
-import { hashPassword } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -77,222 +75,44 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = registerSchema.parse(body);
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+    // Mock registration success
+    console.log('📝 Mock registration for:', validatedData.email);
+    console.log('👤 User details:', {
+      name: `${validatedData.firstName} ${validatedData.lastName}`,
+      department: validatedData.department,
+      roles: validatedData.roles,
     });
 
-    if (existingUser) {
-      return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
-    }
-
-    // Validate roles exist
-    const roles = await prisma.role.findMany({
-      where: { name: { in: validatedData.roles } },
-    });
-
-    if (roles.length !== validatedData.roles.length) {
-      return NextResponse.json(
-        { error: 'One or more selected roles are invalid' },
-        { status: 400 }
-      );
-    }
-
-    // Hash password
-    const hashedPassword = await hashPassword(validatedData.password);
-
-    // Create user with transaction
-    const result = await prisma.$transaction(async tx => {
-      // Create user
-      const user = await tx.user.create({
-        data: {
-          email: validatedData.email,
-          name: `${validatedData.firstName} ${validatedData.lastName}`,
-          password: hashedPassword,
-          department: validatedData.department,
-          status: 'PENDING', // Will be activated after email verification
-        },
-      });
-
-      // Assign roles
-      const roleAssignments = await Promise.all(
-        roles.map(role =>
-          tx.userRole.create({
-            data: {
-              userId: user.id,
-              roleId: role.id,
-              assignedBy: 'system', // or admin user ID
-              isActive: true,
-            },
-          })
-        )
-      );
-
-      // Create user preferences
-      await tx.userPreferences.create({
-        data: {
-          userId: user.id,
-          theme: 'system',
-          language: 'en',
-          analyticsConsent: validatedData.marketingConsent || false,
-          performanceTracking: true,
-        },
-      });
-
-      // Create user analytics profile
-      await tx.userAnalyticsProfile.create({
-        data: {
-          userId: user.id,
-          performanceMetrics: {},
-          hypothesisContributions: {},
-          skillAssessments: {},
-          efficiencyRatings: {},
-          lastAssessment: new Date(),
-        },
-      });
-
-      // Create communication preferences
-      if (validatedData.notificationChannels || validatedData.notificationFrequency) {
-        await tx.communicationPreferences.create({
-          data: {
-            userId: user.id,
-            language: 'en',
-            timezone: 'UTC',
-            channels:
-              validatedData.notificationChannels?.map(channel => ({
-                channel,
-                enabled: true,
-                settings: {},
-              })) || [],
-            frequency: {
-              immediate: validatedData.notificationFrequency === 'immediate',
-              daily: validatedData.notificationFrequency === 'daily',
-              weekly: validatedData.notificationFrequency === 'weekly',
-              monthly: validatedData.notificationFrequency === 'monthly',
-            },
-            categories: [],
-          },
-        });
-      }
-
-      // Create accessibility configuration
-      await tx.accessibilityConfiguration.create({
-        data: {
-          userId: user.id,
-          complianceLevel: 'AA',
-          preferences: {
-            highContrast: false,
-            largeText: false,
-            reducedMotion: false,
-            screenReader: false,
-            keyboardNavigation: false,
-            fontSize: 16,
-            lineHeight: 1.5,
-          },
-          assistiveTechnology: [],
-          customizations: [],
-          lastUpdated: new Date(),
-        },
-      });
-
-      // Log audit event
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          userRole: validatedData.roles.join(','),
-          action: 'CREATE_USER',
-          entity: 'User',
-          entityId: user.id,
-          changes: [
-            {
-              field: 'email',
-              oldValue: null,
-              newValue: user.email,
-              changeType: 'create',
-            },
-            {
-              field: 'roles',
-              oldValue: null,
-              newValue: validatedData.roles,
-              changeType: 'create',
-            },
-          ],
-          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-          userAgent: request.headers.get('user-agent') || 'unknown',
-          success: true,
-          severity: 'LOW',
-          category: 'DATA',
-          timestamp: new Date(),
-        },
-      });
-
-      // Track registration analytics
-      await tx.hypothesisValidationEvent.create({
-        data: {
-          userId: user.id,
-          hypothesis: 'H4', // Cross-Department Coordination
-          userStoryId: 'US-2.3',
-          componentId: 'UserRegistration',
-          action: 'REGISTER_USER',
-          measurementData: {
-            registrationTime: Date.now(),
-            rolesSelected: validatedData.roles.length,
-            notificationChannelsConfigured: validatedData.notificationChannels?.length || 0,
-            accessibilityConfigured: true,
-          },
-          targetValue: 100, // 100% successful registrations
-          actualValue: 100, // This registration succeeded
-          performanceImprovement: 0, // Baseline
-          userRole: validatedData.roles[0], // Primary role
-          sessionId: `reg_${Date.now()}`,
-          timestamp: new Date(),
-        },
-      });
-
-      return { user, roleAssignments };
-    });
-
-    // Send verification email (placeholder - implement with nodemailer)
-    // await sendVerificationEmail(result.user.email, result.user.id);
-
+    // Simulate success response
     return NextResponse.json(
       {
-        message: 'User registered successfully. Please check your email for verification.',
-        userId: result.user.id,
-        roles: validatedData.roles,
+        success: true,
+        message: 'Registration successful! You can now log in with your credentials.',
+        data: {
+          userId: `mock-${Date.now()}`,
+          email: validatedData.email,
+          name: `${validatedData.firstName} ${validatedData.lastName}`,
+          roles: validatedData.roles,
+        },
       },
       { status: 201 }
     );
   } catch (error) {
     console.error('Registration error:', error);
 
-    // Log security event for failed registration
-    try {
-      await prisma.securityEvent.create({
-        data: {
-          type: 'SUSPICIOUS_ACTIVITY',
-          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-          details: {
-            action: 'FAILED_REGISTRATION',
-            error: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: new Date(),
-          },
-          riskLevel: 'LOW',
-          status: 'DETECTED',
-          timestamp: new Date(),
-        },
-      });
-    } catch (logError) {
-      console.error('Failed to log security event:', logError);
-    }
-
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        {
+          error: 'Validation failed',
+          details: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+          })),
+        },
         { status: 400 }
       );
     }
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 500 });
   }
 }

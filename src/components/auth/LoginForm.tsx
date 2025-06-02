@@ -288,203 +288,267 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
   };
 
   return (
-    <div className={`min-h-screen bg-white flex ${className}`}>
+    <div
+      className={`min-h-screen bg-gradient-to-br from-primary-50 via-white to-blue-50 flex ${className}`}
+    >
       {/* Left Panel - Illustration */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-50 to-indigo-100 items-center justify-center p-12">
-        <div className="max-w-md text-center">
-          <div className="w-64 h-64 mx-auto mb-8 bg-gradient-to-br from-blue-200 to-indigo-300 rounded-full flex items-center justify-center">
-            <div className="text-6xl text-blue-600">📋</div>
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-600 to-blue-600 items-center justify-center p-12 relative overflow-hidden">
+        {/* Background pattern */}
+        <div className="absolute inset-0 bg-white/5 backdrop-blur-sm"></div>
+        <div className="relative z-10 max-w-md text-center text-white">
+          <div className="w-64 h-64 mx-auto mb-8 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
+            <div className="text-6xl">📋</div>
           </div>
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-            Streamline your proposal workflow with AI-powered collaboration
+          <h2 className="text-3xl font-bold mb-4 leading-tight">
+            Streamline Your Proposal Workflow
           </h2>
-          <p className="text-gray-600">
-            Connect teams, accelerate decisions, and deliver winning proposals faster than ever.
+          <p className="text-primary-100 text-lg leading-relaxed">
+            Connect teams, accelerate decisions, and deliver winning proposals with AI-powered
+            collaboration tools.
           </p>
+          <div className="mt-8 flex items-center justify-center space-x-2">
+            <div className="w-2 h-2 bg-white rounded-full"></div>
+            <div className="w-2 h-2 bg-white/60 rounded-full"></div>
+            <div className="w-2 h-2 bg-white/40 rounded-full"></div>
+          </div>
         </div>
       </div>
 
       {/* Right Panel - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="max-w-md w-full">
+          {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">POSALPRO</h1>
-            <h2 className="text-2xl font-semibold text-gray-800 mt-2">Welcome Back</h2>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent mb-2">
+              PosalPro
+            </h1>
+            <h2 className="text-2xl font-semibold text-neutral-800 mb-2">Welcome Back</h2>
+            <p className="text-neutral-600">Sign in to your enterprise account</p>
           </div>
 
-          {/* Error Alert */}
-          {authError && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-red-800 font-medium">Authentication Failed</p>
-                <p className="text-red-700 text-sm mt-1">{authError}</p>
+          {/* Login Form Card */}
+          <div className="bg-white rounded-xl shadow-xl border border-neutral-200 p-8">
+            {/* Error Alert */}
+            {authError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-800 font-medium">Authentication Failed</p>
+                  <p className="text-red-700 text-sm mt-1">{authError}</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
-              <input
-                name={register('email').name}
-                onChange={e => {
-                  register('email').onChange(e);
-                  setAuthError(null);
-                  trackFieldInteraction('email', 'change');
-                }}
-                onBlur={e => {
-                  register('email').onBlur(e);
-                  trackFieldInteraction('email', 'blur');
-                }}
-                ref={register('email').ref}
-                type="email"
-                id="email"
-                autoComplete="email"
-                placeholder="admin@posalpro.com"
-                className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                  errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                }`}
-                onFocus={() => trackFieldInteraction('email', 'focus')}
-              />
-              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <div className="relative">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Email Field */}
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-semibold text-neutral-700 mb-2"
+                >
+                  Email Address
+                </label>
                 <input
-                  name={register('password').name}
+                  name={register('email').name}
                   onChange={e => {
-                    register('password').onChange(e);
+                    register('email').onChange(e);
                     setAuthError(null);
-                    trackFieldInteraction('password', 'change');
+                    trackFieldInteraction('email', 'change');
                   }}
                   onBlur={e => {
-                    register('password').onBlur(e);
-                    trackFieldInteraction('password', 'blur');
+                    register('email').onBlur(e);
+                    trackFieldInteraction('email', 'blur');
                   }}
-                  ref={register('password').ref}
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  autoComplete="current-password"
-                  placeholder="PosalPro2024!"
-                  className={`w-full h-10 px-3 pr-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                    errors.password ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  ref={register('email').ref}
+                  type="email"
+                  id="email"
+                  autoComplete="email"
+                  placeholder="admin@posalpro.com"
+                  className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                    errors.email
+                      ? 'border-red-300 bg-red-50'
+                      : 'border-neutral-300 hover:border-neutral-400'
                   }`}
-                  onFocus={() => trackFieldInteraction('password', 'focus')}
+                  onFocus={() => trackFieldInteraction('email', 'focus')}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-              )}
-            </div>
-
-            {/* Role Selection */}
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                Role
-              </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                  className={`w-full h-10 px-3 border rounded-md text-left focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex items-center justify-between ${
-                    errors.role ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                  }`}
-                  onFocus={() => trackFieldInteraction('role', 'focus')}
-                >
-                  <span className={selectedRole ? 'text-gray-900' : 'text-gray-500'}>
-                    {selectedRole || 'Select a role'}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 text-gray-400 transition-transform ${
-                      roleDropdownOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
-
-                {roleDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                    {AVAILABLE_ROLES.map(role => (
-                      <button
-                        key={role.value}
-                        type="button"
-                        onClick={() => handleRoleSelect(role.value)}
-                        className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors"
-                      >
-                        {role.label}
-                      </button>
-                    ))}
-                  </div>
+                {errors.email && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.email.message}</span>
+                  </p>
                 )}
               </div>
-              {errors.role && <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>}
-            </div>
 
-            {/* Remember Me */}
-            <div className="flex items-center">
-              <input
-                {...register('rememberMe')}
-                type="checkbox"
-                id="rememberMe"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
-                Remember me
-              </label>
-            </div>
+              {/* Password Field */}
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-semibold text-neutral-700 mb-2"
+                >
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    name={register('password').name}
+                    onChange={e => {
+                      register('password').onChange(e);
+                      setAuthError(null);
+                      trackFieldInteraction('password', 'change');
+                    }}
+                    onBlur={e => {
+                      register('password').onBlur(e);
+                      trackFieldInteraction('password', 'blur');
+                    }}
+                    ref={register('password').ref}
+                    type={showPassword ? 'text' : 'password'}
+                    id="password"
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    className={`w-full h-12 px-4 pr-12 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                      errors.password
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-neutral-300 hover:border-neutral-400'
+                    }`}
+                    onFocus={() => trackFieldInteraction('password', 'focus')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.password.message}</span>
+                  </p>
+                )}
+              </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`w-full h-11 font-medium rounded-md transition-all duration-200 flex items-center justify-center space-x-2 ${
-                email && password && selectedRole && !isLoading
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
-                  : !isLoading
-                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-sm hover:shadow-md'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-              title={!isValid ? 'Debug mode: Form validation may have issues' : 'Ready to sign in'}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Signing In...</span>
-                </>
-              ) : (
-                <span>
-                  {email && password && selectedRole ? 'Sign In' : 'Debug: Fill All Fields'}
-                </span>
-              )}
-            </button>
+              {/* Role Selection */}
+              <div>
+                <label htmlFor="role" className="block text-sm font-semibold text-neutral-700 mb-2">
+                  Select Role
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                    className={`w-full h-12 px-4 border-2 rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 flex items-center justify-between ${
+                      errors.role
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-neutral-300 hover:border-neutral-400'
+                    }`}
+                    onFocus={() => trackFieldInteraction('role', 'focus')}
+                  >
+                    <span
+                      className={selectedRole ? 'text-neutral-900 font-medium' : 'text-neutral-500'}
+                    >
+                      {selectedRole || 'Choose your role'}
+                    </span>
+                    <ChevronDown
+                      className={`w-5 h-5 text-neutral-400 transition-transform duration-200 ${
+                        roleDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
 
-            {/* Forgot Password */}
-            <div className="text-center">
+                  {roleDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-2 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-60 overflow-auto">
+                      {AVAILABLE_ROLES.map(role => (
+                        <button
+                          key={role.value}
+                          type="button"
+                          onClick={() => handleRoleSelect(role.value)}
+                          className="w-full px-4 py-3 text-left hover:bg-primary-50 hover:text-primary-700 focus:bg-primary-50 focus:text-primary-700 focus:outline-none transition-colors duration-200 border-b border-neutral-100 last:border-b-0"
+                        >
+                          <span className="font-medium">{role.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {errors.role && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.role.message}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Remember Me */}
+              <div className="flex items-center">
+                <input
+                  {...register('rememberMe')}
+                  type="checkbox"
+                  id="rememberMe"
+                  className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-neutral-300 rounded"
+                />
+                <label
+                  htmlFor="rememberMe"
+                  className="ml-3 block text-sm font-medium text-neutral-700"
+                >
+                  Keep me signed in
+                </label>
+              </div>
+
+              {/* Submit Button */}
               <button
-                type="button"
-                onClick={() => router.push('/auth/reset-password')}
-                className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                type="submit"
+                disabled={isLoading}
+                className={`w-full h-12 font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl ${
+                  email && password && selectedRole && !isLoading
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white'
+                    : !isLoading
+                    ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white'
+                    : 'bg-neutral-300 text-neutral-500 cursor-not-allowed shadow-none'
+                }`}
+                title={
+                  !isValid ? 'Debug mode: Form validation may have issues' : 'Ready to sign in'
+                }
               >
-                Forgot password?
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Signing In...</span>
+                  </>
+                ) : (
+                  <span>
+                    {email && password && selectedRole
+                      ? 'Sign In to Dashboard'
+                      : 'Debug: Fill All Fields'}
+                  </span>
+                )}
               </button>
-            </div>
-          </form>
+
+              {/* Forgot Password */}
+              <div className="text-center pt-4 border-t border-neutral-200">
+                <button
+                  type="button"
+                  onClick={() => router.push('/auth/reset-password')}
+                  className="text-sm text-primary-600 hover:text-primary-700 hover:underline font-medium transition-colors"
+                >
+                  Forgot your password?
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Additional Links */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-neutral-600">
+              Don&apos;t have an account?{' '}
+              <button
+                onClick={() => router.push('/auth/register')}
+                className="text-primary-600 hover:text-primary-700 font-semibold hover:underline transition-colors"
+              >
+                Create Account
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     </div>

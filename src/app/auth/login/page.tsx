@@ -13,18 +13,20 @@ export const metadata: Metadata = {
 };
 
 interface LoginPageProps {
-  searchParams: {
+  searchParams: Promise<{
     callbackUrl?: string;
     error?: string;
     registered?: string;
     verified?: string;
-  };
+  }>;
 }
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <LoginForm callbackUrl={searchParams.callbackUrl} />
+      <LoginForm callbackUrl={params.callbackUrl} />
     </Suspense>
   );
 }

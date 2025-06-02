@@ -227,7 +227,7 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Application Preferences</h2>
+        <h2 className="text-lg font-semibold text-neutral-900">Application Preferences</h2>
       </div>
 
       {/* Success/Error Messages */}
@@ -251,78 +251,78 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* General Preferences */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4">General Settings</h3>
+          <h3 className="text-md font-medium text-neutral-900 mb-4">General Settings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Theme */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Theme</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-3">Theme</label>
               <div className="space-y-2">
                 <label className="flex items-center space-x-3">
                   <input
                     {...register('theme')}
                     type="radio"
                     value="light"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <Sun className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">Light</span>
+                  <Sun className="w-4 h-4 text-neutral-500" />
+                  <span className="text-sm text-neutral-700">Light</span>
                 </label>
                 <label className="flex items-center space-x-3">
                   <input
                     {...register('theme')}
                     type="radio"
                     value="dark"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <Moon className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">Dark</span>
+                  <Moon className="w-4 h-4 text-neutral-500" />
+                  <span className="text-sm text-neutral-700">Dark</span>
                 </label>
                 <label className="flex items-center space-x-3">
                   <input
                     {...register('theme')}
                     type="radio"
                     value="system"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <Monitor className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">System</span>
+                  <Monitor className="w-4 h-4 text-neutral-500" />
+                  <span className="text-sm text-neutral-700">System</span>
                 </label>
               </div>
             </div>
 
             {/* Default View */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Default View</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-3">Default View</label>
               <div className="space-y-2">
                 <label className="flex items-center space-x-3">
                   <input
                     {...register('defaultView')}
                     type="radio"
                     value="card"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <span className="text-sm text-gray-700">Card View</span>
+                  <span className="text-sm text-neutral-700">Card View</span>
                 </label>
                 <label className="flex items-center space-x-3">
                   <input
                     {...register('defaultView')}
                     type="radio"
                     value="table"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <span className="text-sm text-gray-700">Table View</span>
+                  <span className="text-sm text-neutral-700">Table View</span>
                 </label>
               </div>
             </div>
 
             {/* Starting Screen */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
                 Starting Screen
               </label>
               <select
                 {...register('startingScreen')}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {STARTING_SCREENS.map(screen => (
                   <option key={screen.value} value={screen.value}>
@@ -334,10 +334,10 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
             {/* Date Format */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">Date Format</label>
               <select
                 {...register('dateFormat')}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {DATE_FORMATS.map(format => (
                   <option key={format.value} value={format.value}>
@@ -349,10 +349,10 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
             {/* Time Format */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">Time Format</label>
               <select
                 {...register('timeFormat')}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {TIME_FORMATS.map(format => (
                   <option key={format.value} value={format.value}>
@@ -364,10 +364,10 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
             {/* Language */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">Language</label>
               <select
                 {...register('language')}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {LANGUAGES.map(lang => (
                   <option key={lang.value} value={lang.value}>
@@ -381,108 +381,108 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
         {/* Accessibility Settings */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4">Accessibility</h3>
+          <h3 className="text-md font-medium text-neutral-900 mb-4">Accessibility</h3>
           <div className="space-y-3">
             <label className="flex items-center space-x-3">
               <input
                 {...register('highContrast')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <Eye className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-700">High contrast mode</span>
+              <Eye className="w-4 h-4 text-neutral-500" />
+              <span className="text-sm text-neutral-700">High contrast mode</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('largeText')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <Type className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-700">Larger text</span>
+              <Type className="w-4 h-4 text-neutral-500" />
+              <span className="text-sm text-neutral-700">Larger text</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('screenReaderOptimized')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Screen reader optimized</span>
+              <span className="text-sm text-neutral-700">Screen reader optimized</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('reducedMotion')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Reduced motion</span>
+              <span className="text-sm text-neutral-700">Reduced motion</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('keyboardNavigation')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <MousePointer className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-700">Keyboard navigation mode</span>
+              <MousePointer className="w-4 h-4 text-neutral-500" />
+              <span className="text-sm text-neutral-700">Keyboard navigation mode</span>
             </label>
           </div>
         </div>
 
         {/* Dashboard Customization */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4">Dashboard Customization</h3>
+          <h3 className="text-md font-medium text-neutral-900 mb-4">Dashboard Customization</h3>
           <div className="space-y-3">
             <label className="flex items-center space-x-3">
               <input
                 {...register('showQuickActions')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Show quick actions</span>
+              <span className="text-sm text-neutral-700">Show quick actions</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('showRecentProposals')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Show recent proposals</span>
+              <span className="text-sm text-neutral-700">Show recent proposals</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('showTeamActivity')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Show team activity</span>
+              <span className="text-sm text-neutral-700">Show team activity</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('showSystemNotifications')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Show system notifications</span>
+              <span className="text-sm text-neutral-700">Show system notifications</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('showKPIs')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Show KPIs</span>
+              <span className="text-sm text-neutral-700">Show KPIs</span>
             </label>
           </div>
         </div>
 
         {/* AI Preferences */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4">AI Preferences</h3>
+          <h3 className="text-md font-medium text-neutral-900 mb-4">AI Preferences</h3>
           <div className="space-y-6">
             {/* AI Assistance Level */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-sm font-medium text-neutral-700 mb-3">
                 AI Assistance Level
               </label>
               <div className="space-y-2">
@@ -491,27 +491,27 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
                     {...register('aiAssistanceLevel')}
                     type="radio"
                     value="minimal"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <span className="text-sm text-gray-700">Minimal</span>
+                  <span className="text-sm text-neutral-700">Minimal</span>
                 </label>
                 <label className="flex items-center space-x-3">
                   <input
                     {...register('aiAssistanceLevel')}
                     type="radio"
                     value="balanced"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <span className="text-sm text-gray-700">Balanced</span>
+                  <span className="text-sm text-neutral-700">Balanced</span>
                 </label>
                 <label className="flex items-center space-x-3">
                   <input
                     {...register('aiAssistanceLevel')}
                     type="radio"
                     value="full"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300"
                   />
-                  <span className="text-sm text-gray-700">Full</span>
+                  <span className="text-sm text-neutral-700">Full</span>
                 </label>
               </div>
             </div>
@@ -522,33 +522,33 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
                 <input
                   {...register('enableContentSuggestions')}
                   type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
                 />
-                <span className="text-sm text-gray-700">Enable content suggestions</span>
+                <span className="text-sm text-neutral-700">Enable content suggestions</span>
               </label>
               <label className="flex items-center space-x-3">
                 <input
                   {...register('enableWorkflowAssistance')}
                   type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
                 />
-                <span className="text-sm text-gray-700">Enable workflow assistance</span>
+                <span className="text-sm text-neutral-700">Enable workflow assistance</span>
               </label>
               <label className="flex items-center space-x-3">
                 <input
                   {...register('enableAutomatedDrafts')}
                   type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
                 />
-                <span className="text-sm text-gray-700">Enable automated drafts</span>
+                <span className="text-sm text-neutral-700">Enable automated drafts</span>
               </label>
               <label className="flex items-center space-x-3">
                 <input
                   {...register('enableValidationHelp')}
                   type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
                 />
-                <span className="text-sm text-gray-700">Enable validation help</span>
+                <span className="text-sm text-neutral-700">Enable validation help</span>
               </label>
             </div>
           </div>
@@ -560,7 +560,7 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
             type="button"
             onClick={handleReset}
             disabled={isLoading}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:cursor-not-allowed"
+            className="flex items-center space-x-2 px-4 py-2 text-neutral-600 border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors disabled:cursor-not-allowed"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Reset to Default</span>

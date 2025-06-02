@@ -38,7 +38,7 @@ export function AuthenticatedRedirect({
       <div className={`min-h-screen flex items-center justify-center ${className}`}>
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Checking authentication...</p>
+          <p className="text-neutral-600">Checking authentication...</p>
         </div>
       </div>
     );
@@ -52,11 +52,11 @@ export function AuthenticatedRedirect({
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">Already Signed In</h1>
-          <p className="text-gray-600 mb-6">
+          <h1 className="text-2xl font-semibold text-neutral-900 mb-4">Already Signed In</h1>
+          <p className="text-neutral-600 mb-6">
             You&apos;re already signed in as <strong>{session?.user?.email}</strong>.
           </p>
-          <p className="text-gray-600 mb-6">
+          <p className="text-neutral-600 mb-6">
             If you need to register a different account, please sign out first.
           </p>
 

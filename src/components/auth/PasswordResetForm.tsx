@@ -146,15 +146,15 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
         <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Mail className="w-8 h-8 text-blue-600" />
         </div>
-        <h2 className="text-2xl font-semibold text-gray-900">Reset Your Password</h2>
-        <p className="text-gray-600 mt-2">
+        <h2 className="text-2xl font-semibold text-neutral-900">Reset Your Password</h2>
+        <p className="text-neutral-600 mt-2">
           Enter your email address and we&apos;ll send you a link to reset your password.
         </p>
       </div>
 
       <form onSubmit={requestForm.handleSubmit(handleRequestReset)} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-2">
             Email Address
           </label>
           <input
@@ -164,7 +164,7 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
             autoComplete="email"
             placeholder="your@email.com"
             className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-              requestForm.formState.errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
+              requestForm.formState.errors.email ? 'border-red-300 bg-red-50' : 'border-neutral-300'
             }`}
           />
           {requestForm.formState.errors.email && (
@@ -180,7 +180,7 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
           className={`w-full h-12 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 ${
             requestForm.formState.isValid && !isLoading
               ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
           }`}
         >
           {isLoading ? (
@@ -205,8 +205,8 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Lock className="w-8 h-8 text-green-600" />
         </div>
-        <h2 className="text-2xl font-semibold text-gray-900">Set New Password</h2>
-        <p className="text-gray-600 mt-2">
+        <h2 className="text-2xl font-semibold text-neutral-900">Set New Password</h2>
+        <p className="text-neutral-600 mt-2">
           {requestedEmail
             ? `Check your email for instructions sent to ${requestedEmail}`
             : 'Enter your reset token and new password below.'}
@@ -216,7 +216,7 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
       <form onSubmit={confirmForm.handleSubmit(handleConfirmReset)} className="space-y-4">
         {!initialToken && (
           <div>
-            <label htmlFor="token" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="token" className="block text-sm font-medium text-neutral-700 mb-2">
               Reset Token
             </label>
             <input
@@ -225,7 +225,7 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
               id="token"
               placeholder="Enter the token from your email"
               className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                confirmForm.formState.errors.token ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                confirmForm.formState.errors.token ? 'border-red-300 bg-red-50' : 'border-neutral-300'
               }`}
             />
             {confirmForm.formState.errors.token && (
@@ -237,7 +237,7 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
         )}
 
         <div>
-          <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="newPassword" className="block text-sm font-medium text-neutral-700 mb-2">
             New Password
           </label>
           <div className="relative">
@@ -250,13 +250,13 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
               className={`w-full h-12 px-4 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
                 confirmForm.formState.errors.newPassword
                   ? 'border-red-300 bg-red-50'
-                  : 'border-gray-300'
+                  : 'border-neutral-300'
               }`}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -267,14 +267,14 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
               {confirmForm.formState.errors.newPassword.message}
             </p>
           )}
-          <div className="mt-2 text-xs text-gray-500">
+          <div className="mt-2 text-xs text-neutral-500">
             Password must contain at least 8 characters with uppercase, lowercase, number, and
             special character.
           </div>
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="confirmPassword" className="block text-sm font-medium text-neutral-700 mb-2">
             Confirm New Password
           </label>
           <div className="relative">
@@ -287,13 +287,13 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
               className={`w-full h-12 px-4 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
                 confirmForm.formState.errors.confirmPassword
                   ? 'border-red-300 bg-red-50'
-                  : 'border-gray-300'
+                  : 'border-neutral-300'
               }`}
             />
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
               aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
             >
               {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -312,7 +312,7 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
           className={`w-full h-12 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 ${
             confirmForm.formState.isValid && !isLoading
               ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
           }`}
         >
           {isLoading ? (
@@ -349,8 +349,8 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
         <Check className="w-8 h-8 text-green-600" />
       </div>
-      <h2 className="text-2xl font-semibold text-gray-900">Password Reset Successful</h2>
-      <p className="text-gray-600">
+      <h2 className="text-2xl font-semibold text-neutral-900">Password Reset Successful</h2>
+      <p className="text-neutral-600">
         Your password has been successfully updated. You can now sign in with your new password.
       </p>
 
@@ -364,10 +364,10 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
   );
 
   return (
-    <div className={`min-h-screen bg-gray-50 flex items-center justify-center p-8 ${className}`}>
+    <div className={`min-h-screen bg-neutral-50 flex items-center justify-center p-8 ${className}`}>
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">POSALPRO</h1>
+          <h1 className="text-3xl font-bold text-neutral-900">POSALPRO</h1>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border p-8">
@@ -393,7 +393,7 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
               <button
                 type="button"
                 onClick={() => router.push('/auth/login')}
-                className="text-sm text-gray-600 hover:text-gray-800 hover:underline inline-flex items-center space-x-1"
+                className="text-sm text-neutral-600 hover:text-neutral-800 hover:underline inline-flex items-center space-x-1"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back to Sign In</span>

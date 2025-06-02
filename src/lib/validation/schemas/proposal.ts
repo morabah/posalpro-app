@@ -308,6 +308,48 @@ export const proposalWizardStep4Schema = z.object({
 export type ProposalWizardStep4Data = z.infer<typeof proposalWizardStep4Schema>;
 
 /**
+ * Proposal Wizard Step 5 validation schema (Section Assignment)
+ */
+export const proposalWizardStep5Schema = z.object({
+  sections: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        title: validationUtils.stringWithLength(1, 200, 'Section title'),
+        required: z.boolean(),
+        order: z.number().int().min(1),
+        estimatedHours: z.number().min(0, 'Estimated hours must be non-negative'),
+        dueDate: z.date().optional(),
+        assignedTo: z.string().optional(),
+        status: z
+          .enum(['not_started', 'in_progress', 'completed', 'reviewed'])
+          .default('not_started'),
+        description: z.string().optional(),
+        dependencies: z.array(z.string().uuid()).optional(),
+        priority: z.enum(['high', 'medium', 'low']).default('medium'),
+      })
+    )
+    .min(1, 'At least one section is required'),
+
+  sectionAssignments: z.record(z.string(), z.string()),
+
+  totalEstimatedHours: z.number().min(0).optional(),
+
+  criticalPath: z.array(z.string().uuid()).optional(),
+
+  timelineEstimate: z
+    .object({
+      startDate: z.date().optional(),
+      endDate: z.date().optional(),
+      complexity: z.enum(['low', 'medium', 'high']).default('medium'),
+      riskFactors: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
+
+export type ProposalWizardStep5Data = z.infer<typeof proposalWizardStep5Schema>;
+
+/**
  * Complete proposal entity validation schema
  */
 export const proposalEntitySchema = baseEntitySchema.extend({

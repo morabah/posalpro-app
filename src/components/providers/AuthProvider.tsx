@@ -364,8 +364,8 @@ function SessionWarningModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Session Expiring Soon</h3>
-        <p className="text-gray-600 mb-4">
+        <h3 className="text-lg font-semibold text-neutral-900 mb-4">Session Expiring Soon</h3>
+        <p className="text-neutral-600 mb-4">
           Your session will expire in {minutes}:{seconds.toString().padStart(2, '0')}. Would you
           like to extend your session?
         </p>
@@ -378,14 +378,14 @@ function SessionWarningModal({
           </button>
           <button
             onClick={onLogout}
-            className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+            className="flex-1 bg-neutral-300 text-neutral-700 px-4 py-2 rounded-md hover:bg-neutral-400 transition-colors"
           >
             Log Out
           </button>
         </div>
         <button
           onClick={onDismiss}
-          className="w-full mt-2 text-sm text-gray-500 hover:text-gray-700"
+          className="w-full mt-2 text-sm text-neutral-500 hover:text-neutral-700"
         >
           Dismiss (will logout automatically)
         </button>

@@ -286,82 +286,149 @@ export function UserProfile({ className = '' }: UserProfileProps) {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-50 ${className}`}>
-      <div className="max-w-6xl mx-auto py-8 px-4">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-blue-50">
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-neutral-200 sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+                PosalPro
+              </h1>
+              <span className="text-sm text-neutral-500 px-2 py-1 bg-neutral-100 rounded-full">
+                Profile
+              </span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
+              >
+                ← Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">User Profile</h1>
-          <p className="text-gray-600 mt-2">Manage your personal information and preferences</p>
+          <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl p-6 border border-primary-100">
+            <h1 className="text-3xl font-bold text-neutral-900 mb-2">User Profile</h1>
+            <p className="text-neutral-600 text-lg">
+              Manage your personal information, preferences, and security settings
+            </p>
+          </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="mb-8">
-          <nav className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-            {PROFILE_TABS.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`
-                    flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors
-                    ${
-                      activeTab === tab.id
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                    }
-                  `}
-                  aria-current={activeTab === tab.id ? 'page' : undefined}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Error Alert */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-red-800 font-medium">Update Failed</p>
+              <p className="text-red-800 font-medium">Error</p>
               <p className="text-red-700 text-sm mt-1">{error}</p>
             </div>
           </div>
         )}
 
-        {/* Tab Content */}
-        <div className="bg-white rounded-lg shadow-sm border">
-          {activeTab === 'personal' && (
-            <PersonalTab
-              register={register}
-              errors={errors}
-              watch={watch}
-              setValue={setValue}
-              isEditing={isEditing}
-              setIsEditing={setIsEditing}
-              isLoading={isLoading}
-              profileImage={profileImage}
-              expertiseAreas={expertiseAreas}
-              onSubmit={handleSubmit(onSubmit)}
-              onImageUpload={handleImageUpload}
-              onExpertiseToggle={handleExpertiseToggle}
-              onCancel={() => {
-                setIsEditing(false);
-                reset();
-              }}
-              user={user}
-              completeness={calculateCompleteness()}
-            />
-          )}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Sidebar Navigation */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-lg border border-neutral-200 overflow-hidden">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-neutral-900 mb-4">Settings</h3>
+                <nav className="space-y-2">
+                  {PROFILE_TABS.map(tab => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => handleTabChange(tab.id)}
+                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-all duration-200 ${
+                          activeTab === tab.id
+                            ? 'bg-gradient-to-r from-primary-50 to-blue-50 text-primary-700 border-l-4 border-primary-600'
+                            : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+                        }`}
+                      >
+                        <Icon
+                          className={`w-5 h-5 ${
+                            activeTab === tab.id ? 'text-primary-600' : 'text-neutral-400'
+                          }`}
+                        />
+                        <span className="font-medium">{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+            </div>
 
-          {activeTab === 'preferences' && <PreferencesTab analytics={analytics} user={user} />}
+            {/* Profile Completeness Card */}
+            <div className="mt-6 bg-white rounded-xl shadow-lg border border-neutral-200 p-6">
+              <h4 className="text-sm font-semibold text-neutral-700 mb-3">Profile Completeness</h4>
+              <div className="flex items-center space-x-3">
+                <div className="flex-1 bg-neutral-200 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${calculateCompleteness()}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm font-semibold text-neutral-900">
+                  {calculateCompleteness()}%
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500 mt-2">
+                Complete your profile to unlock all features
+              </p>
+            </div>
+          </div>
 
-          {activeTab === 'notifications' && <NotificationsTab analytics={analytics} user={user} />}
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-xl shadow-lg border border-neutral-200 overflow-hidden">
+              {activeTab === 'personal' && (
+                <PersonalTab
+                  register={register}
+                  errors={errors}
+                  watch={watch}
+                  setValue={setValue}
+                  isEditing={isEditing}
+                  setIsEditing={setIsEditing}
+                  isLoading={isLoading}
+                  profileImage={profileImage}
+                  expertiseAreas={expertiseAreas}
+                  onSubmit={handleSubmit(onSubmit)}
+                  onImageUpload={handleImageUpload}
+                  onExpertiseToggle={handleExpertiseToggle}
+                  onCancel={() => {
+                    setIsEditing(false);
+                    reset();
+                  }}
+                  user={user}
+                  completeness={calculateCompleteness()}
+                />
+              )}
 
-          {activeTab === 'security' && <SecurityTab analytics={analytics} user={user} />}
+              {activeTab === 'preferences' && (
+                <div className="p-8">
+                  <PreferencesTab analytics={analytics} user={user} />
+                </div>
+              )}
+
+              {activeTab === 'notifications' && (
+                <div className="p-8">
+                  <NotificationsTab analytics={analytics} user={user} />
+                </div>
+              )}
+
+              {activeTab === 'security' && (
+                <div className="p-8">
+                  <SecurityTab analytics={analytics} user={user} />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -406,25 +473,19 @@ function PersonalTab({
 }: PersonalTabProps) {
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-neutral-900">Personal Information</h2>
+          <p className="text-neutral-600 mt-1">
+            Update your personal details and profile preferences
+          </p>
+        </div>
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">Profile Completeness:</span>
-            <div className="flex items-center space-x-2">
-              <div className="w-16 bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${completeness}%` }}
-                />
-              </div>
-              <span className="text-sm font-medium text-gray-900">{completeness}%</span>
-            </div>
-          </div>
           {!isEditing && (
             <button
               onClick={() => setIsEditing(true)}
-              className="flex items-center space-x-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <Edit3 className="w-4 h-4" />
               <span>Edit Profile</span>
@@ -433,207 +494,259 @@ function PersonalTab({
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-6">
-        {/* Profile Header */}
-        <div className="flex items-start space-x-6 p-6 bg-gray-50 rounded-lg">
-          <div className="relative">
-            <div className="w-24 h-24 bg-gray-200 rounded-full overflow-hidden">
-              {profileImage ? (
-                <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-500">
-                  <User className="w-8 h-8" />
-                </div>
+      <form onSubmit={onSubmit} className="space-y-8">
+        {/* Profile Header Card */}
+        <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl p-8 border border-primary-100">
+          <div className="flex items-start space-x-6">
+            <div className="relative">
+              <div className="w-28 h-28 bg-white rounded-full overflow-hidden shadow-lg border-4 border-white">
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-primary-600 bg-primary-50">
+                    <User className="w-10 h-10" />
+                  </div>
+                )}
+              </div>
+              {isEditing && (
+                <label className="absolute bottom-0 right-0 p-2 bg-primary-600 text-white rounded-full cursor-pointer hover:bg-primary-700 transition-colors shadow-lg">
+                  <Camera className="w-4 h-4" />
+                  <input type="file" accept="image/*" onChange={onImageUpload} className="hidden" />
+                </label>
               )}
             </div>
-            {isEditing && (
-              <label className="absolute bottom-0 right-0 p-1 bg-blue-600 text-white rounded-full cursor-pointer hover:bg-blue-700 transition-colors">
-                <Camera className="w-4 h-4" />
-                <input type="file" accept="image/*" onChange={onImageUpload} className="hidden" />
+
+            <div className="flex-1">
+              <h3 className="text-2xl font-bold text-neutral-900">
+                {watch('firstName')} {watch('lastName')}
+              </h3>
+              <p className="text-lg text-primary-700 font-medium">{watch('title')}</p>
+              <p className="text-neutral-600 mt-2">
+                {watch('department')} {watch('office') && `• ${watch('office')}`}
+              </p>
+
+              {/* Profile Completeness */}
+              <div className="mt-4 flex items-center space-x-3">
+                <span className="text-sm font-medium text-neutral-700">Profile Completeness:</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-24 bg-neutral-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${completeness}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-bold text-green-600">{completeness}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Basic Information Section */}
+        <div className="bg-white rounded-xl border border-neutral-200 p-6">
+          <h4 className="text-lg font-semibold text-neutral-900 mb-6">Basic Information</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                First Name *
               </label>
-            )}
-          </div>
+              <input
+                {...register('firstName')}
+                type="text"
+                disabled={!isEditing}
+                className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                  !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
+                } ${errors.firstName ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}
+              />
+              {errors.firstName && (
+                <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.firstName.message}</span>
+                </p>
+              )}
+            </div>
 
-          <div className="flex-1">
-            <h3 className="text-xl font-semibold text-gray-900">
-              {watch('firstName')} {watch('lastName')}
-            </h3>
-            <p className="text-gray-600">{watch('title')}</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {watch('department')} • {watch('office')}
-            </p>
+            <div>
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                Last Name *
+              </label>
+              <input
+                {...register('lastName')}
+                type="text"
+                disabled={!isEditing}
+                className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                  !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
+                } ${errors.lastName ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}
+              />
+              {errors.lastName && (
+                <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.lastName.message}</span>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                Job Title *
+              </label>
+              <input
+                {...register('title')}
+                type="text"
+                disabled={!isEditing}
+                className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                  !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
+                } ${errors.title ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}
+              />
+              {errors.title && (
+                <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.title.message}</span>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                Email Address *
+              </label>
+              <input
+                {...register('email')}
+                type="email"
+                disabled={!isEditing}
+                className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                  !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
+                } ${errors.email ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}
+              />
+              {errors.email && (
+                <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.email.message}</span>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                Phone Number
+              </label>
+              <input
+                {...register('phone')}
+                type="tel"
+                disabled={!isEditing}
+                className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                  !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
+                } ${errors.phone ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}
+              />
+              {errors.phone && (
+                <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.phone.message}</span>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                Department *
+              </label>
+              <select
+                {...register('department')}
+                disabled={!isEditing}
+                className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
+                  !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
+                } ${errors.department ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}
+              >
+                <option value="">Select Department</option>
+                {DEPARTMENTS.map(dept => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+              {errors.department && (
+                <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.department.message}</span>
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Form Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
-            <input
-              {...register('firstName')}
-              type="text"
-              disabled={!isEditing}
-              className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-              } ${errors.firstName ? 'border-red-300' : 'border-gray-300'}`}
-            />
-            {errors.firstName && (
-              <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
-            <input
-              {...register('lastName')}
-              type="text"
-              disabled={!isEditing}
-              className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-              } ${errors.lastName ? 'border-red-300' : 'border-gray-300'}`}
-            />
-            {errors.lastName && (
-              <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
-            <input
-              {...register('title')}
-              type="text"
-              disabled={!isEditing}
-              className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-              } ${errors.title ? 'border-red-300' : 'border-gray-300'}`}
-            />
-            {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
-            <input
-              {...register('email')}
-              type="email"
-              disabled={!isEditing}
-              className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-              } ${errors.email ? 'border-red-300' : 'border-gray-300'}`}
-            />
-            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-            <input
-              {...register('phone')}
-              type="tel"
-              disabled={!isEditing}
-              className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-              } ${errors.phone ? 'border-red-300' : 'border-gray-300'}`}
-            />
-            {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Department *</label>
-            <select
-              {...register('department')}
-              disabled={!isEditing}
-              className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-              } ${errors.department ? 'border-red-300' : 'border-gray-300'}`}
-            >
-              <option value="">Select Department</option>
-              {DEPARTMENTS.map(dept => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
-            {errors.department && (
-              <p className="mt-1 text-sm text-red-600">{errors.department.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Office</label>
-            <select
-              {...register('office')}
-              disabled={!isEditing}
-              className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-              } ${errors.office ? 'border-red-300' : 'border-gray-300'}`}
-            >
-              <option value="">Select Office</option>
-              {OFFICES.map(office => (
-                <option key={office} value={office}>
-                  {office}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Bio */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-          <textarea
-            {...register('bio')}
-            disabled={!isEditing}
-            rows={4}
-            placeholder="Tell us about your professional background and expertise..."
-            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none ${
-              !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
-            } ${errors.bio ? 'border-red-300' : 'border-gray-300'}`}
-          />
-          {errors.bio && <p className="mt-1 text-sm text-red-600">{errors.bio.message}</p>}
-        </div>
-
-        {/* Areas of Expertise */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-4">Areas of Expertise</label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {/* Expertise Areas Section */}
+        <div className="bg-white rounded-xl border border-neutral-200 p-6">
+          <h4 className="text-lg font-semibold text-neutral-900 mb-4">Areas of Expertise</h4>
+          <p className="text-neutral-600 mb-6">
+            Select your areas of expertise to help with proposal assignments
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {EXPERTISE_AREAS.map(area => (
-              <label key={area} className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={expertiseAreas.includes(area)}
-                  onChange={() => onExpertiseToggle(area)}
-                  disabled={!isEditing}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:cursor-not-allowed"
-                />
-                <span className="text-sm text-gray-700">{area}</span>
-              </label>
+              <button
+                key={area}
+                type="button"
+                onClick={() => isEditing && onExpertiseToggle(area)}
+                disabled={!isEditing}
+                className={`p-3 text-sm font-medium rounded-lg border-2 transition-all duration-200 ${
+                  expertiseAreas.includes(area)
+                    ? 'bg-gradient-to-r from-primary-50 to-blue-50 border-primary-200 text-primary-700'
+                    : 'bg-white border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                } ${
+                  !isEditing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:shadow-md'
+                }`}
+              >
+                {area}
+                {expertiseAreas.includes(area) && (
+                  <Check className="w-4 h-4 ml-2 inline-block text-primary-600" />
+                )}
+              </button>
             ))}
           </div>
         </div>
 
+        {/* Bio Section */}
+        <div className="bg-white rounded-xl border border-neutral-200 p-6">
+          <h4 className="text-lg font-semibold text-neutral-900 mb-4">Professional Bio</h4>
+          <textarea
+            {...register('bio')}
+            disabled={!isEditing}
+            rows={4}
+            placeholder="Tell us about your professional background and experience..."
+            className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none ${
+              !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
+            } ${errors.bio ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}
+          />
+          {errors.bio && (
+            <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+              <AlertCircle className="w-4 h-4" />
+              <span>{errors.bio.message}</span>
+            </p>
+          )}
+        </div>
+
         {/* Action Buttons */}
         {isEditing && (
-          <div className="flex items-center justify-end space-x-4 pt-6 border-t">
+          <div className="flex justify-end space-x-4 pt-6 border-t border-neutral-200">
             <button
               type="button"
               onClick={onCancel}
-              disabled={isLoading}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:cursor-not-allowed"
+              className="px-6 py-3 text-neutral-700 bg-white border-2 border-neutral-300 rounded-lg hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-200 font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:bg-blue-400"
+              className="px-8 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center space-x-2"
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4" />
+                  <Save className="w-5 h-5" />
                   <span>Save Changes</span>
                 </>
               )}
@@ -641,46 +754,6 @@ function PersonalTab({
           </div>
         )}
       </form>
-
-      {/* Recent Activity */}
-      {!isEditing && (
-        <div className="mt-8 pt-8 border-t">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-md">
-              <Check className="w-4 h-4 text-green-500" />
-              <span className="text-sm text-gray-700">Profile updated successfully</span>
-              <span className="text-xs text-gray-500 ml-auto">2 hours ago</span>
-            </div>
-            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-md">
-              <Shield className="w-4 h-4 text-blue-500" />
-              <span className="text-sm text-gray-700">Security settings configured</span>
-              <span className="text-xs text-gray-500 ml-auto">1 day ago</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Team Memberships */}
-      {!isEditing && (
-        <div className="mt-8 pt-8 border-t">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Memberships</h3>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <span className="text-sm text-gray-700">Healthcare Solutions Team</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-700">Enterprise Proposals Team</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-              <span className="text-sm text-gray-700">Technical Review Committee</span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

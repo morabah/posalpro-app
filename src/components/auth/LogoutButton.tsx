@@ -45,7 +45,7 @@ export function LogoutButton({ className = '', variant = 'button', children }: L
     <button
       onClick={handleLogout}
       disabled={isLoggingOut}
-      className={`inline-flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors ${className}`}
+      className={`inline-flex items-center space-x-2 px-4 py-2 bg-neutral-600 text-white rounded-md hover:bg-neutral-700 disabled:opacity-50 transition-colors ${className}`}
     >
       <LogOut className="w-4 h-4" />
       <span>{children || (isLoggingOut ? 'Signing out...' : 'Sign out')}</span>

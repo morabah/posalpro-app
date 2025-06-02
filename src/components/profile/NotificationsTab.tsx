@@ -248,7 +248,7 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Notification Settings</h2>
+        <h2 className="text-lg font-semibold text-neutral-900">Notification Settings</h2>
       </div>
 
       {/* Success/Error Messages */}
@@ -272,8 +272,8 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* Email Notifications */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4 flex items-center space-x-2">
-            <Mail className="w-5 h-5 text-gray-500" />
+          <h3 className="text-md font-medium text-neutral-900 mb-4 flex items-center space-x-2">
+            <Mail className="w-5 h-5 text-neutral-500" />
             <span>Email Notifications</span>
           </h3>
           <div className="space-y-3 pl-7">
@@ -281,49 +281,49 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
               <input
                 {...register('emailProposalStatus')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Proposal status changes</span>
+              <span className="text-sm text-neutral-700">Proposal status changes</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('emailApprovalRequests')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Approval requests</span>
+              <span className="text-sm text-neutral-700">Approval requests</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('emailTaskAssignments')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Task assignments</span>
+              <span className="text-sm text-neutral-700">Task assignments</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('emailSystemAnnouncements')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">System announcements</span>
+              <span className="text-sm text-neutral-700">System announcements</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('emailTeamUpdates')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Team updates</span>
+              <span className="text-sm text-neutral-700">Team updates</span>
             </label>
           </div>
         </div>
 
         {/* In-App Notifications */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4 flex items-center space-x-2">
-            <Bell className="w-5 h-5 text-gray-500" />
+          <h3 className="text-md font-medium text-neutral-900 mb-4 flex items-center space-x-2">
+            <Bell className="w-5 h-5 text-neutral-500" />
             <span>In-App Notifications</span>
           </h3>
           <div className="space-y-3 pl-7">
@@ -331,49 +331,49 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
               <input
                 {...register('inAppProposalStatus')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Proposal status changes</span>
+              <span className="text-sm text-neutral-700">Proposal status changes</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('inAppApprovalRequests')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Approval requests</span>
+              <span className="text-sm text-neutral-700">Approval requests</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('inAppTaskAssignments')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Task assignments</span>
+              <span className="text-sm text-neutral-700">Task assignments</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('inAppSystemAnnouncements')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">System announcements</span>
+              <span className="text-sm text-neutral-700">System announcements</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('inAppTeamUpdates')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Team updates</span>
+              <span className="text-sm text-neutral-700">Team updates</span>
             </label>
           </div>
         </div>
 
         {/* Mobile Push Notifications */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4 flex items-center space-x-2">
-            <Smartphone className="w-5 h-5 text-gray-500" />
+          <h3 className="text-md font-medium text-neutral-900 mb-4 flex items-center space-x-2">
+            <Smartphone className="w-5 h-5 text-neutral-500" />
             <span>Mobile Push Notifications</span>
           </h3>
           <div className="space-y-3 pl-7">
@@ -381,64 +381,64 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
               <input
                 {...register('pushApprovalRequests')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Approval requests</span>
+              <span className="text-sm text-neutral-700">Approval requests</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('pushCriticalDeadlines')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Critical deadlines</span>
+              <span className="text-sm text-neutral-700">Critical deadlines</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('pushSystemAnnouncements')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">System announcements</span>
+              <span className="text-sm text-neutral-700">System announcements</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('pushTeamUpdates')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Team updates</span>
+              <span className="text-sm text-neutral-700">Team updates</span>
             </label>
           </div>
         </div>
 
         {/* Digest Preferences */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4">Digest Preferences</h3>
+          <h3 className="text-md font-medium text-neutral-900 mb-4">Digest Preferences</h3>
           <div className="space-y-3">
             <label className="flex items-center space-x-3">
               <input
                 {...register('dailySummaryEmail')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Daily summary email</span>
+              <span className="text-sm text-neutral-700">Daily summary email</span>
             </label>
             <label className="flex items-center space-x-3">
               <input
                 {...register('weeklyActivityReport')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Weekly activity report</span>
+              <span className="text-sm text-neutral-700">Weekly activity report</span>
             </label>
           </div>
         </div>
 
         {/* Quiet Hours */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4 flex items-center space-x-2">
-            <Clock className="w-5 h-5 text-gray-500" />
+          <h3 className="text-md font-medium text-neutral-900 mb-4 flex items-center space-x-2">
+            <Clock className="w-5 h-5 text-neutral-500" />
             <span>Quiet Hours</span>
           </h3>
           <div className="space-y-4">
@@ -446,18 +446,18 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
               <input
                 {...register('quietHoursEnabled')}
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="text-sm text-gray-700">Enable quiet hours</span>
+              <span className="text-sm text-neutral-700">Enable quiet hours</span>
             </label>
 
             {watch('quietHoursEnabled') && (
               <div className="pl-7 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">From</label>
                   <select
                     {...register('quietHoursFrom')}
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {TIME_OPTIONS.map(time => (
                       <option key={time} value={time}>
@@ -467,10 +467,10 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">To</label>
                   <select
                     {...register('quietHoursTo')}
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {TIME_OPTIONS.map(time => (
                       <option key={time} value={time}>
@@ -490,7 +490,7 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
             type="button"
             onClick={handleReset}
             disabled={isLoading}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:cursor-not-allowed"
+            className="flex items-center space-x-2 px-4 py-2 text-neutral-600 border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors disabled:cursor-not-allowed"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Reset</span>
@@ -518,8 +518,8 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
 
       {/* Current Notifications */}
       <div className="mt-8 pt-8 border-t">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Notifications</h3>
-        <div className="bg-gray-50 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-neutral-900 mb-4">Current Notifications</h3>
+        <div className="bg-neutral-50 rounded-lg p-4">
           {currentNotifications.length > 0 ? (
             <>
               <div className="space-y-3">
@@ -534,18 +534,18 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
                           ? 'text-red-500'
                           : notification.priority === 'medium'
                           ? 'text-yellow-500'
-                          : 'text-gray-500'
+                          : 'text-neutral-500'
                       }`}
                     />
-                    <span className="text-sm text-gray-700 flex-1">{notification.message}</span>
-                    <span className="text-xs text-gray-500">{notification.time}</span>
+                    <span className="text-sm text-neutral-700 flex-1">{notification.message}</span>
+                    <span className="text-xs text-neutral-500">{notification.time}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-end space-x-4 mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-end space-x-4 mt-4 pt-4 border-t border-neutral-200">
                 <button
                   onClick={handleClearAll}
-                  className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
                 >
                   Clear All
                 </button>
@@ -559,8 +559,8 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
             </>
           ) : (
             <div className="text-center py-8">
-              <VolumeX className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-500">No notifications</p>
+              <VolumeX className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
+              <p className="text-neutral-500">No notifications</p>
             </div>
           )}
         </div>

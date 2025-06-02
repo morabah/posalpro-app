@@ -177,7 +177,7 @@ export function ProtectedRoute({
       <div className={`min-h-screen flex items-center justify-center ${className}`}>
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Verifying access...</p>
+          <p className="text-neutral-600">Verifying access...</p>
         </div>
       </div>
     );
@@ -191,11 +191,11 @@ export function ProtectedRoute({
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <Lock className="w-8 h-8 text-red-600" />
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">Authentication Required</h1>
-          <p className="text-gray-600 mb-6">
+          <h1 className="text-2xl font-semibold text-neutral-900 mb-4">Authentication Required</h1>
+          <p className="text-neutral-600 mb-6">
             Please sign in to access this page. You&apos;ll be redirected automatically.
           </p>
-          <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+          <div className="flex items-center justify-center space-x-2 text-sm text-neutral-500">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span>Redirecting to sign in...</span>
           </div>
@@ -212,7 +212,7 @@ export function ProtectedRoute({
           <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <Shield className="w-8 h-8 text-orange-600" />
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">Access Denied</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900 mb-4">Access Denied</h1>
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
             <div className="flex items-start space-x-3">
               <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
@@ -226,7 +226,7 @@ export function ProtectedRoute({
           <div className="space-y-3">
             <button
               onClick={() => router.back()}
-              className="w-full px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full px-4 py-2 text-neutral-600 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
             >
               Go Back
             </button>
@@ -239,9 +239,9 @@ export function ProtectedRoute({
           </div>
 
           {session?.user && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg text-left">
-              <h3 className="text-sm font-medium text-gray-900 mb-2">Your Current Access:</h3>
-              <div className="text-xs text-gray-600 space-y-1">
+            <div className="mt-6 p-4 bg-neutral-50 rounded-lg text-left">
+              <h3 className="text-sm font-medium text-neutral-900 mb-2">Your Current Access:</h3>
+              <div className="text-xs text-neutral-600 space-y-1">
                 <p>
                   <strong>Roles:</strong> {session.user.roles?.join(', ') || 'None'}
                 </p>

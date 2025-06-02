@@ -1,27 +1,35 @@
-import { AuthProvider } from '@/components/providers/AuthProvider';
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+/**
+ * PosalPro MVP2 - Root Layout
+ * Global layout with error boundaries and providers
+ */
 
-const inter = Inter({
-  variable: '--font-inter',
-  subsets: ['latin'],
-});
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ErrorBoundary } from '@/components/providers/ErrorBoundary';
+import '@/styles/globals.css';
+import { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'PosalPro MVP2',
-  description: 'Professional proposal management platform with AI-powered collaboration',
+  title: 'PosalPro - AI-Powered Proposal Management',
+  description: 'Streamline your proposal process with intelligent automation',
+  keywords: ['proposals', 'business development', 'automation', 'AI'],
+  authors: [{ name: 'PosalPro Team' }],
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} antialiased`}>
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en" className="h-full">
+      <body className={`${inter.className} h-full antialiased`}>
+        <ErrorBoundary enableReporting={process.env.NODE_ENV === 'production'}>
+          <AuthProvider>{children}</AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

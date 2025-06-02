@@ -287,115 +287,149 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
   };
 
   return (
-    <div className={`min-h-screen bg-gray-50 ${className}`}>
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">POSALPRO</h1>
-          <h2 className="text-xl font-semibold text-gray-700 mt-2">User Registration</h2>
-        </div>
+    <div
+      className={`min-h-screen bg-gradient-to-br from-primary-50 via-white to-blue-50 ${className}`}
+    >
+      {/* Progress Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-neutral-200 sticky top-0 z-30">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="text-center mb-6">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent mb-2">
+              Create Your PosalPro Account
+            </h1>
+            <p className="text-neutral-600">Set up your enterprise account in just a few steps</p>
+          </div>
 
-        {/* Progress Steps */}
-        <div className="mb-8">
+          {/* Progress Steps */}
           <div className="flex items-center justify-center space-x-4">
             {REGISTRATION_STEPS.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <div
-                  className={`
-                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
-                  ${index <= currentStep ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}
-                `}
+                  className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-all duration-200 ${
+                    index === currentStep
+                      ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
+                      : index < currentStep
+                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      : 'bg-neutral-100 text-neutral-500 border border-neutral-200'
+                  }`}
                 >
-                  {index < currentStep ? <Check className="w-4 h-4" /> : index + 1}
-                </div>
-                <div className="ml-2 hidden sm:block">
                   <div
-                    className={`text-sm font-medium ${
-                      index <= currentStep ? 'text-blue-600' : 'text-gray-500'
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index === currentStep
+                        ? 'bg-white text-primary-600'
+                        : index < currentStep
+                        ? 'bg-green-500 text-white'
+                        : 'bg-neutral-300 text-neutral-600'
                     }`}
                   >
-                    {step.title}
+                    {index < currentStep ? <Check className="w-5 h-5" /> : index + 1}
                   </div>
-                  <div className="text-xs text-gray-500">{step.description}</div>
+                  <div className="hidden sm:block">
+                    <div className="font-semibold">{step.title}</div>
+                    <div className="text-xs opacity-75">{step.description}</div>
+                  </div>
                 </div>
                 {index < REGISTRATION_STEPS.length - 1 && (
-                  <div
-                    className={`w-12 h-px mx-4 ${
-                      index < currentStep ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  />
+                  <ArrowRight className="w-4 h-4 mx-2 text-neutral-400" />
                 )}
               </div>
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Error Alert */}
-        {submitError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-red-800 font-medium">Registration Failed</p>
-              <p className="text-red-700 text-sm mt-1">{submitError}</p>
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-xl shadow-xl border border-neutral-200 overflow-hidden">
+          {/* Error Alert */}
+          {submitError && (
+            <div className="m-8 mb-0 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-red-800 font-medium">Registration Failed</p>
+                <p className="text-red-700 text-sm mt-1">{submitError}</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Form Content */}
-        <div className="bg-white rounded-lg shadow-sm border p-8">
           <form onSubmit={handleSubmit(onSubmit)}>
-            {renderStepContent()}
+            <div className="p-8">{renderStepContent()}</div>
 
             {/* Navigation */}
-            <div className="flex justify-between mt-8 pt-6 border-t">
+            <div className="flex items-center justify-between p-8 bg-neutral-50 border-t border-neutral-200">
               <button
                 type="button"
                 onClick={handlePrevious}
                 disabled={currentStep === 0}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                  currentStep === 0
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-                }`}
+                className="flex items-center space-x-2 px-6 py-3 text-neutral-700 bg-white border-2 border-neutral-300 rounded-lg hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back</span>
+                <ArrowLeft className="w-5 h-5" />
+                <span>Previous</span>
               </button>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-neutral-600">
+                  Step {currentStep + 1} of {REGISTRATION_STEPS.length}
+                </span>
+                <div className="flex space-x-1">
+                  {REGISTRATION_STEPS.map((_, index) => (
+                    <div
+                      key={index}
+                      className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                        index === currentStep
+                          ? 'bg-primary-600'
+                          : index < currentStep
+                          ? 'bg-green-500'
+                          : 'bg-neutral-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
 
               {currentStep < REGISTRATION_STEPS.length - 1 ? (
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                 >
-                  <span>Continue to {REGISTRATION_STEPS[currentStep + 1].title}</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Next</span>
+                  <ArrowRight className="w-5 h-5" />
                 </button>
               ) : (
                 <button
                   type="submit"
                   disabled={isLoading || !isValid}
-                  className={`flex items-center space-x-2 px-6 py-2 rounded-md transition-colors ${
-                    isValid && !isLoading
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
+                  className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-5 h-5 animate-spin" />
                       <span>Creating Account...</span>
                     </>
                   ) : (
                     <>
-                      <span>Create User Account</span>
-                      <Check className="w-4 h-4" />
+                      <Check className="w-5 h-5" />
+                      <span>Create Account</span>
                     </>
                   )}
                 </button>
               )}
             </div>
           </form>
+        </div>
+
+        {/* Help Text */}
+        <div className="mt-6 text-center">
+          <p className="text-sm text-neutral-600">
+            Already have an account?{' '}
+            <button
+              onClick={() => router.push('/auth/login')}
+              className="text-primary-600 hover:text-primary-700 font-semibold hover:underline transition-colors"
+            >
+              Sign In
+            </button>
+          </p>
         </div>
       </div>
     </div>
@@ -414,16 +448,16 @@ function UserInfoStep({
 }) {
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">User Information</h3>
+      <h3 className="text-lg font-semibold text-neutral-900">User Information</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">First Name *</label>
           <input
             {...register('firstName')}
             type="text"
             className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.firstName ? 'border-red-300' : 'border-gray-300'
+              errors.firstName ? 'border-red-300' : 'border-neutral-300'
             }`}
           />
           {errors.firstName && (
@@ -432,12 +466,12 @@ function UserInfoStep({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">Last Name *</label>
           <input
             {...register('lastName')}
             type="text"
             className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.lastName ? 'border-red-300' : 'border-gray-300'
+              errors.lastName ? 'border-red-300' : 'border-neutral-300'
             }`}
           />
           {errors.lastName && (
@@ -446,32 +480,32 @@ function UserInfoStep({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">Email *</label>
           <input
             {...register('email')}
             type="email"
             className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.email ? 'border-red-300' : 'border-gray-300'
+              errors.email ? 'border-red-300' : 'border-neutral-300'
             }`}
           />
           {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">Title</label>
           <input
             {...register('title')}
             type="text"
-            className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Department *</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">Department *</label>
           <select
             {...register('department')}
             className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.department ? 'border-red-300' : 'border-gray-300'
+              errors.department ? 'border-red-300' : 'border-neutral-300'
             }`}
           >
             <option value="">Select Department</option>
@@ -495,10 +529,10 @@ function UserInfoStep({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Office</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">Office</label>
           <select
             {...register('office')}
-            className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Select Office</option>
             {OFFICES.map(office => (
@@ -518,18 +552,18 @@ function UserInfoStep({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">Phone</label>
           <input
             {...register('phone')}
             type="tel"
-            className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
       {/* Password Setting */}
       <div className="mt-8">
-        <label className="block text-sm font-medium text-gray-700 mb-4">
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
           Initial Password Setting:
         </label>
         <div className="space-y-3">
@@ -540,7 +574,7 @@ function UserInfoStep({
               value="system"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500"
             />
-            <span className="ml-3 text-sm text-gray-700">System Generated (Email)</span>
+            <span className="ml-3 text-sm text-neutral-700">System Generated (Email)</span>
           </label>
           <label className="flex items-center">
             <input
@@ -549,7 +583,7 @@ function UserInfoStep({
               value="first_login"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500"
             />
-            <span className="ml-3 text-sm text-gray-700">User Sets at First Login</span>
+            <span className="ml-3 text-sm text-neutral-700">User Sets at First Login</span>
           </label>
           <label className="flex items-center">
             <input
@@ -558,7 +592,7 @@ function UserInfoStep({
               value="admin_set"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500"
             />
-            <span className="ml-3 text-sm text-gray-700">Admin Sets Password</span>
+            <span className="ml-3 text-sm text-neutral-700">Admin Sets Password</span>
           </label>
         </div>
       </div>
@@ -599,14 +633,14 @@ function RoleAccessStep({
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">Role & Access</h3>
+      <h3 className="text-lg font-semibold text-neutral-900">Role & Access</h3>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Primary Role *</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-2">Primary Role *</label>
         <select
           {...register('primaryRole')}
           className={`w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.primaryRole ? 'border-red-300' : 'border-gray-300'
+            errors.primaryRole ? 'border-red-300' : 'border-neutral-300'
           }`}
         >
           <option value="">Select Primary Role</option>
@@ -622,7 +656,7 @@ function RoleAccessStep({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-4">Additional Roles:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">Additional Roles:</label>
         <div className="grid grid-cols-2 gap-3">
           {['SME Contributor', 'Approver', 'Executive Reviewer', 'RFP Analyst'].map(role => (
             <label key={role} className="flex items-center">
@@ -630,16 +664,16 @@ function RoleAccessStep({
                 type="checkbox"
                 checked={selectedRoles.includes(role)}
                 onChange={() => handleRoleToggle(role)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="ml-3 text-sm text-gray-700">{role}</span>
+              <span className="ml-3 text-sm text-neutral-700">{role}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-4">Team Assignments:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">Team Assignments:</label>
         <div className="space-y-3">
           {AVAILABLE_TEAMS.map(team => (
             <label key={team} className="flex items-center">
@@ -647,16 +681,18 @@ function RoleAccessStep({
                 type="checkbox"
                 checked={selectedTeams.includes(team)}
                 onChange={() => handleTeamToggle(team)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="ml-3 text-sm text-gray-700">{team}</span>
+              <span className="ml-3 text-sm text-neutral-700">{team}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-4">System Access Level:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
+          System Access Level:
+        </label>
         <div className="space-y-3">
           <label className="flex items-center">
             <input
@@ -665,7 +701,7 @@ function RoleAccessStep({
               value="standard"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500"
             />
-            <span className="ml-3 text-sm text-gray-700">Standard User</span>
+            <span className="ml-3 text-sm text-neutral-700">Standard User</span>
           </label>
           <label className="flex items-center">
             <input
@@ -674,7 +710,7 @@ function RoleAccessStep({
               value="power"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500"
             />
-            <span className="ml-3 text-sm text-gray-700">Power User</span>
+            <span className="ml-3 text-sm text-neutral-700">Power User</span>
           </label>
           <label className="flex items-center">
             <input
@@ -683,7 +719,7 @@ function RoleAccessStep({
               value="admin"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500"
             />
-            <span className="ml-3 text-sm text-gray-700">System Administrator</span>
+            <span className="ml-3 text-sm text-neutral-700">System Administrator</span>
           </label>
         </div>
       </div>
@@ -705,10 +741,12 @@ function NotificationsStep({
 }) {
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">Default Notification Settings</h3>
+      <h3 className="text-lg font-semibold text-neutral-900">Default Notification Settings</h3>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-4">Email Notifications:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
+          Email Notifications:
+        </label>
         <div className="space-y-3">
           {[
             { value: 'proposals', label: 'Proposal status changes' },
@@ -722,16 +760,16 @@ function NotificationsStep({
                 {...register('emailNotifications')}
                 type="checkbox"
                 value={value}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="ml-3 text-sm text-gray-700">{label}</span>
+              <span className="ml-3 text-sm text-neutral-700">{label}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-4">
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
           In-App Notifications:
         </label>
         <div className="space-y-3">
@@ -747,16 +785,16 @@ function NotificationsStep({
                 {...register('inAppNotifications')}
                 type="checkbox"
                 value={value}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="ml-3 text-sm text-gray-700">{label}</span>
+              <span className="ml-3 text-sm text-neutral-700">{label}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-4">
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
           Mobile Push Notifications:
         </label>
         <div className="space-y-3">
@@ -771,16 +809,16 @@ function NotificationsStep({
                 {...register('mobileNotifications')}
                 type="checkbox"
                 value={value}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
-              <span className="ml-3 text-sm text-gray-700">{label}</span>
+              <span className="ml-3 text-sm text-neutral-700">{label}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-4">
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
           Default Digest Preferences:
         </label>
         <div className="space-y-3">
@@ -789,18 +827,18 @@ function NotificationsStep({
               {...register('digestPreferences')}
               type="checkbox"
               value="daily"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
             />
-            <span className="ml-3 text-sm text-gray-700">Daily summary email</span>
+            <span className="ml-3 text-sm text-neutral-700">Daily summary email</span>
           </label>
           <label className="flex items-center">
             <input
               {...register('digestPreferences')}
               type="checkbox"
               value="weekly"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
             />
-            <span className="ml-3 text-sm text-gray-700">Weekly activity report</span>
+            <span className="ml-3 text-sm text-neutral-700">Weekly activity report</span>
           </label>
         </div>
       </div>
@@ -826,9 +864,9 @@ function NotificationsStep({
             <input
               {...register('acceptTerms')}
               type="checkbox"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded mt-1"
             />
-            <span className="ml-3 text-sm text-gray-700">
+            <span className="ml-3 text-sm text-neutral-700">
               I accept the{' '}
               <a href="#" className="text-blue-600 hover:underline">
                 Terms of Service
@@ -848,9 +886,9 @@ function NotificationsStep({
             <input
               {...register('marketingConsent')}
               type="checkbox"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded mt-1"
             />
-            <span className="ml-3 text-sm text-gray-700">
+            <span className="ml-3 text-sm text-neutral-700">
               I would like to receive product updates and marketing communications
             </span>
           </label>
@@ -864,12 +902,12 @@ function NotificationsStep({
 function ConfirmationStep({ data }: { data: RegistrationFormData }) {
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">Confirm New User Details</h3>
+      <h3 className="text-lg font-semibold text-neutral-900">Confirm New User Details</h3>
 
-      <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+      <div className="bg-neutral-50 rounded-lg p-6 space-y-4">
         <div>
-          <h4 className="font-medium text-gray-900">User Information:</h4>
-          <div className="mt-2 text-sm text-gray-600 space-y-1">
+          <h4 className="font-medium text-neutral-900">User Information:</h4>
+          <div className="mt-2 text-sm text-neutral-600 space-y-1">
             <p>
               {data.firstName} {data.lastName}
             </p>
@@ -882,8 +920,8 @@ function ConfirmationStep({ data }: { data: RegistrationFormData }) {
         </div>
 
         <div>
-          <h4 className="font-medium text-gray-900">Role & Access:</h4>
-          <div className="mt-2 text-sm text-gray-600 space-y-1">
+          <h4 className="font-medium text-neutral-900">Role & Access:</h4>
+          <div className="mt-2 text-sm text-neutral-600 space-y-1">
             <p>Primary Role: {data.primaryRole}</p>
             <p>Teams: {data.teamAssignments?.join(', ') || 'None'}</p>
             <p>Access Level: {data.accessLevel}</p>
@@ -892,8 +930,8 @@ function ConfirmationStep({ data }: { data: RegistrationFormData }) {
         </div>
 
         <div>
-          <h4 className="font-medium text-gray-900">Notifications:</h4>
-          <div className="mt-2 text-sm text-gray-600 space-y-1">
+          <h4 className="font-medium text-neutral-900">Notifications:</h4>
+          <div className="mt-2 text-sm text-neutral-600 space-y-1">
             <p>Email: {data.emailNotifications?.join(', ')}</p>
             <p>In-App: All enabled</p>
             <p>Mobile: {data.mobileNotifications?.join(', ')}</p>
@@ -902,8 +940,8 @@ function ConfirmationStep({ data }: { data: RegistrationFormData }) {
         </div>
 
         <div>
-          <h4 className="font-medium text-gray-900">Initial Access:</h4>
-          <div className="mt-2 text-sm text-gray-600 space-y-1">
+          <h4 className="font-medium text-neutral-900">Initial Access:</h4>
+          <div className="mt-2 text-sm text-neutral-600 space-y-1">
             <p>
               Password:{' '}
               {data.passwordSetting === 'first_login'

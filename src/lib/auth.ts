@@ -4,12 +4,63 @@
  * Analytics integration and security features
  */
 
-import { prisma } from '@/lib/prisma';
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import bcrypt from 'bcrypt';
 import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
+
+// Mock users for development
+const MOCK_USERS = [
+  {
+    id: '1',
+    email: 'admin@posalpro.com',
+    password: 'PosalPro2024!', // In production, this would be hashed
+    name: 'Admin User',
+    department: 'Administration',
+    roles: ['System Administrator'],
+    permissions: ['*:*'],
+    status: 'ACTIVE',
+  },
+  {
+    id: '2',
+    email: 'manager@posalpro.com',
+    password: 'PosalPro2024!',
+    name: 'Proposal Manager',
+    department: 'Business Development',
+    roles: ['Proposal Manager'],
+    permissions: ['proposals:read', 'proposals:write', 'proposals:manage'],
+    status: 'ACTIVE',
+  },
+  {
+    id: '3',
+    email: 'sme@posalpro.com',
+    password: 'PosalPro2024!',
+    name: 'Subject Matter Expert',
+    department: 'Technical',
+    roles: ['Subject Matter Expert (SME)'],
+    permissions: ['content:read', 'content:write', 'validation:execute'],
+    status: 'ACTIVE',
+  },
+  {
+    id: '4',
+    email: 'executive@posalpro.com',
+    password: 'PosalPro2024!',
+    name: 'Executive',
+    department: 'Leadership',
+    roles: ['Executive'],
+    permissions: ['proposals:approve', 'reports:read', 'analytics:read'],
+    status: 'ACTIVE',
+  },
+  {
+    id: '5',
+    email: 'content@posalpro.com',
+    password: 'PosalPro2024!',
+    name: 'Content Manager',
+    department: 'Content',
+    roles: ['Content Manager'],
+    permissions: ['content:read', 'content:write', 'content:manage'],
+    status: 'ACTIVE',
+  },
+];
 
 // Extend NextAuth types to include our custom fields
 declare module 'next-auth' {
@@ -46,9 +97,6 @@ declare module 'next-auth/jwt' {
 }
 
 export const authOptions: NextAuthOptions = {
-  // Use Prisma adapter for database integration
-  adapter: PrismaAdapter(prisma) as any,
-
   providers: [
     CredentialsProvider({
       id: 'credentials',
@@ -75,30 +123,10 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          // Find user with roles and permissions
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email },
-            include: {
-              roles: {
-                include: {
-                  role: {
-                    include: {
-                      permissions: {
-                        include: {
-                          permission: true,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-              permissions: {
-                include: {
-                  permission: true,
-                },
-              },
-            },
-          });
+          // Find user in mock data
+          const user = MOCK_USERS.find(
+            u => u.email === credentials.email && u.password === credentials.password
+          );
 
           if (!user) {
             throw new Error('Invalid credentials');
@@ -109,95 +137,18 @@ export const authOptions: NextAuthOptions = {
             throw new Error('Account is not active');
           }
 
-          // Verify password
-          const passwordMatch = await bcrypt.compare(credentials.password, user.password);
-          if (!passwordMatch) {
-            throw new Error('Invalid credentials');
-          }
-
-          // Extract roles and permissions
-          const userRoles = user.roles
-            .filter((ur: any) => ur.isActive && (!ur.expiresAt || ur.expiresAt > new Date()))
-            .map((ur: any) => ur.role.name);
-
-          const rolePermissions = user.roles
-            .filter((ur: any) => ur.isActive && (!ur.expiresAt || ur.expiresAt > new Date()))
-            .flatMap((ur: any) =>
-              ur.role.permissions.map(
-                (rp: any) => `${rp.permission.resource}:${rp.permission.action}`
-              )
-            );
-
-          const directPermissions = user.permissions
-            .filter((up: any) => up.isActive && (!up.expiresAt || up.expiresAt > new Date()))
-            .map((up: any) => `${up.permission.resource}:${up.permission.action}`);
-
-          const allPermissions = [...new Set([...rolePermissions, ...directPermissions])];
-
-          // Update last login
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { lastLogin: new Date() },
-          });
-
-          // Log authentication event
-          await prisma.auditLog.create({
-            data: {
-              userId: user.id,
-              userRole: userRoles.join(','),
-              action: 'LOGIN',
-              entity: 'User',
-              entityId: user.id,
-              changes: [
-                {
-                  field: 'lastLogin',
-                  oldValue: user.lastLogin,
-                  newValue: new Date(),
-                  changeType: 'update',
-                },
-              ],
-              ipAddress: '0.0.0.0', // Will be updated by middleware
-              userAgent: 'NextAuth',
-              success: true,
-              severity: 'LOW',
-              category: 'ACCESS',
-              timestamp: new Date(),
-            },
-          });
+          console.log('🔐 Authentication successful for:', user.email, 'Role:', user.roles[0]);
 
           return {
             id: user.id,
             email: user.email,
             name: user.name,
             department: user.department,
-            roles: userRoles,
-            permissions: allPermissions,
+            roles: user.roles,
+            permissions: user.permissions,
           };
         } catch (error) {
           console.error('Authentication error:', error);
-
-          // Log failed authentication attempt
-          if (credentials.email) {
-            try {
-              await prisma.securityEvent.create({
-                data: {
-                  type: 'LOGIN_ATTEMPT',
-                  ipAddress: '0.0.0.0',
-                  details: {
-                    email: credentials.email,
-                    success: false,
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                  },
-                  riskLevel: 'MEDIUM',
-                  status: 'DETECTED',
-                  timestamp: new Date(),
-                },
-              });
-            } catch (logError) {
-              console.error('Failed to log security event:', logError);
-            }
-          }
-
           throw error;
         }
       },
@@ -254,64 +205,15 @@ export const authOptions: NextAuthOptions = {
   },
 
   events: {
-    async signIn({ user, account, profile, isNewUser }) {
+    async signIn({ user }) {
       // Track successful sign-in events
-      console.log('User signed in:', user.email);
-
-      // Create user session record
-      try {
-        await prisma.userSession.create({
-          data: {
-            userId: user.id,
-            sessionToken: `session_${Date.now()}`,
-            ipAddress: '0.0.0.0', // Will be updated by middleware
-            userAgent: 'NextAuth',
-            isActive: true,
-            createdAt: new Date(),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-            lastUsed: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error('Failed to create session record:', error);
-      }
+      console.log('✅ User signed in successfully:', user.email);
     },
 
-    async signOut({ session, token }) {
-      // Track sign-out events and cleanup
-      if (token?.id) {
-        try {
-          // Deactivate user sessions
-          await prisma.userSession.updateMany({
-            where: {
-              userId: token.id,
-              isActive: true,
-            },
-            data: {
-              isActive: false,
-            },
-          });
-
-          // Log sign-out event
-          await prisma.auditLog.create({
-            data: {
-              userId: token.id,
-              userRole: token.roles?.join(',') || '',
-              action: 'LOGOUT',
-              entity: 'User',
-              entityId: token.id,
-              changes: [],
-              ipAddress: '0.0.0.0',
-              userAgent: 'NextAuth',
-              success: true,
-              severity: 'LOW',
-              category: 'ACCESS',
-              timestamp: new Date(),
-            },
-          });
-        } catch (error) {
-          console.error('Failed to handle sign-out:', error);
-        }
+    async signOut({ token }) {
+      // Track sign-out events
+      if (token?.email) {
+        console.log('👋 User signed out:', token.email);
       }
     },
   },
@@ -319,64 +221,14 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === 'development',
 };
 
-// Helper functions for authentication
-export async function hashPassword(password: string): Promise<string> {
-  const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
-  return bcrypt.hash(password, saltRounds);
+// Mock helper functions for development
+export function getMockUserPermissions(userId: string): string[] {
+  const user = MOCK_USERS.find(u => u.id === userId);
+  return user?.permissions || [];
 }
 
-export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  return bcrypt.compare(password, hashedPassword);
-}
-
-export async function getUserPermissions(userId: string): Promise<string[]> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      roles: {
-        where: { isActive: true },
-        include: {
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true,
-                },
-              },
-            },
-          },
-        },
-      },
-      permissions: {
-        where: { isActive: true },
-        include: {
-          permission: true,
-        },
-      },
-    },
-  });
-
-  if (!user) return [];
-
-  const rolePermissions = user.roles
-    .filter((ur: any) => !ur.expiresAt || ur.expiresAt > new Date())
-    .flatMap((ur: any) =>
-      ur.role.permissions.map((rp: any) => `${rp.permission.resource}:${rp.permission.action}`)
-    );
-
-  const directPermissions = user.permissions
-    .filter((up: any) => !up.expiresAt || up.expiresAt > new Date())
-    .map((up: any) => `${up.permission.resource}:${up.permission.action}`);
-
-  return [...new Set([...rolePermissions, ...directPermissions])];
-}
-
-export async function hasPermission(
-  userId: string,
-  resource: string,
-  action: string
-): Promise<boolean> {
-  const permissions = await getUserPermissions(userId);
+export function hasMockPermission(userId: string, resource: string, action: string): boolean {
+  const permissions = getMockUserPermissions(userId);
   return (
     permissions.includes(`${resource}:${action}`) ||
     permissions.includes(`${resource}:*`) ||
@@ -384,17 +236,7 @@ export async function hasPermission(
   );
 }
 
-export async function getUserRoles(userId: string): Promise<string[]> {
-  const userRoles = await prisma.userRole.findMany({
-    where: {
-      userId,
-      isActive: true,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-    },
-    include: {
-      role: true,
-    },
-  });
-
-  return userRoles.map((ur: any) => ur.role.name);
+export function getMockUserRoles(userId: string): string[] {
+  const user = MOCK_USERS.find(u => u.id === userId);
+  return user?.roles || [];
 }
