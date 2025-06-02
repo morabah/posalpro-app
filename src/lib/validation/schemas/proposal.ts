@@ -1,0 +1,418 @@
+/**
+ * PosalPro MVP2 - Proposal Entity Validation Schemas
+ * Proposal creation, management, and workflow validation
+ * Based on PROPOSAL_CREATION_SCREEN.md and proposal management requirements
+ */
+
+import { ProposalStatus } from '@/types';
+import { z } from 'zod';
+import { baseEntitySchema, fileUploadSchema, prioritySchema, validationUtils } from './shared';
+
+/**
+ * Proposal metadata validation schema
+ * Based on PROPOSAL_CREATION_SCREEN.md Step 1: Basic Information
+ */
+export const proposalMetadataSchema = z.object({
+  title: validationUtils.stringWithLength(1, 200, 'Proposal title'),
+
+  description: validationUtils.stringWithLength(10, 2000, 'Proposal description'),
+
+  clientName: validationUtils.stringWithLength(1, 100, 'Client name'),
+
+  clientContact: z.object({
+    name: validationUtils.stringWithLength(1, 100, 'Contact name'),
+    email: z.string().email('Please enter a valid email address'),
+    phone: z.string().optional(),
+    jobTitle: z.string().optional(),
+  }),
+
+  projectType: z.enum([
+    'consulting',
+    'development',
+    'design',
+    'strategy',
+    'implementation',
+    'maintenance',
+  ]),
+
+  estimatedValue: z.number().min(0, 'Estimated value must be positive').optional(),
+
+  currency: z.string().length(3, 'Currency must be a 3-letter ISO code').default('USD'),
+
+  deadline: z.date().min(new Date(), 'Deadline must be in the future'),
+
+  priority: prioritySchema,
+
+  tags: validationUtils.arrayWithLength(z.string().min(1), 0, 20, 'Tags'),
+});
+
+export type ProposalMetadata = z.infer<typeof proposalMetadataSchema>;
+
+/**
+ * RFP document validation schema
+ * Based on PROPOSAL_CREATION_SCREEN.md Step 2: RFP Analysis
+ */
+export const rfpDocumentSchema = z.object({
+  id: z.string().uuid(),
+
+  fileName: validationUtils.stringWithLength(1, 255, 'File name'),
+
+  fileSize: z.number().int().min(1, 'File size must be greater than 0'),
+
+  fileType: z.enum(['pdf', 'doc', 'docx', 'txt', 'rtf']),
+
+  uploadedAt: z.date(),
+
+  // Parsed content from RFP
+  parsedContent: z
+    .object({
+      requirements: z.array(
+        z.object({
+          id: z.string().uuid(),
+          text: z.string().min(1, 'Requirement text is required'),
+          category: z.string().min(1, 'Category is required'),
+          priority: prioritySchema,
+          compliance: z
+            .enum(['compliant', 'partial', 'non_compliant', 'not_applicable'])
+            .optional(),
+          notes: z.string().optional(),
+        })
+      ),
+
+      sections: z.array(
+        z.object({
+          title: z.string().min(1, 'Section title is required'),
+          content: z.string().min(1, 'Section content is required'),
+          pageNumbers: z.array(z.number().int().min(1)),
+        })
+      ),
+
+      keyDates: z.array(
+        z.object({
+          event: z.string().min(1, 'Event description is required'),
+          date: z.date(),
+          importance: prioritySchema,
+        })
+      ),
+
+      evaluationCriteria: z.array(
+        z.object({
+          criterion: z.string().min(1, 'Criterion is required'),
+          weight: z.number().min(0).max(100),
+          description: z.string().optional(),
+        })
+      ),
+    })
+    .optional(),
+
+  // AI analysis results
+  aiAnalysis: z
+    .object({
+      summaryGenerated: z.boolean().default(false),
+      requirementsExtracted: z.boolean().default(false),
+      complianceAnalyzed: z.boolean().default(false),
+      confidenceScore: z.number().min(0).max(1),
+      processingTime: z.number().min(0), // milliseconds
+    })
+    .optional(),
+});
+
+export type RFPDocument = z.infer<typeof rfpDocumentSchema>;
+
+/**
+ * Content section validation schema
+ * Based on PROPOSAL_CREATION_SCREEN.md Step 3: Content Selection
+ */
+export const contentSectionSchema = z.object({
+  id: z.string().uuid(),
+
+  title: validationUtils.stringWithLength(1, 200, 'Section title'),
+
+  type: z.enum([
+    'introduction',
+    'approach',
+    'methodology',
+    'timeline',
+    'team',
+    'pricing',
+    'appendix',
+    'custom',
+  ]),
+
+  order: z.number().int().min(1),
+
+  content: z.string().min(1, 'Section content is required'),
+
+  isRequired: z.boolean().default(false),
+
+  wordCount: z.number().int().min(0),
+
+  // AI assistance
+  aiGenerated: z.boolean().default(false),
+
+  aiConfidence: z.number().min(0).max(1).optional(),
+
+  // Version control
+  version: z.number().int().min(1).default(1),
+
+  lastModified: z.date(),
+
+  modifiedBy: z.string().uuid(),
+
+  // Content metadata
+  sources: z.array(z.string()).optional(),
+
+  attachments: z.array(fileUploadSchema).optional(),
+});
+
+export type ContentSection = z.infer<typeof contentSectionSchema>;
+
+/**
+ * Product selection validation schema
+ * Based on PROPOSAL_CREATION_SCREEN.md Step 4: Product Selection
+ */
+export const proposalProductSchema = z.object({
+  productId: z.string().uuid(),
+
+  productName: validationUtils.stringWithLength(1, 200, 'Product name'),
+
+  productCategory: z.string().min(1, 'Product category is required'),
+
+  quantity: z.number().int().min(1, 'Quantity must be at least 1'),
+
+  unitPrice: z.number().min(0, 'Unit price must be non-negative'),
+
+  totalPrice: z.number().min(0, 'Total price must be non-negative'),
+
+  currency: z.string().length(3, 'Currency must be a 3-letter ISO code').default('USD'),
+
+  // Customization options
+  customizations: z
+    .array(
+      z.object({
+        option: z.string().min(1, 'Customization option is required'),
+        value: z.string().min(1, 'Customization value is required'),
+        additionalCost: z.number().min(0).default(0),
+      })
+    )
+    .optional(),
+
+  // Delivery and timeline
+  deliveryTimeline: z.string().optional(),
+
+  deliverables: z.array(z.string()).optional(),
+
+  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional(),
+});
+
+export type ProposalProduct = z.infer<typeof proposalProductSchema>;
+
+/**
+ * Proposal team assignment validation schema
+ */
+export const teamAssignmentSchema = z.object({
+  userId: z.string().uuid(),
+
+  userName: validationUtils.stringWithLength(1, 100, 'User name'),
+
+  role: z.enum(['lead', 'contributor', 'reviewer', 'approver']),
+
+  responsibilities: z.array(z.string()).optional(),
+
+  estimatedHours: z.number().min(0).optional(),
+
+  hourlyRate: z.number().min(0).optional(),
+
+  assignedAt: z.date(),
+
+  assignedBy: z.string().uuid(),
+
+  status: z.enum(['assigned', 'accepted', 'declined', 'completed']).default('assigned'),
+});
+
+export type TeamAssignment = z.infer<typeof teamAssignmentSchema>;
+
+/**
+ * Proposal Wizard Step 2 validation schema
+ */
+export const proposalWizardStep2Schema = z.object({
+  teamLead: validationUtils.stringWithLength(1, 100, 'Team lead'),
+
+  salesRepresentative: validationUtils.stringWithLength(1, 100, 'Sales representative'),
+
+  subjectMatterExperts: z
+    .record(z.string(), z.string())
+    .refine(data => Object.keys(data).length > 0, {
+      message: 'At least one subject matter expert is required',
+    }),
+
+  executiveReviewers: z.array(z.string()).min(0, 'Executive reviewers must be an array'),
+});
+
+export type ProposalWizardStep2Data = z.infer<typeof proposalWizardStep2Schema>;
+
+/**
+ * Complete proposal entity validation schema
+ */
+export const proposalEntitySchema = baseEntitySchema.extend({
+  // Basic Information
+  metadata: proposalMetadataSchema,
+
+  // RFP Information
+  rfpDocument: rfpDocumentSchema.optional(),
+
+  // Content
+  sections: validationUtils.arrayWithLength(contentSectionSchema, 1, 50, 'Proposal sections'),
+
+  // Products
+  products: z.array(proposalProductSchema).optional(),
+
+  // Team
+  teamAssignments: z.array(teamAssignmentSchema).optional(),
+
+  // Workflow
+  status: z.nativeEnum(ProposalStatus),
+
+  currentStage: z.enum([
+    'draft',
+    'content_development',
+    'review',
+    'approval',
+    'finalization',
+    'submitted',
+  ]),
+
+  // Approval workflow
+  approvalWorkflow: z
+    .object({
+      steps: z.array(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().min(1, 'Step name is required'),
+          order: z.number().int().min(1),
+          assignedTo: z.string().uuid(),
+          status: z.enum(['pending', 'approved', 'rejected', 'skipped']).default('pending'),
+          comments: z.string().optional(),
+          completedAt: z.date().optional(),
+        })
+      ),
+      currentStep: z.number().int().min(0).default(0),
+    })
+    .optional(),
+
+  // Compliance and validation
+  complianceChecks: z
+    .object({
+      rfpCompliance: z.number().min(0).max(100).optional(),
+      contentCompleteness: z.number().min(0).max(100).optional(),
+      teamAssignmentComplete: z.boolean().default(false),
+      budgetValidated: z.boolean().default(false),
+      legalReviewed: z.boolean().default(false),
+    })
+    .optional(),
+
+  // Timeline
+  milestones: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string().min(1, 'Milestone title is required'),
+        description: z.string().optional(),
+        dueDate: z.date(),
+        completed: z.boolean().default(false),
+        completedAt: z.date().optional(),
+      })
+    )
+    .optional(),
+
+  // Analytics and tracking
+  analytics: z
+    .object({
+      viewCount: z.number().int().min(0).default(0),
+      editCount: z.number().int().min(0).default(0),
+      collaboratorCount: z.number().int().min(0).default(0),
+      timeSpent: z.number().min(0).default(0), // minutes
+      lastViewedAt: z.date().optional(),
+      lastEditedAt: z.date().optional(),
+    })
+    .optional(),
+
+  // Export and sharing
+  exportHistory: z
+    .array(
+      z.object({
+        format: z.enum(['pdf', 'docx', 'html']),
+        exportedAt: z.date(),
+        exportedBy: z.string().uuid(),
+        version: z.string().min(1, 'Version is required'),
+      })
+    )
+    .optional(),
+});
+
+export type ProposalEntity = z.infer<typeof proposalEntitySchema>;
+
+/**
+ * Proposal creation schema (initial proposal data)
+ */
+export const createProposalSchema = z.object({
+  metadata: proposalMetadataSchema,
+  rfpDocument: rfpDocumentSchema.optional(),
+  teamAssignments: z.array(teamAssignmentSchema).optional(),
+});
+
+export type CreateProposalData = z.infer<typeof createProposalSchema>;
+
+/**
+ * Proposal update schema
+ */
+export const updateProposalSchema = z.object({
+  id: z.string().uuid(),
+  metadata: proposalMetadataSchema.partial().optional(),
+  sections: z.array(contentSectionSchema).optional(),
+  products: z.array(proposalProductSchema).optional(),
+  teamAssignments: z.array(teamAssignmentSchema).optional(),
+  status: z.nativeEnum(ProposalStatus).optional(),
+});
+
+export type UpdateProposalData = z.infer<typeof updateProposalSchema>;
+
+/**
+ * Proposal search and filtering schema
+ */
+export const proposalSearchSchema = z.object({
+  query: z.string().optional(),
+  status: z.array(z.nativeEnum(ProposalStatus)).optional(),
+  priority: z.array(prioritySchema).optional(),
+  clientName: z.string().optional(),
+  assignedTo: z.array(z.string().uuid()).optional(),
+  createdAfter: z.date().optional(),
+  createdBefore: z.date().optional(),
+  deadlineAfter: z.date().optional(),
+  deadlineBefore: z.date().optional(),
+  estimatedValueMin: z.number().min(0).optional(),
+  estimatedValueMax: z.number().min(0).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export type ProposalSearchCriteria = z.infer<typeof proposalSearchSchema>;
+
+/**
+ * Proposal comment/feedback schema
+ */
+export const proposalCommentSchema = z.object({
+  id: z.string().uuid(),
+  proposalId: z.string().uuid(),
+  sectionId: z.string().uuid().optional(), // If comment is on specific section
+  parentCommentId: z.string().uuid().optional(), // For threaded comments
+  content: validationUtils.stringWithLength(1, 2000, 'Comment content'),
+  type: z.enum(['general', 'suggestion', 'issue', 'approval', 'rejection']),
+  isResolved: z.boolean().default(false),
+  resolvedBy: z.string().uuid().optional(),
+  resolvedAt: z.date().optional(),
+  createdBy: z.string().uuid(),
+  createdAt: z.date(),
+  mentions: z.array(z.string().uuid()).optional(),
+});
+
+export type ProposalComment = z.infer<typeof proposalCommentSchema>;
