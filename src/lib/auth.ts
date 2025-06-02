@@ -97,6 +97,10 @@ declare module 'next-auth/jwt' {
 }
 
 export const authOptions: NextAuthOptions = {
+  // Secret for JWT signing - use environment variable or fallback
+  secret:
+    process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+
   providers: [
     CredentialsProvider({
       id: 'credentials',
