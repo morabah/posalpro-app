@@ -1,0 +1,39 @@
+name: Deploy to Windsurf
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Quality check
+        run: npm run quality:check
+
+      - name: Install Windsurf CLI
+        run: npm install -g @windsurf/cli
+
+      - name: Deploy to Windsurf
+        run: windsurf deploy --prod
+        env:
+          WINDSURF_TOKEN: ${{ secrets.WINDSURF_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}

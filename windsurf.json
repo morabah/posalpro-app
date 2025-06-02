@@ -1,0 +1,27 @@
+{
+  "name": "posalpro-mvp2",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "startCommand": "npm run start",
+  "outputDirectory": ".next",
+  "environment": {
+    "NODE_ENV": "production"
+  },
+  "database": {
+    "type": "postgresql",
+    "version": "14",
+    "autoMigrations": true
+  },
+  "hooks": {
+    "postDeploy": "npm run db:migrate:deploy"
+  },
+  "regions": ["auto"],
+  "scaling": {
+    "min": 1,
+    "max": 3
+  },
+  "healthCheck": {
+    "path": "/_health",
+    "timeout": 10
+  }
+}

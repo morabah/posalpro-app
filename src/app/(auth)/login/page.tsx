@@ -14,7 +14,7 @@ import { loginSchema, type LoginFormData } from '@/lib/validation';
 import { UserType } from '@/types';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 /**
@@ -48,7 +48,7 @@ const roleOptions = [
   },
 ];
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAuthenticated = useIsAuthenticated();
@@ -205,42 +205,41 @@ export default function LoginPage() {
             {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-3">
-                Select Your Role
+                Role Selection
               </label>
               <div className="grid grid-cols-1 gap-2">
                 {roleOptions.map(role => (
-                  <button
+                  <label
                     key={role.value}
-                    type="button"
+                    className={`relative flex cursor-pointer rounded-lg border p-4 focus:outline-none ${
+                      selectedRole === role.value
+                        ? 'border-primary-600 bg-primary-50 ring-2 ring-primary-600'
+                        : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                    }`}
                     onClick={() => setSelectedRole(role.value)}
-                    className={`
-                      p-4 text-left border rounded-lg transition-all duration-200
-                      ${
-                        selectedRole === role.value
-                          ? 'border-primary-600 bg-primary-50 ring-2 ring-primary-600'
-                          : 'border-neutral-300 bg-white hover:border-neutral-400'
-                      }
-                      focus:outline-none focus:ring-2 focus:ring-primary-500
-                    `}
                   >
-                    <div className="font-medium text-neutral-900">{role.label}</div>
-                    <div className="text-sm text-neutral-600 mt-1">{role.description}</div>
-                  </button>
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        name="role"
+                        value={role.value}
+                        checked={selectedRole === role.value}
+                        onChange={() => setSelectedRole(role.value)}
+                        className="sr-only"
+                      />
+                      <div className="flex flex-col">
+                        <span className="block text-sm font-medium text-neutral-900">
+                          {role.label}
+                        </span>
+                        <span className="block text-sm text-neutral-500">{role.description}</span>
+                      </div>
+                    </div>
+                    {selectedRole === role.value && (
+                      <div className="absolute -inset-px rounded-lg border-2 border-primary-600 pointer-events-none"></div>
+                    )}
+                  </label>
                 ))}
               </div>
-            </div>
-
-            {/* Remember Me */}
-            <div className="flex items-center">
-              <input
-                {...register('rememberMe')}
-                id="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-neutral-300 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-neutral-700">
-                Remember me for 30 days
-              </label>
             </div>
 
             {/* Submit Button */}
@@ -248,36 +247,53 @@ export default function LoginPage() {
               type="submit"
               variant="primary"
               size="lg"
-              fullWidth
+              className="w-full"
               disabled={!isValid || isSubmitting}
               loading={isSubmitting}
             >
-              {isSubmitting ? 'Signing In...' : 'Sign In'}
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
 
           {/* Footer Links */}
-          <div className="mt-8 text-center space-y-4">
-            <div>
-              <a
-                href="/auth/forgot-password"
-                className="text-sm text-primary-600 hover:text-primary-500 font-medium"
-              >
-                Forgot your password?
-              </a>
-            </div>
-            <div className="text-sm text-neutral-600">
-              Don&apos;t have an account?{' '}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-neutral-600">
+              Don't have an account?{' '}
               <a
                 href="/auth/register"
                 className="text-primary-600 hover:text-primary-500 font-medium"
               >
-                Sign up
+                Create one here
               </a>
-            </div>
+            </p>
+            <p className="text-sm text-neutral-600 mt-2">
+              <a
+                href="/auth/reset-password"
+                className="text-primary-600 hover:text-primary-500 font-medium"
+              >
+                Forgot your password?
+              </a>
+            </p>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p className="text-neutral-600">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }

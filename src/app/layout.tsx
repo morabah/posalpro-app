@@ -3,6 +3,7 @@
  * Global layout with error boundaries and providers
  */
 
+import { ToastProvider } from '@/components/feedback/Toast/ToastProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { ErrorBoundary } from '@/components/providers/ErrorBoundary';
 import '@/styles/globals.css';
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="h-full">
       <body className={`${inter.className} h-full antialiased`}>
         <ErrorBoundary enableReporting={process.env.NODE_ENV === 'production'}>
-          <AuthProvider>{children}</AuthProvider>
+          <ToastProvider position="top-right" maxToasts={5}>
+            <AuthProvider>{children}</AuthProvider>
+          </ToastProvider>
         </ErrorBoundary>
       </body>
     </html>
