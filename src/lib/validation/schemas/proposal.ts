@@ -280,6 +280,34 @@ export const proposalWizardStep3Schema = z.object({
 export type ProposalWizardStep3Data = z.infer<typeof proposalWizardStep3Schema>;
 
 /**
+ * Proposal Wizard Step 4 validation schema (Product Selection)
+ */
+export const proposalWizardStep4Schema = z.object({
+  products: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        name: validationUtils.stringWithLength(1, 200, 'Product name'),
+        included: z.boolean(),
+        quantity: z.number().int().min(1, 'Quantity must be at least 1'),
+        unitPrice: z.number().min(0, 'Unit price must be non-negative'),
+        totalPrice: z.number().min(0, 'Total price must be non-negative'),
+        category: z.string().min(1, 'Product category is required'),
+        configuration: z.record(z.string(), z.any()).optional(),
+        customizations: z.array(z.string()).optional(),
+        notes: z.string().max(500, 'Notes must be less than 500 characters').optional(),
+      })
+    )
+    .min(1, 'At least one product must be selected'),
+
+  totalValue: z.number().min(0, 'Total value must be non-negative'),
+  aiRecommendationsUsed: z.number().int().min(0).optional(),
+  searchHistory: z.array(z.string()).max(20, 'Search history limited to 20 items'),
+});
+
+export type ProposalWizardStep4Data = z.infer<typeof proposalWizardStep4Schema>;
+
+/**
  * Complete proposal entity validation schema
  */
 export const proposalEntitySchema = baseEntitySchema.extend({
