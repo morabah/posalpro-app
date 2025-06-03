@@ -1,12 +1,11 @@
 /**
- * PosalPro MVP2 - Individual Proposal API Routes
- * Handles operations on specific proposals by ID using service functions
- * Based on PROPOSAL_CREATION_SCREEN.md and proposal management requirements
+ * PosalPro MVP2 - Individual Content API Routes
+ * Handles operations on specific content by ID using service functions
+ * Based on CONTENT_SEARCH_SCREEN.md requirements
  */
 
-import { proposalService } from '@/lib/services';
-import { updateProposalSchema } from '@/lib/validation/schemas/proposal';
-import { Prisma } from '@prisma/client';
+import { contentService } from '@/lib/services';
+import { ContentType, Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -35,32 +34,50 @@ function createErrorResponse(error: string, details?: any, status = 500) {
   );
 }
 
+// Content update validation schema
+const updateContentSchema = z.object({
+  id: z.string().uuid('Invalid content ID'),
+  title: z
+    .string()
+    .min(1, 'Title is required')
+    .max(200, 'Title must be less than 200 characters')
+    .optional(),
+  description: z.string().optional(),
+  type: z.nativeEnum(ContentType).optional(),
+  content: z.string().min(1, 'Content is required').optional(),
+  tags: z.array(z.string()).optional(),
+  category: z.array(z.string()).optional(),
+  keywords: z.array(z.string()).optional(),
+  isPublic: z.boolean().optional(),
+  allowedRoles: z.array(z.string()).optional(),
+});
+
 /**
- * GET /api/proposals/[id] - Get specific proposal
+ * GET /api/content/[id] - Get specific content
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const params = await context.params;
     const { id } = params;
 
-    // Get proposal with details using service
-    const proposal = await proposalService.getProposalWithDetails(id);
+    // Get content with creator using service
+    const content = await contentService.getContentWithCreator(id);
 
-    if (!proposal) {
-      return createErrorResponse('Proposal not found', null, 404);
+    if (!content) {
+      return createErrorResponse('Content not found', null, 404);
     }
 
-    return createApiResponse(proposal, 'Proposal retrieved successfully');
+    return createApiResponse(content, 'Content retrieved successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch proposal ${params.id}:`, error);
+    console.error(`Failed to fetch content ${params.id}:`, error);
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       return createErrorResponse('Database error', error.message, 500);
     }
 
     return createErrorResponse(
-      'Failed to fetch proposal',
+      'Failed to fetch content',
       error instanceof Error ? error.message : 'Unknown error',
       500
     );
@@ -68,7 +85,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 /**
- * PUT /api/proposals/[id] - Update specific proposal
+ * PUT /api/content/[id] - Update specific content
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -76,30 +93,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const { id } = params;
     const body = await request.json();
 
-    // Transform date strings to Date objects for validation
-    if (body.validUntil && typeof body.validUntil === 'string') {
-      body.validUntil = new Date(body.validUntil);
-    }
-    if (body.dueDate && typeof body.dueDate === 'string') {
-      body.dueDate = new Date(body.dueDate);
-    }
-
     // Add the id to the body for validation
     const updateData = { id, ...body };
 
     // Validate the update data
-    const validatedData = updateProposalSchema.parse(updateData);
+    const validatedData = updateContentSchema.parse(updateData);
 
-    // Update proposal using service
-    const updatedProposal = await proposalService.updateProposal({
-      ...validatedData,
-      status: validatedData.status as any,
-    });
+    // Update content using service
+    const updatedContent = await contentService.updateContent(validatedData);
 
-    return createApiResponse(updatedProposal, 'Proposal updated successfully');
+    return createApiResponse(updatedContent, 'Content updated successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to update proposal ${params.id}:`, error);
+    console.error(`Failed to update content ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return createErrorResponse('Validation failed', error.errors, 400);
@@ -107,13 +113,13 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2025') {
-        return createErrorResponse('Proposal not found', error.message, 404);
+        return createErrorResponse('Content not found', error.message, 404);
       }
       return createErrorResponse('Database error', error.message, 500);
     }
 
     return createErrorResponse(
-      'Failed to update proposal',
+      'Failed to update content',
       error instanceof Error ? error.message : 'Unknown error',
       500
     );
@@ -121,30 +127,30 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 /**
- * DELETE /api/proposals/[id] - Delete specific proposal
+ * DELETE /api/content/[id] - Delete specific content
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const params = await context.params;
     const { id } = params;
 
-    // Delete proposal using service
-    await proposalService.deleteProposal(id);
+    // Delete content using service
+    await contentService.deleteContent(id);
 
-    return createApiResponse(null, 'Proposal deleted successfully');
+    return createApiResponse(null, 'Content deleted successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to delete proposal ${params.id}:`, error);
+    console.error(`Failed to delete content ${params.id}:`, error);
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2025') {
-        return createErrorResponse('Proposal not found', error.message, 404);
+        return createErrorResponse('Content not found', error.message, 404);
       }
       return createErrorResponse('Database error', error.message, 500);
     }
 
     return createErrorResponse(
-      'Failed to delete proposal',
+      'Failed to delete content',
       error instanceof Error ? error.message : 'Unknown error',
       500
     );

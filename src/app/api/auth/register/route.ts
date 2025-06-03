@@ -1,9 +1,10 @@
 /**
- * PosalPro MVP2 - User Registration API Route (Mock Implementation)
+ * PosalPro MVP2 - User Registration API Route
  * Based on USER_REGISTRATION_SCREEN.md wireframe
  * Role assignment and analytics integration
  */
 
+import { createUser } from '@/lib/services/userService';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -35,29 +36,29 @@ const registerSchema = z.object({
 
 // Rate limiting configuration (5 attempts per minute)
 const rateLimitMap = new Map();
-const rateLimit5PerMinute = (ip: string): boolean => {
+
+function rateLimit5PerMinute(ip: string): boolean {
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute
-  const maxAttempts = 5;
+  const limit = 5;
 
   if (!rateLimitMap.has(ip)) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
-    return true;
+    rateLimitMap.set(ip, []);
   }
 
-  const record = rateLimitMap.get(ip);
-  if (now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
-    return true;
+  const requests = rateLimitMap.get(ip);
+
+  // Remove old requests outside the window
+  const validRequests = requests.filter((time: number) => now - time < windowMs);
+
+  if (validRequests.length >= limit) {
+    return false;
   }
 
-  if (record.count < maxAttempts) {
-    record.count++;
-    return true;
-  }
-
-  return false;
-};
+  validRequests.push(now);
+  rateLimitMap.set(ip, validRequests);
+  return true;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -75,24 +76,39 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = registerSchema.parse(body);
 
-    // Mock registration success
-    console.log('📝 Mock registration for:', validatedData.email);
-    console.log('👤 User details:', {
-      name: `${validatedData.firstName} ${validatedData.lastName}`,
+    // Combine first and last name
+    const fullName = `${validatedData.firstName} ${validatedData.lastName}`;
+
+    // Create user in database
+    console.log('📝 Creating user:', validatedData.email);
+    const user = await createUser({
+      email: validatedData.email,
+      name: fullName,
+      password: validatedData.password,
       department: validatedData.department,
-      roles: validatedData.roles,
     });
 
-    // Simulate success response
+    console.log('👤 User created:', {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      department: user.department,
+    });
+
+    // TODO: Assign roles to user (will be implemented when role assignment system is created)
+    // For now, roles are logged but not persisted to the database
+    console.log('🔐 Roles to be assigned:', validatedData.roles);
+
+    // Return success response
     return NextResponse.json(
       {
         success: true,
         message: 'Registration successful! You can now log in with your credentials.',
         data: {
-          userId: `mock-${Date.now()}`,
-          email: validatedData.email,
-          name: `${validatedData.firstName} ${validatedData.lastName}`,
-          roles: validatedData.roles,
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          department: user.department,
         },
       },
       { status: 201 }
@@ -111,6 +127,16 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // Handle user creation errors
+    if (error instanceof Error) {
+      if (error.message === 'A user with this email already exists') {
+        return NextResponse.json(
+          { error: 'A user with this email address already exists.' },
+          { status: 409 }
+        );
+      }
     }
 
     return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 500 });

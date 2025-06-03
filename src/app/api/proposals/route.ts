@@ -1,50 +1,39 @@
 /**
  * PosalPro MVP2 - Proposals API Routes
- * Handles proposal CRUD operations
+ * Handles proposal CRUD operations using service functions
  * Based on PROPOSAL_CREATION_SCREEN.md and proposal management requirements
  */
 
+import { proposalService } from '@/lib/services';
+import { createProposalSchema } from '@/lib/validation/schemas/proposal';
+import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-// Direct imports to avoid potential module resolution issues
-import { generateProposalId, mockProposalsDB } from '../../../lib/db/mockProposals';
-import { ProposalStatus } from '../../../types/enums';
+/**
+ * Standard API response wrapper
+ */
+function createApiResponse<T>(data: T, message: string, status = 200) {
+  return NextResponse.json(
+    {
+      success: true,
+      data,
+      message,
+    },
+    { status }
+  );
+}
 
-// Define the schema inline to avoid import issues
-const proposalMetadataSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
-  description: z
-    .string()
-    .min(10, 'Description must be at least 10 characters')
-    .max(2000, 'Description must be less than 2000 characters'),
-  clientName: z
-    .string()
-    .min(1, 'Client name is required')
-    .max(100, 'Client name must be less than 100 characters'),
-  clientContact: z.object({
-    name: z.string().min(1, 'Contact name is required'),
-    email: z.string().email('Invalid email format'),
-    phone: z.string().optional(),
-  }),
-  projectType: z.enum([
-    'consulting',
-    'development',
-    'design',
-    'strategy',
-    'implementation',
-    'maintenance',
-  ]),
-  estimatedValue: z.number().min(0, 'Estimated value must be positive').optional(),
-  currency: z.string().length(3, 'Currency must be a 3-letter ISO code').default('USD'),
-  deadline: z.date().refine(date => date > new Date(), 'Deadline must be in the future'),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']),
-  tags: z.array(z.string()).max(20, 'Maximum 20 tags allowed'),
-});
-
-const createProposalSchema = z.object({
-  metadata: proposalMetadataSchema,
-});
+function createErrorResponse(error: string, details?: any, status = 500) {
+  return NextResponse.json(
+    {
+      success: false,
+      error,
+      details,
+    },
+    { status }
+  );
+}
 
 /**
  * GET /api/proposals - List proposals with filtering
@@ -52,52 +41,56 @@ const createProposalSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+
+    // Parse query parameters
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
-    const search = searchParams.get('search');
-    const status = searchParams.get('status');
+    const search = searchParams.get('search') || undefined;
+    const statusParam = searchParams.get('status');
+    const priorityParam = searchParams.get('priority');
+    const customerId = searchParams.get('customerId') || undefined;
+    const createdBy = searchParams.get('createdBy') || undefined;
+    const assignedTo = searchParams.get('assignedTo') || undefined;
 
-    // Get all proposals
-    let proposals = mockProposalsDB.getAll();
+    // Build filters object
+    const filters: any = {};
 
-    // Apply filters
-    if (search) {
-      proposals = proposals.filter(
-        p =>
-          p.title.toLowerCase().includes(search.toLowerCase()) ||
-          p.clientName.toLowerCase().includes(search.toLowerCase())
-      );
+    if (search) filters.search = search;
+    if (customerId) filters.customerId = customerId;
+    if (createdBy) filters.createdBy = createdBy;
+    if (assignedTo) filters.assignedTo = assignedTo;
+
+    if (statusParam) {
+      try {
+        filters.status = statusParam.split(',');
+      } catch (error) {
+        return createErrorResponse('Invalid status filter', undefined, 400);
+      }
     }
 
-    if (status) {
-      proposals = proposals.filter(p => p.status === status);
+    if (priorityParam) {
+      try {
+        filters.priority = priorityParam.split(',');
+      } catch (error) {
+        return createErrorResponse('Invalid priority filter', undefined, 400);
+      }
     }
 
-    // Apply pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedProposals = proposals.slice(startIndex, endIndex);
+    // Get proposals using service
+    const result = await proposalService.getProposals(filters, undefined, page, limit);
 
-    return NextResponse.json({
-      success: true,
-      data: paginatedProposals,
-      message: 'Proposals retrieved successfully',
-      pagination: {
-        page,
-        limit,
-        total: proposals.length,
-        totalPages: Math.ceil(proposals.length / limit),
-      },
-    });
+    return createApiResponse(result.proposals, 'Proposals retrieved successfully', 200);
   } catch (error) {
     console.error('Failed to fetch proposals:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch proposals',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return createErrorResponse('Database error', error.message, 500);
+    }
+
+    return createErrorResponse(
+      'Failed to fetch proposals',
+      error instanceof Error ? error.message : 'Unknown error',
+      500
     );
   }
 }
@@ -118,58 +111,53 @@ export async function POST(request: NextRequest) {
 
     console.log('Transformed body:', JSON.stringify(body, null, 2));
 
-    // Validate the request body
+    // Validate the request body using the proper schema
     const validatedData = createProposalSchema.parse(body);
     console.log('Validation successful');
 
-    // Generate proposal data
-    const proposalId = generateProposalId();
-    const now = new Date();
-
+    // Transform schema data to service data format
     const proposalData = {
-      id: proposalId,
-      ...validatedData.metadata,
-      status: ProposalStatus.DRAFT,
-      createdBy: 'current-user-id', // Would come from auth context
-      assignedTo: [],
-      createdAt: now,
-      updatedAt: now,
-      version: 1,
+      title: validatedData.metadata.title,
+      description: validatedData.metadata.description,
+      customerId: body.customerId || 'cmbgvm5ww00006gox6gg0a3t4', // Use actual existing customer ID
+      createdBy: body.createdBy || 'cmbgmgsuk0000qg7l9tug8zm7', // Use actual existing user ID
+      priority: validatedData.metadata.priority.toUpperCase() as any,
+      value: validatedData.metadata.estimatedValue,
+      currency: validatedData.metadata.currency,
+      validUntil: validatedData.metadata.deadline,
+      dueDate: body.dueDate,
+      tags: validatedData.metadata.tags || [],
+      metadata: {
+        clientName: validatedData.metadata.clientName,
+        clientContact: validatedData.metadata.clientContact,
+        projectType: validatedData.metadata.projectType,
+      },
     };
 
-    console.log('Proposal data prepared:', JSON.stringify(proposalData, null, 2));
+    // Create proposal using service
+    const proposal = await proposalService.createProposal(proposalData);
+    console.log('Proposal created with ID:', proposal.id);
 
-    // Store in shared mock database
-    mockProposalsDB.create(proposalId, proposalData);
-    console.log('Proposal stored in database');
-
-    return NextResponse.json({
-      success: true,
-      data: proposalData,
-      message: 'Proposal created successfully',
-    });
+    return createApiResponse(proposal, 'Proposal created successfully', 201);
   } catch (error) {
     console.error('Failed to create proposal:', error);
 
     if (error instanceof z.ZodError) {
       console.error('Validation error details:', error.errors);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: error.errors,
-        },
-        { status: 400 }
-      );
+      return createErrorResponse('Validation failed', error.errors, 400);
     }
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to create proposal',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2003') {
+        return createErrorResponse('Referenced customer or user not found', error.message, 400);
+      }
+      return createErrorResponse('Database error', error.message, 500);
+    }
+
+    return createErrorResponse(
+      'Failed to create proposal',
+      error instanceof Error ? error.message : 'Unknown error',
+      500
     );
   }
 }

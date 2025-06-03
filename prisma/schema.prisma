@@ -48,6 +48,18 @@ model User {
   // Analytics Events
   hypothesisEvents    HypothesisValidationEvent[]
 
+  // Business entity relationships
+  createdProposals    Proposal[]              @relation("ProposalCreator")
+  assignedProposals   Proposal[]              @relation("ProposalAssignees")
+  createdContent      Content[]
+  contentAccessLogs   ContentAccessLog[]
+  productRelationships ProductRelationship[]
+  validationRules     ValidationRule[]
+  validationExecutions ValidationExecution[]
+  validationIssuesResolved ValidationIssue[]
+  approvalWorkflows   ApprovalWorkflow[]
+  approvalDecisions   ApprovalDecision[]
+
   @@map("users")
 }
 
@@ -571,4 +583,643 @@ enum HypothesisType {
   H6
   H7
   H8
+}
+
+// ========================================
+// CORE BUSINESS ENTITIES
+// ========================================
+
+// Customer Management
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  website     String?
+  address     String?
+  industry    String?
+  companySize String?
+  revenue     Float?
+  status      CustomerStatus @default(ACTIVE)
+  tier        CustomerTier @default(STANDARD)
+
+  // Relationships
+  proposals   Proposal[]
+  contacts    CustomerContact[]
+
+  // Metadata
+  tags        String[]
+  metadata    Json?
+
+  // Analytics
+  segmentation Json? // CustomerSegmentation
+  riskScore   Float?
+  ltv         Float? // Lifetime Value
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastContact DateTime?
+
+  @@index([status, tier])
+  @@index([industry])
+  @@map("customers")
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  name       String
+  email      String
+  phone      String?
+  role       String?
+  department String?
+  isPrimary  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([customerId, isPrimary])
+  @@map("customer_contacts")
+}
+
+// Proposal Management
+model Proposal {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  customerId  String
+  customer    Customer       @relation(fields: [customerId], references: [id])
+
+  // Assignment and ownership
+  createdBy   String
+  creator     User           @relation("ProposalCreator", fields: [createdBy], references: [id])
+  assignedTo  User[]         @relation("ProposalAssignees")
+
+  // Status and lifecycle
+  status      ProposalStatus @default(DRAFT)
+  version     Int            @default(1)
+  priority    Priority       @default(MEDIUM)
+
+  // Business details
+  value       Float?
+  currency    String         @default("USD")
+  validUntil  DateTime?
+
+  // Relationships
+  sections    ProposalSection[]
+  products    ProposalProduct[]
+  approvals   ApprovalExecution[]
+  validationIssues ValidationIssue[]
+
+  // Dates
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  dueDate      DateTime?
+  submittedAt  DateTime?
+  approvedAt   DateTime?
+
+  // Analytics and performance
+  performanceData Json? // ProposalPerformanceMetrics
+  userStoryTracking Json? // UserStoryTracking[]
+  riskScore    Float?
+  tags         String[]
+  metadata     Json?
+
+  @@index([status, dueDate])
+  @@index([customerId, status])
+  @@index([createdBy])
+  @@map("proposals")
+}
+
+model ProposalSection {
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  title      String
+  content    String
+  order      Int
+  type       SectionType @default(TEXT)
+
+  // Validation and analytics
+  validationStatus ValidationStatus @default(NOT_VALIDATED)
+  analyticsData    Json? // SectionAnalytics
+
+  // Metadata
+  metadata   Json?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([proposalId, order])
+  @@map("proposal_sections")
+}
+
+model ProposalProduct {
+  id           String   @id @default(cuid())
+  proposalId   String
+  proposal     Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+
+  quantity     Int      @default(1)
+  unitPrice    Float
+  discount     Float    @default(0)
+  total        Float
+
+  // Configuration and validation
+  configuration Json?
+  validationIssues ValidationIssue[]
+
+  // Analytics
+  selectionAnalytics Json? // ProductSelectionAnalytics
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([proposalId])
+  @@index([productId])
+  @@map("proposal_products")
+}
+
+// Product Management
+model Product {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  sku         String    @unique
+  price       Float
+  currency    String    @default("USD")
+
+  // Categorization
+  category    String[]
+  tags        String[]
+
+  // Product details
+  attributes  Json? // Product attributes as flexible JSON
+  images      String[]
+
+  // Status and lifecycle
+  isActive    Boolean   @default(true)
+  version     Int       @default(1)
+
+  // Relationships
+  relationships ProductRelationship[] @relation("SourceProduct")
+  relatedFrom   ProductRelationship[] @relation("TargetProduct")
+  validationRules ValidationRule[]
+  proposalProducts ProposalProduct[]
+
+  // Analytics
+  usageAnalytics Json? // ProductUsageAnalytics
+  userStoryMappings String[]
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, category])
+  @@index([sku])
+  @@map("products")
+}
+
+model ProductRelationship {
+  id              String            @id @default(cuid())
+  sourceProductId String
+  sourceProduct   Product           @relation("SourceProduct", fields: [sourceProductId], references: [id], onDelete: Cascade)
+  targetProductId String
+  targetProduct   Product           @relation("TargetProduct", fields: [targetProductId], references: [id], onDelete: Cascade)
+
+  type            RelationshipType
+  quantity        Int?
+  condition       Json? // RelationshipCondition
+
+  // Validation and performance
+  validationHistory Json? // RelationshipValidationHistory[]
+  performanceImpact Json? // RelationshipPerformanceImpact
+
+  // Metadata
+  createdBy       String
+  creator         User             @relation(fields: [createdBy], references: [id])
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([sourceProductId])
+  @@index([targetProductId])
+  @@index([type])
+  @@map("product_relationships")
+}
+
+// Content Management
+model Content {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  type        ContentType   @default(TEXT)
+  content     String
+
+  // Categorization and search
+  tags        String[]
+  category    String[]
+  searchableText String?
+  keywords    String[]
+
+  // Quality and usage metrics
+  quality     Json? // ContentQuality
+  usage       Json? // ContentUsage
+
+  // Access control
+  isPublic    Boolean       @default(false)
+  allowedRoles String[]
+
+  // Analytics and optimization
+  searchOptimization Json? // ContentSearchOptimization
+  userStoryTracking  Json? // ContentUserStoryTracking
+
+  // Lifecycle
+  version     Int           @default(1)
+  isActive    Boolean       @default(true)
+
+  // Relationships
+  createdBy   String
+  creator     User          @relation(fields: [createdBy], references: [id])
+  accessLogs  ContentAccessLog[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([type, isActive])
+  @@index([tags])
+  @@index([category])
+  @@map("content")
+}
+
+model ContentAccessLog {
+  id         String      @id @default(cuid())
+  contentId  String
+  content    Content     @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+
+  accessType AccessType
+  userStory  String?
+  performanceImpact Float?
+
+  timestamp  DateTime    @default(now())
+
+  @@index([contentId, timestamp])
+  @@index([userId, accessType])
+  @@map("content_access_logs")
+}
+
+// Validation System
+model ValidationRule {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  ruleType    ValidationRuleType
+
+  // Rule definition
+  conditions  Json // ValidationCondition[]
+  actions     Json // ValidationAction[]
+  severity    Severity         @default(WARNING)
+
+  // Status and lifecycle
+  isActive    Boolean          @default(true)
+
+  // Relationships
+  productId   String?
+  product     Product?         @relation(fields: [productId], references: [id])
+  issues      ValidationIssue[]
+
+  // Analytics
+  executionStats Json? // RuleExecutionStats
+  userStoryMappings String[]
+  hypothesesSupported String[]
+
+  // Metadata
+  createdBy   String
+  creator     User             @relation(fields: [createdBy], references: [id])
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([category, isActive])
+  @@index([ruleType])
+  @@map("validation_rules")
+}
+
+model ValidationIssue {
+  id           String           @id @default(cuid())
+  entityId     String
+  entityType   EntityType
+  ruleId       String
+  rule         ValidationRule   @relation(fields: [ruleId], references: [id])
+
+  severity     Severity
+  message      String
+  fixSuggestion String?
+  status       IssueStatus      @default(OPEN)
+
+  // Relationships
+  proposalId        String?
+  proposal          Proposal?        @relation(fields: [proposalId], references: [id])
+  proposalProductId String?
+  proposalProduct   ProposalProduct? @relation(fields: [proposalProductId], references: [id])
+
+  // Resolution tracking
+  detectedAt   DateTime         @default(now())
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  resolver     User?            @relation(fields: [resolvedBy], references: [id])
+  resolutionMethod ResolutionMethod?
+
+  // Analytics
+  performanceMetrics Json? // IssuePerformanceMetrics
+  userStoryContext   String[]
+
+  @@index([entityType, status])
+  @@index([ruleId, status])
+  @@index([severity, detectedAt])
+  @@map("validation_issues")
+}
+
+model ValidationExecution {
+  id             String         @id @default(cuid())
+  entityId       String
+  entityType     EntityType
+  rulesExecuted  String[]
+
+  // Execution metrics
+  executionTime  Int // milliseconds
+  issuesFound    Int
+  issuesResolved Int
+  performanceScore Float?
+
+  // Context
+  triggeredBy    String
+  trigger        User           @relation(fields: [triggeredBy], references: [id])
+  userStoryContext String[]
+  hypothesesValidated String[]
+
+  timestamp      DateTime       @default(now())
+
+  @@index([entityType, timestamp])
+  @@index([triggeredBy])
+  @@map("validation_executions")
+}
+
+// Approval Workflow System
+model ApprovalWorkflow {
+  id          String                @id @default(cuid())
+  name        String
+  description String?
+  entityType  EntityType
+
+  // Workflow definition
+  stages      WorkflowStage[]
+
+  // Status and metrics
+  isActive    Boolean               @default(true)
+  executionStats Json? // WorkflowExecutionStats
+  performanceMetrics Json? // WorkflowPerformanceMetrics
+  userStoryMappings String[]
+
+  // Relationships
+  executions  ApprovalExecution[]
+
+  // Metadata
+  createdBy   String
+  creator     User                  @relation(fields: [createdBy], references: [id])
+
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([entityType, isActive])
+  @@map("approval_workflows")
+}
+
+model WorkflowStage {
+  id          String            @id @default(cuid())
+  workflowId  String
+  workflow    ApprovalWorkflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  order       Int
+
+  // Stage configuration
+  approvers   String[] // User IDs
+  conditions  Json? // StageCondition[]
+  actions     Json? // StageAction[]
+  slaHours    Int?
+  isParallel  Boolean           @default(false)
+  isOptional  Boolean           @default(false)
+
+  // Escalation
+  escalationRules Json? // EscalationRule[]
+
+  // Analytics
+  performanceTracking Json? // StagePerformanceTracking
+
+  // Relationships
+  decisions   ApprovalDecision[]
+  executions  ApprovalExecution[]
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([workflowId, order])
+  @@map("workflow_stages")
+}
+
+model ApprovalExecution {
+  id           String              @id @default(cuid())
+  workflowId   String
+  workflow     ApprovalWorkflow    @relation(fields: [workflowId], references: [id])
+  entityId     String
+
+  // Current state
+  currentStage String?
+  status       ExecutionStatus     @default(PENDING)
+
+  // Timing
+  startedAt    DateTime            @default(now())
+  completedAt  DateTime?
+  slaCompliance Boolean?
+
+  // Relationships
+  proposalId   String?
+  proposal     Proposal?           @relation(fields: [proposalId], references: [id])
+  decisions    ApprovalDecision[]
+  stageExecution WorkflowStage?    @relation(fields: [currentStage], references: [id])
+
+  // Analytics
+  performanceMetrics Json? // ExecutionPerformanceMetrics
+  userStoryContext   String[]
+
+  @@index([workflowId, status])
+  @@index([proposalId])
+  @@map("approval_executions")
+}
+
+model ApprovalDecision {
+  id           String            @id @default(cuid())
+  executionId  String
+  execution    ApprovalExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stageId      String
+  stage        WorkflowStage     @relation(fields: [stageId], references: [id])
+
+  approverId   String
+  approver     User              @relation(fields: [approverId], references: [id])
+
+  decision     DecisionType
+  comments     String?
+
+  // Metrics
+  timeToDecision Int? // minutes
+  qualityScore   Float?
+  performanceImpact Float?
+
+  timestamp    DateTime          @default(now())
+
+  @@index([executionId])
+  @@index([approverId])
+  @@map("approval_decisions")
+}
+
+// ========================================
+// BUSINESS ENUMS
+// ========================================
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  PROSPECT
+  CHURNED
+}
+
+enum CustomerTier {
+  STANDARD
+  PREMIUM
+  ENTERPRISE
+  VIP
+}
+
+enum ProposalStatus {
+  DRAFT
+  IN_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SUBMITTED
+  ACCEPTED
+  DECLINED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SectionType {
+  TEXT
+  PRODUCTS
+  TERMS
+  PRICING
+  CUSTOM
+}
+
+enum ValidationStatus {
+  VALID
+  INVALID
+  WARNING
+  NOT_VALIDATED
+}
+
+enum RelationshipType {
+  REQUIRES
+  RECOMMENDS
+  INCOMPATIBLE
+  ALTERNATIVE
+  OPTIONAL
+}
+
+enum ContentType {
+  TEXT
+  TEMPLATE
+  IMAGE
+  DOCUMENT
+  MEDIA
+}
+
+enum AccessType {
+  VIEW
+  EDIT
+  USE
+  DOWNLOAD
+}
+
+enum ValidationRuleType {
+  COMPATIBILITY
+  LICENSE
+  CONFIGURATION
+  COMPLIANCE
+  CUSTOM
+}
+
+enum Severity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum IssueStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+  FALSE_POSITIVE
+}
+
+enum ResolutionMethod {
+  AUTO
+  MANUAL
+  SUGGESTION
+}
+
+enum ExecutionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  ESCALATED
+}
+
+enum DecisionType {
+  APPROVE
+  REJECT
+  DELEGATE
+  REQUEST_CHANGES
+}
+
+enum EntityType {
+  PROPOSAL
+  CUSTOMER
+  PRODUCT
+  USER
+  ROLE
+  CONTENT
+  VALIDATION_RULE
+  APPROVAL_WORKFLOW
+  PROPOSAL_SECTION
+  PROPOSAL_PRODUCT
+  PRODUCT_RELATIONSHIP
 }

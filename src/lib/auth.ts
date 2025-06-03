@@ -7,60 +7,8 @@
 import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
-
-// Mock users for development
-const MOCK_USERS = [
-  {
-    id: '1',
-    email: 'admin@posalpro.com',
-    password: 'PosalPro2024!', // In production, this would be hashed
-    name: 'Admin User',
-    department: 'Administration',
-    roles: ['System Administrator'],
-    permissions: ['*:*'],
-    status: 'ACTIVE',
-  },
-  {
-    id: '2',
-    email: 'manager@posalpro.com',
-    password: 'PosalPro2024!',
-    name: 'Proposal Manager',
-    department: 'Business Development',
-    roles: ['Proposal Manager'],
-    permissions: ['proposals:read', 'proposals:write', 'proposals:manage'],
-    status: 'ACTIVE',
-  },
-  {
-    id: '3',
-    email: 'sme@posalpro.com',
-    password: 'PosalPro2024!',
-    name: 'Subject Matter Expert',
-    department: 'Technical',
-    roles: ['Subject Matter Expert (SME)'],
-    permissions: ['content:read', 'content:write', 'validation:execute'],
-    status: 'ACTIVE',
-  },
-  {
-    id: '4',
-    email: 'executive@posalpro.com',
-    password: 'PosalPro2024!',
-    name: 'Executive',
-    department: 'Leadership',
-    roles: ['Executive'],
-    permissions: ['proposals:approve', 'reports:read', 'analytics:read'],
-    status: 'ACTIVE',
-  },
-  {
-    id: '5',
-    email: 'content@posalpro.com',
-    password: 'PosalPro2024!',
-    name: 'Content Manager',
-    department: 'Content',
-    roles: ['Content Manager'],
-    permissions: ['content:read', 'content:write', 'content:manage'],
-    status: 'ACTIVE',
-  },
-];
+import { comparePassword } from './auth/passwordUtils';
+import { getUserByEmail, updateLastLogin } from './services/userService';
 
 // Extend NextAuth types to include our custom fields
 declare module 'next-auth' {
@@ -122,34 +70,69 @@ export const authOptions: NextAuthOptions = {
         },
       },
       async authorize(credentials) {
+        console.log('🔐 Authorization attempt:', {
+          email: credentials?.email,
+          hasPassword: !!credentials?.password,
+          role: credentials?.role,
+        });
+
         if (!credentials?.email || !credentials?.password) {
+          console.log('❌ Missing credentials');
           throw new Error('Email and password are required');
         }
 
         try {
-          // Find user in mock data
-          const user = MOCK_USERS.find(
-            u => u.email === credentials.email && u.password === credentials.password
-          );
+          console.log('🔍 Looking up user:', credentials.email);
+          // Find user in database
+          const user = await getUserByEmail(credentials.email);
 
           if (!user) {
+            console.log('❌ User not found');
             throw new Error('Invalid credentials');
           }
 
+          console.log('✅ User found:', {
+            id: user.id,
+            email: user.email,
+            status: user.status,
+            roles: user.roles.map(r => r.role.name),
+          });
+
           // Check if user is active
           if (user.status !== 'ACTIVE') {
+            console.log('❌ User not active:', user.status);
             throw new Error('Account is not active');
           }
 
-          console.log('🔐 Authentication successful for:', user.email, 'Role:', user.roles[0]);
+          console.log('🔑 Verifying password...');
+          // Verify password
+          const isValidPassword = await comparePassword(credentials.password, user.password);
+          if (!isValidPassword) {
+            console.log('❌ Invalid password');
+            throw new Error('Invalid credentials');
+          }
+
+          console.log('✅ Password valid');
+
+          // Update last login timestamp
+          await updateLastLogin(user.id);
+
+          // Extract roles from user.roles array
+          const roles = user.roles.map(userRole => userRole.role.name);
+
+          // For now, we'll assign basic permissions based on roles
+          // In the future, this can be extended to use the actual permissions from the database
+          const permissions = generatePermissionsFromRoles(roles);
+
+          console.log('🔐 Authentication successful for:', user.email, 'Roles:', roles);
 
           return {
             id: user.id,
             email: user.email,
             name: user.name,
             department: user.department,
-            roles: user.roles,
-            permissions: user.permissions,
+            roles: roles,
+            permissions: permissions,
           };
         } catch (error) {
           console.error('Authentication error:', error);
@@ -225,22 +208,28 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === 'development',
 };
 
-// Mock helper functions for development
-export function getMockUserPermissions(userId: string): string[] {
-  const user = MOCK_USERS.find(u => u.id === userId);
-  return user?.permissions || [];
-}
+/**
+ * Generate permissions based on roles
+ * This is a simplified version - in the future, permissions should come from the database
+ */
+function generatePermissionsFromRoles(roles: string[]): string[] {
+  const rolePermissionMap: Record<string, string[]> = {
+    'System Administrator': ['*:*'],
+    'Proposal Manager': ['proposals:read', 'proposals:write', 'proposals:manage'],
+    'Subject Matter Expert (SME)': ['content:read', 'content:write', 'validation:execute'],
+    Executive: ['proposals:approve', 'reports:read', 'analytics:read'],
+    'Content Manager': ['content:read', 'content:write', 'content:manage'],
+    'Technical SME': ['content:read', 'content:write', 'validation:execute'],
+    'Proposal Specialist': ['proposals:read', 'proposals:write'],
+    'Business Development Manager': ['customers:read', 'customers:write'],
+  };
 
-export function hasMockPermission(userId: string, resource: string, action: string): boolean {
-  const permissions = getMockUserPermissions(userId);
-  return (
-    permissions.includes(`${resource}:${action}`) ||
-    permissions.includes(`${resource}:*`) ||
-    permissions.includes('*:*')
-  );
-}
+  const permissions = new Set<string>();
 
-export function getMockUserRoles(userId: string): string[] {
-  const user = MOCK_USERS.find(u => u.id === userId);
-  return user?.roles || [];
+  roles.forEach(role => {
+    const rolePermissions = rolePermissionMap[role] || [];
+    rolePermissions.forEach(permission => permissions.add(permission));
+  });
+
+  return Array.from(permissions);
 }

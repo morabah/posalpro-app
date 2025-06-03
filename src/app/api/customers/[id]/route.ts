@@ -1,12 +1,11 @@
 /**
- * PosalPro MVP2 - Individual Proposal API Routes
- * Handles operations on specific proposals by ID using service functions
- * Based on PROPOSAL_CREATION_SCREEN.md and proposal management requirements
+ * PosalPro MVP2 - Individual Customer API Routes
+ * Handles operations on specific customers by ID using service functions
+ * Based on CUSTOMER_PROFILE_SCREEN.md requirements
  */
 
-import { proposalService } from '@/lib/services';
-import { updateProposalSchema } from '@/lib/validation/schemas/proposal';
-import { Prisma } from '@prisma/client';
+import { customerService } from '@/lib/services';
+import { CustomerTier, Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -35,32 +34,52 @@ function createErrorResponse(error: string, details?: any, status = 500) {
   );
 }
 
+// Customer update validation schema
+const updateCustomerSchema = z.object({
+  id: z.string().uuid('Invalid customer ID'),
+  name: z
+    .string()
+    .min(1, 'Name is required')
+    .max(200, 'Name must be less than 200 characters')
+    .optional(),
+  email: z.string().email('Invalid email format').optional(),
+  phone: z.string().optional(),
+  website: z.string().url('Invalid website URL').optional(),
+  address: z.string().optional(),
+  industry: z.string().optional(),
+  companySize: z.string().optional(),
+  revenue: z.number().min(0, 'Revenue must be positive').optional(),
+  tier: z.nativeEnum(CustomerTier).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
 /**
- * GET /api/proposals/[id] - Get specific proposal
+ * GET /api/customers/[id] - Get specific customer
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const params = await context.params;
     const { id } = params;
 
-    // Get proposal with details using service
-    const proposal = await proposalService.getProposalWithDetails(id);
+    // Get customer with contacts using service
+    const customer = await customerService.getCustomerWithContacts(id);
 
-    if (!proposal) {
-      return createErrorResponse('Proposal not found', null, 404);
+    if (!customer) {
+      return createErrorResponse('Customer not found', null, 404);
     }
 
-    return createApiResponse(proposal, 'Proposal retrieved successfully');
+    return createApiResponse(customer, 'Customer retrieved successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch proposal ${params.id}:`, error);
+    console.error(`Failed to fetch customer ${params.id}:`, error);
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       return createErrorResponse('Database error', error.message, 500);
     }
 
     return createErrorResponse(
-      'Failed to fetch proposal',
+      'Failed to fetch customer',
       error instanceof Error ? error.message : 'Unknown error',
       500
     );
@@ -68,7 +87,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 /**
- * PUT /api/proposals/[id] - Update specific proposal
+ * PUT /api/customers/[id] - Update specific customer
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -76,30 +95,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const { id } = params;
     const body = await request.json();
 
-    // Transform date strings to Date objects for validation
-    if (body.validUntil && typeof body.validUntil === 'string') {
-      body.validUntil = new Date(body.validUntil);
-    }
-    if (body.dueDate && typeof body.dueDate === 'string') {
-      body.dueDate = new Date(body.dueDate);
-    }
-
     // Add the id to the body for validation
     const updateData = { id, ...body };
 
     // Validate the update data
-    const validatedData = updateProposalSchema.parse(updateData);
+    const validatedData = updateCustomerSchema.parse(updateData);
 
-    // Update proposal using service
-    const updatedProposal = await proposalService.updateProposal({
+    // Update customer using service
+    const updatedCustomer = await customerService.updateCustomer({
       ...validatedData,
-      status: validatedData.status as any,
+      tier: validatedData.tier as any,
     });
 
-    return createApiResponse(updatedProposal, 'Proposal updated successfully');
+    return createApiResponse(updatedCustomer, 'Customer updated successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to update proposal ${params.id}:`, error);
+    console.error(`Failed to update customer ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return createErrorResponse('Validation failed', error.errors, 400);
@@ -107,13 +118,13 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2025') {
-        return createErrorResponse('Proposal not found', error.message, 404);
+        return createErrorResponse('Customer not found', error.message, 404);
       }
       return createErrorResponse('Database error', error.message, 500);
     }
 
     return createErrorResponse(
-      'Failed to update proposal',
+      'Failed to update customer',
       error instanceof Error ? error.message : 'Unknown error',
       500
     );
@@ -121,30 +132,30 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 /**
- * DELETE /api/proposals/[id] - Delete specific proposal
+ * DELETE /api/customers/[id] - Delete specific customer
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const params = await context.params;
     const { id } = params;
 
-    // Delete proposal using service
-    await proposalService.deleteProposal(id);
+    // Delete customer using service
+    await customerService.deleteCustomer(id);
 
-    return createApiResponse(null, 'Proposal deleted successfully');
+    return createApiResponse(null, 'Customer deleted successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to delete proposal ${params.id}:`, error);
+    console.error(`Failed to delete customer ${params.id}:`, error);
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2025') {
-        return createErrorResponse('Proposal not found', error.message, 404);
+        return createErrorResponse('Customer not found', error.message, 404);
       }
       return createErrorResponse('Database error', error.message, 500);
     }
 
     return createErrorResponse(
-      'Failed to delete proposal',
+      'Failed to delete customer',
       error instanceof Error ? error.message : 'Unknown error',
       500
     );
