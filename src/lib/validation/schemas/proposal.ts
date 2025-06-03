@@ -261,20 +261,31 @@ export const proposalWizardStep3Schema = z.object({
         item: z.object({
           id: z.string().uuid(),
           title: validationUtils.stringWithLength(1, 200, 'Content title'),
-          type: z.enum(['case_study', 'template', 'reference', 'methodology', 'compliance']),
+          type: z.string().min(1, 'Content type is required'),
           relevanceScore: z.number().min(0).max(100),
           section: z.string().min(1, 'Section is required'),
-          tags: z.array(z.string()),
+          tags: z.array(z.string()).max(20, 'Maximum 20 tags allowed'),
           content: z.string().min(1, 'Content is required'),
+          successRate: z.number().min(0).max(100).optional(),
+          lastUsed: z.date().optional(),
         }),
         section: validationUtils.stringWithLength(1, 100, 'Section assignment'),
-        customizations: z.array(z.string()).optional(),
-        assignedTo: z.string().optional(),
+        customizations: z.array(z.string()).max(10, 'Maximum 10 customizations allowed'),
       })
     )
     .min(1, 'At least one content item must be selected'),
 
   searchHistory: z.array(z.string()).max(20, 'Search history limited to 20 items'),
+
+  // Cross-step validation results
+  crossStepValidation: z
+    .object({
+      teamAlignment: z.boolean().default(true),
+      productCompatibility: z.boolean().default(true),
+      rfpCompliance: z.boolean().default(true),
+      sectionCoverage: z.boolean().default(true),
+    })
+    .optional(),
 });
 
 export type ProposalWizardStep3Data = z.infer<typeof proposalWizardStep3Schema>;
@@ -303,6 +314,16 @@ export const proposalWizardStep4Schema = z.object({
   totalValue: z.number().min(0, 'Total value must be non-negative'),
   aiRecommendationsUsed: z.number().int().min(0).optional(),
   searchHistory: z.array(z.string()).max(20, 'Search history limited to 20 items'),
+
+  // Cross-step validation results
+  crossStepValidation: z
+    .object({
+      teamCompatibility: z.boolean().default(true),
+      contentAlignment: z.boolean().default(true),
+      budgetCompliance: z.boolean().default(true),
+      timelineRealistic: z.boolean().default(true),
+    })
+    .optional(),
 });
 
 export type ProposalWizardStep4Data = z.infer<typeof proposalWizardStep4Schema>;

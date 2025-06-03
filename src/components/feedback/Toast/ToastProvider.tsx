@@ -5,7 +5,14 @@
 
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useReducer } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useReducer,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Toast } from './Toast';
 
@@ -99,6 +106,12 @@ export function ToastProvider({
   maxToasts = 5,
 }: ToastProviderProps) {
   const [toasts, dispatch] = useReducer(toastReducer, []);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Ensure component only renders portal after hydration
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const generateId = useCallback(() => {
     return Math.random().toString(36).substr(2, 9);
@@ -192,8 +205,10 @@ export function ToastProvider({
     };
   }, [toasts, removeToast]);
 
-  // Listen for global error events
+  // Listen for global error events - only after mount
   useEffect(() => {
+    if (!isMounted) return;
+
     const handleAppError = (event: CustomEvent) => {
       const { message, type, duration, action } = event.detail;
       addToast({
@@ -208,7 +223,7 @@ export function ToastProvider({
     return () => {
       window.removeEventListener('app:error', handleAppError as EventListener);
     };
-  }, [addToast]);
+  }, [addToast, isMounted]);
 
   const contextValue: ToastContextType = {
     toasts,
@@ -244,7 +259,7 @@ export function ToastProvider({
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      {typeof window !== 'undefined' &&
+      {isMounted &&
         createPortal(
           <div
             className={`fixed z-50 ${getPositionClasses()} space-y-2`}

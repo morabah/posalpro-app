@@ -1,26 +1,21 @@
 /**
  * PosalPro MVP2 - Dashboard Page
- * Main dashboard with enhanced navigation and layout system
- * Updated to work with the dashboard layout system
+ * Enhanced dashboard with dynamic widget system and role-based customization
+ * Based on DASHBOARD_SCREEN.md wireframe specifications
  */
 
 'use client';
 
+import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/forms/Button';
-import {
-  ChartBarIcon,
-  ClockIcon,
-  DocumentTextIcon,
-  PlusIcon,
-  ShieldCheckIcon,
-  UsersIcon,
-} from '@heroicons/react/24/outline';
-import { useRouter } from 'next/navigation';
+import { useDashboardAnalytics } from '@/hooks/dashboard/useDashboardAnalytics';
+import { getRoleSpecificMockData } from '@/lib/dashboard/mockData';
+import { getDashboardConfiguration } from '@/lib/dashboard/widgetRegistry';
+import { UserType } from '@/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// Component Traceability Matrix for Dashboard with Navigation
+// Component Traceability Matrix for Enhanced Dashboard
 const COMPONENT_MAPPING = {
   userStories: ['US-4.1', 'US-4.3', 'US-2.3'],
   acceptanceCriteria: [
@@ -29,22 +24,33 @@ const COMPONENT_MAPPING = {
     'AC-4.3.1', // Priority visualization
     'AC-4.3.3', // Progress tracking
     'AC-2.3.1', // Role-based access
-    'Navigation integration',
-    'Quick access functionality',
   ],
   methods: [
-    'renderDashboardWidgets()',
-    'trackQuickActions()',
-    'displayRoleBasedContent()',
-    'navigateToSections()',
-    'trackUserActivity()',
-    'optimizeUserExperience()',
+    'renderDynamicDashboard()',
+    'manageWidgetData()',
+    'trackUserInteractions()',
+    'handleRoleBasedContent()',
+    'optimizePerformance()',
   ],
-  hypotheses: ['H7', 'H4'],
-  testCases: ['TC-H7-001', 'TC-H7-002', 'TC-NAV-001'],
+  hypotheses: ['H7', 'H4', 'H8'],
+  testCases: ['TC-H7-001', 'TC-H7-002', 'TC-H4-001', 'TC-DASHBOARD-001'],
 };
 
-// Mock data structures
+// Mock user data - will be replaced with actual authentication
+const MOCK_USER = {
+  id: 'user-001',
+  name: 'Mohamed Rabah',
+  role: UserType.PROPOSAL_MANAGER,
+  permissions: [
+    'proposals.read',
+    'activities.read',
+    'team.read',
+    'deadlines.read',
+    'metrics.read',
+    'actions.execute',
+  ],
+};
+
 interface DashboardMetrics {
   activeProposals: number;
   pendingTasks: number;
@@ -53,17 +59,7 @@ interface DashboardMetrics {
   onTimeDelivery: number;
 }
 
-interface QuickAction {
-  id: string;
-  label: string;
-  href: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  color: string;
-  description: string;
-}
-
 export default function DashboardPage() {
-  const router = useRouter();
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     activeProposals: 12,
     pendingTasks: 8,
@@ -71,88 +67,172 @@ export default function DashboardPage() {
     avgCompletionTime: 12.3,
     onTimeDelivery: 94.2,
   });
+
+  const [widgetData, setWidgetData] = useState<Record<string, any>>({});
+  const [widgetLoading, setWidgetLoading] = useState<Record<string, boolean>>({});
+  const [widgetErrors, setWidgetErrors] = useState<Record<string, string>>({});
   const [sessionStartTime] = useState(Date.now());
   const hasTrackedInitialLoad = useRef(false);
 
-  // Quick actions based on wireframe specifications
-  const quickActions: QuickAction[] = useMemo(
-    () => [
-      {
-        id: 'new-proposal',
-        label: 'New Proposal',
-        href: '/proposals/create',
-        icon: PlusIcon,
-        color: 'bg-blue-600 hover:bg-blue-700',
-        description: 'Create a new proposal',
-      },
-      {
-        id: 'search-content',
-        label: 'Search Content',
-        href: '/content/search',
-        icon: DocumentTextIcon,
-        color: 'bg-green-600 hover:bg-green-700',
-        description: 'Find content for proposals',
-      },
-      {
-        id: 'assign-smes',
-        label: 'Assign SMEs',
-        href: '/sme/assignments',
-        icon: UsersIcon,
-        color: 'bg-purple-600 hover:bg-purple-700',
-        description: 'Assign subject matter experts',
-      },
-      {
-        id: 'run-validation',
-        label: 'Run Validation',
-        href: '/validation',
-        icon: ShieldCheckIcon,
-        color: 'bg-orange-600 hover:bg-orange-700',
-        description: 'Validate proposal configurations',
-      },
-    ],
-    []
+  const analytics = useDashboardAnalytics(
+    MOCK_USER.id,
+    MOCK_USER.role,
+    `dashboard-${sessionStartTime}`
   );
 
-  // Analytics tracking for dashboard interactions
-  const trackDashboardAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      console.log('Dashboard Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        sessionDuration: Date.now() - sessionStartTime,
-        component: 'DashboardPage',
-        userStory: 'US-4.1',
-        hypothesis: 'H7',
-      });
+  // Get dashboard widget configuration for user role
+  const dashboardWidgets = useMemo(() => {
+    return getDashboardConfiguration(MOCK_USER.role, MOCK_USER.permissions);
+  }, []);
+
+  // Load initial widget data
+  useEffect(() => {
+    const loadWidgetData = async () => {
+      try {
+        // Get mock data for all widgets
+        const mockData = getRoleSpecificMockData(MOCK_USER.role);
+
+        // Map data to widgets
+        const widgetDataMap: Record<string, any> = {};
+        dashboardWidgets.forEach(widget => {
+          switch (widget.id) {
+            case 'proposal-overview':
+              widgetDataMap[widget.id] = {
+                metrics: mockData.proposals.metrics,
+                activeProposals: mockData.proposals.active,
+                userRole: MOCK_USER.role,
+              };
+              break;
+            case 'recent-activity':
+              widgetDataMap[widget.id] = {
+                activities: mockData.activities,
+                notifications: mockData.notifications,
+              };
+              break;
+            case 'team-collaboration':
+              widgetDataMap[widget.id] = {
+                teamMembers: mockData.team,
+                collaborationMetrics: {
+                  activeTeamMembers: mockData.team.filter((t: any) => t.status === 'online').length,
+                  avgResponseTime: 2.3,
+                  coordinationScore: 8.7,
+                },
+              };
+              break;
+            case 'deadline-tracker':
+              widgetDataMap[widget.id] = {
+                deadlines: mockData.deadlines,
+                upcomingCount: mockData.deadlines.filter((d: any) => d.dueDate > new Date()).length,
+                overdueCount: mockData.deadlines.filter(
+                  (d: any) => d.dueDate < new Date() && d.status !== 'completed'
+                ).length,
+              };
+              break;
+            case 'performance-metrics':
+              widgetDataMap[widget.id] = {
+                performance: mockData.performance,
+                trends: [
+                  { metric: 'Productivity', value: 85, change: 12, direction: 'up' as const },
+                  { metric: 'Quality', value: 92, change: 5, direction: 'up' as const },
+                  { metric: 'Efficiency', value: 78, change: -2, direction: 'down' as const },
+                ],
+              };
+              break;
+            default:
+              widgetDataMap[widget.id] = { placeholder: true };
+          }
+        });
+
+        setWidgetData(widgetDataMap);
+
+        // Track successful data load
+        analytics.trackEvent('dashboard_data_loaded', {
+          widgetCount: dashboardWidgets.length,
+          loadTime: Date.now() - sessionStartTime,
+          userRole: MOCK_USER.role,
+        });
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+        analytics.trackEvent('dashboard_data_error', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          userRole: MOCK_USER.role,
+        });
+      }
+    };
+
+    loadWidgetData();
+  }, [dashboardWidgets, analytics, sessionStartTime]);
+
+  // Handle widget refresh
+  const handleWidgetRefresh = useCallback(
+    async (widgetId: string) => {
+      setWidgetLoading(prev => ({ ...prev, [widgetId]: true }));
+      setWidgetErrors(prev => ({ ...prev, [widgetId]: '' }));
+
+      try {
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Refresh widget data (would be actual API call in production)
+        const mockData = getRoleSpecificMockData(MOCK_USER.role);
+
+        // Update specific widget data
+        setWidgetData(prev => ({
+          ...prev,
+          [widgetId]: {
+            ...prev[widgetId],
+            lastRefresh: new Date(),
+          },
+        }));
+
+        analytics.trackWidgetInteraction(widgetId, 'refresh_completed', {
+          duration: 1000,
+          success: true,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Refresh failed';
+        setWidgetErrors(prev => ({ ...prev, [widgetId]: errorMessage }));
+
+        analytics.trackWidgetInteraction(widgetId, 'refresh_failed', {
+          error: errorMessage,
+        });
+      } finally {
+        setWidgetLoading(prev => ({ ...prev, [widgetId]: false }));
+      }
     },
-    [sessionStartTime]
+    [analytics]
   );
 
-  // Handle quick action clicks
-  const handleQuickAction = useCallback(
-    (action: QuickAction) => {
-      trackDashboardAction('quick_action_clicked', {
-        actionId: action.id,
-        actionLabel: action.label,
-        destination: action.href,
-      });
-      router.push(action.href);
+  // Handle widget interactions
+  const handleWidgetInteraction = useCallback(
+    (widgetId: string, action: string, metadata?: any) => {
+      analytics.trackWidgetInteraction(widgetId, action, metadata);
+
+      // Handle specific widget actions
+      switch (action) {
+        case 'navigate':
+          if (metadata?.url) {
+            window.location.href = metadata.url;
+          }
+          break;
+        case 'expand':
+        case 'collapse':
+          // Handle widget state changes
+          break;
+        default:
+          console.log(`Widget ${widgetId} action: ${action}`, metadata);
+      }
     },
-    [trackDashboardAction, router]
+    [analytics]
   );
 
-  // Track page load and metrics
+  // Track initial page load
   useEffect(() => {
     if (!hasTrackedInitialLoad.current) {
-      trackDashboardAction('dashboard_loaded', {
-        activeProposals: metrics.activeProposals,
-        pendingTasks: metrics.pendingTasks,
-        completionRate: metrics.completionRate,
-      });
+      analytics.trackDashboardLoaded(Date.now() - sessionStartTime);
       hasTrackedInitialLoad.current = true;
     }
-  }, [metrics, trackDashboardAction]);
+  }, [analytics, sessionStartTime]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -161,9 +241,10 @@ export default function DashboardPage() {
         <Breadcrumbs className="mb-4" />
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Welcome back, Mohamed</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Welcome back, {MOCK_USER.name}</h1>
             <p className="text-gray-600 mt-1">
-              {metrics.activeProposals} active proposals • {metrics.pendingTasks} priority items
+              {metrics.activeProposals} active proposals • {metrics.pendingTasks} priority items •{' '}
+              {dashboardWidgets.length} widgets
             </p>
           </div>
           <div className="flex items-center space-x-4">
@@ -175,138 +256,35 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="mb-8">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {quickActions.map(action => {
-            const IconComponent = action.icon;
-            return (
-              <Button
-                key={action.id}
-                onClick={() => handleQuickAction(action)}
-                className={`${action.color} text-white flex flex-col items-center justify-center py-6 px-4 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 h-24`}
-                aria-label={action.description}
-              >
-                <IconComponent className="w-6 h-6 mb-2" />
-                <span className="text-sm font-medium">{action.label}</span>
-              </Button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Dashboard Shell with Dynamic Widgets */}
+      <DashboardShell
+        widgets={dashboardWidgets}
+        userRole={MOCK_USER.role}
+        userId={MOCK_USER.id}
+        data={widgetData}
+        loading={widgetLoading}
+        errors={widgetErrors}
+        onWidgetRefresh={handleWidgetRefresh}
+        onWidgetInteraction={handleWidgetInteraction}
+        className="mb-8"
+      />
 
-      {/* Status Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <Card>
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Performance Metrics</h3>
-              <ChartBarIcon className="w-5 h-5 text-gray-400" />
-            </div>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Completion Rate</span>
-                <span className="text-lg font-semibold text-green-600">
-                  {metrics.completionRate}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-green-600 h-2 rounded-full"
-                  style={{ width: `${metrics.completionRate}%` }}
-                ></div>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">On-time Delivery</span>
-                <span className="text-lg font-semibold text-blue-600">
-                  {metrics.onTimeDelivery}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full"
-                  style={{ width: `${metrics.onTimeDelivery}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Active Workload</h3>
-              <ClockIcon className="w-5 h-5 text-gray-400" />
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <div>
-                  <div className="text-2xl font-bold text-blue-600">{metrics.activeProposals}</div>
-                  <div className="text-sm text-blue-700">Active Proposals</div>
-                </div>
-                <DocumentTextIcon className="w-8 h-8 text-blue-600" />
-              </div>
-              <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                <div>
-                  <div className="text-2xl font-bold text-orange-600">{metrics.pendingTasks}</div>
-                  <div className="text-sm text-orange-700">Pending Tasks</div>
-                </div>
-                <ClockIcon className="w-8 h-8 text-orange-600" />
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Recent Activity */}
-      <Card>
+      {/* Legacy Quick Actions - Will be moved to widget in next iteration */}
+      <Card className="mt-8">
         <div className="p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-          <div className="space-y-3">
-            {[
-              {
-                time: '2 hours ago',
-                action: 'Proposal "Enterprise Security" moved to Review',
-                type: 'info',
-              },
-              {
-                time: '4 hours ago',
-                action: 'SME assignment completed for "Healthcare Solutions"',
-                type: 'success',
-              },
-              {
-                time: '6 hours ago',
-                action: 'Validation issues found in "Data Analytics Package"',
-                type: 'warning',
-              },
-              { time: '1 day ago', action: 'New proposal "Cloud Migration" created', type: 'info' },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-center space-x-3 py-2">
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    activity.type === 'success'
-                      ? 'bg-green-500'
-                      : activity.type === 'warning'
-                      ? 'bg-orange-500'
-                      : 'bg-blue-500'
-                  }`}
-                ></div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">{activity.action}</p>
-                  <p className="text-xs text-gray-500">{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => trackDashboardAction('view_all_activity')}
-            >
-              View All Activity
-            </Button>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">System Status</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+            <div>
+              <span className="font-medium">Dashboard Widgets:</span> {dashboardWidgets.length}{' '}
+              configured
+            </div>
+            <div>
+              <span className="font-medium">Role:</span> {MOCK_USER.role}
+            </div>
+            <div>
+              <span className="font-medium">Permissions:</span> {MOCK_USER.permissions.length}{' '}
+              granted
+            </div>
           </div>
         </div>
       </Card>

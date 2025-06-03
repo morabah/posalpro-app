@@ -225,6 +225,12 @@ export interface ProposalWizardStep2Data {
 export interface ProposalWizardStep3Data {
   selectedContent: SelectedContent[];
   searchHistory: string[];
+  crossStepValidation?: {
+    teamAlignment: boolean;
+    productCompatibility: boolean;
+    rfpCompliance: boolean;
+    sectionCoverage: boolean;
+  };
 }
 
 export interface ProposalWizardStep4Data {
@@ -232,8 +238,23 @@ export interface ProposalWizardStep4Data {
     id: string;
     name: string;
     included: boolean;
+    quantity?: number;
+    unitPrice?: number;
+    totalPrice?: number;
+    category?: string;
     configuration?: Record<string, any>;
+    customizations?: string[];
+    notes?: string;
   }[];
+  totalValue?: number;
+  aiRecommendationsUsed?: number;
+  searchHistory?: string[];
+  crossStepValidation?: {
+    teamCompatibility: boolean;
+    contentAlignment: boolean;
+    budgetCompliance: boolean;
+    timelineRealistic: boolean;
+  };
 }
 
 export interface ProposalWizardStep5Data {

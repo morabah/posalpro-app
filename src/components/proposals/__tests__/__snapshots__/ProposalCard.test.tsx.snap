@@ -1,0 +1,101 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ProposalCard Component renders correctly with all props 1`] = `
+<div>
+  <script
+    nonce=""
+  >
+    ((e,s,n,l,o,d,u,h)=&gt;{let m=document.documentElement,w=["light","dark"];function p(r){(Array.isArray(e)?e:[e]).forEach(y=&gt;{let k=y==="class",S=k&&d?o.map(f=&gt;d[f]||f):o;k?(m.classList.remove(...S),m.classList.add(d&&d[r]?d[r]:r)):m.setAttribute(y,r)}),C(r)}function C(r){h&&w.includes(r)&&(m.style.colorScheme=r)}function a(){return window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}if(l)p(l);else try{let r=localStorage.getItem(s)||n,y=u&&r==="system"?a():r;p(y)}catch(r){}})("class","theme","system",null,["light","dark"],null,true,true)
+  </script>
+  <div
+    class="flex flex-col p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow "
+    data-testid="proposal-card"
+  >
+    <div
+      class="flex justify-between items-start mb-2"
+    >
+      <h3
+        class="text-lg font-semibold text-gray-900 truncate"
+        title="Enterprise Cloud Migration Proposal"
+      >
+        Enterprise Cloud Migration Proposal
+      </h3>
+      <div
+        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-yellow-500 text-white hover:bg-yellow-600"
+      >
+        In Review
+      </div>
+    </div>
+    <p
+      class="text-sm text-gray-600 mb-3"
+    >
+      Acme Corporation
+    </p>
+    <div
+      class="grid grid-cols-2 gap-2 mb-3"
+    >
+      <div
+        class="flex flex-col"
+      >
+        <span
+          class="text-xs text-gray-500"
+        >
+          Value
+        </span>
+        <span
+          class="text-sm font-medium"
+        >
+          $150,000.00
+        </span>
+      </div>
+      <div
+        class="flex flex-col"
+      >
+        <span
+          class="text-xs text-gray-500"
+        >
+          Win Probability
+        </span>
+        <span
+          class="text-sm font-medium"
+        >
+          75
+          %
+        </span>
+      </div>
+    </div>
+    <div
+      class="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-gray-100"
+    >
+      <div
+        class="flex flex-col"
+      >
+        <span
+          class="text-xs text-gray-500"
+        >
+          Due Date
+        </span>
+        <span
+          class="text-xs"
+        >
+          7/15/2025
+        </span>
+      </div>
+      <div
+        class="flex flex-col"
+      >
+        <span
+          class="text-xs text-gray-500"
+        >
+          Last Modified
+        </span>
+        <span
+          class="text-xs"
+        >
+          6/1/2025
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+`;

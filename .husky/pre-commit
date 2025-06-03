@@ -10,3 +10,11 @@ if [ -n "$STAGED_FILES" ]; then
   echo "Running type checking on staged TypeScript files..."
   npx tsc --noEmit
 fi
+
+# Run Jest tests for affected files and related tests
+TEST_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(ts|tsx|js|jsx)$" | grep -v "node_modules" | grep -v "\.d\.ts$")
+if [ -n "$TEST_FILES" ]; then
+  echo "Running tests related to staged files..."
+  # Use the related flag to run tests for files impacted by changes
+  npx jest --bail --findRelatedTests $TEST_FILES
+fi

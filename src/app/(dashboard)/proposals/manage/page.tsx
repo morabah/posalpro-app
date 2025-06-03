@@ -26,6 +26,11 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { proposalEntity } from '../../../../lib/entities/proposal';
+import {
+  debugResponseStructure,
+  extractArrayFromResponse,
+} from '../../../../lib/utils/apiResponseHandler';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -87,111 +92,13 @@ interface FilterState {
   sortOrder: 'asc' | 'desc';
 }
 
-// Mock proposal data
-const MOCK_PROPOSALS: Proposal[] = [
-  {
-    id: '1',
-    title: 'Cloud Migration Services - Acme Corporation',
-    client: 'Acme Corporation',
-    status: ProposalStatus.IN_PROGRESS,
-    priority: ProposalPriority.HIGH,
-    dueDate: new Date('2025-06-15'),
-    createdAt: new Date('2024-12-01'),
-    updatedAt: new Date('2024-12-19'),
-    estimatedValue: 250000,
-    teamLead: 'Mohamed Rabah',
-    assignedTeam: ['Mohamed Rabah', 'Sarah Johnson', 'John Smith', 'Alex Peterson'],
-    progress: 75,
-    stage: 'Section Assignment',
-    riskLevel: 'medium',
-    tags: ['cloud', 'migration', 'security'],
-    description: 'Enterprise cloud infrastructure migration with security compliance',
-    lastActivity: 'Section assignments updated by Mohamed Rabah',
-  },
-  {
-    id: '2',
-    title: 'Security Audit - TechStart Inc',
-    client: 'TechStart Inc',
-    status: ProposalStatus.REVIEW,
-    priority: ProposalPriority.HIGH,
-    dueDate: new Date('2025-01-30'),
-    createdAt: new Date('2024-12-10'),
-    updatedAt: new Date('2024-12-18'),
-    estimatedValue: 85000,
-    teamLead: 'Alex Peterson',
-    assignedTeam: ['Alex Peterson', 'Lisa Kim', 'David Chen'],
-    progress: 90,
-    stage: 'Executive Review',
-    riskLevel: 'low',
-    tags: ['security', 'audit', 'compliance'],
-    description: 'Comprehensive security audit and compliance assessment',
-    lastActivity: 'Submitted for executive approval',
-  },
-  {
-    id: '3',
-    title: 'Digital Transformation - GlobalCorp',
-    client: 'GlobalCorp',
-    status: ProposalStatus.DRAFT,
-    priority: ProposalPriority.MEDIUM,
-    dueDate: new Date('2025-03-20'),
-    createdAt: new Date('2024-12-15'),
-    updatedAt: new Date('2024-12-17'),
-    estimatedValue: 500000,
-    teamLead: 'Sarah Johnson',
-    assignedTeam: ['Sarah Johnson', 'John Smith'],
-    progress: 25,
-    stage: 'Team Assignment',
-    riskLevel: 'high',
-    tags: ['digital', 'transformation', 'automation'],
-    description: 'Enterprise-wide digital transformation initiative',
-    lastActivity: 'Initial requirements gathered',
-  },
-  {
-    id: '4',
-    title: 'DevOps Implementation - InnovateTech',
-    client: 'InnovateTech',
-    status: ProposalStatus.SUBMITTED,
-    priority: ProposalPriority.HIGH,
-    dueDate: new Date('2024-12-31'),
-    createdAt: new Date('2024-11-15'),
-    updatedAt: new Date('2024-12-10'),
-    estimatedValue: 150000,
-    teamLead: 'John Smith',
-    assignedTeam: ['John Smith', 'Mohamed Rabah', 'Lisa Kim'],
-    progress: 100,
-    stage: 'Submitted',
-    riskLevel: 'low',
-    tags: ['devops', 'automation', 'ci/cd'],
-    description: 'DevOps pipeline setup and automation implementation',
-    lastActivity: 'Proposal submitted to client',
-  },
-  {
-    id: '5',
-    title: 'Data Analytics Platform - DataCorp',
-    client: 'DataCorp',
-    status: ProposalStatus.WON,
-    priority: ProposalPriority.MEDIUM,
-    dueDate: new Date('2024-11-30'),
-    createdAt: new Date('2024-10-01'),
-    updatedAt: new Date('2024-11-25'),
-    estimatedValue: 320000,
-    teamLead: 'Lisa Kim',
-    assignedTeam: ['Lisa Kim', 'David Chen', 'Sarah Johnson'],
-    progress: 100,
-    stage: 'Won',
-    riskLevel: 'low',
-    tags: ['analytics', 'data', 'platform'],
-    description: 'Custom data analytics platform development',
-    lastActivity: 'Contract signed - project kickoff scheduled',
-  },
-];
-
 export default function ProposalManagementDashboard() {
   const router = useRouter();
-  const [proposals, setProposals] = useState<Proposal[]>(MOCK_PROPOSALS);
-  const [filteredProposals, setFilteredProposals] = useState<Proposal[]>(MOCK_PROPOSALS);
-  const [isLoading, setIsLoading] = useState(false);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [filteredProposals, setFilteredProposals] = useState<Proposal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedProposal, setSelectedProposal] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
@@ -203,6 +110,153 @@ export default function ProposalManagementDashboard() {
     sortBy: 'updatedAt',
     sortOrder: 'desc',
   });
+
+  // Fetch proposals from API
+  useEffect(() => {
+    const fetchProposals = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        console.log('Fetching proposals from API...');
+        const response = await proposalEntity.query({
+          page: 1,
+          limit: 50, // Get more proposals to show
+          sortBy: 'createdAt',
+          sortOrder: 'desc',
+        });
+
+        debugResponseStructure(response, 'Proposals API Response');
+
+        if (response.success) {
+          // Use utility function to safely extract array from response
+          const proposalsData = extractArrayFromResponse(response, undefined, []);
+
+          if (proposalsData.length > 0) {
+            console.log('Sample proposal data:', proposalsData[0]);
+
+            // Transform API data to match the UI interface
+            const transformedProposals: Proposal[] = proposalsData.map((apiProposal: any) => ({
+              id: apiProposal.id,
+              title: apiProposal.title,
+              client: apiProposal.clientName || 'Unknown Client',
+              status: mapApiStatusToUIStatus(apiProposal.status),
+              priority: mapApiPriorityToUIPriority(apiProposal.priority),
+              dueDate: new Date(apiProposal.deadline || apiProposal.dueDate || Date.now()),
+              createdAt: new Date(apiProposal.createdAt),
+              updatedAt: new Date(apiProposal.updatedAt),
+              estimatedValue: apiProposal.estimatedValue || 0,
+              teamLead: apiProposal.createdBy || 'Unassigned',
+              assignedTeam: apiProposal.assignedTo || [],
+              progress: calculateProgress(apiProposal.status),
+              stage: getStageFromStatus(apiProposal.status),
+              riskLevel: calculateRiskLevel(apiProposal),
+              tags: apiProposal.tags || [],
+              description: apiProposal.description,
+              lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
+            }));
+
+            setProposals(transformedProposals);
+            console.log('Successfully transformed proposals:', transformedProposals.length);
+          } else {
+            console.warn('No proposals found in response');
+            setProposals([]);
+          }
+        } else {
+          console.warn('API response indicates failure:', response);
+          setError(response.message || 'Failed to load proposals');
+          setProposals([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch proposals:', error);
+        setError('Failed to load proposals. Please try refreshing the page.');
+        setProposals([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProposals();
+  }, []);
+
+  // Helper functions for data transformation
+  const mapApiStatusToUIStatus = (apiStatus: string): ProposalStatus => {
+    switch (apiStatus?.toLowerCase()) {
+      case 'draft':
+        return ProposalStatus.DRAFT;
+      case 'in_review':
+        return ProposalStatus.REVIEW;
+      case 'pending_approval':
+        return ProposalStatus.REVIEW;
+      case 'approved':
+        return ProposalStatus.APPROVED;
+      case 'submitted':
+        return ProposalStatus.SUBMITTED;
+      case 'rejected':
+        return ProposalStatus.LOST;
+      default:
+        return ProposalStatus.DRAFT;
+    }
+  };
+
+  const mapApiPriorityToUIPriority = (apiPriority: string): ProposalPriority => {
+    switch (apiPriority?.toLowerCase()) {
+      case 'high':
+      case 'urgent':
+        return ProposalPriority.HIGH;
+      case 'medium':
+        return ProposalPriority.MEDIUM;
+      case 'low':
+        return ProposalPriority.LOW;
+      default:
+        return ProposalPriority.MEDIUM;
+    }
+  };
+
+  const calculateProgress = (status: string): number => {
+    switch (status?.toLowerCase()) {
+      case 'draft':
+        return 10;
+      case 'in_review':
+        return 50;
+      case 'pending_approval':
+        return 75;
+      case 'approved':
+        return 90;
+      case 'submitted':
+        return 100;
+      default:
+        return 10;
+    }
+  };
+
+  const getStageFromStatus = (status: string): string => {
+    switch (status?.toLowerCase()) {
+      case 'draft':
+        return 'Initial Draft';
+      case 'in_review':
+        return 'Under Review';
+      case 'pending_approval':
+        return 'Pending Approval';
+      case 'approved':
+        return 'Approved';
+      case 'submitted':
+        return 'Submitted';
+      case 'rejected':
+        return 'Rejected';
+      default:
+        return 'Unknown';
+    }
+  };
+
+  const calculateRiskLevel = (proposal: any): 'low' | 'medium' | 'high' => {
+    const daysUntilDeadline = Math.ceil(
+      (new Date(proposal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+    if (daysUntilDeadline < 7) return 'high';
+    if (daysUntilDeadline < 30) return 'medium';
+    return 'low';
+  };
 
   // Apply filters and sorting
   useEffect(() => {
@@ -701,8 +755,8 @@ export default function ProposalManagementDashboard() {
                           proposal.progress >= 80
                             ? 'bg-green-600'
                             : proposal.progress >= 50
-                            ? 'bg-blue-600'
-                            : 'bg-yellow-600'
+                              ? 'bg-blue-600'
+                              : 'bg-yellow-600'
                         }`}
                         style={{ width: `${proposal.progress}%` }}
                       />

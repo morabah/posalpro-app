@@ -1,258 +1,321 @@
 /**
- * Authentication Store
- * Zustand-based global authentication state management
+ * PosalPro MVP2 - Authentication Store
+ * Zustand store for managing authentication state and user sessions
+ * Integrates with NextAuth.js and provides centralized auth management
  */
 
-import { authApi, type LoginCredentials, type SessionData } from '@/lib/api/endpoints/auth';
+import type { Session, User } from 'next-auth';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 
-interface AuthState {
-  // Authentication state
+// Authentication state interface
+export interface AuthState {
+  // User and session data
+  user: User | null;
+  session: Session | null;
+
+  // Authentication status
   isAuthenticated: boolean;
   isLoading: boolean;
-  user: SessionData | null;
-  sessionExpiry: Date | null;
+  isInitializing: boolean;
 
-  // Authentication actions
-  login: (credentials: LoginCredentials) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshSession: () => Promise<void>;
+  // Session management
+  sessionExpiry: Date | null;
+  lastActivity: Date | null;
+  sessionWarningShown: boolean;
+
+  // Error handling
+  authError: string | null;
+
+  // Login attempts tracking
+  loginAttempts: number;
+  isBlocked: boolean;
+  blockExpiry: Date | null;
+}
+
+// Authentication actions interface
+export interface AuthActions {
+  // User authentication
+  setUser: (user: User | null) => void;
+  setSession: (session: Session | null) => void;
   clearAuth: () => void;
 
   // Session management
-  checkSessionValidity: () => boolean;
-  extendSession: () => void;
-  getTimeUntilExpiry: () => number;
+  updateLastActivity: () => void;
+  setSessionWarning: (shown: boolean) => void;
+  refreshSession: () => Promise<void>;
+
+  // Login attempts
+  incrementLoginAttempts: () => void;
+  resetLoginAttempts: () => void;
+  blockUser: (duration: number) => void;
+
+  // Loading states
+  setLoading: (loading: boolean) => void;
+  setInitializing: (initializing: boolean) => void;
+
+  // Error handling
+  setAuthError: (error: string | null) => void;
+
+  // Utility actions
+  isSessionValid: () => boolean;
+  shouldShowSessionWarning: () => boolean;
+  getRemainingSessionTime: () => number;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      // Initial state
-      isAuthenticated: false,
-      isLoading: false,
-      user: null,
-      sessionExpiry: null,
+// Combined store type
+export type AuthStore = AuthState & AuthActions;
 
-      // Login action
-      login: async (credentials: LoginCredentials) => {
-        set({ isLoading: true });
+// Initial state
+const initialState: AuthState = {
+  user: null,
+  session: null,
+  isAuthenticated: false,
+  isLoading: false,
+  isInitializing: true,
+  sessionExpiry: null,
+  lastActivity: null,
+  sessionWarningShown: false,
+  authError: null,
+  loginAttempts: 0,
+  isBlocked: false,
+  blockExpiry: null,
+};
 
-        try {
-          const response = await authApi.login(credentials);
+// Create the auth store
+export const useAuthStore = create<AuthStore>()(
+  subscribeWithSelector(
+    immer((set, get) => ({
+      ...initialState,
 
-          if (!response.success) {
-            throw new Error(response.message || 'Login failed');
+      // User authentication actions
+      setUser: user => {
+        set(state => {
+          state.user = user;
+          state.isAuthenticated = !!user;
+          if (user) {
+            state.authError = null;
+            state.isInitializing = false;
           }
-
-          const userData = response.data;
-          const sessionExpiry = new Date(userData.sessionExpiry);
-
-          set({
-            isAuthenticated: true,
-            isLoading: false,
-            user: userData,
-            sessionExpiry,
-          });
-
-          // Set up automatic session refresh
-          const timeUntilExpiry = sessionExpiry.getTime() - Date.now();
-          const refreshTime = Math.max(timeUntilExpiry - 5 * 60 * 1000, 60 * 1000); // Refresh 5 minutes before expiry
-
-          setTimeout(() => {
-            const { refreshSession } = get();
-            refreshSession();
-          }, refreshTime);
-        } catch (error) {
-          set({
-            isAuthenticated: false,
-            isLoading: false,
-            user: null,
-            sessionExpiry: null,
-          });
-          throw error;
-        }
+        });
       },
 
-      // Logout action
-      logout: async () => {
-        set({ isLoading: true });
+      setSession: session => {
+        set(state => {
+          state.session = session;
+          state.isAuthenticated = !!session;
 
-        try {
-          await authApi.logout();
-        } catch (error) {
-          console.warn('Logout API call failed:', error);
-          // Continue with local logout even if API fails
-        } finally {
-          set({
-            isAuthenticated: false,
-            isLoading: false,
-            user: null,
-            sessionExpiry: null,
-          });
-        }
-      },
-
-      // Refresh session
-      refreshSession: async () => {
-        const { isAuthenticated, user } = get();
-
-        if (!isAuthenticated || !user) {
-          return;
-        }
-
-        try {
-          const response = await authApi.getSession();
-
-          if (!response.success) {
-            throw new Error(response.message || 'Session refresh failed');
+          if (session) {
+            state.sessionExpiry = session.expires ? new Date(session.expires) : null;
+            state.lastActivity = new Date();
+            state.authError = null;
+            state.isInitializing = false;
+          } else {
+            state.sessionExpiry = null;
+            state.sessionWarningShown = false;
           }
-
-          const userData = response.data;
-          const sessionExpiry = new Date(userData.sessionExpiry);
-
-          set({
-            user: userData,
-            sessionExpiry,
-          });
-
-          // Schedule next refresh
-          const timeUntilExpiry = sessionExpiry.getTime() - Date.now();
-          const refreshTime = Math.max(timeUntilExpiry - 5 * 60 * 1000, 60 * 1000);
-
-          setTimeout(() => {
-            const { refreshSession } = get();
-            refreshSession();
-          }, refreshTime);
-        } catch (error) {
-          console.error('Session refresh failed:', error);
-          // Auto-logout on refresh failure
-          get().clearAuth();
-        }
+        });
       },
 
-      // Clear authentication state
       clearAuth: () => {
-        set({
-          isAuthenticated: false,
-          isLoading: false,
-          user: null,
-          sessionExpiry: null,
+        set(state => {
+          state.user = null;
+          state.session = null;
+          state.isAuthenticated = false;
+          state.sessionExpiry = null;
+          state.lastActivity = null;
+          state.sessionWarningShown = false;
+          state.authError = null;
+          state.isInitializing = false;
         });
       },
 
-      // Check if session is still valid
-      checkSessionValidity: () => {
-        const { sessionExpiry, isAuthenticated } = get();
-
-        if (!isAuthenticated || !sessionExpiry) {
-          return false;
-        }
-
-        const now = Date.now();
-        const expiry = sessionExpiry.getTime();
-
-        if (now >= expiry) {
-          get().clearAuth();
-          return false;
-        }
-
-        return true;
-      },
-
-      // Extend session activity
-      extendSession: () => {
-        const { sessionExpiry, isAuthenticated } = get();
-
-        if (!isAuthenticated || !sessionExpiry) {
-          return;
-        }
-
-        // Extend session by updating last activity
-        const newExpiry = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours
-
-        set({
-          sessionExpiry: newExpiry,
-          user: get().user
-            ? {
-                ...get().user!,
-                lastActivity: new Date(),
-                sessionExpiry: newExpiry,
-              }
-            : null,
+      // Session management
+      updateLastActivity: () => {
+        set(state => {
+          state.lastActivity = new Date();
         });
       },
 
-      // Get time until session expiry (in milliseconds)
-      getTimeUntilExpiry: () => {
-        const { sessionExpiry } = get();
+      setSessionWarning: shown => {
+        set(state => {
+          state.sessionWarningShown = shown;
+        });
+      },
 
-        if (!sessionExpiry) {
+      refreshSession: async () => {
+        // TODO: Implement session refresh logic
+        set(state => {
+          state.isLoading = true;
+        });
+
+        try {
+          // This will be implemented when we integrate with NextAuth.js
+          // const newSession = await getSession();
+          // get().setSession(newSession);
+        } catch (error) {
+          console.error('Failed to refresh session:', error);
+          get().setAuthError('Failed to refresh session');
+        } finally {
+          set(state => {
+            state.isLoading = false;
+          });
+        }
+      },
+
+      // Login attempts management
+      incrementLoginAttempts: () => {
+        set(state => {
+          state.loginAttempts += 1;
+
+          // Block after 5 failed attempts
+          if (state.loginAttempts >= 5) {
+            state.isBlocked = true;
+            state.blockExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+          }
+        });
+      },
+
+      resetLoginAttempts: () => {
+        set(state => {
+          state.loginAttempts = 0;
+          state.isBlocked = false;
+          state.blockExpiry = null;
+        });
+      },
+
+      blockUser: duration => {
+        set(state => {
+          state.isBlocked = true;
+          state.blockExpiry = new Date(Date.now() + duration);
+        });
+      },
+
+      // Loading states
+      setLoading: loading => {
+        set(state => {
+          state.isLoading = loading;
+        });
+      },
+
+      setInitializing: initializing => {
+        set(state => {
+          state.isInitializing = initializing;
+        });
+      },
+
+      // Error handling
+      setAuthError: error => {
+        set(state => {
+          state.authError = error;
+        });
+      },
+
+      // Utility functions
+      isSessionValid: () => {
+        const state = get();
+
+        if (!state.session || !state.sessionExpiry) {
+          return false;
+        }
+
+        return new Date() < state.sessionExpiry;
+      },
+
+      shouldShowSessionWarning: () => {
+        const state = get();
+
+        if (!state.sessionExpiry || state.sessionWarningShown) {
+          return false;
+        }
+
+        const now = new Date();
+        const timeRemaining = state.sessionExpiry.getTime() - now.getTime();
+
+        // Show warning 5 minutes before expiry
+        return timeRemaining <= 5 * 60 * 1000 && timeRemaining > 0;
+      },
+
+      getRemainingSessionTime: () => {
+        const state = get();
+
+        if (!state.sessionExpiry) {
           return 0;
         }
 
-        return Math.max(sessionExpiry.getTime() - Date.now(), 0);
+        const now = new Date();
+        return Math.max(0, state.sessionExpiry.getTime() - now.getTime());
       },
-    }),
-    {
-      name: 'auth-storage',
-      partialize: state => ({
-        isAuthenticated: state.isAuthenticated,
-        user: state.user,
-        sessionExpiry: state.sessionExpiry,
-      }),
-      // Handle rehydration
-      onRehydrateStorage: () => state => {
-        if (state) {
-          // Check session validity on rehydration
-          const isValid = state.checkSessionValidity();
-          if (!isValid) {
-            state.clearAuth();
-          } else {
-            // Set up session refresh timer
-            const timeUntilExpiry = state.getTimeUntilExpiry();
-            const refreshTime = Math.max(timeUntilExpiry - 5 * 60 * 1000, 60 * 1000);
-
-            if (refreshTime > 0) {
-              setTimeout(() => {
-                state.refreshSession();
-              }, refreshTime);
-            }
-          }
-        }
-      },
-    }
+    }))
   )
 );
 
-// Export useful selectors
+// Selector hooks for common use cases
+export const useAuth = () =>
+  useAuthStore(state => ({
+    user: state.user,
+    session: state.session,
+    isAuthenticated: state.isAuthenticated,
+    isLoading: state.isLoading,
+    isInitializing: state.isInitializing,
+  }));
+
 export const useAuthUser = () => useAuthStore(state => state.user);
+export const useAuthSession = () => useAuthStore(state => state.session);
 export const useIsAuthenticated = () => useAuthStore(state => state.isAuthenticated);
 export const useAuthLoading = () => useAuthStore(state => state.isLoading);
+export const useAuthError = () => useAuthStore(state => state.authError);
 
-// Session management hooks
-export const useSessionValidity = () => {
-  const checkSessionValidity = useAuthStore(state => state.checkSessionValidity);
-  const getTimeUntilExpiry = useAuthStore(state => state.getTimeUntilExpiry);
+// Actions hooks
+export const useAuthActions = () =>
+  useAuthStore(state => ({
+    setUser: state.setUser,
+    setSession: state.setSession,
+    clearAuth: state.clearAuth,
+    updateLastActivity: state.updateLastActivity,
+    setSessionWarning: state.setSessionWarning,
+    refreshSession: state.refreshSession,
+    incrementLoginAttempts: state.incrementLoginAttempts,
+    resetLoginAttempts: state.resetLoginAttempts,
+    blockUser: state.blockUser,
+    setLoading: state.setLoading,
+    setInitializing: state.setInitializing,
+    setAuthError: state.setAuthError,
+  }));
 
-  return {
-    isSessionValid: checkSessionValidity(),
-    timeUntilExpiry: getTimeUntilExpiry(),
-  };
-};
+// Utility hooks
+export const useSessionUtilities = () =>
+  useAuthStore(state => ({
+    isSessionValid: state.isSessionValid,
+    shouldShowSessionWarning: state.shouldShowSessionWarning,
+    getRemainingSessionTime: state.getRemainingSessionTime,
+    sessionExpiry: state.sessionExpiry,
+    lastActivity: state.lastActivity,
+  }));
 
-// Auto-logout hook for session expiry warnings
-export const useSessionWarning = (warningThreshold: number = 5 * 60 * 1000) => {
-  const getTimeUntilExpiry = useAuthStore(state => state.getTimeUntilExpiry);
-  const clearAuth = useAuthStore(state => state.clearAuth);
+// Subscribe to session changes for automatic cleanup
+useAuthStore.subscribe(
+  state => state.sessionExpiry,
+  sessionExpiry => {
+    if (!sessionExpiry) return;
 
-  const timeUntilExpiry = getTimeUntilExpiry();
-  const showWarning = timeUntilExpiry > 0 && timeUntilExpiry <= warningThreshold;
+    const timeUntilExpiry = sessionExpiry.getTime() - Date.now();
 
-  return {
-    showWarning,
-    timeUntilExpiry,
-    logout: clearAuth,
-  };
+    if (timeUntilExpiry > 0) {
+      // Set timeout to clear auth when session expires
+      setTimeout(() => {
+        const currentState = useAuthStore.getState();
+        if (!currentState.isSessionValid()) {
+          currentState.clearAuth();
+        }
+      }, timeUntilExpiry);
+    }
+  }
+);
+
+// Analytics integration for auth events
+export const trackAuthEvent = (event: string, data?: any) => {
+  // TODO: Integrate with analytics system
+  console.log('Auth Event:', event, data);
 };

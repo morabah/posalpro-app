@@ -948,3 +948,43 @@ story traceability, includes appropriate analytics instrumentation, and supports
 hypothesis validation through measurable acceptance criteria. The architecture
 supports systematic validation of all hypotheses while maintaining clean,
 maintainable code structures.
+
+## Styling Strategy and Architecture
+
+### Tailwind CSS-Only Approach (H2.2 Decision)
+
+**Decision**: Use Tailwind CSS exclusively via the `cn` utility function without
+dedicated CSS files.
+
+**Rationale**:
+
+- ✅ **Consistency**: Aligns with WIREFRAME_INTEGRATION_GUIDE.md approach
+- ✅ **Maintainability**: Single source of truth for styling
+- ✅ **Performance**: No additional CSS bundle overhead
+- ✅ **Developer Experience**: IntelliSense support and type safety
+- ✅ **Accessibility**: Built-in focus management and WCAG compliance utilities
+
+**Implementation**:
+
+- `src/styles/globals.css`: Contains comprehensive Tailwind-based foundation
+  - Component layer utilities (`.btn`, `.form-field`, `.card`, `.alert`)
+  - Base layer accessibility improvements
+  - Consistent focus management and scrollbar styling
+- All components use `cn()` utility for conditional and merged class names
+- No dedicated CSS files (forms.css, layout.css, feedback.css) needed
+
+**Benefits**:
+
+- Reduced bundle size and complexity
+- Consistent design system enforcement
+- Better tree-shaking and purging
+- Easier maintenance and updates
+- Built-in responsive and accessibility features
+
+**Quality Standards**:
+
+- All components maintain WCAG 2.1 AA compliance
+- Consistent spacing (24px content padding, 16px element spacing, 8px gaps)
+- Semantic color palette with proper contrast ratios
+- Touch-friendly sizing (44px minimum touch targets)
+- Proper focus indicators and keyboard navigation

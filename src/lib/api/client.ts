@@ -33,7 +33,12 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public code?: string, public details?: any) {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+    public details?: any
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -238,7 +243,7 @@ class EnhancedApiClient {
         }
 
         return {
-          data: interceptedResponse.data as T,
+          data: interceptedResponse.data?.data || interceptedResponse.data,
           success: true,
           message: interceptedResponse.data?.message || 'Success',
           pagination: interceptedResponse.data?.pagination,

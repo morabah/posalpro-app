@@ -100,9 +100,8 @@ Please maintain documentation standards and cross-reference systems established 
 
 ## Pattern Name: DOCUMENTATION_DRIVEN_IMPLEMENTATION
 
-**Category**: Implementation  
-**Use Case**: Execute implementation tasks with integrated documentation
-**Validation Level**: High
+**Category**: Implementation **Use Case**: Execute implementation tasks with
+integrated documentation **Validation Level**: High
 
 ### Context Setup
 
@@ -420,6 +419,68 @@ Please create history entry in docs/history/ following established template:
 - Include rationale detail
 - Document expected outcomes
 - Maintain timeline consistency
+
+---
+
+## API Response Handling Pattern
+
+**When to Use**: Implementing any component that consumes API data, especially
+arrays/lists **Problem Solved**: Runtime errors from unexpected API response
+structures (e.g., "response.data.map is not a function")
+
+**Prompt Template**:
+
+```
+I need to implement [component/feature] that fetches [data type] from an API endpoint. Please ensure defensive programming for API response handling to prevent runtime errors.
+
+Requirements:
+- Use extractArrayFromResponse() utility for safely accessing array data
+- Add comprehensive error handling for malformed responses
+- Include detailed logging for debugging API integration issues
+- Handle various response structures (direct array, nested, paginated)
+- Provide fallback values for missing or invalid data
+- Validate response structure before processing
+
+Expected API Response: [describe expected structure]
+Fallback Behavior: [describe what should happen if API fails]
+Error UX: [describe user experience for error states]
+```
+
+**Key Implementation Points**:
+
+- Import `extractArrayFromResponse` from `@/lib/utils/apiResponseHandler`
+- Use `debugResponseStructure()` for development debugging
+- Always provide fallback arrays/objects for data properties
+- Handle both success and failure response states
+- Add user-friendly error messages for failed API calls
+
+**Example Implementation**:
+
+```typescript
+import {
+  extractArrayFromResponse,
+  debugResponseStructure,
+} from '@/lib/utils/apiResponseHandler';
+
+const response = await apiEntity.query(options);
+debugResponseStructure(response, 'API Response Debug');
+
+if (response.success) {
+  const data = extractArrayFromResponse(response, undefined, []);
+  // Process data safely...
+} else {
+  setError(response.message || 'Failed to load data');
+}
+```
+
+**Prevention Checklist**:
+
+- [ ] Used defensive response handling utility
+- [ ] Added comprehensive logging for debugging
+- [ ] Provided meaningful error messages to users
+- [ ] Tested with various response structures
+- [ ] Documented expected API response format
+- [ ] Added fallback values for all data properties
 
 ---
 

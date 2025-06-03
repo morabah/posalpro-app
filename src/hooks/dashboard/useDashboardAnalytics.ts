@@ -7,7 +7,7 @@
 
 import { DASHBOARD_COMPONENT_MAPPING } from '@/lib/dashboard/types';
 import { UserType } from '@/types';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface DashboardAnalyticsEvent {
   event: string;
@@ -321,48 +321,52 @@ export const useDashboardAnalytics = (userId?: string, userRole?: UserType, sess
     };
   }, [trackPerformanceMetrics, trackDashboardLoaded]);
 
-  // Return analytics interface
-  return {
-    // Core tracking
-    trackEvent,
-    trackError,
-
-    // Dashboard-specific tracking
-    trackDashboardLoaded,
-    trackWidgetInteraction,
-    trackNavigationPattern,
-    trackSearchUsage,
-    trackRoleBasedUsage,
-
-    // User experience tracking
-    trackUserSatisfaction,
-    trackHypothesisValidation,
-
-    // A/B testing
-    trackExperiment,
-
-    // Utility functions
-    getSessionStats: () => ({
-      sessionDuration: Date.now() - startTime.current,
-      interactionCount: interactionCount.current,
-      widgetInteractions: { ...widgetInteractions.current },
+  // Memoize the returned object to ensure stable reference
+  const analyticsApi = useMemo(
+    () => ({
+      trackEvent,
+      trackDashboardLoaded,
+      trackWidgetInteraction,
+      trackNavigationPattern,
+      trackSearchUsage,
+      trackRoleBasedUsage,
+      trackHypothesisValidation,
+      trackError,
+      trackUserSatisfaction,
+      trackExperiment,
+      getSessionStats: () => ({
+        sessionDuration: Date.now() - startTime.current,
+        interactionCount: interactionCount.current,
+        widgetInteractions: { ...widgetInteractions.current },
+      }),
+      getStoredEvents: () => {
+        try {
+          return JSON.parse(localStorage.getItem('dashboard_analytics') || '[]');
+        } catch {
+          return [];
+        }
+      },
+      clearStoredEvents: () => {
+        try {
+          localStorage.removeItem('dashboard_analytics');
+        } catch {
+          console.warn('Failed to clear analytics storage');
+        }
+      },
     }),
+    [
+      trackEvent,
+      trackDashboardLoaded,
+      trackWidgetInteraction,
+      trackNavigationPattern,
+      trackSearchUsage,
+      trackRoleBasedUsage,
+      trackHypothesisValidation,
+      trackError,
+      trackUserSatisfaction,
+      trackExperiment,
+    ]
+  );
 
-    // Debug functions (development only)
-    getStoredEvents: () => {
-      try {
-        return JSON.parse(localStorage.getItem('dashboard_analytics') || '[]');
-      } catch {
-        return [];
-      }
-    },
-
-    clearStoredEvents: () => {
-      try {
-        localStorage.removeItem('dashboard_analytics');
-      } catch {
-        console.warn('Failed to clear analytics storage');
-      }
-    },
-  };
+  return analyticsApi;
 };
