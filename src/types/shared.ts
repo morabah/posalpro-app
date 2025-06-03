@@ -84,19 +84,6 @@ export interface ValidationWarning {
 }
 
 /**
- * User session information interface
- */
-export interface UserSession {
-  userId: string;
-  email: string;
-  role: string;
-  permissions: string[];
-  department?: string;
-  lastActivity: Date;
-  sessionExpiry: Date;
-}
-
-/**
  * File upload interface for document management
  */
 export interface FileUpload {
@@ -128,21 +115,6 @@ export interface ContactInfo {
   phone?: string;
   mobile?: string;
   address?: Address;
-}
-
-/**
- * Audit log interface for tracking changes
- */
-export interface AuditLog {
-  id: string;
-  entityType: string;
-  entityId: string;
-  action: 'create' | 'update' | 'delete' | 'view';
-  changes?: Record<string, { from: any; to: any }>;
-  performedBy: string;
-  performedAt: Date;
-  ipAddress?: string;
-  userAgent?: string;
 }
 
 /**

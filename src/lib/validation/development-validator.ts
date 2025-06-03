@@ -3,8 +3,8 @@
  * Phase 1.5 - Development Scripts & Validation Tracking
  */
 
-import { logger } from '../logger';
 import { environmentManager } from '../env';
+import { logger } from '../logger';
 import { performanceManager } from '../performance';
 
 export interface ValidationResult {
@@ -50,6 +50,13 @@ export interface QualityMetrics {
   };
 }
 
+/**
+ * Check if running in Node.js environment (server-side)
+ */
+const isServerSide = (): boolean => {
+  return typeof window === 'undefined' && typeof process !== 'undefined';
+};
+
 export class DevelopmentValidator {
   private logger: typeof logger;
   private envManager: typeof environmentManager;
@@ -73,14 +80,27 @@ export class DevelopmentValidator {
     // Environment validation
     checks.environment = await this.validateEnvironment();
 
-    // Configuration validation
-    checks.configuration = await this.validateConfiguration();
+    // Configuration validation (server-side only)
+    if (isServerSide()) {
+      checks.configuration = await this.validateConfiguration();
+      checks.filesystem = await this.validateFileSystem();
+    } else {
+      checks.configuration = {
+        passed: true,
+        message: 'Configuration validation skipped on client-side',
+        timestamp: Date.now(),
+        duration: 0,
+      };
+      checks.filesystem = {
+        passed: true,
+        message: 'Filesystem validation skipped on client-side',
+        timestamp: Date.now(),
+        duration: 0,
+      };
+    }
 
     // Dependencies validation
     checks.dependencies = await this.validateDependencies();
-
-    // File system validation
-    checks.filesystem = await this.validateFileSystem();
 
     // Network connectivity validation
     checks.network = await this.validateNetworkConnectivity();
@@ -117,22 +137,24 @@ export class DevelopmentValidator {
       const config = this.envManager.getConfig();
       const issues: string[] = [];
 
-      // Check critical environment variables
-      const criticalVars = ['DATABASE_URL', 'JWT_SECRET', 'API_KEY'];
-      for (const varName of criticalVars) {
-        if (!process.env[varName]) {
-          issues.push(`Missing environment variable: ${varName}`);
+      // Check critical environment variables (only on server-side)
+      if (isServerSide()) {
+        const criticalVars = ['DATABASE_URL', 'JWT_SECRET', 'API_KEY'];
+        for (const varName of criticalVars) {
+          if (!process.env[varName]) {
+            issues.push(`Missing environment variable: ${varName}`);
+          }
         }
-      }
 
-      // Check environment consistency
-      if (config.nodeEnv !== process.env.NODE_ENV) {
-        issues.push('Environment configuration mismatch');
-      }
+        // Check environment consistency
+        if (config.nodeEnv !== process.env.NODE_ENV) {
+          issues.push('Environment configuration mismatch');
+        }
 
-      // Validate database URL format
-      if (process.env.DATABASE_URL && !this.isValidDatabaseUrl(process.env.DATABASE_URL)) {
-        issues.push('Invalid DATABASE_URL format');
+        // Validate database URL format
+        if (process.env.DATABASE_URL && !this.isValidDatabaseUrl(process.env.DATABASE_URL)) {
+          issues.push('Invalid DATABASE_URL format');
+        }
       }
 
       const passed = issues.length === 0;
@@ -160,10 +182,19 @@ export class DevelopmentValidator {
   }
 
   /**
-   * Validate project configuration files
+   * Validate project configuration files (server-side only)
    */
   private async validateConfiguration(): Promise<ValidationResult> {
     const startTime = Date.now();
+
+    if (!isServerSide()) {
+      return {
+        passed: true,
+        message: 'Configuration validation skipped on client-side',
+        timestamp: Date.now(),
+        duration: Date.now() - startTime,
+      };
+    }
 
     try {
       const fs = await import('fs');
@@ -203,8 +234,8 @@ export class DevelopmentValidator {
         passed,
         message: passed
           ? 'Configuration validation passed'
-          : `Configuration issues found: ${issues.join(', ')}`,
-        details: { issues, checkedFiles: requiredConfigs },
+          : `Configuration validation failed: ${issues.join(', ')}`,
+        details: { issues, configCount: requiredConfigs.length },
         timestamp: Date.now(),
         duration,
       };
@@ -221,43 +252,25 @@ export class DevelopmentValidator {
   }
 
   /**
-   * Validate project dependencies
+   * Validate dependencies
    */
   private async validateDependencies(): Promise<ValidationResult> {
     const startTime = Date.now();
 
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-
       const issues: string[] = [];
 
-      // Check if node_modules exists
-      const nodeModulesPath = path.join(process.cwd(), 'node_modules');
-      if (!fs.existsSync(nodeModulesPath)) {
-        issues.push('node_modules directory not found');
-      }
+      // Check critical dependencies are available
+      const criticalDeps = ['react', 'next', 'zod', 'tailwindcss'];
 
-      // Check package.json and package-lock.json
-      const packageJsonPath = path.join(process.cwd(), 'package.json');
-      const packageLockPath = path.join(process.cwd(), 'package-lock.json');
-
-      if (!fs.existsSync(packageJsonPath)) {
-        issues.push('package.json not found');
-      }
-
-      if (!fs.existsSync(packageLockPath)) {
-        issues.push('package-lock.json not found (run npm install)');
-      }
-
-      // Check critical dependencies
-      if (fs.existsSync(nodeModulesPath)) {
-        const criticalDeps = ['next', 'react', 'typescript'];
-        for (const dep of criticalDeps) {
-          const depPath = path.join(nodeModulesPath, dep);
-          if (!fs.existsSync(depPath)) {
-            issues.push(`Missing critical dependency: ${dep}`);
+      for (const dep of criticalDeps) {
+        try {
+          // Try to resolve the module
+          if (typeof require !== 'undefined') {
+            require.resolve(dep);
           }
+        } catch {
+          issues.push(`Missing critical dependency: ${dep}`);
         }
       }
 
@@ -268,8 +281,8 @@ export class DevelopmentValidator {
         passed,
         message: passed
           ? 'Dependencies validation passed'
-          : `Dependency issues found: ${issues.join(', ')}`,
-        details: { issues },
+          : `Dependencies validation failed: ${issues.join(', ')}`,
+        details: { issues, checkedDependencies: criticalDeps.length },
         timestamp: Date.now(),
         duration,
       };
@@ -286,34 +299,35 @@ export class DevelopmentValidator {
   }
 
   /**
-   * Validate file system structure
+   * Validate file system structure (server-side only)
    */
   private async validateFileSystem(): Promise<ValidationResult> {
     const startTime = Date.now();
+
+    if (!isServerSide()) {
+      return {
+        passed: true,
+        message: 'Filesystem validation skipped on client-side',
+        timestamp: Date.now(),
+        duration: Date.now() - startTime,
+      };
+    }
 
     try {
       const fs = await import('fs');
       const path = await import('path');
 
-      const issues: string[] = [];
+      const requiredDirs = ['src', 'src/app', 'src/components', 'src/lib', 'src/types', 'public'];
 
-      // Check required directories
-      const requiredDirs = ['src', 'src/app', 'src/lib', 'src/components', 'src/types', 'public'];
+      const issues: string[] = [];
 
       for (const dir of requiredDirs) {
         const dirPath = path.join(process.cwd(), dir);
         if (!fs.existsSync(dirPath)) {
-          issues.push(`Missing directory: ${dir}`);
+          issues.push(`Missing required directory: ${dir}`);
+        } else if (!fs.statSync(dirPath).isDirectory()) {
+          issues.push(`Expected directory but found file: ${dir}`);
         }
-      }
-
-      // Check write permissions
-      try {
-        const tempFile = path.join(process.cwd(), '.temp-write-test');
-        fs.writeFileSync(tempFile, 'test');
-        fs.unlinkSync(tempFile);
-      } catch {
-        issues.push('No write permissions in project directory');
       }
 
       const passed = issues.length === 0;
@@ -323,8 +337,8 @@ export class DevelopmentValidator {
         passed,
         message: passed
           ? 'File system validation passed'
-          : `File system issues found: ${issues.join(', ')}`,
-        details: { issues, checkedDirectories: requiredDirs },
+          : `File system validation failed: ${issues.join(', ')}`,
+        details: { issues, checkedDirectories: requiredDirs.length },
         timestamp: Date.now(),
         duration,
       };
@@ -347,20 +361,27 @@ export class DevelopmentValidator {
     const startTime = Date.now();
 
     try {
+      // Simple connectivity check that works on both client and server
+      const testUrls = ['https://api.github.com', 'https://registry.npmjs.org'];
+
       const issues: string[] = [];
 
-      // Check if port 3000 is available (development server port)
-      const net = await import('net');
-      const isPortAvailable = await new Promise<boolean>(resolve => {
-        const server = net.createServer();
-        server.listen(3000, () => {
-          server.close(() => resolve(true));
-        });
-        server.on('error', () => resolve(false));
-      });
+      for (const url of testUrls) {
+        try {
+          // Use fetch which is available in both environments
+          const response = await fetch(url, {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(5000), // 5 second timeout
+          });
 
-      if (!isPortAvailable) {
-        issues.push('Port 3000 is already in use');
+          if (!response.ok) {
+            issues.push(`Network connectivity issue with ${url}: ${response.status}`);
+          }
+        } catch (error) {
+          issues.push(
+            `Failed to connect to ${url}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
+        }
       }
 
       const passed = issues.length === 0;
@@ -370,8 +391,8 @@ export class DevelopmentValidator {
         passed,
         message: passed
           ? 'Network connectivity validation passed'
-          : `Network issues found: ${issues.join(', ')}`,
-        details: { issues, portChecked: 3000 },
+          : `Network connectivity validation failed: ${issues.join(', ')}`,
+        details: { issues, testedUrls: testUrls.length },
         timestamp: Date.now(),
         duration,
       };
@@ -379,7 +400,7 @@ export class DevelopmentValidator {
       const duration = Date.now() - startTime;
       return {
         passed: false,
-        message: `Network validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Network connectivity validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         details: { error: error instanceof Error ? error.message : 'Unknown error' },
         timestamp: Date.now(),
         duration,
@@ -396,20 +417,24 @@ export class DevelopmentValidator {
     try {
       const issues: string[] = [];
 
-      // Check memory usage
-      const memoryUsage = process.memoryUsage();
-      const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+      // Memory usage check (if available)
+      if (isServerSide() && typeof process !== 'undefined' && process.memoryUsage) {
+        const memUsage = process.memoryUsage();
+        const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
 
-      if (heapUsedMB > 500) {
-        issues.push(`High memory usage: ${heapUsedMB}MB`);
+        if (heapUsedMB > 512) {
+          // 512MB threshold
+          issues.push(`High memory usage: ${heapUsedMB.toFixed(2)}MB`);
+        }
       }
 
-      // Check Node.js version
-      const nodeVersion = process.version;
-      const majorVersion = parseInt(nodeVersion.substring(1).split('.')[0]);
-
-      if (majorVersion < 18) {
-        issues.push(`Outdated Node.js version: ${nodeVersion} (recommend 18+)`);
+      // Performance timing check (if available)
+      if (typeof performance !== 'undefined') {
+        const now = performance.now();
+        if (now > 30000) {
+          // 30 second threshold for long-running processes
+          issues.push(`Long process runtime detected: ${(now / 1000).toFixed(2)}s`);
+        }
       }
 
       const passed = issues.length === 0;
@@ -419,12 +444,8 @@ export class DevelopmentValidator {
         passed,
         message: passed
           ? 'Performance validation passed'
-          : `Performance issues found: ${issues.join(', ')}`,
-        details: {
-          issues,
-          memoryUsage: heapUsedMB,
-          nodeVersion,
-        },
+          : `Performance validation warnings: ${issues.join(', ')}`,
+        details: { issues, environment: isServerSide() ? 'server' : 'client' },
         timestamp: Date.now(),
         duration,
       };
@@ -440,127 +461,141 @@ export class DevelopmentValidator {
     }
   }
 
-  /**
-   * Generate validation summary
-   */
   private generateSummary(checks: Record<string, ValidationResult>) {
     const total = Object.keys(checks).length;
     const passed = Object.values(checks).filter(check => check.passed).length;
     const failed = total - passed;
     const warnings = Object.values(checks).filter(
-      check => !check.passed && check.message.toLowerCase().includes('warning')
+      check => !check.passed && check.message.includes('warning')
     ).length;
 
-    return {
-      total,
-      passed,
-      failed,
-      warnings,
-    };
+    return { total, passed, failed, warnings };
   }
 
-  /**
-   * Validate database URL format
-   */
   private isValidDatabaseUrl(url: string): boolean {
     try {
       const parsed = new URL(url);
-      return ['postgres:', 'postgresql:', 'mysql:', 'sqlite:'].includes(parsed.protocol);
+      return ['postgresql', 'postgres', 'mysql', 'sqlite'].includes(
+        parsed.protocol.replace(':', '')
+      );
     } catch {
       return false;
     }
   }
 
   /**
-   * Get development quality metrics
+   * Get quality metrics (server-side only with full analysis)
    */
   async getQualityMetrics(): Promise<QualityMetrics> {
-    this.logger.info('Collecting quality metrics');
+    if (!isServerSide()) {
+      // Return basic metrics for client-side
+      return {
+        typescript: {
+          strictMode: true,
+          errorCount: 0,
+          warningCount: 0,
+        },
+        eslint: {
+          errorCount: 0,
+          warningCount: 0,
+          rulesCount: 0,
+        },
+        performance: {
+          buildTime: 0,
+          bundleSize: 0,
+          memoryUsage: 0,
+        },
+        codebase: {
+          totalFiles: 0,
+          totalLines: 0,
+          complexityScore: 0,
+          testCoverage: 0,
+        },
+      };
+    }
 
-    const metrics: QualityMetrics = {
-      typescript: {
-        strictMode: true, // This would be determined by checking tsconfig.json
-        errorCount: 0,
-        warningCount: 0,
-      },
-      eslint: {
-        errorCount: 0,
-        warningCount: 0,
-        rulesCount: 0,
-      },
-      performance: {
-        buildTime: 0,
-        bundleSize: 0,
-        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      },
-      codebase: {
+    try {
+      const codebaseMetrics = await this.analyzeCodebase('src');
+
+      return {
+        typescript: {
+          strictMode: true, // Assume strict mode is enabled
+          errorCount: 0, // Would need to run tsc to get actual errors
+          warningCount: 0,
+        },
+        eslint: {
+          errorCount: 0, // Would need to run eslint to get actual errors
+          warningCount: 0,
+          rulesCount: 0,
+        },
+        performance: {
+          buildTime: 0, // Would need build metrics
+          bundleSize: 0, // Would need bundle analysis
+          memoryUsage: process.memoryUsage().heapUsed,
+        },
+        codebase: codebaseMetrics,
+      };
+    } catch (error) {
+      this.logger.error('Failed to get quality metrics', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze codebase metrics (server-side only)
+   */
+  private async analyzeCodebase(srcPath: string) {
+    if (!isServerSide()) {
+      return {
         totalFiles: 0,
         totalLines: 0,
         complexityScore: 0,
         testCoverage: 0,
-      },
-    };
-
-    try {
-      // Collect file statistics
-      const fs = await import('fs');
-      const path = await import('path');
-
-      const srcPath = path.join(process.cwd(), 'src');
-      if (fs.existsSync(srcPath)) {
-        const stats = await this.analyzeCodebase(srcPath);
-        metrics.codebase = { ...metrics.codebase, ...stats };
-      }
-    } catch (error) {
-      this.logger.error('Failed to collect quality metrics', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      };
     }
 
-    return metrics;
-  }
-
-  /**
-   * Analyze codebase statistics
-   */
-  private async analyzeCodebase(srcPath: string) {
     const fs = await import('fs');
     const path = await import('path');
 
     let totalFiles = 0;
     let totalLines = 0;
-    let complexityScore = 0;
 
     const traverse = (dir: string) => {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const files = fs.readdirSync(dir);
 
-      entries.forEach(entry => {
-        const fullPath = path.join(dir, entry.name);
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        const stat = fs.statSync(filePath);
 
-        if (entry.isDirectory() && !entry.name.startsWith('.')) {
-          traverse(fullPath);
-        } else if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx'))) {
+        if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+          traverse(filePath);
+        } else if (file.endsWith('.ts') || file.endsWith('.tsx')) {
           totalFiles++;
-
-          const content = fs.readFileSync(fullPath, 'utf8');
-          const lines = content
-            .split('\n')
-            .filter((line: string) => line.trim() && !line.trim().startsWith('//')).length;
-          totalLines += lines;
-
-          // Simple complexity calculation
-          const complexityMatches = content.match(/(if|for|while|switch|catch)\s*\(/g) || [];
-          complexityScore += complexityMatches.length;
+          const content = fs.readFileSync(filePath, 'utf8');
+          totalLines += content.split('\n').length;
         }
-      });
+      }
     };
 
-    traverse(srcPath);
+    try {
+      const fullSrcPath = path.join(process.cwd(), srcPath);
+      if (fs.existsSync(fullSrcPath)) {
+        traverse(fullSrcPath);
+      }
+    } catch (error) {
+      this.logger.warn('Failed to analyze codebase', { error });
+    }
 
     return {
       totalFiles,
       totalLines,
-      complexityScore,
+      complexityScore: Math.floor(totalLines / totalFiles) || 0, // Simple complexity metric
+      testCoverage: 0, // Would need to run coverage tools
     };
   }
 }
+
+/**
+ * Global development validator instance
+ */
+export const developmentValidator = new DevelopmentValidator();

@@ -12,8 +12,9 @@ import { z } from 'zod';
 /**
  * GET /api/proposals/[id] - Get specific proposal
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const params = await context.params;
     const { id } = params;
 
     // Get proposal from shared mock database
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       message: 'Proposal retrieved successfully',
     });
   } catch (error) {
+    const params = await context.params;
     console.error(`Failed to fetch proposal ${params.id}:`, error);
     return NextResponse.json(
       {
@@ -51,8 +53,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 /**
  * PUT /api/proposals/[id] - Update specific proposal
  */
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const params = await context.params;
     const { id } = params;
     const body = await request.json();
 
@@ -86,6 +89,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       message: 'Proposal updated successfully',
     });
   } catch (error) {
+    const params = await context.params;
     console.error(`Failed to update proposal ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
@@ -113,8 +117,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 /**
  * DELETE /api/proposals/[id] - Delete specific proposal
  */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const params = await context.params;
     const { id } = params;
 
     // Check if proposal exists and delete
@@ -134,6 +139,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       message: 'Proposal deleted successfully',
     });
   } catch (error) {
+    const params = await context.params;
     console.error(`Failed to delete proposal ${params.id}:`, error);
     return NextResponse.json(
       {

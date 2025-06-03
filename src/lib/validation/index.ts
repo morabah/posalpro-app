@@ -9,8 +9,17 @@ export * from './schemas/shared';
 
 // Entity-specific validation schemas
 export * from './schemas/auth';
+export * from './schemas/customer';
+export * from './schemas/product';
 export * from './schemas/proposal';
 export * from './schemas/user';
+
+// Core validation utilities
+export * from './formHelpers';
+export * from './validationMessages';
+
+// Enhanced validation testing framework
+export * from './validation-testing';
 
 // Type guards and validation utilities
 import { z } from 'zod';
@@ -111,3 +120,6 @@ export const isValidEmail = (value: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(value);
 };
+
+// Re-export commonly used Zod types
+export { z, type ZodError, type ZodSchema } from 'zod';

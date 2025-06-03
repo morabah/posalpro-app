@@ -1,57 +1,42 @@
 /**
  * API Mocking Infrastructure using MSW
- * 
+ *
  * This module provides Mock Service Worker setup for API mocking in tests.
  * It follows our functional programming patterns and TypeScript strict mode.
- * 
+ *
  * @stage Development
  * @quality-gate Development
  */
 
-import { setupServer } from 'msw/node';
+import type { DefaultBodyType } from 'msw';
 import { http, HttpResponse } from 'msw';
-import type { DefaultBodyType, PathParams } from 'msw';
+import { setupServer } from 'msw/node';
 
 // Define type for handlers to enforce consistent handler patterns
-export type MockHandler = Parameters<typeof http.get>[1] | 
-                         Parameters<typeof http.post>[1] | 
-                         Parameters<typeof http.put>[1] | 
-                         Parameters<typeof http.delete>[1];
+export type MockHandler =
+  | Parameters<typeof http.get>[1]
+  | Parameters<typeof http.post>[1]
+  | Parameters<typeof http.put>[1]
+  | Parameters<typeof http.delete>[1];
 
 // Create reusable response builder with proper types
-export const createResponseBuilder = <T extends DefaultBodyType>(
-  status: number = 200
-) => {
+export const createResponseBuilder = <T extends DefaultBodyType>(status: number = 200) => {
   return () => {
-    return HttpResponse.json(
-      null, 
-      { status, statusText: 'OK' }
-    );
+    return HttpResponse.json(null, { status, statusText: 'OK' });
   };
 };
 
 // Success response builder with data
-export const successResponse = <T extends DefaultBodyType>(
-  data: T
-) => {
+export const successResponse = <T extends DefaultBodyType>(data: T) => {
   return () => {
-    return HttpResponse.json(
-      data,
-      { status: 200, statusText: 'OK' }
-    );
+    return HttpResponse.json(data, { status: 200, statusText: 'OK' });
   };
 };
 
 // Error response builder
-export const errorResponse = (
-  status: number = 400,
-  message: string = 'Bad Request'
-) => {
+export const errorResponse = (status: number = 400, message: string = 'Bad Request') => {
   return () => {
-    return HttpResponse.json(
-      { error: message },
-      { status, statusText: message }
-    );
+    return HttpResponse.json({ error: message }, { status, statusText: message });
   };
 };
 
@@ -66,22 +51,22 @@ export const serverErrorResponse = () => {
 };
 
 // Create a generic handler creator for common endpoints
-export const createGetHandler = <T extends DefaultBodyType>(
-  path: string,
-  responseData: T
-) => {
+export const createGetHandler = <T extends DefaultBodyType>(path: string, responseData: T) => {
   return http.get(path, () => {
     return successResponse(responseData)();
   });
 };
 
-export const createPostHandler = <T extends DefaultBodyType, B extends DefaultBodyType = DefaultBodyType>(
+export const createPostHandler = <
+  T extends DefaultBodyType,
+  B extends DefaultBodyType = DefaultBodyType,
+>(
   path: string,
   responseData: T,
   validator?: (body: B) => boolean
 ) => {
   return http.post(path, async ({ request }) => {
-    const body = await request.json() as B;
+    const body = (await request.json()) as B;
     if (validator && !validator(body)) {
       return errorResponse(400, 'Validation Error')();
     }
@@ -104,8 +89,8 @@ export const createAuthHandler = <T extends DefaultBodyType>(
 ) => {
   return http.post(path, async ({ request }) => {
     // Type cast to AuthRequestBody to ensure type safety
-    const body = await request.json() as AuthRequestBody;
-    
+    const body = (await request.json()) as AuthRequestBody;
+
     // Check for test credentials that should trigger auth failure
     if (
       (body.email === 'test@example.com' && body.password === 'wrong-password') ||
@@ -113,7 +98,7 @@ export const createAuthHandler = <T extends DefaultBodyType>(
     ) {
       return errorResponse(401, failureMessage)();
     }
-    
+
     // Otherwise return success
     return successResponse(successData)();
   });
@@ -123,22 +108,19 @@ export const createAuthHandler = <T extends DefaultBodyType>(
 export const defaultHandlers = [
   // API health endpoint
   http.get('/api/health', () => {
-    return HttpResponse.json(
-      { status: 'healthy' },
-      { status: 200 }
-    );
+    return HttpResponse.json({ status: 'healthy' }, { status: 200 });
   }),
-  
+
   // Authentication endpoints
-  createAuthHandler<{ token: string, user: { id: string, email: string, role: string } }>(
+  createAuthHandler<{ token: string; user: { id: string; email: string; role: string } }>(
     '/api/auth/login',
     {
       token: 'mock-jwt-token',
       user: {
         id: '123',
         email: 'test@example.com',
-        role: 'Technical SME'
-      }
+        role: 'Technical SME',
+      },
     },
     'Invalid email or password. Please try again.'
   ),
@@ -151,10 +133,10 @@ export const server = setupServer(...defaultHandlers);
 export const setupApiMocks = () => {
   // Start the server before all tests
   beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
-  
+
   // Reset handlers after each test
   afterEach(() => server.resetHandlers());
-  
+
   // Close the server after all tests
   afterAll(() => server.close());
 };
@@ -165,3 +147,22 @@ export const addTemporaryHandlers = (...handlers: ReturnType<typeof http.get>[])
     server.use(...handlers);
   });
 };
+
+// Mock HTTP client interface
+interface MockHttpClient {
+  get: (url: string, config?: Record<string, unknown>) => Promise<unknown>;
+  post: (url: string, data?: unknown, config?: Record<string, unknown>) => Promise<unknown>;
+  put: (url: string, data?: unknown, config?: Record<string, unknown>) => Promise<unknown>;
+  delete: (url: string, config?: Record<string, unknown>) => Promise<unknown>;
+}
+
+// Mock response factory
+export function createMockResponse(data: unknown = null, status = 200) {
+  return Promise.resolve({
+    data,
+    status,
+    statusText: status === 200 ? 'OK' : 'Error',
+    headers: {},
+    config: {},
+  });
+}

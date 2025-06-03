@@ -18,8 +18,9 @@ const statusUpdateSchema = z.object({
 /**
  * PUT /api/proposals/[id]/status - Update proposal status
  */
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const params = await context.params;
     const { id } = params;
     const body = await request.json();
 
@@ -85,6 +86,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       message: `Proposal status updated to ${newStatus}`,
     });
   } catch (error) {
+    const params = await context.params;
     console.error(`Failed to update proposal status ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {

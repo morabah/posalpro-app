@@ -1,0 +1,558 @@
+/**
+ * PosalPro MVP2 - Dashboard Data Hook
+ * Comprehensive dashboard data management with role-based filtering and real-time updates
+ * Based on DASHBOARD_SCREEN.md wireframe specifications
+ */
+
+import { dashboardAPI, type DashboardQueryOptions } from '@/lib/dashboard/api';
+import type {
+  ActivityFeedItem,
+  DashboardData,
+  Deadline,
+  Notification,
+  PerformanceMetrics,
+  TeamMember,
+} from '@/lib/dashboard/types';
+import { UserType } from '@/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDashboardAnalytics } from './useDashboardAnalytics';
+
+// Component Traceability Matrix
+const COMPONENT_MAPPING = {
+  userStories: ['US-4.1', 'US-4.3', 'US-2.3'],
+  acceptanceCriteria: [
+    'AC-4.1.1', // Timeline visualization
+    'AC-4.1.3', // On-time completion tracking
+    'AC-4.3.1', // Priority visualization
+    'AC-4.3.3', // Progress tracking
+    'AC-2.3.1', // Role-based access
+  ],
+  methods: [
+    'fetchDashboardData()',
+    'refreshData()',
+    'handleRoleBasedFiltering()',
+    'manageDataState()',
+    'trackDataUsage()',
+  ],
+  hypotheses: ['H7', 'H4', 'H8'],
+  testCases: ['TC-H7-001', 'TC-H7-002', 'TC-H4-001'],
+};
+
+// Hook configuration
+interface UseDashboardDataOptions {
+  userId?: string;
+  userRole?: UserType;
+  timeRange?: 'day' | 'week' | 'month' | 'quarter' | 'year';
+  autoRefresh?: boolean;
+  refreshInterval?: number;
+  enableCache?: boolean;
+  onError?: (error: Error, section?: string) => void;
+  onDataChange?: (data: DashboardData) => void;
+}
+
+// Hook state interface
+interface DashboardDataState {
+  data: DashboardData | null;
+  loading: {
+    overall: boolean;
+    proposals: boolean;
+    activities: boolean;
+    team: boolean;
+    deadlines: boolean;
+    performance: boolean;
+    notifications: boolean;
+  };
+  errors: {
+    overall: string | null;
+    proposals: string | null;
+    activities: string | null;
+    team: string | null;
+    deadlines: string | null;
+    performance: string | null;
+    notifications: string | null;
+  };
+  lastUpdated: Date | null;
+  stats: {
+    totalRequests: number;
+    cacheHits: number;
+    errorCount: number;
+    averageLoadTime: number;
+  };
+}
+
+// Individual section data interfaces
+interface SectionDataState<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+  lastUpdated: Date | null;
+}
+
+export interface UseDashboardDataReturn {
+  // Data
+  dashboardData: DashboardData | null;
+  proposals: SectionDataState<DashboardData['proposals']>;
+  activities: SectionDataState<ActivityFeedItem[]>;
+  team: SectionDataState<TeamMember[]>;
+  deadlines: SectionDataState<Deadline[]>;
+  performance: SectionDataState<PerformanceMetrics>;
+  notifications: SectionDataState<Notification[]>;
+
+  // Loading states
+  isLoading: boolean;
+  loadingStates: DashboardDataState['loading'];
+
+  // Error states
+  hasErrors: boolean;
+  errors: DashboardDataState['errors'];
+
+  // Actions
+  refreshAll: () => Promise<void>;
+  refreshSection: (section: string) => Promise<void>;
+  clearErrors: () => void;
+  markNotificationAsRead: (notificationId: string) => Promise<boolean>;
+
+  // Stats & Meta
+  stats: DashboardDataState['stats'];
+  lastUpdated: Date | null;
+
+  // Configuration
+  updateOptions: (newOptions: Partial<UseDashboardDataOptions>) => void;
+}
+
+/**
+ * Comprehensive dashboard data management hook
+ */
+export function useDashboardData(
+  initialOptions: UseDashboardDataOptions = {}
+): UseDashboardDataReturn {
+  const [options, setOptions] = useState<UseDashboardDataOptions>({
+    timeRange: 'week',
+    autoRefresh: true,
+    refreshInterval: 5 * 60 * 1000, // 5 minutes
+    enableCache: true,
+    ...initialOptions,
+  });
+
+  const [state, setState] = useState<DashboardDataState>({
+    data: null,
+    loading: {
+      overall: false,
+      proposals: false,
+      activities: false,
+      team: false,
+      deadlines: false,
+      performance: false,
+      notifications: false,
+    },
+    errors: {
+      overall: null,
+      proposals: null,
+      activities: null,
+      team: null,
+      deadlines: null,
+      performance: null,
+      notifications: null,
+    },
+    lastUpdated: null,
+    stats: {
+      totalRequests: 0,
+      cacheHits: 0,
+      errorCount: 0,
+      averageLoadTime: 0,
+    },
+  });
+
+  // Analytics integration
+  const { trackDashboardLoaded, trackError, trackEvent, trackRoleBasedUsage } =
+    useDashboardAnalytics(options.userId, options.userRole);
+
+  // Refs for cleanup and timing
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadStartTimeRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+
+  // Update loading state helper
+  const updateLoadingState = useCallback(
+    (section: keyof DashboardDataState['loading'], loading: boolean) => {
+      setState(prev => ({
+        ...prev,
+        loading: {
+          ...prev.loading,
+          [section]: loading,
+        },
+      }));
+    },
+    []
+  );
+
+  // Update error state helper
+  const updateErrorState = useCallback(
+    (section: keyof DashboardDataState['errors'], error: string | null) => {
+      setState(prev => ({
+        ...prev,
+        errors: {
+          ...prev.errors,
+          [section]: error,
+        },
+      }));
+
+      if (error) {
+        trackError(error, `dashboard_${section}`);
+        options.onError?.(new Error(error), section);
+      }
+    },
+    [options, trackError]
+  );
+
+  // Update stats helper
+  const updateStats = useCallback((update: Partial<DashboardDataState['stats']>) => {
+    setState(prev => ({
+      ...prev,
+      stats: {
+        ...prev.stats,
+        ...update,
+      },
+    }));
+  }, []);
+
+  /**
+   * Fetch all dashboard data
+   */
+  const fetchDashboardData = useCallback(
+    async (refresh = false) => {
+      if (!mountedRef.current) return;
+
+      loadStartTimeRef.current = Date.now();
+      updateLoadingState('overall', true);
+      updateErrorState('overall', null);
+
+      try {
+        const queryOptions: DashboardQueryOptions = {
+          userId: options.userId,
+          userRole: options.userRole,
+          timeRange: options.timeRange,
+          refresh: refresh || !options.enableCache,
+        };
+
+        const data = await dashboardAPI.getDashboardData(queryOptions);
+
+        if (!mountedRef.current) return;
+
+        setState(prev => ({
+          ...prev,
+          data,
+          lastUpdated: new Date(),
+        }));
+
+        // Update stats
+        const loadTime = Date.now() - (loadStartTimeRef.current || Date.now());
+        updateStats({
+          totalRequests: state.stats.totalRequests + 1,
+          averageLoadTime: (state.stats.averageLoadTime + loadTime) / 2,
+        });
+
+        // Track analytics
+        trackDashboardLoaded(loadTime);
+        trackEvent('dashboard_load', { loadTime, userRole: options.userRole });
+        trackRoleBasedUsage('dashboard', 'load', true);
+
+        // Notify callback
+        options.onDataChange?.(data);
+      } catch (error) {
+        if (!mountedRef.current) return;
+
+        const errorMessage =
+          error instanceof Error ? error.message : 'Failed to fetch dashboard data';
+        updateErrorState('overall', errorMessage);
+        updateStats({ errorCount: state.stats.errorCount + 1 });
+
+        console.error('Dashboard data fetch failed:', error);
+      } finally {
+        if (mountedRef.current) {
+          updateLoadingState('overall', false);
+        }
+      }
+    },
+    [
+      options,
+      state.stats,
+      updateLoadingState,
+      updateErrorState,
+      updateStats,
+      trackDashboardLoaded,
+      trackEvent,
+      trackRoleBasedUsage,
+    ]
+  );
+
+  /**
+   * Refresh specific dashboard section
+   */
+  const refreshSection = useCallback(
+    async (section: string) => {
+      if (!mountedRef.current) return;
+
+      const sectionKey = section as keyof DashboardDataState['loading'];
+      const loadStartTime = Date.now();
+
+      updateLoadingState(sectionKey, true);
+      updateErrorState(sectionKey, null);
+
+      try {
+        const queryOptions: DashboardQueryOptions = {
+          userId: options.userId,
+          userRole: options.userRole,
+          timeRange: options.timeRange,
+          refresh: true,
+        };
+
+        const sectionData = await dashboardAPI.refreshSection(section, queryOptions);
+
+        if (!mountedRef.current) return;
+
+        // Update specific section in state
+        setState(prev => {
+          if (!prev.data) return prev;
+
+          const updatedData = { ...prev.data };
+          switch (section) {
+            case 'proposals':
+              updatedData.proposals = sectionData;
+              break;
+            case 'activities':
+              updatedData.activities = sectionData;
+              break;
+            case 'team':
+              updatedData.team = sectionData;
+              break;
+            case 'deadlines':
+              updatedData.deadlines = sectionData;
+              break;
+            case 'performance':
+              updatedData.performance = sectionData;
+              break;
+            case 'notifications':
+              updatedData.notifications = sectionData;
+              break;
+          }
+
+          return {
+            ...prev,
+            data: updatedData,
+            lastUpdated: new Date(),
+          };
+        });
+
+        // Track analytics
+        const loadTime = Date.now() - loadStartTime;
+        trackEvent('section_refresh', { section, loadTime, userRole: options.userRole });
+        trackRoleBasedUsage(section, 'refresh', true);
+      } catch (error) {
+        if (!mountedRef.current) return;
+
+        const errorMessage =
+          error instanceof Error ? error.message : `Failed to refresh ${section}`;
+        updateErrorState(sectionKey, errorMessage);
+        updateStats({ errorCount: state.stats.errorCount + 1 });
+
+        console.error(`Failed to refresh ${section}:`, error);
+      } finally {
+        if (mountedRef.current) {
+          updateLoadingState(sectionKey, false);
+        }
+      }
+    },
+    [
+      options,
+      state.stats,
+      updateLoadingState,
+      updateErrorState,
+      updateStats,
+      trackEvent,
+      trackRoleBasedUsage,
+    ]
+  );
+
+  /**
+   * Refresh all dashboard data
+   */
+  const refreshAll = useCallback(async () => {
+    await fetchDashboardData(true);
+  }, [fetchDashboardData]);
+
+  /**
+   * Clear all error states
+   */
+  const clearErrors = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      errors: {
+        overall: null,
+        proposals: null,
+        activities: null,
+        team: null,
+        deadlines: null,
+        performance: null,
+        notifications: null,
+      },
+    }));
+  }, []);
+
+  /**
+   * Mark notification as read
+   */
+  const markNotificationAsRead = useCallback(
+    async (notificationId: string): Promise<boolean> => {
+      try {
+        const success = await dashboardAPI.markNotificationAsRead(notificationId);
+
+        if (success && state.data?.notifications) {
+          // Update notification in local state
+          setState(prev => {
+            if (!prev.data?.notifications) return prev;
+
+            const updatedNotifications = prev.data.notifications.map(notification =>
+              notification.id === notificationId ? { ...notification, read: true } : notification
+            );
+
+            return {
+              ...prev,
+              data: {
+                ...prev.data,
+                notifications: updatedNotifications,
+              },
+            };
+          });
+        }
+
+        return success;
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+        return false;
+      }
+    },
+    [state.data?.notifications]
+  );
+
+  /**
+   * Update hook options
+   */
+  const updateOptions = useCallback((newOptions: Partial<UseDashboardDataOptions>) => {
+    setOptions(prev => ({ ...prev, ...newOptions }));
+  }, []);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchDashboardData();
+  }, [options.userId, options.userRole, options.timeRange]); // Re-fetch when key options change
+
+  // Auto-refresh setup
+  useEffect(() => {
+    if (!options.autoRefresh || !options.refreshInterval) return;
+
+    refreshTimeoutRef.current = setInterval(() => {
+      if (mountedRef.current && !state.loading.overall) {
+        fetchDashboardData();
+      }
+    }, options.refreshInterval);
+
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearInterval(refreshTimeoutRef.current);
+      }
+    };
+  }, [options.autoRefresh, options.refreshInterval, state.loading.overall, fetchDashboardData]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (refreshTimeoutRef.current) {
+        clearInterval(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Computed values
+  const isLoading = state.loading.overall;
+  const hasErrors = Object.values(state.errors).some(error => error !== null);
+
+  // Individual section data with loading and error states
+  const proposals: SectionDataState<DashboardData['proposals']> = {
+    data: state.data?.proposals || null,
+    loading: state.loading.proposals,
+    error: state.errors.proposals,
+    lastUpdated: state.lastUpdated,
+  };
+
+  const activities: SectionDataState<ActivityFeedItem[]> = {
+    data: state.data?.activities || null,
+    loading: state.loading.activities,
+    error: state.errors.activities,
+    lastUpdated: state.lastUpdated,
+  };
+
+  const team: SectionDataState<TeamMember[]> = {
+    data: state.data?.team || null,
+    loading: state.loading.team,
+    error: state.errors.team,
+    lastUpdated: state.lastUpdated,
+  };
+
+  const deadlines: SectionDataState<Deadline[]> = {
+    data: state.data?.deadlines || null,
+    loading: state.loading.deadlines,
+    error: state.errors.deadlines,
+    lastUpdated: state.lastUpdated,
+  };
+
+  const performance: SectionDataState<PerformanceMetrics> = {
+    data: state.data?.performance || null,
+    loading: state.loading.performance,
+    error: state.errors.performance,
+    lastUpdated: state.lastUpdated,
+  };
+
+  const notifications: SectionDataState<Notification[]> = {
+    data: state.data?.notifications || null,
+    loading: state.loading.notifications,
+    error: state.errors.notifications,
+    lastUpdated: state.lastUpdated,
+  };
+
+  return {
+    // Data
+    dashboardData: state.data,
+    proposals,
+    activities,
+    team,
+    deadlines,
+    performance,
+    notifications,
+
+    // Loading states
+    isLoading,
+    loadingStates: state.loading,
+
+    // Error states
+    hasErrors,
+    errors: state.errors,
+
+    // Actions
+    refreshAll,
+    refreshSection,
+    clearErrors,
+    markNotificationAsRead,
+
+    // Stats & Meta
+    stats: state.stats,
+    lastUpdated: state.lastUpdated,
+
+    // Configuration
+    updateOptions,
+  };
+}
+
+// Export types for external use
+export type { DashboardDataState, SectionDataState, UseDashboardDataOptions };

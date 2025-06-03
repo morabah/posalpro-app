@@ -1,16 +1,13 @@
 /**
- * PosalPro MVP2 - Entity Types Index
- * Exports all entity-specific types and interfaces
- * Entity implementations will be added in subsequent prompts
+ * PosalPro MVP2 - Entity Type Definitions
+ * Comprehensive entity interfaces for all business objects
  */
 
-// Entity types will be exported here as they are implemented:
-// export * from './user';
-// export * from './proposal';
-// export * from './product';
-// export * from './customer';
+// Re-export proposal types only (avoiding conflicts)
+export type * from '../proposals';
 
-// Placeholder to prevent empty export error
-export interface EntityPlaceholder {
-  // This will be removed when actual entities are implemented
-}
+// Base entity interface - using export type for isolated modules
+export type { BaseEntity } from '../shared';
+
+// Entity union type for type guards and utility functions
+export type EntityType = 'proposal' | 'customer' | 'product' | 'user' | 'role' | 'deadline';
