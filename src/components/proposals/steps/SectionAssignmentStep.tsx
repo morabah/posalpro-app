@@ -827,8 +827,8 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
                     calculateComplexity(sections) === 'high'
                       ? 'text-red-600'
                       : calculateComplexity(sections) === 'medium'
-                      ? 'text-amber-600'
-                      : 'text-green-600'
+                        ? 'text-amber-600'
+                        : 'text-green-600'
                   }`}
                 >
                   {calculateComplexity(sections).charAt(0).toUpperCase() +

@@ -126,8 +126,8 @@ export function StepIndicator({
                       index === currentStep
                         ? 'text-primary-600'
                         : index < currentStep
-                        ? 'text-neutral-900'
-                        : 'text-neutral-500'
+                          ? 'text-neutral-900'
+                          : 'text-neutral-500'
                     }`}
                   >
                     {step.title}
@@ -186,8 +186,8 @@ export function StepIndicator({
                     index === currentStep
                       ? 'text-primary-600'
                       : index < currentStep
-                      ? 'text-neutral-900'
-                      : 'text-neutral-500'
+                        ? 'text-neutral-900'
+                        : 'text-neutral-500'
                   }`}
                 >
                   {step.title}

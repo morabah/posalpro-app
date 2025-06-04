@@ -86,15 +86,15 @@ export const mockAnalyticsEvent = (eventName: string, properties: any = {}) => (
 });
 
 // Wait for analytics to be called
-export const waitForAnalytics = async (mockFn: jest.Mock, eventName: string, timeout = 1000) => {
+export const waitForAnalytics = async (mockFn: any, eventName: string, timeout = 1000) => {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeout) {
     const calls = mockFn.mock.calls;
-    const hasEvent = calls.some(call => call[0] === eventName);
+    const hasEvent = calls.some((call: any) => call[0] === eventName);
 
     if (hasEvent) {
-      return calls.find(call => call[0] === eventName);
+      return calls.find((call: any) => call[0] === eventName);
     }
 
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -318,9 +318,9 @@ export const mockConsole = () => {
   const warnings: any[] = [];
   const errors: any[] = [];
 
-  console.log = jest.fn((...args) => logs.push(args));
-  console.warn = jest.fn((...args) => warnings.push(args));
-  console.error = jest.fn((...args) => errors.push(args));
+  console.log = jest.fn((...args: any[]) => logs.push(args));
+  console.warn = jest.fn((...args: any[]) => warnings.push(args));
+  console.error = jest.fn((...args: any[]) => errors.push(args));
 
   return {
     restore: () => {
@@ -330,12 +330,14 @@ export const mockConsole = () => {
     getWarnings: () => [...warnings],
     getErrors: () => [...errors],
     hasLog: (message: string) =>
-      logs.some(log => log.some(arg => typeof arg === 'string' && arg.includes(message))),
+      logs.some(log => log.some((arg: any) => typeof arg === 'string' && arg.includes(message))),
     hasWarning: (message: string) =>
       warnings.some(warning =>
-        warning.some(arg => typeof arg === 'string' && arg.includes(message))
+        warning.some((arg: any) => typeof arg === 'string' && arg.includes(message))
       ),
     hasError: (message: string) =>
-      errors.some(error => error.some(arg => typeof arg === 'string' && arg.includes(message))),
+      errors.some(error =>
+        error.some((arg: any) => typeof arg === 'string' && arg.includes(message))
+      ),
   };
 };

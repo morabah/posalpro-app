@@ -203,8 +203,8 @@ export default function SMEPage() {
                     activity.type === 'success'
                       ? 'bg-green-500'
                       : activity.type === 'warning'
-                      ? 'bg-orange-500'
-                      : 'bg-blue-500'
+                        ? 'bg-orange-500'
+                        : 'bg-blue-500'
                   }`}
                 ></div>
                 <div className="flex-1">

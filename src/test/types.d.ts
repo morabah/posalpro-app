@@ -1,6 +1,6 @@
 /**
  * Global test type definitions
- * 
+ *
  * This file provides global TypeScript declarations for test-related functions
  * and objects to ensure proper type checking in test files.
  */

@@ -253,7 +253,10 @@ export const csrf = CSRFProtection;
 export const rateLimiter = RateLimiter;
 
 // Auto-cleanup (run periodically)
-setInterval(() => {
-  CSRFProtection.cleanupExpired();
-  RateLimiter.cleanup();
-}, 5 * 60 * 1000); // Every 5 minutes
+setInterval(
+  () => {
+    CSRFProtection.cleanupExpired();
+    RateLimiter.cleanup();
+  },
+  5 * 60 * 1000
+); // Every 5 minutes

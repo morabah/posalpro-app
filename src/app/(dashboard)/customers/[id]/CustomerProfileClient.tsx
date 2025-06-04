@@ -248,8 +248,8 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
                         customer.healthScore >= 80
                           ? 'bg-green-500'
                           : customer.healthScore >= 60
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
+                            ? 'bg-yellow-500'
+                            : 'bg-red-500'
                       }`}
                       style={{ width: `${customer.healthScore}%` }}
                     ></div>

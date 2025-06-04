@@ -18,14 +18,9 @@ const nextConfig = {
   experimental: {
     serverActions: {
       // Allow server actions for local development and production domain
-      allowedOrigins: [
-        'localhost:3001', 
-        'localhost:3000',
-        'posalpro-mvp2.windsurf.build',
-      ],
+      allowedOrigins: ['localhost:3001', 'localhost:3000', 'posalpro-mvp2.windsurf.build'],
     },
     // Optimize bundling for serverless environments
-    optimizeFonts: true,
     optimizePackageImports: ['react', 'react-dom', '@headlessui/react', '@heroicons/react'],
   },
   logging: {
@@ -47,8 +42,7 @@ const nextConfig = {
       transform: '@heroicons/react/{{member}}',
     },
   },
-  // Configure transpilation for better cross-platform compatibility
-  swcMinify: true,
+  // Note: swcMinify and optimizeFonts are enabled by default in Next.js 15+
 };
 
 // Support for different bundle analysis in development

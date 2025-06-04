@@ -1,9 +1,9 @@
 /**
  * Unit tests for formatters utility functions
- * 
+ *
  * Following quality-first approach and TDD principles as outlined in our
  * quality gates process.
- * 
+ *
  * @stage Development
  * @quality-gate Unit Testing
  */

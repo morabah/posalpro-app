@@ -255,8 +255,8 @@ export default function SMEAssignmentsPage() {
                         assignment.status === 'Completed'
                           ? 'bg-green-100 text-green-800'
                           : assignment.status === 'In Progress'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-yellow-100 text-yellow-800'
                       }`}
                     >
                       {assignment.status}
@@ -305,8 +305,8 @@ export default function SMEAssignmentsPage() {
                 {selectedTab === 'pending'
                   ? 'You have no pending assignments at the moment.'
                   : selectedTab === 'active'
-                  ? 'You have no active assignments at the moment.'
-                  : 'You have not completed any assignments yet.'}
+                    ? 'You have no active assignments at the moment.'
+                    : 'You have not completed any assignments yet.'}
               </p>
             </div>
           </Card>

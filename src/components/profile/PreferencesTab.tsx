@@ -9,17 +9,17 @@
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-    AlertCircle,
-    Check,
-    Eye,
-    Loader2,
-    Monitor,
-    Moon,
-    MousePointer,
-    RotateCcw,
-    Save,
-    Sun,
-    Type,
+  AlertCircle,
+  Check,
+  Eye,
+  Loader2,
+  Monitor,
+  Moon,
+  MousePointer,
+  RotateCcw,
+  Save,
+  Sun,
+  Type,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -292,7 +292,9 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
             {/* Default View */}
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-3">Default View</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-3">
+                Default View
+              </label>
               <div className="space-y-2">
                 <label className="flex items-center space-x-3">
                   <input

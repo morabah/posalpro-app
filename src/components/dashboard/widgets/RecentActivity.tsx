@@ -166,21 +166,24 @@ export const RecentActivity: React.FC<WidgetProps> = ({
       return { filteredActivities: [], filterCounts: {} };
     }
 
-    const counts = activityData.activities.reduce((acc, activity) => {
-      acc[activity.type] = (acc[activity.type] || 0) + 1;
-      acc.all = (acc.all || 0) + 1;
-      if (activity.actionRequired) {
-        acc.actionRequired = (acc.actionRequired || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<string, number>);
+    const counts = activityData.activities.reduce(
+      (acc, activity) => {
+        acc[activity.type] = (acc[activity.type] || 0) + 1;
+        acc.all = (acc.all || 0) + 1;
+        if (activity.actionRequired) {
+          acc.actionRequired = (acc.actionRequired || 0) + 1;
+        }
+        return acc;
+      },
+      {} as Record<string, number>
+    );
 
     const filtered =
       activeFilter === 'all'
         ? activityData.activities
         : activeFilter === 'actionRequired'
-        ? activityData.activities.filter(a => a.actionRequired)
-        : activityData.activities.filter(a => a.type === activeFilter);
+          ? activityData.activities.filter(a => a.actionRequired)
+          : activityData.activities.filter(a => a.type === activeFilter);
 
     return {
       filteredActivities: filtered.slice(0, 10), // Limit to 10 items

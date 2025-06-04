@@ -1,9 +1,9 @@
 /**
  * Proposal Card Component
- * 
+ *
  * Displays a summary of a proposal with key metrics and status.
  * Follows our component composition patterns and design system.
- * 
+ *
  * @stage Development
  * @quality-gate Component
  */
@@ -49,14 +49,17 @@ export interface ProposalCardProps {
  * Maps proposal status to badge variant for visual indication
  */
 const getStatusBadgeVariant = (status: ProposalCardProps['status']) => {
-  const variantMap: Record<ProposalCardProps['status'], React.ComponentProps<typeof Badge>['variant']> = {
-    'draft': 'secondary',
+  const variantMap: Record<
+    ProposalCardProps['status'],
+    React.ComponentProps<typeof Badge>['variant']
+  > = {
+    draft: 'secondary',
     'in-review': 'warning',
-    'submitted': 'default',
-    'won': 'success',
-    'lost': 'destructive'
+    submitted: 'default',
+    won: 'success',
+    lost: 'destructive',
   };
-  
+
   return variantMap[status] || 'default';
 };
 
@@ -92,7 +95,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
   };
 
   return (
-    <div 
+    <div
       className={`flex flex-col p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow ${className}`}
       onClick={handleClick}
       data-testid="proposal-card"
@@ -101,33 +104,29 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
         <h3 className="text-lg font-semibold text-gray-900 truncate" title={title}>
           {title}
         </h3>
-        <Badge variant={getStatusBadgeVariant(status)}>
-          {formatStatus(status)}
-        </Badge>
+        <Badge variant={getStatusBadgeVariant(status)}>{formatStatus(status)}</Badge>
       </div>
-      
-      <p className="text-sm text-gray-600 mb-3">
-        {client}
-      </p>
-      
+
+      <p className="text-sm text-gray-600 mb-3">{client}</p>
+
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="flex flex-col">
           <span className="text-xs text-gray-500">Value</span>
           <span className="text-sm font-medium">{formatCurrency(value)}</span>
         </div>
-        
+
         <div className="flex flex-col">
           <span className="text-xs text-gray-500">Win Probability</span>
           <span className="text-sm font-medium">{winProbability}%</span>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-gray-100">
         <div className="flex flex-col">
           <span className="text-xs text-gray-500">Due Date</span>
           <span className="text-xs">{formatDate(dueDate, 'short')}</span>
         </div>
-        
+
         <div className="flex flex-col">
           <span className="text-xs text-gray-500">Last Modified</span>
           <span className="text-xs">{formatDate(lastModified, 'short')}</span>

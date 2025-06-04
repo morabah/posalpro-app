@@ -586,8 +586,8 @@ export default function ProductRelationshipsManagement() {
                                 result.status === 'valid'
                                   ? 'bg-green-100 text-green-800'
                                   : result.status === 'warning'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-red-100 text-red-800'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-red-100 text-red-800'
                               }`}
                             >
                               {result.status}
@@ -652,10 +652,10 @@ export default function ProductRelationshipsManagement() {
                               entry.changeType === 'create'
                                 ? 'bg-green-100 text-green-800'
                                 : entry.changeType === 'update'
-                                ? 'bg-blue-100 text-blue-800'
-                                : entry.changeType === 'delete'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-purple-100 text-purple-800'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : entry.changeType === 'delete'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-purple-100 text-purple-800'
                             }`}
                           >
                             {entry.changeType.replace('_', ' ')}
@@ -725,8 +725,8 @@ export default function ProductRelationshipsManagement() {
                             dependency.impact === 'critical'
                               ? 'bg-red-100 text-red-800'
                               : dependency.impact === 'moderate'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-yellow-100 text-yellow-800'
                           }`}
                         >
                           {dependency.impact} impact
@@ -759,8 +759,8 @@ export default function ProductRelationshipsManagement() {
                                     resolution.difficulty === 'easy'
                                       ? 'bg-green-100 text-green-800'
                                       : resolution.difficulty === 'moderate'
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-red-100 text-red-800'
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-red-100 text-red-800'
                                   }`}
                                 >
                                   {resolution.difficulty}

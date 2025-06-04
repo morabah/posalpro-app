@@ -472,8 +472,8 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
                   summaryStats.completeness >= 90
                     ? 'bg-green-600'
                     : summaryStats.completeness >= 70
-                    ? 'bg-amber-500'
-                    : 'bg-red-500'
+                      ? 'bg-amber-500'
+                      : 'bg-red-500'
                 }`}
                 style={{ width: `${summaryStats.completeness}%` }}
               />
@@ -512,8 +512,8 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
                     issue.severity === 'error'
                       ? 'border-red-500 bg-red-50'
                       : issue.severity === 'warning'
-                      ? 'border-amber-500 bg-amber-50'
-                      : 'border-blue-500 bg-blue-50'
+                        ? 'border-amber-500 bg-amber-50'
+                        : 'border-blue-500 bg-blue-50'
                   }`}
                 >
                   <div className="flex items-start">
@@ -589,8 +589,8 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
                       insights.complexity === 'high'
                         ? 'text-red-600'
                         : insights.complexity === 'medium'
-                        ? 'text-amber-600'
-                        : 'text-green-600'
+                          ? 'text-amber-600'
+                          : 'text-green-600'
                     }`}
                   >
                     {insights.complexity.charAt(0).toUpperCase() + insights.complexity.slice(1)}
@@ -618,8 +618,8 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
                         proposal.winRate >= 80
                           ? 'text-green-600'
                           : proposal.winRate >= 60
-                          ? 'text-amber-600'
-                          : 'text-red-600'
+                            ? 'text-amber-600'
+                            : 'text-red-600'
                       }`}
                     >
                       {proposal.winRate}% win

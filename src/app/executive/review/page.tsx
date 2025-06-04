@@ -514,8 +514,8 @@ export default function ExecutiveReviewPortal() {
             selectedProposal.complexity === 'high'
               ? 8
               : selectedProposal.complexity === 'medium'
-              ? 5
-              : 3,
+                ? 5
+                : 3,
           timelineImpact: selectedProposal.priority / 10,
           criticalPathPosition: selectedProposal.status === ProposalStatus.AT_RISK,
           queuePosition: sortedProposals.findIndex(p => p.id === selectedProposal.id) + 1,
@@ -872,8 +872,8 @@ export default function ExecutiveReviewPortal() {
                                     insight.type === 'risk'
                                       ? 'border-red-500 bg-red-50'
                                       : insight.type === 'opportunity'
-                                      ? 'border-green-500 bg-green-50'
-                                      : 'border-blue-500 bg-blue-50'
+                                        ? 'border-green-500 bg-green-50'
+                                        : 'border-blue-500 bg-blue-50'
                                   }`}
                                 >
                                   <div className="flex items-start space-x-3">

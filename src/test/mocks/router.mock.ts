@@ -1,6 +1,6 @@
 /**
  * Next.js Router Mock
- * 
+ *
  * This mock implements the Next.js router functionality for testing purposes.
  * It provides all common router methods and properties with sensible defaults.
  */
@@ -32,13 +32,13 @@ export const mockRouter = {
  * Resets all mock functions in the router mock
  */
 export const resetRouterMock = (): void => {
-  Object.values(mockRouter).forEach((value) => {
+  Object.values(mockRouter).forEach(value => {
     if (typeof value === 'function' && 'mockReset' in value) {
       value.mockReset();
     }
   });
-  
-  Object.values(mockRouter.events).forEach((value) => {
+
+  Object.values(mockRouter.events).forEach(value => {
     if (typeof value === 'function' && 'mockReset' in value) {
       value.mockReset();
     }

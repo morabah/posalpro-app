@@ -117,11 +117,14 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
     console.log('  isValidating:', isValidating);
 
     // Safe error logging to avoid circular structure
-    const safeErrors = Object.keys(errors).reduce((acc, key) => {
-      const error = errors[key as keyof typeof errors];
-      acc[key] = error ? { message: error.message, type: error.type } : null;
-      return acc;
-    }, {} as Record<string, any>);
+    const safeErrors = Object.keys(errors).reduce(
+      (acc, key) => {
+        const error = errors[key as keyof typeof errors];
+        acc[key] = error ? { message: error.message, type: error.type } : null;
+        return acc;
+      },
+      {} as Record<string, any>
+    );
     console.log('  errors:', safeErrors);
 
     console.log('  watchedValues:', {
@@ -503,8 +506,8 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                   email && password && selectedRole && !isLoading
                     ? 'bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white'
                     : !isLoading
-                    ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white'
-                    : 'bg-neutral-300 text-neutral-500 cursor-not-allowed shadow-none'
+                      ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white'
+                      : 'bg-neutral-300 text-neutral-500 cursor-not-allowed shadow-none'
                 }`}
                 title={
                   !isValid ? 'Debug mode: Form validation may have issues' : 'Ready to sign in'

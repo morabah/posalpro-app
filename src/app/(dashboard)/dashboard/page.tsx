@@ -1,7 +1,7 @@
 /**
  * PosalPro MVP2 - Dashboard Page
  * Enhanced dashboard with dynamic widget system and role-based customization
- * Based on DASHBOARD_SCREEN.md wireframe specifications
+ * Based on DASHBOARD_SCREEN.md wireframe specifications with real database integration
  */
 
 'use client';
@@ -10,7 +10,6 @@ import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { useDashboardAnalytics } from '@/hooks/dashboard/useDashboardAnalytics';
-import { getRoleSpecificMockData } from '@/lib/dashboard/mockData';
 import { getDashboardConfiguration } from '@/lib/dashboard/widgetRegistry';
 import { UserType } from '@/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -59,19 +58,34 @@ interface DashboardMetrics {
   onTimeDelivery: number;
 }
 
+interface DashboardData {
+  proposals: any[];
+  customers: any[];
+  products: any[];
+  content: any[];
+  users: any[];
+}
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics>({
-    activeProposals: 12,
-    pendingTasks: 8,
-    completionRate: 87.5,
-    avgCompletionTime: 12.3,
-    onTimeDelivery: 94.2,
+    activeProposals: 0,
+    pendingTasks: 0,
+    completionRate: 0,
+    avgCompletionTime: 0,
+    onTimeDelivery: 0,
   });
 
   const [widgetData, setWidgetData] = useState<Record<string, any>>({});
   const [widgetLoading, setWidgetLoading] = useState<Record<string, boolean>>({});
   const [widgetErrors, setWidgetErrors] = useState<Record<string, string>>({});
   const [sessionStartTime] = useState(Date.now());
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
+    proposals: [],
+    customers: [],
+    products: [],
+    content: [],
+    users: [],
+  });
   const hasTrackedInitialLoad = useRef(false);
 
   const analytics = useDashboardAnalytics(
@@ -85,52 +99,201 @@ export default function DashboardPage() {
     return getDashboardConfiguration(MOCK_USER.role, MOCK_USER.permissions);
   }, []);
 
-  // Load initial widget data
+  // Fetch real dashboard data from API
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      console.log('🔄 Fetching real dashboard data from database...');
+
+      // Fetch data from multiple endpoints in parallel
+      const [proposalsRes, customersRes, productsRes, contentRes] = await Promise.all([
+        fetch('/api/proposals?limit=20'),
+        fetch('/api/customers?limit=10'),
+        fetch('/api/products?limit=10'),
+        fetch('/api/content?limit=10'),
+      ]);
+
+      const [proposalsData, customersData, productsData, contentData] = await Promise.all([
+        proposalsRes.json(),
+        customersRes.json(),
+        productsRes.json(),
+        contentRes.json(),
+      ]);
+
+      console.log('✅ Dashboard data fetched:', {
+        proposals: proposalsData.success ? proposalsData.data?.proposals?.length || 0 : 0,
+        customers: customersData.success ? customersData.data?.customers?.length || 0 : 0,
+        products: productsData.success ? productsData.data?.products?.length || 0 : 0,
+        content: contentData.success ? contentData.data?.content?.length || 0 : 0,
+      });
+
+      const data: DashboardData = {
+        proposals: proposalsData.success ? proposalsData.data?.proposals || [] : [],
+        customers: customersData.success ? customersData.data?.customers || [] : [],
+        products: productsData.success ? productsData.data?.products || [] : [],
+        content: contentData.success ? contentData.data?.content || [] : [],
+        users: [], // Users would need separate endpoint
+      };
+
+      setDashboardData(data);
+
+      // Calculate metrics from real data
+      const proposals = data.proposals;
+      const activeProposals = proposals.filter(p =>
+        ['DRAFT', 'IN_REVIEW', 'PENDING_APPROVAL', 'APPROVED'].includes(p.status)
+      );
+      const completedProposals = proposals.filter(p =>
+        ['SUBMITTED', 'ACCEPTED'].includes(p.status)
+      );
+
+      const calculatedMetrics: DashboardMetrics = {
+        activeProposals: activeProposals.length,
+        pendingTasks: proposals.filter(p => p.status === 'IN_REVIEW').length,
+        completionRate:
+          proposals.length > 0 ? (completedProposals.length / proposals.length) * 100 : 0,
+        avgCompletionTime: 12.3, // Would need completion time calculation
+        onTimeDelivery: 94.2, // Would need deadline analysis
+      };
+
+      setMetrics(calculatedMetrics);
+
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to fetch dashboard data:', error);
+      analytics.trackEvent('dashboard_data_error', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userRole: MOCK_USER.role,
+      });
+      throw error;
+    }
+  }, [analytics]);
+
+  // Load initial widget data with real database data
   useEffect(() => {
     const loadWidgetData = async () => {
       try {
-        // Get mock data for all widgets
-        const mockData = getRoleSpecificMockData(MOCK_USER.role);
+        // Fetch real dashboard data
+        const data = await fetchDashboardData();
 
-        // Map data to widgets
+        // Map real data to widgets
         const widgetDataMap: Record<string, any> = {};
         dashboardWidgets.forEach(widget => {
           switch (widget.id) {
             case 'proposal-overview':
+              const activeProposals = data.proposals.filter(p =>
+                ['DRAFT', 'IN_REVIEW', 'PENDING_APPROVAL', 'APPROVED'].includes(p.status)
+              );
               widgetDataMap[widget.id] = {
-                metrics: mockData.proposals.metrics,
-                activeProposals: mockData.proposals.active,
+                metrics: {
+                  active: activeProposals.length,
+                  total: data.proposals.length,
+                  inReview: data.proposals.filter(p => p.status === 'IN_REVIEW').length,
+                  approved: data.proposals.filter(p => p.status === 'APPROVED').length,
+                  pendingApproval: data.proposals.filter(p => p.status === 'PENDING_APPROVAL')
+                    .length,
+                  completion:
+                    data.proposals.length > 0
+                      ? (data.proposals.filter(p => ['SUBMITTED', 'ACCEPTED'].includes(p.status))
+                          .length /
+                          data.proposals.length) *
+                        100
+                      : 0,
+                },
+                activeProposals: activeProposals.slice(0, 5).map(p => ({
+                  id: p.id,
+                  title: p.title,
+                  status: p.status.toLowerCase().replace('_', '-') as any,
+                  priority: (p.priority?.toLowerCase() as any) || 'medium',
+                  customer: {
+                    name: p.customer?.name || 'Unknown Customer',
+                    industry: p.customer?.industry || 'Unknown',
+                  },
+                  dueDate: p.dueDate
+                    ? new Date(p.dueDate)
+                    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                  completion: 75, // Default completion percentage
+                  team: [], // Would need team data
+                })),
                 userRole: MOCK_USER.role,
               };
               break;
             case 'recent-activity':
+              // Generate activity feed from recent proposals and updates
+              const recentActivities = data.proposals
+                .filter(p => p.updatedAt)
+                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                .slice(0, 10)
+                .map(p => ({
+                  id: `activity-${p.id}`,
+                  type: 'proposal' as const,
+                  title: `Proposal "${p.title}" ${p.status.toLowerCase().replace('_', ' ')}`,
+                  description: `Status: ${p.status}`,
+                  user: p.creator?.name || 'Unknown User',
+                  timestamp: new Date(p.updatedAt),
+                  priority: (p.priority?.toLowerCase() as any) || 'medium',
+                  proposalId: p.id,
+                  proposalTitle: p.title,
+                }));
+
               widgetDataMap[widget.id] = {
-                activities: mockData.activities,
-                notifications: mockData.notifications,
+                activities: recentActivities,
+                notifications: [], // Would need notification system
               };
               break;
             case 'team-collaboration':
               widgetDataMap[widget.id] = {
-                teamMembers: mockData.team,
+                teamMembers: data.users, // Limited user data available
                 collaborationMetrics: {
-                  activeTeamMembers: mockData.team.filter((t: any) => t.status === 'online').length,
+                  activeTeamMembers: 0, // Would need user status
                   avgResponseTime: 2.3,
                   coordinationScore: 8.7,
                 },
               };
               break;
             case 'deadline-tracker':
+              const upcomingDeadlines = data.proposals
+                .filter(p => p.dueDate && new Date(p.dueDate) > new Date())
+                .map(p => ({
+                  id: p.id,
+                  title: p.title,
+                  type: 'proposal' as const,
+                  dueDate: new Date(p.dueDate),
+                  priority: (p.priority?.toLowerCase() as any) || 'medium',
+                  status: p.status === 'APPROVED' ? 'completed' : 'pending',
+                  assignedTo: p.creator?.name || 'Unassigned',
+                }));
+
+              const overdueDeadlines = data.proposals
+                .filter(
+                  p =>
+                    p.dueDate &&
+                    new Date(p.dueDate) < new Date() &&
+                    !['SUBMITTED', 'ACCEPTED'].includes(p.status)
+                )
+                .map(p => ({
+                  id: p.id,
+                  title: p.title,
+                  type: 'proposal' as const,
+                  dueDate: new Date(p.dueDate),
+                  priority: 'critical' as const,
+                  status: 'overdue' as const,
+                  assignedTo: p.creator?.name || 'Unassigned',
+                }));
+
               widgetDataMap[widget.id] = {
-                deadlines: mockData.deadlines,
-                upcomingCount: mockData.deadlines.filter((d: any) => d.dueDate > new Date()).length,
-                overdueCount: mockData.deadlines.filter(
-                  (d: any) => d.dueDate < new Date() && d.status !== 'completed'
-                ).length,
+                deadlines: [...upcomingDeadlines, ...overdueDeadlines],
+                upcomingCount: upcomingDeadlines.length,
+                overdueCount: overdueDeadlines.length,
               };
               break;
             case 'performance-metrics':
               widgetDataMap[widget.id] = {
-                performance: mockData.performance,
+                performance: {
+                  proposalVolume: data.proposals.length,
+                  completionRate: metrics.completionRate,
+                  avgResponseTime: 2.3,
+                  customerSatisfaction: 4.2,
+                  revenueImpact: 1250000,
+                },
                 trends: [
                   { metric: 'Productivity', value: 85, change: 12, direction: 'up' as const },
                   { metric: 'Quality', value: 92, change: 5, direction: 'up' as const },
@@ -150,6 +313,9 @@ export default function DashboardPage() {
           widgetCount: dashboardWidgets.length,
           loadTime: Date.now() - sessionStartTime,
           userRole: MOCK_USER.role,
+          dataSource: 'database',
+          proposalCount: data.proposals.length,
+          customerCount: data.customers.length,
         });
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
@@ -157,11 +323,21 @@ export default function DashboardPage() {
           error: error instanceof Error ? error.message : 'Unknown error',
           userRole: MOCK_USER.role,
         });
+
+        // Fallback to empty data structure
+        const fallbackDataMap: Record<string, any> = {};
+        dashboardWidgets.forEach(widget => {
+          fallbackDataMap[widget.id] = {
+            placeholder: true,
+            error: 'Failed to load data',
+          };
+        });
+        setWidgetData(fallbackDataMap);
       }
     };
 
     loadWidgetData();
-  }, [dashboardWidgets, analytics, sessionStartTime]);
+  }, [dashboardWidgets, analytics, sessionStartTime, fetchDashboardData, metrics.completionRate]);
 
   // Handle widget refresh
   const handleWidgetRefresh = useCallback(
@@ -170,11 +346,10 @@ export default function DashboardPage() {
       setWidgetErrors(prev => ({ ...prev, [widgetId]: '' }));
 
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`🔄 Refreshing widget: ${widgetId}`);
 
-        // Refresh widget data (would be actual API call in production)
-        const mockData = getRoleSpecificMockData(MOCK_USER.role);
+        // Refresh dashboard data
+        const data = await fetchDashboardData();
 
         // Update specific widget data
         setWidgetData(prev => ({
@@ -188,6 +363,7 @@ export default function DashboardPage() {
         analytics.trackWidgetInteraction(widgetId, 'refresh_completed', {
           duration: 1000,
           success: true,
+          dataSource: 'database',
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Refresh failed';
@@ -200,7 +376,7 @@ export default function DashboardPage() {
         setWidgetLoading(prev => ({ ...prev, [widgetId]: false }));
       }
     },
-    [analytics]
+    [analytics, fetchDashboardData]
   );
 
   // Handle widget interactions

@@ -860,14 +860,14 @@ export default function ValidationDashboard() {
                           issue.category === RuleCategory.PRODUCT_CONFIG
                             ? 'bg-blue-500'
                             : issue.category === RuleCategory.PRICING
-                            ? 'bg-green-500'
-                            : issue.category === RuleCategory.COMPLIANCE
-                            ? 'bg-red-500'
-                            : issue.category === RuleCategory.LICENSING
-                            ? 'bg-purple-500'
-                            : issue.category === RuleCategory.TECHNICAL
-                            ? 'bg-orange-500'
-                            : 'bg-gray-500'
+                              ? 'bg-green-500'
+                              : issue.category === RuleCategory.COMPLIANCE
+                                ? 'bg-red-500'
+                                : issue.category === RuleCategory.LICENSING
+                                  ? 'bg-purple-500'
+                                  : issue.category === RuleCategory.TECHNICAL
+                                    ? 'bg-orange-500'
+                                    : 'bg-gray-500'
                         }`}
                       />
                       {issue.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -896,8 +896,8 @@ export default function ValidationDashboard() {
                                     suggestion.confidence >= 90
                                       ? 'bg-green-100 text-green-800'
                                       : suggestion.confidence >= 75
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-yellow-100 text-yellow-800'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-yellow-100 text-yellow-800'
                                   }`}
                                 >
                                   {suggestion.confidence}% confidence

@@ -581,8 +581,8 @@ export default function ApprovalWorkflowDashboard() {
             isOverdue
               ? 'text-red-600 font-semibold'
               : isUrgent
-              ? 'text-orange-600'
-              : 'text-gray-600'
+                ? 'text-orange-600'
+                : 'text-gray-600'
           }`}
         >
           {isOverdue
@@ -920,8 +920,8 @@ export default function ApprovalWorkflowDashboard() {
                           approval.riskLevel === 'high'
                             ? 'bg-red-500'
                             : approval.riskLevel === 'medium'
-                            ? 'bg-yellow-500'
-                            : 'bg-green-500'
+                              ? 'bg-yellow-500'
+                              : 'bg-green-500'
                         }`}
                       />
                       Risk: {approval.riskLevel}
@@ -952,8 +952,8 @@ export default function ApprovalWorkflowDashboard() {
                               index < approval.currentStage
                                 ? 'bg-green-100 text-green-800'
                                 : index === approval.currentStage - 1
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-600'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-gray-100 text-gray-600'
                             }`}
                           >
                             {stage.charAt(0).toUpperCase() + stage.slice(1)}
@@ -980,8 +980,8 @@ export default function ApprovalWorkflowDashboard() {
                                 decision.decision === DecisionType.APPROVE
                                   ? 'bg-green-500'
                                   : decision.decision === DecisionType.APPROVE_WITH_COMMENTS
-                                  ? 'bg-blue-500'
-                                  : 'bg-red-500'
+                                    ? 'bg-blue-500'
+                                    : 'bg-red-500'
                               }`}
                             />
                             <div className="flex-1">

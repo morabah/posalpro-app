@@ -222,10 +222,13 @@ export default function ContentSearch() {
   // AI tag suggestions
   const suggestedTags = useMemo(() => {
     const allTags = MOCK_CONTENT.flatMap(item => item.tags);
-    const tagCounts = allTags.reduce((acc, tag) => {
-      acc[tag] = (acc[tag] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const tagCounts = allTags.reduce(
+      (acc, tag) => {
+        acc[tag] = (acc[tag] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
 
     return Object.entries(tagCounts)
       .sort(([, a], [, b]) => b - a)

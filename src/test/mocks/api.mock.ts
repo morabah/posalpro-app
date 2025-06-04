@@ -239,7 +239,7 @@ export const mockApiResponses = {
 
 // Setup global API mocks
 export const setupApiMocksGlobal = () => {
-  global.fetch = jest.fn().mockImplementation((url: string, options?: any) => {
+  global.fetch = jest.fn().mockImplementation((url: string | URL, options?: any) => {
     // Parse URL to determine endpoint
     const urlPath = typeof url === 'string' ? url : url.toString();
 

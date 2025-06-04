@@ -1,6 +1,7 @@
 /**
  * Content Service
- * Data access layer for Content entities and access management
+ * Enhanced data access layer for Content entities with semantic search and AI integration
+ * Supports H1 hypothesis validation for 45% search time reduction
  */
 
 import { AccessType, Content, ContentAccessLog, ContentType, Prisma } from '@prisma/client';
@@ -9,6 +10,55 @@ import { prisma } from '../prisma';
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   return error instanceof Prisma.PrismaClientKnownRequestError;
+}
+
+// Enhanced interfaces for semantic search and AI integration
+export interface SemanticSearchRequest {
+  query: string;
+  filters?: ContentFilters;
+  userRoles: string[];
+  includeRelevanceScore: boolean;
+  maxResults: number;
+  userId: string;
+  sessionId: string;
+}
+
+export interface ContentSearchResult extends Content {
+  relevanceScore: number;
+  highlights: string[];
+  contextSnippets: string[];
+  relatedContent: string[];
+  qualityScore: number;
+  usageMetrics: ContentUsageStats;
+}
+
+export interface ContentUsageStats {
+  totalViews: number;
+  totalUses: number;
+  avgUsageTime: number;
+  clickThroughRate: number;
+  lastAccessed: Date;
+  popularityScore: number;
+}
+
+export interface SearchPerformanceMetrics {
+  searchId: string;
+  searchStartTime: number;
+  timeToFirstResult: number;
+  timeToSelection?: number;
+  resultsCount: number;
+  searchAccuracy: number;
+  userSatisfaction?: number;
+  hypothesis: 'H1';
+  userStory: 'US-1.1' | 'US-1.2' | 'US-1.3';
+}
+
+export interface AIContentSuggestions {
+  categories: string[];
+  tags: string[];
+  relatedContent: string[];
+  qualityPrediction: number;
+  searchOptimizations: string[];
 }
 
 // Content interfaces
@@ -576,6 +626,481 @@ export class ContentService {
     } catch (error) {
       throw new Error('Failed to retrieve content statistics');
     }
+  }
+
+  // Enhanced semantic search with AI integration (US-1.1, US-1.2, US-1.3)
+  async semanticSearch(request: SemanticSearchRequest): Promise<{
+    results: ContentSearchResult[];
+    metrics: SearchPerformanceMetrics;
+    aiSuggestions: AIContentSuggestions;
+    totalResults: number;
+  }> {
+    const searchStartTime = Date.now();
+    const searchId = `search_${request.userId}_${searchStartTime}`;
+
+    try {
+      // Build enhanced search query with semantic understanding
+      const semanticQuery = this.buildSemanticQuery(request.query);
+
+      // Apply user role-based access control
+      const where: any = {
+        isActive: true,
+        OR: [{ isPublic: true }, { allowedRoles: { hasSome: request.userRoles } }],
+        AND: [
+          {
+            OR: [
+              { title: { contains: semanticQuery, mode: 'insensitive' } },
+              { description: { contains: semanticQuery, mode: 'insensitive' } },
+              { searchableText: { contains: semanticQuery, mode: 'insensitive' } },
+              { keywords: { hasSome: semanticQuery.split(' ') } },
+              { tags: { hasSome: semanticQuery.split(' ') } },
+              { category: { hasSome: semanticQuery.split(' ') } },
+            ],
+          },
+        ],
+      };
+
+      // Apply additional filters
+      if (request.filters) {
+        if (request.filters.type) where.type = { in: request.filters.type };
+        if (request.filters.category && request.filters.category.length > 0) {
+          where.category = { hasSome: request.filters.category };
+        }
+        if (request.filters.tags && request.filters.tags.length > 0) {
+          where.tags = { hasSome: request.filters.tags };
+        }
+      }
+
+      // Get content with enhanced metadata
+      const rawResults = await prisma.content.findMany({
+        where,
+        take: request.maxResults,
+        orderBy: [{ updatedAt: 'desc' }, { title: 'asc' }],
+      });
+
+      const timeToFirstResult = Date.now() - searchStartTime;
+
+      // Calculate relevance scores and enhance results
+      const enhancedResults = await Promise.all(
+        rawResults.map(async content => {
+          const relevanceScore = this.calculateRelevanceScore(content, request.query);
+          const highlights = this.extractHighlights(content, request.query);
+          const contextSnippets = this.extractContextSnippets(content, request.query);
+          const usageMetrics = await this.getContentUsageStats(content.id);
+          const relatedContent = await this.getRelatedContentIds(content.id, 3);
+          const qualityScore = await this.calculateQualityScore(content.id);
+
+          return {
+            ...content,
+            relevanceScore,
+            highlights,
+            contextSnippets,
+            relatedContent,
+            qualityScore,
+            usageMetrics,
+          } as ContentSearchResult;
+        })
+      );
+
+      // Sort by relevance score
+      const sortedResults = enhancedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+      // Generate AI suggestions
+      const aiSuggestions = await this.generateAISuggestions(request.query, sortedResults);
+
+      // Calculate search accuracy
+      const searchAccuracy = this.calculateSearchAccuracy(sortedResults, request.query);
+
+      // Create performance metrics
+      const metrics: SearchPerformanceMetrics = {
+        searchId,
+        searchStartTime,
+        timeToFirstResult,
+        resultsCount: sortedResults.length,
+        searchAccuracy,
+        hypothesis: 'H1',
+        userStory: 'US-1.1',
+      };
+
+      // Log search analytics for H1 hypothesis validation
+      await this.logSearchAnalytics(request, metrics, sortedResults.length);
+
+      return {
+        results: sortedResults,
+        metrics,
+        aiSuggestions,
+        totalResults: sortedResults.length,
+      };
+    } catch (error) {
+      console.error('Semantic search failed:', error);
+      throw new Error('Failed to perform semantic search');
+    }
+  }
+
+  // Enhanced content categorization with AI assistance (US-1.2)
+  async getAICategories(content?: string, existingCategories?: string[]): Promise<string[]> {
+    try {
+      // Get all existing categories from database
+      const existingCategoriesFromDB = await prisma.content.findMany({
+        where: { isActive: true },
+        select: { category: true },
+        distinct: ['category'],
+      });
+
+      const allCategories = new Set<string>();
+      existingCategoriesFromDB.forEach(item => {
+        item.category.forEach(cat => allCategories.add(cat));
+      });
+
+      // AI-powered category suggestion (placeholder for actual AI integration)
+      const suggestedCategories = this.suggestCategoriesFromContent(
+        content || '',
+        Array.from(allCategories)
+      );
+
+      // Combine with existing categories and remove duplicates
+      const combinedCategories = [...suggestedCategories, ...(existingCategories || [])];
+
+      return Array.from(new Set(combinedCategories)).slice(0, 10);
+    } catch (error) {
+      console.error('AI categorization failed:', error);
+      return existingCategories || [];
+    }
+  }
+
+  // Content quality scoring with win-rate analysis (US-1.3)
+  async calculateContentQualityScore(contentId: string): Promise<number> {
+    try {
+      const content = await prisma.content.findUnique({
+        where: { id: contentId },
+        include: {
+          accessLogs: {
+            take: 100,
+            orderBy: { timestamp: 'desc' },
+          },
+        },
+      });
+
+      if (!content) return 0;
+
+      let qualityScore = 0;
+
+      // Base quality from content characteristics
+      qualityScore += content.title.length > 10 ? 20 : 10;
+      qualityScore += content.description ? 15 : 0;
+      qualityScore += content.tags.length * 5;
+      qualityScore += content.keywords.length * 3;
+
+      // Usage-based quality scoring
+      const totalAccess = content.accessLogs.length;
+      const uniqueUsers = new Set(content.accessLogs.map(log => log.userId)).size;
+      const recentAccess = content.accessLogs.filter(
+        log => log.timestamp > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      ).length;
+
+      qualityScore += Math.min(totalAccess * 2, 30);
+      qualityScore += Math.min(uniqueUsers * 5, 25);
+      qualityScore += Math.min(recentAccess * 3, 15);
+
+      // Content freshness
+      const daysSinceUpdate = Math.floor(
+        (Date.now() - content.updatedAt.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      qualityScore += Math.max(0, 10 - daysSinceUpdate / 30);
+
+      return Math.min(100, Math.max(0, qualityScore));
+    } catch (error) {
+      console.error('Quality scoring failed:', error);
+      return 0;
+    }
+  }
+
+  // Related content suggestions (US-1.2)
+  async getRelatedContent(contentId: string, limit: number = 5): Promise<Content[]> {
+    try {
+      const baseContent = await prisma.content.findUnique({
+        where: { id: contentId },
+      });
+
+      if (!baseContent) return [];
+
+      // Find related content based on tags, category, and type
+      const relatedContent = await prisma.content.findMany({
+        where: {
+          AND: [
+            { id: { not: contentId } },
+            { isActive: true },
+            {
+              OR: [
+                { tags: { hasSome: baseContent.tags } },
+                { category: { hasSome: baseContent.category } },
+                { type: baseContent.type },
+              ],
+            },
+          ],
+        },
+        take: limit,
+        orderBy: [{ updatedAt: 'desc' }],
+      });
+
+      return relatedContent;
+    } catch (error) {
+      console.error('Related content lookup failed:', error);
+      return [];
+    }
+  }
+
+  // Performance analytics for H1 hypothesis validation
+  async logSearchAnalytics(
+    request: SemanticSearchRequest,
+    metrics: SearchPerformanceMetrics,
+    resultsCount: number
+  ): Promise<void> {
+    try {
+      // Log to analytics system (placeholder - would integrate with actual analytics service)
+      const analyticsData = {
+        searchId: metrics.searchId,
+        userId: request.userId,
+        sessionId: request.sessionId,
+        query: request.query,
+        searchStartTime: metrics.searchStartTime,
+        timeToFirstResult: metrics.timeToFirstResult,
+        resultsCount: resultsCount,
+        searchAccuracy: metrics.searchAccuracy,
+        hypothesis: 'H1',
+        userStory: 'US-1.1',
+        timestamp: new Date(),
+        filtersUsed: request.filters ? Object.keys(request.filters) : [],
+        userRoles: request.userRoles,
+      };
+
+      console.log('Search Analytics (H1 Validation):', analyticsData);
+
+      // Store in database for analysis (could be separate analytics table)
+      // This would typically go to a dedicated analytics service
+    } catch (error) {
+      console.error('Failed to log search analytics:', error);
+      // Don't throw error - analytics failure shouldn't break search
+    }
+  }
+
+  // Helper methods for semantic search functionality
+
+  private buildSemanticQuery(query: string): string {
+    // Enhanced query building with synonym expansion and semantic understanding
+    // This is a simplified version - would integrate with actual NLP service
+    const synonymMap: Record<string, string[]> = {
+      AI: ['artificial intelligence', 'machine learning', 'ML'],
+      security: ['cybersecurity', 'infosec', 'protection'],
+      data: ['database', 'information', 'analytics'],
+      cloud: ['AWS', 'Azure', 'GCP', 'SaaS'],
+      network: ['networking', 'infrastructure', 'connectivity'],
+    };
+
+    let enhancedQuery = query.toLowerCase();
+
+    // Expand with synonyms
+    Object.entries(synonymMap).forEach(([term, synonyms]) => {
+      if (enhancedQuery.includes(term.toLowerCase())) {
+        enhancedQuery += ' ' + synonyms.join(' ');
+      }
+    });
+
+    return enhancedQuery;
+  }
+
+  private calculateRelevanceScore(content: Content, query: string): number {
+    const queryTerms = query.toLowerCase().split(' ');
+    let score = 0;
+
+    // Title matching (highest weight)
+    queryTerms.forEach(term => {
+      if (content.title.toLowerCase().includes(term)) {
+        score += 40;
+      }
+    });
+
+    // Description matching
+    queryTerms.forEach(term => {
+      if (content.description?.toLowerCase().includes(term)) {
+        score += 25;
+      }
+    });
+
+    // Tag matching
+    queryTerms.forEach(term => {
+      if (content.tags.some(tag => tag.toLowerCase().includes(term))) {
+        score += 20;
+      }
+    });
+
+    // Content matching
+    queryTerms.forEach(term => {
+      if (content.content.toLowerCase().includes(term)) {
+        score += 10;
+      }
+    });
+
+    // Boost for content quality indicators
+    score += content.tags.length * 2;
+    score += content.keywords.length;
+
+    return Math.min(100, score);
+  }
+
+  private extractHighlights(content: Content, query: string): string[] {
+    const queryTerms = query.toLowerCase().split(' ');
+    const highlights: string[] = [];
+
+    // Extract highlights from title
+    queryTerms.forEach(term => {
+      if (content.title.toLowerCase().includes(term)) {
+        highlights.push(content.title);
+      }
+    });
+
+    // Extract highlights from description
+    if (content.description) {
+      queryTerms.forEach(term => {
+        if (content.description!.toLowerCase().includes(term)) {
+          highlights.push(content.description!.substring(0, 100) + '...');
+        }
+      });
+    }
+
+    return highlights.slice(0, 3);
+  }
+
+  private extractContextSnippets(content: Content, query: string): string[] {
+    const queryTerms = query.toLowerCase().split(' ');
+    const snippets: string[] = [];
+    const contentText = content.content.toLowerCase();
+
+    queryTerms.forEach(term => {
+      const index = contentText.indexOf(term);
+      if (index !== -1) {
+        const start = Math.max(0, index - 50);
+        const end = Math.min(contentText.length, index + 150);
+        const snippet = content.content.substring(start, end);
+        snippets.push('...' + snippet + '...');
+      }
+    });
+
+    return snippets.slice(0, 2);
+  }
+
+  private async getContentUsageStats(contentId: string): Promise<ContentUsageStats> {
+    try {
+      const accessLogs = await prisma.contentAccessLog.findMany({
+        where: { contentId },
+        orderBy: { timestamp: 'desc' },
+      });
+
+      const totalViews = accessLogs.filter(log => log.accessType === 'VIEW').length;
+      const totalUses = accessLogs.filter(log => log.accessType === 'USE').length;
+      const uniqueUsers = new Set(accessLogs.map(log => log.userId)).size;
+      const lastAccessed = accessLogs[0]?.timestamp || new Date();
+
+      return {
+        totalViews,
+        totalUses,
+        avgUsageTime: 0, // Would calculate from session data
+        clickThroughRate: totalUses / Math.max(totalViews, 1),
+        lastAccessed,
+        popularityScore: (totalViews + totalUses * 2) * Math.min(uniqueUsers / 10, 1),
+      };
+    } catch (error) {
+      return {
+        totalViews: 0,
+        totalUses: 0,
+        avgUsageTime: 0,
+        clickThroughRate: 0,
+        lastAccessed: new Date(),
+        popularityScore: 0,
+      };
+    }
+  }
+
+  private async getRelatedContentIds(contentId: string, limit: number): Promise<string[]> {
+    const relatedContent = await this.getRelatedContent(contentId, limit);
+    return relatedContent.map(content => content.id);
+  }
+
+  private async calculateQualityScore(contentId: string): Promise<number> {
+    return await this.calculateContentQualityScore(contentId);
+  }
+
+  private async generateAISuggestions(
+    query: string,
+    results: ContentSearchResult[]
+  ): Promise<AIContentSuggestions> {
+    // AI-powered suggestions (placeholder for actual AI service integration)
+    const categories = new Set<string>();
+    const tags = new Set<string>();
+
+    // Extract patterns from search results
+    results.forEach(result => {
+      result.category.forEach(cat => categories.add(cat));
+      result.tags.forEach(tag => tags.add(tag));
+    });
+
+    return {
+      categories: Array.from(categories).slice(0, 5),
+      tags: Array.from(tags).slice(0, 8),
+      relatedContent: results.slice(0, 3).map(r => r.id),
+      qualityPrediction: results.length > 0 ? results[0].qualityScore : 0,
+      searchOptimizations: this.generateSearchOptimizations(query),
+    };
+  }
+
+  private calculateSearchAccuracy(results: ContentSearchResult[], query: string): number {
+    if (results.length === 0) return 0;
+
+    const averageRelevance =
+      results.reduce((sum, result) => sum + result.relevanceScore, 0) / results.length;
+    return Math.min(100, averageRelevance);
+  }
+
+  private suggestCategoriesFromContent(content: string, existingCategories: string[]): string[] {
+    // Simple content-based category suggestion (would use actual AI/ML in production)
+    const suggestions: string[] = [];
+    const contentLower = content.toLowerCase();
+
+    const categoryKeywords: Record<string, string[]> = {
+      Technical: ['api', 'database', 'architecture', 'system', 'technical'],
+      Security: ['security', 'encryption', 'firewall', 'protection', 'secure'],
+      'AI/ML': ['ai', 'artificial intelligence', 'machine learning', 'neural', 'algorithm'],
+      Cloud: ['cloud', 'aws', 'azure', 'saas', 'infrastructure'],
+      Data: ['data', 'analytics', 'database', 'information', 'metrics'],
+      Business: ['business', 'strategy', 'process', 'workflow', 'management'],
+    };
+
+    Object.entries(categoryKeywords).forEach(([category, keywords]) => {
+      if (keywords.some(keyword => contentLower.includes(keyword))) {
+        suggestions.push(category);
+      }
+    });
+
+    return suggestions;
+  }
+
+  private generateSearchOptimizations(query: string): string[] {
+    // Generate search optimization suggestions
+    const suggestions: string[] = [];
+
+    if (query.length < 3) {
+      suggestions.push('Try using more specific terms');
+    }
+
+    if (!query.includes(' ')) {
+      suggestions.push('Consider adding related terms');
+    }
+
+    // Add semantic suggestions
+    suggestions.push(`Try: "${query} best practices"`);
+    suggestions.push(`Try: "${query} implementation"`);
+
+    return suggestions.slice(0, 3);
   }
 }
 

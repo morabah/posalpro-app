@@ -1,6 +1,6 @@
 /**
  * Utility functions for formatting data
- * 
+ *
  * These functions follow the functional programming patterns established in our
  * code quality foundation and include proper TypeScript type definitions.
  */
@@ -38,9 +38,9 @@ export function formatDate(
   locale: string = 'en-US'
 ): string {
   const dateObj = date instanceof Date ? date : new Date(date);
-  
+
   let options: Intl.DateTimeFormatOptions;
-  
+
   switch (format) {
     case 'short':
       options = { year: 'numeric', month: 'numeric', day: 'numeric' };
@@ -54,7 +54,7 @@ export function formatDate(
     default:
       options = { year: 'numeric', month: 'short', day: 'numeric' };
   }
-  
+
   return new Intl.DateTimeFormat(locale, options).format(dateObj);
 }
 
@@ -71,21 +71,21 @@ export function truncateText(text: string, maxLength: number): string {
 
 /**
  * Format file size in bytes to human-readable string
- * 
+ *
  * @param bytes - File size in bytes
  * @param decimals - Number of decimal places (default: 2)
  * @returns Formatted file size string
  */
 export function formatFileSize(bytes: number, decimals: number = 2): string {
   if (bytes === 0) return '0 Bytes';
-  
+
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   // Calculate the value
   const value = bytes / Math.pow(k, i);
-  
+
   // Apply formatting based on whether it's a whole number and decimals parameter
   if (Number.isInteger(value) && decimals === 2) {
     // If it's a whole number and we're using the default decimal places, show as integer

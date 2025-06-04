@@ -225,7 +225,9 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
               id="token"
               placeholder="Enter the token from your email"
               className={`w-full h-12 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                confirmForm.formState.errors.token ? 'border-red-300 bg-red-50' : 'border-neutral-300'
+                confirmForm.formState.errors.token
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-neutral-300'
               }`}
             />
             {confirmForm.formState.errors.token && (
@@ -274,7 +276,10 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-neutral-700 mb-2">
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm font-medium text-neutral-700 mb-2"
+          >
             Confirm New Password
           </label>
           <div className="relative">

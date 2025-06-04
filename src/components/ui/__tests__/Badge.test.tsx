@@ -1,9 +1,9 @@
 /**
  * Component tests for Badge component
- * 
+ *
  * Following component composition and testing best practices as outlined
  * in our quality-first approach.
- * 
+ *
  * @stage Development
  * @quality-gate Component Testing
  */

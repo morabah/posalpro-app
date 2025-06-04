@@ -69,7 +69,7 @@ export function useApiClient(): UseApiClientReturn {
           throw new Error(`API request failed: ${response.status} ${response.statusText}`);
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as T;
         return data;
       } catch (error) {
         console.error('API request error:', {
@@ -177,10 +177,11 @@ export function useApiHealth() {
         error: null,
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setHealthStatus({
         isHealthy: false,
         lastCheck: new Date(),
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       });
     }
   }, []);

@@ -1,163 +1,562 @@
 /**
- * PosalPro MVP2 - Proposals API Routes
- * Handles proposal CRUD operations using service functions
- * Based on PROPOSAL_CREATION_SCREEN.md and proposal management requirements
+ * PosalPro MVP2 - Proposals API Route
+ * Production-ready proposal management with database integration
  */
 
-import { proposalService } from '@/lib/services';
-import { createProposalSchema } from '@/lib/validation/schemas/proposal';
-import { Prisma } from '@prisma/client';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db/client';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-/**
- * Standard API response wrapper
- */
-function createApiResponse<T>(data: T, message: string, status = 200) {
-  return NextResponse.json(
-    {
-      success: true,
-      data,
-      message,
+// Validation schemas
+const ProposalCreateSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200, 'Title too long'),
+  description: z.string().max(1000, 'Description too long').optional(),
+  customerId: z.string().cuid('Invalid customer ID'),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
+  dueDate: z.string().datetime().optional(),
+  value: z.number().positive().optional(),
+  currency: z.string().length(3).default('USD'),
+  products: z
+    .array(
+      z.object({
+        productId: z.string().cuid(),
+        quantity: z.number().int().positive().default(1),
+        unitPrice: z.number().positive(),
+        discount: z.number().min(0).max(100).default(0),
+      })
+    )
+    .optional(),
+  sections: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        content: z.string(),
+        type: z.enum(['TEXT', 'PRODUCTS', 'TERMS', 'PRICING', 'CUSTOM']).default('TEXT'),
+        order: z.number().int().positive(),
+      })
+    )
+    .optional(),
+});
+
+const ProposalUpdateSchema = ProposalCreateSchema.partial().extend({
+  id: z.string().cuid('Invalid proposal ID'),
+  status: z
+    .enum([
+      'DRAFT',
+      'IN_REVIEW',
+      'PENDING_APPROVAL',
+      'APPROVED',
+      'REJECTED',
+      'SUBMITTED',
+      'ACCEPTED',
+      'DECLINED',
+    ])
+    .optional(),
+});
+
+const ProposalQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(10),
+  status: z
+    .enum([
+      'DRAFT',
+      'IN_REVIEW',
+      'PENDING_APPROVAL',
+      'APPROVED',
+      'REJECTED',
+      'SUBMITTED',
+      'ACCEPTED',
+      'DECLINED',
+    ])
+    .optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+  customerId: z.string().cuid().optional(),
+  createdBy: z.string().cuid().optional(),
+  search: z.string().max(100).optional(),
+  sortBy: z
+    .enum(['title', 'createdAt', 'updatedAt', 'dueDate', 'value', 'priority'])
+    .default('updatedAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+
+// Helper function to check user permissions
+async function checkUserPermissions(userId: string, action: string, scope: string = 'ALL') {
+  const userRoles = await prisma.userRole.findMany({
+    where: { userId },
+    include: {
+      role: {
+        include: {
+          permissions: {
+            include: {
+              permission: true,
+            },
+          },
+        },
+      },
     },
-    { status }
+  });
+
+  const hasPermission = userRoles.some(userRole =>
+    userRole.role.permissions.some(
+      rolePermission =>
+        rolePermission.permission.resource === 'proposals' &&
+        rolePermission.permission.action === action &&
+        (rolePermission.permission.scope === 'ALL' || rolePermission.permission.scope === scope)
+    )
   );
+
+  return hasPermission;
 }
 
-function createErrorResponse(error: string, details?: any, status = 500) {
-  return NextResponse.json(
-    {
-      success: false,
-      error,
-      details,
-    },
-    { status }
-  );
-}
-
-/**
- * GET /api/proposals - List proposals with filtering
- */
+// GET /api/proposals - List proposals with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-
-    // Parse query parameters
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const search = searchParams.get('search') || undefined;
-    const statusParam = searchParams.get('status');
-    const priorityParam = searchParams.get('priority');
-    const customerId = searchParams.get('customerId') || undefined;
-    const createdBy = searchParams.get('createdBy') || undefined;
-    const assignedTo = searchParams.get('assignedTo') || undefined;
-
-    // Build filters object
-    const filters: any = {};
-
-    if (search) filters.search = search;
-    if (customerId) filters.customerId = customerId;
-    if (createdBy) filters.createdBy = createdBy;
-    if (assignedTo) filters.assignedTo = assignedTo;
-
-    if (statusParam) {
-      try {
-        filters.status = statusParam.split(',');
-      } catch (error) {
-        return createErrorResponse('Invalid status filter', undefined, 400);
-      }
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
-    if (priorityParam) {
-      try {
-        filters.priority = priorityParam.split(',');
-      } catch (error) {
-        return createErrorResponse('Invalid priority filter', undefined, 400);
-      }
+    // Check read permissions
+    const canRead = await checkUserPermissions(session.user.id, 'read');
+    if (!canRead) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+        { status: 403 }
+      );
     }
 
-    // Get proposals using service
-    const result = await proposalService.getProposals(filters, undefined, page, limit);
+    // Parse and validate query parameters
+    const url = new URL(request.url);
+    const queryParams = Object.fromEntries(url.searchParams.entries());
+    const query = ProposalQuerySchema.parse(queryParams);
 
-    return createApiResponse(result.proposals, 'Proposals retrieved successfully', 200);
+    // Build where clause
+    const where: any = {};
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    if (query.priority) {
+      where.priority = query.priority;
+    }
+
+    if (query.customerId) {
+      where.customerId = query.customerId;
+    }
+
+    if (query.createdBy) {
+      where.createdBy = query.createdBy;
+    }
+
+    if (query.search) {
+      where.OR = [
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Calculate pagination
+    const skip = (query.page - 1) * query.limit;
+
+    // Fetch proposals with relations
+    const [proposals, totalCount] = await Promise.all([
+      prisma.proposal.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              industry: true,
+              tier: true,
+            },
+          },
+          creator: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              department: true,
+            },
+          },
+          assignedTo: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              department: true,
+            },
+          },
+          products: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  category: true,
+                  price: true,
+                  currency: true,
+                },
+              },
+            },
+          },
+          sections: {
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              order: true,
+              validationStatus: true,
+            },
+            orderBy: {
+              order: 'asc',
+            },
+          },
+          _count: {
+            select: {
+              sections: true,
+              products: true,
+              approvals: true,
+              validationIssues: true,
+            },
+          },
+        },
+        orderBy: {
+          [query.sortBy]: query.sortOrder,
+        },
+        skip,
+        take: query.limit,
+      }),
+      prisma.proposal.count({ where }),
+    ]);
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / query.limit);
+    const hasNextPage = query.page < totalPages;
+    const hasPreviousPage = query.page > 1;
+
+    return NextResponse.json({
+      proposals,
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        totalCount,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+      },
+      filters: {
+        status: query.status,
+        priority: query.priority,
+        customerId: query.customerId,
+        search: query.search,
+      },
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
-    console.error('Failed to fetch proposals:', error);
+    console.error('Proposals GET error:', error);
 
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return createErrorResponse('Database error', error.message, 500);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: 'Invalid query parameters',
+          code: 'VALIDATION_ERROR',
+          details: error.errors,
+        },
+        { status: 400 }
+      );
     }
 
-    return createErrorResponse(
-      'Failed to fetch proposals',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    return NextResponse.json(
+      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
+      { status: 500 }
     );
   }
 }
 
-/**
- * POST /api/proposals - Create new proposal
- */
+// POST /api/proposals - Create new proposal
 export async function POST(request: NextRequest) {
   try {
-    console.log('POST /api/proposals - Starting proposal creation');
-    const body = await request.json();
-    console.log('Request body received:', JSON.stringify(body, null, 2));
-
-    // Transform date strings to Date objects for validation
-    if (body.metadata?.deadline && typeof body.metadata.deadline === 'string') {
-      body.metadata.deadline = new Date(body.metadata.deadline);
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
-    console.log('Transformed body:', JSON.stringify(body, null, 2));
+    // Check create permissions
+    const canCreate = await checkUserPermissions(session.user.id, 'create');
+    if (!canCreate) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+        { status: 403 }
+      );
+    }
 
-    // Validate the request body using the proper schema
-    const validatedData = createProposalSchema.parse(body);
-    console.log('Validation successful');
+    // Parse and validate request body
+    const body = await request.json();
+    const data = ProposalCreateSchema.parse(body);
 
-    // Transform schema data to service data format
-    const proposalData = {
-      title: validatedData.metadata.title,
-      description: validatedData.metadata.description,
-      customerId: body.customerId || 'cmbgvm5ww00006gox6gg0a3t4', // Use actual existing customer ID
-      createdBy: body.createdBy || 'cmbgmgsuk0000qg7l9tug8zm7', // Use actual existing user ID
-      priority: validatedData.metadata.priority.toUpperCase() as any,
-      value: validatedData.metadata.estimatedValue,
-      currency: validatedData.metadata.currency,
-      validUntil: validatedData.metadata.deadline,
-      dueDate: body.dueDate,
-      tags: validatedData.metadata.tags || [],
-      metadata: {
-        clientName: validatedData.metadata.clientName,
-        clientContact: validatedData.metadata.clientContact,
-        projectType: validatedData.metadata.projectType,
+    // Verify customer exists
+    const customer = await prisma.customer.findUnique({
+      where: { id: data.customerId },
+    });
+
+    if (!customer) {
+      return NextResponse.json(
+        { error: 'Customer not found', code: 'CUSTOMER_NOT_FOUND' },
+        { status: 404 }
+      );
+    }
+
+    // Calculate total value from products if provided
+    let calculatedValue = data.value;
+    if (data.products && data.products.length > 0) {
+      calculatedValue = data.products.reduce((total, product) => {
+        const discountAmount = (product.unitPrice * product.discount) / 100;
+        const discountedPrice = product.unitPrice - discountAmount;
+        return total + discountedPrice * product.quantity;
+      }, 0);
+    }
+
+    // Create proposal with transaction
+    const proposal = await prisma.$transaction(async tx => {
+      // Create the proposal
+      const newProposal = await tx.proposal.create({
+        data: {
+          title: data.title,
+          description: data.description,
+          customerId: data.customerId,
+          createdBy: session.user.id,
+          priority: data.priority,
+          value: calculatedValue,
+          currency: data.currency,
+          dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+          metadata: {
+            createdVia: 'api',
+            userAgent: request.headers.get('user-agent') || 'unknown',
+          },
+        },
+      });
+
+      // Add products if provided
+      if (data.products && data.products.length > 0) {
+        await tx.proposalProduct.createMany({
+          data: data.products.map(product => ({
+            proposalId: newProposal.id,
+            productId: product.productId,
+            quantity: product.quantity,
+            unitPrice: product.unitPrice,
+            discount: product.discount,
+            total:
+              (product.unitPrice - (product.unitPrice * product.discount) / 100) * product.quantity,
+          })),
+        });
+      }
+
+      // Add sections if provided
+      if (data.sections && data.sections.length > 0) {
+        await tx.proposalSection.createMany({
+          data: data.sections.map(section => ({
+            proposalId: newProposal.id,
+            title: section.title,
+            content: section.content,
+            type: section.type,
+            order: section.order,
+          })),
+        });
+      }
+
+      return newProposal;
+    });
+
+    // Fetch the complete proposal with relations
+    const completeProposal = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            industry: true,
+            tier: true,
+          },
+        },
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            department: true,
+          },
+        },
+        products: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                category: true,
+                price: true,
+                currency: true,
+              },
+            },
+          },
+        },
+        sections: {
+          orderBy: {
+            order: 'asc',
+          },
+        },
       },
-    };
+    });
 
-    // Create proposal using service
-    const proposal = await proposalService.createProposal(proposalData);
-    console.log('Proposal created with ID:', proposal.id);
-
-    return createApiResponse(proposal, 'Proposal created successfully', 201);
+    return NextResponse.json(
+      {
+        proposal: completeProposal,
+        message: 'Proposal created successfully',
+        timestamp: new Date().toISOString(),
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error('Failed to create proposal:', error);
+    console.error('Proposals POST error:', error);
 
     if (error instanceof z.ZodError) {
-      console.error('Validation error details:', error.errors);
-      return createErrorResponse('Validation failed', error.errors, 400);
+      return NextResponse.json(
+        {
+          error: 'Invalid request data',
+          code: 'VALIDATION_ERROR',
+          details: error.errors,
+        },
+        { status: 400 }
+      );
     }
 
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2003') {
-        return createErrorResponse('Referenced customer or user not found', error.message, 400);
-      }
-      return createErrorResponse('Database error', error.message, 500);
+    return NextResponse.json(
+      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/proposals - Update proposal (bulk updates)
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
-    return createErrorResponse(
-      'Failed to create proposal',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    // Parse and validate request body
+    const body = await request.json();
+    const data = ProposalUpdateSchema.parse(body);
+
+    // Check if proposal exists and user has permission
+    const existingProposal = await prisma.proposal.findUnique({
+      where: { id: data.id },
+      include: {
+        creator: true,
+      },
+    });
+
+    if (!existingProposal) {
+      return NextResponse.json(
+        { error: 'Proposal not found', code: 'PROPOSAL_NOT_FOUND' },
+        { status: 404 }
+      );
+    }
+
+    // Check update permissions
+    const canUpdateAll = await checkUserPermissions(session.user.id, 'update', 'ALL');
+    const canUpdateOwn = await checkUserPermissions(session.user.id, 'update', 'OWN');
+
+    if (!canUpdateAll && !(canUpdateOwn && existingProposal.createdBy === session.user.id)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+        { status: 403 }
+      );
+    }
+
+    // Prepare update data
+    const updateData: any = {};
+
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.priority !== undefined) updateData.priority = data.priority;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.value !== undefined) updateData.value = data.value;
+    if (data.currency !== undefined) updateData.currency = data.currency;
+    if (data.dueDate !== undefined) updateData.dueDate = new Date(data.dueDate);
+
+    // Update proposal
+    const updatedProposal = await prisma.proposal.update({
+      where: { id: data.id },
+      data: updateData,
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            industry: true,
+            tier: true,
+          },
+        },
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            department: true,
+          },
+        },
+        products: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                category: true,
+                price: true,
+                currency: true,
+              },
+            },
+          },
+        },
+        sections: {
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({
+      proposal: updatedProposal,
+      message: 'Proposal updated successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Proposals PUT error:', error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: 'Invalid request data',
+          code: 'VALIDATION_ERROR',
+          details: error.errors,
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
+      { status: 500 }
     );
   }
 }

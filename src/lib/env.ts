@@ -138,17 +138,17 @@ class EnvironmentManager {
     }
 
     // Use default if value not provided
-    const finalValue = value || options.default?.toString() || '';
+    const finalValue = value || (options.default ? options.default.toString() : '') || '';
 
     // Type conversion
     switch (options.type) {
-      case 'number':
+      case 'number': {
         const numValue = Number(finalValue);
         if (isNaN(numValue)) {
           throw new Error(`Environment variable ${key} must be a valid number, got: ${finalValue}`);
         }
         return numValue;
-
+      }
       case 'boolean':
         return finalValue.toLowerCase() === 'true' || finalValue === '1';
 

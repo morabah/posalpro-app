@@ -701,10 +701,10 @@ Please review this initial draft and provide feedback for refinement. The techni
                         assignment.context.priority === 'critical'
                           ? 'text-red-600'
                           : assignment.context.priority === 'high'
-                          ? 'text-orange-600'
-                          : assignment.context.priority === 'medium'
-                          ? 'text-yellow-600'
-                          : 'text-green-600'
+                            ? 'text-orange-600'
+                            : assignment.context.priority === 'medium'
+                              ? 'text-yellow-600'
+                              : 'text-green-600'
                       }`}
                     >
                       {assignment.context.priority}
@@ -910,8 +910,8 @@ Please review this initial draft and provide feedback for refinement. The techni
                                   template.difficulty === 'beginner'
                                     ? 'bg-green-100 text-green-800'
                                     : template.difficulty === 'intermediate'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : 'bg-red-100 text-red-800'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-red-100 text-red-800'
                                 }`}
                               >
                                 {template.difficulty}
@@ -986,10 +986,10 @@ Please review this initial draft and provide feedback for refinement. The techni
                                   resource.type === 'document'
                                     ? 'bg-blue-100 text-blue-800'
                                     : resource.type === 'specification'
-                                    ? 'bg-green-100 text-green-800'
-                                    : resource.type === 'example'
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : 'bg-orange-100 text-orange-800'
+                                      ? 'bg-green-100 text-green-800'
+                                      : resource.type === 'example'
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : 'bg-orange-100 text-orange-800'
                                 }`}
                               >
                                 {resource.type}

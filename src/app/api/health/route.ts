@@ -206,7 +206,7 @@ async function checkConnectivity(): Promise<HealthCheckResult> {
 }
 
 // Main health check handler
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   const startTime = Date.now();
 
   try {
@@ -281,7 +281,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { components } = body;
+    const { components } = body as { components?: string[] };
 
     // Allow selective health checking
     const availableComponents = [
@@ -313,21 +313,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     for (const component of validComponents) {
       switch (component) {
-        case 'database':
+        case 'database': {
           checks.push(await checkDatabase());
           break;
-        case 'authentication':
+        }
+        case 'authentication': {
           checks.push(await checkAuthentication());
           break;
-        case 'environment':
+        }
+        case 'environment': {
           checks.push(await checkEnvironment());
           break;
-        case 'memory':
+        }
+        case 'memory': {
           checks.push(await checkMemory());
           break;
-        case 'connectivity':
+        }
+        case 'connectivity': {
           checks.push(await checkConnectivity());
           break;
+        }
       }
     }
 

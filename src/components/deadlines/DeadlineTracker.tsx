@@ -763,8 +763,8 @@ export function DeadlineTracker({
                             isOverdue
                               ? 'text-red-600'
                               : isUrgent
-                              ? 'text-orange-600'
-                              : 'text-neutral-600'
+                                ? 'text-orange-600'
+                                : 'text-neutral-600'
                           }`}
                         >
                           {deadline.dueDate.toLocaleDateString()}

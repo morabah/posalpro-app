@@ -1,6 +1,6 @@
 /**
  * i18n Mock for React-i18next
- * 
+ *
  * This mock provides simulated internationalization functionality for testing
  * components that rely on react-i18next.
  */
@@ -39,18 +39,20 @@ export const mockUseTranslation = () => ({
 
 // Reset the mock translation function
 export const resetTranslationMock = () => {
-  t.mockReset().mockImplementation((key: string, options?: { defaultValue?: string; [key: string]: any }) => {
-    if (options && typeof key === 'string') {
-      let result = key;
-      Object.entries(options).forEach(([k, v]) => {
-        if (k !== 't' && k !== 'i18n' && k !== 'tDescription') {
-          result = result.replace(new RegExp(`{{${k}}}`, 'g'), String(v));
-        }
-      });
-      return result;
+  t.mockReset().mockImplementation(
+    (key: string, options?: { defaultValue?: string; [key: string]: any }) => {
+      if (options && typeof key === 'string') {
+        let result = key;
+        Object.entries(options).forEach(([k, v]) => {
+          if (k !== 't' && k !== 'i18n' && k !== 'tDescription') {
+            result = result.replace(new RegExp(`{{${k}}}`, 'g'), String(v));
+          }
+        });
+        return result;
+      }
+      return key;
     }
-    return key;
-  });
+  );
 };
 
 // Set a specific language for testing

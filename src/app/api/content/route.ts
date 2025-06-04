@@ -4,10 +4,18 @@
  * Based on CONTENT_SEARCH_SCREEN.md requirements
  */
 
-import { contentService } from '@/lib/services';
-import { ContentType, Prisma } from '@prisma/client';
+import { authOptions } from '@/lib/auth';
+import {
+  ContentService,
+  type ContentFilters,
+  type SemanticSearchRequest,
+} from '@/lib/services/contentService';
+import { ContentType } from '@prisma/client';
+import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+
+const contentServiceInstance = new ContentService();
 
 /**
  * Standard API response wrapper
@@ -51,74 +59,191 @@ const updateContentSchema = createContentSchema.partial().extend({
   id: z.string().uuid('Invalid content ID'),
 });
 
+// Enhanced validation schemas for semantic search
+const semanticSearchSchema = z.object({
+  query: z.string().min(1, 'Search query is required'),
+  filters: z
+    .object({
+      type: z.array(z.nativeEnum(ContentType)).optional(),
+      category: z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
+      isPublic: z.boolean().optional(),
+      isActive: z.boolean().optional(),
+      createdBy: z.string().optional(),
+      search: z.string().optional(),
+    })
+    .optional(),
+  includeRelevanceScore: z.boolean().default(true),
+  maxResults: z.number().min(1).max(100).default(20),
+  sessionId: z.string().optional(),
+});
+
+const aiCategoriesSchema = z.object({
+  content: z.string().optional(),
+  existingCategories: z.array(z.string()).optional(),
+});
+
+const qualityScoreSchema = z.object({
+  contentId: z.string().min(1, 'Content ID is required'),
+});
+
 /**
  * GET /api/content - List content with filtering
  */
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
+    const searchType = searchParams.get('searchType');
 
-    // Parse query parameters
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const search = searchParams.get('search') || undefined;
-    const typeParam = searchParams.get('type');
-    const categoryParam = searchParams.get('category');
-    const isPublic = searchParams.get('isPublic');
-    const isActive = searchParams.get('isActive');
+    // Handle semantic search requests (US-1.1)
+    if (searchType === 'semantic') {
+      const searchQuery = searchParams.get('q');
+      const filtersParam = searchParams.get('filters');
+      const maxResults = parseInt(searchParams.get('maxResults') || '20');
+      const sessionId = searchParams.get('sessionId') || `session_${Date.now()}`;
 
-    // Build filters object
-    const filters: any = {};
-
-    if (search) filters.search = search;
-    if (isPublic !== null) filters.isPublic = isPublic === 'true';
-    if (isActive !== null) filters.isActive = isActive === 'true';
-
-    if (typeParam) {
-      try {
-        filters.type = typeParam.split(',');
-      } catch (error) {
-        return createErrorResponse('Invalid type filter', undefined, 400);
+      if (!searchQuery) {
+        return NextResponse.json({ error: 'Search query is required' }, { status: 400 });
       }
+
+      // Parse filters if provided
+      let filters: ContentFilters | undefined;
+      if (filtersParam) {
+        try {
+          const parsedFilters = JSON.parse(filtersParam);
+
+          // Validate and convert filters to proper types (only ContentFilters properties)
+          filters = {
+            type: parsedFilters.type
+              ? parsedFilters.type.map((t: string) => t as ContentType)
+              : undefined,
+            category: parsedFilters.category,
+            tags: parsedFilters.tags,
+            isPublic: parsedFilters.isPublic,
+            isActive: parsedFilters.isActive,
+            createdBy: parsedFilters.createdBy,
+            search: parsedFilters.search,
+          };
+        } catch (error) {
+          return NextResponse.json({ error: 'Invalid filters format' }, { status: 400 });
+        }
+      }
+
+      // Build semantic search request
+      const searchRequest: SemanticSearchRequest = {
+        query: searchQuery,
+        filters,
+        userRoles: session.user.roles || ['user'],
+        includeRelevanceScore: true,
+        maxResults,
+        userId: session.user.id,
+        sessionId,
+      };
+
+      // Perform semantic search
+      const searchResults = await contentServiceInstance.semanticSearch(searchRequest);
+
+      return NextResponse.json({
+        success: true,
+        data: searchResults,
+        hypothesis: 'H1',
+        userStory: 'US-1.1',
+        timestamp: new Date().toISOString(),
+      });
     }
 
-    if (categoryParam) {
-      try {
-        filters.category = categoryParam.split(',');
-      } catch (error) {
-        return createErrorResponse('Invalid category filter', undefined, 400);
+    // Handle AI categories request (US-1.2)
+    if (searchType === 'ai-categories') {
+      const content = searchParams.get('content');
+      const existingCategoriesParam = searchParams.get('existingCategories');
+
+      let existingCategories;
+      if (existingCategoriesParam) {
+        try {
+          existingCategories = JSON.parse(existingCategoriesParam);
+        } catch (error) {
+          return NextResponse.json(
+            { error: 'Invalid existing categories format' },
+            { status: 400 }
+          );
+        }
       }
+
+      const categories = await contentServiceInstance.getAICategories(
+        content || undefined,
+        existingCategories
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: { categories },
+        hypothesis: 'H1',
+        userStory: 'US-1.2',
+        timestamp: new Date().toISOString(),
+      });
     }
 
-    // TODO: Get user roles from auth context
-    const userRoles = ['USER']; // Default role
+    // Handle quality score request (US-1.3)
+    if (searchType === 'quality-score') {
+      const contentId = searchParams.get('contentId');
 
-    // Get content using service
-    const result = await contentService.getContent(filters, undefined, page, limit, userRoles);
+      if (!contentId) {
+        return NextResponse.json({ error: 'Content ID is required' }, { status: 400 });
+      }
 
-    return createApiResponse(
-      {
-        content: result.content,
-        pagination: {
-          page: result.page,
-          limit,
-          total: result.total,
-          totalPages: result.totalPages,
-        },
-      },
-      'Content retrieved successfully'
-    );
+      const qualityScore = await contentServiceInstance.calculateContentQualityScore(contentId);
+
+      return NextResponse.json({
+        success: true,
+        data: { qualityScore, contentId },
+        hypothesis: 'H1',
+        userStory: 'US-1.3',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Handle related content request (US-1.2)
+    if (searchType === 'related') {
+      const contentId = searchParams.get('contentId');
+      const limit = parseInt(searchParams.get('limit') || '5');
+
+      if (!contentId) {
+        return NextResponse.json({ error: 'Content ID is required' }, { status: 400 });
+      }
+
+      const relatedContent = await contentServiceInstance.getRelatedContent(contentId, limit);
+
+      return NextResponse.json({
+        success: true,
+        data: { relatedContent },
+        hypothesis: 'H1',
+        userStory: 'US-1.2',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Default content listing (existing functionality)
+    const userRoles = session.user.roles || ['user'];
+    const content = await contentServiceInstance.getContent({}, undefined, 1, 20, userRoles);
+
+    return NextResponse.json({
+      success: true,
+      data: content,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
-    console.error('Failed to fetch content:', error);
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return createErrorResponse('Database error', error.message, 500);
-    }
-
-    return createErrorResponse(
-      'Failed to fetch content',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    console.error('Content API error:', error);
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
     );
   }
 }
@@ -128,31 +253,144 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
+    const { action, ...data } = body;
 
-    // Validate the request body
-    const validatedData = createContentSchema.parse(body);
+    // Handle semantic search POST requests (for complex queries)
+    if (action === 'semantic-search') {
+      const validationResult = semanticSearchSchema.safeParse(data);
 
-    // Create content using service (need createdBy from auth context)
-    const createdBy = 'temp-user-id'; // TODO: Get from auth context
-    const content = await contentService.createContent(validatedData, createdBy);
+      if (!validationResult.success) {
+        return NextResponse.json(
+          {
+            error: 'Invalid search parameters',
+            details: validationResult.error.errors,
+          },
+          { status: 400 }
+        );
+      }
 
-    return createApiResponse(content, 'Content created successfully', 201);
+      const searchRequest: SemanticSearchRequest = {
+        ...validationResult.data,
+        userRoles: session.user.roles || ['user'],
+        userId: session.user.id,
+        sessionId: data.sessionId || `session_${Date.now()}`,
+      };
+
+      const searchResults = await contentServiceInstance.semanticSearch(searchRequest);
+
+      return NextResponse.json({
+        success: true,
+        data: searchResults,
+        hypothesis: 'H1',
+        userStory: 'US-1.1',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Handle AI categories POST request
+    if (action === 'ai-categories') {
+      const validationResult = aiCategoriesSchema.safeParse(data);
+
+      if (!validationResult.success) {
+        return NextResponse.json(
+          {
+            error: 'Invalid parameters',
+            details: validationResult.error.errors,
+          },
+          { status: 400 }
+        );
+      }
+
+      const categories = await contentServiceInstance.getAICategories(
+        validationResult.data.content,
+        validationResult.data.existingCategories
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: { categories },
+        hypothesis: 'H1',
+        userStory: 'US-1.2',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Handle quality score calculation POST request
+    if (action === 'quality-score') {
+      const validationResult = qualityScoreSchema.safeParse(data);
+
+      if (!validationResult.success) {
+        return NextResponse.json(
+          {
+            error: 'Invalid parameters',
+            details: validationResult.error.errors,
+          },
+          { status: 400 }
+        );
+      }
+
+      const qualityScore = await contentServiceInstance.calculateContentQualityScore(
+        validationResult.data.contentId
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: { qualityScore, contentId: validationResult.data.contentId },
+        hypothesis: 'H1',
+        userStory: 'US-1.3',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Default content creation (existing functionality with AI enhancement)
+    if (!data.title || !data.content) {
+      return NextResponse.json(
+        {
+          error: 'Title and content are required',
+        },
+        { status: 400 }
+      );
+    }
+
+    // Enhance content creation with AI suggestions
+    if (data.title && data.content) {
+      const aiCategories = await contentServiceInstance.getAICategories(
+        `${data.title} ${data.content}`,
+        data.category
+      );
+
+      // Merge AI suggestions with existing categories
+      if (aiCategories.length > 0) {
+        data.category = [...(data.category || []), ...aiCategories.slice(0, 3)];
+        data.category = Array.from(new Set(data.category)); // Remove duplicates
+      }
+    }
+
+    const newContent = await contentServiceInstance.createContent(data, session.user.id);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: newContent,
+        aiEnhanced: true,
+        timestamp: new Date().toISOString(),
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error('Failed to create content:', error);
-
-    if (error instanceof z.ZodError) {
-      return createErrorResponse('Validation failed', error.errors, 400);
-    }
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return createErrorResponse('Database error', error.message, 500);
-    }
-
-    return createErrorResponse(
-      'Failed to create content',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    console.error('Content creation error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to create content',
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
     );
   }
 }

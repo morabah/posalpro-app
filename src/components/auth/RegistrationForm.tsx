@@ -309,8 +309,8 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                     index === currentStep
                       ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
                       : index < currentStep
-                      ? 'bg-green-100 text-green-800 border border-green-200'
-                      : 'bg-neutral-100 text-neutral-500 border border-neutral-200'
+                        ? 'bg-green-100 text-green-800 border border-green-200'
+                        : 'bg-neutral-100 text-neutral-500 border border-neutral-200'
                   }`}
                 >
                   <div
@@ -318,8 +318,8 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                       index === currentStep
                         ? 'bg-white text-primary-600'
                         : index < currentStep
-                        ? 'bg-green-500 text-white'
-                        : 'bg-neutral-300 text-neutral-600'
+                          ? 'bg-green-500 text-white'
+                          : 'bg-neutral-300 text-neutral-600'
                     }`}
                   >
                     {index < currentStep ? <Check className="w-5 h-5" /> : index + 1}
@@ -379,8 +379,8 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                         index === currentStep
                           ? 'bg-primary-600'
                           : index < currentStep
-                          ? 'bg-green-500'
-                          : 'bg-neutral-300'
+                            ? 'bg-green-500'
+                            : 'bg-neutral-300'
                       }`}
                     />
                   ))}
@@ -947,8 +947,8 @@ function ConfirmationStep({ data }: { data: RegistrationFormData }) {
               {data.passwordSetting === 'first_login'
                 ? 'Set at first login'
                 : data.passwordSetting === 'system'
-                ? 'System generated'
-                : 'Admin set'}
+                  ? 'System generated'
+                  : 'Admin set'}
             </p>
             <p>MFA: Required</p>
           </div>

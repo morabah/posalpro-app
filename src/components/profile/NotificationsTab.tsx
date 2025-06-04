@@ -533,8 +533,8 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
                         notification.priority === 'high'
                           ? 'text-red-500'
                           : notification.priority === 'medium'
-                          ? 'text-yellow-500'
-                          : 'text-neutral-500'
+                            ? 'text-yellow-500'
+                            : 'text-neutral-500'
                       }`}
                     />
                     <span className="text-sm text-neutral-700 flex-1">{notification.message}</span>
