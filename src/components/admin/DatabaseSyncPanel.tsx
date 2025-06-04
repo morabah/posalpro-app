@@ -24,6 +24,7 @@ import {
   SignalIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
+import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -71,6 +72,7 @@ export default function DatabaseSyncPanel({
   onSyncComplete,
   onConflictDetected,
 }: DatabaseSyncPanelProps) {
+  const { data: session, status: sessionStatus } = useSession();
   const [isSyncing, setIsSyncing] = useState(false);
   const [localDbStatus, setLocalDbStatus] = useState<DatabaseStatus>({
     isOnline: false,
@@ -90,14 +92,45 @@ export default function DatabaseSyncPanel({
   const [conflicts, setConflicts] = useState<ConflictRecord[]>([]);
   const [isMonitoring, setIsMonitoring] = useState(true);
 
+  // Check if user has admin privileges
+  const isAdminUser = useCallback(() => {
+    if (sessionStatus === 'loading') return false;
+    if (!session?.user) return false;
+
+    // In development, allow bypass
+    if (process.env.NODE_ENV === 'development') return true;
+
+    // Check user roles for admin privileges
+    const user = session.user as any;
+    if (typeof user.roles === 'string') {
+      return user.roles.toLowerCase().includes('admin');
+    }
+    if (Array.isArray(user.roles)) {
+      return user.roles.some((role: string) => role.toLowerCase().includes('admin'));
+    }
+
+    return false;
+  }, [session, sessionStatus]);
+
   // Real-time database status monitoring
   const checkDatabaseStatus = useCallback(async (type: 'local' | 'cloud') => {
     try {
       const startTime = Date.now();
 
+      // Prepare headers with authentication
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add development test bypass if needed
+      if (process.env.NODE_ENV === 'development') {
+        headers['x-test-bypass'] = 'true';
+      }
+
       const response = await fetch(`/api/admin/db-status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
+        credentials: 'include', // Include cookies for session
         body: JSON.stringify({ type }),
         cache: 'no-cache',
       });
@@ -163,9 +196,20 @@ export default function DatabaseSyncPanel({
         const startTime = Date.now();
         const toastId = toast.loading(`Starting ${direction} synchronization...`);
 
+        // Prepare headers with authentication
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        // Add development test bypass if needed
+        if (process.env.NODE_ENV === 'development') {
+          headers['x-test-bypass'] = 'true';
+        }
+
         const response = await fetch('/api/admin/db-sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
+          credentials: 'include', // Include cookies for session
           body: JSON.stringify({
             direction,
             includeConflictDetection: true,
@@ -179,28 +223,37 @@ export default function DatabaseSyncPanel({
         toast.dismiss(toastId);
 
         if (!response.ok) {
-          throw new Error(result.error || 'Synchronization failed');
+          // Handle authentication errors specifically
+          if (response.status === 401) {
+            throw new Error('Authentication required. Please log in as an administrator.');
+          } else if (response.status === 403) {
+            throw new Error('Admin privileges required for database synchronization.');
+          }
+          throw new Error(result.error || result.message || 'Synchronization failed');
         }
+
+        // Extract sync data from response
+        const syncData = result.data || result;
 
         // Create detailed sync record
         const syncRecord: SyncRecord = {
           id: `sync-${Date.now()}`,
           timestamp: new Date(),
           direction,
-          status: result.conflicts?.length > 0 ? 'partial' : 'success',
-          itemsSynced: result.itemsSynced || 0,
-          itemsFailed: result.itemsFailed || 0,
-          tables: result.tables || [],
+          status: syncData.conflicts?.length > 0 ? 'partial' : 'success',
+          itemsSynced: syncData.itemsSynced || 0,
+          itemsFailed: syncData.itemsFailed || 0,
+          tables: syncData.tables || [],
           duration,
-          conflicts: result.conflicts?.length || 0,
-          errors: result.errors || [],
+          conflicts: syncData.conflicts?.length || 0,
+          errors: syncData.errors || [],
         };
 
         setSyncRecords(prev => [syncRecord, ...prev.slice(0, 9)]); // Keep last 10 records
 
         // Handle conflicts if any
-        if (result.conflicts?.length > 0) {
-          const newConflicts = result.conflicts.map(
+        if (syncData.conflicts?.length > 0) {
+          const newConflicts = syncData.conflicts.map(
             (conflict: {
               table: string;
               recordId: string;
@@ -228,11 +281,11 @@ export default function DatabaseSyncPanel({
           });
 
           toast.error(
-            `Sync completed with ${result.conflicts.length} conflicts requiring resolution`
+            `Sync completed with ${syncData.conflicts.length} conflicts requiring resolution`
           );
         } else {
           toast.success(
-            `Synchronization completed successfully! ${result.itemsSynced} items synced.`
+            `Synchronization completed successfully! ${syncData.itemsSynced} items synced.`
           );
         }
 
@@ -327,14 +380,32 @@ export default function DatabaseSyncPanel({
 
       {/* Sync Controls */}
       <div className="mb-6">
-        <h4 className="text-lg font-medium mb-3">Sync Operations</h4>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-lg font-medium">Sync Operations</h4>
+          {sessionStatus === 'loading' ? (
+            <span className="text-sm text-gray-500">Checking authentication...</span>
+          ) : !session?.user ? (
+            <span className="text-sm text-red-600">Authentication required</span>
+          ) : !isAdminUser() ? (
+            <span className="text-sm text-red-600">Admin privileges required</span>
+          ) : (
+            <span className="text-sm text-green-600">✅ Authenticated as {session.user.email}</span>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Button
             variant="primary"
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('localToCloud')}
-            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline}
+            disabled={
+              isSyncing ||
+              !localDbStatus.isOnline ||
+              !cloudDbStatus.isOnline ||
+              sessionStatus === 'loading' ||
+              !isAdminUser()
+            }
           >
             <CloudArrowUpIcon className="w-4 h-4 mr-2" />
             Local → Cloud
@@ -345,7 +416,13 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('cloudToLocal')}
-            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline}
+            disabled={
+              isSyncing ||
+              !localDbStatus.isOnline ||
+              !cloudDbStatus.isOnline ||
+              sessionStatus === 'loading' ||
+              !isAdminUser()
+            }
           >
             <CloudArrowDownIcon className="w-4 h-4 mr-2" />
             Cloud → Local
@@ -356,7 +433,13 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('bidirectional')}
-            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline}
+            disabled={
+              isSyncing ||
+              !localDbStatus.isOnline ||
+              !cloudDbStatus.isOnline ||
+              sessionStatus === 'loading' ||
+              !isAdminUser()
+            }
           >
             <ArrowPathIcon className="w-4 h-4 mr-2" />
             Bi-directional
@@ -366,6 +449,14 @@ export default function DatabaseSyncPanel({
         {(!localDbStatus.isOnline || !cloudDbStatus.isOnline) && (
           <p className="text-sm text-red-600 mt-2">
             Both databases must be online to perform synchronization.
+          </p>
+        )}
+
+        {sessionStatus !== 'loading' && !isAdminUser() && (
+          <p className="text-sm text-red-600 mt-2">
+            {!session?.user
+              ? 'Please log in with an administrator account to perform sync operations.'
+              : 'Admin privileges are required for database synchronization.'}
           </p>
         )}
       </div>
