@@ -604,6 +604,11 @@ model Customer {
   status      CustomerStatus @default(ACTIVE)
   tier        CustomerTier @default(STANDARD)
 
+  // Cloud Sync Fields
+  cloudId     String?  // ID from cloud database for sync purposes
+  lastSyncedAt DateTime? // Last successful sync timestamp
+  syncStatus   String?   @default("PENDING") // PENDING, SYNCED, CONFLICT, ERROR
+
   // Relationships
   proposals   Proposal[]
   contacts    CustomerContact[]
@@ -624,6 +629,7 @@ model Customer {
 
   @@index([status, tier])
   @@index([industry])
+  @@index([cloudId]) // Index for sync performance
   @@map("customers")
 }
 
@@ -690,9 +696,15 @@ model Proposal {
   tags         String[]
   metadata     Json?
 
+  // Cloud Sync Fields
+  cloudId      String?  // ID from cloud database for sync purposes
+  lastSyncedAt DateTime? // Last successful sync timestamp
+  syncStatus   String?   @default("PENDING") // PENDING, SYNCED, CONFLICT, ERROR
+
   @@index([status, dueDate])
   @@index([customerId, status])
   @@index([createdBy])
+  @@index([cloudId]) // Index for sync performance
   @@map("proposals")
 }
 
@@ -853,9 +865,15 @@ model Content {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  // Cloud Sync Fields
+  cloudId      String?  // ID from cloud database for sync purposes
+  lastSyncedAt DateTime? // Last successful sync timestamp
+  syncStatus   String?   @default("PENDING") // PENDING, SYNCED, CONFLICT, ERROR
+
   @@index([type, isActive])
   @@index([tags])
   @@index([category])
+  @@index([cloudId]) // Index for sync performance
   @@map("content")
 }
 

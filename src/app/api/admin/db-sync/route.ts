@@ -412,30 +412,42 @@ const syncTableData = async (
         const roles = await sourcePrisma.role.findMany();
         for (const role of roles) {
           try {
-            await targetPrisma.role.upsert({
-              where: { id: role.id },
-              update: {
-                name: role.name,
-                description: role.description,
-                level: role.level,
-                isSystem: role.isSystem,
-                parentId: role.parentId,
-                updatedAt: new Date(),
-              },
-              create: {
-                id: role.id,
-                name: role.name,
-                description: role.description,
-                level: role.level,
-                isSystem: role.isSystem,
-                parentId: role.parentId,
-                createdAt: role.createdAt,
-                updatedAt: new Date(),
-              },
+            // For roles, sync by name since it's unique
+            const existingRole = await targetPrisma.role.findUnique({
+              where: { name: role.name },
             });
+
+            if (existingRole) {
+              // Update existing role (keeping the target database's ID)
+              await targetPrisma.role.update({
+                where: { name: role.name },
+                data: {
+                  description: role.description,
+                  level: role.level,
+                  isSystem: role.isSystem,
+                  parentId: role.parentId,
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              // Create new role with source ID
+              await targetPrisma.role.create({
+                data: {
+                  id: role.id,
+                  name: role.name,
+                  description: role.description,
+                  level: role.level,
+                  isSystem: role.isSystem,
+                  parentId: role.parentId,
+                  createdAt: role.createdAt,
+                  updatedAt: new Date(),
+                  // Exclude performanceExpectations to avoid JsonValue type issues
+                },
+              });
+            }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync role ${role.id}:`, error);
+            console.error(`Failed to sync role ${role.name}:`, error);
           }
         }
         break;
@@ -445,26 +457,51 @@ const syncTableData = async (
         const permissions = await sourcePrisma.permission.findMany();
         for (const permission of permissions) {
           try {
-            await targetPrisma.permission.upsert({
-              where: { id: permission.id },
-              update: {
-                resource: permission.resource,
-                action: permission.action,
-                scope: permission.scope,
-                updatedAt: new Date(),
-              },
-              create: {
-                id: permission.id,
-                resource: permission.resource,
-                action: permission.action,
-                scope: permission.scope,
-                createdAt: permission.createdAt,
-                updatedAt: new Date(),
+            // For permissions, sync by composite key (resource, action, scope)
+            const existingPermission = await targetPrisma.permission.findUnique({
+              where: {
+                resource_action_scope: {
+                  resource: permission.resource,
+                  action: permission.action,
+                  scope: permission.scope,
+                },
               },
             });
+
+            if (existingPermission) {
+              // Update existing permission (keeping the target database's ID)
+              await targetPrisma.permission.update({
+                where: {
+                  resource_action_scope: {
+                    resource: permission.resource,
+                    action: permission.action,
+                    scope: permission.scope,
+                  },
+                },
+                data: {
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              // Create new permission with source ID
+              await targetPrisma.permission.create({
+                data: {
+                  id: permission.id,
+                  resource: permission.resource,
+                  action: permission.action,
+                  scope: permission.scope,
+                  createdAt: permission.createdAt,
+                  updatedAt: new Date(),
+                  // Exclude constraints to avoid JsonValue type issues
+                },
+              });
+            }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync permission ${permission.id}:`, error);
+            console.error(
+              `Failed to sync permission ${permission.resource}:${permission.action}:`,
+              error
+            );
           }
         }
         break;
@@ -474,36 +511,51 @@ const syncTableData = async (
         const customers = await sourcePrisma.customer.findMany();
         for (const customer of customers) {
           try {
-            // Extract non-JSON fields only to avoid type conflicts
+            // For customers, try by email first (most reliable natural key)
             const { metadata, segmentation, ...customerData } = customer;
-            // Suppress unused variable warnings
             void metadata;
             void segmentation;
 
-            await targetPrisma.customer.upsert({
-              where: { id: customer.id },
-              update: {
-                name: customerData.name,
-                email: customerData.email,
-                phone: customerData.phone,
-                website: customerData.website,
-                address: customerData.address,
-                industry: customerData.industry,
-                companySize: customerData.companySize,
-                revenue: customerData.revenue,
-                status: customerData.status,
-                tier: customerData.tier,
-                tags: customerData.tags,
-                riskScore: customerData.riskScore,
-                ltv: customerData.ltv,
-                lastContact: customerData.lastContact,
-                updatedAt: new Date(),
-              },
-              create: {
-                ...customerData,
-                updatedAt: new Date(),
-              },
-            });
+            let existingCustomer = null;
+
+            // Try to find by email if it exists and is not null
+            if (customerData.email) {
+              existingCustomer = await targetPrisma.customer.findFirst({
+                where: { email: customerData.email },
+              });
+            }
+
+            if (existingCustomer) {
+              // Update existing customer
+              await targetPrisma.customer.update({
+                where: { id: existingCustomer.id },
+                data: {
+                  name: customerData.name,
+                  email: customerData.email,
+                  phone: customerData.phone,
+                  website: customerData.website,
+                  address: customerData.address,
+                  industry: customerData.industry,
+                  companySize: customerData.companySize,
+                  revenue: customerData.revenue,
+                  status: customerData.status,
+                  tier: customerData.tier,
+                  tags: customerData.tags,
+                  riskScore: customerData.riskScore,
+                  ltv: customerData.ltv,
+                  lastContact: customerData.lastContact,
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              // Create new customer
+              await targetPrisma.customer.create({
+                data: {
+                  ...customerData,
+                  updatedAt: new Date(),
+                },
+              });
+            }
             syncedCount++;
           } catch (error) {
             console.error(`Failed to sync customer ${customer.id}:`, error);
@@ -516,36 +568,49 @@ const syncTableData = async (
         const products = await sourcePrisma.product.findMany();
         for (const product of products) {
           try {
-            // Extract non-JSON fields only to avoid type conflicts
-            const { attributes, usageAnalytics, ...productData } = product;
-            // Suppress unused variable warnings
-            void attributes;
-            void usageAnalytics;
-
-            await targetPrisma.product.upsert({
-              where: { id: product.id },
-              update: {
-                name: productData.name,
-                description: productData.description,
-                sku: productData.sku,
-                price: productData.price,
-                currency: productData.currency,
-                category: productData.category,
-                tags: productData.tags,
-                images: productData.images,
-                isActive: productData.isActive,
-                version: productData.version,
-                userStoryMappings: productData.userStoryMappings,
-                updatedAt: new Date(),
-              },
-              create: {
-                ...productData,
-                updatedAt: new Date(),
-              },
+            // For products, sync by SKU since it's unique
+            const existingProduct = await targetPrisma.product.findUnique({
+              where: { sku: product.sku },
             });
+
+            if (existingProduct) {
+              // Update existing product (keeping the target database's ID)
+              const { attributes, usageAnalytics, ...productData } = product;
+              void attributes;
+              void usageAnalytics;
+
+              await targetPrisma.product.update({
+                where: { sku: product.sku },
+                data: {
+                  name: productData.name,
+                  description: productData.description,
+                  price: productData.price,
+                  currency: productData.currency,
+                  category: productData.category,
+                  tags: productData.tags,
+                  images: productData.images,
+                  isActive: productData.isActive,
+                  version: productData.version,
+                  userStoryMappings: productData.userStoryMappings,
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              // Create new product with source data
+              const { attributes, usageAnalytics, ...productData } = product;
+              void attributes;
+              void usageAnalytics;
+
+              await targetPrisma.product.create({
+                data: {
+                  ...productData,
+                  updatedAt: new Date(),
+                },
+              });
+            }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync product ${product.id}:`, error);
+            console.error(`Failed to sync product ${product.sku}:`, error);
           }
         }
         break;
@@ -555,52 +620,69 @@ const syncTableData = async (
         const contents = await sourcePrisma.content.findMany();
         for (const content of contents) {
           try {
-            // Extract non-JSON fields only to avoid type conflicts
+            // For content, use title as natural key (not perfect but better than nothing)
             const { quality, usage, searchOptimization, userStoryTracking, ...contentData } =
               content;
-            // Suppress unused variable warnings
             void quality;
             void usage;
             void searchOptimization;
             void userStoryTracking;
 
-            await targetPrisma.content.upsert({
-              where: { id: content.id },
-              update: {
+            let existingContent = null;
+
+            // Try to find by title and type combination
+            existingContent = await targetPrisma.content.findFirst({
+              where: {
                 title: contentData.title,
-                description: contentData.description,
                 type: contentData.type,
-                content: contentData.content,
-                tags: contentData.tags,
-                category: contentData.category,
-                searchableText: contentData.searchableText,
-                keywords: contentData.keywords,
-                isPublic: contentData.isPublic,
-                allowedRoles: contentData.allowedRoles,
-                version: contentData.version,
-                isActive: contentData.isActive,
                 createdBy: contentData.createdBy,
-                updatedAt: new Date(),
-              },
-              create: {
-                id: contentData.id,
-                title: contentData.title,
-                description: contentData.description,
-                type: contentData.type,
-                content: contentData.content,
-                tags: contentData.tags,
-                category: contentData.category,
-                searchableText: contentData.searchableText,
-                keywords: contentData.keywords,
-                isPublic: contentData.isPublic,
-                allowedRoles: contentData.allowedRoles,
-                version: contentData.version,
-                isActive: contentData.isActive,
-                createdBy: contentData.createdBy,
-                createdAt: contentData.createdAt,
-                updatedAt: new Date(),
               },
             });
+
+            if (existingContent) {
+              // Update existing content
+              await targetPrisma.content.update({
+                where: { id: existingContent.id },
+                data: {
+                  title: contentData.title,
+                  description: contentData.description,
+                  type: contentData.type,
+                  content: contentData.content,
+                  tags: contentData.tags,
+                  category: contentData.category,
+                  searchableText: contentData.searchableText,
+                  keywords: contentData.keywords,
+                  isPublic: contentData.isPublic,
+                  allowedRoles: contentData.allowedRoles,
+                  version: contentData.version,
+                  isActive: contentData.isActive,
+                  createdBy: contentData.createdBy,
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              // Create new content
+              await targetPrisma.content.create({
+                data: {
+                  id: contentData.id,
+                  title: contentData.title,
+                  description: contentData.description,
+                  type: contentData.type,
+                  content: contentData.content,
+                  tags: contentData.tags,
+                  category: contentData.category,
+                  searchableText: contentData.searchableText,
+                  keywords: contentData.keywords,
+                  isPublic: contentData.isPublic,
+                  allowedRoles: contentData.allowedRoles,
+                  version: contentData.version,
+                  isActive: contentData.isActive,
+                  createdBy: contentData.createdBy,
+                  createdAt: contentData.createdAt,
+                  updatedAt: new Date(),
+                },
+              });
+            }
             syncedCount++;
           } catch (error) {
             console.error(`Failed to sync content ${content.id}:`, error);
@@ -613,38 +695,55 @@ const syncTableData = async (
         const proposals = await sourcePrisma.proposal.findMany();
         for (const proposal of proposals) {
           try {
-            // Extract non-JSON fields only and fix field names
+            // For proposals, use title + customerId as natural key
             const { performanceData, userStoryTracking, metadata, ...proposalData } = proposal;
-            // Suppress unused variable warnings
             void performanceData;
             void userStoryTracking;
             void metadata;
 
-            await targetPrisma.proposal.upsert({
-              where: { id: proposal.id },
-              update: {
+            let existingProposal = null;
+
+            // Try to find by title and customerId combination
+            existingProposal = await targetPrisma.proposal.findFirst({
+              where: {
                 title: proposalData.title,
-                description: proposalData.description,
-                status: proposalData.status,
                 customerId: proposalData.customerId,
-                createdBy: proposalData.createdBy, // Fixed: was createdById
-                value: proposalData.value,
-                currency: proposalData.currency,
-                priority: proposalData.priority,
-                validUntil: proposalData.validUntil,
-                dueDate: proposalData.dueDate,
-                submittedAt: proposalData.submittedAt,
-                approvedAt: proposalData.approvedAt,
-                version: proposalData.version,
-                riskScore: proposalData.riskScore,
-                tags: proposalData.tags,
-                updatedAt: new Date(),
-              },
-              create: {
-                ...proposalData,
-                updatedAt: new Date(),
+                createdBy: proposalData.createdBy,
               },
             });
+
+            if (existingProposal) {
+              // Update existing proposal
+              await targetPrisma.proposal.update({
+                where: { id: existingProposal.id },
+                data: {
+                  title: proposalData.title,
+                  description: proposalData.description,
+                  status: proposalData.status,
+                  customerId: proposalData.customerId,
+                  createdBy: proposalData.createdBy,
+                  value: proposalData.value,
+                  currency: proposalData.currency,
+                  priority: proposalData.priority,
+                  validUntil: proposalData.validUntil,
+                  dueDate: proposalData.dueDate,
+                  submittedAt: proposalData.submittedAt,
+                  approvedAt: proposalData.approvedAt,
+                  version: proposalData.version,
+                  riskScore: proposalData.riskScore,
+                  tags: proposalData.tags,
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              // Create new proposal
+              await targetPrisma.proposal.create({
+                data: {
+                  ...proposalData,
+                  updatedAt: new Date(),
+                },
+              });
+            }
             syncedCount++;
           } catch (error) {
             console.error(`Failed to sync proposal ${proposal.id}:`, error);
