@@ -4,7 +4,7 @@
  * and support for multiple deployment environments (dev, staging, prod)
  */
 
-import { logError, logWarn, logInfo } from './logger';
+import { logError, logInfo, logWarn } from './logger';
 
 // Environment types enum
 export enum Environment {
@@ -224,19 +224,30 @@ class EnvironmentManager {
 
       // API configuration
       let apiBaseUrl: string;
-      try {
-        apiBaseUrl = this.getEnvVar('API_BASE_URL', {
-          required: !isDevelopment,
-          default: isDevelopment ? 'http://localhost:3000/api' : undefined,
-          type: 'string',
-        }) as string;
-      } catch (error) {
-        if (isDevelopment) {
-          apiBaseUrl = 'http://localhost:3000/api';
+
+      // Dynamic API base URL detection for development
+      if (isDevelopment) {
+        // In development, use dynamic port detection
+        if (typeof window !== 'undefined') {
+          // Client-side: use current window location
+          apiBaseUrl = `${window.location.origin}/api`;
         } else {
-          throw error;
+          // Server-side: use relative URL to avoid port conflicts
+          apiBaseUrl = '/api';
+        }
+      } else {
+        // Production/staging: use explicit API_BASE_URL
+        try {
+          apiBaseUrl = this.getEnvVar('API_BASE_URL', {
+            required: true,
+            type: 'string',
+          }) as string;
+        } catch (error) {
+          errors.push(`API_BASE_URL is required for ${currentEnv} environment`);
+          apiBaseUrl = '/api'; // Fallback to relative URL
         }
       }
+
       const apiTimeout = this.getEnvVar('API_TIMEOUT', {
         required: false,
         default: 10000,
