@@ -456,6 +456,184 @@ model HypothesisValidationEvent {
 }
 
 // ========================================
+// ANALYTICS & MEASUREMENT ENTITIES
+// ========================================
+
+model UserStoryMetrics {
+  id         String @id @default(cuid())
+  userStoryId String @unique
+  hypothesis  String[] // Array of hypothesis IDs (H1, H3, H4, H6, H7, H8)
+  acceptanceCriteria String[] // Array of acceptance criteria IDs
+
+  // Performance tracking
+  performanceTargets Json // Record<string, number>
+  actualPerformance  Json // Record<string, number>
+  completionRate     Float @default(0) // 0-1 scale
+
+  // Criteria status
+  passedCriteria     String[] @default([])
+  failedCriteria     String[] @default([])
+
+  // Test results relationships
+  testResults        TestExecutionResult[]
+
+  // Baseline comparison
+  baselineMetrics    Json? // Record<string, number>
+
+  lastUpdated        DateTime @updatedAt @default(now())
+  createdAt          DateTime @default(now())
+
+  @@index([userStoryId])
+  @@index([completionRate])
+  @@map("user_story_metrics")
+}
+
+model PerformanceBaseline {
+  id                     String @id @default(cuid())
+  hypothesis             String // H1, H3, H4, H6, H7, H8
+  metricName             String
+  baselineValue          Float
+  targetImprovement      Float // Target improvement percentage (e.g., 0.45 for 45%)
+  currentValue           Float?
+  improvementPercentage  Float? // Calculated improvement percentage
+  measurementUnit        String
+
+  // Validity and confidence
+  collectionDate         DateTime @default(now())
+  validUntil             DateTime?
+  sampleSize             Int
+  confidence             Float // 0-1 scale
+
+  // Environment and methodology
+  environment            String @default("development")
+  methodology            String?
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([hypothesis, metricName, collectionDate])
+  @@index([hypothesis, metricName])
+  @@index([collectionDate])
+  @@map("performance_baselines")
+}
+
+model ComponentTraceability {
+  id                    String @id @default(cuid())
+  componentName         String @unique
+  userStories           String[] @default([]) // Array of user story IDs
+  acceptanceCriteria    String[] @default([]) // Array of acceptance criteria IDs
+  methods               String[] @default([]) // Array of method names
+  hypotheses            String[] @default([]) // Array of hypothesis IDs
+  testCases             String[] @default([]) // Array of test case IDs
+  analyticsHooks        String[] @default([]) // Array of analytics hook names
+
+  // Validation status
+  lastValidated         DateTime @default(now())
+  validationStatus      ValidationStatusType @default(PENDING)
+
+  // Relationships
+  testCaseRelations     TestCase[]
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([componentName])
+  @@index([validationStatus])
+  @@index([userStories])
+  @@map("component_traceability")
+}
+
+// ========================================
+// TESTING & QA ENTITIES
+// ========================================
+
+model TestCase {
+  id                          String @id @default(cuid())
+  userStory                   String // US-X.X format
+  hypothesis                  String // HX format
+  actor                       String // Primary user role
+
+  // Test definition
+  preconditions               String[] @default([]) // Setup requirements
+  testSteps                   String[] @default([]) // Execution steps
+  acceptanceCriteria          String[] @default([]) // Success conditions
+  measurementPoints           Json // MetricDefinition[]
+  successThresholds           Json // Thresholds object
+  instrumentationRequirements String[] @default([])
+
+  // Status and execution
+  status                      TestStatusType @default(DRAFT)
+  lastExecuted                DateTime?
+  passRate                    Float @default(0) // 0-1 scale
+
+  // Relationships
+  componentId                 String?
+  component                   ComponentTraceability? @relation(fields: [componentId], references: [id])
+  executions                  TestExecutionResult[]
+
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([userStory])
+  @@index([hypothesis])
+  @@index([status])
+  @@map("test_cases")
+}
+
+model TestExecutionResult {
+  id               String @id @default(cuid())
+  testCaseId       String
+  testCase         TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  userStoryId      String
+  userStoryMetrics UserStoryMetrics @relation(fields: [userStoryId], references: [userStoryId], onDelete: Cascade)
+  hypothesis       String
+
+  // Execution details
+  executed         Boolean @default(false)
+  passed           Boolean?
+  executionTime    Int // milliseconds
+  metrics          Json? // Execution-specific metrics
+  errors           String[] @default([])
+
+  // Environment and context
+  environment      String @default("development")
+  executedBy       String? // User ID who executed the test
+
+  timestamp        DateTime @default(now())
+
+  @@index([testCaseId])
+  @@index([userStoryId])
+  @@index([hypothesis, timestamp])
+  @@index([passed, timestamp])
+  @@map("test_execution_results")
+}
+
+model BaselineMetrics {
+  id             String @id @default(cuid())
+  hypothesis     String // H1, H3, H4, H6, H7, H8
+  metric         String
+  value          Float
+  unit           String
+
+  // Collection metadata
+  collectedAt    DateTime @default(now())
+  validUntil     DateTime?
+  sampleSize     Int
+  environment    String @default("development")
+  methodology    String
+
+  // Additional context
+  metadata       Json?
+
+  createdAt      DateTime @default(now())
+
+  @@unique([hypothesis, metric, collectedAt])
+  @@index([hypothesis, metric])
+  @@index([collectedAt])
+  @@map("baseline_metrics")
+}
+
+// ========================================
 // ENUMS
 // ========================================
 
@@ -584,6 +762,22 @@ enum HypothesisType {
   H6
   H7
   H8
+}
+
+enum ValidationStatusType {
+  PENDING
+  VALID
+  INVALID
+  NEEDS_REVIEW
+}
+
+enum TestStatusType {
+  DRAFT
+  ACTIVE
+  EXECUTED
+  PASSED
+  FAILED
+  DEPRECATED
 }
 
 // ========================================
