@@ -12,11 +12,8 @@
 
 'use client';
 
-import DatabaseSyncPanel from '@/components/admin/DatabaseSyncPanel';
-import RoleManager from '@/components/admin/RoleManager';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { usePermissions, useRoles, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
 import {
   CheckCircleIcon,
   CogIcon,
@@ -29,9 +26,70 @@ import {
   UsersIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
-import { toast, Toaster } from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
+
+// Database hooks
+import { usePermissions, useRoles, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
+
+// Role Manager Component
+import RoleManager from '@/components/admin/RoleManager';
+
+// Import date-fns with parseISO for string date handling
+import { formatDistanceToNow, isDate, isValid, parseISO } from 'date-fns';
+
+// Additional components - Fix default import
+import DatabaseSyncPanel from '@/components/admin/DatabaseSyncPanel';
+
+// Type definitions for better type safety
+enum UserStatus {
+  ACTIVE = 'Active',
+  INACTIVE = 'Inactive',
+  PENDING = 'Pending',
+  LOCKED = 'Locked',
+  SUSPENDED = 'Suspended',
+}
+
+enum SystemHealth {
+  OPERATIONAL = 'Operational',
+  DEGRADED = 'Degraded',
+  MAINTENANCE = 'Maintenance',
+  OUTAGE = 'Outage',
+  DOWN = 'Down',
+}
+
+/**
+ * Helper function to format time in a human-readable format
+ * Follows platform engineering standards for consistent date formatting
+ * Handles both Date objects and ISO strings with proper error handling
+ */
+const formatTimeAgo = (date: any): string => {
+  try {
+    if (!date) return 'Never';
+
+    let dateObj: Date;
+
+    // Handle different date input types
+    if (isDate(date)) {
+      dateObj = date;
+    } else if (typeof date === 'string') {
+      // Parse ISO string dates
+      dateObj = parseISO(date);
+    } else {
+      return 'Invalid date';
+    }
+
+    // Validate the parsed date
+    if (!isValid(dateObj)) {
+      return 'Invalid date';
+    }
+
+    return formatDistanceToNow(dateObj, { addSuffix: true });
+  } catch (error) {
+    console.warn('Date formatting error:', error);
+    return 'Unknown';
+  }
+};
 
 // Component Traceability Matrix
 // Used for documentation and traceability in platform engineering standards
@@ -79,36 +137,6 @@ const COMPONENT_MAPPING = {
   testCases: ['Supporting TC-H4-002', 'Infrastructure for All Test Cases'],
 };
 
-// Enums and interfaces
-/**
- * System enumerations using TypeScript strict mode
- * Following platform engineering best practices for type safety
- */
-enum UserStatus {
-  ACTIVE = 'Active',
-  INACTIVE = 'Inactive',
-  PENDING = 'Pending',
-  LOCKED = 'Locked',
-  SUSPENDED = 'Suspended',
-}
-
-// System health status enum
-enum SystemHealth {
-  OPERATIONAL = 'Operational',
-  DEGRADED = 'Degraded',
-  MAINTENANCE = 'Maintenance',
-  OUTAGE = 'Outage',
-  DOWN = 'Down',
-}
-
-/**
- * Helper function to format time in a human-readable format
- * Follows platform engineering standards for consistent date formatting
- */
-const formatTimeAgo = (date: Date): string => {
-  return formatDistanceToNow(date, { addSuffix: true });
-};
-
 interface Role {
   id: string;
   name: string;
@@ -116,12 +144,12 @@ interface Role {
   userCount: number;
   accessLevel: 'Full' | 'High' | 'Medium' | 'Limited' | 'Low';
   permissions: Record<string, boolean>;
-  lastModified: Date;
+  lastModified: Date | string;
 }
 
 interface AuditLogEntry {
   id: string;
-  timestamp: Date;
+  timestamp: Date | string;
   user: string;
   type: 'Security' | 'Config' | 'Data' | 'Error' | 'Backup';
   severity: 'Low' | 'Medium' | 'High' | 'Critical';
