@@ -5,6 +5,8 @@ alwaysApply: true
 ---
 # PosalPro MVP2 - Project-Specific Rules
 
+
+always use "npm run dev:smart"not "npm run dev"
 ## Project Context
 
 - **Technology Stack**: Next.js 15, TypeScript, Tailwind CSS, ESLint,

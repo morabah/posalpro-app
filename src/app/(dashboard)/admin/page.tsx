@@ -13,9 +13,10 @@
 'use client';
 
 import DatabaseSyncPanel from '@/components/admin/DatabaseSyncPanel';
+import RoleManager from '@/components/admin/RoleManager';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
+import { usePermissions, useRoles, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
 import {
   CheckCircleIcon,
   CogIcon,
@@ -198,6 +199,7 @@ export default function AdminSystem() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('All Roles');
   const [selectedStatus, setSelectedStatus] = useState<string>('All Statuses');
+  const [selectedAccessLevel, setSelectedAccessLevel] = useState<string>('All Levels');
 
   // Use database hooks instead of mock data
   const {
@@ -218,13 +220,34 @@ export default function AdminSystem() {
   );
 
   const {
+    roles,
+    loading: rolesLoading,
+    error: rolesError,
+    pagination: rolesPagination,
+    refetch: refetchRoles,
+    createRole,
+    updateRole,
+    deleteRole,
+  } = useRoles(1, 10, searchTerm, selectedAccessLevel === 'All Levels' ? '' : selectedAccessLevel);
+
+  const {
+    permissions,
+    loading: permissionsLoading,
+    error: permissionsError,
+    pagination: permissionsPagination,
+    filters: permissionFilters,
+    refetch: refetchPermissions,
+    createPermission,
+    updatePermission,
+    deletePermission,
+  } = usePermissions(1, 20, searchTerm);
+
+  const {
     metrics,
     loading: metricsLoading,
     error: metricsError,
     refetch: refetchMetrics,
   } = useSystemMetrics();
-
-  const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
 
   // Error handling with user feedback
   const handleError = useCallback((error: string) => {
@@ -743,15 +766,13 @@ export default function AdminSystem() {
           </div>
         )}
 
-        {/* Other tabs would be implemented similarly with database connections */}
         {activeTab === 'roles' && (
-          <div className="text-center py-12">
-            <UserGroupIcon className="h-12 w-12 text-gray-400 mx-auto" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">Roles Management</h3>
-            <p className="mt-2 text-sm text-gray-500">
-              Role management interface would be implemented here with database connectivity.
-            </p>
-          </div>
+          <RoleManager
+            searchTerm={searchTerm}
+            selectedAccessLevel={selectedAccessLevel}
+            onSearchChange={setSearchTerm}
+            onAccessLevelChange={setSelectedAccessLevel}
+          />
         )}
 
         {activeTab === 'integration' && (

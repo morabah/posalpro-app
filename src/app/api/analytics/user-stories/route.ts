@@ -216,7 +216,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    if (error.code === 'P2025') {
+    // Handle Prisma errors with proper typing
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
       return NextResponse.json({ error: 'User story metrics not found' }, { status: 404 });
     }
 
