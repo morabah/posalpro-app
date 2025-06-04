@@ -3,7 +3,10 @@
  * Secure password operations using bcrypt
  */
 
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
+
+// Platform compatibility: Using bcryptjs (pure JS) instead of bcrypt (native)
+// See IMPLEMENTATION_LOG.md and LESSONS_LEARNED.md for details
 
 // Number of salt rounds for bcrypt (12 provides good security/performance balance)
 const SALT_ROUNDS = 12;

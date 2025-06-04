@@ -7,13 +7,17 @@
   NODE_VERSION = "20.15.1"
   NEXT_USE_NETLIFY_EDGE = "true"
 
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Handle platform-specific binary compatibility
+[build.processing]
+  skip_processing = false
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
 
 [dev]
   framework = "next"

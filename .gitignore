@@ -89,3 +89,6 @@ local_db/
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
+
+# Local Netlify folder
+.netlify

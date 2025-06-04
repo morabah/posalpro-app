@@ -4,7 +4,10 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
+
+// Platform compatibility: Using bcryptjs (pure JS) instead of bcrypt (native)
+// This ensures consistent behavior across all environments (dev, CI, production)
 
 const prisma = new PrismaClient();
 

@@ -2,6 +2,12 @@
  * PosalPro MVP2 - Admin System Interface
  * Based on ADMIN_SCREEN.md wireframe specifications
  * Supports component traceability and analytics integration for platform foundation
+ * 
+ * Reference Documents:
+ * - LESSONS_LEARNED.md: Database synchronization implementation
+ * - IMPLEMENTATION_LOG.md: Feature development tracking
+ * - PROJECT_REFERENCE.md: Platform engineering standards
+ * - PROMPT_PATTERNS.md: Component standardization
  */
 
 'use client';
@@ -10,27 +16,29 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import {
   CheckCircleIcon,
-  ClockIcon,
   CogIcon,
   ExclamationTriangleIcon,
   EyeIcon,
   MagnifyingGlassIcon,
-  PencilIcon,
   PlusIcon,
   ShieldCheckIcon,
-  TrashIcon,
   UserGroupIcon,
   UsersIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast, Toaster } from 'react-hot-toast';
+import DatabaseSyncPanel from '@/components/admin/DatabaseSyncPanel';
+import { formatDistanceToNow } from 'date-fns';
 
 // Component Traceability Matrix
+// Used for documentation and traceability in platform engineering standards
 const COMPONENT_MAPPING = {
-  userStories: ['US-2.3', 'Platform Foundation'],
+  userStories: ['US-2.3', 'Platform Foundation', 'US-4.2'],
   acceptanceCriteria: [
     'AC-2.3.1',
     'AC-2.3.2',
+    'AC-4.2.1', 
     'System Health',
     'Performance Monitoring',
     'User Management',
@@ -38,6 +46,7 @@ const COMPONENT_MAPPING = {
     'System Integration',
     'Audit Trail',
     'Data Protection',
+    'Database Synchronization'
   ],
   methods: [
     'monitorSystem()',
@@ -61,25 +70,42 @@ const COMPONENT_MAPPING = {
     'scheduleBackups()',
     'restoreData()',
     'verifyIntegrity()',
+    'syncDatabases()',
+    'migrateData()',
   ],
   hypotheses: ['Supporting H4', 'Infrastructure for All Hypotheses'],
   testCases: ['Supporting TC-H4-002', 'Infrastructure for All Test Cases'],
 };
 
 // Enums and interfaces
+/**
+ * System enumerations using TypeScript strict mode
+ * Following platform engineering best practices for type safety
+ */
 enum UserStatus {
   ACTIVE = 'Active',
   INACTIVE = 'Inactive',
   PENDING = 'Pending',
+  LOCKED = 'Locked',
   SUSPENDED = 'Suspended',
 }
 
+// System health status enum
 enum SystemHealth {
   OPERATIONAL = 'Operational',
-  WARNING = 'Warning',
-  CRITICAL = 'Critical',
+  DEGRADED = 'Degraded',
   MAINTENANCE = 'Maintenance',
+  OUTAGE = 'Outage',
+  DOWN = 'Down'
 }
+
+/**
+ * Helper function to format time in a human-readable format
+ * Follows platform engineering standards for consistent date formatting
+ */
+const formatTimeAgo = (date: Date): string => {
+  return formatDistanceToNow(date, { addSuffix: true });
+};
 
 interface SystemUser {
   id: string;
@@ -103,6 +129,10 @@ interface Role {
   lastModified: Date;
 }
 
+/**
+ * System metrics interface with cloud sync tracking
+ * Follows quality-first approach with comprehensive type definitions
+ */
 interface SystemMetrics {
   apiStatus: SystemHealth;
   databaseStatus: SystemHealth;
@@ -111,6 +141,7 @@ interface SystemMetrics {
   activeUsers: number;
   responseTime: number;
   lastBackup: Date;
+  lastSync?: Date | null;
   uptime: number;
 }
 
@@ -241,623 +272,547 @@ const MOCK_ROLES: Role[] = [
       'validation:execute': true,
       'proposals:review': true,
     },
-    lastModified: new Date('2024-03-22'),
+    lastModified: new Date('2024-03-25'),
+  },
+];
+
+const MOCK_AUDIT_LOGS: AuditLogEntry[] = [
+  {
+    id: 'log-1',
+    timestamp: new Date('2024-05-25T14:30:00.000Z'),
+    user: 'admin',
+    type: 'Security',
+    severity: 'High',
+    action: 'Login attempt failed',
+    details: 'Invalid credentials provided',
+    ipAddress: '192.168.1.100',
+  },
+  {
+    id: 'log-2',
+    timestamp: new Date('2024-05-25T14:35:00.000Z'),
+    user: 'admin',
+    type: 'Config',
+    severity: 'Medium',
+    action: 'System configuration updated',
+    details: 'Updated system settings',
+    ipAddress: '192.168.1.100',
+  },
+  {
+    id: 'log-3',
+    timestamp: new Date('2024-05-25T14:40:00.000Z'),
+    user: 'proposal-mgr',
+    type: 'Data',
+    severity: 'Low',
+    action: 'Proposal created',
+    details: 'Created new proposal',
+    ipAddress: '192.168.1.101',
   },
 ];
 
 const MOCK_SYSTEM_METRICS: SystemMetrics = {
   apiStatus: SystemHealth.OPERATIONAL,
   databaseStatus: SystemHealth.OPERATIONAL,
-  storageUsed: 3.2,
-  storageTotal: 4.0,
-  activeUsers: 47,
-  responseTime: 238,
-  lastBackup: new Date(Date.now() - 7 * 60 * 60 * 1000),
-  uptime: 99.97,
+  storageUsed: 128.5,
+  storageTotal: 1024,
+  activeUsers: 42,
+  responseTime: 283,
+  lastBackup: new Date(new Date().getTime() - 86400000), // 1 day ago
+  lastSync: new Date(new Date().getTime() - 172800000), // 2 days ago
+  uptime: 99.98,
 };
 
-const MOCK_AUDIT_LOGS: AuditLogEntry[] = [
-  {
-    id: '1',
-    timestamp: new Date(Date.now() - 2 * 60 * 1000),
-    user: 'admin@posalpro.com',
-    type: 'Security',
-    severity: 'Medium',
-    action: 'User Created',
-    details: 'New user Thomas Wilson added to Finance Approver role',
-    ipAddress: '192.168.1.100',
-  },
-  {
-    id: '2',
-    timestamp: new Date(Date.now() - 15 * 60 * 1000),
-    user: 'admin@posalpro.com',
-    type: 'Config',
-    severity: 'Low',
-    action: 'Role Modified',
-    details: 'Updated permissions for Proposal Manager role',
-    ipAddress: '192.168.1.100',
-  },
-  {
-    id: '3',
-    timestamp: new Date(Date.now() - 60 * 60 * 1000),
-    user: 'system',
-    type: 'Security',
-    severity: 'Low',
-    action: 'API Key Rotated',
-    details: 'Automatic API key rotation for Salesforce integration',
-    ipAddress: 'system',
-  },
-  {
-    id: '4',
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    user: 'manager@posalpro.com',
-    type: 'Config',
-    severity: 'Medium',
-    action: 'Config Changed',
-    details: 'Modified proposal workflow approval settings',
-    ipAddress: '192.168.1.105',
-  },
-  {
-    id: '5',
-    timestamp: new Date(Date.now() - 7 * 60 * 60 * 1000),
-    user: 'system',
-    type: 'Backup',
-    severity: 'Low',
-    action: 'Backup Completed',
-    details: 'Daily automatic backup completed successfully (4.2GB)',
-    ipAddress: 'system',
-  },
-];
-
 export default function AdminSystem() {
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'users' | 'roles' | 'integration' | 'config' | 'logs' | 'backups'
-  >('overview');
-  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  // State management following platform engineering best practices
+  const [activeTab, setActiveTab] = useState('overview');
+  const [users, setUsers] = useState<SystemUser[]>(MOCK_USERS);
+  const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
+  const [logs, setLogs] = useState<AuditLogEntry[]>(MOCK_AUDIT_LOGS);
+  const [metrics, setMetrics] = useState<SystemMetrics>(MOCK_SYSTEM_METRICS);
   const [searchQuery, setSearchQuery] = useState('');
-  const [userFilter, setUserFilter] = useState<{ role: string; status: string }>({
-    role: 'All',
-    status: 'All',
-  });
-  const [sessionStartTime] = useState(Date.now());
+  const [userStatusFilter, setUserStatusFilter] = useState<UserStatus | 'All'>('All');
+  const [roleFilter, setRoleFilter] = useState<string>('All');
+  const [logsTypeFilter, setLogsTypeFilter] = useState<string>('All');
+  const [logsSeverityFilter, setLogsSeverityFilter] = useState<string>('All');
+  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
 
-  // Analytics tracking
-  const trackAdminAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      console.log('Admin System Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        sessionDuration: Date.now() - sessionStartTime,
-      });
-    },
-    [sessionStartTime]
-  );
-
-  // System health status
-  const systemHealthSummary = useMemo(() => {
-    const healthStatuses = [MOCK_SYSTEM_METRICS.apiStatus, MOCK_SYSTEM_METRICS.databaseStatus];
-
-    if (healthStatuses.includes(SystemHealth.CRITICAL)) return SystemHealth.CRITICAL;
-    if (healthStatuses.includes(SystemHealth.WARNING)) return SystemHealth.WARNING;
-    return SystemHealth.OPERATIONAL;
+  /**
+   * Handle database sync completion
+   * Updates system metrics and adds an audit log entry
+   */
+  const handleSyncComplete = useCallback((syncTime: Date) => {
+    // Update metrics with new sync time
+    setMetrics(prevMetrics => ({
+      ...prevMetrics,
+      lastSync: syncTime
+    }));
   }, []);
 
-  // Filtered users
+  /**
+   * Handle new audit log entry creation from database sync
+   */
+  const handleLogCreated = useCallback((logEntry: AuditLogEntry) => {
+    setLogs(prevLogs => [logEntry, ...prevLogs]);
+  }, []);
+  
+  /**
+   * Handle various actions in the admin interface
+   * Following platform engineering standards for action handling
+   */
+  const handleAction = useCallback((action: string, data?: SystemUser | Role) => {
+    switch (action) {
+      case 'create_user':
+        toast.success('User creation initiated');
+        break;
+      case 'edit_user':
+        toast.success(`Editing user: ${data && (data as SystemUser).name || 'Unknown'}`);
+        break;
+      case 'delete_user':
+        toast.success(`User deletion initiated: ${data && (data as SystemUser).name || 'Unknown'}`);
+        break;
+      case 'create_role':
+        toast.success('Role creation initiated');
+        break;
+      case 'edit_role':
+        toast.success(`Editing role: ${data && (data as Role).name || 'Unknown'}`);
+        break;
+      case 'delete_role':
+        toast.success(`Role deletion initiated: ${data && (data as Role).name || 'Unknown'}`);
+        break;
+      case 'system_backup':
+        toast.success('System backup initiated');
+        break;
+      default:
+        console.log(`Action ${action} not implemented`);
+    }
+  }, []);
+
+  /**
+   * Filter users based on search query and status filter
+   */
   const filteredUsers = useMemo(() => {
-    return MOCK_USERS.filter(user => {
-      const matchesSearch =
-        !searchQuery ||
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.role.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesRole = userFilter.role === 'All' || user.role === userFilter.role;
-      const matchesStatus = userFilter.status === 'All' || user.status === userFilter.status;
-
-      return matchesSearch && matchesRole && matchesStatus;
-    });
-  }, [searchQuery, userFilter]);
-
-  // Status indicators
-  const getStatusIcon = (status: UserStatus | SystemHealth) => {
-    switch (status) {
-      case UserStatus.ACTIVE:
-      case SystemHealth.OPERATIONAL:
-        return <CheckCircleIcon className="w-5 h-5 text-green-600" />;
-      case UserStatus.INACTIVE:
-      case SystemHealth.WARNING:
-        return <ExclamationTriangleIcon className="w-5 h-5 text-amber-600" />;
-      case UserStatus.PENDING:
-        return <ClockIcon className="w-5 h-5 text-blue-600" />;
-      case UserStatus.SUSPENDED:
-      case SystemHealth.CRITICAL:
-        return <XCircleIcon className="w-5 h-5 text-red-600" />;
-      default:
-        return <div className="w-5 h-5 bg-gray-400 rounded" />;
-    }
-  };
-
-  const getStatusColor = (status: UserStatus | SystemHealth) => {
-    switch (status) {
-      case UserStatus.ACTIVE:
-      case SystemHealth.OPERATIONAL:
-        return 'text-green-600 bg-green-100';
-      case UserStatus.INACTIVE:
-      case SystemHealth.WARNING:
-        return 'text-amber-600 bg-amber-100';
-      case UserStatus.PENDING:
-        return 'text-blue-600 bg-blue-100';
-      case UserStatus.SUSPENDED:
-      case SystemHealth.CRITICAL:
-        return 'text-red-600 bg-red-100';
-      default:
-        return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  // Handle actions
-  const handleAction = useCallback(
-    (action: string, target?: any) => {
-      trackAdminAction(`admin_${action}`, {
-        targetId: target?.id,
-        targetType: target?.constructor?.name,
-      });
-
-      switch (action) {
-        case 'create_user':
-          console.log('Create new user');
-          break;
-        case 'edit_user':
-          console.log('Edit user:', target?.id);
-          break;
-        case 'delete_user':
-          console.log('Delete user:', target?.id);
-          break;
-        case 'create_role':
-          console.log('Create new role');
-          break;
-        case 'edit_role':
-          console.log('Edit role:', target?.id);
-          break;
-        case 'system_backup':
-          console.log('Initiate system backup');
-          break;
-        default:
-          console.log(`${action}:`, target?.id);
+    return users.filter(user => {
+      // Apply status filter
+      if (userStatusFilter !== 'All' && user.status !== userStatusFilter) {
+        return false;
       }
-    },
-    [trackAdminAction]
-  );
+      
+      // Apply role filter
+      if (roleFilter !== 'All' && user.role !== roleFilter) {
+        return false;
+      }
+      
+      // Apply search query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          user.name.toLowerCase().includes(query) ||
+          user.email.toLowerCase().includes(query) ||
+          user.department.toLowerCase().includes(query)
+        );
+      }
+      
+      return true;
+    });
+  }, [users, searchQuery, userStatusFilter, roleFilter]);
+  
+  /**
+   * Filter audit logs based on type and severity filters
+   */
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      if (logsTypeFilter !== 'All' && log.type !== logsTypeFilter) {
+        return false;
+      }
+      
+      if (logsSeverityFilter !== 'All' && log.severity !== logsSeverityFilter) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [logs, logsTypeFilter, logsSeverityFilter]);
 
-  // Format time ago
-  const formatTimeAgo = (date: Date) => {
-    const now = Date.now();
-    const diff = now - date.getTime();
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    if (minutes < 1) return 'Now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
+  /**
+   * Render status icon based on system health status or user status
+   */
+  const getStatusIcon = (status: SystemHealth | UserStatus) => {
+    if (Object.values(SystemHealth).includes(status as SystemHealth)) {
+      switch (status) {
+        case SystemHealth.OPERATIONAL:
+          return <CheckCircleIcon className="w-5 h-5 text-green-500" />;
+        case SystemHealth.DEGRADED:
+          return <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />;
+        case SystemHealth.MAINTENANCE:
+          return <CogIcon className="w-5 h-5 text-blue-500" />;
+        case SystemHealth.OUTAGE:
+        case SystemHealth.DOWN:
+          return <XCircleIcon className="w-5 h-5 text-red-500" />;
+        default:
+          return <CogIcon className="w-5 h-5 text-gray-500" />;
+      }
+    } else {
+      // Handle UserStatus
+      switch (status) {
+        case UserStatus.ACTIVE:
+          return <CheckCircleIcon className="w-5 h-5 text-green-500" />;
+        case UserStatus.INACTIVE:
+          return <XCircleIcon className="w-5 h-5 text-gray-500" />;
+        case UserStatus.SUSPENDED:
+          return <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />;
+        case UserStatus.PENDING:
+          return <CogIcon className="w-5 h-5 text-blue-500" />;
+        default:
+          return <CogIcon className="w-5 h-5 text-gray-500" />;
+      }
+    }
   };
 
-  // Track page load
-  useEffect(() => {
-    trackAdminAction('admin_system_loaded', {
-      systemHealth: systemHealthSummary,
-      activeUsers: MOCK_SYSTEM_METRICS.activeUsers,
-      totalUsers: MOCK_USERS.length,
-      totalRoles: MOCK_ROLES.length,
-    });
-  }, [systemHealthSummary, trackAdminAction]);
+  /**
+   * Get color class based on system health status or user status
+   */
+  const getStatusColor = (status: SystemHealth | UserStatus): string => {
+    if (Object.values(SystemHealth).includes(status as SystemHealth)) {
+      switch (status) {
+        case SystemHealth.OPERATIONAL:
+          return 'text-green-700 bg-green-100';
+        case SystemHealth.DEGRADED:
+          return 'text-amber-700 bg-amber-100';
+        case SystemHealth.MAINTENANCE:
+          return 'text-blue-700 bg-blue-100';
+        case SystemHealth.OUTAGE:
+        case SystemHealth.DOWN:
+          return 'text-red-700 bg-red-100';
+        default:
+          return 'text-gray-700 bg-gray-100';
+      }
+    } else {
+      // Handle UserStatus
+      switch (status) {
+        case UserStatus.ACTIVE:
+          return 'text-green-700 bg-green-100';
+        case UserStatus.INACTIVE:
+          return 'text-gray-700 bg-gray-100';
+        case UserStatus.SUSPENDED:
+          return 'text-amber-700 bg-amber-100';
+        case UserStatus.PENDING:
+          return 'text-blue-700 bg-blue-100';
+        default:
+          return 'text-gray-700 bg-gray-100';
+      }
+    }
+  };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Admin System</h1>
-              <p className="text-gray-600">
-                System Management • {MOCK_SYSTEM_METRICS.uptime}% uptime •{' '}
-                {MOCK_SYSTEM_METRICS.activeUsers} active users
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                onClick={() => handleAction('system_backup')}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <ShieldCheckIcon className="w-4 h-4 mr-2" />
-                Backup Now
-              </Button>
-              <Button
-                onClick={() => handleAction('create_user')}
-                variant="secondary"
-                className="border-gray-300"
-              >
-                <PlusIcon className="w-4 h-4 mr-2" />
-                New User
-              </Button>
-            </div>
+
+// ...
+
+return (
+  <div className="min-h-screen bg-gray-50">
+    {/* Header */}
+    <div className="bg-white shadow-sm border-b">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center py-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Admin System</h1>
+            <p className="text-gray-600">
+              System Management • {MOCK_SYSTEM_METRICS.uptime}% uptime •{' '}
+              {MOCK_SYSTEM_METRICS.activeUsers} active users
+            </p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Button
+              onClick={() => handleAction('system_backup')}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <ShieldCheckIcon className="w-4 h-4 mr-2" />
+              Backup Now
+            </Button>
+            <Button
+              onClick={() => handleAction('create_user')}
+              variant="secondary"
+              className="border-gray-300"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              New User
+            </Button>
           </div>
         </div>
       </div>
+    </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tab Navigation */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
-            {[
-              { id: 'overview', label: 'Overview', icon: CogIcon },
-              { id: 'users', label: 'Users', icon: UsersIcon, count: MOCK_USERS.length },
-              { id: 'roles', label: 'Roles', icon: UserGroupIcon, count: MOCK_ROLES.length },
-              { id: 'integration', label: 'Integration', icon: CogIcon },
-              { id: 'config', label: 'Config', icon: CogIcon },
-              { id: 'logs', label: 'Logs', icon: EyeIcon, count: MOCK_AUDIT_LOGS.length },
-              { id: 'backups', label: 'Backups', icon: ShieldCheckIcon },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <tab.icon className="w-4 h-4 mr-2" />
-                {tab.label}
-                {tab.count !== undefined && (
-                  <span className="ml-2 py-0.5 px-2 text-xs bg-gray-100 rounded-full">
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          {[
+            { id: 'overview', label: 'Overview', icon: CogIcon },
+            { id: 'users', label: 'Users', icon: UsersIcon, count: users.length },
+            { id: 'roles', label: 'Roles', icon: UserGroupIcon, count: roles.length },
+            { id: 'integration', label: 'Integration', icon: CogIcon },
+            { id: 'config', label: 'Config', icon: CogIcon },
+            { id: 'logs', label: 'Logs', icon: EyeIcon, count: logs.length },
+            { id: 'backups', label: 'Backups', icon: ShieldCheckIcon },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
+                activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <tab.icon className="w-4 h-4 mr-2" />
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className="ml-2 py-0.5 px-2 text-xs bg-gray-100 rounded-full">
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Overview Tab */}
+      {/* Toast notifications for database sync */}
+      <Toaster position="top-right" />
+      
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* System Health */}
+          <div className="lg:col-span-2">
+            <Card>
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">System Health</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      {getStatusIcon(MOCK_SYSTEM_METRICS.apiStatus)}
+                    </div>
+                    <div className="text-sm font-medium text-gray-900">API Status</div>
+                    <div className="text-xs text-gray-600">{MOCK_SYSTEM_METRICS.apiStatus}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      {getStatusIcon(MOCK_SYSTEM_METRICS.databaseStatus)}
+                    </div>
+                    <div className="text-sm font-medium text-gray-900">Database</div>
+                    <div className="text-xs text-gray-600">
+                      {MOCK_SYSTEM_METRICS.databaseStatus}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {Math.round(
+                        (MOCK_SYSTEM_METRICS.storageUsed / MOCK_SYSTEM_METRICS.storageTotal) * 100
+                      )}
+                      %
+                    </div>
+                    <div className="text-sm font-medium text-gray-900">Storage</div>
+                    <div className="text-xs text-gray-600">
+                      {MOCK_SYSTEM_METRICS.storageUsed}TB/{MOCK_SYSTEM_METRICS.storageTotal}TB
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {MOCK_SYSTEM_METRICS.activeUsers}
+                    </div>
+                    <div className="text-sm font-medium text-gray-900">Active Users</div>
+                    <div className="text-xs text-gray-600">
+                      {MOCK_SYSTEM_METRICS.responseTime}ms avg
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-6 pt-4 border-t">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Last Backup:</span>
+                    <span className="font-medium">
+                      {formatTimeAgo(metrics.lastBackup)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm mt-2">
+                    <span className="text-gray-600">Last Sync:</span>
+                    <span className="font-medium">
+                      {metrics.lastSync ? formatTimeAgo(metrics.lastSync) : 'Never'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Database Sync Panel - Integrated following platform engineering best practices */}
+            <div className="mt-6">
+              <DatabaseSyncPanel 
+                onSyncComplete={handleSyncComplete}
+                onLogCreated={handleLogCreated}
+              />
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div>
+            <Card>
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+                <div className="space-y-3">
+                  {logs.slice(0, 5).map(log => (
+                    <div key={log.id} className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            log.severity === 'High' || log.severity === 'Critical'
+                              ? 'bg-red-500'
+                              : log.severity === 'Medium'
+                              ? 'bg-amber-500'
+                              : 'bg-green-500'
+                          }`}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{log.action}</p>
+                        <p className="text-xs text-gray-600">{formatTimeAgo(log.timestamp)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
+      )}
 
-        {/* Overview Tab */}
-        {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* System Health */}
-            <div className="lg:col-span-2">
-              <Card>
-                <div className="p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">System Health</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        {getStatusIcon(MOCK_SYSTEM_METRICS.apiStatus)}
-                      </div>
-                      <div className="text-sm font-medium text-gray-900">API Status</div>
-                      <div className="text-xs text-gray-600">{MOCK_SYSTEM_METRICS.apiStatus}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center mb-2">
-                        {getStatusIcon(MOCK_SYSTEM_METRICS.databaseStatus)}
-                      </div>
-                      <div className="text-sm font-medium text-gray-900">Database</div>
-                      <div className="text-xs text-gray-600">
-                        {MOCK_SYSTEM_METRICS.databaseStatus}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {Math.round(
-                          (MOCK_SYSTEM_METRICS.storageUsed / MOCK_SYSTEM_METRICS.storageTotal) * 100
-                        )}
-                        %
-                      </div>
-                      <div className="text-sm font-medium text-gray-900">Storage</div>
-                      <div className="text-xs text-gray-600">
-                        {MOCK_SYSTEM_METRICS.storageUsed}TB/{MOCK_SYSTEM_METRICS.storageTotal}TB
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {MOCK_SYSTEM_METRICS.activeUsers}
-                      </div>
-                      <div className="text-sm font-medium text-gray-900">Active Users</div>
-                      <div className="text-xs text-gray-600">
-                        {MOCK_SYSTEM_METRICS.responseTime}ms avg
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-6 pt-4 border-t">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Last Backup:</span>
-                      <span className="font-medium">
-                        {formatTimeAgo(MOCK_SYSTEM_METRICS.lastBackup)}
-                      </span>
-                    </div>
-                  </div>
+      {/* Users Tab */}
+      {activeTab === 'users' && (
+        <div className="space-y-6">
+          {/* Search and Filters */}
+          <Card>
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="relative col-span-2">
+                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-              </Card>
-            </div>
-
-            {/* Recent Activity */}
-            <div>
-              <Card>
-                <div className="p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-                  <div className="space-y-3">
-                    {MOCK_AUDIT_LOGS.slice(0, 5).map(log => (
-                      <div key={log.id} className="flex items-start space-x-3">
-                        <div className="flex-shrink-0">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              log.severity === 'High' || log.severity === 'Critical'
-                                ? 'bg-red-500'
-                                : log.severity === 'Medium'
-                                ? 'bg-amber-500'
-                                : 'bg-green-500'
-                            }`}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{log.action}</p>
-                          <p className="text-xs text-gray-600">{formatTimeAgo(log.timestamp)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        {/* Users Tab */}
-        {activeTab === 'users' && (
-          <div className="space-y-6">
-            {/* Search and Filters */}
-            <Card>
-              <div className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="relative col-span-2">
-                    <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search users..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <select
-                    value={userFilter.role}
-                    onChange={e => setUserFilter(prev => ({ ...prev, role: e.target.value }))}
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="All">All Roles</option>
-                    {MOCK_ROLES.map(role => (
-                      <option key={role.id} value={role.name}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={userFilter.status}
-                    onChange={e => setUserFilter(prev => ({ ...prev, status: e.target.value }))}
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="All">All Statuses</option>
-                    {Object.values(UserStatus).map(status => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <select
+                  value={roleFilter}
+                  onChange={e => setRoleFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="All">All Roles</option>
+                  {roles.map(role => (
+                    <option key={role.id} value={role.name}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={userStatusFilter}
+                  onChange={e => setUserStatusFilter(e.target.value as UserStatus | 'All')}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="All">All Statuses</option>
+                  {Object.values(UserStatus).map(status => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </Card>
+            </div>
+          </Card>
 
-            {/* Users Table */}
-            <Card>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Users ({filteredUsers.length})
-                  </h3>
-                  <Button
-                    onClick={() => handleAction('create_user')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    <PlusIcon className="w-4 h-4 mr-2" />
-                    New User
-                  </Button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Name
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Role
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Last Active
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredUsers.map(user => (
-                        <tr
-                          key={user.id}
-                          className={`cursor-pointer hover:bg-gray-50 ${
-                            selectedUser?.id === user.id ? 'bg-blue-50' : ''
-                          }`}
-                          onClick={() => setSelectedUser(user)}
-                        >
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                              <div className="text-sm text-gray-500">{user.email}</div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-                              {user.role}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center space-x-2">
-                              {getStatusIcon(user.status)}
-                              <span
-                                className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
-                                  user.status
-                                )}`}
-                              >
-                                {user.status}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatTimeAgo(user.lastActive)}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleAction('edit_user', user);
-                                }}
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                <PencilIcon className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleAction('delete_user', user);
-                                }}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <TrashIcon className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          {/* Users Table */}
+          <Card>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Users ({filteredUsers.length})
+                </h3>
+                <Button
+                  onClick={() => handleAction('create_user')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
+                  New User
+                </Button>
               </div>
-            </Card>
-          </div>
-        )}
-
-        {/* Roles Tab */}
-        {activeTab === 'roles' && (
-          <div className="space-y-6">
-            <Card>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Role Management ({MOCK_ROLES.length})
-                  </h3>
-                  <Button
-                    onClick={() => handleAction('create_role')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    <PlusIcon className="w-4 h-4 mr-2" />
-                    New Role
-                  </Button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Role
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Users
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Access Level
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Last Modified
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {MOCK_ROLES.map(role => (
-                        <tr
-                          key={role.id}
-                          className={`cursor-pointer hover:bg-gray-50 ${
-                            selectedRole?.id === role.id ? 'bg-blue-50' : ''
-                          }`}
-                          onClick={() => setSelectedRole(role)}
-                        >
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{role.name}</div>
-                              <div className="text-sm text-gray-500">{role.description}</div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {role.userCount}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Last Active
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredUsers.map(user => (
+                      <tr
+                        key={user.id}
+                        className={`cursor-pointer hover:bg-gray-50 ${
+                          selectedUser?.id === user.id ? 'bg-blue-50' : ''
+                        }`}
+                        onClick={() => setSelectedUser(user)}
+                      >
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                            <div className="text-sm text-gray-500">{user.email}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-2">
+                            {getStatusIcon(user.status)}
                             <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                role.accessLevel === 'Full'
-                                  ? 'bg-red-100 text-red-800'
-                                  : role.accessLevel === 'High'
-                                  ? 'bg-orange-100 text-orange-800'
-                                  : role.accessLevel === 'Medium'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : 'bg-green-100 text-green-800'
-                              }`}
+                              className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                                user.status
+                              )}`}
                             >
-                              {role.accessLevel}
+                              {user.status}
                             </span>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {role.lastModified.toLocaleDateString()}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleAction('edit_role', role);
-                                }}
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                <PencilIcon className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleAction('delete_role', role);
-                                }}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <TrashIcon className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatTimeAgo(user.lastActive)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleAction('edit_user', user)}
+                              className="text-blue-600 hover:text-blue-900 mr-4"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleAction('delete_user', user)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                         </tr>
                       ))}
                     </tbody>
@@ -873,7 +828,7 @@ export default function AdminSystem() {
           <Card>
             <div className="p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                System Logs & Audit Trail ({MOCK_AUDIT_LOGS.length})
+                System Logs & Audit Trail ({logs.length})
               </h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -897,7 +852,7 @@ export default function AdminSystem() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {MOCK_AUDIT_LOGS.map(log => (
+                    {logs.map(log => (
                       <tr key={log.id} className="hover:bg-gray-50">
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                           {log.timestamp.toLocaleString()}
@@ -907,17 +862,15 @@ export default function AdminSystem() {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span
-                            className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              log.type === 'Security'
+                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              log.severity === 'High' || log.severity === 'Critical'
                                 ? 'bg-red-100 text-red-800'
-                                : log.type === 'Config'
-                                ? 'bg-blue-100 text-blue-800'
-                                : log.type === 'Error'
-                                ? 'bg-red-100 text-red-800'
+                                : log.severity === 'Medium'
+                                ? 'bg-yellow-100 text-yellow-800'
                                 : 'bg-green-100 text-green-800'
                             }`}
                           >
-                            {log.type}
+                            {log.type} - {log.severity}
                           </span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">

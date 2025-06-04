@@ -5,7 +5,7 @@
  */
 
 import { contentService } from '@/lib/services';
-import { ContentType, Prisma } from '@prisma/client';
+import { Prisma, ContentType } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 

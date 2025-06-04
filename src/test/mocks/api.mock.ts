@@ -8,6 +8,7 @@
  * @quality-gate Development
  */
 
+import { UserType } from '@/types';
 import type { DefaultBodyType } from 'msw';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
@@ -166,3 +167,149 @@ export function createMockResponse(data: unknown = null, status = 200) {
     config: {},
   });
 }
+
+// Mock API responses
+export const mockApiResponses = {
+  auth: {
+    login: {
+      success: true,
+      data: {
+        user: {
+          id: 'user-123',
+          name: 'Test User',
+          email: 'test@example.com',
+          role: UserType.PROPOSAL_MANAGER,
+        },
+        token: 'mock-jwt-token',
+      },
+    },
+    logout: {
+      success: true,
+    },
+  },
+  proposals: {
+    create: {
+      success: true,
+      data: {
+        id: 'proposal-123',
+        title: 'Test Proposal',
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+      },
+    },
+    list: {
+      success: true,
+      data: [
+        {
+          id: 'proposal-1',
+          title: 'Proposal 1',
+          status: 'draft',
+        },
+        {
+          id: 'proposal-2',
+          title: 'Proposal 2',
+          status: 'review',
+        },
+      ],
+      pagination: {
+        total: 2,
+        page: 1,
+        limit: 10,
+      },
+    },
+  },
+  dashboard: {
+    data: {
+      success: true,
+      data: {
+        widgets: [
+          {
+            id: 'proposal-overview',
+            data: {
+              totalProposals: 5,
+              activeProposals: 3,
+              completedProposals: 2,
+            },
+          },
+        ],
+      },
+    },
+  },
+};
+
+// Setup global API mocks
+export const setupApiMocksGlobal = () => {
+  global.fetch = jest.fn().mockImplementation((url: string, options?: any) => {
+    // Parse URL to determine endpoint
+    const urlPath = typeof url === 'string' ? url : url.toString();
+
+    // Auth endpoints
+    if (urlPath.includes('/api/auth/login')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockApiResponses.auth.login),
+      });
+    }
+
+    if (urlPath.includes('/api/auth/logout')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockApiResponses.auth.logout),
+      });
+    }
+
+    // Proposal endpoints
+    if (urlPath.includes('/api/proposals') && options?.method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve(mockApiResponses.proposals.create),
+      });
+    }
+
+    if (urlPath.includes('/api/proposals') && (!options?.method || options.method === 'GET')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockApiResponses.proposals.list),
+      });
+    }
+
+    // Dashboard endpoints
+    if (urlPath.includes('/api/dashboard')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockApiResponses.dashboard.data),
+      });
+    }
+
+    // Default successful response
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true, data: {} }),
+    });
+  });
+};
+
+// Cleanup mocks
+export const cleanupApiMocks = () => {
+  jest.restoreAllMocks();
+};
+
+// Mock specific API failures
+export const mockApiFailure = (endpoint: string, error: string) => {
+  global.fetch = jest.fn().mockImplementation((url: string) => {
+    if (url.includes(endpoint)) {
+      return Promise.reject(new Error(error));
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true }),
+    });
+  });
+};

@@ -1,105 +1,90 @@
 /**
- * Next Auth Session Mock
- *
- * This mock provides simulated authentication functionality for testing
- * components that rely on next-auth/react.
+ * PosalPro MVP2 - Session Mock Utilities
+ * Mock session management for testing authentication flows
  */
 
-import { Session } from 'next-auth';
+import { UserType } from '@/types';
 
-// Default mock user
-const defaultUser = {
-  id: 'test-user-id',
-  name: 'Test User',
-  email: 'test@example.com',
-  department: 'Business Development',
-  roles: ['Proposal Manager'],
-  permissions: ['proposals:read', 'proposals:write', 'content:read'],
-  image: 'https://via.placeholder.com/150',
+// Mock session interface
+export interface MockSession {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: UserType;
+  } | null;
+}
+
+// Global session state for tests
+let mockSessionState: MockSession = { user: null };
+
+// Set mock session
+export const setMockSession = (session: MockSession) => {
+  mockSessionState = session;
 };
 
-// Default mock session
-const defaultSession: Session = {
-  user: defaultUser,
-  expires: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(), // 24 hours from now
+// Get current mock session
+export const getMockSession = (): MockSession => {
+  return mockSessionState;
 };
 
-// Mock of the useSession hook
-const useSession = jest.fn(() => ({
-  data: defaultSession,
-  status: 'authenticated', // 'authenticated' | 'loading' | 'unauthenticated'
-  update: jest.fn(),
-}));
+// Clear mock session
+export const clearMockSession = () => {
+  mockSessionState = { user: null };
+};
 
-// Mock of the getSession function
-const getSession = jest.fn().mockResolvedValue(defaultSession);
-
-// Mock of the signIn function
-const signIn = jest.fn().mockResolvedValue({
-  ok: true,
-  error: null,
-  status: 200,
-  url: '/dashboard',
+// Create mock user
+export const createMockUser = (overrides: Partial<MockSession['user']> = {}) => ({
+  id: 'mock-user-123',
+  name: 'Mock User',
+  email: 'mock@example.com',
+  role: UserType.PROPOSAL_MANAGER,
+  ...overrides,
 });
 
-// Mock of the signOut function
-const signOut = jest.fn().mockResolvedValue({
-  ok: true,
-  url: '/',
-});
-
-// Utility to customize the mock session for specific tests
-export const setMockSession = (
-  session: Partial<Session> | null,
-  status: 'authenticated' | 'loading' | 'unauthenticated' = 'authenticated'
-) => {
-  if (session === null) {
-    useSession.mockReturnValue({
-      data: null,
-      status: 'unauthenticated',
-      update: jest.fn(),
-    });
-    getSession.mockResolvedValue(null);
-  } else {
-    const mockSession = { ...defaultSession, ...session };
-    useSession.mockReturnValue({
-      data: mockSession,
-      status,
-      update: jest.fn(),
-    });
-    getSession.mockResolvedValue(mockSession);
-  }
-};
-
-// Reset all session mocks to default values
-export const resetSessionMock = () => {
-  useSession.mockReset().mockReturnValue({
-    data: defaultSession,
-    status: 'authenticated',
-    update: jest.fn(),
-  });
-  getSession.mockReset().mockResolvedValue(defaultSession);
-  signIn.mockReset().mockResolvedValue({
-    ok: true,
-    error: null,
-    status: 200,
-    url: '/dashboard',
-  });
-  signOut.mockReset().mockResolvedValue({
-    ok: true,
-    url: '/',
-  });
-};
-
-// Export the mock implementation
-export const mockSession = {
-  useSession,
-  getSession,
-  signIn,
-  signOut,
-  setCsrfToken: jest.fn(),
-  getProviders: jest.fn().mockResolvedValue({
-    google: { id: 'google', name: 'Google', type: 'oauth' },
-    github: { id: 'github', name: 'GitHub', type: 'oauth' },
+// Mock different user roles
+export const mockUserRoles = {
+  proposalManager: createMockUser({
+    id: 'pm-123',
+    name: 'Proposal Manager',
+    email: 'pm@example.com',
+    role: UserType.PROPOSAL_MANAGER,
   }),
+  contentManager: createMockUser({
+    id: 'cm-123',
+    name: 'Content Manager',
+    email: 'cm@example.com',
+    role: UserType.CONTENT_MANAGER,
+  }),
+  sme: createMockUser({
+    id: 'sme-123',
+    name: 'Subject Matter Expert',
+    email: 'sme@example.com',
+    role: UserType.SME,
+  }),
+  executive: createMockUser({
+    id: 'exec-123',
+    name: 'Executive',
+    email: 'exec@example.com',
+    role: UserType.EXECUTIVE,
+  }),
+  admin: createMockUser({
+    id: 'admin-123',
+    name: 'System Administrator',
+    email: 'admin@example.com',
+    role: UserType.SYSTEM_ADMINISTRATOR,
+  }),
+};
+
+// Set session by role
+export const setMockSessionByRole = (role: UserType) => {
+  const userMap = {
+    [UserType.PROPOSAL_MANAGER]: mockUserRoles.proposalManager,
+    [UserType.CONTENT_MANAGER]: mockUserRoles.contentManager,
+    [UserType.SME]: mockUserRoles.sme,
+    [UserType.EXECUTIVE]: mockUserRoles.executive,
+    [UserType.SYSTEM_ADMINISTRATOR]: mockUserRoles.admin,
+  };
+
+  setMockSession({ user: userMap[role] });
 };
