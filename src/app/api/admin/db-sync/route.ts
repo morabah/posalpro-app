@@ -9,11 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Import auth options from the correct location
 import { authOptions } from '@/lib/auth';
 import { PrismaClient } from '@prisma/client';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { z } from 'zod';
-
-const execAsync = promisify(exec);
 
 /**
  * Schema validation for sync operation request - Enhanced for bidirectional sync
@@ -33,8 +29,8 @@ const SyncRequestSchema = z.object({
 /**
  * Current environment detection
  */
-const isProduction = process.env.NODE_ENV === 'production';
-const isNetlify = !!process.env.NETLIFY;
+// const isProduction = process.env.NODE_ENV === 'production';
+// const isNetlify = !!process.env.NETLIFY;
 
 /**
  * Enhanced sync result interface
@@ -85,7 +81,7 @@ const detectConflicts = async (
   try {
     // This is a simplified example - in production, you'd need table-specific logic
     switch (table) {
-      case 'User':
+      case 'User': {
         const localUsers = await localPrisma.user.findMany({
           select: { id: true, email: true, name: true, updatedAt: true },
         });
@@ -124,49 +120,13 @@ const detectConflicts = async (
           }
         }
         break;
+      }
 
-      case 'Proposal':
+      case 'Proposal': {
         // TODO: Fix JsonValue type compatibility issues
         console.log('Proposal sync temporarily disabled due to type compatibility issues');
         break;
-      /*
-        const proposals = await sourcePrisma.proposal.findMany();
-        for (const proposal of proposals) {
-          try {
-            // For now, sync basic proposal fields excluding JsonValue fields that cause type issues
-            await targetPrisma.proposal.upsert({
-              where: { id: proposal.id },
-              update: {
-                title: proposal.title,
-                description: proposal.description,
-                status: proposal.status,
-                customerId: proposal.customerId,
-                createdById: proposal.createdById,
-                submissionDeadline: proposal.submissionDeadline,
-                value: proposal.value,
-                priority: proposal.priority,
-                updatedAt: new Date(),
-              },
-              create: {
-                id: proposal.id,
-                title: proposal.title,
-                description: proposal.description,
-                status: proposal.status,
-                customerId: proposal.customerId,
-                createdById: proposal.createdById,
-                submissionDeadline: proposal.submissionDeadline,
-                value: proposal.value,
-                priority: proposal.priority,
-                createdAt: proposal.createdAt,
-                updatedAt: new Date(),
-              },
-            });
-            syncedCount++;
-          } catch (error) {
-            console.error(`Failed to sync proposal ${proposal.id}:`, error);
-          }
-        }
-        */
+      }
 
       default:
         console.log(`No conflict detection implemented for table: ${table}`);
@@ -350,11 +310,11 @@ const performDatabaseSync = async (
             let syncedCount = 0;
 
             if (direction === 'localToCloud' || direction === 'bidirectional') {
-              syncedCount += await syncTableData(localPrisma, cloudPrisma, table, 'localToCloud');
+              syncedCount += await syncTableData(localPrisma, cloudPrisma, table);
             }
 
             if (direction === 'cloudToLocal' || direction === 'bidirectional') {
-              syncedCount += await syncTableData(cloudPrisma, localPrisma, table, 'cloudToLocal');
+              syncedCount += await syncTableData(cloudPrisma, localPrisma, table);
             }
 
             result.itemsSynced += syncedCount;
@@ -404,62 +364,284 @@ const performDatabaseSync = async (
 const syncTableData = async (
   sourcePrisma: PrismaClient,
   targetPrisma: PrismaClient,
-  table: string,
-  direction: 'localToCloud' | 'cloudToLocal'
+  table: string
 ): Promise<number> => {
   let syncedCount = 0;
 
   try {
     switch (table) {
-      case 'User':
+      case 'User': {
         const users = await sourcePrisma.user.findMany();
         for (const user of users) {
           try {
-            await targetPrisma.user.upsert({
-              where: { id: user.id },
-              update: user,
-              create: user,
+            // For users, sync by email since IDs might be different between databases
+            // but emails are unique and represent the same logical user
+            const existingUser = await targetPrisma.user.findUnique({
+              where: { email: user.email },
             });
+
+            if (existingUser) {
+              // Update existing user (keeping the target database's ID)
+              await targetPrisma.user.update({
+                where: { email: user.email },
+                data: {
+                  name: user.name,
+                  password: user.password,
+                  department: user.department,
+                  status: user.status,
+                  lastLogin: user.lastLogin,
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              // Create new user with source ID
+              await targetPrisma.user.create({
+                data: user,
+              });
+            }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync user ${user.id}:`, error);
+            console.error(`Failed to sync user ${user.email}:`, error);
+            // Don't break the loop, continue with other users
           }
         }
         break;
+      }
 
-      case 'Proposal':
-        // TODO: Fix JsonValue type compatibility issues
-        console.log('Proposal sync temporarily disabled due to type compatibility issues');
-        break;
-      /*
-        const proposals = await sourcePrisma.proposal.findMany();
-        for (const proposal of proposals) {
+      case 'Role': {
+        const roles = await sourcePrisma.role.findMany();
+        for (const role of roles) {
           try {
-            // For now, sync basic proposal fields excluding JsonValue fields that cause type issues
-            await targetPrisma.proposal.upsert({
-              where: { id: proposal.id },
+            await targetPrisma.role.upsert({
+              where: { id: role.id },
               update: {
-                title: proposal.title,
-                description: proposal.description,
-                status: proposal.status,
-                customerId: proposal.customerId,
-                createdById: proposal.createdById,
-                submissionDeadline: proposal.submissionDeadline,
-                value: proposal.value,
-                priority: proposal.priority,
+                name: role.name,
+                description: role.description,
+                level: role.level,
+                isSystem: role.isSystem,
+                parentId: role.parentId,
                 updatedAt: new Date(),
               },
               create: {
-                id: proposal.id,
-                title: proposal.title,
-                description: proposal.description,
-                status: proposal.status,
-                customerId: proposal.customerId,
-                createdById: proposal.createdById,
-                submissionDeadline: proposal.submissionDeadline,
-                value: proposal.value,
-                priority: proposal.priority,
-                createdAt: proposal.createdAt,
+                id: role.id,
+                name: role.name,
+                description: role.description,
+                level: role.level,
+                isSystem: role.isSystem,
+                parentId: role.parentId,
+                createdAt: role.createdAt,
+                updatedAt: new Date(),
+              },
+            });
+            syncedCount++;
+          } catch (error) {
+            console.error(`Failed to sync role ${role.id}:`, error);
+          }
+        }
+        break;
+      }
+
+      case 'Permission': {
+        const permissions = await sourcePrisma.permission.findMany();
+        for (const permission of permissions) {
+          try {
+            await targetPrisma.permission.upsert({
+              where: { id: permission.id },
+              update: {
+                resource: permission.resource,
+                action: permission.action,
+                scope: permission.scope,
+                updatedAt: new Date(),
+              },
+              create: {
+                id: permission.id,
+                resource: permission.resource,
+                action: permission.action,
+                scope: permission.scope,
+                createdAt: permission.createdAt,
+                updatedAt: new Date(),
+              },
+            });
+            syncedCount++;
+          } catch (error) {
+            console.error(`Failed to sync permission ${permission.id}:`, error);
+          }
+        }
+        break;
+      }
+
+      case 'Customer': {
+        const customers = await sourcePrisma.customer.findMany();
+        for (const customer of customers) {
+          try {
+            // Extract non-JSON fields only to avoid type conflicts
+            const { metadata, segmentation, ...customerData } = customer;
+            // Suppress unused variable warnings
+            void metadata;
+            void segmentation;
+
+            await targetPrisma.customer.upsert({
+              where: { id: customer.id },
+              update: {
+                name: customerData.name,
+                email: customerData.email,
+                phone: customerData.phone,
+                website: customerData.website,
+                address: customerData.address,
+                industry: customerData.industry,
+                companySize: customerData.companySize,
+                revenue: customerData.revenue,
+                status: customerData.status,
+                tier: customerData.tier,
+                tags: customerData.tags,
+                riskScore: customerData.riskScore,
+                ltv: customerData.ltv,
+                lastContact: customerData.lastContact,
+                updatedAt: new Date(),
+              },
+              create: {
+                ...customerData,
+                updatedAt: new Date(),
+              },
+            });
+            syncedCount++;
+          } catch (error) {
+            console.error(`Failed to sync customer ${customer.id}:`, error);
+          }
+        }
+        break;
+      }
+
+      case 'Product': {
+        const products = await sourcePrisma.product.findMany();
+        for (const product of products) {
+          try {
+            // Extract non-JSON fields only to avoid type conflicts
+            const { attributes, usageAnalytics, ...productData } = product;
+            // Suppress unused variable warnings
+            void attributes;
+            void usageAnalytics;
+
+            await targetPrisma.product.upsert({
+              where: { id: product.id },
+              update: {
+                name: productData.name,
+                description: productData.description,
+                sku: productData.sku,
+                price: productData.price,
+                currency: productData.currency,
+                category: productData.category,
+                tags: productData.tags,
+                images: productData.images,
+                isActive: productData.isActive,
+                version: productData.version,
+                userStoryMappings: productData.userStoryMappings,
+                updatedAt: new Date(),
+              },
+              create: {
+                ...productData,
+                updatedAt: new Date(),
+              },
+            });
+            syncedCount++;
+          } catch (error) {
+            console.error(`Failed to sync product ${product.id}:`, error);
+          }
+        }
+        break;
+      }
+
+      case 'Content': {
+        const contents = await sourcePrisma.content.findMany();
+        for (const content of contents) {
+          try {
+            // Extract non-JSON fields only to avoid type conflicts
+            const { quality, usage, searchOptimization, userStoryTracking, ...contentData } =
+              content;
+            // Suppress unused variable warnings
+            void quality;
+            void usage;
+            void searchOptimization;
+            void userStoryTracking;
+
+            await targetPrisma.content.upsert({
+              where: { id: content.id },
+              update: {
+                title: contentData.title,
+                description: contentData.description,
+                type: contentData.type,
+                content: contentData.content,
+                tags: contentData.tags,
+                category: contentData.category,
+                searchableText: contentData.searchableText,
+                keywords: contentData.keywords,
+                isPublic: contentData.isPublic,
+                allowedRoles: contentData.allowedRoles,
+                version: contentData.version,
+                isActive: contentData.isActive,
+                createdBy: contentData.createdBy,
+                updatedAt: new Date(),
+              },
+              create: {
+                id: contentData.id,
+                title: contentData.title,
+                description: contentData.description,
+                type: contentData.type,
+                content: contentData.content,
+                tags: contentData.tags,
+                category: contentData.category,
+                searchableText: contentData.searchableText,
+                keywords: contentData.keywords,
+                isPublic: contentData.isPublic,
+                allowedRoles: contentData.allowedRoles,
+                version: contentData.version,
+                isActive: contentData.isActive,
+                createdBy: contentData.createdBy,
+                createdAt: contentData.createdAt,
+                updatedAt: new Date(),
+              },
+            });
+            syncedCount++;
+          } catch (error) {
+            console.error(`Failed to sync content ${content.id}:`, error);
+          }
+        }
+        break;
+      }
+
+      case 'Proposal': {
+        const proposals = await sourcePrisma.proposal.findMany();
+        for (const proposal of proposals) {
+          try {
+            // Extract non-JSON fields only and fix field names
+            const { performanceData, userStoryTracking, metadata, ...proposalData } = proposal;
+            // Suppress unused variable warnings
+            void performanceData;
+            void userStoryTracking;
+            void metadata;
+
+            await targetPrisma.proposal.upsert({
+              where: { id: proposal.id },
+              update: {
+                title: proposalData.title,
+                description: proposalData.description,
+                status: proposalData.status,
+                customerId: proposalData.customerId,
+                createdBy: proposalData.createdBy, // Fixed: was createdById
+                value: proposalData.value,
+                currency: proposalData.currency,
+                priority: proposalData.priority,
+                validUntil: proposalData.validUntil,
+                dueDate: proposalData.dueDate,
+                submittedAt: proposalData.submittedAt,
+                approvedAt: proposalData.approvedAt,
+                version: proposalData.version,
+                riskScore: proposalData.riskScore,
+                tags: proposalData.tags,
+                updatedAt: new Date(),
+              },
+              create: {
+                ...proposalData,
                 updatedAt: new Date(),
               },
             });
@@ -468,9 +650,9 @@ const syncTableData = async (
             console.error(`Failed to sync proposal ${proposal.id}:`, error);
           }
         }
-        */
+        break;
+      }
 
-      // Add more table cases as needed
       default:
         console.log(`No sync logic implemented for table: ${table}`);
     }
