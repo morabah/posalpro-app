@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch approval requests
     const [approvalRequests, total] = await Promise.all([
-      prisma.executionStage.findMany({
+      prisma.approvalExecution.findMany({
         where,
         include: includeOptions,
         orderBy: {
@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
         skip,
         take: validatedQuery.limit,
       }),
-      prisma.executionStage.count({ where }),
+      prisma.approvalExecution.count({ where }),
     ]);
 
     // Transform requests with enhanced analytics
@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
 
       // Calculate priority score based on multiple factors
       const priorityScore = calculatePriorityScore(
-        request.execution?.priority || 'MEDIUM',
+        request.priority || 'MEDIUM',
         isOverdue,
         timeRemaining,
         metadata.isParallel || false
