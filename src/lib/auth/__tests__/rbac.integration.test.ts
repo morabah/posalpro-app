@@ -28,7 +28,7 @@ const ROLE_PERMISSIONS: RolePermissions = {
     { action: 'read', resource: 'content' },
     { action: 'manage', resource: 'team' },
     { action: 'access', resource: 'dashboard' },
-    { action: 'view', resource: 'analytics' },
+    { action: 'read', resource: 'analytics' },
   ],
   [UserType.CONTENT_MANAGER]: [
     { action: 'create', resource: 'content' },
@@ -85,12 +85,19 @@ const hasPermission = (
     }
 
     // Check conditions if present
-    if (permission.conditions && context) {
+    if (permission.conditions) {
+      // If permission has conditions but no context provided, deny access
+      if (!context) {
+        return false;
+      }
+
+      // Check that all condition requirements are met
       return Object.entries(permission.conditions).every(([key, value]) => {
         return context[key] === value;
       });
     }
 
+    // No conditions required, allow access
     return true;
   });
 };
@@ -107,7 +114,7 @@ const canAccessComponent = (userRole: UserType, componentName: string): boolean 
     ContentEditor: { action: 'create', resource: 'content' },
     ContentLibrary: { action: 'read', resource: 'content' },
     TeamManagement: { action: 'manage', resource: 'team' },
-    Analytics: { action: 'view', resource: 'analytics' },
+    Analytics: { action: 'read', resource: 'analytics' },
     ExecutiveDashboard: { action: 'view', resource: 'executive-dashboard' },
     AdminPanel: { action: 'access', resource: 'admin-panel' },
     SMEWorkspace: { action: 'validate', resource: 'technical-specs' },
@@ -116,7 +123,21 @@ const canAccessComponent = (userRole: UserType, componentName: string): boolean 
   const required = componentPermissions[componentName];
   if (!required) return false;
 
-  return hasPermission(userRole, required.action, required.resource);
+  // For component access, check if user has ANY permission for this action/resource
+  // regardless of conditions (UI access is different from operation access)
+  const permissions = ROLE_PERMISSIONS[userRole] || [];
+
+  // Check for wildcard admin permissions
+  if (permissions.some(p => p.action === '*' && p.resource === '*')) {
+    return true;
+  }
+
+  // Check if user has the required action/resource in any form
+  return permissions.some(permission => {
+    const actionMatch = permission.action === required.action || permission.action === '*';
+    const resourceMatch = permission.resource === required.resource || permission.resource === '*';
+    return actionMatch && resourceMatch;
+  });
 };
 
 describe('RBAC Integration Tests', () => {

@@ -17,7 +17,7 @@ import {
   EyeIcon,
   EyeSlashIcon,
 } from '@heroicons/react/24/outline';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -114,6 +114,33 @@ const WidgetSkeleton: React.FC<{ size: 'small' | 'medium' | 'large' | 'full' }> 
   );
 };
 
+// Custom Error Boundary Component
+class WidgetErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_error: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Widget Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+
 // Widget Error State
 const WidgetError: React.FC<{
   widgetId: string;
@@ -166,7 +193,17 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   // Filter widgets by user role and permissions
   const filteredWidgets = useMemo(() => {
+    // Handle undefined or null widgets gracefully
+    if (!widgets || !Array.isArray(widgets)) {
+      return [];
+    }
+
     return widgets.filter(widget => {
+      // Handle malformed widget objects
+      if (!widget || !widget.roles || !Array.isArray(widget.roles)) {
+        return false;
+      }
+
       // Check role-based access
       if (widget.roles.length > 0 && !widget.roles.includes(userRole)) {
         return false;
@@ -361,9 +398,19 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               <span className="text-sm text-gray-500">Click to expand</span>
             </Card>
           ) : (
-            <Suspense fallback={<WidgetSkeleton size={widget.size} />}>
-              <widget.component {...widgetProps} />
-            </Suspense>
+            <WidgetErrorBoundary
+              fallback={
+                <WidgetError
+                  widgetId={widget.id}
+                  error="Widget failed to load"
+                  onRetry={handleWidgetRefresh}
+                />
+              }
+            >
+              <Suspense fallback={<WidgetSkeleton size={widget.size} />}>
+                <widget.component {...widgetProps} />
+              </Suspense>
+            </WidgetErrorBoundary>
           )}
         </div>
       );
@@ -387,7 +434,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   }, [analytics]);
 
   return (
-    <div className={`dashboard-shell ${className}`}>
+    <main className={`dashboard-shell ${className}`} role="main">
       {/* Dashboard Controls */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -453,6 +500,6 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           <Button variant="primary">Configure Dashboard</Button>
         </Card>
       )}
-    </div>
+    </main>
   );
 };

@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * PosalPro MVP2 - Dashboard Skeleton Component
  * Comprehensive loading states for dashboard widgets with responsive layouts

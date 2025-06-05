@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="6" failures="0" errors="0" time="4.001">
+  <testsuite name="Enhanced Proposal Creation Journey Integration Tests" errors="0" failures="0" skipped="0" timestamp="2025-06-04T20:56:35" time="3.541" tests="6">
+    <testcase classname="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should complete form submission with API integration" name="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should complete form submission with API integration" time="0.709">
+    </testcase>
+    <testcase classname="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should handle content selection with product API" name="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should handle content selection with product API" time="0.249">
+    </testcase>
+    <testcase classname="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should validate team assignment workflow" name="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should validate team assignment workflow" time="0.377">
+    </testcase>
+    <testcase classname="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should track H1 content discovery metrics" name="Enhanced Proposal Creation Journey Integration Tests Optimized Proposal Creation Journey should track H1 content discovery metrics" time="0.168">
+    </testcase>
+    <testcase classname="Enhanced Proposal Creation Journey Integration Tests Enhanced Error Handling and Performance should handle API errors with retry mechanisms" name="Enhanced Proposal Creation Journey Integration Tests Enhanced Error Handling and Performance should handle API errors with retry mechanisms" time="1.326">
+    </testcase>
+    <testcase classname="Enhanced Proposal Creation Journey Integration Tests Enhanced Error Handling and Performance should maintain performance targets throughout workflow" name="Enhanced Proposal Creation Journey Integration Tests Enhanced Error Handling and Performance should maintain performance targets throughout workflow" time="0.025">
+    </testcase>
+  </testsuite>
+</testsuites>

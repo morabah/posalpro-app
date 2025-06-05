@@ -142,7 +142,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         component: 'AuthProvider',
       });
     }
-  }, [update, analytics, user?.id]);
+  }, [update, user?.id]); // Remove analytics dependency
 
   const logout = useCallback(async (): Promise<void> => {
     try {
@@ -173,23 +173,24 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         component: 'AuthProvider',
       });
     }
-  }, [analytics, user?.id, lastActivity]);
+  }, [user?.id, lastActivity]); // Remove analytics dependency
 
   // Activity tracking
   const trackActivity = useCallback(
     (activity: string, metadata: Record<string, unknown> = {}) => {
-      setLastActivity(Date.now());
+      const now = Date.now();
+      setLastActivity(now);
 
       analytics.track('user_activity', {
         activity,
         userId: user?.id,
         userRoles: roles,
-        timestamp: Date.now(),
+        timestamp: now,
         component: 'AuthProvider',
         ...metadata,
       });
     },
-    [analytics, user?.id, roles]
+    [user?.id, roles] // Remove analytics dependency
   );
 
   // Session monitoring and auto-refresh
@@ -247,8 +248,16 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    let lastActivityUpdate = 0;
+    const ACTIVITY_THROTTLE = 30000; // Throttle activity updates to once per 30 seconds
+
     const handleActivity = () => {
-      setLastActivity(Date.now());
+      const now = Date.now();
+      // Only update lastActivity if enough time has passed since last update
+      if (now - lastActivityUpdate > ACTIVITY_THROTTLE) {
+        setLastActivity(now);
+        lastActivityUpdate = now;
+      }
       setSessionWarning(false);
     };
 

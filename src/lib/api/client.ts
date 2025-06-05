@@ -150,6 +150,11 @@ class EnhancedApiClient {
       }
     }
 
+    // Ensure we have a valid error to throw
+    if (!lastError) {
+      lastError = new Error('Request failed after retries');
+    }
+
     throw lastError;
   }
 
@@ -229,12 +234,17 @@ class EnhancedApiClient {
         }
 
         if (!response.ok) {
-          const error = errorInterceptor.processError(
-            interceptedResponse,
-            interceptedRequest,
-            config.errorHandling
-          );
-          throw new Error(error.userMessage);
+          try {
+            const error = errorInterceptor.processError(
+              interceptedResponse,
+              interceptedRequest,
+              config.errorHandling || {}
+            );
+            throw new Error(error.userMessage);
+          } catch (errorProcessingError) {
+            console.error('[ApiClient] Error processing error:', errorProcessingError);
+            throw new Error(`Request failed with status ${response.status}`);
+          }
         }
 
         // Cache successful GET responses

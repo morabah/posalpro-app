@@ -1,6 +1,26 @@
 import type { NextConfig } from 'next';
 
+// Set default environment variables for development if missing
+if (process.env.NODE_ENV === 'development') {
+  if (!process.env.NEXTAUTH_SECRET) {
+    process.env.NEXTAUTH_SECRET =
+      'posalpro-mvp2-development-secret-key-minimum-32-characters-required';
+    console.log('✅ NextAuth: Set default NEXTAUTH_SECRET for development');
+  }
+
+  if (!process.env.NEXTAUTH_URL) {
+    process.env.NEXTAUTH_URL = 'http://localhost:3000';
+    console.log('✅ NextAuth: Set default NEXTAUTH_URL for development');
+  }
+}
+
 const nextConfig: NextConfig = {
+  // ESLint configuration for build process
+  eslint: {
+    dirs: ['src'], // Only lint src directory
+    ignoreDuringBuilds: false,
+  },
+
   // Development configuration to resolve chunk loading issues
   experimental: {
     // Enable webpack build worker for better development performance

@@ -101,6 +101,12 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     children: [
       { id: 'products-catalog', name: 'Product Catalog', href: '/products', icon: CircleStackIcon },
       {
+        id: 'products-create',
+        name: 'Create Product',
+        href: '/products/create',
+        icon: CircleStackIcon,
+      },
+      {
         id: 'products-selection',
         name: 'Product Selection',
         href: '/products/selection',

@@ -6,6 +6,7 @@
 import { ToastProvider } from '@/components/feedback/Toast/ToastProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { ErrorBoundary } from '@/components/providers/ErrorBoundary';
+import { QueryProvider } from '@/components/providers/QueryProvider';
 import '@/styles/globals.css';
 import { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
@@ -29,9 +30,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="h-full">
       <body className={`${inter.className} h-full antialiased`}>
         <ErrorBoundary enableReporting={process.env.NODE_ENV === 'production'}>
-          <ToastProvider position="top-right" maxToasts={5}>
-            <AuthProvider>{children}</AuthProvider>
-          </ToastProvider>
+          <QueryProvider>
+            <ToastProvider position="top-right" maxToasts={5}>
+              <AuthProvider>{children}</AuthProvider>
+            </ToastProvider>
+          </QueryProvider>
         </ErrorBoundary>
       </body>
     </html>

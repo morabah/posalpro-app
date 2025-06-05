@@ -152,10 +152,8 @@ describe('API Endpoints Integration Tests', () => {
       mockFetch.mockResolvedValueOnce(
         new MockResponse(
           JSON.stringify({
-            error: {
-              type: 'authentication_failed',
-              message: 'Invalid email or password',
-            },
+            type: 'authentication_failed',
+            message: 'Invalid email or password',
           }),
           { status: 401, headers: { 'Content-Type': 'application/json' } }
         ) as any
@@ -662,13 +660,11 @@ describe('API Endpoints Integration Tests', () => {
       mockFetch.mockResolvedValueOnce(
         new MockResponse(
           JSON.stringify({
-            error: {
-              type: 'validation_error',
-              message: 'Invalid request payload',
-              details: {
-                title: 'Title is required',
-                email: 'Invalid email format',
-              },
+            type: 'validation_error',
+            message: 'Invalid request payload',
+            details: {
+              title: 'Title is required',
+              email: 'Invalid email format',
             },
           }),
           { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -708,10 +704,8 @@ describe('API Endpoints Integration Tests', () => {
       mockFetch.mockResolvedValueOnce(
         new MockResponse(
           JSON.stringify({
-            error: {
-              type: 'rate_limit_exceeded',
-              message: 'Too many requests',
-            },
+            type: 'rate_limit_exceeded',
+            message: 'Too many requests',
           }),
           {
             status: 429,

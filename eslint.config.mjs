@@ -1,37 +1,30 @@
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { FlatCompat } from '@eslint/eslintrc';
 import js from '@eslint/js';
 import nextPlugin from '@next/eslint-plugin-next';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
-import typescriptEslint from 'typescript-eslint';
+import tseslint from 'typescript-eslint'; // Renamed for clarity, this is the main export
 
 // Get the directory name in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// FlatCompat for backward compatibility
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-});
-
-const eslintConfig = [
+export default tseslint.config(
   // Core ESLint recommended rules
   js.configs.recommended,
   
-  // TypeScript ESLint recommended rules with relaxed settings for initial setup
-  ...typescriptEslint.configs.recommendedTypeChecked,
+  // TypeScript ESLint configurations
+  ...tseslint.configs.recommendedTypeChecked, // Base type-checked rules
   {
+    // Customizations for TypeScript rules and ensuring project path
     languageOptions: {
-      parser: typescriptEslint.parser,
       parserOptions: {
-        project: './tsconfig.json',
+        project: './tsconfig.json', // Explicitly set project path for type-aware rules
         tsconfigRootDir: __dirname,
       },
     },
     rules: {
-      // Disable rules that are too strict for initial setup
+      // Your TypeScript rule overrides/relaxations
       '@typescript-eslint/no-unused-vars': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unsafe-assignment': 'warn',
@@ -45,34 +38,40 @@ const eslintConfig = [
       '@typescript-eslint/restrict-template-expressions': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'warn',
       '@typescript-eslint/no-unsafe-enum-comparison': 'warn',
-    },
-  },
-  
-  // Next.js recommended rules
-  {
-    plugins: {
-      '@next/next': nextPlugin,
-      'react-hooks': reactHooksPlugin,
-    },
-    rules: {
-      // Next.js specific rules
-      '@next/next/no-html-link-for-pages': 'error',
-      '@next/next/no-sync-scripts': 'error',
-      
-      // React Hooks rules
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
-      
-      // Custom rules
-      'react/react-in-jsx-scope': 'off',
-      'react/prop-types': 'off',
-      '@typescript-eslint/no-unused-vars': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
     },
   },
   
-  // Ignore patterns
+  // Next.js plugin configuration (consolidated)
+  {
+    files: ['**/*.{js,jsx,ts,tsx}'], // Apply Next.js rules to all relevant files
+    plugins: {
+      '@next/next': nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
+      // React-specific rules often used with Next.js
+      'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
+    },
+    settings: {
+      next: {
+        rootDir: __dirname,
+      },
+    },
+  },
+
+  // React Hooks plugin configuration
+  {
+    files: ['**/*.{js,jsx,ts,tsx}'], // Ensure hooks rules apply broadly
+    plugins: {
+      'react-hooks': reactHooksPlugin,
+    },
+    rules: reactHooksPlugin.configs.recommended.rules,
+  },
+  
+  // Global ignore patterns
   {
     ignores: [
       'node_modules/**',
@@ -81,11 +80,9 @@ const eslintConfig = [
       'dist/**',
       'build/**',
       '*.config.js',
-      '*.config.mjs',
+      '*.config.mjs', // Ignores this file itself
       'public/**',
       'coverage/**',
     ],
-  },
-];
-
-export default eslintConfig;
+  }
+);

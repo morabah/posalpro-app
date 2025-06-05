@@ -136,16 +136,31 @@ class ErrorInterceptor {
     let responseData: any;
     let originalMessage: string;
 
+    // Add safety checks for error object
+    if (!error) {
+      error = new Error('Unknown error occurred');
+    }
+
+    // Add safety checks for request object
+    if (!request) {
+      request = {
+        url: 'unknown',
+        method: 'GET',
+        headers: {},
+      };
+    }
+
     if ('status' in error) {
       // API Response error
-      status = error.status;
+      status = error.status || 0;
       responseData = error.data;
-      originalMessage = responseData?.message || responseData?.error || `HTTP ${status}`;
+      originalMessage =
+        responseData?.message || responseData?.error || `HTTP ${status}` || 'Unknown API error';
     } else {
       // Network or other error
       status = 0;
       responseData = null;
-      originalMessage = error.message;
+      originalMessage = error?.message || error?.toString() || 'Unknown error';
     }
 
     const category = this.categorizeError(status, responseData);
@@ -156,14 +171,22 @@ class ErrorInterceptor {
     const processedError: ProcessedError = {
       category,
       code: responseData?.code || `${category}_${status}`,
-      message: originalMessage,
+      message: originalMessage || 'No error message provided',
       userMessage,
       details: {
         status,
-        url: request.url,
-        method: request.method,
+        url: request?.url || 'unknown',
+        method: request?.method || 'GET',
         responseData,
         requestId: responseData?.requestId,
+        originalError:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : error,
       },
       timestamp: new Date(),
       requestId: responseData?.requestId,
@@ -201,19 +224,32 @@ class ErrorInterceptor {
   }
 
   private logError(error: ProcessedError): void {
-    const logLevel = this.getLogLevel(error.severity);
+    // Safety check for error object
+    if (!error) {
+      console.error('[ErrorInterceptor] No error object provided to logError');
+      return;
+    }
+
+    const logLevel = this.getLogLevel(error.severity || 'low');
 
     const logData = {
-      timestamp: error.timestamp.toISOString(),
-      category: error.category,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      severity: error.severity,
-      retryable: error.retryable,
+      timestamp: error.timestamp?.toISOString() || new Date().toISOString(),
+      category: error.category || 'UNKNOWN',
+      code: error.code || 'UNKNOWN_ERROR',
+      message: error.message || 'No error message',
+      userMessage: error.userMessage || 'Unknown error occurred',
+      details: error.details || {},
+      severity: error.severity || 'low',
+      retryable: error.retryable || false,
+      requestId: error.requestId,
     };
 
-    console[logLevel]('[ErrorInterceptor]', logData);
+    // Only log if we have meaningful data
+    if (logData.message !== 'No error message' || Object.keys(logData.details).length > 0) {
+      console[logLevel]('[ErrorInterceptor]', logData);
+    } else {
+      console.warn('[ErrorInterceptor] Attempted to log empty error data:', { error, logData });
+    }
 
     // In production, send to logging service
     if (process.env.NODE_ENV === 'production' && error.severity === 'critical') {
@@ -312,20 +348,31 @@ export const errorInterceptor = ErrorInterceptor.getInstance();
 // Set up global error handlers
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', event => {
-    const error = event.reason;
-    errorInterceptor.processError(error, {
-      url: window.location.href,
-      method: 'GET',
-      headers: {},
-    });
+    try {
+      const error = event.reason || new Error('Unhandled promise rejection');
+      errorInterceptor.processError(error, {
+        url: window.location.href,
+        method: 'GET',
+        headers: {},
+      });
+    } catch (handlerError) {
+      console.error('[ErrorInterceptor] Error in unhandledrejection handler:', handlerError);
+    }
   });
 
   window.addEventListener('error', event => {
-    const error = new Error(event.message);
-    errorInterceptor.processError(error, {
-      url: window.location.href,
-      method: 'GET',
-      headers: {},
-    });
+    try {
+      const error = new Error(event.message || 'Unknown error');
+      if (event.filename) {
+        error.stack = `${error.message}\n    at ${event.filename}:${event.lineno}:${event.colno}`;
+      }
+      errorInterceptor.processError(error, {
+        url: window.location.href,
+        method: 'GET',
+        headers: {},
+      });
+    } catch (handlerError) {
+      console.error('[ErrorInterceptor] Error in error handler:', handlerError);
+    }
   });
 }

@@ -1,32 +1,30 @@
-/**
- * PosalPro MVP2 - Product Management Interface
- * Based on PRODUCT_MANAGEMENT_SCREEN.md wireframe specifications
- * Supports component traceability and analytics integration for H8 hypothesis validation
- */
-
 'use client';
 
-import { Card } from '@/components/ui/Card';
+import { ProductCreationForm } from '@/components/products/ProductCreationForm';
 import { Button } from '@/components/ui/forms/Button';
+import { useCreateProduct, useDeleteProduct, useProductsManager } from '@/hooks/useProducts';
+import { CreateProductData, Product } from '@/types/entities/product';
 import {
-  ArrowDownTrayIcon,
-  ChartBarIcon,
-  CheckCircleIcon,
-  ClockIcon,
-  Cog6ToothIcon,
-  DocumentTextIcon,
-  ExclamationTriangleIcon,
-  EyeIcon,
-  FunnelIcon,
-  MagnifyingGlassIcon,
-  PencilIcon,
-  PhotoIcon,
-  PlusIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+  Download,
+  Edit,
+  Eye,
+  Filter,
+  Grid,
+  List,
+  Loader2,
+  MoreVertical,
+  Package,
+  Plus,
+  Search,
+  Settings,
+  Trash2,
+  Upload,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
-// Component Traceability Matrix
+// Component Traceability Matrix for Phase 3
 const COMPONENT_MAPPING = {
   userStories: ['US-3.2', 'US-3.1', 'US-1.2'],
   acceptanceCriteria: ['AC-3.2.1', 'AC-3.2.2', 'AC-3.2.3', 'AC-3.1.1', 'AC-1.2.1'],
@@ -42,447 +40,81 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H8-002', 'TC-H8-001', 'TC-H1-002'],
 };
 
-// Product interfaces
-enum ProductCategory {
-  SECURITY = 'Security',
-  SERVICES = 'Services',
-  SOFTWARE = 'Software',
-  HARDWARE = 'Hardware',
-  CONSULTING = 'Consulting',
-}
+export default function ProductsPage() {
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-enum ProductStatus {
-  DRAFT = 'draft',
-  ACTIVE = 'active',
-  ARCHIVED = 'archived',
-}
+  // Use the production data hooks instead of mock data
+  const {
+    products,
+    pagination,
+    stats,
+    categories,
+    filters,
+    updateFilters,
+    clearFilters,
+    setPage,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useProductsManager();
 
-enum PriceModel {
-  FIXED = 'fixed',
-  HOURLY = 'hourly',
-  SUBSCRIPTION = 'subscription',
-}
+  const createProductMutation = useCreateProduct();
+  const deleteProductMutation = useDeleteProduct();
 
-interface ProductOption {
-  id: string;
-  name: string;
-  type: 'single_select' | 'multi_select' | 'text_input' | 'number_input';
-  choices: Array<{
-    label: string;
-    value: string;
-    priceModifier: number;
-  }>;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  productId: string;
-  category: ProductCategory;
-  subCategory: string;
-  shortDescription: string;
-  detailedDescription: string;
-  status: ProductStatus;
-  priceModel: PriceModel;
-  basePrice: number;
-  options: ProductOption[];
-  resources: Array<{
-    id: string;
-    name: string;
-    type: 'document' | 'image';
-    url: string;
-  }>;
-  licenseDependencies: string[];
-  createdAt: Date;
-  createdBy: string;
-  lastModified: Date;
-  modifiedBy: string;
-  isVisible: boolean;
-  isFeatured: boolean;
-  clientSpecificPricing: boolean;
-}
-
-// Mock products data
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: 'prod-001',
-    name: 'Cloud Security Suite',
-    productId: 'CS-2025-001',
-    category: ProductCategory.SECURITY,
-    subCategory: 'Cloud Solutions',
-    shortDescription: 'Enterprise-grade cloud security solution with advanced threat detection',
-    detailedDescription:
-      'Comprehensive cloud security platform with AI-powered threat detection, compliance automation, and real-time monitoring capabilities.',
-    status: ProductStatus.ACTIVE,
-    priceModel: PriceModel.FIXED,
-    basePrice: 2500,
-    options: [
-      {
-        id: 'opt-001',
-        name: 'Deployment Type',
-        type: 'single_select',
-        choices: [
-          { label: 'Cloud-only', value: 'cloud', priceModifier: 0 },
-          { label: 'Hybrid', value: 'hybrid', priceModifier: 500 },
-          { label: 'On-premises', value: 'onprem', priceModifier: 1200 },
-        ],
-      },
-    ],
-    resources: [
-      {
-        id: 'res-001',
-        name: 'Security_Whitepaper.pdf',
-        type: 'document',
-        url: '/docs/security-whitepaper.pdf',
-      },
-      {
-        id: 'res-002',
-        name: 'Dashboard_Screenshot.png',
-        type: 'image',
-        url: '/images/dashboard-screenshot.png',
-      },
-    ],
-    licenseDependencies: ['Enterprise Security License', 'Cloud Platform License'],
-    createdAt: new Date('2024-04-10'),
-    createdBy: 'Mohamed Rabah',
-    lastModified: new Date('2024-05-22'),
-    modifiedBy: 'Sarah Johnson',
-    isVisible: true,
-    isFeatured: true,
-    clientSpecificPricing: false,
-  },
-  {
-    id: 'prod-002',
-    name: 'Data Migration Service',
-    productId: 'DMS-2025-002',
-    category: ProductCategory.SERVICES,
-    subCategory: 'Data Services',
-    shortDescription: 'Professional data migration and integration services',
-    detailedDescription:
-      'Expert-led data migration services ensuring seamless transition with minimal downtime and data integrity validation.',
-    status: ProductStatus.ACTIVE,
-    priceModel: PriceModel.HOURLY,
-    basePrice: 175,
-    options: [
-      {
-        id: 'opt-002',
-        name: 'Data Volume',
-        type: 'single_select',
-        choices: [
-          { label: 'Up to 1TB', value: 'small', priceModifier: 0 },
-          { label: '1-10TB', value: 'medium', priceModifier: 25 },
-          { label: '10TB+', value: 'large', priceModifier: 50 },
-        ],
-      },
-    ],
-    resources: [
-      {
-        id: 'res-003',
-        name: 'Migration_Methodology.pdf',
-        type: 'document',
-        url: '/docs/migration-methodology.pdf',
-      },
-    ],
-    licenseDependencies: ['Data Processing License'],
-    createdAt: new Date('2024-03-15'),
-    createdBy: 'Alex Chen',
-    lastModified: new Date('2024-06-01'),
-    modifiedBy: 'Mohamed Rabah',
-    isVisible: true,
-    isFeatured: false,
-    clientSpecificPricing: true,
-  },
-  {
-    id: 'prod-003',
-    name: 'AI Analytics Dashboard',
-    productId: 'AAD-2025-003',
-    category: ProductCategory.SOFTWARE,
-    subCategory: 'Analytics',
-    shortDescription: 'AI-powered business intelligence dashboard',
-    detailedDescription:
-      'Advanced analytics platform with machine learning capabilities for predictive insights and automated reporting.',
-    status: ProductStatus.DRAFT,
-    priceModel: PriceModel.SUBSCRIPTION,
-    basePrice: 950,
-    options: [
-      {
-        id: 'opt-003',
-        name: 'User Licenses',
-        type: 'number_input',
-        choices: [{ label: 'Per User/Month', value: 'per_user', priceModifier: 95 }],
-      },
-    ],
-    resources: [
-      {
-        id: 'res-004',
-        name: 'Feature_Overview.pdf',
-        type: 'document',
-        url: '/docs/feature-overview.pdf',
-      },
-      { id: 'res-005', name: 'Demo_Video.mp4', type: 'document', url: '/videos/demo-video.mp4' },
-    ],
-    licenseDependencies: ['AI Platform License', 'Analytics License'],
-    createdAt: new Date('2024-06-10'),
-    createdBy: 'Lisa Wang',
-    lastModified: new Date('2024-06-15'),
-    modifiedBy: 'Lisa Wang',
-    isVisible: false,
-    isFeatured: false,
-    clientSpecificPricing: false,
-  },
-  {
-    id: 'prod-004',
-    name: 'Network Audit Package',
-    productId: 'NAP-2025-004',
-    category: ProductCategory.SERVICES,
-    subCategory: 'Network Services',
-    shortDescription: 'Comprehensive network security audit and assessment',
-    detailedDescription:
-      'Full network security assessment including vulnerability scanning, penetration testing, and compliance validation.',
-    status: ProductStatus.ACTIVE,
-    priceModel: PriceModel.FIXED,
-    basePrice: 3500,
-    options: [
-      {
-        id: 'opt-004',
-        name: 'Scope Level',
-        type: 'single_select',
-        choices: [
-          { label: 'Basic Assessment', value: 'basic', priceModifier: 0 },
-          { label: 'Advanced Audit', value: 'advanced', priceModifier: 1500 },
-          { label: 'Full Penetration Test', value: 'full', priceModifier: 3000 },
-        ],
-      },
-    ],
-    resources: [
-      {
-        id: 'res-006',
-        name: 'Audit_Checklist.pdf',
-        type: 'document',
-        url: '/docs/audit-checklist.pdf',
-      },
-      {
-        id: 'res-007',
-        name: 'Sample_Report.pdf',
-        type: 'document',
-        url: '/docs/sample-report.pdf',
-      },
-    ],
-    licenseDependencies: ['Security Audit License', 'Penetration Testing License'],
-    createdAt: new Date('2024-02-20'),
-    createdBy: 'John Smith',
-    lastModified: new Date('2024-05-30'),
-    modifiedBy: 'Sarah Johnson',
-    isVisible: true,
-    isFeatured: true,
-    clientSpecificPricing: true,
-  },
-];
-
-// Analytics interfaces
-interface ProductManagementMetrics {
-  licenseDetectionTime: number;
-  dependencyCheckDuration: number;
-  missingComponentsDetected: number;
-  pricingCalculationAccuracy: number;
-  validationSpeedImprovement: number;
-  productSearchTime: number;
-  catalogBrowsingEfficiency: number;
-  configurationComplexity: number;
-  validationRuleCount: number;
-  compatibilityChecks: number;
-  dependencyMappingAccuracy: number;
-  licensePoolUtilization: number;
-  pricingVariations: number;
-  productCreationTime: number;
-  configurationChanges: number;
-  validationOverrides: number;
-  exportOperations: number;
-}
-
-export default function ProductManagement() {
-  const [products] = useState<Product[]>(MOCK_PRODUCTS);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('newest');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [sessionStartTime] = useState(Date.now());
-
-  // Analytics tracking
-  const trackProductAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      console.log('Product Management Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        sessionDuration: Date.now() - sessionStartTime,
-      });
-    },
-    [sessionStartTime]
-  );
-
-  // Product validation metrics
-  const validationMetrics = useMemo((): ProductManagementMetrics => {
-    const totalProducts = products.length;
-    const activeProducts = products.filter(p => p.status === ProductStatus.ACTIVE).length;
-    const productsWithDependencies = products.filter(p => p.licenseDependencies.length > 0).length;
-
-    return {
-      licenseDetectionTime: 1.2, // Mock: 1.2 seconds average
-      dependencyCheckDuration: 0.8, // Mock: 0.8 seconds
-      missingComponentsDetected: 3, // Mock: 3 missing components detected
-      pricingCalculationAccuracy: 98.5, // Mock: 98.5% accuracy
-      validationSpeedImprovement: 23.5, // Mock: 23.5% improvement over baseline
-      productSearchTime: 0.3, // Mock: 0.3 seconds search time
-      catalogBrowsingEfficiency: 85.2, // Mock: 85.2% efficiency rating
-      configurationComplexity: totalProducts * 2.5, // Mock complexity score
-      validationRuleCount: productsWithDependencies * 3, // Mock: 3 rules per dependency
-      compatibilityChecks: 156, // Mock: 156 compatibility checks performed
-      dependencyMappingAccuracy: 94.8, // Mock: 94.8% mapping accuracy
-      licensePoolUtilization: 67.3, // Mock: 67.3% license pool utilization
-      pricingVariations: products.reduce((sum, p) => sum + p.options.length, 0),
-      productCreationTime: 8.5, // Mock: 8.5 minutes average creation time
-      configurationChanges: 45, // Mock: 45 configuration changes this session
-      validationOverrides: 7, // Mock: 7 validation overrides
-      exportOperations: 12, // Mock: 12 export operations
-    };
-  }, [products]);
-
-  // Filter and search products
-  useEffect(() => {
-    let filtered = products;
-
-    // Apply category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(product => product.category === selectedCategory);
-    }
-
-    // Apply search filter
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        product =>
-          product.name.toLowerCase().includes(searchLower) ||
-          product.shortDescription.toLowerCase().includes(searchLower) ||
-          product.category.toLowerCase().includes(searchLower) ||
-          product.productId.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Apply sorting
-    switch (sortBy) {
-      case 'newest':
-        filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        break;
-      case 'oldest':
-        filtered.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-        break;
-      case 'name':
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'price':
-        filtered.sort((a, b) => a.basePrice - b.basePrice);
-        break;
-      default:
-        break;
-    }
-
-    setFilteredProducts(filtered);
-
-    // Track search and filter actions
-    if (searchTerm || selectedCategory !== 'all') {
-      trackProductAction('catalog_filtered', {
-        searchTerm,
-        category: selectedCategory,
-        resultsCount: filtered.length,
-        searchTime: 0.3, // Mock search time
-      });
-    }
-  }, [products, searchTerm, selectedCategory, sortBy, trackProductAction]);
-
-  // Get status display
-  const getStatusDisplay = (status: ProductStatus) => {
-    switch (status) {
-      case ProductStatus.ACTIVE:
-        return { label: 'Active', color: 'text-green-600', bg: 'bg-green-100' };
-      case ProductStatus.DRAFT:
-        return { label: 'Draft', color: 'text-gray-600', bg: 'bg-gray-100' };
-      case ProductStatus.ARCHIVED:
-        return { label: 'Archived', color: 'text-red-600', bg: 'bg-red-100' };
-      default:
-        return { label: 'Unknown', color: 'text-gray-600', bg: 'bg-gray-100' };
+  const handleProductSubmit = async (data: CreateProductData) => {
+    try {
+      await createProductMutation.mutateAsync(data);
+      toast.success('Product created successfully');
+      setIsCreateFormOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create product');
     }
   };
 
-  // Format price display
+  const handleDeleteProduct = async (productId: string) => {
+    if (!confirm('Are you sure you want to delete this product?')) {
+      return;
+    }
+
+    try {
+      await deleteProductMutation.mutateAsync(productId);
+      toast.success('Product deleted successfully');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete product');
+    }
+  };
+
   const formatPrice = (product: Product) => {
-    switch (product.priceModel) {
-      case PriceModel.FIXED:
-        return `$${product.basePrice.toLocaleString()}`;
-      case PriceModel.HOURLY:
-        return `$${product.basePrice}/hr`;
-      case PriceModel.SUBSCRIPTION:
-        return `$${product.basePrice}/mo`;
-      default:
-        return `$${product.basePrice}`;
-    }
+    return `${product.currency} ${product.price.toLocaleString()}`;
   };
 
-  // Handle product creation
-  const handleCreateProduct = useCallback(() => {
-    trackProductAction('create_product_initiated');
-    setShowCreateModal(true);
-  }, [trackProductAction]);
-
-  // Handle product view
-  const handleViewProduct = useCallback(
-    (product: Product) => {
-      trackProductAction('product_viewed', {
-        productId: product.id,
-        productName: product.name,
-        category: product.category,
-      });
-      setSelectedProduct(product);
-    },
-    [trackProductAction]
-  );
-
-  // Handle product edit
-  const handleEditProduct = useCallback(
-    (product: Product) => {
-      trackProductAction('product_edit_initiated', {
-        productId: product.id,
-        productName: product.name,
-      });
-      // Would open edit modal
-      console.log('Edit product:', product.id);
-    },
-    [trackProductAction]
-  );
-
-  // Simulate initial loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      trackProductAction('product_management_loaded', {
-        totalProducts: products.length,
-        metrics: validationMetrics,
-        loadTime: Date.now() - sessionStartTime,
-      });
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [products.length, validationMetrics, sessionStartTime, trackProductAction]);
-
+  // Handle loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading product catalog...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading products...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle error state
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load products</h3>
+          <p className="text-gray-600 mb-4">
+            {error instanceof Error ? error.message : 'An unexpected error occurred'}
+          </p>
+          <Button onClick={() => refetch()} variant="outline">
+            Try Again
+          </Button>
         </div>
       </div>
     );
@@ -491,491 +123,423 @@ export default function ProductManagement() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
-              <p className="text-gray-600">
-                {filteredProducts.length} of {products.length} products •{' '}
-                {validationMetrics.validationSpeedImprovement}% validation improvement
-              </p>
+      <div className="bg-white border-b border-gray-200">
+        <div className="px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 mb-4 sm:mb-0">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Package className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Product Catalog</h1>
+                <p className="text-gray-600">Manage products for proposal generation</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-3">
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button
-                onClick={handleCreateProduct}
-                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+                variant="outline"
+                onClick={() => {
+                  /* TODO: Implement import */
+                }}
+                className="flex items-center gap-2"
               >
-                <PlusIcon className="w-5 h-5 mr-2" />
-                Create Product
+                <Upload className="h-4 w-4" />
+                Import Products
               </Button>
               <Button
-                variant="secondary"
-                onClick={() => {
-                  trackProductAction('import_data_initiated');
-                  console.log('Import data clicked');
-                }}
-                className="flex items-center"
+                onClick={() => setIsCreateFormOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
               >
-                <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
-                Import Data
+                <Plus className="h-4 w-4" />
+                Create Product
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Validation Metrics Overview */}
-        <div className="mb-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Validation Performance</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <div className="p-6 text-center">
-                <ClockIcon className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-blue-600">
-                  {validationMetrics.licenseDetectionTime}s
-                </div>
-                <div className="text-sm text-gray-600">License Detection</div>
-                <div className="mt-2 text-xs text-green-600">
-                  +{validationMetrics.validationSpeedImprovement}% faster
-                </div>
+      {/* Filters and Search */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Search */}
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={filters.search || ''}
+                  onChange={e => updateFilters({ search: e.target.value })}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
-            </Card>
+            </div>
 
-            <Card>
-              <div className="p-6 text-center">
-                <CheckCircleIcon className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-green-600">
-                  {validationMetrics.dependencyMappingAccuracy}%
-                </div>
-                <div className="text-sm text-gray-600">Mapping Accuracy</div>
-                <div className="mt-2 text-xs text-gray-500">
-                  {validationMetrics.compatibilityChecks} checks
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="p-6 text-center">
-                <ExclamationTriangleIcon className="w-8 h-8 text-orange-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-orange-600">
-                  {validationMetrics.missingComponentsDetected}
-                </div>
-                <div className="text-sm text-gray-600">Missing Components</div>
-                <div className="mt-2 text-xs text-gray-500">Auto-detected issues</div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="p-6 text-center">
-                <ChartBarIcon className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-purple-600">
-                  {validationMetrics.licensePoolUtilization}%
-                </div>
-                <div className="text-sm text-gray-600">License Utilization</div>
-                <div className="mt-2 text-xs text-gray-500">Pool optimization</div>
-              </div>
-            </Card>
-          </div>
-        </div>
-
-        {/* Filters and Search */}
-        <Card className="mb-8">
-          <div className="p-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-4">
+            {/* Category Filter */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-gray-400" />
                 <select
-                  value={selectedCategory}
-                  onChange={e => setSelectedCategory(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={filters.category?.[0] || 'all'}
+                  onChange={e =>
+                    updateFilters({
+                      category: e.target.value === 'all' ? undefined : [e.target.value],
+                    })
+                  }
+                  className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="all">All Categories</option>
-                  {Object.values(ProductCategory).map(category => (
+                  {categories.map(category => (
                     <option key={category} value={category}>
                       {category}
                     </option>
                   ))}
                 </select>
-                <select
-                  value={sortBy}
-                  onChange={e => setSortBy(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              </div>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center border border-gray-300 rounded-md">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                 >
-                  <option value="newest">Newest First</option>
-                  <option value="oldest">Oldest First</option>
-                  <option value="name">Name A-Z</option>
-                  <option value="price">Price Low-High</option>
-                </select>
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  <List className="h-4 w-4" />
+                </button>
               </div>
             </div>
           </div>
-        </Card>
 
-        {/* Product List */}
-        <Card>
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-gray-900">
-                Product Catalog ({filteredProducts.length} products)
-              </h3>
-              <div className="flex items-center space-x-2 text-sm text-gray-500">
-                <FunnelIcon className="w-4 h-4" />
-                <span>
-                  Filtered by: {selectedCategory === 'all' ? 'All Categories' : selectedCategory}
+          {/* Active Filters */}
+          {(filters.search || filters.category?.length || filters.isActive !== undefined) && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-500">Active filters:</span>
+              {filters.search && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                  Search: {filters.search}
+                  <button
+                    onClick={() => updateFilters({ search: undefined })}
+                    className="ml-1 text-blue-600 hover:text-blue-800"
+                  >
+                    ×
+                  </button>
                 </span>
+              )}
+              {filters.category?.map(cat => (
+                <span
+                  key={cat}
+                  className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800"
+                >
+                  Category: {cat}
+                  <button
+                    onClick={() => updateFilters({ category: undefined })}
+                    className="ml-1 text-green-600 hover:text-green-800"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <button onClick={clearFilters} className="text-sm text-blue-600 hover:text-blue-800">
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Actions Bar */}
+      <div className="bg-gray-50 border-b border-gray-200">
+        <div className="px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-wrap gap-2">
+            <Link href="/products/create">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <Plus className="h-3 w-3" />
+                New Product
+              </Button>
+            </Link>
+            <Link href="/products/relationships">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <Settings className="h-3 w-3" />
+                Relationships
+              </Button>
+            </Link>
+            <Link href="/products/management">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <Settings className="h-3 w-3" />
+                Management
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Download className="h-3 w-3" />
+              Export
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="px-4 sm:px-6 lg:px-8 py-6">
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Products</p>
+                <p className="text-2xl font-bold text-gray-900">{stats?.total || 0}</p>
+              </div>
+              <Package className="h-8 w-8 text-blue-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Active Products</p>
+                <p className="text-2xl font-bold text-green-600">{stats?.active || 0}</p>
+              </div>
+              <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                <div className="h-4 w-4 bg-green-500 rounded-full"></div>
               </div>
             </div>
+          </div>
 
-            {filteredProducts.length === 0 ? (
-              <div className="text-center py-12">
-                <DocumentTextIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
-                <p className="text-gray-600 mb-4">
-                  {searchTerm || selectedCategory !== 'all'
-                    ? 'Try adjusting your search or filter criteria.'
-                    : 'Get started by creating your first product.'}
+          <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Categories</p>
+                <p className="text-2xl font-bold text-purple-600">{categories.length}</p>
+              </div>
+              <Filter className="h-8 w-8 text-purple-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Value</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  ${stats?.totalRevenue.toLocaleString() || '0'}
                 </p>
+              </div>
+              <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 font-bold text-sm">$</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Products Display */}
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {products.map(product => (
+              <div
+                key={product.id}
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900 truncate">{product.name}</h3>
+                    <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                  </div>
+                  <div className="relative">
+                    <button className="p-1 text-gray-400 hover:text-gray-600">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {product.category.slice(0, 2).map((cat: string) => (
+                    <span key={cat} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                      {cat}
+                    </span>
+                  ))}
+                  {product.category.length > 2 && (
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                      +{product.category.length - 2} more
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="text-lg font-bold text-green-600">{formatPrice(product)}</div>
+                  <div className="flex items-center gap-1">
+                    <Link href={`/products/${product.id}`}>
+                      <button className="p-1 text-gray-400 hover:text-blue-600" title="View">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    </Link>
+                    <Link href={`/products/${product.id}/edit`}>
+                      <button className="p-1 text-gray-400 hover:text-green-600" title="Edit">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                    </Link>
+                    <button
+                      onClick={() => handleDeleteProduct(product.id)}
+                      className="p-1 text-gray-400 hover:text-red-600"
+                      title="Delete"
+                      disabled={deleteProductMutation.isPending}
+                    >
+                      {deleteProductMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
+              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-600">
+                <div className="col-span-4">Product</div>
+                <div className="col-span-2">Category</div>
+                <div className="col-span-2">Price</div>
+                <div className="col-span-2">Status</div>
+                <div className="col-span-2">Actions</div>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {products.map(product => (
+                <div key={product.id} className="px-6 py-4 hover:bg-gray-50">
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    <div className="col-span-4">
+                      <div>
+                        <h3 className="font-medium text-gray-900">{product.name}</h3>
+                        <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="flex flex-wrap gap-1">
+                        {product.category.slice(0, 1).map((cat: string) => (
+                          <span
+                            key={cat}
+                            className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded"
+                          >
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="font-medium text-green-600">{formatPrice(product)}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs rounded-full ${
+                          product.isActive
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {product.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/products/${product.id}`}>
+                          <button className="p-1 text-gray-400 hover:text-blue-600">
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </Link>
+                        <Link href={`/products/${product.id}/edit`}>
+                          <button className="p-1 text-gray-400 hover:text-green-600">
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="p-1 text-gray-400 hover:text-red-600"
+                          disabled={deleteProductMutation.isPending}
+                        >
+                          {deleteProductMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {pagination && pagination.totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-between">
+            <p className="text-sm text-gray-700">
+              Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
+              {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}{' '}
+              results
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPage(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-gray-700">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <Button
+                variant="outline"
+                onClick={() => setPage(pagination.page + 1)}
+                disabled={pagination.page >= pagination.totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {products.length === 0 && !isLoading && (
+          <div className="text-center py-12">
+            <Package className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No products found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {filters.search || filters.category?.length
+                ? 'Try adjusting your search or filters'
+                : 'Get started by creating your first product'}
+            </p>
+            {!filters.search && !filters.category?.length && (
+              <div className="mt-6">
                 <Button
-                  onClick={handleCreateProduct}
+                  onClick={() => setIsCreateFormOpen(true)}
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
-                  <PlusIcon className="w-5 h-5 mr-2" />
+                  <Plus className="h-4 w-4 mr-2" />
                   Create Product
                 </Button>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Category
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Price
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Dependencies
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredProducts.map(product => {
-                      const statusDisplay = getStatusDisplay(product.status);
-
-                      return (
-                        <tr key={product.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <div>
-                              <div className="font-medium text-gray-900">{product.name}</div>
-                              <div className="text-sm text-gray-500">{product.productId}</div>
-                              <div className="text-sm text-gray-600 mt-1">
-                                {product.shortDescription}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div>
-                              <div className="text-sm text-gray-900">{product.category}</div>
-                              <div className="text-sm text-gray-500">{product.subCategory}</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {formatPrice(product)}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {product.priceModel} pricing
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusDisplay.bg} ${statusDisplay.color}`}
-                            >
-                              {statusDisplay.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">
-                              {product.licenseDependencies.length} licenses
-                            </div>
-                            {product.licenseDependencies.length > 0 && (
-                              <div className="text-sm text-gray-500">
-                                {product.licenseDependencies[0]}
-                                {product.licenseDependencies.length > 1 &&
-                                  ` +${product.licenseDependencies.length - 1} more`}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end space-x-2">
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => handleViewProduct(product)}
-                              >
-                                <EyeIcon className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => handleEditProduct(product)}
-                              >
-                                <PencilIcon className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {filteredProducts.length > 0 && (
-              <div className="flex items-center justify-between mt-6">
-                <div className="text-sm text-gray-700">
-                  Showing {filteredProducts.length} of {products.length} products
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="secondary" size="sm" disabled>
-                    Previous
-                  </Button>
-                  <span className="px-3 py-1 text-sm bg-blue-600 text-white rounded">1</span>
-                  <Button variant="secondary" size="sm">
-                    Next
-                  </Button>
-                </div>
-              </div>
             )}
           </div>
-        </Card>
+        )}
       </div>
 
-      {/* Product Creation Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Create New Product</h2>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <XMarkIcon className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6">
-              <div className="text-center py-12">
-                <Cog6ToothIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Product Creation Form</h3>
-                <p className="text-gray-600 mb-4">
-                  This would contain the full product creation form with:
-                </p>
-                <ul className="text-left text-gray-600 space-y-2 max-w-md mx-auto">
-                  <li>• Product information fields</li>
-                  <li>• Pricing configuration</li>
-                  <li>• Customization options</li>
-                  <li>• Resource attachments</li>
-                  <li>• License dependency mapping</li>
-                  <li>• Visibility and status settings</li>
-                  <li>• AI-assisted description generation</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
-              <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => setShowCreateModal(false)}>Save Draft</Button>
-              <Button
-                onClick={() => {
-                  trackProductAction('product_created', {
-                    creationTime: validationMetrics.productCreationTime,
-                    licenseValidationTime: validationMetrics.licenseDetectionTime,
-                  });
-                  setShowCreateModal(false);
-                }}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                Save and Activate
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Product Detail Modal */}
-      {selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{selectedProduct.name}</h2>
-                  <p className="text-gray-600">{selectedProduct.productId}</p>
-                </div>
-                <button
-                  onClick={() => setSelectedProduct(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <XMarkIcon className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Product Information */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">Product Information</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Category</label>
-                    <p className="text-sm text-gray-900">{selectedProduct.category}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Sub-category</label>
-                    <p className="text-sm text-gray-900">{selectedProduct.subCategory}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Description</label>
-                    <p className="text-sm text-gray-900">{selectedProduct.detailedDescription}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pricing */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">Pricing</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Base Price</label>
-                    <p className="text-sm text-gray-900">{formatPrice(selectedProduct)}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Price Model</label>
-                    <p className="text-sm text-gray-900 capitalize">
-                      {selectedProduct.priceModel} pricing
-                    </p>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Customization Options
-                    </label>
-                    <div className="space-y-2">
-                      {selectedProduct.options.map(option => (
-                        <div key={option.id} className="text-sm text-gray-900">
-                          • {option.name} ({option.choices.length} choices)
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* License Dependencies */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">License Dependencies</h3>
-                <div className="space-y-2">
-                  {selectedProduct.licenseDependencies.map((license, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <CheckCircleIcon className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-gray-900">{license}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Resources */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">
-                  Resources & Documentation
-                </h3>
-                <div className="space-y-2">
-                  {selectedProduct.resources.map(resource => (
-                    <div key={resource.id} className="flex items-center space-x-2">
-                      {resource.type === 'document' ? (
-                        <DocumentTextIcon className="w-4 h-4 text-blue-600" />
-                      ) : (
-                        <PhotoIcon className="w-4 h-4 text-green-600" />
-                      )}
-                      <span className="text-sm text-gray-900">{resource.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Product History */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">Product History</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <label className="block font-medium text-gray-700">Created</label>
-                    <p className="text-gray-900">
-                      {selectedProduct.createdAt.toLocaleDateString()}
-                    </p>
-                    <p className="text-gray-600">By: {selectedProduct.createdBy}</p>
-                  </div>
-                  <div>
-                    <label className="block font-medium text-gray-700">Last Modified</label>
-                    <p className="text-gray-900">
-                      {selectedProduct.lastModified.toLocaleDateString()}
-                    </p>
-                    <p className="text-gray-600">By: {selectedProduct.modifiedBy}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
-              <Button variant="secondary" onClick={() => setSelectedProduct(null)}>
-                Close
-              </Button>
-              <Button onClick={() => handleEditProduct(selectedProduct)}>Edit Product</Button>
-              <Button
-                onClick={() => {
-                  trackProductAction('product_cloned', {
-                    originalProductId: selectedProduct.id,
-                    originalProductName: selectedProduct.name,
-                  });
-                  console.log('Clone product:', selectedProduct.id);
-                }}
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                Clone Product
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Product Creation Form Modal */}
+      <ProductCreationForm
+        isOpen={isCreateFormOpen}
+        onClose={() => setIsCreateFormOpen(false)}
+        onSubmit={handleProductSubmit}
+      />
     </div>
   );
 }

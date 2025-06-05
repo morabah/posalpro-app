@@ -77,9 +77,40 @@ const createMockWidget = (overrides: Partial<DashboardWidget> = {}): DashboardWi
   ...overrides,
 });
 
-const mockProposalManagerWidgets = getDashboardConfiguration(UserType.PROPOSAL_MANAGER, []);
-const mockSMEWidgets = getDashboardConfiguration(UserType.SME, []);
-const mockExecutiveWidgets = getDashboardConfiguration(UserType.EXECUTIVE, []);
+// Mock permissions for different roles
+const mockProposalManagerPermissions = [
+  'proposals.read',
+  'activities.read',
+  'team.read',
+  'deadlines.read',
+  'metrics.read',
+  'actions.execute',
+];
+
+const mockSMEPermissions = [
+  'sme.assignments.read',
+  'activities.read',
+  'team.read',
+  'validation.read',
+  'actions.execute',
+];
+
+const mockExecutivePermissions = [
+  'executive.read',
+  'proposals.read',
+  'metrics.read',
+  'deadlines.read',
+];
+
+const mockProposalManagerWidgets = getDashboardConfiguration(
+  UserType.PROPOSAL_MANAGER,
+  mockProposalManagerPermissions
+);
+const mockSMEWidgets = getDashboardConfiguration(UserType.SME, mockSMEPermissions);
+const mockExecutiveWidgets = getDashboardConfiguration(
+  UserType.EXECUTIVE,
+  mockExecutivePermissions
+);
 
 describe('DashboardShell Integration Tests', () => {
   const defaultProps = {
@@ -162,8 +193,8 @@ describe('DashboardShell Integration Tests', () => {
     it('filters widgets based on user role - SME', () => {
       render(<DashboardShell {...defaultProps} widgets={mockSMEWidgets} userRole={UserType.SME} />);
 
-      // SME should see different widgets
-      expect(screen.getByText(/Role: SME/)).toBeInTheDocument();
+      // SME should see different widgets - fix to match actual enum value
+      expect(screen.getByText(/Role: Subject Matter Expert/)).toBeInTheDocument();
       // Widgets would be filtered by role in the registry
     });
 
@@ -203,7 +234,8 @@ describe('DashboardShell Integration Tests', () => {
       rerender(
         <DashboardShell {...defaultProps} widgets={mockSMEWidgets} userRole={UserType.SME} />
       );
-      expect(screen.getByText(/Role: SME/)).toBeInTheDocument();
+      // Fix to match actual enum value
+      expect(screen.getByText(/Role: Subject Matter Expert/)).toBeInTheDocument();
     });
   });
 

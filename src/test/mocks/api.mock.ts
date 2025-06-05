@@ -35,10 +35,47 @@ export const successResponse = <T extends DefaultBodyType>(data: T) => {
 };
 
 // Error response builder
-export const errorResponse = (status: number = 400, message: string = 'Bad Request') => {
+export const errorResponse = (
+  status: number = 400,
+  message: string = 'Bad Request',
+  type?: string
+) => {
+  const errorType = type || getErrorTypeFromStatus(status);
   return () => {
-    return HttpResponse.json({ error: message }, { status, statusText: message });
+    return HttpResponse.json(
+      {
+        success: false,
+        error: {
+          type: errorType,
+          message,
+          status,
+        },
+      },
+      { status }
+    );
   };
+};
+
+// Helper function to determine error type from status code
+const getErrorTypeFromStatus = (status: number): string => {
+  switch (status) {
+    case 400:
+      return 'validation_error';
+    case 401:
+      return 'authentication_failed';
+    case 403:
+      return 'authorization_failed';
+    case 404:
+      return 'not_found';
+    case 409:
+      return 'conflict';
+    case 429:
+      return 'rate_limit_exceeded';
+    case 500:
+      return 'internal_server_error';
+    default:
+      return 'unknown_error';
+  }
 };
 
 // Auth error (401) response

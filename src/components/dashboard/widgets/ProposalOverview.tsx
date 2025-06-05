@@ -8,14 +8,13 @@
 import { Button } from '@/components/ui/forms/Button';
 import type { ProposalMetrics, ProposalSummary, WidgetProps } from '@/lib/dashboard/types';
 import { UserType } from '@/types';
+import { ArrowTrendingDownIcon, ArrowTrendingUpIcon } from '@heroicons/react/24/outline';
 import {
   AlertTriangleIcon,
   BarChart3Icon,
   CheckCircleIcon,
   ClockIcon,
   PlusIcon,
-  TrendingDownIcon,
-  TrendingUpIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -45,9 +44,9 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, change, trend, icon, 
 
   const trendIcon =
     trend === 'up' ? (
-      <TrendingUpIcon className="w-4 h-4 text-green-500" />
+      <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />
     ) : trend === 'down' ? (
-      <TrendingDownIcon className="w-4 h-4 text-red-500" />
+      <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />
     ) : null;
 
   return (
@@ -112,9 +111,9 @@ const ProposalListItem: React.FC<ProposalListItemProps> = ({ proposal, onSelect 
     }
   };
 
-  const daysUntilDeadline = Math.ceil(
-    (proposal.deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
+  const daysUntilDeadline = proposal.deadline
+    ? Math.ceil((proposal.deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
 
   return (
     <div
@@ -151,7 +150,13 @@ const ProposalListItem: React.FC<ProposalListItemProps> = ({ proposal, onSelect 
       <div className="flex items-center justify-between text-xs text-neutral-600">
         <div className="flex items-center space-x-1">
           <ClockIcon className="w-3 h-3" />
-          <span>{daysUntilDeadline > 0 ? `${daysUntilDeadline} days left` : 'Overdue'}</span>
+          <span>
+            {daysUntilDeadline !== null
+              ? daysUntilDeadline > 0
+                ? `${daysUntilDeadline} days left`
+                : 'Overdue'
+              : 'No deadline'}
+          </span>
         </div>
         <div className="flex items-center space-x-1">
           <span>{proposal.team.length} members</span>
@@ -199,7 +204,7 @@ export const ProposalOverview: React.FC<WidgetProps> = ({
         value: `${Math.round(metrics.winRate * 100)}%`,
         change: 5,
         trend: 'up',
-        icon: <TrendingUpIcon className="w-5 h-5" />,
+        icon: <ArrowTrendingUpIcon className="w-5 h-5" />,
         color: 'green',
       },
       {

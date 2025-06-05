@@ -73,6 +73,11 @@ const toastReducer = (state: ToastState[], action: ToastAction): ToastState[] =>
       return newState;
 
     case 'REMOVE_TOAST':
+      // Find the toast and call onClose if it exists
+      const toastToRemove = state.find(toast => toast.id === action.payload);
+      if (toastToRemove?.onClose) {
+        toastToRemove.onClose();
+      }
       return state.filter(toast => toast.id !== action.payload);
 
     case 'CLEAR_ALL_TOASTS':
@@ -139,16 +144,10 @@ export function ToastProvider({
     [generateId]
   );
 
-  const removeToast = useCallback(
-    (id: string) => {
-      const toast = toasts.find(t => t.id === id);
-      if (toast?.onClose) {
-        toast.onClose();
-      }
-      dispatch({ type: 'REMOVE_TOAST', payload: id });
-    },
-    [toasts]
-  );
+  const removeToast = useCallback((id: string) => {
+    // We'll handle onClose callback in the reducer
+    dispatch({ type: 'REMOVE_TOAST', payload: id });
+  }, []); // No dependencies
 
   const clearAllToasts = useCallback(() => {
     dispatch({ type: 'CLEAR_ALL_TOASTS' });

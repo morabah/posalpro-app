@@ -1,0 +1,280 @@
+/**
+ * PosalPro MVP2 - Individual User API Routes
+ * Get user profile and activity tracking for specific users
+ * Component Traceability: US-2.1, US-2.2, H4, H7
+ */
+
+import { authOptions } from '@/lib/auth';
+import { PrismaClient } from '@prisma/client';
+import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const prisma = new PrismaClient();
+
+/**
+ * Component Traceability Matrix:
+ * - User Stories: US-2.1 (User Profile Management), US-2.2 (User Activity Tracking)
+ * - Acceptance Criteria: AC-2.1.1, AC-2.1.2, AC-2.2.1, AC-2.2.2
+ * - Hypotheses: H4 (Cross-Department Coordination), H7 (Deadline Management)
+ * - Methods: getUserById(), getUserActivity(), trackUserInteraction()
+ * - Test Cases: TC-H4-003, TC-H7-003
+ */
+
+/**
+ * Query schema for activity filtering
+ */
+const ActivityQuerySchema = z.object({
+  limit: z.coerce.number().min(1).max(100).default(20),
+  days: z.coerce.number().min(1).max(90).default(30),
+  includeActivity: z
+    .string()
+    .optional()
+    .transform(val => val === 'true'),
+});
+
+/**
+ * GET /api/users/[id] - Get specific user profile and activity
+ */
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const params = await context.params;
+    const { id } = params;
+
+    // Authentication check
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Parse query parameters
+    const { searchParams } = new URL(request.url);
+    const queryParams = Object.fromEntries(searchParams);
+    const validatedQuery = ActivityQuerySchema.parse(queryParams);
+
+    // Check if user exists and is accessible
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        department: true,
+        status: true,
+        lastLogin: true,
+        createdAt: true,
+        roles: {
+          select: {
+            role: {
+              select: {
+                name: true,
+                description: true,
+                level: true,
+              },
+            },
+          },
+        },
+        preferences: {
+          select: {
+            theme: true,
+            language: true,
+            analyticsConsent: true,
+          },
+        },
+        communicationPrefs: {
+          select: {
+            timezone: true,
+            language: true,
+          },
+        },
+        analyticsProfile: {
+          select: {
+            performanceMetrics: true,
+            hypothesisContributions: true,
+            lastAssessment: true,
+          },
+        },
+        _count: {
+          select: {
+            createdProposals: true,
+            assignedProposals: true,
+            createdContent: true,
+            hypothesisEvents: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Only allow access to active users (privacy protection)
+    if (user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not available' }, { status: 403 });
+    }
+
+    // Prepare the base user profile
+    const userProfile = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      department: user.department,
+      status: user.status,
+      lastLogin: user.lastLogin,
+      createdAt: user.createdAt,
+      timezone: user.communicationPrefs?.timezone || 'UTC',
+      language: user.communicationPrefs?.language || user.preferences?.language || 'en',
+      theme: user.preferences?.theme || 'system',
+      analyticsConsent: user.preferences?.analyticsConsent || false,
+      roles: user.roles.map(ur => ({
+        name: ur.role.name,
+        description: ur.role.description,
+        level: ur.role.level,
+      })),
+      stats: {
+        proposalsCreated: user._count.createdProposals,
+        proposalsAssigned: user._count.assignedProposals,
+        contentCreated: user._count.createdContent,
+        hypothesisEvents: user._count.hypothesisEvents,
+      },
+      performance: user.analyticsProfile
+        ? {
+            metrics: user.analyticsProfile.performanceMetrics,
+            hypothesisContributions: user.analyticsProfile.hypothesisContributions,
+            lastAssessment: user.analyticsProfile.lastAssessment,
+          }
+        : null,
+    };
+
+    // If activity is requested, fetch recent activity
+    if (validatedQuery.includeActivity) {
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - validatedQuery.days);
+
+      const [auditLogs, hypothesisEvents, proposalActivity] = await Promise.all([
+        // Recent audit logs
+        prisma.auditLog.findMany({
+          where: {
+            userId: id,
+            timestamp: { gte: daysAgo },
+          },
+          select: {
+            id: true,
+            action: true,
+            entity: true,
+            entityId: true,
+            success: true,
+            timestamp: true,
+            severity: true,
+          },
+          orderBy: { timestamp: 'desc' },
+          take: Math.min(validatedQuery.limit, 50),
+        }),
+
+        // Recent hypothesis validation events
+        prisma.hypothesisValidationEvent.findMany({
+          where: {
+            userId: id,
+            timestamp: { gte: daysAgo },
+          },
+          select: {
+            id: true,
+            hypothesis: true,
+            action: true,
+            performanceImprovement: true,
+            timestamp: true,
+            userStoryId: true,
+          },
+          orderBy: { timestamp: 'desc' },
+          take: Math.min(validatedQuery.limit, 20),
+        }),
+
+        // Recent proposal activity (created/updated)
+        prisma.proposal.findMany({
+          where: {
+            OR: [{ createdBy: id }, { assignedTo: { some: { id } } }],
+            updatedAt: { gte: daysAgo },
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            updatedAt: true,
+            createdBy: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: Math.min(validatedQuery.limit, 10),
+        }),
+      ]);
+
+      // Combine and format activity
+      const combinedActivity = [
+        ...auditLogs.map(log => ({
+          id: log.id,
+          type: 'audit',
+          action: log.action,
+          entity: log.entity,
+          entityId: log.entityId,
+          success: log.success,
+          severity: log.severity,
+          timestamp: log.timestamp,
+        })),
+        ...hypothesisEvents.map(event => ({
+          id: event.id,
+          type: 'hypothesis',
+          action: event.action,
+          hypothesis: event.hypothesis,
+          userStoryId: event.userStoryId,
+          improvement: event.performanceImprovement,
+          timestamp: event.timestamp,
+        })),
+        ...proposalActivity.map(proposal => ({
+          id: proposal.id,
+          type: 'proposal',
+          action: proposal.createdBy === id ? 'created' : 'updated',
+          title: proposal.title,
+          status: proposal.status,
+          timestamp: proposal.updatedAt,
+        })),
+      ]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, validatedQuery.limit);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          user: userProfile,
+          activity: combinedActivity,
+          activitySummary: {
+            totalEvents: combinedActivity.length,
+            auditEvents: auditLogs.length,
+            hypothesisEvents: hypothesisEvents.length,
+            proposalActivity: proposalActivity.length,
+            periodDays: validatedQuery.days,
+          },
+        },
+        message: 'User profile and activity retrieved successfully',
+      });
+    }
+
+    // Return just the user profile if no activity requested
+    return NextResponse.json({
+      success: true,
+      data: { user: userProfile },
+      message: 'User profile retrieved successfully',
+    });
+  } catch (error) {
+    const params = await context.params;
+    console.error(`Failed to fetch user ${params.id}:`, error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid query parameters', details: error.errors },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ error: 'Failed to fetch user profile' }, { status: 500 });
+  }
+}
