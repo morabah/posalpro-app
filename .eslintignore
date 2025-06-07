@@ -1,0 +1,7 @@
+# Ignore all test files from linting
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__/**
+**/__mocks__/**

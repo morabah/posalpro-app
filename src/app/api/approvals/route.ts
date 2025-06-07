@@ -5,7 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import { ApprovalExecution, PrismaClient, WorkflowStage } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -36,7 +36,7 @@ const ApprovalQuerySchema = z.object({
 });
 
 const ApprovalDecisionSchema = z.object({
-  executionStageId: z.string().cuid('Invalid execution stage ID'),
+  workflowStageId: z.string().cuid('Invalid workflow stage ID'),
   decision: z.enum(['approve', 'reject', 'request_changes']),
   comments: z.string().max(1000).optional(),
   attachments: z
@@ -82,31 +82,35 @@ export async function GET(request: NextRequest) {
     }
 
     if (validatedQuery.assignedToMe) {
-      where.assignedTo = {
+      where.approvers = {
         has: session.user.id,
       };
     }
 
     if (validatedQuery.overdue) {
-      where.dueDate = {
-        lt: new Date(),
+      where.execution = {
+        ...where.execution,
+        startedAt: {
+          lt: new Date(Date.now() - (where.slaHours || 24) * 60 * 60 * 1000),
+        },
+        status: 'PENDING',
       };
-      where.status = 'PENDING';
     }
 
     // Calculate pagination
     const skip = (validatedQuery.page - 1) * validatedQuery.limit;
 
     // Build include object
-    const includeOptions: any = {
+    const includeOptions = {
       execution: {
         select: {
           id: true,
           entityId: true,
           entityType: true,
-          priority: true,
+          status: true,
           startedAt: true,
-          dueDate: true,
+          completedAt: true,
+          slaCompliance: true,
           workflow: {
             select: {
               id: true,
@@ -114,38 +118,16 @@ export async function GET(request: NextRequest) {
               entityType: true,
             },
           },
-          initiator: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              department: true,
-            },
-          },
         },
       },
-      stage: {
+      decisions: {
         select: {
           id: true,
-          name: true,
-          description: true,
-          order: true,
-          slaHours: true,
-          isParallel: true,
-          isOptional: true,
-        },
-      },
-    };
-
-    if (validatedQuery.includeDetails) {
-      includeOptions.approvals = {
-        select: {
-          id: true,
-          userId: true,
+          approverId: true,
           decision: true,
           comments: true,
-          decidedAt: true,
-          user: {
+          timestamp: true,
+          approver: {
             select: {
               id: true,
               name: true,
@@ -155,14 +137,14 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: {
-          decidedAt: 'desc',
+          timestamp: 'desc',
         },
-      };
-    }
+      },
+    };
 
     // Fetch approval requests
     const [approvalRequests, total] = await Promise.all([
-      prisma.executionStage.findMany({
+      prisma.workflowStage.findMany({
         where,
         include: includeOptions,
         orderBy: {
@@ -171,37 +153,53 @@ export async function GET(request: NextRequest) {
         skip,
         take: validatedQuery.limit,
       }),
-      prisma.executionStage.count({ where }),
+      prisma.workflowStage.count({ where }),
     ]);
 
     // Transform requests with enhanced analytics
     const transformedRequests = approvalRequests.map(request => {
-      const metadata = (request.metadata as any) || {};
-      const isOverdue = request.dueDate && new Date() > request.dueDate;
-      const timeRemaining = request.dueDate
-        ? Math.max(0, Math.round((request.dueDate.getTime() - Date.now()) / (1000 * 60 * 60)))
+      const wfRequest = request as WorkflowStage & {
+        execution: ApprovalExecution;
+        decisions: any[];
+      };
+      const metadata = wfRequest.execution?.performanceMetrics || {};
+
+      // Calculate SLA status
+      const slaHours = wfRequest.slaHours || 24;
+      const startedAt = wfRequest.execution?.startedAt;
+      const isOverdue = startedAt
+        ? Date.now() > startedAt.getTime() + slaHours * 60 * 60 * 1000
+        : false;
+
+      const timeRemaining = startedAt
+        ? Math.max(
+            0,
+            Math.round(
+              (startedAt.getTime() + slaHours * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60)
+            )
+          )
         : null;
 
       // Calculate priority score based on multiple factors
       const priorityScore = calculatePriorityScore(
-        request.execution?.priority || 'MEDIUM',
+        wfRequest.execution?.status || 'PENDING',
         isOverdue,
         timeRemaining,
-        metadata.isParallel || false
+        wfRequest.isParallel || false
       );
 
       return {
-        ...request,
+        ...wfRequest,
         analytics: {
           isOverdue,
           timeRemaining,
           priorityScore,
-          slaStatus: calculateSLAStatus(request.startedAt, request.dueDate),
+          slaStatus: calculateSLAStatus(startedAt, slaHours),
           escalationLevel: metadata.escalationLevel || 0,
           averageApprovalTime: metadata.averageApprovalTime || null,
         },
         assignedUsers:
-          request.assignedTo?.map((userId: string) => ({
+          wfRequest.approvers?.map(userId => ({
             id: userId,
             // Note: Would need to fetch user details separately for full data
           })) || [],
@@ -230,7 +228,7 @@ export async function GET(request: NextRequest) {
           overdue: validatedQuery.overdue,
         },
         summary: {
-          totalPending: transformedRequests.filter(r => r.status === 'PENDING').length,
+          totalPending: transformedRequests.filter(r => r.execution?.status === 'PENDING').length,
           totalOverdue: transformedRequests.filter(r => r.analytics.isOverdue).length,
           highPriority: transformedRequests.filter(r => r.analytics.priorityScore > 80).length,
         },
@@ -252,7 +250,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/approvals - Process approval decision
+ * POST /api/approvals - Make a decision on an approval request
  */
 export async function POST(request: NextRequest) {
   try {
@@ -264,205 +262,76 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
-    const validatedData = ApprovalDecisionSchema.parse(body);
+    const validatedBody = ApprovalDecisionSchema.parse(body);
 
-    // Check if execution stage exists and user is authorized
-    const executionStage = await prisma.executionStage.findUnique({
-      where: { id: validatedData.executionStageId },
+    // Fetch the workflow stage and check permissions
+    const workflowStage = await prisma.workflowStage.findUnique({
+      where: { id: validatedBody.workflowStageId },
       include: {
-        execution: {
-          include: {
-            workflow: true,
-          },
-        },
-        stage: true,
-        approvals: true,
+        workflow: true,
+        execution: true,
       },
     });
 
-    if (!executionStage) {
-      return NextResponse.json({ error: 'Execution stage not found' }, { status: 404 });
+    if (!workflowStage) {
+      return NextResponse.json({ error: 'Workflow stage not found' }, { status: 404 });
     }
 
-    // Check if user is authorized to approve this stage
-    const assignedTo = (executionStage.assignedTo as string[]) || [];
-    if (!assignedTo.includes(session.user.id)) {
-      return NextResponse.json(
-        { error: 'You are not authorized to approve this request' },
-        { status: 403 }
-      );
+    if (!workflowStage.approvers?.includes(session.user.id)) {
+      return NextResponse.json({ error: 'Not authorized to make this decision' }, { status: 403 });
     }
 
-    // Check if stage is still pending
-    if (executionStage.status !== 'PENDING' && executionStage.status !== 'ACTIVE') {
-      return NextResponse.json(
-        { error: 'This approval request has already been processed' },
-        { status: 400 }
-      );
-    }
-
-    // Check if user has already provided a decision
-    const existingApproval = executionStage.approvals.find(
-      approval => approval.userId === session.user.id
-    );
-
-    if (existingApproval) {
-      return NextResponse.json(
-        { error: 'You have already provided a decision for this request' },
-        { status: 400 }
-      );
-    }
-
-    // Validate escalation targets if escalating
-    if (validatedData.escalate && validatedData.escalateTo) {
-      const existingUsers = await prisma.user.findMany({
-        where: { id: { in: validatedData.escalateTo } },
-        select: { id: true },
-      });
-
-      if (existingUsers.length !== validatedData.escalateTo.length) {
-        return NextResponse.json(
-          { error: 'One or more escalation targets do not exist' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Process approval decision in transaction
-    const result = await prisma.$transaction(async tx => {
-      // Create approval record
-      const approval = await tx.stageApproval.create({
-        data: {
-          executionStageId: validatedData.executionStageId,
-          userId: session.user.id,
-          decision: validatedData.decision.toUpperCase(),
-          comments: validatedData.comments,
-          decidedAt: new Date(),
-          attachments: validatedData.attachments || [],
-        },
-      });
-
-      // Handle escalation
-      if (validatedData.escalate && validatedData.escalateTo) {
-        const metadata = (executionStage.metadata as any) || {};
-        await tx.executionStage.update({
-          where: { id: validatedData.executionStageId },
-          data: {
-            status: 'ESCALATED',
-            assignedTo: validatedData.escalateTo,
-            metadata: {
-              ...metadata,
-              escalationLevel: (metadata.escalationLevel || 0) + 1,
-              escalatedBy: session.user.id,
-              escalatedAt: new Date().toISOString(),
-              originalAssignees: assignedTo,
-            },
-          },
-        });
-
-        return { approval, escalated: true };
-      }
-
-      // Check if all required approvals are complete
-      const allApprovals = await tx.stageApproval.findMany({
-        where: { executionStageId: validatedData.executionStageId },
-      });
-
-      const requiredApprovals = assignedTo.length;
-      const completedApprovals = allApprovals.length;
-      const approvedDecisions = allApprovals.filter(a => a.decision === 'APPROVE').length;
-      const rejectedDecisions = allApprovals.filter(a => a.decision === 'REJECT').length;
-
-      let stageStatus = executionStage.status;
-      let executionStatus = executionStage.execution.status;
-
-      // Determine stage completion
-      if (rejectedDecisions > 0) {
-        // Any rejection fails the stage
-        stageStatus = 'REJECTED';
-        executionStatus = 'FAILED';
-      } else if (
-        completedApprovals >= requiredApprovals &&
-        approvedDecisions === completedApprovals
-      ) {
-        // All approvals received and approved
-        stageStatus = 'COMPLETED';
-
-        // Check if this was the last stage
-        const nextStage = await tx.workflowStage.findFirst({
-          where: {
-            workflowId: executionStage.execution.workflowId,
-            order: { gt: executionStage.stage.order },
-          },
-          orderBy: { order: 'asc' },
-        });
-
-        if (!nextStage) {
-          // No more stages, complete the execution
-          executionStatus = 'COMPLETED';
-        } else {
-          // Start next stage
-          await tx.executionStage.updateMany({
-            where: {
-              executionId: executionStage.executionId,
-              workflowStageId: nextStage.id,
-            },
-            data: {
-              status: 'ACTIVE',
-              startedAt: new Date(),
-            },
-          });
-        }
-      }
-
-      // Update stage status
-      await tx.executionStage.update({
-        where: { id: validatedData.executionStageId },
-        data: {
-          status: stageStatus,
-          completedAt:
-            stageStatus === 'COMPLETED' || stageStatus === 'REJECTED' ? new Date() : null,
-        },
-      });
-
-      // Update execution status if changed
-      if (executionStatus !== executionStage.execution.status) {
-        await tx.workflowExecution.update({
-          where: { id: executionStage.executionId },
-          data: {
-            status: executionStatus,
-            completedAt:
-              executionStatus === 'COMPLETED' || executionStatus === 'FAILED' ? new Date() : null,
-          },
-        });
-      }
-
-      return { approval, stageCompleted: stageStatus !== 'PENDING' && stageStatus !== 'ACTIVE' };
+    // Create the approval decision
+    const decision = await prisma.approvalDecision.create({
+      data: {
+        stageId: workflowStage.id,
+        executionId: workflowStage.execution?.id!,
+        approverId: session.user.id,
+        decision: validatedBody.decision.toUpperCase() as any,
+        comments: validatedBody.comments,
+        timeToDecision: workflowStage.execution?.startedAt
+          ? Math.round((Date.now() - workflowStage.execution.startedAt.getTime()) / (1000 * 60))
+          : null,
+      },
     });
 
-    // Track approval decision for analytics
+    // Update execution status if needed
+    if (validatedBody.decision === 'approve') {
+      await prisma.approvalExecution.update({
+        where: { id: workflowStage.execution?.id! },
+        data: {
+          status: workflowStage.isParallel ? 'IN_PROGRESS' : 'COMPLETED',
+          completedAt: workflowStage.isParallel ? null : new Date(),
+          slaCompliance: workflowStage.execution?.startedAt
+            ? Date.now() <=
+              workflowStage.execution.startedAt.getTime() +
+                (workflowStage.slaHours || 24) * 60 * 60 * 1000
+            : null,
+        },
+      });
+    }
+
+    // Track the decision for analytics
     await trackApprovalDecisionEvent(
       session.user.id,
-      validatedData.executionStageId,
-      validatedData.decision,
-      result.escalated || false
+      workflowStage.id,
+      validatedBody.decision,
+      validatedBody.escalate
     );
 
     return NextResponse.json({
       success: true,
       data: {
-        approval: result.approval,
-        stageCompleted: result.stageCompleted,
-        escalated: result.escalated,
+        decision,
+        message: `Approval request ${validatedBody.decision} successfully`,
       },
-      message: `Approval ${validatedData.decision} processed successfully`,
     });
   } catch (error) {
-    console.error('Approval processing error:', error);
+    console.error('Approval decision error:', error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Invalid request data', details: error.errors },
         { status: 400 }
       );
     }
@@ -471,75 +340,61 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Calculate priority score based on multiple factors
- */
 function calculatePriorityScore(
-  priority: string,
+  status: string,
   isOverdue: boolean,
   timeRemaining: number | null,
   isParallel: boolean
 ): number {
-  let score = 0;
+  let score = 50; // Base score
 
-  // Base priority score
-  switch (priority) {
-    case 'URGENT':
-      score += 80;
-      break;
-    case 'HIGH':
-      score += 60;
-      break;
-    case 'MEDIUM':
-      score += 40;
-      break;
-    case 'LOW':
+  // Status impact
+  switch (status) {
+    case 'PENDING':
       score += 20;
       break;
+    case 'IN_PROGRESS':
+      score += 10;
+      break;
+    case 'ESCALATED':
+      score += 30;
+      break;
   }
 
-  // Overdue penalty
+  // Time factors
   if (isOverdue) {
     score += 30;
+  } else if (timeRemaining !== null) {
+    if (timeRemaining < 2) {
+      score += 25;
+    } else if (timeRemaining < 4) {
+      score += 15;
+    } else if (timeRemaining < 8) {
+      score += 10;
+    }
   }
 
-  // Time pressure
-  if (timeRemaining !== null) {
-    if (timeRemaining <= 1)
-      score += 20; // Less than 1 hour
-    else if (timeRemaining <= 8)
-      score += 10; // Less than 8 hours
-    else if (timeRemaining <= 24) score += 5; // Less than 24 hours
-  }
-
-  // Parallel processing boost
+  // Parallel processing impact
   if (isParallel) {
-    score += 10;
+    score -= 5; // Slightly lower priority for parallel stages
   }
 
-  return Math.min(100, score);
+  // Ensure score stays within bounds
+  return Math.min(100, Math.max(0, score));
 }
 
-/**
- * Calculate SLA status
- */
-function calculateSLAStatus(startedAt: Date | null, dueDate: Date | null): string {
-  if (!startedAt || !dueDate) return 'no_sla';
+function calculateSLAStatus(startedAt: Date | null, slaHours: number): string {
+  if (!startedAt) return 'NOT_STARTED';
 
-  const now = new Date();
-  const elapsed = now.getTime() - startedAt.getTime();
-  const total = dueDate.getTime() - startedAt.getTime();
-  const progress = elapsed / total;
+  const elapsedHours = (Date.now() - startedAt.getTime()) / (1000 * 60 * 60);
+  const slaPercentage = (elapsedHours / slaHours) * 100;
 
-  if (now > dueDate) return 'overdue';
-  if (progress > 0.9) return 'at_risk';
-  if (progress > 0.7) return 'warning';
-  return 'on_track';
+  if (slaPercentage >= 100) return 'BREACHED';
+  if (slaPercentage >= 90) return 'AT_RISK';
+  if (slaPercentage >= 75) return 'WARNING';
+  return 'ON_TRACK';
 }
 
-/**
- * Track approval list access for analytics
- */
 async function trackApprovalListEvent(
   userId: string,
   totalApprovals: number,
@@ -549,33 +404,31 @@ async function trackApprovalListEvent(
     await prisma.hypothesisValidationEvent.create({
       data: {
         userId,
-        hypothesis: 'H7', // Deadline Management
-        userStoryId: 'US-4.3',
-        componentId: 'ApprovalsList',
-        action: 'approvals_list_accessed',
+        hypothesis: 'H7',
+        userStoryId: 'US-4.1',
+        componentId: 'APPROVAL_LIST',
+        action: 'VIEW',
         measurementData: {
           totalApprovals,
           assignedToMe,
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         },
-        targetValue: 1.0, // Target: list load in <1 second
-        actualValue: 0.6, // Actual load time
-        performanceImprovement: 0.4, // 40% improvement
-        userRole: 'user',
-        sessionId: `approvals_list_${Date.now()}`,
+        targetValue: 0, // Not applicable for view events
+        actualValue: 0, // Not applicable for view events
+        performanceImprovement: 0, // Not applicable for view events
+        userRole: 'APPROVER', // This should come from user context
+        sessionId: 'SESSION_ID', // This should come from context
       },
     });
   } catch (error) {
-    console.warn('Failed to track approval list event:', error);
+    console.error('Failed to track approval list event:', error);
+    // Non-blocking error - don't throw
   }
 }
 
-/**
- * Track approval decision for analytics
- */
 async function trackApprovalDecisionEvent(
   userId: string,
-  executionStageId: string,
+  workflowStageId: string,
   decision: string,
   escalated: boolean
 ) {
@@ -583,24 +436,25 @@ async function trackApprovalDecisionEvent(
     await prisma.hypothesisValidationEvent.create({
       data: {
         userId,
-        hypothesis: 'H7', // Deadline Management
-        userStoryId: 'US-4.1',
-        componentId: 'ApprovalDecision',
-        action: 'approval_decision_made',
+        hypothesis: 'H7',
+        userStoryId: 'US-4.3',
+        componentId: 'APPROVAL_DECISION',
+        action: 'DECIDE',
         measurementData: {
-          executionStageId,
+          workflowStageId,
           decision,
           escalated,
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         },
-        targetValue: 2.0, // Target: decision process in <2 minutes
-        actualValue: 1.2, // Actual decision time
-        performanceImprovement: 0.8, // 40% improvement
-        userRole: 'user',
-        sessionId: `approval_decision_${Date.now()}`,
+        targetValue: 0, // This should be set based on SLA targets
+        actualValue: 0, // This should be calculated based on decision time
+        performanceImprovement: 0, // This should be calculated based on historical data
+        userRole: 'APPROVER', // This should come from user context
+        sessionId: 'SESSION_ID', // This should come from context
       },
     });
   } catch (error) {
-    console.warn('Failed to track approval decision event:', error);
+    console.error('Failed to track approval decision event:', error);
+    // Non-blocking error - don't throw
   }
 }
