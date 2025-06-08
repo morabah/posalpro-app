@@ -17,14 +17,24 @@ const loginSchema = z.object({
 
 // Role-based redirection map from SITEMAP.md
 const roleRedirectionMap: Record<string, string> = {
-  'System Administrator': '/admin/system',
-  'Proposal Manager': '/proposals/list',
+  Administrator: '/admin/system',
+  'Proposal Manager': '/proposals/manage',
+  'Bid Manager': '/proposals/manage',
   'Technical SME': '/sme/contribution',
-  'Presales Engineer': '/products/validation',
-  'Bid Manager': '/proposals/management-dashboard',
   'Technical Director': '/validation/dashboard',
   'Business Development Manager': '/customers/profile',
+  'Presales Engineer': '/products/validation',
   'Proposal Specialist': '/proposals/create',
+};
+
+const getDefaultRedirect = (roles: string[]): string => {
+  if (roles.includes('Admin')) return '/admin/system';
+  if (roles.includes('Executive')) return '/dashboard/overview';
+  if (roles.includes('Proposal Manager')) return '/proposals/list';
+  if (roles.includes('Bid Manager')) return '/proposals/list';
+  if (roles.includes('Sales')) return '/customers/dashboard';
+  if (roles.includes('SME')) return '/sme/assignments';
+  return '/dashboard';
 };
 
 export async function POST(request: NextRequest) {
@@ -38,7 +48,7 @@ export async function POST(request: NextRequest) {
     const redirectUrl =
       primaryRole && roleRedirectionMap[primaryRole]
         ? roleRedirectionMap[primaryRole]
-        : '/dashboard';
+        : getDefaultRedirect(primaryRole ? [primaryRole] : []);
 
     return NextResponse.json(
       {

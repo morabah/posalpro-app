@@ -49,10 +49,10 @@ const AVAILABLE_ROLES = [
 // Role-based redirection map
 const ROLE_REDIRECTS: Record<string, string> = {
   'System Administrator': '/admin/system',
-  'Proposal Manager': '/proposals/list',
+  'Proposal Manager': '/proposals/manage',
   'Technical SME': '/sme/contribution',
   'Presales Engineer': '/products/validation',
-  'Bid Manager': '/proposals/management-dashboard',
+  'Bid Manager': '/proposals/manage',
   'Technical Director': '/validation/dashboard',
   'Business Development Manager': '/customers/profile',
   'Proposal Specialist': '/proposals/create',
@@ -288,6 +288,16 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getDefaultRedirect = (roles: string[]): string => {
+    if (roles.includes('Admin')) return '/admin/system';
+    if (roles.includes('Executive')) return '/dashboard/overview';
+    if (roles.includes('Proposal Manager')) return '/proposals/list';
+    if (roles.includes('Bid Manager')) return '/proposals/list';
+    if (roles.includes('Sales')) return '/customers/dashboard';
+    if (roles.includes('SME')) return '/sme/assignments';
+    return '/dashboard';
   };
 
   return (

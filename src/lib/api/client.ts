@@ -164,6 +164,9 @@ class EnhancedApiClient {
   ): Promise<ApiResponse<T>> {
     const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
     const config = { ...this.defaultConfig, ...options };
+    if (config.cache) {
+      config.cache.enabled = false; // Force disable cache
+    }
 
     // Check cache for GET requests
     const cacheKey = this.generateCacheKey(fullUrl, config);

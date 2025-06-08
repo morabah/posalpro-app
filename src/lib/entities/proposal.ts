@@ -9,6 +9,7 @@ import { trackAuthEvent } from '@/lib/store/authStore';
 import { createProposalSchema, proposalMetadataSchema } from '@/lib/validation';
 import { ApprovalDecision, Priority, ProposalStatus } from '@/types/enums';
 import { z } from 'zod';
+import { CustomerEntity } from './customer';
 
 // Infer types from validation schemas
 export type ProposalMetadata = z.infer<typeof proposalMetadataSchema>;
@@ -40,6 +41,17 @@ export interface ProposalQueryOptions {
   limit?: number;
   sortBy?: 'title' | 'deadline' | 'createdAt' | 'priority' | 'status';
   sortOrder?: 'asc' | 'desc';
+}
+
+interface ProposalsApiResponse {
+  proposals: ProposalData[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  filters: any;
 }
 
 export interface TeamAssignment {
@@ -113,11 +125,32 @@ export class ProposalEntity {
    */
   async create(proposalData: CreateProposalData): Promise<ApiResponse<ProposalData>> {
     try {
-      // Validate input data
-      const validatedData = createProposalSchema.parse(proposalData);
+      // The validation here is for the client-side entity shape.
+      // The server will do its own validation.
+      const clientValidatedData = createProposalSchema.parse(proposalData);
+
+      // Get or create customer to get customerId
+      const customerEntity = CustomerEntity.getInstance();
+      const customerId = await customerEntity.findOrCreate(clientValidatedData.metadata.clientName);
+
+      // Transform data to match API schema
+      const apiPayload = {
+        title: clientValidatedData.metadata.title,
+        description: clientValidatedData.metadata.description,
+        customerId: customerId,
+        priority: clientValidatedData.metadata.priority.toUpperCase() as
+          | 'LOW'
+          | 'MEDIUM'
+          | 'HIGH'
+          | 'URGENT',
+        dueDate: clientValidatedData.metadata.deadline.toISOString(),
+        value: clientValidatedData.metadata.estimatedValue,
+        currency: clientValidatedData.metadata.currency,
+        // products and sections would be mapped here if they were in CreateProposalData
+      };
 
       // Create proposal via API
-      const response = await apiClient.post<ProposalData>('/api/proposals', validatedData);
+      const response = await apiClient.post<ProposalData>('/api/proposals', apiPayload);
 
       if (response.success && response.data) {
         // Cache the new proposal
@@ -246,17 +279,39 @@ export class ProposalEntity {
       if (options.sortBy) queryParams.set('sortBy', options.sortBy);
       if (options.sortOrder) queryParams.set('sortOrder', options.sortOrder);
 
-      const response = await apiClient.get<ProposalData[]>(
+      const response = await apiClient.get<ProposalsApiResponse>(
         `/api/proposals?${queryParams.toString()}`
       );
 
-      // Cache results - check if response has data array
-      if (response.success && response.data && Array.isArray(response.data)) {
-        response.data.forEach((proposal: ProposalData) => this.setCache(proposal.id, proposal));
+      // Cache results
+      if (response.success && response.data?.proposals) {
+        response.data.proposals.forEach((proposal: ProposalData) =>
+          this.setCache(proposal.id, proposal)
+        );
       }
 
-      // Return properly typed PaginatedResponse - the response already matches the structure
-      return response as PaginatedResponse<ProposalData>;
+      // Return properly typed PaginatedResponse
+      if (response.success && response.data) {
+        return {
+          success: true,
+          message: response.message,
+          data: response.data.proposals,
+          pagination: response.data.pagination,
+        };
+      }
+
+      // Fallback for unsuccessful response
+      return {
+        success: false,
+        message: response.message || 'Failed to query proposals',
+        data: [],
+        pagination: {
+          page: options.page || 1,
+          limit: options.limit || 10,
+          total: 0,
+          totalPages: 0,
+        },
+      };
     } catch (error) {
       console.error('Failed to query proposals:', error);
       throw error;

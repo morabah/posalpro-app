@@ -26,11 +26,11 @@ import {
   UsersIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 
 // Database hooks
-import { usePermissions, useRoles, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
+import { useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
 
 // Role Manager Component
 import RoleManager from '@/components/admin/RoleManager';
@@ -158,62 +158,6 @@ interface AuditLogEntry {
   ipAddress: string;
 }
 
-// Mock data for roles (this would also be from database in full implementation)
-const MOCK_ROLES: Role[] = [
-  {
-    id: '1',
-    name: 'System Administrator',
-    description: 'Full system access and management capabilities',
-    userCount: 2,
-    accessLevel: 'Full',
-    permissions: {
-      'users:read': true,
-      'users:write': true,
-      'users:delete': true,
-      'system:configure': true,
-    },
-    lastModified: new Date('2024-03-15'),
-  },
-  {
-    id: '2',
-    name: 'Proposal Manager',
-    description: 'Proposal creation and management',
-    userCount: 5,
-    accessLevel: 'High',
-    permissions: {
-      'proposals:read': true,
-      'proposals:write': true,
-      'proposals:manage': true,
-    },
-    lastModified: new Date('2024-03-10'),
-  },
-  {
-    id: '3',
-    name: 'Subject Matter Expert',
-    description: 'Technical content contribution',
-    userCount: 8,
-    accessLevel: 'Medium',
-    permissions: {
-      'content:read': true,
-      'content:write': true,
-      'validation:execute': true,
-    },
-    lastModified: new Date('2024-03-05'),
-  },
-  {
-    id: '4',
-    name: 'Legal Reviewer',
-    description: 'Legal compliance and review',
-    userCount: 3,
-    accessLevel: 'Limited',
-    permissions: {
-      'proposals:read': true,
-      'compliance:review': true,
-    },
-    lastModified: new Date('2024-02-28'),
-  },
-];
-
 /**
  * Main Admin System Component
  * Implements comprehensive system administration interface
@@ -228,6 +172,7 @@ export default function AdminSystem() {
   const [selectedRole, setSelectedRole] = useState<string>('All Roles');
   const [selectedStatus, setSelectedStatus] = useState<string>('All Statuses');
   const [selectedAccessLevel, setSelectedAccessLevel] = useState<string>('All Levels');
+  const [userPage, setUserPage] = useState<number>(1);
 
   // Use database hooks instead of mock data
   const {
@@ -240,35 +185,12 @@ export default function AdminSystem() {
     updateUser,
     deleteUser,
   } = useUsers(
-    1,
+    userPage,
     10,
     searchTerm,
     selectedRole === 'All Roles' ? '' : selectedRole,
     selectedStatus === 'All Statuses' ? '' : selectedStatus
   );
-
-  const {
-    roles,
-    loading: rolesLoading,
-    error: rolesError,
-    pagination: rolesPagination,
-    refetch: refetchRoles,
-    createRole,
-    updateRole,
-    deleteRole,
-  } = useRoles(1, 10, searchTerm, selectedAccessLevel === 'All Levels' ? '' : selectedAccessLevel);
-
-  const {
-    permissions,
-    loading: permissionsLoading,
-    error: permissionsError,
-    pagination: permissionsPagination,
-    filters: permissionFilters,
-    refetch: refetchPermissions,
-    createPermission,
-    updatePermission,
-    deletePermission,
-  } = usePermissions(1, 20, searchTerm);
 
   const {
     metrics,
@@ -278,9 +200,10 @@ export default function AdminSystem() {
   } = useSystemMetrics();
 
   // Error handling with user feedback
-  const handleError = useCallback((error: string) => {
-    console.error('Admin System Error:', error);
-    toast.error(error);
+  const handleError = useCallback((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error('Admin System Error:', errorMessage);
+    toast.error(errorMessage);
   }, []);
 
   // Success handling with user feedback
@@ -304,19 +227,19 @@ export default function AdminSystem() {
         await createUser(userData);
         handleSuccess('User created successfully');
       } catch (error) {
-        handleError(error instanceof Error ? error.message : 'Failed to create user');
+        handleError(error);
       }
     },
     [createUser, handleSuccess, handleError]
   );
 
   const handleUpdateUser = useCallback(
-    async (id: string, userData: any) => {
+    async (id: string, userData: Record<string, unknown>) => {
       try {
         await updateUser(id, userData);
         handleSuccess('User updated successfully');
       } catch (error) {
-        handleError(error instanceof Error ? error.message : 'Failed to update user');
+        handleError(error);
       }
     },
     [updateUser, handleSuccess, handleError]
@@ -329,37 +252,12 @@ export default function AdminSystem() {
           await deleteUser(id);
           handleSuccess('User deleted successfully');
         } catch (error) {
-          handleError(error instanceof Error ? error.message : 'Failed to delete user');
+          handleError(error);
         }
       }
     },
     [deleteUser, handleSuccess, handleError]
   );
-
-  // Derived state with error handling
-  const filteredUsers = useMemo(() => {
-    if (!users) return [];
-
-    return users.filter(user => {
-      const matchesSearch =
-        !searchTerm ||
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesRole = selectedRole === 'All Roles' || user.role === selectedRole;
-      const matchesStatus = selectedStatus === 'All Statuses' || user.status === selectedStatus;
-
-      return matchesSearch && matchesRole && matchesStatus;
-    });
-  }, [users, searchTerm, selectedRole, selectedStatus]);
-
-  const filteredRoles = useMemo(() => {
-    return roles.filter(
-      role =>
-        role.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        role.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [roles, searchTerm]);
 
   /**
    * Icon and color utilities
@@ -679,7 +577,7 @@ export default function AdminSystem() {
             <Card className="overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900">
-                  Users ({filteredUsers.length})
+                  Users ({pagination?.total ?? 0})
                 </h3>
               </div>
               <div className="overflow-x-auto">
@@ -704,54 +602,88 @@ export default function AdminSystem() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredUsers.map(user => (
-                      <tr key={user.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10">
-                              <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                <span className="text-sm font-medium text-gray-700">
-                                  {user.name.charAt(0)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                              <div className="text-sm text-gray-500">{user.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(user.status as UserStatus)}`}
-                          >
-                            {user.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatTimeAgo(user.lastActive)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => toast(`Edit user: ${user.name}`)}
-                            className="text-blue-600 hover:text-blue-900 mr-3"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
+                    {usersLoading ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-12">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                          <p className="mt-2 text-sm text-gray-500">Loading users...</p>
                         </td>
                       </tr>
-                    ))}
+                    ) : usersError ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-12">
+                          <XCircleIcon className="h-8 w-8 text-red-500 mx-auto" />
+                          <p className="mt-2 text-sm text-red-600">{usersError}</p>
+                          <Button
+                            onClick={() => refetchUsers()}
+                            className="mt-4"
+                            variant="outline"
+                            size="sm"
+                          >
+                            Retry
+                          </Button>
+                        </td>
+                      </tr>
+                    ) : users && users.length > 0 ? (
+                      users.map(user => (
+                        <tr key={user.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {user.name.charAt(0)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                                <div className="text-sm text-gray-500">{user.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(user.status as UserStatus)}`}
+                            >
+                              {user.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatTimeAgo(user.lastActive)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() => toast(`Edit user: ${user.name}`)}
+                              className="text-blue-600 hover:text-blue-900 mr-3"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="text-center py-12">
+                          <MagnifyingGlassIcon className="h-8 w-8 text-gray-400 mx-auto" />
+                          <h3 className="mt-2 text-sm font-medium text-gray-900">No users found</h3>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Try adjusting your search or filter criteria.
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -766,22 +698,16 @@ export default function AdminSystem() {
                   </div>
                   <div className="flex space-x-2">
                     <Button
-                      disabled={pagination.page <= 1}
-                      onClick={() => {
-                        // In a real implementation, this would change the page
-                        toast('Previous page');
-                      }}
+                      disabled={userPage <= 1 || usersLoading}
+                      onClick={() => setUserPage(userPage - 1)}
                       variant="outline"
                       size="sm"
                     >
                       Previous
                     </Button>
                     <Button
-                      disabled={pagination.page >= pagination.totalPages}
-                      onClick={() => {
-                        // In a real implementation, this would change the page
-                        toast('Next page');
-                      }}
+                      disabled={userPage >= pagination.totalPages || usersLoading}
+                      onClick={() => setUserPage(userPage + 1)}
                       variant="outline"
                       size="sm"
                     >

@@ -616,7 +616,7 @@ export function ProposalWizard({
       if (onCancel) {
         onCancel();
       } else {
-        router.push('/proposals/manage');
+        router.push('/proposals/list');
       }
     }
   }, [wizardData.isDirty, onCancel, router]);
@@ -630,7 +630,7 @@ export function ProposalWizard({
       if (onCancel) {
         onCancel();
       } else {
-        router.push('/proposals/manage');
+        router.push('/proposals/list');
       }
     } catch (error) {
       setError('Failed to save before exit');
@@ -647,7 +647,7 @@ export function ProposalWizard({
     if (onCancel) {
       onCancel();
     } else {
-      router.push('/proposals/manage');
+      router.push('/proposals/list');
     }
   }, [onCancel, router]);
 

@@ -60,20 +60,19 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
   {
     id: 'proposals',
     name: 'Proposals',
-    href: '/proposals',
+    href: '/proposals/manage',
     icon: DocumentTextIcon,
     children: [
-      { id: 'proposals-list', name: 'All Proposals', href: '/proposals', icon: DocumentTextIcon },
+      {
+        id: 'proposals-list',
+        name: 'All Proposals',
+        href: '/proposals/manage',
+        icon: DocumentTextIcon,
+      },
       {
         id: 'proposals-create',
         name: 'Create New',
         href: '/proposals/create',
-        icon: DocumentTextIcon,
-      },
-      {
-        id: 'proposals-management',
-        name: 'Management',
-        href: '/proposals/management',
         icon: DocumentTextIcon,
       },
     ],

@@ -378,9 +378,27 @@ offer_database_seeding() {
     if [ $WARNINGS_COUNT -gt 0 ]; then
         echo ""
         echo -e "${YELLOW}Would you like to seed the database now? This will add sample users and data. (y/N)${NC}"
-        read -r seed_response
+
+        local seed_response=""
+        for i in $(seq 5 -1 1); do
+            echo -ne "${DIM}Auto-selecting 'No' in $i seconds... (Press 'y' to seed, any other key to skip immediately)${NC}\r"
+            # Read a single character with a 1-second timeout
+            if read -t 1 -n 1 key; then
+                seed_response=$key
+                # break from the loop as we got input
+                break
+            fi
+        done
+        # Move to the next line after the countdown is finished or interrupted
+        echo ""
+
+        # Default to 'n' if no input was given
+        if [ -z "$seed_response" ]; then
+            seed_response="n"
+        fi
+
         if [[ "$seed_response" =~ ^[Yy]$ ]]; then
-            echo -e "${INFO} ${BLUE}Seeding database...${NC}"
+            echo -e "\n${INFO} ${BLUE}Seeding database...${NC}"
             if npm run db:seed >/dev/null 2>&1; then
                 echo -e "${CHECK_MARK} ${GREEN}Database seeded successfully${NC}"
                 # Re-check user count
@@ -392,6 +410,8 @@ offer_database_seeding() {
                 echo -e "${CROSS_MARK} ${RED}Database seeding failed${NC}"
                 echo -e "${DIM}You can run manually: npm run db:seed${NC}"
             fi
+        else
+            echo -e "\n${INFO} ${BLUE}Skipping database seeding.${NC}"
         fi
     fi
 }
