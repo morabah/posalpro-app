@@ -124,3 +124,44 @@ build/
 
 # Local Netlify folder
 .netlify
+.netlify/**
+
+# Binary files and large dependencies
+*.dylib
+*.dylib.node
+*.so
+*.so.node
+*.dll
+*.exe
+*.bin
+*.dat
+*.pack
+*.pack.gz
+*.pack.old
+
+# Prisma binaries
+node_modules/.prisma/client/libquery_engine-*
+node_modules/@prisma/engines/*
+node_modules/prisma/libquery_engine-*
+
+# Sharp binaries
+node_modules/@img/sharp-*
+node_modules/sharp/vendor
+
+# ESBuild binaries
+node_modules/@esbuild/*/bin/
+node_modules/esbuild/bin/
+
+# SWC binaries
+node_modules/@next/swc-*
+
+# Puppeteer/Chromium
+node_modules/**/puppeteer*/.local-chromium
+
+# Large JS files
+node_modules/typescript/lib/_tsc.js
+node_modules/typescript/lib/typescript.js
+node_modules/@napi-rs/wasm-runtime/dist/fs.js
+
+# Local Netlify folder
+.netlify
