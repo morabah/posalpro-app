@@ -482,7 +482,7 @@ export class ProposalService {
   ): Promise<ProposalProduct> {
     try {
       // Recalculate total if relevant fields changed
-      let updateData: any = { ...data };
+      const updateData: any = { ...data };
 
       if (
         data.quantity !== undefined ||

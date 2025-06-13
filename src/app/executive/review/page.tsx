@@ -141,292 +141,48 @@ interface ExecutiveMetrics {
   signatureTime: number;
 }
 
-// Mock executive proposals data
-const MOCK_PROPOSALS: ExecutiveProposal[] = [
-  {
-    id: 'exec-001',
-    title: 'Healthcare Solutions Platform',
-    customer: 'MedTech Corporation',
-    value: 2400000,
-    deadline: new Date(Date.now() + 172800000), // 2 days
-    status: ProposalStatus.AT_RISK,
-    complexity: 'high',
-    priority: 95,
-    winProbability: 72,
-    deliveryConfidence: 85,
-    resourceAvailability: 65,
-    strategicAlignment: 90,
-    summary: {
-      description: '24-month healthcare data platform implementation with AI-powered analytics',
-      margin: 35,
-      competitorCount: 4,
-      duration: '24 months',
-      keyObjectives: [
-        'Implement enterprise healthcare data platform',
-        'Deploy AI-powered analytics and reporting',
-        'Ensure HIPAA and SOC 2 compliance',
-        'Integrate with existing EHR systems',
-      ],
-    },
-    criticalPath: [
-      {
-        id: 'cp-001',
-        step: 'SME Input',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 86400000),
-      },
-      {
-        id: 'cp-002',
-        step: 'Technical Validation',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 43200000),
-      },
-      {
-        id: 'cp-003',
-        step: 'Financial Review',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 21600000),
-      },
-      { id: 'cp-004', step: 'Legal Sign-off', status: 'at_risk', assignee: 'Legal Team' },
-      { id: 'cp-005', step: 'Executive Approval', status: 'pending', assignee: 'Executive Review' },
-    ],
-    aiInsights: [
-      {
-        id: 'ai-001',
-        type: 'risk',
-        severity: 'medium',
-        title: 'Non-standard SLA Terms',
-        description:
-          'Legal terms contain non-standard SLA commitments in Section 4.2 that may impact delivery',
-        recommendation: 'Approve with condition to adjust SLA terms before final submission',
-        confidence: 85,
-      },
-      {
-        id: 'ai-002',
-        type: 'opportunity',
-        severity: 'high',
-        title: 'Strategic Account Expansion',
-        description:
-          'Success on this project opens opportunity for 3 additional healthcare clients',
-        confidence: 78,
-      },
-    ],
-    team: {
-      proposalManager: 'Sarah Johnson',
-      leadSME: 'Dr. Michael Chen',
-      salesRep: 'Alex Peterson',
-    },
-  },
-  {
-    id: 'exec-002',
-    title: 'Government Security Platform',
-    customer: 'Federal Agency',
-    value: 1800000,
-    deadline: new Date(Date.now() + 864000000), // 10 days
-    status: ProposalStatus.READY,
-    complexity: 'high',
-    priority: 88,
-    winProbability: 84,
-    deliveryConfidence: 92,
-    resourceAvailability: 85,
-    strategicAlignment: 95,
-    summary: {
-      description: 'Comprehensive cybersecurity platform for federal government deployment',
-      margin: 28,
-      competitorCount: 2,
-      duration: '18 months',
-      keyObjectives: [
-        'Deploy zero-trust security architecture',
-        'Implement FedRAMP compliance framework',
-        'Integrate with existing government systems',
-        'Provide 24/7 monitoring and response',
-      ],
-    },
-    criticalPath: [
-      {
-        id: 'cp-006',
-        step: 'SME Input',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 172800000),
-      },
-      {
-        id: 'cp-007',
-        step: 'Technical Validation',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 86400000),
-      },
-      {
-        id: 'cp-008',
-        step: 'Financial Review',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 43200000),
-      },
-      {
-        id: 'cp-009',
-        step: 'Legal Sign-off',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 21600000),
-      },
-      { id: 'cp-010', step: 'Executive Approval', status: 'pending', assignee: 'Executive Review' },
-    ],
-    aiInsights: [
-      {
-        id: 'ai-003',
-        type: 'recommendation',
-        severity: 'low',
-        title: 'Expedited Approval Recommended',
-        description:
-          'All requirements met, strong competitive position, and strategic importance justify rapid approval',
-        confidence: 92,
-      },
-    ],
-    team: {
-      proposalManager: 'John Smith',
-      leadSME: 'Lisa Rodriguez',
-      salesRep: 'Mohamed Rabah',
-    },
-  },
-  {
-    id: 'exec-003',
-    title: 'Enterprise IT Modernization',
-    customer: 'Global Manufacturing Corp',
-    value: 3700000,
-    deadline: new Date(Date.now() + 1296000000), // 15 days
-    status: ProposalStatus.READY,
-    complexity: 'high',
-    priority: 82,
-    winProbability: 68,
-    deliveryConfidence: 78,
-    resourceAvailability: 70,
-    strategicAlignment: 85,
-    summary: {
-      description: 'Complete IT infrastructure modernization with cloud migration and automation',
-      margin: 32,
-      competitorCount: 5,
-      duration: '36 months',
-      keyObjectives: [
-        'Migrate legacy systems to cloud architecture',
-        'Implement DevOps and automation frameworks',
-        'Deploy AI-powered monitoring and analytics',
-        'Ensure 99.9% uptime during transition',
-      ],
-    },
-    criticalPath: [
-      {
-        id: 'cp-011',
-        step: 'SME Input',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 259200000),
-      },
-      {
-        id: 'cp-012',
-        step: 'Technical Validation',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 172800000),
-      },
-      {
-        id: 'cp-013',
-        step: 'Financial Review',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 86400000),
-      },
-      {
-        id: 'cp-014',
-        step: 'Legal Sign-off',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 43200000),
-      },
-      { id: 'cp-015', step: 'Executive Approval', status: 'pending', assignee: 'Executive Review' },
-    ],
-    aiInsights: [
-      {
-        id: 'ai-004',
-        type: 'risk',
-        severity: 'low',
-        title: 'Resource Constraint Alert',
-        description:
-          'Current resource allocation at 70% may require additional staffing for optimal delivery',
-        recommendation: 'Consider staffing augmentation or phased delivery approach',
-        confidence: 74,
-      },
-    ],
-    team: {
-      proposalManager: 'Lisa Kim',
-      leadSME: 'David Wilson',
-      salesRep: 'Rachel Green',
-    },
-  },
-  {
-    id: 'exec-004',
-    title: 'Financial Services Platform',
-    customer: 'Regional Bank',
-    value: 950000,
-    deadline: new Date(Date.now() + 432000000), // 5 days
-    status: ProposalStatus.UNDER_REVIEW,
-    complexity: 'medium',
-    priority: 75,
-    winProbability: 79,
-    deliveryConfidence: 88,
-    resourceAvailability: 90,
-    strategicAlignment: 75,
-    summary: {
-      description: 'Digital banking platform with advanced fraud detection and customer analytics',
-      margin: 38,
-      competitorCount: 3,
-      duration: '12 months',
-      keyObjectives: [
-        'Deploy modern digital banking interface',
-        'Implement AI-powered fraud detection',
-        'Integrate customer analytics platform',
-        'Ensure PCI DSS compliance',
-      ],
-    },
-    criticalPath: [
-      {
-        id: 'cp-016',
-        step: 'SME Input',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 432000000),
-      },
-      {
-        id: 'cp-017',
-        step: 'Technical Validation',
-        status: 'completed',
-        completedAt: new Date(Date.now() - 259200000),
-      },
-      { id: 'cp-018', step: 'Financial Review', status: 'in_progress', assignee: 'Finance Team' },
-      { id: 'cp-019', step: 'Legal Sign-off', status: 'pending', assignee: 'Legal Team' },
-      { id: 'cp-020', step: 'Executive Approval', status: 'pending', assignee: 'Executive Review' },
-    ],
-    aiInsights: [
-      {
-        id: 'ai-005',
-        type: 'opportunity',
-        severity: 'medium',
-        title: 'Banking Sector Expansion',
-        description:
-          'Success with this regional bank creates entry point to broader financial services market',
-        confidence: 81,
-      },
-    ],
-    team: {
-      proposalManager: 'Tom Brown',
-      leadSME: 'Jennifer Lee',
-      salesRep: 'Mark Johnson',
-    },
-  },
-];
-
 export default function ExecutiveReviewPortal() {
   const router = useRouter();
-  const [proposals] = useState<ExecutiveProposal[]>(MOCK_PROPOSALS);
-  const [selectedProposal, setSelectedProposal] = useState<ExecutiveProposal | null>(proposals[0]);
+  const [proposals, setProposals] = useState<ExecutiveProposal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  const [decision, setDecision] = useState<DecisionStatus | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'team' | 'history' | 'kpis'>('pending');
   const [decisionInProgress, setDecisionInProgress] = useState(false);
   const [selectedDecision, setSelectedDecision] = useState<DecisionStatus | null>(null);
   const [conditions, setConditions] = useState('');
   const [signature, setSignature] = useState('');
   const [sessionStartTime] = useState(Date.now());
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    const fetchProposals = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/executive/proposals');
+        if (!response.ok) {
+          throw new Error('Failed to fetch executive proposals');
+        }
+        const data = await response.json();
+        setProposals(data);
+        if (data.length > 0) {
+          setSelectedProposalId(data[0].id);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProposals();
+  }, []);
+
+  const selectedProposal = useMemo(
+    () => proposals.find(p => p.id === selectedProposalId),
+    [proposals, selectedProposalId]
+  );
 
   // Sort proposals by priority and deadline
   const sortedProposals = useMemo(() => {
@@ -472,7 +228,7 @@ export default function ExecutiveReviewPortal() {
   // Handle proposal selection
   const handleProposalSelect = useCallback(
     (proposal: ExecutiveProposal) => {
-      setSelectedProposal(proposal);
+      setSelectedProposalId(proposal.id);
       setSelectedDecision(null);
       setConditions('');
       setSignature('');
@@ -599,6 +355,14 @@ export default function ExecutiveReviewPortal() {
       totalValue: dashboardMetrics.totalValue,
     });
   }, [dashboardMetrics, trackAction]);
+
+  if (loading) {
+    return <p>Loading executive review portal...</p>;
+  }
+
+  if (error) {
+    return <p className="text-red-500">{error}</p>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -20,6 +20,8 @@ export interface ApiResponse {
   data: any;
   status: number;
   headers: Record<string, string>;
+  success?: boolean;
+  message?: string;
 }
 
 class AuthInterceptor {

@@ -4,8 +4,6 @@
  * Features: Auto-save, AI assistance, templates, real-time analytics
  */
 
-/* eslint-disable react-hooks/exhaustive-deps */
-
 'use client';
 
 import { Card } from '@/components/ui/Card';
@@ -25,6 +23,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -156,210 +155,33 @@ interface SMEContributionMetrics {
   versionsCreated: number;
 }
 
-// Mock SME assignment data
-const MOCK_ASSIGNMENT: SMEAssignment = {
-  id: 'sme-001',
-  proposalId: '1',
-  proposalTitle: 'Enterprise IT Solution - Network Security',
-  customer: 'Acme Corporation',
-  sectionType: SectionType.TECHNICAL_SPECS,
-  assignedBy: 'Alex Kim',
-  assignedAt: new Date(Date.now() - 14400000), // 4 hours ago
-  dueDate: new Date(Date.now() + 172800000), // 48 hours from now
-  status: AssignmentStatus.IN_PROGRESS,
-  requirements: [
-    'Provide technical specifications for network security solution',
-    'Include compatibility requirements with existing infrastructure',
-    'Address compliance with ISO 27001 and SOC 2 Type II',
-    'Detail implementation timeline with milestones',
-    'Specify hardware and software requirements',
-    'Include risk assessment and mitigation strategies',
-  ],
-  context: {
-    proposalValue: 750000,
-    industry: 'Financial Services',
-    complexity: 'high',
-    priority: 'critical',
-  },
-  content: {
-    draft: `# Network Security Solution - Technical Specifications
-
-## 1. Firewall Configuration
-
-The proposed network security solution includes a next-generation firewall deployment with the following specifications:
-
-- **Next-Gen Firewall with IPS**: Fortinet FortiGate 3000D series with integrated Intrusion Prevention System
-- **Application-level filtering**: Deep packet inspection with application control and web filtering
-- **Redundant deployment**: Active-passive high availability configuration with sub-second failover
-
-## 2. Endpoint Protection
-
-Comprehensive endpoint security covering all client devices:
-
-- **Client security software**: CrowdStrike Falcon Prevent with EDR capabilities
-- **Device management solution**: Microsoft Intune for mobile device management
-- **Automated patch management**: WSUS integration with Windows Update for Business
-
-## 3. Network Segmentation
-
-Implementation of zero-trust network architecture:
-
-- **VLAN segmentation**: Layer 2 isolation with role-based access control
-- **Micro-segmentation**: Software-defined perimeter using Cisco ACI fabric
-- **Access control**: 802.1X authentication with certificate-based device validation`,
-    wordCount: 156,
-    lastSaved: new Date(Date.now() - 900000), // 15 minutes ago
-    version: 3,
-  },
-};
-
-// Mock templates data
-const MOCK_TEMPLATES: ContributionTemplate[] = [
-  {
-    id: 'temp-001',
-    type: TemplateType.TECHNICAL_SPECIFICATIONS,
-    title: 'Technical Specifications Template',
-    description: 'Comprehensive template for technical solution specifications',
-    estimatedTime: 45,
-    difficulty: 'intermediate',
-    sections: [
-      {
-        id: 'sec-001',
-        title: 'Solution Overview',
-        placeholder: 'Provide a high-level overview of the proposed technical solution...',
-        required: true,
-        guidance: 'Start with the core problem being solved and the approach taken',
-      },
-      {
-        id: 'sec-002',
-        title: 'Technical Architecture',
-        placeholder: 'Detail the technical architecture and components...',
-        required: true,
-        guidance: 'Include system diagrams, component relationships, and data flows',
-      },
-      {
-        id: 'sec-003',
-        title: 'Implementation Requirements',
-        placeholder: 'Specify hardware, software, and infrastructure requirements...',
-        required: true,
-        guidance: 'Be specific about versions, capacity, and compatibility requirements',
-      },
-    ],
-  },
-  {
-    id: 'temp-002',
-    type: TemplateType.SECURITY_ASSESSMENT,
-    title: 'Security Assessment Template',
-    description: 'Template for security analysis and risk assessment',
-    estimatedTime: 60,
-    difficulty: 'advanced',
-    sections: [
-      {
-        id: 'sec-004',
-        title: 'Security Framework',
-        placeholder: 'Outline the security framework and standards compliance...',
-        required: true,
-        guidance: 'Reference relevant standards like ISO 27001, NIST, or SOC 2',
-      },
-      {
-        id: 'sec-005',
-        title: 'Risk Assessment',
-        placeholder: 'Identify and assess security risks...',
-        required: true,
-        guidance: 'Use a structured risk assessment methodology with likelihood and impact',
-      },
-    ],
-  },
-];
-
-// Mock resources data
-const MOCK_RESOURCES: ContributionResource[] = [
-  {
-    id: 'res-001',
-    title: 'Previous Network Security Solutions',
-    type: 'example',
-    url: '/resources/network-security-examples',
-    description: 'Reference implementations from similar enterprise deployments',
-    relevanceScore: 95,
-  },
-  {
-    id: 'res-002',
-    title: 'Fortinet Product Specifications',
-    type: 'specification',
-    url: '/resources/fortinet-specs',
-    description: 'Technical specifications for FortiGate enterprise firewalls',
-    relevanceScore: 90,
-  },
-  {
-    id: 'res-003',
-    title: 'ISO 27001 Requirements Guide',
-    type: 'standard',
-    url: '/resources/iso-27001-guide',
-    description: 'Complete guide to ISO 27001 compliance requirements',
-    relevanceScore: 85,
-  },
-  {
-    id: 'res-004',
-    title: 'Enterprise Security Architecture Best Practices',
-    type: 'document',
-    url: '/resources/security-best-practices',
-    description: 'Industry best practices for enterprise security architecture',
-    relevanceScore: 80,
-  },
-];
-
-// Mock version history
-const MOCK_VERSIONS: VersionHistory[] = [
-  {
-    id: 'ver-003',
-    version: 3,
-    content: MOCK_ASSIGNMENT.content.draft,
-    savedAt: new Date(Date.now() - 900000),
-    wordCount: 156,
-    changesSummary: 'Added network segmentation section with micro-segmentation details',
-    autoSaved: false,
-  },
-  {
-    id: 'ver-002',
-    version: 2,
-    content: 'Previous version content...',
-    savedAt: new Date(Date.now() - 3600000),
-    wordCount: 124,
-    changesSummary: 'Expanded endpoint protection specifications',
-    autoSaved: true,
-  },
-  {
-    id: 'ver-001',
-    version: 1,
-    content: 'Initial template content...',
-    savedAt: new Date(Date.now() - 7200000),
-    wordCount: 89,
-    changesSummary: 'Initial draft from template',
-    autoSaved: false,
-  },
-];
-
 export default function SMEContributionInterface() {
   const router = useRouter();
-  const [assignment] = useState<SMEAssignment>(MOCK_ASSIGNMENT);
-  const [templates] = useState<ContributionTemplate[]>(MOCK_TEMPLATES);
-  const [resources] = useState<ContributionResource[]>(MOCK_RESOURCES);
-  const [versions] = useState<VersionHistory[]>(MOCK_VERSIONS);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'editor' | 'resources' | 'history'>(
-    'editor'
-  );
-  const [content, setContent] = useState(assignment.content.draft);
+  const [assignment, setAssignment] = useState<SMEAssignment | null>(null);
+  const [templates, setTemplates] = useState<ContributionTemplate[]>([]);
+  const [resources, setResources] = useState<ContributionResource[]>([]);
+  const [versions, setVersions] = useState<VersionHistory[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [content, setContent] = useState('');
+  const [wordCount, setWordCount] = useState(0);
+  const [lastSaved, setLastSaved] = useState(new Date());
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState('Saved');
+  const sessionStartTime = useRef(Date.now());
+
+  const [activeTab, setActiveTab] = useState('context');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [wordCount, setWordCount] = useState(assignment.content.wordCount);
-  const [lastSaved, setLastSaved] = useState(assignment.content.lastSaved);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [metrics, setMetrics] = useState<SMEContributionMetrics | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Analytics tracking refs
-  const sessionStartTime = useRef(Date.now());
   const editingStartTime = useRef<number | null>(null);
   const activeEditingTime = useRef(0);
   const aiDraftUsed = useRef(false);
@@ -399,6 +221,7 @@ export default function SMEContributionInterface() {
       setContent(newContent);
       setWordCount(newContent.trim().split(/\s+/).length);
       setHasUnsavedChanges(true);
+      setAutosaveStatus('Unsaved changes');
 
       // Clear existing timer and set new one
       if (autoSaveTimer.current) {
@@ -415,6 +238,7 @@ export default function SMEContributionInterface() {
   // Analytics tracking
   const trackAction = useCallback(
     (action: string, metadata: any = {}) => {
+      if (!assignment) return;
       console.log('SME Contribution Analytics:', {
         action,
         metadata,
@@ -425,7 +249,7 @@ export default function SMEContributionInterface() {
         activeEditingTime: activeEditingTime.current,
       });
     },
-    [assignment.id, assignment.proposalId]
+    [assignment]
   );
 
   // Generate AI draft
@@ -434,21 +258,21 @@ export default function SMEContributionInterface() {
     aiDraftUsed.current = true;
 
     trackAction('ai_draft_requested', {
-      sectionType: assignment.sectionType,
-      requirements: assignment.requirements.length,
+      sectionType: assignment?.sectionType,
+      requirements: assignment?.requirements.length,
     });
 
     // Simulate AI generation delay
     setTimeout(() => {
-      const aiGeneratedContent = `# ${assignment.proposalTitle} - AI Generated Draft
+      const aiGeneratedContent = `# ${assignment?.proposalTitle} - AI Generated Draft
 
 ## Executive Summary
 
 Based on the requirements for ${
-        assignment.customer
+        assignment?.customer
       }, this technical specification outlines a comprehensive solution addressing the following key areas:
 
-${assignment.requirements.map((req, index) => `${index + 1}. ${req}`).join('\n')}
+${assignment?.requirements.map((req, index) => `${index + 1}. ${req}`).join('\n')}
 
 ## Proposed Solution Architecture
 
@@ -552,52 +376,35 @@ Please review this initial draft and provide feedback for refinement. The techni
 
   // Submit contribution
   const handleSubmit = useCallback(() => {
-    const totalSessionTime = Date.now() - sessionStartTime.current;
-
-    if (editingStartTime.current) {
-      activeEditingTime.current += Date.now() - editingStartTime.current;
-    }
-
-    const metrics: SMEContributionMetrics = {
-      assignmentId: assignment.id,
-      timeToStart: 0, // Mock - time from notification to first action
-      activeEditingTime: activeEditingTime.current,
-      aiDraftUsed: aiDraftUsed.current,
-      aiDraftUtilization: aiDraftUsed.current ? 75 : 0, // Mock utilization percentage
-      templateUsed: templateUsed.current,
-      templateType: selectedTemplate || 'none',
-      contributionQuality: 8.5, // Mock quality score
-      submissionTime: totalSessionTime,
-      requirementsViewTime: 120000, // Mock - 2 minutes
-      resourcesAccessed: 3,
-      knowledgeBaseSearches: 2,
-      versionsCreated: versions.length,
-    };
-
-    trackAction('contribution_submitted', metrics);
-
-    // Navigate back or show success state
-    router.push('/dashboard');
-  }, [assignment.id, selectedTemplate, versions.length, trackAction, router]);
+    if (!assignment) return;
+    trackAction('Submit Contribution', {
+      wordCount,
+      versionCount: versions.length,
+      templateUsed: selectedTemplate !== '',
+    });
+    // In a real app, this would submit the content to the backend.
+    toast.success('Contribution submitted successfully!');
+    router.push('/dashboard/sme/assignments');
+  }, [assignment, wordCount, versions.length, selectedTemplate, trackAction, router]);
 
   // Format time remaining
-  const timeRemaining = useMemo(() => {
+  const timeRemainingText = useMemo(() => {
+    if (!assignment) return 'N/A';
+
     const now = new Date();
-    const due = assignment.dueDate;
+    const due = new Date(assignment.dueDate);
     const diffMs = due.getTime() - now.getTime();
 
     if (diffMs <= 0) return 'Overdue';
 
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((diffMs / 1000 / 60) % 60);
 
-    if (hours < 24) {
-      return `${hours}h ${minutes}m remaining`;
-    } else {
-      const days = Math.floor(hours / 24);
-      return `${days}d ${hours % 24}h remaining`;
-    }
-  }, [assignment.dueDate]);
+    if (days > 0) return `${days}d ${hours}h ${minutes}m remaining`;
+    if (hours > 0) return `${hours}h ${minutes}m remaining`;
+    return `${minutes}m remaining`;
+  }, [assignment]);
 
   // Filter resources by search
   const filteredResources = useMemo(() => {
@@ -611,9 +418,9 @@ Please review this initial draft and provide feedback for refinement. The techni
 
   useEffect(() => {
     trackAction('sme_contribution_session_started', {
-      assignmentId: assignment.id,
-      sectionType: assignment.sectionType,
-      dueIn: assignment.dueDate.getTime() - Date.now(),
+      assignmentId: assignment?.id,
+      sectionType: assignment?.sectionType,
+      dueIn: assignment?.dueDate.getTime() - Date.now(),
     });
 
     return () => {
@@ -622,6 +429,56 @@ Please review this initial draft and provide feedback for refinement. The techni
       }
     };
   }, [assignment, trackAction]);
+
+  useEffect(() => {
+    const fetchAndSetData = async () => {
+      setLoading(true);
+      try {
+        const [assignmentRes, templatesRes, resourcesRes, versionsRes] = await Promise.all([
+          fetch('/api/sme/assignment'),
+          fetch('/api/sme/templates'),
+          fetch('/api/sme/resources'),
+          fetch('/api/sme/versions'),
+        ]);
+
+        if (!assignmentRes.ok || !templatesRes.ok || !resourcesRes.ok || !versionsRes.ok) {
+          throw new Error('Failed to fetch all SME data');
+        }
+
+        const assignmentData = await assignmentRes.json();
+        const templatesData = await templatesRes.json();
+        const resourcesData = await resourcesRes.json();
+        const versionsData = await versionsRes.json();
+
+        setAssignment(assignmentData);
+        setTemplates(templatesData);
+        setResources(resourcesData);
+        setVersions(versionsData);
+
+        setContent(assignmentData.content.draft);
+        setWordCount(assignmentData.content.wordCount);
+        setLastSaved(new Date(assignmentData.content.lastSaved));
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAndSetData();
+  }, []);
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-screen">
+        Loading SME contribution portal...
+      </div>
+    );
+  if (error)
+    return (
+      <div className="flex items-center justify-center h-screen text-red-500">Error: {error}</div>
+    );
+  if (!assignment)
+    return <div className="flex items-center justify-center h-screen">No assignment found.</div>;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -643,7 +500,7 @@ Please review this initial draft and provide feedback for refinement. The techni
               <h1 className="text-2xl font-bold text-gray-900">{assignment.proposalTitle}</h1>
               <p className="text-gray-600">
                 {assignment.customer} • Due: {assignment.dueDate.toLocaleDateString()} •{' '}
-                {timeRemaining}
+                {timeRemainingText}
               </p>
             </div>
             <div className="flex items-center space-x-4">

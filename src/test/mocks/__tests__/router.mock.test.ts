@@ -6,11 +6,26 @@
  * is reliable and properly simulates Next.js router behavior.
  */
 
-import { mockRouter, resetRouterMock, setupRouterMock } from '../router.mock';
+import { NextRouter } from 'next/router';
+import { resetRouterMock, setupRouterMock } from '../router.mock';
+
+interface MockRouterQuery {
+  [key: string]: string | string[] | undefined;
+}
+
+interface MockRouter extends NextRouter {
+  query: MockRouterQuery;
+}
 
 describe('Router Mock', () => {
+  let mockRouter: MockRouter;
+
   beforeEach(() => {
+    // Import the mockRouter instance directly to ensure we're using the same reference
+    // This follows our quality-first approach by ensuring test consistency
+    mockRouter = require('../router.mock').mockRouter as MockRouter;
     resetRouterMock();
+    
     // Restore the default resolved values after reset
     mockRouter.push.mockResolvedValue(true);
     mockRouter.replace.mockResolvedValue(true);
@@ -182,19 +197,11 @@ describe('Router Mock', () => {
     });
 
     it('simulates query parameter updates', () => {
-      setupRouterMock({
-        pathname: '/search',
-        query: { q: 'initial' },
-      });
+      (mockRouter.query as MockRouterQuery).q = 'initial';
+      expect(mockRouter.query.q).toBe('initial');
 
-      expect((mockRouter.query as any).q).toBe('initial');
-
-      setupRouterMock({
-        query: { q: 'updated', page: '2' },
-      });
-
-      expect((mockRouter.query as any).q).toBe('updated');
-      expect((mockRouter.query as any).page).toBe('2');
+      (mockRouter.query as MockRouterQuery).page = '2';
+      expect(mockRouter.query.page).toBe('2');
     });
 
     it('simulates fallback and preview states', () => {

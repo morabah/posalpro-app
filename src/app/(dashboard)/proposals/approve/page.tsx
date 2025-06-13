@@ -136,220 +136,13 @@ interface FilterState {
   sortOrder: 'asc' | 'desc';
 }
 
-// Mock approval workflow data
-const MOCK_APPROVALS: WorkflowApproval[] = [
-  {
-    id: 'appr-1',
-    proposalId: '1',
-    proposalTitle: 'Cloud Migration Services - Acme Corporation',
-    client: 'Acme Corporation',
-    stage: ApprovalStage.FINANCIAL,
-    status: ApprovalStatus.PENDING,
-    priority: Priority.HIGH,
-    assignedTo: 'Maria Rodriguez',
-    assignedToRole: 'Financial Approver',
-    dueDate: new Date(Date.now() + 3600000), // 1 hour from now
-    createdAt: new Date(Date.now() - 86400000), // 1 day ago
-    updatedAt: new Date(Date.now() - 3600000), // 1 hour ago
-    estimatedValue: 250000,
-    currentStage: 2,
-    totalStages: 4,
-    slaHours: 24,
-    timeRemaining: 1,
-    riskLevel: 'medium',
-    isParallel: false,
-    dependsOn: ['tech-review-1'],
-    workflowPath: ['technical', 'financial', 'legal', 'executive'],
-    previousDecisions: [
-      {
-        id: 'dec-1',
-        stage: ApprovalStage.TECHNICAL,
-        approver: 'John Smith',
-        approverRole: 'Technical Lead',
-        decision: DecisionType.APPROVE_WITH_COMMENTS,
-        comments: 'Technical configuration validated. Note potential scaling issue in Y2.',
-        timestamp: new Date(Date.now() - 3600000),
-        timeToDecision: 4,
-      },
-    ],
-  },
-  {
-    id: 'appr-2',
-    proposalId: '2',
-    proposalTitle: 'Security Audit - TechStart Inc',
-    client: 'TechStart Inc',
-    stage: ApprovalStage.EXECUTIVE,
-    status: ApprovalStatus.PENDING,
-    priority: Priority.HIGH,
-    assignedTo: 'David Chen',
-    assignedToRole: 'Executive Approver',
-    dueDate: new Date(Date.now() + 21600000), // 6 hours from now
-    createdAt: new Date(Date.now() - 172800000), // 2 days ago
-    updatedAt: new Date(Date.now() - 7200000), // 2 hours ago
-    estimatedValue: 85000,
-    currentStage: 4,
-    totalStages: 4,
-    slaHours: 48,
-    timeRemaining: 6,
-    riskLevel: 'low',
-    isParallel: false,
-    dependsOn: ['legal-review-2'],
-    workflowPath: ['technical', 'financial', 'legal', 'executive'],
-    previousDecisions: [
-      {
-        id: 'dec-2',
-        stage: ApprovalStage.TECHNICAL,
-        approver: 'Alex Peterson',
-        approverRole: 'Security Lead',
-        decision: DecisionType.APPROVE,
-        comments: 'Security audit scope is comprehensive and appropriate.',
-        timestamp: new Date(Date.now() - 172800000),
-        timeToDecision: 2,
-      },
-      {
-        id: 'dec-3',
-        stage: ApprovalStage.FINANCIAL,
-        approver: 'Maria Rodriguez',
-        approverRole: 'Financial Approver',
-        decision: DecisionType.APPROVE,
-        comments: 'Pricing validated and within budget parameters.',
-        timestamp: new Date(Date.now() - 86400000),
-        timeToDecision: 3,
-      },
-      {
-        id: 'dec-4',
-        stage: ApprovalStage.LEGAL,
-        approver: 'Lisa Kim',
-        approverRole: 'Legal Counsel',
-        decision: DecisionType.APPROVE_WITH_COMMENTS,
-        comments: 'Standard terms acceptable. Minor liability clause adjustment made.',
-        timestamp: new Date(Date.now() - 7200000),
-        timeToDecision: 18,
-      },
-    ],
-  },
-  {
-    id: 'appr-3',
-    proposalId: '3',
-    proposalTitle: 'Digital Transformation - GlobalCorp',
-    client: 'GlobalCorp',
-    stage: ApprovalStage.TECHNICAL,
-    status: ApprovalStatus.IN_PROGRESS,
-    priority: Priority.MEDIUM,
-    assignedTo: 'John Smith',
-    assignedToRole: 'Technical Lead',
-    dueDate: new Date(Date.now() + 345600000), // 4 days from now
-    createdAt: new Date(Date.now() - 43200000), // 12 hours ago
-    updatedAt: new Date(Date.now() - 1800000), // 30 minutes ago
-    estimatedValue: 500000,
-    currentStage: 1,
-    totalStages: 5,
-    slaHours: 72,
-    timeRemaining: 96,
-    riskLevel: 'high',
-    isParallel: true,
-    dependsOn: [],
-    workflowPath: ['technical', 'security', 'financial', 'legal', 'executive'],
-    previousDecisions: [],
-  },
-  {
-    id: 'appr-4',
-    proposalId: '4',
-    proposalTitle: 'DevOps Implementation - InnovateTech',
-    client: 'InnovateTech',
-    stage: ApprovalStage.LEGAL,
-    status: ApprovalStatus.ESCALATED,
-    priority: Priority.URGENT,
-    assignedTo: 'Lisa Kim',
-    assignedToRole: 'Legal Counsel',
-    dueDate: new Date(Date.now() - 7200000), // 2 hours overdue
-    createdAt: new Date(Date.now() - 259200000), // 3 days ago
-    updatedAt: new Date(Date.now() - 3600000), // 1 hour ago
-    estimatedValue: 150000,
-    currentStage: 3,
-    totalStages: 4,
-    slaHours: 48,
-    timeRemaining: -2,
-    riskLevel: 'high',
-    isParallel: false,
-    dependsOn: ['financial-review-4'],
-    workflowPath: ['technical', 'financial', 'legal', 'executive'],
-    previousDecisions: [
-      {
-        id: 'dec-5',
-        stage: ApprovalStage.TECHNICAL,
-        approver: 'John Smith',
-        approverRole: 'Technical Lead',
-        decision: DecisionType.APPROVE,
-        comments: 'DevOps architecture is sound and follows best practices.',
-        timestamp: new Date(Date.now() - 172800000),
-        timeToDecision: 6,
-      },
-      {
-        id: 'dec-6',
-        stage: ApprovalStage.FINANCIAL,
-        approver: 'Maria Rodriguez',
-        approverRole: 'Financial Approver',
-        decision: DecisionType.REQUEST_CHANGES,
-        comments: 'Pricing needs adjustment for enterprise license tier.',
-        timestamp: new Date(Date.now() - 86400000),
-        timeToDecision: 24,
-      },
-    ],
-  },
-  {
-    id: 'appr-5',
-    proposalId: '5',
-    proposalTitle: 'Data Analytics Platform - DataCorp',
-    client: 'DataCorp',
-    stage: ApprovalStage.COMPLIANCE,
-    status: ApprovalStatus.PENDING,
-    priority: Priority.MEDIUM,
-    assignedTo: 'Sarah Johnson',
-    assignedToRole: 'Compliance Officer',
-    dueDate: new Date(Date.now() + 172800000), // 2 days from now
-    createdAt: new Date(Date.now() - 86400000), // 1 day ago
-    updatedAt: new Date(Date.now() - 7200000), // 2 hours ago
-    estimatedValue: 320000,
-    currentStage: 3,
-    totalStages: 5,
-    slaHours: 48,
-    timeRemaining: 48,
-    riskLevel: 'medium',
-    isParallel: true,
-    dependsOn: ['technical-review-5', 'security-review-5'],
-    workflowPath: ['technical', 'security', 'compliance', 'financial', 'executive'],
-    previousDecisions: [
-      {
-        id: 'dec-7',
-        stage: ApprovalStage.TECHNICAL,
-        approver: 'Alex Peterson',
-        approverRole: 'Data Engineer',
-        decision: DecisionType.APPROVE,
-        comments: 'Analytics platform architecture meets requirements.',
-        timestamp: new Date(Date.now() - 43200000),
-        timeToDecision: 8,
-      },
-      {
-        id: 'dec-8',
-        stage: ApprovalStage.SECURITY,
-        approver: 'Alex Peterson',
-        approverRole: 'Security Lead',
-        decision: DecisionType.APPROVE_WITH_COMMENTS,
-        comments: 'Data security measures adequate. Recommend additional encryption.',
-        timestamp: new Date(Date.now() - 21600000),
-        timeToDecision: 12,
-      },
-    ],
-  },
-];
-
 export default function ApprovalWorkflowDashboard() {
   const router = useRouter();
-  const [approvals, setApprovals] = useState<WorkflowApproval[]>(MOCK_APPROVALS);
-  const [filteredApprovals, setFilteredApprovals] = useState<WorkflowApproval[]>(MOCK_APPROVALS);
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedApproval, setSelectedApproval] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<WorkflowApproval[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filteredApprovals, setFilteredApprovals] = useState<WorkflowApproval[]>([]);
+  const [selectedApproval, setSelectedApproval] = useState<WorkflowApproval | null>(null);
   const [showDecisionModal, setShowDecisionModal] = useState<string | null>(null);
 
   // Filter state
@@ -361,44 +154,64 @@ export default function ApprovalWorkflowDashboard() {
     assignee: 'all',
     timeframe: 'all',
     sortBy: 'dueDate',
-    sortOrder: 'asc',
+    sortOrder: 'desc',
   });
 
-  // Apply filters and sorting
+  useEffect(() => {
+    const fetchApprovals = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/approvals');
+        if (!response.ok) {
+          throw new Error('Failed to fetch approvals');
+        }
+        const data = await response.json();
+        setApprovals(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchApprovals();
+  }, []);
+
   useEffect(() => {
     let filtered = [...approvals];
 
-    // Search filter
+    // Apply search filter
     if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
       filtered = filtered.filter(
         approval =>
-          approval.proposalTitle.toLowerCase().includes(filters.search.toLowerCase()) ||
-          approval.client.toLowerCase().includes(filters.search.toLowerCase()) ||
-          approval.assignedTo.toLowerCase().includes(filters.search.toLowerCase())
+          approval.proposalTitle.toLowerCase().includes(searchTerm) ||
+          approval.client.toLowerCase().includes(searchTerm) ||
+          approval.assignedTo.toLowerCase().includes(searchTerm)
       );
     }
 
-    // Status filter
+    // Apply status filter
     if (filters.status !== 'all') {
       filtered = filtered.filter(approval => approval.status === filters.status);
     }
 
-    // Stage filter
+    // Apply stage filter
     if (filters.stage !== 'all') {
       filtered = filtered.filter(approval => approval.stage === filters.stage);
     }
 
-    // Priority filter
+    // Apply priority filter
     if (filters.priority !== 'all') {
       filtered = filtered.filter(approval => approval.priority === filters.priority);
     }
 
-    // Assignee filter
+    // Apply assignee filter
     if (filters.assignee !== 'all') {
       filtered = filtered.filter(approval => approval.assignedTo === filters.assignee);
     }
 
-    // Timeframe filter
+    // Apply timeframe filter
     if (filters.timeframe !== 'all') {
       const now = new Date();
       let cutoffHours = 0;
@@ -420,44 +233,23 @@ export default function ApprovalWorkflowDashboard() {
       }
     }
 
-    // Sorting
+    // Apply sort
     filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
+      const aVal = a[filters.sortBy as keyof WorkflowApproval];
+      const bVal = b[filters.sortBy as keyof WorkflowApproval];
 
-      switch (filters.sortBy) {
-        case 'dueDate':
-          aValue = a.dueDate;
-          bValue = b.dueDate;
-          break;
-        case 'priority':
-          const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
-          aValue = priorityOrder[a.priority];
-          bValue = priorityOrder[b.priority];
-          break;
-        case 'stage':
-          aValue = a.currentStage;
-          bValue = b.currentStage;
-          break;
-        case 'value':
-          aValue = a.estimatedValue;
-          bValue = b.estimatedValue;
-          break;
-        default:
-          aValue = a.updatedAt;
-          bValue = b.updatedAt;
-      }
-
-      if (aValue < bValue) return filters.sortOrder === 'asc' ? -1 : 1;
-      if (aValue > bValue) return filters.sortOrder === 'asc' ? 1 : -1;
+      if (aVal === undefined || bVal === undefined) return 0;
+      if (aVal < bVal) return filters.sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return filters.sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
 
     setFilteredApprovals(filtered);
   }, [approvals, filters]);
 
-  // Filter handlers
-  const handleFilterChange = useCallback((key: keyof FilterState, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+  const handleFilterChange = useCallback((filterName: keyof FilterState, value: string) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+    trackAction('filter_changed', { filter: filterName, value });
   }, []);
 
   const clearFilters = useCallback(() => {
@@ -469,25 +261,35 @@ export default function ApprovalWorkflowDashboard() {
       assignee: 'all',
       timeframe: 'all',
       sortBy: 'dueDate',
-      sortOrder: 'asc',
+      sortOrder: 'desc',
     });
   }, []);
 
-  // Analytics tracking
-  const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      console.log('Approval Workflow Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        filters: filters,
-        approvalCount: filteredApprovals.length,
-      });
-    },
-    [filters, filteredApprovals.length]
-  );
+  const handleApprovalAction = useCallback((approvalId: string, decision: DecisionType) => {
+    trackAction('approval_action', { approvalId, decision });
+  }, []);
 
-  // Status badge component
+  const trackAction = useCallback((action: string, metadata: object = {}) => {
+    console.log('Approval Workflow Analytics:', {
+      action,
+      metadata,
+      timestamp: Date.now(),
+    });
+  }, []);
+
+  useEffect(() => {
+    trackAction('dashboard_viewed');
+  }, []);
+
+  if (loading) {
+    return <p>Loading approval workflow dashboard...</p>;
+  }
+
+  if (error) {
+    return <p className="text-red-500">{error}</p>;
+  }
+
+  // Render Functions
   const StatusBadge = ({ status }: { status: ApprovalStatus }) => {
     const getStatusStyle = (status: ApprovalStatus) => {
       switch (status) {
@@ -521,7 +323,6 @@ export default function ApprovalWorkflowDashboard() {
     );
   };
 
-  // Priority indicator component
   const PriorityIndicator = ({ priority }: { priority: Priority }) => {
     const getPriorityColor = (priority: Priority) => {
       switch (priority) {
@@ -545,7 +346,6 @@ export default function ApprovalWorkflowDashboard() {
     );
   };
 
-  // Workflow progress component
   const WorkflowProgress = ({ approval }: { approval: WorkflowApproval }) => {
     const progressPercentage = (approval.currentStage / approval.totalStages) * 100;
 
@@ -564,7 +364,6 @@ export default function ApprovalWorkflowDashboard() {
     );
   };
 
-  // Time remaining indicator
   const TimeRemaining = ({ approval }: { approval: WorkflowApproval }) => {
     const isOverdue = approval.timeRemaining < 0;
     const isUrgent = approval.timeRemaining <= 2 && approval.timeRemaining > 0;
@@ -593,7 +392,6 @@ export default function ApprovalWorkflowDashboard() {
     );
   };
 
-  // Calculate dashboard metrics
   const dashboardMetrics = useMemo(() => {
     const total = approvals.length;
     const pending = approvals.filter(a => a.status === ApprovalStatus.PENDING).length;
@@ -806,7 +604,7 @@ export default function ApprovalWorkflowDashboard() {
 
         {/* Approvals List */}
         <div className="grid grid-cols-1 gap-6">
-          {isLoading ? (
+          {loading ? (
             // Loading skeleton
             Array.from({ length: 3 }).map((_, index) => (
               <Card key={index}>
@@ -856,7 +654,7 @@ export default function ApprovalWorkflowDashboard() {
               <Card
                 key={approval.id}
                 className={`hover:shadow-lg transition-shadow duration-200 ${
-                  selectedApproval === approval.id ? 'ring-2 ring-blue-500' : ''
+                  selectedApproval === approval ? 'ring-2 ring-blue-500' : ''
                 } ${approval.timeRemaining < 0 ? 'border-l-4 border-red-500' : ''}`}
               >
                 <div className="p-6">
@@ -885,7 +683,7 @@ export default function ApprovalWorkflowDashboard() {
                         size="sm"
                         onClick={() => {
                           trackAction('view_approval_details', { approvalId: approval.id });
-                          setSelectedApproval(approval.id);
+                          setSelectedApproval(approval);
                         }}
                       >
                         <EyeIcon className="w-4 h-4" />

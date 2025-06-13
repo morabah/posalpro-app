@@ -492,12 +492,20 @@ export function ProposalWizard({
     [wizardData, currentProposalId, proposalEntity, analytics]
   );
 
-  // Create final proposal
+  // Handle proposal creation
   const handleCreateProposal = useCallback(async () => {
-    setIsLoading(true);
+    console.log('[ProposalWizard] Starting proposal creation');
+    console.log('[ProposalWizard] Current wizard data:', wizardData);
+    console.log('[ProposalWizard] Current proposal ID:', currentProposalId);
+
     try {
-      // Calculate creation metrics for analytics
+      setIsLoading(true);
+      setError(null);
+
+      // Get analytics summary
+      console.log('[ProposalWizard] Getting analytics summary');
       const summary = analytics.getWizardSummary();
+      console.log('[ProposalWizard] Analytics summary:', summary);
 
       const creationMetrics = {
         proposalId: currentProposalId || 'new-' + Date.now(),
@@ -529,30 +537,37 @@ export function ProposalWizard({
         hypotheses: COMPONENT_MAPPING.hypotheses,
       };
 
+      console.log('[ProposalWizard] Creation metrics:', creationMetrics);
       analytics.trackProposalCreation(creationMetrics);
 
       if (currentProposalId) {
+        console.log('[ProposalWizard] Updating existing proposal:', currentProposalId);
         // Update status from draft to in_progress
         const response = await proposalEntity.updateStatus(
           currentProposalId,
           'in_progress' as any,
           'Proposal creation completed'
         );
+        console.log('[ProposalWizard] Update response:', response);
 
         if (response.success) {
+          console.log('[ProposalWizard] Proposal updated successfully');
           // Clear session storage
           localStorage.removeItem(WIZARD_SESSION_KEY);
           localStorage.removeItem(WIZARD_DRAFT_ID_KEY);
 
           if (onComplete) {
+            console.log('[ProposalWizard] Calling onComplete callback');
             onComplete({ ...wizardData, proposalId: currentProposalId });
           } else {
+            console.log('[ProposalWizard] Redirecting to proposals/manage');
             router.push('/proposals/manage');
           }
         } else {
           throw new Error('Failed to finalize proposal');
         }
       } else {
+        console.log('[ProposalWizard] Creating new proposal');
         // Create new proposal directly
         const proposalData = {
           metadata: {
@@ -580,15 +595,21 @@ export function ProposalWizard({
           },
         };
 
+        console.log('[ProposalWizard] New proposal data:', proposalData);
         const response = await proposalEntity.create(proposalData);
+        console.log('[ProposalWizard] Create response:', response);
+
         if (response.success && response.data) {
+          console.log('[ProposalWizard] Proposal created successfully');
           // Clear session storage
           localStorage.removeItem(WIZARD_SESSION_KEY);
           localStorage.removeItem(WIZARD_DRAFT_ID_KEY);
 
           if (onComplete) {
+            console.log('[ProposalWizard] Calling onComplete callback');
             onComplete({ ...wizardData, proposalId: response.data.id });
           } else {
+            console.log('[ProposalWizard] Redirecting to proposals/manage');
             router.push('/proposals/manage');
           }
         } else {
@@ -596,9 +617,9 @@ export function ProposalWizard({
         }
       }
     } catch (err) {
+      console.error('[ProposalWizard] Error during proposal creation:', err);
       setError('Failed to create proposal. Please try again.');
       analytics.trackWizardStep(6, 'create_proposal', 'error', { reason: 'api_error' });
-      console.error('Create proposal error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -678,178 +699,114 @@ export function ProposalWizard({
       {/* Session Recovery Banner */}
       {sessionRecovered && (
         <Alert variant="info" className="mb-6">
-          <div className="flex items-center justify-between">
-            <span>Previous session recovered. You can continue from where you left off.</span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                localStorage.removeItem(WIZARD_SESSION_KEY);
-                setSessionRecovered(false);
-              }}
-            >
-              Start Fresh
-            </Button>
-          </div>
+          Your previous progress has been restored.
         </Alert>
       )}
 
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <DocumentTextIcon className="w-8 h-8 text-primary-600 mr-3" />
-          <h1 className="text-3xl font-bold text-neutral-900">
-            {editProposalId ? 'Edit Proposal' : 'Create New Proposal'}
-          </h1>
-        </div>
-
-        {/* Step Indicator */}
-        <div className="flex items-center space-x-4 mb-6">
-          {WIZARD_STEPS.map((step, index) => (
-            <div key={step.number} className="flex items-center">
-              <div
-                className={`
-                flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium
-                ${
-                  wizardData.currentStep === step.number
-                    ? 'bg-primary-600 text-white'
-                    : wizardData.currentStep > step.number
-                      ? 'bg-success-600 text-white'
-                      : 'bg-neutral-200 text-neutral-600'
-                }
-              `}
-              >
-                {wizardData.currentStep > step.number ? '✓' : step.number}
-              </div>
-              <span
-                className={`ml-2 text-sm font-medium ${
-                  wizardData.currentStep === step.number ? 'text-primary-600' : 'text-neutral-600'
-                }`}
-              >
-                {step.title}
-              </span>
-              {index < WIZARD_STEPS.length - 1 && (
-                <ChevronRightIcon className="w-4 h-4 text-neutral-400 mx-3" />
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Error Alert */}
       {error && (
-        <Alert variant="error" className="mb-6">
+        <Alert variant="error" className="mb-6" dismissible onDismiss={() => setError(null)}>
           {error}
         </Alert>
       )}
 
-      {/* Step Content */}
-      <Card className="mb-8">
-        <div className="p-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-neutral-900 mb-2">
-              Step {wizardData.currentStep} of 6: {WIZARD_STEPS[wizardData.currentStep - 1].title}
-            </h2>
+      {/* Main Wizard Content */}
+      <div className="space-y-6">
+        {/* Step Title */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold text-gray-900 flex items-center">
+            <DocumentTextIcon className="w-6 h-6 mr-2" />
+            {WIZARD_STEPS[wizardData.currentStep - 1].title}
+          </h2>
+          <div className="text-sm text-gray-500">
+            Step {wizardData.currentStep} of {WIZARD_STEPS.length}
           </div>
-
-          <CurrentStepComponent
-            data={
-              (wizardData[`step${wizardData.currentStep}` as keyof ProposalWizardData] as any) || {}
-            }
-            onUpdate={stableOnUpdate}
-            analytics={analytics}
-            allWizardData={wizardData}
-          />
-        </div>
-      </Card>
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button variant="secondary" onClick={handleCancel} disabled={isLoading}>
-            Cancel
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={() => handleSaveDraft()}
-            disabled={isLoading}
-            loading={isLoading}
-          >
-            Save Draft
-          </Button>
-
-          {wizardData.lastSaved && (
-            <span className="text-sm text-neutral-600">
-              Last saved: {wizardData.lastSaved.toLocaleTimeString()}
-            </span>
-          )}
-
-          {isAutoSaving && <span className="text-sm text-blue-600">Auto-saving...</span>}
         </div>
 
-        <div className="flex items-center space-x-4">
-          {wizardData.currentStep > 1 && (
+        {/* Step Content */}
+        <CurrentStepComponent
+          data={wizardData[`step${wizardData.currentStep}` as keyof ProposalWizardData] as any}
+          onUpdate={stableOnUpdate}
+          onNext={wizardData.currentStep === 6 ? handleCreateProposal : handleNext}
+          analytics={analytics}
+          allWizardData={wizardData}
+        />
+
+        {/* Navigation Buttons */}
+        <div className="flex justify-between pt-6 border-t border-gray-200">
+          <div>
             <Button
               variant="secondary"
-              onClick={handlePrevious}
-              disabled={isLoading}
+              onClick={handleCancel}
               className="flex items-center"
+              disabled={isLoading}
             >
-              <ChevronLeftIcon className="w-4 h-4 mr-2" />
-              Previous
+              Cancel
             </Button>
-          )}
-
-          <Button
-            variant="primary"
-            onClick={handleNext}
-            disabled={isLoading}
-            loading={isLoading}
-            className="flex items-center"
-          >
-            {wizardData.currentStep === 6 ? (
-              editProposalId ? (
-                'Update Proposal'
-              ) : (
-                'Create Proposal'
-              )
-            ) : (
-              <>
-                Next Step
-                <ChevronRightIcon className="w-4 h-4 ml-2" />
-              </>
+          </div>
+          <div className="flex space-x-4">
+            <Button
+              variant="secondary"
+              onClick={() => handleSaveDraft()}
+              className="flex items-center"
+              disabled={isLoading || isAutoSaving}
+              loading={isAutoSaving}
+            >
+              Save Draft
+            </Button>
+            {wizardData.currentStep > 1 && (
+              <Button
+                variant="secondary"
+                onClick={handlePrevious}
+                className="flex items-center"
+                disabled={isLoading}
+              >
+                <ChevronLeftIcon className="w-5 h-5 mr-1" />
+                Previous
+              </Button>
             )}
-          </Button>
+            {wizardData.currentStep < WIZARD_STEPS.length ? (
+              <Button
+                variant="primary"
+                onClick={handleNext}
+                className="flex items-center"
+                disabled={isLoading || !wizardData.isValid[wizardData.currentStep - 1]}
+              >
+                Next
+                <ChevronRightIcon className="w-5 h-5 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={handleCreateProposal}
+                className="flex items-center"
+                disabled={isLoading || !wizardData.isValid[wizardData.currentStep - 1]}
+                loading={isLoading}
+              >
+                Create Proposal
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Exit Confirmation Modal */}
       {showExitConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="max-w-md w-full mx-4">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-neutral-900 mb-4">Unsaved Changes</h3>
-              <p className="text-neutral-600 mb-6">
-                You have unsaved changes. What would you like to do?
-              </p>
-              <div className="flex items-center justify-end space-x-4">
-                <Button variant="secondary" onClick={() => setShowExitConfirm(false)}>
-                  Continue Editing
-                </Button>
-                <Button variant="primary" onClick={handleExitWithSave} loading={isLoading}>
-                  Save & Exit
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={handleExitWithoutSave}
-                  className="text-error-600 hover:text-error-700"
-                >
-                  Exit Without Saving
-                </Button>
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4">Save Changes?</h3>
+            <p className="text-gray-600 mb-6">
+              You have unsaved changes. Would you like to save them before exiting?
+            </p>
+            <div className="flex justify-end space-x-4">
+              <Button variant="secondary" onClick={handleExitWithoutSave}>
+                Don't Save
+              </Button>
+              <Button variant="primary" onClick={handleExitWithSave}>
+                Save & Exit
+              </Button>
             </div>
-          </Card>
+          </div>
         </div>
       )}
     </div>

@@ -22,6 +22,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   UsersIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline';
 import {
   ChartPieIcon as ChartPieIconSolid,
@@ -63,24 +64,73 @@ interface PriorityItem {
 }
 
 interface ModernDashboardProps {
-  user: {
+  user?: {
     id: string;
     name: string;
     role: UserType;
   };
+  loading?: boolean;
+  error?: string | null;
   data: DashboardData;
   proposals: ProposalItem[];
   priorityItems: PriorityItem[];
   onQuickAction?: (action: string) => void;
+  onRetry?: () => void;
 }
+
+const DashboardSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/60 shadow-sm">
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      </div>
+    </div>
+    <div className="max-w-7xl mx-auto px-6 py-10 space-y-10">
+      <div className="space-y-6">
+        <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="h-32 bg-gray-200 rounded-2xl"></div>
+          <div className="h-32 bg-gray-200 rounded-2xl"></div>
+          <div className="h-32 bg-gray-200 rounded-2xl"></div>
+          <div className="h-32 bg-gray-200 rounded-2xl"></div>
+        </div>
+      </div>
+      <div className="space-y-6">
+        <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+        <div className="h-48 bg-gray-200 rounded-2xl"></div>
+      </div>
+    </div>
+  </div>
+);
 
 export default function ModernDashboard({
   user,
+  loading,
+  error,
   data,
   proposals,
   priorityItems,
   onQuickAction,
+  onRetry,
 }: ModernDashboardProps) {
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <XCircleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-800">Failed to Load Dashboard</h2>
+          <p className="text-gray-600 mt-2 mb-6">{error}</p>
+          {onRetry && <Button onClick={onRetry}>Retry</Button>}
+        </div>
+      </div>
+    );
+  }
+
   // Status badge styling following design system
   const getStatusBadge = (status: string) => {
     const statusConfig = {
@@ -145,7 +195,7 @@ export default function ModernDashboard({
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Welcome back, {user.name.split(' ')[0]}
+                Welcome back, {user?.name.split(' ')[0]}
               </h1>
               <p className="text-gray-600 flex items-center gap-2">
                 <SparklesIcon className="w-4 h-4 text-blue-500" />

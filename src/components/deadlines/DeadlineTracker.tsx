@@ -9,6 +9,7 @@
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
+import { SystemUser, useUsers } from '@/hooks/admin/useAdminData';
 import { useDeadlineManagementAnalytics } from '@/hooks/deadlines/useDeadlineManagementAnalytics';
 import {
   ComplexityLevel,
@@ -32,7 +33,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -65,14 +66,6 @@ interface DeadlineTrackerProps {
   onDeadlineDelete?: (id: string) => void;
   className?: string;
 }
-
-// Mock team members for assignment
-const MOCK_TEAM_MEMBERS = [
-  { value: 'user-001', label: 'Mohamed Rabah (Project Manager)' },
-  { value: 'user-002', label: 'Sarah Johnson (Technical Lead)' },
-  { value: 'user-003', label: 'Alex Parker (SME)' },
-  { value: 'user-004', label: 'Lisa Chen (Designer)' },
-];
 
 // Deadline type options
 const DEADLINE_TYPE_OPTIONS = [
@@ -115,12 +108,14 @@ const Select: React.FC<{
   onChange?: (value: string) => void;
   placeholder?: string;
   error?: string;
-}> = ({ options, value, onChange, placeholder, error }) => (
+  disabled?: boolean;
+}> = ({ options, value, onChange, placeholder, error, disabled }) => (
   <div>
     <select
       className={`form-field ${error ? 'border-red-300' : ''}`}
       value={value || ''}
       onChange={e => onChange?.(e.target.value)}
+      disabled={disabled}
     >
       {placeholder && <option value="">{placeholder}</option>}
       {options.map(option => (
@@ -143,6 +138,15 @@ export function DeadlineTracker({
   className = '',
 }: DeadlineTrackerProps) {
   const analytics = useDeadlineManagementAnalytics();
+  const { users, loading: isLoadingUsers, error: usersError } = useUsers();
+
+  const teamMemberOptions = useMemo(() => {
+    if (!users) return [];
+    return users.map((user: SystemUser) => ({
+      value: user.id,
+      label: `${user.name} (${user.role})`,
+    }));
+  }, [users]);
 
   const [deadlines, setDeadlines] = useState<Deadline[]>(initialDeadlines);
   const [isCreating, setIsCreating] = useState(false);
@@ -561,11 +565,13 @@ export function DeadlineTracker({
             />
 
             <Select
-              options={[{ value: '', label: 'All Assignees' }, ...MOCK_TEAM_MEMBERS]}
+              options={[{ value: '', label: 'All Assignees' }, ...teamMemberOptions]}
               value={filter.assignee || ''}
               onChange={value => setFilter(prev => ({ ...prev, assignee: value }))}
               placeholder="Filter by assignee"
+              disabled={isLoadingUsers}
             />
+            {usersError && <p className="text-xs text-red-600 mt-1">Could not load users</p>}
           </div>
 
           <div className="flex items-center space-x-4">
@@ -673,10 +679,13 @@ export function DeadlineTracker({
                 Assigned To <span className="text-red-500">*</span>
               </label>
               <Select
-                options={MOCK_TEAM_MEMBERS}
+                options={teamMemberOptions}
                 onChange={value => setValue('assignedTo', [value])}
                 error={errors.assignedTo?.message}
+                disabled={isLoadingUsers}
+                placeholder={isLoadingUsers ? 'Loading users...' : 'Select assignee'}
               />
+              {usersError && <p className="text-xs text-red-600 mt-1">Could not load users</p>}
             </div>
 
             <div>

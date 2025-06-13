@@ -4,155 +4,68 @@
  * Based on CONTENT_SEARCH_SCREEN.md requirements
  */
 
-import { contentService } from '@/lib/services';
-import { Prisma, ContentType } from '@prisma/client';
-import { NextRequest, NextResponse } from 'next/server';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db/prisma';
+import { Roles } from '@/lib/rbac/types';
+import { withRole } from '@/lib/rbac/withRole';
+import { updateContentSchema } from '@/lib/validation/schemas';
+import { getServerSession } from 'next-auth';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-/**
- * Standard API response wrapper
- */
-function createApiResponse<T>(data: T, message: string, status = 200) {
-  return NextResponse.json(
-    {
-      success: true,
-      data,
-      message,
-    },
-    { status }
-  );
-}
+async function handler(req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
 
-function createErrorResponse(error: string, details?: any, status = 500) {
-  return NextResponse.json(
-    {
-      success: false,
-      error,
-      details,
-    },
-    { status }
-  );
-}
+  const contentId = params.id;
 
-// Content update validation schema
-const updateContentSchema = z.object({
-  id: z.string().uuid('Invalid content ID'),
-  title: z
-    .string()
-    .min(1, 'Title is required')
-    .max(200, 'Title must be less than 200 characters')
-    .optional(),
-  description: z.string().optional(),
-  type: z.nativeEnum(ContentType).optional(),
-  content: z.string().min(1, 'Content is required').optional(),
-  tags: z.array(z.string()).optional(),
-  category: z.array(z.string()).optional(),
-  keywords: z.array(z.string()).optional(),
-  isPublic: z.boolean().optional(),
-  allowedRoles: z.array(z.string()).optional(),
-});
-
-/**
- * GET /api/content/[id] - Get specific content
- */
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const params = await context.params;
-    const { id } = params;
+    switch (req.method) {
+      case 'GET':
+        const content = await prisma.content.findUnique({
+          where: { id: contentId },
+          include: {
+            author: true,
+            tags: true,
+            category: true,
+            relatedContent: { include: { related: true } },
+          },
+        });
+        if (!content) {
+          return NextResponse.json({ error: 'Content not found' }, { status: 404 });
+        }
+        return NextResponse.json(content);
 
-    // Get content with creator using service
-    const content = await contentService.getContentWithCreator(id);
+      case 'PUT':
+        const body = await req.json();
+        const data = updateContentSchema.parse(body);
+        const updatedContent = await prisma.content.update({
+          where: { id: contentId },
+          data: {
+            ...data,
+            // Handle tags connection separately if needed
+          },
+        });
+        return NextResponse.json(updatedContent);
 
-    if (!content) {
-      return createErrorResponse('Content not found', null, 404);
+      case 'DELETE':
+        await prisma.content.delete({ where: { id: contentId } });
+        return NextResponse.json({ message: 'Content deleted successfully' });
+
+      default:
+        return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
     }
-
-    return createApiResponse(content, 'Content retrieved successfully');
-  } catch (error) {
-    const params = await context.params;
-    console.error(`Failed to fetch content ${params.id}:`, error);
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return createErrorResponse('Database error', error.message, 500);
+  } catch (e) {
+    console.error(e);
+    if (e instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Invalid request payload' }, { status: 400 });
     }
-
-    return createErrorResponse(
-      'Failed to fetch content',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
-    );
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }
 
-/**
- * PUT /api/content/[id] - Update specific content
- */
-export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const params = await context.params;
-    const { id } = params;
-    const body = await request.json();
-
-    // Add the id to the body for validation
-    const updateData = { id, ...body };
-
-    // Validate the update data
-    const validatedData = updateContentSchema.parse(updateData);
-
-    // Update content using service
-    const updatedContent = await contentService.updateContent(validatedData);
-
-    return createApiResponse(updatedContent, 'Content updated successfully');
-  } catch (error) {
-    const params = await context.params;
-    console.error(`Failed to update content ${params.id}:`, error);
-
-    if (error instanceof z.ZodError) {
-      return createErrorResponse('Validation failed', error.errors, 400);
-    }
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') {
-        return createErrorResponse('Content not found', error.message, 404);
-      }
-      return createErrorResponse('Database error', error.message, 500);
-    }
-
-    return createErrorResponse(
-      'Failed to update content',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
-    );
-  }
-}
-
-/**
- * DELETE /api/content/[id] - Delete specific content
- */
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const params = await context.params;
-    const { id } = params;
-
-    // Delete content using service
-    await contentService.deleteContent(id);
-
-    return createApiResponse(null, 'Content deleted successfully');
-  } catch (error) {
-    const params = await context.params;
-    console.error(`Failed to delete content ${params.id}:`, error);
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') {
-        return createErrorResponse('Content not found', error.message, 404);
-      }
-      return createErrorResponse('Database error', error.message, 500);
-    }
-
-    return createErrorResponse(
-      'Failed to delete content',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
-    );
-  }
-}
+export const GET = withRole(Roles.USER, handler);
+export const PUT = withRole(Roles.ADMIN, handler);
+export const DELETE = withRole(Roles.ADMIN, handler);

@@ -204,7 +204,7 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
         {/* Initials fallback */}
         {showInitials && (
           <span className="font-semibold" aria-hidden="true">
-            {getInitials(name!)}
+            {getInitials(name)}
           </span>
         )}
 
@@ -316,7 +316,7 @@ export const AvatarGroup: React.FC<AvatarGroupProps> = ({
     <div
       className={cn(
         'flex items-center',
-        spacingStyles[size!],
+        spacingStyles[size],
         onClick && 'cursor-pointer',
         className
       )}
@@ -344,7 +344,7 @@ export const AvatarGroup: React.FC<AvatarGroupProps> = ({
             'bg-neutral-100 border-2 border-white',
             'text-neutral-600 font-medium rounded-full',
             'z-0',
-            sizeStyles[size!]
+            sizeStyles[size]
           )}
           aria-label={`${hiddenCount} more users`}
         >

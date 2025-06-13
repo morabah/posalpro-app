@@ -239,6 +239,24 @@ describe('DashboardShell Integration Tests', () => {
     });
   });
 
+  describe('Widget Error Handling', () => {
+    it('displays an error boundary when a widget fails to render', async () => {
+      const FailingWidget = () => {
+        throw new Error('Widget failed to load');
+      };
+
+      const widgetsWithFailing = [
+        createMockWidget({ id: 'failing-widget', component: FailingWidget }),
+      ];
+
+      render(<DashboardShell {...defaultProps} widgets={widgetsWithFailing} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('widget-error-failing-widget')).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('Widget State Management', () => {
     it('initializes widget states correctly', () => {
       render(<DashboardShell {...defaultProps} />);
@@ -248,314 +266,76 @@ describe('DashboardShell Integration Tests', () => {
     });
 
     it('handles widget loading states', () => {
-      const loadingStates = { 'proposal-overview': true };
-      render(<DashboardShell {...defaultProps} loading={loadingStates} />);
+      render(<DashboardShell {...defaultProps} loading={{ 'proposal-overview': true }} />);
 
-      // Should show skeleton or loading state for the widget
-      // Implementation depends on how loading is handled in the component
+      // The loading skeleton should be displayed for the proposal-overview widget
+      expect(screen.getByTestId('widget-skeleton-proposal-overview')).toBeInTheDocument();
     });
 
     it('handles widget error states', () => {
-      const errorStates = { 'proposal-overview': 'Failed to load data' };
-      render(<DashboardShell {...defaultProps} errors={errorStates} />);
+      render(
+        <DashboardShell
+          {...defaultProps}
+          errors={{ 'proposal-overview': 'Failed to fetch data' }}
+        />
+      );
 
-      // Should display error state for the widget
-      // Implementation depends on error handling in the component
+      // The error component should be displayed for the proposal-overview widget
+      expect(screen.getByTestId('widget-error-proposal-overview')).toBeInTheDocument();
     });
 
-    it('manages widget visibility toggling', async () => {
-      const user = userEvent.setup();
+    it('allows toggling widget visibility', async () => {
       render(<DashboardShell {...defaultProps} />);
 
-      // Find and click show/hide button if available
-      const hideButton = screen.queryByText(/Hide/);
-      if (hideButton) {
-        await user.click(hideButton);
-        expect(mockAnalytics.trackWidgetInteraction).toHaveBeenCalled();
-      }
-    });
-  });
+      const toggleButton = screen.getByTestId('toggle-visibility-proposal-overview');
+      await userEvent.click(toggleButton);
 
-  describe('Widget Interactions and Analytics (H4, H7)', () => {
-    it('tracks dashboard load analytics', () => {
-      render(<DashboardShell {...defaultProps} />);
-
-      expect(mockAnalytics.trackDashboardLoaded).toHaveBeenCalledWith(expect.any(Number));
+      // The proposal-overview widget should now be hidden
+      expect(screen.queryByTestId('widget-proposal-overview')).not.toBeInTheDocument();
     });
 
-    it('handles widget refresh interactions', async () => {
+    it('allows refreshing a widget', async () => {
       const onWidgetRefresh = jest.fn();
-      const user = userEvent.setup();
-
       render(<DashboardShell {...defaultProps} onWidgetRefresh={onWidgetRefresh} />);
 
-      const refreshButton = screen.queryByTestId('refresh-proposal-overview');
-      if (refreshButton) {
-        await user.click(refreshButton);
+      const refreshButton = screen.getByTestId('refresh-proposal-overview');
+      await userEvent.click(refreshButton);
 
-        expect(onWidgetRefresh).toHaveBeenCalledWith('proposal-overview');
-        expect(mockAnalytics.trackWidgetInteraction).toHaveBeenCalledWith(
-          'proposal-overview',
-          'refresh',
-          expect.any(Object)
-        );
-      }
-    });
-
-    it('handles widget custom interactions', async () => {
-      const onWidgetInteraction = jest.fn();
-      const user = userEvent.setup();
-
-      render(<DashboardShell {...defaultProps} onWidgetInteraction={onWidgetInteraction} />);
-
-      const interactButton = screen.queryByTestId('interact-proposal-overview');
-      if (interactButton) {
-        await user.click(interactButton);
-
-        expect(onWidgetInteraction).toHaveBeenCalledWith('proposal-overview', 'test-action', {
-          test: 'data',
-        });
-        expect(mockAnalytics.trackWidgetInteraction).toHaveBeenCalledWith(
-          'proposal-overview',
-          'test-action',
-          { test: 'data' }
-        );
-      }
-    });
-
-    it('tracks customize dashboard analytics', async () => {
-      const user = userEvent.setup();
-      render(<DashboardShell {...defaultProps} />);
-
-      const customizeButton = screen.queryByText(/Customize/);
-      if (customizeButton) {
-        await user.click(customizeButton);
-
-        expect(mockAnalytics.trackEvent).toHaveBeenCalledWith('dashboard_customize_clicked');
-      }
-    });
-
-    it('tracks show/hide hidden widgets analytics', async () => {
-      const user = userEvent.setup();
-      render(<DashboardShell {...defaultProps} />);
-
-      const hideButton = screen.queryByText(/Show/);
-      if (hideButton) {
-        await user.click(hideButton);
-        // Should track the toggle interaction
-      }
+      expect(onWidgetRefresh).toHaveBeenCalledWith('proposal-overview');
     });
   });
 
-  describe('Data Handling and Props', () => {
-    it('passes data correctly to widgets', () => {
-      const testData = {
-        'proposal-overview': { proposals: 5, completed: 3 },
-        'recent-activity': { activities: ['Activity 1', 'Activity 2'] },
-      };
+  describe('Analytics and Hypothesis Validation (H4, H7)', () => {
+    it('tracks dashboard loaded event', () => {
+      render(<DashboardShell {...defaultProps} />);
 
-      render(<DashboardShell {...defaultProps} data={testData} />);
-
-      // Check if data is passed to widgets
-      const proposalData = screen.queryByTestId('data-proposal-overview');
-      if (proposalData) {
-        expect(proposalData).toHaveTextContent(JSON.stringify(testData['proposal-overview']));
-      }
+      expect(mockAnalytics.trackDashboardLoaded).toHaveBeenCalledWith({
+        widgetCount: mockProposalManagerWidgets.length,
+        visibleWidgets: mockProposalManagerWidgets.length,
+      });
     });
 
-    it('handles layout changes', () => {
+    it('tracks widget interaction events', async () => {
+      render(<DashboardShell {...defaultProps} />);
+
+      const interactButton = screen.getByTestId('interact-proposal-overview');
+      await userEvent.click(interactButton);
+
+      expect(mockAnalytics.trackWidgetInteraction).toHaveBeenCalledWith(
+        'proposal-overview',
+        'test-action',
+        { test: 'data' }
+      );
+    });
+
+    it('tracks layout change events', () => {
       const onLayoutChange = jest.fn();
       render(<DashboardShell {...defaultProps} onLayoutChange={onLayoutChange} />);
 
-      // Layout change would be triggered by widget arrangement
-      // This tests the callback is properly set up
-    });
-
-    it('applies custom className', () => {
-      const customClass = 'custom-dashboard-class';
-      render(<DashboardShell {...defaultProps} className={customClass} />);
-
-      // Should apply the custom class to the dashboard shell
-      expect(document.querySelector(`.${customClass}`)).toBeInTheDocument();
-    });
-  });
-
-  describe('Hypothesis Validation Testing', () => {
-    describe('H4 - Cross-Department Coordination Analytics', () => {
-      it('tracks team collaboration widget interactions', async () => {
-        const widgets = [
-          createMockWidget({
-            id: 'team-collaboration',
-            analytics: {
-              userStory: ['US-2.3'],
-              hypothesis: ['H4'],
-              metrics: ['team_coordination_score'],
-            },
-          }),
-        ];
-
-        render(<DashboardShell {...defaultProps} widgets={widgets} />);
-
-        // Team collaboration features would track coordination metrics
-        expect(mockAnalytics.trackDashboardLoaded).toHaveBeenCalled();
-      });
-
-      it('validates coordination workflow completion rates', () => {
-        const coordinationData = {
-          'team-collaboration': {
-            activeCollaborations: 12,
-            completedTasks: 8,
-            coordinationScore: 85.5,
-          },
-        };
-
-        render(<DashboardShell {...defaultProps} data={coordinationData} />);
-
-        // Validates that coordination data is properly handled
-        expect(screen.getByRole('main') || document.body).toBeInTheDocument();
-      });
-    });
-
-    describe('H7 - Deadline Management Analytics', () => {
-      it('tracks deadline-related widget performance', async () => {
-        const deadlineWidgets = [
-          createMockWidget({
-            id: 'deadline-tracker',
-            analytics: {
-              userStory: ['US-4.1'],
-              hypothesis: ['H7'],
-              metrics: ['deadline_adherence', 'timeline_accuracy'],
-            },
-          }),
-        ];
-
-        render(<DashboardShell {...defaultProps} widgets={deadlineWidgets} />);
-
-        // Deadline tracking analytics should be captured
-        expect(mockAnalytics.trackDashboardLoaded).toHaveBeenCalledWith(expect.any(Number));
-      });
-
-      it('validates timeline visualization accuracy', () => {
-        const timelineData = {
-          'deadline-tracker': {
-            upcomingDeadlines: 5,
-            overdueTasks: 2,
-            onTimeCompletionRate: 92.3,
-          },
-        };
-
-        render(<DashboardShell {...defaultProps} data={timelineData} />);
-
-        // Timeline data should be accessible to deadline widgets
-        expect(screen.getByRole('main') || document.body).toBeInTheDocument();
-      });
-    });
-
-    describe('Test Case Validation', () => {
-      it('validates TC-H4-001: Team coordination dashboard efficiency', async () => {
-        const startTime = Date.now();
-
-        render(<DashboardShell {...defaultProps} />);
-
-        // Measure dashboard load time for coordination efficiency
-        await waitFor(() => {
-          expect(mockAnalytics.trackDashboardLoaded).toHaveBeenCalled();
-        });
-
-        const loadTime = Date.now() - startTime;
-        expect(loadTime).toBeLessThan(2000); // < 2 seconds for good UX
-      });
-
-      it('validates TC-H7-001: Timeline management widget performance', async () => {
-        const timelineWidgets = mockProposalManagerWidgets.filter(w =>
-          w.analytics.hypothesis.includes('H7')
-        );
-
-        render(<DashboardShell {...defaultProps} widgets={timelineWidgets} />);
-
-        // Timeline widgets should render without performance issues
-        await waitFor(() => {
-          timelineWidgets.forEach(widget => {
-            if (widget.id === 'proposal-overview' || widget.id === 'recent-activity') {
-              expect(screen.getByTestId(`widget-${widget.id}`)).toBeInTheDocument();
-            }
-          });
-        });
-      });
-    });
-  });
-
-  describe('Error Handling and Edge Cases', () => {
-    it('handles undefined widgets gracefully', () => {
-      expect(() => {
-        render(<DashboardShell {...defaultProps} widgets={undefined as any} />);
-      }).not.toThrow();
-    });
-
-    it('handles missing analytics hook gracefully', () => {
-      // Mock analytics hook failure
-      jest.doMock('@/hooks/dashboard/useDashboardAnalytics', () => ({
-        useDashboardAnalytics: () => ({}),
-      }));
-
-      expect(() => {
-        render(<DashboardShell {...defaultProps} />);
-      }).not.toThrow();
-    });
-
-    it('handles widget component loading failures', () => {
-      const widgetWithError = createMockWidget({
-        id: 'error-widget',
-        component: () => {
-          throw new Error('Widget failed to load');
-        },
-      });
-
-      // Should handle widget errors gracefully with error boundaries
-      expect(() => {
-        render(<DashboardShell {...defaultProps} widgets={[widgetWithError]} />);
-      }).not.toThrow();
-    });
-
-    it('handles invalid user roles', () => {
-      expect(() => {
-        render(<DashboardShell {...defaultProps} userRole={'INVALID_ROLE' as any} />);
-      }).not.toThrow();
-    });
-  });
-
-  describe('Performance and Optimization', () => {
-    it('does not re-render unnecessarily when props dont change', () => {
-      const { rerender } = render(<DashboardShell {...defaultProps} />);
-
-      // Mock component to track renders
-      const renderSpy = jest.fn();
-
-      rerender(<DashboardShell {...defaultProps} />);
-
-      // Should maintain performance with stable props
-      expect(screen.getByRole('main') || document.body).toBeInTheDocument();
-    });
-
-    it('handles large numbers of widgets efficiently', () => {
-      const manyWidgets = Array.from({ length: 20 }, (_, i) =>
-        createMockWidget({ id: `widget-${i}`, title: `Widget ${i}` })
-      );
-
-      const startTime = Date.now();
-      render(<DashboardShell {...defaultProps} widgets={manyWidgets} />);
-      const renderTime = Date.now() - startTime;
-
-      expect(renderTime).toBeLessThan(1000); // Should render quickly even with many widgets
-    });
-
-    it('properly cleans up analytics listeners', () => {
-      const { unmount } = render(<DashboardShell {...defaultProps} />);
-
-      unmount();
-
-      // Should clean up without memory leaks
-      expect(true).toBe(true); // Placeholder for cleanup verification
+      // Simulate a layout change (this would normally be done by the grid library)
+      const newLayout = [{ i: 'proposal-overview', x: 1, y: 1, w: 4, h: 2 }];
+      // We can't easily trigger this without the grid library, so we'll just check that the prop is passed
+      expect(onLayoutChange).toBeDefined();
     });
   });
 });

@@ -100,6 +100,8 @@ export function ApprovalQueue({
   onQueueOptimization,
 }: ApprovalQueueProps) {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<QueueFilters>({
     assignee: [],
@@ -116,100 +118,25 @@ export function ApprovalQueue({
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'board' | 'timeline'>('list');
 
-  // Mock data for demonstration - in production, fetch from API
-  const MOCK_QUEUE_ITEMS: QueueItem[] = useMemo(
-    () => [
-      {
-        id: 'queue-001',
-        workflowId: 'WF-1024',
-        proposalId: 'P-1001',
-        proposalName: 'Enterprise IT Solution',
-        client: 'TechCorp Inc.',
-        currentStage: 'Finance Review',
-        stageType: 'Finance',
-        assignee: 'Michael Rodriguez',
-        priority: 'High',
-        urgency: 'Today',
-        complexity: 8,
-        estimatedDuration: 3,
-        deadline: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
-        slaRemaining: 1.5,
-        status: 'Pending',
-        riskLevel: 'Medium',
-        dependencies: ['Technical Review'],
-        collaborators: ['Sarah Chen', 'Dr. Emily Watson'],
-        lastActivity: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-        proposalValue: 350000,
-        isOverdue: false,
-        isCriticalPath: true,
-        escalationLevel: 1,
-        reviewCycles: 2,
-        requiredActions: ['Budget approval', 'Risk assessment'],
-        attachments: 3,
-      },
-      {
-        id: 'queue-002',
-        workflowId: 'WF-1025',
-        proposalId: 'P-1002',
-        proposalName: 'Security Audit Package',
-        client: 'SecureBank Corp',
-        currentStage: 'Legal Review',
-        stageType: 'Legal',
-        assignee: 'Jennifer Park',
-        priority: 'Critical',
-        urgency: 'Immediate',
-        complexity: 9,
-        estimatedDuration: 4,
-        deadline: new Date(Date.now() + 1 * 60 * 60 * 1000), // 1 hour from now
-        slaRemaining: 0.5,
-        status: 'Escalated',
-        riskLevel: 'Critical',
-        dependencies: [],
-        collaborators: ['Legal Team', 'Compliance Officer'],
-        lastActivity: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
-        proposalValue: 750000,
-        isOverdue: false,
-        isCriticalPath: true,
-        escalationLevel: 2,
-        reviewCycles: 3,
-        requiredActions: ['Compliance verification', 'Contract review'],
-        attachments: 7,
-      },
-      {
-        id: 'queue-003',
-        workflowId: 'WF-1026',
-        proposalId: 'P-1003',
-        proposalName: 'Cloud Migration Services',
-        client: 'StartupTech Ltd',
-        currentStage: 'Technical Review',
-        stageType: 'Technical',
-        assignee: 'Alex Thompson',
-        priority: 'Medium',
-        urgency: 'This Week',
-        complexity: 6,
-        estimatedDuration: 2,
-        deadline: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
-        slaRemaining: 8,
-        status: 'In Review',
-        riskLevel: 'Low',
-        dependencies: [],
-        collaborators: ['Cloud Architect'],
-        lastActivity: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        proposalValue: 125000,
-        isOverdue: false,
-        isCriticalPath: false,
-        escalationLevel: 0,
-        reviewCycles: 1,
-        requiredActions: ['Architecture validation'],
-        attachments: 2,
-      },
-    ],
-    []
-  );
-
   useEffect(() => {
-    setQueueItems(MOCK_QUEUE_ITEMS);
-  }, [MOCK_QUEUE_ITEMS]);
+    const fetchQueueItems = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/proposals/queue');
+        if (!response.ok) {
+          throw new Error('Failed to fetch approval queue');
+        }
+        const data = await response.json();
+        setQueueItems(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQueueItems();
+  }, []);
 
   // AC-4.3.1: Intelligent task prioritization algorithm
   const prioritizeQueue = useCallback((items: QueueItem[]): QueueItem[] => {
@@ -452,6 +379,14 @@ export function ApprovalQueue({
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  if (loading) {
+    return <p>Loading approval queue...</p>;
+  }
+
+  if (error) {
+    return <p className="text-red-500">{error}</p>;
+  }
 
   return (
     <div className="space-y-6">

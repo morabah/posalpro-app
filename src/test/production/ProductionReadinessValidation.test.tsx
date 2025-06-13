@@ -16,6 +16,14 @@ import {
 import { UserType } from '@/types';
 import { waitFor } from '@testing-library/react';
 
+declare global {
+  namespace NodeJS {
+    interface Global {
+      mockTrackAnalytics: jest.Mock;
+    }
+  }
+}
+
 // Production monitoring setup
 const mockTrackAnalytics = jest.fn();
 
@@ -70,7 +78,7 @@ describe('Production Readiness Validation Tests', () => {
     });
 
     // Setup global mock analytics for production monitoring
-    (global as any).mockTrackAnalytics = mockTrackAnalytics;
+    global.mockTrackAnalytics = mockTrackAnalytics;
     jest.clearAllMocks();
 
     // Start production monitoring

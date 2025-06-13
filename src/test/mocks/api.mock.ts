@@ -8,29 +8,24 @@
  * @quality-gate Development
  */
 
-import { UserType } from '@/types';
-import type { DefaultBodyType } from 'msw';
-import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
+import type { DefaultBodyType, RestContext, RestRequest } from 'msw';
+import { rest } from 'msw';
+import { UserType } from '../../types';
 
 // Define type for handlers to enforce consistent handler patterns
-export type MockHandler =
-  | Parameters<typeof http.get>[1]
-  | Parameters<typeof http.post>[1]
-  | Parameters<typeof http.put>[1]
-  | Parameters<typeof http.delete>[1];
+export type MockHandler = (req: RestRequest, res: any, ctx: RestContext) => any;
 
 // Create reusable response builder with proper types
 export const createResponseBuilder = <T extends DefaultBodyType>(status: number = 200) => {
-  return () => {
-    return HttpResponse.json(null, { status, statusText: 'OK' });
+  return (req: RestRequest, res: any, ctx: RestContext) => {
+    return res(ctx.status(status), ctx.json(null));
   };
 };
 
 // Success response builder with data
 export const successResponse = <T extends DefaultBodyType>(data: T) => {
-  return () => {
-    return HttpResponse.json(data, { status: 200, statusText: 'OK' });
+  return (req: RestRequest, res: any, ctx: RestContext) => {
+    return res(ctx.status(200), ctx.json(data));
   };
 };
 
@@ -41,17 +36,17 @@ export const errorResponse = (
   type?: string
 ) => {
   const errorType = type || getErrorTypeFromStatus(status);
-  return () => {
-    return HttpResponse.json(
-      {
+  return (req: RestRequest, res: any, ctx: RestContext) => {
+    return res(
+      ctx.status(status),
+      ctx.json({
         success: false,
         error: {
           type: errorType,
           message,
           status,
         },
-      },
-      { status }
+      })
     );
   };
 };
@@ -90,8 +85,8 @@ export const serverErrorResponse = () => {
 
 // Create a generic handler creator for common endpoints
 export const createGetHandler = <T extends DefaultBodyType>(path: string, responseData: T) => {
-  return http.get(path, () => {
-    return successResponse(responseData)();
+  return rest.get(path, (req, res, ctx) => {
+    return res(ctx.status(200), ctx.json(responseData));
   });
 };
 
@@ -103,12 +98,12 @@ export const createPostHandler = <
   responseData: T,
   validator?: (body: B) => boolean
 ) => {
-  return http.post(path, async ({ request }) => {
-    const body = (await request.json()) as B;
+  return rest.post(path, async (req, res, ctx) => {
+    const body = (await req.json()) as B;
     if (validator && !validator(body)) {
-      return errorResponse(400, 'Validation Error')();
+      return res(ctx.status(400), ctx.json({ message: 'Validation Error' }));
     }
-    return successResponse(responseData)();
+    return res(ctx.status(200), ctx.json(responseData));
   });
 };
 
@@ -125,64 +120,20 @@ export const createAuthHandler = <T extends DefaultBodyType>(
   successData: T,
   failureMessage: string = 'Invalid credentials'
 ) => {
-  return http.post(path, async ({ request }) => {
+  return rest.post(path, async (req, res, ctx) => {
     // Type cast to AuthRequestBody to ensure type safety
-    const body = (await request.json()) as AuthRequestBody;
+    const body = (await req.json()) as AuthRequestBody;
 
     // Check for test credentials that should trigger auth failure
     if (
       (body.email === 'test@example.com' && body.password === 'wrong-password') ||
       body.password === 'invalid-password'
     ) {
-      return errorResponse(401, failureMessage)();
+      return res(ctx.status(401), ctx.json({ message: failureMessage }));
     }
 
     // Otherwise return success
-    return successResponse(successData)();
-  });
-};
-
-// Default handlers that can be extended in tests
-export const defaultHandlers = [
-  // API health endpoint
-  http.get('/api/health', () => {
-    return HttpResponse.json({ status: 'healthy' }, { status: 200 });
-  }),
-
-  // Authentication endpoints
-  createAuthHandler<{ token: string; user: { id: string; email: string; role: string } }>(
-    '/api/auth/login',
-    {
-      token: 'mock-jwt-token',
-      user: {
-        id: '123',
-        email: 'test@example.com',
-        role: 'Technical SME',
-      },
-    },
-    'Invalid email or password. Please try again.'
-  ),
-];
-
-// Create and export the server instance
-export const server = setupServer(...defaultHandlers);
-
-// Setup functions to start/stop the server in tests
-export const setupApiMocks = () => {
-  // Start the server before all tests
-  beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
-
-  // Reset handlers after each test
-  afterEach(() => server.resetHandlers());
-
-  // Close the server after all tests
-  afterAll(() => server.close());
-};
-
-// Helper to add temporary handlers for specific tests
-export const addTemporaryHandlers = (...handlers: ReturnType<typeof http.get>[]) => {
-  beforeEach(() => {
-    server.use(...handlers);
+    return res(ctx.status(200), ctx.json(successData));
   });
 };
 
@@ -248,105 +199,6 @@ export const mockApiResponses = {
           status: 'review',
         },
       ],
-      pagination: {
-        total: 2,
-        page: 1,
-        limit: 10,
-      },
     },
   },
-  dashboard: {
-    data: {
-      success: true,
-      data: {
-        widgets: [
-          {
-            id: 'proposal-overview',
-            data: {
-              totalProposals: 5,
-              activeProposals: 3,
-              completedProposals: 2,
-            },
-          },
-        ],
-      },
-    },
-  },
-};
-
-// Setup global API mocks
-export const setupApiMocksGlobal = () => {
-  global.fetch = jest.fn().mockImplementation((url: string | URL, options?: any) => {
-    // Parse URL to determine endpoint
-    const urlPath = typeof url === 'string' ? url : url.toString();
-
-    // Auth endpoints
-    if (urlPath.includes('/api/auth/login')) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(mockApiResponses.auth.login),
-      });
-    }
-
-    if (urlPath.includes('/api/auth/logout')) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(mockApiResponses.auth.logout),
-      });
-    }
-
-    // Proposal endpoints
-    if (urlPath.includes('/api/proposals') && options?.method === 'POST') {
-      return Promise.resolve({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve(mockApiResponses.proposals.create),
-      });
-    }
-
-    if (urlPath.includes('/api/proposals') && (!options?.method || options.method === 'GET')) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(mockApiResponses.proposals.list),
-      });
-    }
-
-    // Dashboard endpoints
-    if (urlPath.includes('/api/dashboard')) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(mockApiResponses.dashboard.data),
-      });
-    }
-
-    // Default successful response
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ success: true, data: {} }),
-    });
-  });
-};
-
-// Cleanup mocks
-export const cleanupApiMocks = () => {
-  jest.restoreAllMocks();
-};
-
-// Mock specific API failures
-export const mockApiFailure = (endpoint: string, error: string) => {
-  global.fetch = jest.fn().mockImplementation((url: string) => {
-    if (url.includes(endpoint)) {
-      return Promise.reject(new Error(error));
-    }
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ success: true }),
-    });
-  });
 };

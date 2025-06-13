@@ -175,6 +175,37 @@ export const useLoginAnalytics = () => {
     [analytics]
   );
 
+  const trackAuthenticationSuccess = useCallback(
+    (email: string, roles: string[], duration: number) => {
+      trackAuthenticationAttempt({
+        email,
+        role: roles.join(','),
+        success: true,
+        duration,
+      });
+    },
+    [trackAuthenticationAttempt]
+  );
+
+  const trackAuthenticationFailure = useCallback(
+    (email: string, errorType: string, duration: number) => {
+      trackAuthenticationAttempt({
+        email,
+        role: 'N/A',
+        success: false,
+        duration,
+        errorType,
+      });
+      trackSecurityEvent({
+        eventType: 'login_failed',
+        severity: 'MEDIUM',
+        outcome: 'FAILURE',
+        metadata: { error: errorType },
+      });
+    },
+    [trackAuthenticationAttempt, trackSecurityEvent]
+  );
+
   return {
     trackLoginPerformance,
     trackAuthenticationAttempt,
@@ -183,5 +214,7 @@ export const useLoginAnalytics = () => {
     trackPermissionApplication,
     trackFormInteraction,
     trackPageLoad,
+    trackAuthenticationSuccess,
+    trackAuthenticationFailure,
   };
 };

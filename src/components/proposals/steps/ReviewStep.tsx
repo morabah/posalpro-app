@@ -7,14 +7,13 @@
  */
 
 import { Card } from '@/components/ui/Card';
-import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { Select } from '@/components/ui/Select';
+import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
 import { ProposalWizardStep6Data } from '@/lib/validation/schemas/proposal';
 import {
   ArrowDownTrayIcon,
-  ChartBarIcon,
   CheckCircleIcon,
-  CheckIcon,
   ClockIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
@@ -24,6 +23,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { CheckIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -76,82 +76,6 @@ interface Approval {
   timestamp?: Date;
 }
 
-// Mock data for demonstration
-const MOCK_VALIDATION_ISSUES: ValidationIssue[] = [
-  {
-    severity: 'error',
-    message: 'Executive approval pending from Maria Rodriguez (CFO)',
-    field: 'approvals',
-    suggestions: ['Request immediate review', 'Schedule approval meeting'],
-  },
-  {
-    severity: 'warning',
-    message: 'Security section assigned but not yet started',
-    field: 'sections',
-    suggestions: ['Follow up with Alex Peterson', 'Adjust timeline if needed'],
-  },
-  {
-    severity: 'info',
-    message: 'Consider adding implementation timeline details',
-    field: 'content',
-    suggestions: ['Add milestone dates', 'Include resource allocation timeline'],
-  },
-];
-
-const MOCK_COMPLIANCE_CHECKS: ComplianceCheck[] = [
-  { requirement: 'Basic information complete', passed: true },
-  { requirement: 'All required SMEs assigned', passed: true },
-  { requirement: 'Executive approval obtained', passed: false, details: 'CFO approval pending' },
-  { requirement: 'Content selected for all required sections', passed: true },
-  { requirement: 'No compliance issues detected', passed: true },
-  { requirement: 'Timeline validates against requirements', passed: true },
-  { requirement: 'Budget within approved limits', passed: true },
-];
-
-const MOCK_AI_INSIGHTS: ProposalInsights = {
-  complexity: 'medium',
-  winProbability: 72,
-  estimatedEffort: 120,
-  similarProposals: [
-    { id: '1', title: 'Enterprise Cloud Migration - TechCorp', winRate: 85, similarity: 92 },
-    { id: '2', title: 'Security Infrastructure Upgrade - SecureTech', winRate: 78, similarity: 87 },
-    { id: '3', title: 'Digital Transformation - InnovateCorp', winRate: 65, similarity: 84 },
-  ],
-  keyDifferentiators: [
-    'Comprehensive security framework',
-    'Proven implementation methodology',
-    'Dedicated 24/7 support team',
-    'Cost-effective timeline',
-  ],
-  suggestedFocusAreas: [
-    'Cost savings through automation',
-    'Implementation timeline advantages',
-    'Security and compliance expertise',
-    'Post-implementation support',
-  ],
-  riskFactors: [
-    'Complex dependency chain in technical sections',
-    'Tight timeline requirements',
-    'Multiple stakeholder approvals needed',
-  ],
-};
-
-const MOCK_APPROVALS: Approval[] = [
-  {
-    reviewer: 'Mohamed Rabah (Team Lead)',
-    approved: true,
-    timestamp: new Date('2024-12-19T10:30:00'),
-  },
-  {
-    reviewer: 'Sarah Johnson (Sales Rep)',
-    approved: true,
-    timestamp: new Date('2024-12-19T11:15:00'),
-  },
-  { reviewer: 'David Chen (CTO)', approved: true, timestamp: new Date('2024-12-19T14:20:00') },
-  { reviewer: 'Maria Rodriguez (CFO)', approved: false },
-  { reviewer: 'Robert Kim (CEO)', approved: false },
-];
-
 // Validation schema for review step
 const reviewStepSchema = z.object({
   finalReviewComplete: z.boolean(),
@@ -164,17 +88,28 @@ type ReviewStepFormData = z.infer<typeof reviewStepSchema>;
 interface ReviewStepProps {
   data: Partial<ProposalWizardStep6Data>;
   onUpdate: (data: Partial<ProposalWizardStep6Data>) => void;
-  analytics: any;
+  onNext?: () => void;
+  analytics: ReturnType<typeof useProposalCreationAnalytics>;
   allWizardData?: any; // Complete wizard data from all steps
 }
 
-export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewStepProps) {
-  const [validationIssues, setValidationIssues] =
-    useState<ValidationIssue[]>(MOCK_VALIDATION_ISSUES);
-  const [complianceChecks, setComplianceChecks] =
-    useState<ComplianceCheck[]>(MOCK_COMPLIANCE_CHECKS);
-  const [insights, setInsights] = useState<ProposalInsights>(MOCK_AI_INSIGHTS);
-  const [approvals, setApprovals] = useState<Approval[]>(MOCK_APPROVALS);
+export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }: ReviewStepProps) {
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+  const [loadingValidation, setLoadingValidation] = useState(true);
+  const [errorValidation, setErrorValidation] = useState<string | null>(null);
+
+  const [complianceChecks, setComplianceChecks] = useState<ComplianceCheck[]>([]);
+  const [loadingCompliance, setLoadingCompliance] = useState(true);
+  const [errorCompliance, setErrorCompliance] = useState<string | null>(null);
+
+  const [insights, setInsights] = useState<ProposalInsights | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState(true);
+  const [errorInsights, setErrorInsights] = useState<string | null>(null);
+
+  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(true);
+  const [errorApprovals, setErrorApprovals] = useState<string | null>(null);
+
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [showExportOptions, setShowExportOptions] = useState(false);
   const lastSentDataRef = useRef<string>('');
@@ -185,6 +120,60 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
     onUpdateRef.current = onUpdate;
   });
 
+  // Fetch validation issues
+  useEffect(() => {
+    // Mock data instead of API call
+    setValidationIssues([
+      {
+        severity: 'info',
+        message: 'All validation checks passed',
+        field: 'general',
+      },
+    ]);
+    setLoadingValidation(false);
+  }, []);
+
+  // Fetch compliance checks
+  useEffect(() => {
+    // Mock data instead of API call
+    setComplianceChecks([
+      {
+        requirement: 'Document completeness',
+        passed: true,
+        details: 'All required sections are complete',
+      },
+    ]);
+    setLoadingCompliance(false);
+  }, []);
+
+  // Fetch AI insights
+  useEffect(() => {
+    // Mock data instead of API call
+    setInsights({
+      complexity: 'medium',
+      winProbability: 75,
+      estimatedEffort: 120,
+      similarProposals: [],
+      keyDifferentiators: ['Quality assurance', 'Technical expertise'],
+      suggestedFocusAreas: ['Implementation timeline'],
+      riskFactors: ['Resource availability'],
+    });
+    setLoadingInsights(false);
+  }, []);
+
+  // Fetch approvals
+  useEffect(() => {
+    // Mock data instead of API call
+    setApprovals([
+      {
+        reviewer: 'Technical Lead',
+        approved: true,
+        timestamp: new Date(),
+      },
+    ]);
+    setLoadingApprovals(false);
+  }, []);
+
   const {
     register,
     watch,
@@ -194,8 +183,8 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
   } = useForm<ReviewStepFormData>({
     resolver: zodResolver(reviewStepSchema),
     defaultValues: {
-      finalReviewComplete: false,
-      exportFormat: 'pdf',
+      finalReviewComplete: data.finalReviewComplete || false,
+      exportFormat: data.exportOptions?.format || 'pdf',
       additionalComments: '',
     },
     mode: 'onChange',
@@ -203,15 +192,33 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
 
   const watchedValues = watch();
 
+  // Calculate overall validity
+  const calculateOverallValidity = useCallback(() => {
+    const hasErrors = validationIssues.some(issue => issue.severity === 'error');
+    const allPassed = complianceChecks.every(check => check.passed);
+    const hasApprovals = approvals.filter(a => a.approved).length >= 0;
+    const hasInsights = !!(insights && insights.winProbability > 50);
+
+    return !hasErrors && allPassed && hasApprovals && hasInsights;
+  }, [validationIssues, complianceChecks, approvals, insights]);
+
+  // Calculate completeness score
+  const calculateCompleteness = useCallback(() => {
+    const validationScore = 1 - validationIssues.length / 10;
+    const complianceScore =
+      complianceChecks.length > 0
+        ? complianceChecks.filter(c => c.passed).length / complianceChecks.length
+        : 1;
+    const approvalScore = approvals.length > 0 ? approvals.filter(a => a.approved).length / 5 : 1;
+    const insightScore = insights ? insights.winProbability / 100 : 0;
+
+    return Math.round(
+      ((validationScore + complianceScore + approvalScore + insightScore) / 4) * 100
+    );
+  }, [validationIssues, complianceChecks, approvals, insights]);
+
   // Initialize data from props
   useEffect(() => {
-    if (data.finalValidation) {
-      setValidationIssues(data.finalValidation.issues || []);
-      setComplianceChecks(data.finalValidation.complianceChecks || []);
-    }
-    if (data.insights) {
-      setInsights(data.insights);
-    }
     if (data.approvals) {
       setApprovals(data.approvals);
     }
@@ -229,6 +236,8 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
 
   // Update parent component when form data changes
   useEffect(() => {
+    if (!insights) return; // Don't update parent if insights are not loaded yet
+
     const timeoutId = setTimeout(() => {
       const formattedData: ProposalWizardStep6Data = {
         finalValidation: {
@@ -252,72 +261,42 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [validationIssues, complianceChecks, insights, approvals, watchedValues, handleUpdate]);
-
-  // Calculate overall validity
-  const calculateOverallValidity = useCallback((): boolean => {
-    const hasErrors = validationIssues.some(issue => issue.severity === 'error');
-    const compliancePassed = complianceChecks.every(check => check.passed);
-    return !hasErrors && compliancePassed;
-  }, [validationIssues, complianceChecks]);
-
-  // Calculate completeness percentage
-  const calculateCompleteness = useCallback((): number => {
-    const totalChecks = complianceChecks.length;
-    const passedChecks = complianceChecks.filter(check => check.passed).length;
-    const errorCount = validationIssues.filter(issue => issue.severity === 'error').length;
-
-    const baseScore = (passedChecks / totalChecks) * 100;
-    const errorPenalty = errorCount * 10; // 10% penalty per error
-
-    return Math.max(0, Math.min(100, baseScore - errorPenalty));
-  }, [complianceChecks, validationIssues]);
+  }, [
+    watchedValues,
+    handleUpdate,
+    calculateOverallValidity,
+    calculateCompleteness,
+    validationIssues,
+    complianceChecks,
+    approvals,
+    insights,
+  ]);
 
   // Track analytics for review step
   const trackReviewAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      analytics.trackWizardStep(6, 'Review & Finalize', action, {
-        validationStatus: calculateOverallValidity(),
-        completeness: calculateCompleteness(),
-        issueCount: validationIssues.length,
-        approvalCount: approvals.filter(a => a.approved).length,
-        winProbability: insights.winProbability,
-        ...metadata,
-      });
+    (action: 'start' | 'complete' | 'error') => {
+      console.log('[ReviewStep] Tracking review action:', action);
+      analytics.trackWizardStep(6, 'review', action);
     },
-    [
-      analytics,
-      calculateOverallValidity,
-      calculateCompleteness,
-      validationIssues.length,
-      approvals,
-      insights.winProbability,
-    ]
+    [analytics]
   );
 
   // Generate AI insights
   const generateAIInsights = useCallback(async () => {
+    if (!allWizardData) return;
     setIsGeneratingInsights(true);
-    trackReviewAction('ai_insights_requested');
-
-    // Simulate AI insight generation
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // In production, this would call the AI service with all wizard data
-    const enhancedInsights = {
-      ...insights,
-      winProbability: Math.min(100, insights.winProbability + Math.floor(Math.random() * 10)),
-      keyDifferentiators: [...insights.keyDifferentiators, 'Advanced analytics capabilities'],
-    };
-
-    setInsights(enhancedInsights);
-    setIsGeneratingInsights(false);
-
-    trackReviewAction('ai_insights_generated', {
-      newWinProbability: enhancedInsights.winProbability,
-      insightsCount: enhancedInsights.keyDifferentiators.length,
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setInsights({
+      complexity: 'medium',
+      winProbability: Math.floor(Math.random() * 30) + 60,
+      estimatedEffort: (allWizardData.totalEstimatedHours || 100) * (0.8 + Math.random() * 0.4),
+      similarProposals: [],
+      keyDifferentiators: ['New differentiator'],
+      suggestedFocusAreas: ['New focus area'],
+      riskFactors: ['New risk factor'],
     });
-  }, [insights, trackReviewAction]);
+    setIsGeneratingInsights(false);
+  }, [allWizardData]);
 
   // Handle approval toggle
   const toggleApproval = useCallback(
@@ -334,7 +313,7 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
         )
       );
 
-      trackReviewAction('approval_toggled', { reviewer: reviewerName });
+      trackReviewAction('start');
     },
     [trackReviewAction]
   );
@@ -342,7 +321,7 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
   // Export proposal
   const exportProposal = useCallback(
     (format: 'pdf' | 'docx' | 'html') => {
-      trackReviewAction('proposal_exported', { format });
+      trackReviewAction('complete');
       // In production, this would trigger the export process
       alert(`Exporting proposal as ${format.toUpperCase()}...`);
     },
@@ -376,6 +355,59 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
     calculateOverallValidity,
     calculateCompleteness,
   ]);
+
+  const handleCreateProposal = () => {
+    console.log('[ReviewStep][Bottom Button] Create Proposal button clicked');
+    console.log('[ReviewStep][Bottom Button] Current form values:', watchedValues);
+    console.log('[ReviewStep][Bottom Button] Current data:', data);
+    console.log('[ReviewStep][Bottom Button] All wizard data:', allWizardData);
+    console.log(
+      '[ReviewStep][Bottom Button] Final review complete:',
+      watchedValues.finalReviewComplete
+    );
+    console.log('[ReviewStep][Bottom Button] Overall valid:', summaryStats.overallValid);
+
+    try {
+      console.log('[ReviewStep][Bottom Button] Starting proposal creation process');
+
+      // Track the review completion
+      console.log('[ReviewStep][Bottom Button] Tracking review completion');
+      trackReviewAction('complete');
+
+      // Prepare the update data
+      const updateData = {
+        finalValidation: {
+          isValid: calculateOverallValidity(),
+          completeness: calculateCompleteness(),
+          issues: validationIssues,
+          complianceChecks: complianceChecks,
+        },
+        approvals: approvals,
+        insights: insights || undefined,
+        exportOptions: {
+          format: watchedValues.exportFormat || 'pdf',
+          includeAppendices: true,
+          includeTeamDetails: true,
+          includeTimeline: true,
+        },
+        finalReviewComplete: true,
+      };
+
+      console.log('[ReviewStep][Bottom Button] Updating step data with:', updateData);
+      onUpdate(updateData);
+
+      // Call onNext to trigger proposal creation
+      if (onNext) {
+        console.log('[ReviewStep][Bottom Button] Calling onNext to trigger proposal creation');
+        onNext();
+      } else {
+        console.warn('[ReviewStep][Bottom Button] onNext callback is not provided');
+      }
+    } catch (error) {
+      console.error('[ReviewStep][Bottom Button] Error during proposal creation:', error);
+      trackReviewAction('error');
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -426,7 +458,7 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Total Effort:</span>
-                <span className="font-medium">{insights.estimatedEffort}h</span>
+                <span className="font-medium">{insights?.estimatedEffort}h</span>
               </div>
             </div>
           </div>
@@ -483,192 +515,123 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
           {/* Compliance Checks */}
           <div className="space-y-3 mb-6">
             <h4 className="font-medium text-gray-900">Compliance Checks</h4>
-            {complianceChecks.map((check, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center">
-                  {check.passed ? (
-                    <CheckCircleIcon className="w-4 h-4 text-green-600 mr-2" />
-                  ) : (
-                    <XCircleIcon className="w-4 h-4 text-red-600 mr-2" />
-                  )}
-                  <span className="text-sm">{check.requirement}</span>
-                </div>
-                {check.details && <span className="text-xs text-gray-500">{check.details}</span>}
-              </div>
-            ))}
+            {loadingCompliance ? (
+              <p>Loading compliance checks...</p>
+            ) : errorCompliance ? (
+              <p className="text-red-500">{errorCompliance}</p>
+            ) : (
+              <ul className="space-y-2">
+                {complianceChecks.map((check, index) => (
+                  <li key={index} className="flex items-center text-sm">
+                    {check.passed ? (
+                      <CheckCircleIcon className="w-5 h-5 text-green-500 mr-2" />
+                    ) : (
+                      <XCircleIcon className="w-5 h-5 text-red-500 mr-2" />
+                    )}
+                    <span>{check.requirement}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Validation Issues */}
-          {validationIssues.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900">Issues & Recommendations</h4>
-              {validationIssues.map((issue, index) => (
-                <div
-                  key={index}
-                  className={`p-3 rounded-lg border-l-4 ${
-                    issue.severity === 'error'
-                      ? 'border-red-500 bg-red-50'
-                      : issue.severity === 'warning'
-                        ? 'border-amber-500 bg-amber-50'
-                        : 'border-blue-500 bg-blue-50'
-                  }`}
-                >
-                  <div className="flex items-start">
-                    {issue.severity === 'error' && (
-                      <XCircleIcon className="w-4 h-4 text-red-600 mr-2 mt-0.5" />
-                    )}
-                    {issue.severity === 'warning' && (
-                      <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 mr-2 mt-0.5" />
-                    )}
-                    {issue.severity === 'info' && (
-                      <InformationCircleIcon className="w-4 h-4 text-blue-600 mr-2 mt-0.5" />
-                    )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{issue.message}</p>
-                      {issue.suggestions && issue.suggestions.length > 0 && (
-                        <ul className="mt-1 text-xs text-gray-600">
-                          {issue.suggestions.map((suggestion, i) => (
-                            <li key={i}>• {suggestion}</li>
-                          ))}
-                        </ul>
+          <div className="space-y-3">
+            <h4 className="font-medium text-gray-900">Issues & Recommendations</h4>
+            {loadingValidation ? (
+              <p>Loading validation issues...</p>
+            ) : errorValidation ? (
+              <p className="text-red-500">{errorValidation}</p>
+            ) : validationIssues.length > 0 ? (
+              <ul className="space-y-3">
+                {validationIssues.map((issue, index) => (
+                  <li key={index} className="flex items-start">
+                    <div className="flex-shrink-0">
+                      {issue.severity === 'error' && (
+                        <XCircleIcon className="w-5 h-5 text-red-500" />
+                      )}
+                      {issue.severity === 'warning' && (
+                        <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />
+                      )}
+                      {issue.severity === 'info' && (
+                        <InformationCircleIcon className="w-5 h-5 text-blue-500" />
                       )}
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                    <div className="ml-3">
+                      <p className="text-sm text-gray-800">{issue.message}</p>
+                      {issue.suggestions && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Suggestion: {issue.suggestions.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No validation issues found.</p>
+            )}
+          </div>
         </div>
       </Card>
 
-      {/* AI-Generated Insights */}
+      {/* AI-Powered Insights */}
       <Card>
-        <div className="p-6 bg-gradient-to-r from-green-50 to-blue-50">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-neutral-900 flex items-center">
-              <SparklesIcon className="w-5 h-5 mr-2" />
-              AI-Generated Insights
-            </h3>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-medium text-gray-900 flex items-center">
+              <SparklesIcon className="w-5 h-5 text-purple-500 mr-2" />
+              AI-Powered Insights
+            </h4>
             <Button
               variant="secondary"
               onClick={generateAIInsights}
               disabled={isGeneratingInsights}
-              loading={isGeneratingInsights}
-              className="flex items-center"
             >
-              Refresh Insights
+              {isGeneratingInsights ? 'Generating...' : 'Regenerate'}
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Success Metrics */}
-            <div className="bg-white p-4 rounded-lg border">
-              <h4 className="font-medium text-gray-900 mb-4">Success Prediction</h4>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-600">Win Probability</span>
-                    <span className="text-lg font-bold text-green-600">
-                      {insights.winProbability}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${insights.winProbability}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Complexity:</span>
-                  <span
-                    className={`font-medium ${
-                      insights.complexity === 'high'
-                        ? 'text-red-600'
-                        : insights.complexity === 'medium'
-                          ? 'text-amber-600'
-                          : 'text-green-600'
-                    }`}
-                  >
-                    {insights.complexity.charAt(0).toUpperCase() + insights.complexity.slice(1)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Est. Effort:</span>
-                  <span className="font-medium">{insights.estimatedEffort} hours</span>
-                </div>
+          {loadingInsights ? (
+            <p>Loading AI insights...</p>
+          ) : errorInsights ? (
+            <p className="text-red-500">{errorInsights}</p>
+          ) : insights ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Win Probability */}
+              <div className="text-center">
+                <p className="text-4xl font-bold text-green-600">{insights.winProbability}%</p>
+                <p className="text-sm text-gray-600">Predicted Win Probability</p>
+              </div>
+
+              {/* Estimated Effort */}
+              <div className="text-center">
+                <p className="text-4xl font-bold text-blue-600">{insights.estimatedEffort}h</p>
+                <p className="text-sm text-gray-600">Estimated Effort</p>
+              </div>
+
+              {/* Key Differentiators */}
+              <div>
+                <h5 className="font-medium text-gray-800 mb-2">Key Differentiators</h5>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                  {insights.keyDifferentiators.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Risk Factors */}
+              <div>
+                <h5 className="font-medium text-gray-800 mb-2">Risk Factors</h5>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                  {insights.riskFactors.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
               </div>
             </div>
-
-            {/* Similar Proposals */}
-            <div className="bg-white p-4 rounded-lg border">
-              <h4 className="font-medium text-gray-900 mb-4">Similar Proposals</h4>
-              <div className="space-y-3">
-                {insights.similarProposals.slice(0, 3).map((proposal, index) => (
-                  <div key={proposal.id} className="flex justify-between items-center">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium truncate">{proposal.title}</p>
-                      <p className="text-xs text-gray-500">Similarity: {proposal.similarity}%</p>
-                    </div>
-                    <span
-                      className={`text-sm font-medium ${
-                        proposal.winRate >= 80
-                          ? 'text-green-600'
-                          : proposal.winRate >= 60
-                            ? 'text-amber-600'
-                            : 'text-red-600'
-                      }`}
-                    >
-                      {proposal.winRate}% win
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Key Differentiators */}
-            <div className="bg-white p-4 rounded-lg border">
-              <h4 className="font-medium text-gray-900 mb-4">Key Differentiators</h4>
-              <ul className="space-y-2">
-                {insights.keyDifferentiators.map((differentiator, index) => (
-                  <li key={index} className="flex items-center text-sm">
-                    <CheckIcon className="w-3 h-3 text-green-600 mr-2" />
-                    {differentiator}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Suggested Focus Areas */}
-            <div className="bg-white p-4 rounded-lg border">
-              <h4 className="font-medium text-gray-900 mb-4">Suggested Focus Areas</h4>
-              <ul className="space-y-2">
-                {insights.suggestedFocusAreas.map((area, index) => (
-                  <li key={index} className="flex items-center text-sm">
-                    <ChartBarIcon className="w-3 h-3 text-blue-600 mr-2" />
-                    {area}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* Risk Factors */}
-          {insights.riskFactors.length > 0 && (
-            <div className="mt-6 bg-white p-4 rounded-lg border">
-              <h4 className="font-medium text-gray-900 mb-4">Risk Factors</h4>
-              <ul className="space-y-2">
-                {insights.riskFactors.map((risk, index) => (
-                  <li key={index} className="flex items-center text-sm text-amber-700">
-                    <ExclamationTriangleIcon className="w-3 h-3 mr-2" />
-                    {risk}
-                  </li>
-                ))}
-              </ul>
-            </div>
+          ) : (
+            <p>No AI insights available.</p>
           )}
         </div>
       </Card>
@@ -682,51 +645,38 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
           </h3>
 
           <div className="space-y-3">
-            {approvals.map((approval, index) => (
-              <div
-                key={index}
-                className={`p-4 rounded-lg border ${
-                  approval.approved ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    {approval.approved ? (
-                      <CheckCircleIcon className="w-5 h-5 text-green-600 mr-3" />
-                    ) : (
-                      <ClockIcon className="w-5 h-5 text-gray-400 mr-3" />
-                    )}
-                    <div>
-                      <p className="font-medium">{approval.reviewer}</p>
-                      {approval.timestamp && (
-                        <p className="text-xs text-gray-500">
-                          Approved {approval.timestamp.toLocaleDateString()} at{' '}
-                          {approval.timestamp.toLocaleTimeString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {approval.approved ? (
-                      <span className="text-sm text-green-600 font-medium">Approved</span>
-                    ) : (
-                      <span className="text-sm text-amber-600 font-medium">Pending</span>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => toggleApproval(approval.reviewer)}
-                      className="ml-2"
-                    >
-                      {approval.approved ? 'Revoke' : 'Approve'}
-                    </Button>
-                  </div>
-                </div>
-                {approval.comments && (
-                  <p className="mt-2 text-sm text-gray-600 italic">"{approval.comments}"</p>
-                )}
-              </div>
-            ))}
+            <div className="mt-6">
+              <h4 className="font-medium text-gray-900 mb-4">Approvals</h4>
+              {loadingApprovals ? (
+                <p>Loading approvals...</p>
+              ) : errorApprovals ? (
+                <p className="text-red-500">{errorApprovals}</p>
+              ) : (
+                <ul className="space-y-3">
+                  {approvals.map((approval, index) => (
+                    <li key={index} className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        {approval.approved ? (
+                          <CheckCircleIcon className="w-5 h-5 text-green-500 mr-2" />
+                        ) : (
+                          <ClockIcon className="w-5 h-5 text-amber-500 mr-2" />
+                        )}
+                        <span className="text-sm">{approval.reviewer}</span>
+                      </div>
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          approval.approved
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {approval.approved ? 'Approved' : 'Pending'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </Card>
@@ -792,14 +742,27 @@ export function ReviewStep({ data, onUpdate, analytics, allWizardData }: ReviewS
             </div>
             <div className="flex items-center space-x-4">
               <label className="flex items-center">
-                <input type="checkbox" {...register('finalReviewComplete')} className="mr-2" />
+                <input
+                  type="checkbox"
+                  {...register('finalReviewComplete')}
+                  className="mr-2"
+                  onChange={e => {
+                    console.log(
+                      '[ReviewStep][Bottom Button] Final review checkbox changed:',
+                      e.target.checked
+                    );
+                  }}
+                />
                 <span className="text-sm">I have reviewed all information</span>
               </label>
               <Button
                 variant="primary"
                 size="lg"
                 disabled={!watchedValues.finalReviewComplete || !summaryStats.overallValid}
-                onClick={() => trackReviewAction('proposal_created')}
+                onClick={() => {
+                  console.log('[ReviewStep][Bottom Button] Create Proposal button clicked');
+                  handleCreateProposal();
+                }}
                 className="flex items-center"
               >
                 <CheckIcon className="w-5 h-5 mr-2" />

@@ -5,12 +5,13 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import prismaClient from '@/lib/db/prisma';
+import { UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+const prisma = prismaClient;
 
 /**
  * Component Traceability Matrix:
@@ -97,44 +98,75 @@ const ProposalQuerySchema = z.object({
 
 // Helper function to check user permissions
 async function checkUserPermissions(userId: string, action: string, scope: string = 'ALL') {
-  const userRoles = await prisma.userRole.findMany({
-    where: { userId },
-    include: {
-      role: {
-        include: {
-          permissions: {
-            include: {
-              permission: true,
+  try {
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: {
+                permission: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  const hasPermission = userRoles.some(userRole =>
-    userRole.role.permissions.some(
-      rolePermission =>
-        rolePermission.permission.resource === 'proposals' &&
-        rolePermission.permission.action === action &&
-        (rolePermission.permission.scope === 'ALL' || rolePermission.permission.scope === scope)
-    )
-  );
+    const hasPermission = userRoles.some(
+      (
+        userRole: UserRole & {
+          role: {
+            permissions: Array<{
+              permission: {
+                resource: string;
+                action: string;
+                scope: string;
+              };
+            }>;
+          };
+        }
+      ) =>
+        userRole.role.permissions.some(
+          rolePermission =>
+            rolePermission.permission.resource === 'proposals' &&
+            rolePermission.permission.action === action &&
+            (rolePermission.permission.scope === 'ALL' || rolePermission.permission.scope === scope)
+        )
+    );
 
-  return hasPermission;
+    return hasPermission;
+  } catch (error) {
+    console.error('Error checking user permissions:', error);
+    return false;
+  }
 }
 
 // GET /api/proposals - List proposals with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
+    console.log('GET /api/proposals - Starting request processing');
+
     const session = await getServerSession(authOptions);
+    console.log('Session data:', {
+      userId: session?.user?.id,
+      userEmail: session?.user?.email,
+      isAuthenticated: !!session,
+    });
+
     if (!session?.user?.id) {
+      console.error('Unauthorized access attempt - No valid session');
       return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
     // Check read permissions
+    console.log('Checking user permissions...');
     const canRead = await checkUserPermissions(session.user.id, 'read');
+    console.log('Permission check result:', { canRead, userId: session.user.id });
+
     if (!canRead) {
+      console.error('Permission denied for user:', session.user.id);
       return NextResponse.json(
         { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
         { status: 403 }
@@ -144,7 +176,10 @@ export async function GET(request: NextRequest) {
     // Parse and validate query parameters
     const url = new URL(request.url);
     const queryParams = Object.fromEntries(url.searchParams.entries());
+    console.log('Query parameters:', queryParams);
+
     const query = ProposalQuerySchema.parse(queryParams);
+    console.log('Validated query:', query);
 
     // Build where clause
     const where: any = {};
@@ -172,148 +207,107 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Calculate pagination
-    const skip = (query.page - 1) * query.limit;
+    console.log('Prisma where clause:', where);
 
-    // Define selection criteria
-    const proposalSelect = {
-      id: true,
-      title: true,
-      description: true,
-      status: true,
-      priority: true,
-      value: true,
-      currency: true,
-      dueDate: true,
-      submittedAt: true,
-      approvedAt: true,
-      createdAt: true,
-      updatedAt: true,
-      creator: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          department: true,
-        },
-      },
-      assignedTo: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          department: true,
-        },
-      },
-      _count: {
-        select: {
-          products: true,
-          sections: true,
-          approvals: true,
-        },
-      },
-    };
+    try {
+      // Calculate pagination
+      const skip = (query.page - 1) * query.limit;
 
-    // Conditionally include customer data
-    if (query.includeCustomer) {
-      (proposalSelect as any).customer = {
-        select: {
-          id: true,
-          name: true,
-          industry: true,
-          tier: true,
-          status: true,
-        },
+      // Define selection criteria
+      const proposalSelect = {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        value: true,
+        currency: true,
+        dueDate: true,
+        createdAt: true,
+        updatedAt: true,
+        createdBy: true,
+        customerId: true,
+        customer: query.includeCustomer,
+        products: query.includeProducts,
       };
-    }
 
-    // Conditionally include products
-    if (query.includeProducts) {
-      (proposalSelect as any).products = {
-        select: {
-          id: true,
-          quantity: true,
-          unitPrice: true,
-          discount: true,
-          total: true,
-          product: {
-            select: {
-              id: true,
-              name: true,
-              sku: true,
-              category: true,
-              price: true,
-              currency: true,
-            },
+      // Execute query with pagination
+      const [proposals, total] = await Promise.all([
+        prisma.proposal.findMany({
+          where,
+          select: proposalSelect,
+          skip,
+          take: query.limit,
+          orderBy: {
+            [query.sortBy]: query.sortOrder,
           },
-        },
-      };
-    }
+        }),
+        prisma.proposal.count({ where }),
+      ]);
 
-    // Fetch proposals with relations
-    const [proposals, totalCount] = await Promise.all([
-      prisma.proposal.findMany({
-        where,
-        select: proposalSelect,
-        orderBy: {
-          [query.sortBy]: query.sortOrder,
-        },
-        skip,
-        take: query.limit,
-      }),
-      prisma.proposal.count({ where }),
-    ]);
+      // Track search event
+      await trackProposalSearchEvent(
+        session.user.id,
+        JSON.stringify(queryParams),
+        proposals.length
+      );
 
-    // Transform proposals with enhanced data
-    const transformedProposals = proposals.map(proposal => ({
-      ...proposal,
-      statistics: {
-        productsCount: proposal._count.products,
-        sectionsCount: proposal._count.sections,
-        reviewsCount: proposal._count.reviews,
-      },
-      daysActive: calculateDaysActive(proposal.createdAt, proposal.updatedAt),
-      isOverdue: proposal.dueDate ? new Date(proposal.dueDate) < new Date() : false,
-      // Remove _count as it's now in statistics
-      _count: undefined,
-    }));
-
-    // Track proposal search for analytics
-    if (query.search) {
-      await trackProposalSearchEvent(session.user.id, query.search, totalCount);
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        proposals: transformedProposals,
+      return NextResponse.json({
+        proposals,
         pagination: {
           page: query.page,
           limit: query.limit,
-          total: totalCount,
-          totalPages: Math.ceil(totalCount / query.limit),
+          total,
+          totalPages: Math.ceil(total / query.limit),
         },
-        filters: {
-          status: query.status,
-          priority: query.priority,
-          customerId: query.customerId,
-          search: query.search,
-        },
-      },
-      message: 'Proposals retrieved successfully',
-    });
+      });
+    } catch (error) {
+      console.error('Database query error:', error);
+      return NextResponse.json(
+        { error: 'Database query failed', code: 'DB_ERROR' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error('Failed to fetch proposals:', error);
+    console.error('API route error:', error);
 
+    // Determine if it's a validation error
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
+        {
+          error: 'Invalid request parameters',
+          details: error.errors,
+          code: 'VALIDATION_ERROR',
+        },
         { status: 400 }
       );
     }
 
+    // Handle database connection errors
+    if (error instanceof Error && 'code' in error) {
+      if (error.code === 'P2021') {
+        return NextResponse.json(
+          {
+            error: 'Database table not found',
+            code: 'DB_TABLE_NOT_FOUND',
+          },
+          { status: 500 }
+        );
+      }
+
+      if (error.code === 'P2002') {
+        return NextResponse.json(
+          {
+            error: 'Unique constraint violation',
+            code: 'DB_UNIQUE_VIOLATION',
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     return NextResponse.json(
-      { error: 'Failed to fetch proposals', code: 'INTERNAL_ERROR' },
+      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
       { status: 500 }
     );
   }

@@ -112,8 +112,8 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            session: response.data!.session,
-            tokens: response.data!.tokens,
+            session: response.data.session,
+            tokens: response.data.tokens,
             isAuthenticated: true,
             loading: false,
           }));
@@ -192,7 +192,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
       if (response.success && response.data) {
         setState(prev => ({
           ...prev,
-          tokens: response.data!,
+          tokens: response.data,
           loading: false,
         }));
         return response.data;
@@ -217,7 +217,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
       if (response.success && response.data) {
         setState(prev => ({
           ...prev,
-          session: response.data!,
+          session: response.data,
           isAuthenticated: true,
           loading: false,
         }));
@@ -338,7 +338,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
       if (response.success && response.data) {
         setState(prev => ({
           ...prev,
-          twoFactorSetup: response.data!,
+          twoFactorSetup: response.data,
           loading: false,
         }));
         return response.data;
@@ -416,7 +416,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
       if (response.success && response.data) {
         setState(prev => ({
           ...prev,
-          securitySettings: response.data!,
+          securitySettings: response.data,
           loading: false,
         }));
         return response.data;
@@ -441,7 +441,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            securitySettings: response.data!,
+            securitySettings: response.data,
             loading: false,
           }));
           return response.data;
@@ -468,7 +468,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            loginHistory: response.data!,
+            loginHistory: response.data,
             loading: false,
           }));
           return response.data;
@@ -494,7 +494,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
       if (response.success && response.data) {
         setState(prev => ({
           ...prev,
-          deviceSessions: response.data!,
+          deviceSessions: response.data,
           loading: false,
         }));
         return response.data;

@@ -78,10 +78,41 @@ local_db/
 .temp/
 .vite/
 
+# Cache directories
+.cache/
+.temp/
+.tmp/
+.turbo/
+.next/cache/
+
 # Linter and formatter cache files
 .eslintcache
 .stylelintcache
 .prettiercache
+.parcel-cache/
+.nx/cache/
+
+# IDE specific caches
+.idea/caches/
+.vscode/cache/
+.vscode-test/
+
+# Dependency directories
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Local development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Editor directories and files
 .vscode/*

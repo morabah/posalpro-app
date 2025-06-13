@@ -327,7 +327,7 @@ export function WorkflowVisualization({
                 </div>
               </div>
               <div className="text-right">
-                <Badge variant={stage.slaCompliance ? 'success' : 'warning'} size="sm">
+                <Badge variant={stage.slaCompliance ? 'success' : 'destructive'} size="sm">
                   SLA {stage.slaCompliance ? 'Met' : 'At Risk'}
                 </Badge>
                 {stage.isCriticalPath && (
@@ -508,7 +508,7 @@ export function WorkflowVisualization({
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span>Status</span>
-                        <Badge variant={stage.status === 'Approved' ? 'success' : 'warning'}>
+                        <Badge variant={stage.status === 'Approved' ? 'success' : 'destructive'}>
                           {stage.status}
                         </Badge>
                       </div>
@@ -540,7 +540,7 @@ export function WorkflowVisualization({
                       </div>
                       <div className="flex justify-between">
                         <span>SLA Compliance</span>
-                        <Badge variant={stage.slaCompliance ? 'success' : 'error'}>
+                        <Badge variant={stage.slaCompliance ? 'success' : 'destructive'}>
                           {stage.slaCompliance ? 'Compliant' : 'At Risk'}
                         </Badge>
                       </div>
@@ -548,11 +548,11 @@ export function WorkflowVisualization({
                         <span>Bottleneck Risk</span>
                         <Badge
                           variant={
-                            stage.bottleneckRisk === 'High'
-                              ? 'error'
-                              : stage.bottleneckRisk === 'Medium'
-                                ? 'warning'
-                                : 'success'
+                            stage.status === 'completed'
+                              ? 'success'
+                              : stage.status === 'failed'
+                                ? 'destructive'
+                                : 'warning'
                           }
                         >
                           {stage.bottleneckRisk}

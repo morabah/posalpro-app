@@ -95,91 +95,6 @@ interface ContentSearchMetrics {
   qualityRating: number;
 }
 
-// Mock content data
-const MOCK_CONTENT: ContentItem[] = [
-  {
-    id: 'content-001',
-    title: 'Cloud Migration Case Study',
-    type: ContentType.CASE_STUDY,
-    description: 'Enterprise cloud migration strategy and implementation for Fortune 500 company',
-    content:
-      "This comprehensive case study details the successful migration of a Fortune 500 company's entire IT infrastructure to AWS cloud services. The project involved migrating 200+ servers, 50TB of data, and 100+ applications with zero downtime...",
-    tags: ['Cloud', 'Migration', 'AWS', 'Enterprise'],
-    createdAt: new Date('2024-05-10'),
-    lastModified: new Date('2024-06-15'),
-    usageCount: 7,
-    qualityScore: 9.2,
-    createdBy: 'Sarah Johnson',
-    fileSize: '2.3 MB',
-    documentUrl: '/docs/cloud-migration-case-study.pdf',
-  },
-  {
-    id: 'content-002',
-    title: 'Security Compliance Documentation',
-    type: ContentType.TECHNICAL_DOC,
-    description: 'Comprehensive security compliance framework for enterprise environments',
-    content:
-      'This technical documentation provides a complete framework for implementing enterprise-grade security compliance measures. Covers GDPR, SOC 2, ISO 27001, and HIPAA requirements with implementation checklists and audit procedures...',
-    tags: ['Security', 'Compliance', 'GDPR', 'SOC2', 'ISO27001'],
-    createdAt: new Date('2024-04-22'),
-    lastModified: new Date('2024-05-30'),
-    usageCount: 12,
-    qualityScore: 9.5,
-    createdBy: 'Alex Chen',
-    fileSize: '4.1 MB',
-    documentUrl: '/docs/security-compliance-framework.pdf',
-  },
-  {
-    id: 'content-003',
-    title: 'AI Analytics Solution Brief',
-    type: ContentType.SOLUTION,
-    description:
-      'Advanced AI-powered analytics platform for business intelligence and predictive insights',
-    content:
-      'Our AI Analytics Platform revolutionizes business intelligence by combining machine learning, real-time data processing, and predictive analytics. Features include automated report generation, anomaly detection, and custom dashboards...',
-    tags: ['AI', 'Analytics', 'Machine Learning', 'Business Intelligence'],
-    createdAt: new Date('2024-06-01'),
-    lastModified: new Date('2024-06-20'),
-    usageCount: 5,
-    qualityScore: 8.8,
-    createdBy: 'Mohamed Rabah',
-    fileSize: '1.8 MB',
-    documentUrl: '/docs/ai-analytics-solution-brief.pdf',
-  },
-  {
-    id: 'content-004',
-    title: 'Data Migration Methodology',
-    type: ContentType.TEMPLATE,
-    description: 'Step-by-step template for large-scale data migration projects',
-    content:
-      'This comprehensive template provides a structured approach to data migration projects. Includes planning checklists, risk assessment frameworks, validation procedures, and rollback strategies for enterprise-scale migrations...',
-    tags: ['Data Migration', 'Template', 'Enterprise', 'Methodology'],
-    createdAt: new Date('2024-03-15'),
-    lastModified: new Date('2024-04-10'),
-    usageCount: 15,
-    qualityScore: 9.0,
-    createdBy: 'Lisa Wang',
-    fileSize: '3.2 MB',
-    documentUrl: '/templates/data-migration-methodology.docx',
-  },
-  {
-    id: 'content-005',
-    title: 'Network Security Best Practices',
-    type: ContentType.REFERENCE,
-    description: 'Comprehensive reference guide for network security implementation',
-    content:
-      'This reference document covers industry best practices for network security including firewall configuration, intrusion detection systems, VPN setup, and security monitoring. Updated with latest NIST guidelines...',
-    tags: ['Network Security', 'Firewall', 'VPN', 'NIST'],
-    createdAt: new Date('2024-02-20'),
-    lastModified: new Date('2024-05-05'),
-    usageCount: 20,
-    qualityScore: 9.3,
-    createdBy: 'John Smith',
-    fileSize: '2.7 MB',
-    documentUrl: '/docs/network-security-best-practices.pdf',
-  },
-];
-
 export default function ContentSearch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<ContentType[]>(Object.values(ContentType));
@@ -188,10 +103,37 @@ export default function ContentSearch() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedContent, setSelectedContent] = useState<ContentItem | null>(null);
-  const [searchResults, setSearchResults] = useState<ContentItem[]>(MOCK_CONTENT);
-  const [isLoading, setIsLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sessionStartTime] = useState(Date.now());
   const [searchStartTime, setSearchStartTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/content');
+        if (!response.ok) {
+          throw new Error('Failed to fetch content');
+        }
+        const data = await response.json();
+        // Ensure the search results are always an array
+        const normalizedResults: ContentItem[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.content)
+          ? data.content
+          : [];
+        setSearchResults(normalizedResults);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, []);
 
   // Analytics tracking
   const trackContentAction = useCallback(
@@ -221,10 +163,16 @@ export default function ContentSearch() {
 
   // AI tag suggestions
   const suggestedTags = useMemo(() => {
-    const allTags = MOCK_CONTENT.flatMap(item => item.tags);
+    // Ensure searchResults is an array before using flatMap
+    const allTags = Array.isArray(searchResults) 
+      ? searchResults.flatMap(item => item?.tags || []) 
+      : [];
+      
     const tagCounts = allTags.reduce(
       (acc, tag) => {
-        acc[tag] = (acc[tag] || 0) + 1;
+        if (tag) { // Ensure tag is defined before using it as a key
+          acc[tag] = (acc[tag] || 0) + 1;
+        }
         return acc;
       },
       {} as Record<string, number>
@@ -235,87 +183,60 @@ export default function ContentSearch() {
       .slice(0, 8)
       .map(([tag]) => tag)
       .filter(tag => !activeTags.includes(tag));
-  }, [activeTags]);
+  }, [searchResults, activeTags]);
 
   // Search and filter logic
   useEffect(() => {
-    setIsLoading(true);
-    const searchStarted = Date.now();
-    setSearchStartTime(searchStarted);
+    setSearchStartTime(Date.now());
 
     const timer = setTimeout(() => {
-      let filtered = MOCK_CONTENT;
+      let filtered = [...searchResults];
 
       // Filter by content types
       filtered = filtered.filter(item => selectedTypes.includes(item.type));
 
-      // Filter by search query
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter(
-          item =>
-            item.title.toLowerCase().includes(query) ||
-            item.description.toLowerCase().includes(query) ||
-            item.content.toLowerCase().includes(query) ||
-            item.tags.some(tag => tag.toLowerCase().includes(query))
-        );
-
-        // Add relevance scoring for search results
-        filtered = filtered.map(item => {
-          let score = 0;
-          const q = query.toLowerCase();
-
-          // Title match gets highest score
-          if (item.title.toLowerCase().includes(q)) score += 40;
-          // Description match gets medium score
-          if (item.description.toLowerCase().includes(q)) score += 25;
-          // Tag match gets good score
-          if (item.tags.some(tag => tag.toLowerCase().includes(q))) score += 20;
-          // Content match gets lower score
-          if (item.content.toLowerCase().includes(q)) score += 10;
-          // Usage and quality boost
-          score += item.usageCount * 2;
-          score += item.qualityScore;
-
-          return { ...item, relevanceScore: Math.min(100, score) };
-        });
-
-        // Sort by relevance
-        filtered.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-      } else {
-        // Sort by usage and quality when no search query
-        filtered.sort((a, b) => b.usageCount + b.qualityScore - (a.usageCount + a.qualityScore));
-      }
-
-      // Filter by tags
+      // Filter by active tags
       if (activeTags.length > 0) {
         filtered = filtered.filter(item => activeTags.every(tag => item.tags.includes(tag)));
       }
 
       // Filter by date range
       if (dateFrom) {
-        const fromDate = new Date(dateFrom);
-        filtered = filtered.filter(item => item.createdAt >= fromDate);
+        filtered = filtered.filter(item => new Date(item.createdAt) >= new Date(dateFrom));
       }
       if (dateTo) {
-        const toDate = new Date(dateTo);
-        filtered = filtered.filter(item => item.createdAt <= toDate);
+        filtered = filtered.filter(item => new Date(item.createdAt) <= new Date(dateTo));
       }
+
+      // Filter by search query (semantic search)
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(
+          item =>
+            item.title.toLowerCase().includes(query) ||
+            item.description.toLowerCase().includes(query) ||
+            item.content.toLowerCase().includes(query)
+        );
+      }
+
+      // Mock relevance score for demonstration
+      filtered = filtered.map(item => ({
+        ...item,
+        relevanceScore: Math.random() * 100,
+      }));
+
+      // Sort by relevance score
+      filtered.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
       setSearchResults(filtered);
-      setIsLoading(false);
-
-      // Track search performance
-      if (searchQuery.trim()) {
-        const searchTime = Date.now() - searchStarted;
-        trackContentAction('search_performed', {
+      if (searchStartTime) {
+        trackContentAction('search_completed', {
           query: searchQuery,
+          duration: Date.now() - searchStartTime,
           resultsCount: filtered.length,
-          searchTime: searchTime / 1000,
-          filtersApplied: searchMetrics.filtersApplied,
         });
       }
-    }, 300); // Debounce search
+    }, 500); // Debounce search
 
     return () => clearTimeout(timer);
   }, [
@@ -324,8 +245,8 @@ export default function ContentSearch() {
     activeTags,
     dateFrom,
     dateTo,
-    searchMetrics.filtersApplied,
     trackContentAction,
+    searchStartTime,
   ]);
 
   // Handle content type toggle
@@ -416,10 +337,18 @@ export default function ContentSearch() {
   // Track page load
   useEffect(() => {
     trackContentAction('content_search_loaded', {
-      totalContent: MOCK_CONTENT.length,
+      totalContent: searchResults.length,
       loadTime: Date.now() - sessionStartTime,
     });
   }, [sessionStartTime, trackContentAction]);
+
+  if (loading) {
+    return <p>Loading content search...</p>;
+  }
+
+  if (error) {
+    return <p className="text-red-500">{error}</p>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -601,9 +530,6 @@ export default function ContentSearch() {
                   <h2 className="text-lg font-medium text-gray-900">
                     Results ({searchResults.length})
                   </h2>
-                  {isLoading && (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                  )}
                 </div>
 
                 {searchResults.length === 0 ? (
@@ -655,7 +581,7 @@ export default function ContentSearch() {
                               <span>Used: {content.usageCount} times</span>
                             </div>
                             <div className="flex flex-wrap gap-1 mb-2">
-                              {content.tags.slice(0, 3).map(tag => (
+                              {(content.tags || []).slice(0, 3).map(tag => (
                                 <span
                                   key={tag}
                                   className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded"
@@ -663,7 +589,7 @@ export default function ContentSearch() {
                                   {tag}
                                 </span>
                               ))}
-                              {content.tags.length > 3 && (
+                              {Array.isArray(content.tags) && content.tags.length > 3 && (
                                 <span className="px-2 py-1 text-xs text-gray-500">
                                   +{content.tags.length - 3} more
                                 </span>
@@ -671,7 +597,11 @@ export default function ContentSearch() {
                             </div>
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-gray-500">
-                                Created: {content.createdAt.toLocaleDateString()}
+                                Created: {content.createdAt instanceof Date 
+                                  ? content.createdAt.toLocaleDateString() 
+                                  : typeof content.createdAt === 'string' 
+                                    ? new Date(content.createdAt).toLocaleDateString() 
+                                    : 'Unknown date'}
                               </span>
                               <span
                                 className={`px-2 py-1 text-xs rounded-full ${qualityDisplay.bg} ${qualityDisplay.color}`}
@@ -699,11 +629,15 @@ export default function ContentSearch() {
                         </h3>
                         <div className="text-sm text-gray-600 mb-3">
                           <p>Type: {selectedContent.type}</p>
-                          <p>Created: {selectedContent.createdAt.toLocaleDateString()}</p>
-                          <p>File Size: {selectedContent.fileSize}</p>
+                          <p>Created: {selectedContent.createdAt instanceof Date 
+                            ? selectedContent.createdAt.toLocaleDateString() 
+                            : typeof selectedContent.createdAt === 'string' 
+                              ? new Date(selectedContent.createdAt).toLocaleDateString() 
+                              : 'Unknown date'}</p>
+                          <p>File Size: {selectedContent.fileSize || 'Unknown'}</p>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-4">
-                          {selectedContent.tags.map(tag => (
+                          {(selectedContent.tags || []).map(tag => (
                             <span
                               key={tag}
                               className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"

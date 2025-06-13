@@ -4,7 +4,6 @@
  * Integrates with UserEntity and provides loading states, error handling
  */
 
-import type { PaginatedResponse } from '@/lib/api/client';
 import {
   userEntity,
   type CreateUserData,
@@ -103,8 +102,8 @@ export const useUser = (): UseUserState & UseUserActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            user: response.data!,
-            users: [...prev.users, response.data!],
+            user: response.data,
+            users: [...prev.users, response.data],
             loading: false,
           }));
           return response.data;
@@ -185,8 +184,8 @@ export const useUser = (): UseUserState & UseUserActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            user: prev.user?.id === id ? response.data! : prev.user,
-            users: prev.users.map(user => (user.id === id ? response.data! : user)),
+            user: prev.user?.id === id ? response.data : prev.user,
+            users: prev.users.map(user => (user.id === id ? response.data : user)),
             loading: false,
           }));
           return response.data;
@@ -237,16 +236,16 @@ export const useUser = (): UseUserState & UseUserActions => {
         setLoading(true);
         clearError();
 
-        const response = (await userEntity.query(options)) as PaginatedResponse<UserProfile>;
+        const response = await userEntity.query(options);
 
-        if (response.success && response.data) {
+        if (response.success && response.data?.users) {
           setState(prev => ({
             ...prev,
-            users: response.data!,
-            pagination: response.pagination || null,
+            users: response.data.users,
+            pagination: response.data.pagination || null,
             loading: false,
           }));
-          return response.data;
+          return response.data.users;
         } else {
           setError(response.message || 'Failed to query users');
           return [];
@@ -285,7 +284,7 @@ export const useUser = (): UseUserState & UseUserActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            permissions: response.data!,
+            permissions: response.data,
             loading: false,
           }));
           return response.data;
@@ -315,7 +314,7 @@ export const useUser = (): UseUserState & UseUserActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            permissions: response.data!,
+            permissions: response.data,
             loading: false,
           }));
           return response.data;
@@ -341,15 +340,12 @@ export const useUser = (): UseUserState & UseUserActions => {
         setLoading(true);
         clearError();
 
-        const response = (await userEntity.getActivityLog(
-          id,
-          options
-        )) as PaginatedResponse<UserActivityLog>;
+        const response = await userEntity.getActivityLog(id, options);
 
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            activityLog: response.data!,
+            activityLog: response.data,
             pagination: response.pagination || null,
             loading: false,
           }));
@@ -378,8 +374,8 @@ export const useUser = (): UseUserState & UseUserActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            user: prev.user?.id === id ? response.data! : prev.user,
-            users: prev.users.map(user => (user.id === id ? response.data! : user)),
+            user: prev.user?.id === id ? response.data : prev.user,
+            users: prev.users.map(user => (user.id === id ? response.data : user)),
             loading: false,
           }));
           return response.data;
@@ -406,8 +402,8 @@ export const useUser = (): UseUserState & UseUserActions => {
         if (response.success && response.data) {
           setState(prev => ({
             ...prev,
-            user: prev.user?.id === id ? response.data! : prev.user,
-            users: prev.users.map(user => (user.id === id ? response.data! : user)),
+            user: prev.user?.id === id ? response.data : prev.user,
+            users: prev.users.map(user => (user.id === id ? response.data : user)),
             loading: false,
           }));
           return response.data;

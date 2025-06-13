@@ -5,11 +5,11 @@
 
 import { Prisma, Product, ProductRelationship, RelationshipType } from '@prisma/client';
 import {
-  CreateProductData,
-  CreateProductRelationshipData,
-  ProductFilters,
-  ProductSortOptions,
-  UpdateProductData,
+    CreateProductData,
+    CreateProductRelationshipData,
+    ProductFilters,
+    ProductSortOptions,
+    UpdateProductData,
 } from '../../types/entities/product';
 import { prisma } from '../prisma';
 

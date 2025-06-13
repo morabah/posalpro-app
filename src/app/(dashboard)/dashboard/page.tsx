@@ -10,6 +10,7 @@ import ModernDashboard from '@/components/dashboard/ModernDashboard';
 import { useDashboardAnalytics } from '@/hooks/dashboard/useDashboardAnalytics';
 import { UserType } from '@/types';
 import { XCircleIcon } from '@heroicons/react/24/outline';
+import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Component Traceability Matrix
@@ -54,14 +55,19 @@ interface PriorityItem {
   urgency: 'low' | 'medium' | 'high' | 'critical';
 }
 
-// Mock user data (will be replaced with actual auth in production)
-const MOCK_USER = {
-  id: '1',
-  name: 'John Doe',
-  role: 'PROPOSAL_MANAGER' as UserType,
-};
-
 export default function DashboardPage() {
+  const { data: session, status: sessionStatus } = useSession();
+
+  const formattedUser = useMemo(() => {
+    if (!session?.user) return undefined;
+    const { id, name, roles } = session.user;
+    return {
+      id,
+      name: name || 'User',
+      role: (roles?.[0] || 'VIEWER') as UserType,
+    };
+  }, [session]);
+
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     proposals: [],
     customers: [],
@@ -78,7 +84,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const analytics = useDashboardAnalytics(MOCK_USER.id, MOCK_USER.role, 'session-123');
+  const analytics = useDashboardAnalytics(
+    formattedUser?.id || 'unknown-user',
+    formattedUser?.role || 'VIEWER',
+    session?.user.id || 'unknown-session'
+  );
 
   // Circuit breaker pattern
   const maxRetries = 5;
@@ -173,21 +183,24 @@ export default function DashboardPage() {
     }
   }, [retryCount, isCircuitOpen]);
 
-  // Initial data load
+  // Initial data load, dependent on session
   useEffect(() => {
-    loadData();
-  }, []);
+    if (sessionStatus === 'authenticated') {
+      loadData();
+    }
+  }, [sessionStatus, loadData]);
 
   // Quick action handler with analytics
   const handleQuickAction = useCallback(
     (action: string) => {
+      if (!formattedUser) return;
       analytics.trackEvent('dashboard_quick_action', {
         action,
         timestamp: new Date().toISOString(),
-        userId: MOCK_USER.id,
+        userId: formattedUser.id,
       });
     },
-    [analytics]
+    [analytics, formattedUser]
   );
 
   // Transform proposals data for component
@@ -255,7 +268,9 @@ export default function DashboardPage() {
     return items;
   }, [dashboardData.metrics, activeProposals]);
 
-  if (loading) {
+  const isLoading = sessionStatus === 'loading' || loading;
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -290,11 +305,14 @@ export default function DashboardPage() {
   // Render the modern dashboard
   return (
     <ModernDashboard
-      user={MOCK_USER}
+      user={formattedUser}
+      loading={isLoading}
+      error={error}
       data={dashboardData}
-      proposals={activeProposals}
       priorityItems={priorityItems}
+      proposals={activeProposals}
       onQuickAction={handleQuickAction}
+      onRetry={loadData}
     />
   );
 }

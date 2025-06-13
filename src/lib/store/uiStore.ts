@@ -309,7 +309,7 @@ export const useUIStore = create<UIStore>()(
           if (state.modals[id]) {
             state.modals[id].isOpen = false;
             if (state.modals[id].onClose) {
-              state.modals[id].onClose!();
+              state.modals[id].onClose();
             }
           }
           if (state.activeModal === id) {

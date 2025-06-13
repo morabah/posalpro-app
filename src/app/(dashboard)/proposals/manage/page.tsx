@@ -294,7 +294,7 @@ export default function ProposalManagementDashboard() {
     // Date range filter
     if (filters.dateRange !== 'all') {
       const now = new Date();
-      let cutoffDate = new Date();
+      const cutoffDate = new Date();
 
       switch (filters.dateRange) {
         case 'week':

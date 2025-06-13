@@ -59,7 +59,7 @@ export class CustomerService {
           status: CustomerStatus.ACTIVE,
           tier: data.tier || CustomerTier.STANDARD,
           tags: data.tags || [],
-          metadata: data.metadata,
+          metadata: data.metadata as Prisma.JsonValue,
         },
       });
     } catch (error) {
@@ -75,7 +75,10 @@ export class CustomerService {
       const { id, ...updateData } = data;
       return await prisma.customer.update({
         where: { id },
-        data: updateData,
+        data: {
+          ...updateData,
+          metadata: updateData.metadata as Prisma.JsonValue,
+        },
       });
     } catch (error) {
       if (isPrismaError(error) && error.code === 'P2025') {
@@ -291,7 +294,10 @@ export class CustomerService {
 
       return await prisma.customerContact.update({
         where: { id },
-        data: updateData,
+        data: {
+          ...updateData,
+          metadata: updateData.metadata as Prisma.JsonValue,
+        },
       });
     } catch (error) {
       if (isPrismaError(error) && error.code === 'P2025') {

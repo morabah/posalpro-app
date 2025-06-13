@@ -4,10 +4,14 @@
  */
 
 import {
+  ActionTarget,
+  ActionType,
   FixSuggestion,
   RuleAction,
   RuleCondition,
   RuleResult,
+  SuggestionImpact,
+  SuggestionType,
   ValidationContext,
   ValidationIssue,
   ValidationRule,
@@ -70,7 +74,7 @@ export class RuleExecutor {
         if (actionResult.type === 'error' || actionResult.type === 'warning') {
           issues.push({
             id: `issue_${rule.id}_${Math.random().toString(36).substr(2, 9)}`,
-            type: actionResult.type,
+            type: actionResult.type as 'error' | 'warning',
             severity: rule.severity,
             category: rule.category as
               | 'compatibility'
@@ -90,15 +94,16 @@ export class RuleExecutor {
         if (actionResult.type === 'fix' || actionResult.type === 'suggest') {
           suggestions.push({
             id: `suggestion_${rule.id}_${Math.random().toString(36).substr(2, 9)}`,
-            type: actionResult.automated ? 'automatic' : 'manual',
+            type: actionResult.automated ? 'automatic' : ('manual' as SuggestionType),
+            title: actionResult.message,
             description: actionResult.message,
             confidence: actionResult.data?.confidence || 0.5,
-            impact: this.determineImpact(rule.severity),
+            impact: this.determineImpact(rule.severity) as SuggestionImpact,
             actions: [
               {
                 id: `action_${Math.random().toString(36).substr(2, 9)}`,
-                type: 'configure',
-                target: actionResult.data?.target || 'configuration',
+                type: 'configure' as ActionType,
+                target: (actionResult.data?.target || 'configuration') as ActionTarget,
                 value: actionResult.data?.value,
                 description: actionResult.message,
                 automated: actionResult.automated || false,
@@ -250,7 +255,7 @@ export class RuleExecutor {
   async executeActions(
     actions: RuleAction[],
     context: ValidationContext
-  ): Promise<Array<{ type: string; message: string; data?: any; automated?: boolean }>> {
+  ): Promise<Array<ActionResult>> {
     const results: Array<{ type: string; message: string; data?: any; automated?: boolean }> = [];
 
     try {

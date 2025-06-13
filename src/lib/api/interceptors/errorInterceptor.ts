@@ -316,29 +316,49 @@ class ErrorInterceptor {
   private getNotificationDuration(severity: ProcessedError['severity']): number {
     switch (severity) {
       case 'critical':
-        return 0; // Don't auto-dismiss
+        return 0; // Stay until user dismisses
       case 'high':
-        return 8000;
+        return 10000; // 10 seconds
       case 'medium':
-        return 5000;
+        return 7000; // 7 seconds
       default:
-        return 3000;
+        return 5000; // 5 seconds
     }
   }
 
   private async sendToLoggingService(logData: any): Promise<void> {
-    try {
-      // Example implementation - replace with your logging service
-      await fetch('/api/logging/error', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    // Implement logging service integration
+    // For now, just console.log
+    console.log('[ErrorInterceptor] Error logged:', logData);
+  }
+
+  async interceptResponse(
+    response: Response,
+    data: any,
+    options: ErrorHandlerOptions = {}
+  ): Promise<ApiResponse> {
+    if (!response.ok) {
+      const error = this.processError(
+        {
+          status: response.status,
+          data: data,
+        } as ApiResponse,
+        {
+          url: response.url,
+          method: response.type as string,
+          headers: Object.fromEntries(response.headers.entries()),
         },
-        body: JSON.stringify(logData),
-      });
-    } catch (error) {
-      console.error('Failed to send error to logging service:', error);
+        options
+      );
+
+      throw new Error(error.userMessage);
     }
+
+    return {
+      data: data,
+      success: true,
+      message: 'Success',
+    };
   }
 }
 

@@ -339,7 +339,7 @@ export function DecisionInterface({
           </div>
           <div className="flex items-center gap-2">
             <Badge className={getPriorityColor(context.priority)}>{context.priority}</Badge>
-            <Badge variant={context.slaRemaining < 2 ? 'error' : 'primary'}>
+            <Badge variant={context.slaRemaining < 2 ? 'destructive' : 'default'}>
               SLA: {context.slaRemaining.toFixed(1)}h
             </Badge>
           </div>
@@ -439,7 +439,7 @@ export function DecisionInterface({
                             {comment.stageName} - {comment.author}
                           </div>
                           <Badge
-                            variant={comment.type === 'concern' ? 'warning' : 'primary'}
+                            variant={comment.type === 'concern' ? 'warning' : 'default'}
                             size="sm"
                           >
                             {comment.type}
@@ -575,7 +575,7 @@ export function DecisionInterface({
                             collaborator.recommendation === 'approve'
                               ? 'success'
                               : collaborator.recommendation === 'reject'
-                                ? 'error'
+                                ? 'destructive'
                                 : 'warning'
                           }
                           size="sm"

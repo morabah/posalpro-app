@@ -3,11 +3,7 @@
  * Comprehensive HTTP client with authentication, error handling, retry logic, and caching
  */
 
-import {
-  authInterceptor,
-  type ApiRequest,
-  type ApiResponse as InterceptorApiResponse,
-} from './interceptors/authInterceptor';
+import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
 import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
 
 // Export the existing types and interfaces
@@ -70,7 +66,7 @@ interface EnhancedRequestConfig {
 class EnhancedApiClient {
   private baseURL: string;
   private defaultConfig: EnhancedRequestConfig;
-  private cache: Map<string, { data: any; expires: number }> = new Map();
+  private cache: Map<string, { data: ApiResponse<any>; expires: number }> = new Map();
   private pendingRequests: Map<string, Promise<any>> = new Map();
 
   constructor(baseURL: string = '', config: EnhancedRequestConfig = {}) {
@@ -99,10 +95,10 @@ class EnhancedApiClient {
     return `${method}:${url}:${body}`;
   }
 
-  private getCachedResponse(cacheKey: string): any | null {
+  private getCachedResponse<T>(cacheKey: string): ApiResponse<T> | null {
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expires > Date.now()) {
-      return cached.data;
+      return cached.data as ApiResponse<T>;
     }
 
     if (cached && cached.expires <= Date.now()) {
@@ -112,7 +108,7 @@ class EnhancedApiClient {
     return null;
   }
 
-  private setCachedResponse(cacheKey: string, data: any, ttl: number): void {
+  private setCachedResponse<T>(cacheKey: string, data: ApiResponse<T>, ttl: number): void {
     this.cache.set(cacheKey, {
       data,
       expires: Date.now() + ttl,
@@ -162,27 +158,28 @@ class EnhancedApiClient {
     url: string,
     options: EnhancedRequestConfig = {}
   ): Promise<ApiResponse<T>> {
+    console.log('[ApiClient] Starting request:', { url, method: options.method || 'GET' });
     const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
     const config = { ...this.defaultConfig, ...options };
-    if (config.cache) {
-      config.cache.enabled = false; // Force disable cache
-    }
+    console.log('[ApiClient] Request config:', config);
 
     // Check cache for GET requests
     const cacheKey = this.generateCacheKey(fullUrl, config);
     if (config.method === 'GET' && config.cache?.enabled) {
-      const cached = this.getCachedResponse(cacheKey);
+      console.log('[ApiClient] Checking cache for:', cacheKey);
+      const cached = this.getCachedResponse<T>(cacheKey);
       if (cached) {
+        console.log('[ApiClient] Cache hit:', cached);
         return {
-          data: cached as T,
-          success: true,
+          ...cached,
           message: 'Success (cached)',
-          pagination: undefined,
-        } as ApiResponse<T>;
+        };
       }
+      console.log('[ApiClient] Cache miss');
 
       // Check for pending request
       if (this.pendingRequests.has(cacheKey)) {
+        console.log('[ApiClient] Using pending request for:', cacheKey);
         return this.pendingRequests.get(cacheKey) as Promise<ApiResponse<T>>;
       }
     }
@@ -194,96 +191,74 @@ class EnhancedApiClient {
       headers: { ...config.headers } as Record<string, string>,
       body: config.body,
     };
+    console.log('[ApiClient] Initial request:', apiRequest);
 
     // Apply auth interceptor
+    console.log('[ApiClient] Applying auth interceptor');
     const interceptedRequest = await authInterceptor.interceptRequest(apiRequest);
+    console.log('[ApiClient] Auth interceptor applied:', interceptedRequest);
 
     // Update config with intercepted headers
     config.headers = { ...config.headers, ...interceptedRequest.headers };
 
     const requestPromise = this.executeWithRetry(
       async (): Promise<ApiResponse<T>> => {
-        // Create standard fetch options
-        const fetchOptions: RequestInit = {
-          method: interceptedRequest.method,
-          headers: interceptedRequest.headers,
-          body: interceptedRequest.body,
-        };
+        try {
+          console.log('[ApiClient] Executing request with retry');
+          const response = await this.executeWithTimeout(
+            fetch(interceptedRequest.url, {
+              method: interceptedRequest.method,
+              headers: interceptedRequest.headers,
+              body: interceptedRequest.body ? JSON.stringify(interceptedRequest.body) : undefined,
+            }),
+            config.timeout || 10000
+          );
+          console.log('[ApiClient] Raw response:', response);
 
-        const response = await this.executeWithTimeout(
-          fetch(interceptedRequest.url, fetchOptions),
-          config.timeout || 10000
-        );
-
-        const interceptorResponse: InterceptorApiResponse = {
-          data: response.ok ? await response.json() : await response.text(),
-          status: response.status,
-          headers: Object.fromEntries(response.headers.entries()),
-        };
-
-        // Apply response interceptor
-        const interceptedResponse = await authInterceptor.interceptResponse(
-          interceptorResponse,
-          interceptedRequest
-        );
-
-        // Handle retry indication from auth interceptor
-        if (interceptedResponse.data?.shouldRetry) {
-          const retryRequest = interceptedResponse.data.retryRequest;
-          return this.makeRequest<T>(retryRequest.url, {
-            ...config,
-            headers: retryRequest.headers,
-          });
-        }
-
-        if (!response.ok) {
-          try {
-            const error = errorInterceptor.processError(
-              interceptedResponse,
-              interceptedRequest,
-              config.errorHandling || {}
-            );
-            throw new Error(error.userMessage);
-          } catch (errorProcessingError) {
-            console.error('[ApiClient] Error processing error:', errorProcessingError);
-            throw new Error(`Request failed with status ${response.status}`);
+          // Handle non-JSON responses
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            console.warn('[ApiClient] Non-JSON response received:', contentType);
+            throw new Error('Invalid response format');
           }
-        }
 
-        // Cache successful GET responses
-        if (config.method === 'GET' && config.cache?.enabled) {
-          this.setCachedResponse(cacheKey, interceptedResponse.data, config.cache.ttl || 300000);
-        }
+          const data = await response.json();
+          console.log('[ApiClient] Parsed response data:', data);
 
-        return {
-          data: interceptedResponse.data?.data || interceptedResponse.data,
-          success: true,
-          message: interceptedResponse.data?.message || 'Success',
-          pagination: interceptedResponse.data?.pagination,
-        } as ApiResponse<T>;
+          // Apply error interceptor
+          const interceptedResponse = await errorInterceptor.interceptResponse(
+            response,
+            data,
+            config.errorHandling
+          );
+          console.log('[ApiClient] Error interceptor applied:', interceptedResponse);
+
+          // Cache successful GET responses
+          if (config.method === 'GET' && config.cache?.enabled && response.ok) {
+            console.log('[ApiClient] Caching response');
+            this.setCachedResponse(cacheKey, interceptedResponse, config.cache.ttl || 300000);
+          }
+
+          return interceptedResponse;
+        } catch (error) {
+          console.error('[ApiClient] Request failed:', error);
+          throw error;
+        }
       },
       {
         attempts: config.retry?.attempts || 3,
         delay: config.retry?.delay || 1000,
         backoff: config.retry?.backoff || 2,
-        retryCondition:
-          config.retry?.retryCondition ||
-          ((error: any) => {
-            return (
-              error.message?.includes('timeout') ||
-              error.message?.includes('network') ||
-              error.status >= 500
-            );
-          }),
+        retryCondition: config.retry?.retryCondition,
       }
     );
 
     // Store pending request
     if (config.method === 'GET' && config.cache?.enabled) {
+      console.log('[ApiClient] Storing pending request:', cacheKey);
       this.pendingRequests.set(cacheKey, requestPromise);
-
-      // Clean up pending request when done
       requestPromise.finally(() => {
+        console.log('[ApiClient] Removing pending request:', cacheKey);
         this.pendingRequests.delete(cacheKey);
       });
     }
@@ -370,5 +345,5 @@ class EnhancedApiClient {
 
 // Export enhanced client instance
 export const apiClient = new EnhancedApiClient(
-  process.env.NODE_ENV === 'development' ? '' : process.env.NEXT_PUBLIC_API_BASE_URL || ''
+  process.env.NODE_ENV === 'development' ? '/api' : process.env.NEXT_PUBLIC_API_BASE_URL || ''
 );

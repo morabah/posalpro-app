@@ -10,11 +10,13 @@ import { Card } from '@/components/ui/Card';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { useUser } from '@/hooks/entities/useUser';
+import { UserType } from '@/types/enums';
 import { ExpertiseArea, ProposalWizardStep2Data } from '@/types/proposals';
 import { PlusIcon, SparklesIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 // Component Traceability Matrix
@@ -27,16 +29,21 @@ const COMPONENT_MAPPING = {
 };
 
 // Mock data for team members (would come from API in production)
-const MOCK_TEAM_LEADS = [
-  { id: '1', name: 'Mohamed Rabah', role: 'Senior Solution Architect', availability: 80 },
-  { id: '2', name: 'Alex Johnson', role: 'Technical Lead', availability: 65 },
-  { id: '3', name: 'Sarah Williams', role: 'Project Manager', availability: 90 },
-];
-
-const MOCK_SALES_REPS = [
-  { id: '1', name: 'Sarah Johnson', role: 'Senior Sales Manager', winRate: 78 },
-  { id: '2', name: 'Mike Chen', role: 'Account Executive', winRate: 82 },
-  { id: '3', name: 'Lisa Rodriguez', role: 'Business Development', winRate: 71 },
+const MOCK_EXECUTIVES = [
+  {
+    id: '1',
+    name: 'David Chen',
+    title: 'Chief Technology Officer (CTO)',
+    department: 'Technology',
+  },
+  {
+    id: '2',
+    name: 'Maria Rodriguez',
+    title: 'Chief Financial Officer (CFO)',
+    department: 'Finance',
+  },
+  { id: '3', name: 'Robert Kim', title: 'Chief Executive Officer (CEO)', department: 'Executive' },
+  { id: '4', name: 'Susan Lee', title: 'Chief Operating Officer (COO)', department: 'Operations' },
 ];
 
 const MOCK_SME_POOL = {
@@ -68,23 +75,6 @@ const MOCK_SME_POOL = {
   ],
 };
 
-const MOCK_EXECUTIVES = [
-  {
-    id: '1',
-    name: 'David Chen',
-    title: 'Chief Technology Officer (CTO)',
-    department: 'Technology',
-  },
-  {
-    id: '2',
-    name: 'Maria Rodriguez',
-    title: 'Chief Financial Officer (CFO)',
-    department: 'Finance',
-  },
-  { id: '3', name: 'Robert Kim', title: 'Chief Executive Officer (CEO)', department: 'Executive' },
-  { id: '4', name: 'Susan Lee', title: 'Chief Operating Officer (COO)', department: 'Operations' },
-];
-
 // Validation schema for team assignment step
 const teamAssignmentSchema = z.object({
   teamLead: z.string().min(1, 'Team lead is required'),
@@ -106,6 +96,11 @@ interface TeamAssignmentStepProps {
 export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignmentStepProps) {
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({});
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [teamLeads, setTeamLeads] = useState<any[]>([]);
+  const [salesReps, setSalesReps] = useState<any[]>([]);
+  const [isLoadingTeamData, setIsLoadingTeamData] = useState(true);
+  const [executives, setExecutives] = useState<any[]>([]);
+  const { getUsersByRole } = useUser();
   const [expertiseAreas, setExpertiseAreas] = useState<ExpertiseArea[]>([
     ExpertiseArea.TECHNICAL,
     ExpertiseArea.SECURITY,
@@ -124,6 +119,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     register,
     watch,
     setValue,
+    control,
     formState: { errors, isValid },
     getValues,
   } = useForm<TeamAssignmentFormData>({
@@ -205,8 +201,8 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     const suggestions = {
-      teamLead: MOCK_TEAM_LEADS[0], // Suggest highest availability
-      salesRep: MOCK_SALES_REPS.find(rep => rep.winRate > 75), // Suggest high win rate
+      teamLead: teamLeads[0], // Suggest highest availability
+      salesRep: salesReps.find(rep => rep.winRate > 75), // Suggest high win rate
       smes: {
         [ExpertiseArea.TECHNICAL]: MOCK_SME_POOL[ExpertiseArea.TECHNICAL].find(
           sme => sme.availability > 70
@@ -215,7 +211,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
           sme => sme.availability > 70
         ),
       },
-      executives: [MOCK_EXECUTIVES[0]], // Suggest CTO for technical proposals
+      executives: [executives[0]], // Suggest CTO for technical proposals
     };
 
     setAiSuggestions(suggestions);
@@ -224,7 +220,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     analytics.trackWizardStep(2, 'Team Assignment', 'ai_suggestions_generated', {
       suggestionsCount: Object.keys(suggestions).length,
     });
-  }, [analytics]);
+  }, [teamLeads, salesReps, executives, analytics]);
 
   // Apply AI suggestion
   const applyAISuggestion = useCallback(
@@ -295,6 +291,39 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     },
     [getValues, setValue, analytics]
   );
+
+  useEffect(() => {
+    const fetchTeamData = async () => {
+      try {
+        setIsLoadingTeamData(true);
+        
+        // Fetch managers for team leads and sales reps
+        const managersResponse = await getUsersByRole(UserType.PROPOSAL_MANAGER);
+        const managers = Array.isArray(managersResponse) 
+          ? managersResponse 
+          : managersResponse?.data || [];
+        setTeamLeads(managers);
+        setSalesReps(managers); // Using the same pool for now
+
+        // Fetch executives
+        const executiveResponse = await getUsersByRole(UserType.EXECUTIVE);
+        const executiveUsers = Array.isArray(executiveResponse)
+          ? executiveResponse
+          : executiveResponse?.data || [];
+        setExecutives(executiveUsers);
+      } catch (error) {
+        console.error('Error fetching team data:', error);
+        // Set empty arrays to prevent undefined errors
+        setTeamLeads([]);
+        setSalesReps([]);
+        setExecutives([]);
+      } finally {
+        setIsLoadingTeamData(false);
+      }
+    };
+    
+    fetchTeamData();
+  }, [getUsersByRole]);
 
   return (
     <div className="space-y-8">
@@ -367,45 +396,53 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
             Proposal Team
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Label htmlFor="teamLead" required>
-                Team Lead
-              </Label>
-              <Select
-                id="teamLead"
-                options={MOCK_TEAM_LEADS.map(lead => ({
-                  value: lead.id,
-                  label: `${lead.name} (${lead.availability}% available)`,
-                }))}
-                error={errors.teamLead?.message}
-                {...register('teamLead')}
-                onChange={(value: string) => {
-                  setValue('teamLead', value);
-                  trackTeamAssignment('teamLead', value);
-                }}
-              />
+          {isLoadingTeamData ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label htmlFor="teamLead" required>
+                  Team Lead
+                </Label>
+                <Select
+                  id="teamLead"
+                  options={teamLeads.map(lead => ({
+                    value: lead.id,
+                    label: `${lead.name} (${lead.role || 'No role'})`,
+                  }))}
+                  error={errors.teamLead?.message}
+                  {...register('teamLead')}
+                  onChange={(value: string) => {
+                    setValue('teamLead', value);
+                    trackTeamAssignment('teamLead', value);
+                  }}
+                  value={watch('teamLead')}
+                />
+              </div>
 
-            <div>
-              <Label htmlFor="salesRepresentative" required>
-                Sales Representative
-              </Label>
-              <Select
-                id="salesRepresentative"
-                options={MOCK_SALES_REPS.map(rep => ({
-                  value: rep.id,
-                  label: `${rep.name} (${rep.winRate}% win rate)`,
-                }))}
-                error={errors.salesRepresentative?.message}
-                {...register('salesRepresentative')}
-                onChange={(value: string) => {
-                  setValue('salesRepresentative', value);
-                  trackTeamAssignment('salesRepresentative', value);
-                }}
-              />
+              <div>
+                <Label htmlFor="salesRepresentative" required>
+                  Sales Representative
+                </Label>
+                <Select
+                  id="salesRepresentative"
+                  options={salesReps.map(rep => ({
+                    value: rep.id,
+                    label: `${rep.name} (${rep.role || 'No role'})`,
+                  }))}
+                  error={errors.salesRepresentative?.message}
+                  {...register('salesRepresentative')}
+                  onChange={(value: string) => {
+                    setValue('salesRepresentative', value);
+                    trackTeamAssignment('salesRepresentative', value);
+                  }}
+                  value={watch('salesRepresentative')}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </Card>
 
@@ -448,32 +485,42 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                       {area.replace('_', ' ')}
                     </td>
                     <td className="py-3 px-4">
-                      <Select
-                        options={[
-                          { value: '', label: 'Select SME...' },
-                          ...(MOCK_SME_POOL[area] || []).map(sme => ({
-                            value: sme.id,
-                            label: `${sme.name} - ${sme.expertise} (${sme.availability}% available)`,
-                          })),
-                        ]}
-                        {...register(`subjectMatterExperts.${area}`)}
-                        onChange={(value: string) => {
-                          setValue(`subjectMatterExperts.${area}`, value);
-                          if (value) {
-                            trackTeamAssignment('sme', value);
-                          }
-                        }}
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => removeExpertiseArea(area)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <XMarkIcon className="w-4 h-4" />
-                      </Button>
+                      <div className="space-y-6">
+                        <div className="flex justify-between items-center mb-2">
+                          <Label htmlFor={`sme-${area}`}>
+                            {area}{' '}
+                            <span className="text-gray-500">
+                              ({(MOCK_SME_POOL[area] || []).length} available)
+                            </span>
+                          </Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeExpertiseArea(area)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <XMarkIcon className="h-4 w-4 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
+                        <Controller
+                          name={`subjectMatterExperts.${area}`}
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              id={`sme-${area}`}
+                              options={(MOCK_SME_POOL[area] || []).map(sme => ({
+                                value: sme.id,
+                                label: `${sme.name} (${sme.expertise})`,
+                              }))}
+                              onChange={field.onChange}
+                              value={field.value}
+                              placeholder="Select an expert..."
+                            />
+                          )}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -489,15 +536,15 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
           <h3 className="text-lg font-semibold text-neutral-900 mb-6">Executive Reviewers</h3>
 
           <div className="space-y-3">
-            {MOCK_EXECUTIVES.map(executive => (
+            {executives.map(executive => (
               <label key={executive.id} className="flex items-center cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={watchedValues.executiveReviewers?.includes(executive.id)}
-                  onChange={() => toggleExecutiveReviewer(executive.id)}
-                  className="mr-3 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  value={executive.id}
+                  {...register('executiveReviewers')}
                 />
-                <div>
+                <div className="ml-3">
                   <span className="font-medium text-gray-900">{executive.name}</span>
                   <span className="text-gray-600 ml-2">({executive.title})</span>
                 </div>

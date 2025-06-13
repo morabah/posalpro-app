@@ -3,6 +3,8 @@
  * Based on Prisma models and DATA_MODEL.md specifications
  */
 
+import { Entity, EntityModel, EntityQueryOptions, createEntity } from '@/lib/entities/entity';
+
 // Product Enums (manually defined to match Prisma schema)
 export enum RelationshipType {
   REQUIRES = 'REQUIRES',
@@ -22,11 +24,11 @@ export interface Product {
   currency: string;
   category: string[];
   tags: string[];
-  attributes?: any | null;
+  attributes?: Record<string, unknown> | null;
   images: string[];
   isActive: boolean;
   version: number;
-  usageAnalytics?: any | null;
+  usageAnalytics?: Record<string, unknown> | null;
   userStoryMappings: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -38,9 +40,9 @@ export interface ProductRelationship {
   targetProductId: string;
   type: RelationshipType;
   quantity?: number | null;
-  condition?: any | null;
-  validationHistory?: any | null;
-  performanceImpact?: any | null;
+  condition?: Record<string, unknown> | null;
+  validationHistory?: Record<string, unknown> | null;
+  performanceImpact?: Record<string, unknown> | null;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -106,7 +108,7 @@ export interface RelationshipCondition {
 export interface ConditionRule {
   attribute: string;
   operator: 'equals' | 'notEquals' | 'contains' | 'greaterThan' | 'lessThan';
-  value: any;
+  value: unknown;
 }
 
 // Form Types
@@ -118,7 +120,7 @@ export interface CreateProductData {
   currency?: string;
   category?: string[];
   tags?: string[];
-  attributes?: Record<string, any>;
+  attributes?: Record<string, unknown>;
   images?: string[];
   userStoryMappings?: string[];
 }
@@ -176,3 +178,63 @@ export interface ProductValidationResult {
     code: string;
   }>;
 }
+
+export interface ProductData {
+  id: string;
+  name: string;
+  description: string;
+  sku: string;
+  price: number;
+  currency: string;
+  category: string;
+  tags: string[];
+  attributes: Record<string, unknown>;
+  isActive: boolean;
+  version: number;
+  // Relationships
+  relatedProducts: ProductRelationship[];
+}
+
+export type ProductRelationship = {
+  id: string;
+  type: 'upsell' | 'cross-sell' | 'related' | 'bundle';
+  productId: string;
+};
+
+export type ProductSortBy = 'name' | 'price' | 'category' | 'isActive' | 'createdAt';
+
+export interface ProductQuery extends EntityQueryOptions {
+  sortBy?: ProductSortBy;
+  category?: string;
+  tags?: string[];
+  priceRange?: [number, number];
+  isActive?: boolean;
+}
+
+const productModel: EntityModel<ProductData, ProductQuery> = {
+  name: 'Product',
+  schema: ProductSchema,
+  searchableFields: ['name', 'description', 'sku', 'tags'],
+  sortableFields: ['name', 'price', 'category', 'isActive', 'createdAt'],
+  async query(options: ProductQuery, apiClient): Promise<ProductData[]> {
+    const response = await apiClient.get('/products', { params: options });
+    return (response.data as { products: ProductData[] }).products;
+  },
+  async getById(id: string, apiClient): Promise<ProductData | null> {
+    const response = await apiClient.get(`/products/${id}`);
+    return response.data as ProductData;
+  },
+  async create(data: Omit<ProductData, 'id' | 'relatedProducts'>, apiClient): Promise<ProductData> {
+    const response = await apiClient.post('/products', data);
+    return response.data as ProductData;
+  },
+  async update(id: string, data: Partial<ProductData>, apiClient): Promise<ProductData> {
+    const response = await apiClient.put(`/products/${id}`, data);
+    return response.data as ProductData;
+  },
+  async delete(id: string, apiClient): Promise<void> {
+    await apiClient.delete(`/products/${id}`);
+  },
+};
+
+export const Product: Entity<ProductData, ProductQuery> = createEntity(productModel);

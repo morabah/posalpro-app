@@ -4,6 +4,7 @@
  * Supports H8 (System Reliability) hypothesis validation
  */
 
+import { ApiResponse } from '@/lib/testing/testUtils';
 import { clearMockSession, setMockSession } from '@/test/mocks/session.mock';
 import { UserType } from '@/types/enums';
 
@@ -11,37 +12,19 @@ import { UserType } from '@/types/enums';
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-// Mock Response class for Node.js test environment
-class MockResponse {
-  public status: number;
-  public statusText: string;
-  public headers: Map<string, string>;
-  public ok: boolean;
-  private body: string;
-
-  constructor(
-    body: string,
-    init?: { status?: number; statusText?: string; headers?: Record<string, string> }
-  ) {
-    this.body = body;
-    this.status = init?.status || 200;
-    this.statusText = init?.statusText || 'OK';
-    this.headers = new Map(Object.entries(init?.headers || {}));
-    this.ok = this.status >= 200 && this.status < 300;
-  }
-
-  async json(): Promise<any> {
-    return JSON.parse(this.body);
-  }
-
-  async text(): Promise<string> {
-    return this.body;
-  }
-
-  get(headerName: string): string | null {
-    return this.headers.get(headerName) || null;
-  }
+interface MockResponse<T> extends ApiResponse<T> {
+  ok: boolean;
+  status: number;
+  json: () => Promise<T>;
+  text: () => Promise<string>;
 }
+
+const mockResponse = <T>(data: T, status = 200): MockResponse<T> => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => data,
+  text: async () => JSON.stringify(data),
+});
 
 // API endpoint test utilities
 interface EndpointTestResult {
@@ -121,19 +104,16 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle login requests properly', async () => {
       // Mock successful login response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            user: {
-              id: '1',
-              email: 'test@example.com',
-              name: 'Test User',
-              role: UserType.PROPOSAL_MANAGER,
-            },
-            token: 'jwt_token_here',
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          user: {
+            id: '1',
+            email: 'test@example.com',
+            name: 'Test User',
+            role: UserType.PROPOSAL_MANAGER,
+          },
+          token: 'jwt_token_here',
+        })
       );
 
       const result = await ApiTester.testEndpoint('/api/auth/login', 'POST', {
@@ -150,13 +130,10 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle login failures with proper error responses', async () => {
       // Mock failed login response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            type: 'authentication_failed',
-            message: 'Invalid email or password',
-          }),
-          { status: 401, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          type: 'authentication_failed',
+          message: 'Invalid email or password',
+        })
       );
 
       const result = await ApiTester.testEndpoint('/api/auth/login', 'POST', {
@@ -172,19 +149,16 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle registration requests', async () => {
       // Mock successful registration response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            message: 'Account created successfully',
-            user: {
-              id: '2',
-              email: 'newuser@example.com',
-              name: 'New User',
-              role: UserType.CONTENT_MANAGER,
-            },
-          }),
-          { status: 201, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          message: 'Account created successfully',
+          user: {
+            id: '2',
+            email: 'newuser@example.com',
+            name: 'New User',
+            role: UserType.CONTENT_MANAGER,
+          },
+        })
       );
 
       const result = await ApiTester.testEndpoint('/api/auth/register', 'POST', {
@@ -202,13 +176,10 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle logout requests', async () => {
       // Mock successful logout response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            message: 'Logged out successfully',
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          message: 'Logged out successfully',
+        })
       );
 
       const result = await ApiTester.testEndpoint('/api/auth/logout', 'POST', undefined, {
@@ -235,24 +206,21 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle content search requests', async () => {
       // Mock successful search response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            data: [
-              {
-                id: '1',
-                title: 'Sample Content',
-                description: 'Sample description',
-                type: 'template',
-                createdAt: '2024-01-01T00:00:00Z',
-              },
-            ],
-            total: 1,
-            page: 1,
-            pageSize: 10,
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          data: [
+            {
+              id: '1',
+              title: 'Sample Content',
+              description: 'Sample description',
+              type: 'template',
+              createdAt: '2024-01-01T00:00:00Z',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 10,
+        })
       );
 
       const result = await ApiTester.testEndpoint(
@@ -282,19 +250,16 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle content creation requests', async () => {
       // Mock successful creation response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            data: {
-              id: '2',
-              title: 'New Content',
-              description: 'New content description',
-              type: 'reference',
-              createdAt: '2024-01-01T00:00:00Z',
-            },
-          }),
-          { status: 201, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          data: {
+            id: '2',
+            title: 'New Content',
+            description: 'New content description',
+            type: 'reference',
+            createdAt: '2024-01-01T00:00:00Z',
+          },
+        })
       );
 
       const result = await ApiTester.testEndpoint(
@@ -319,19 +284,16 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle content updates', async () => {
       // Mock successful update response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            data: {
-              id: '1',
-              title: 'Updated Content',
-              description: 'Updated description',
-              type: 'template',
-              updatedAt: '2024-01-01T00:00:00Z',
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          data: {
+            id: '1',
+            title: 'Updated Content',
+            description: 'Updated description',
+            type: 'template',
+            updatedAt: '2024-01-01T00:00:00Z',
+          },
+        })
       );
 
       const result = await ApiTester.testEndpoint(
@@ -354,13 +316,10 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle content deletion', async () => {
       // Mock successful deletion response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            message: 'Content deleted successfully',
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          message: 'Content deleted successfully',
+        })
       );
 
       const result = await ApiTester.testEndpoint('/api/content/1', 'DELETE', undefined, {
@@ -387,20 +346,17 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle proposal creation requests', async () => {
       // Mock successful proposal creation
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            data: {
-              id: '1',
-              title: 'New Proposal',
-              description: 'Proposal description',
-              status: 'draft',
-              createdAt: '2024-01-01T00:00:00Z',
-              managerId: '1',
-            },
-          }),
-          { status: 201, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          data: {
+            id: '1',
+            title: 'New Proposal',
+            description: 'Proposal description',
+            status: 'draft',
+            createdAt: '2024-01-01T00:00:00Z',
+            managerId: '1',
+          },
+        })
       );
 
       const result = await ApiTester.testEndpoint(
@@ -425,29 +381,26 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle proposal listing requests', async () => {
       // Mock successful proposal listing
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            data: [
-              {
-                id: '1',
-                title: 'Proposal 1',
-                status: 'draft',
-                createdAt: '2024-01-01T00:00:00Z',
-              },
-              {
-                id: '2',
-                title: 'Proposal 2',
-                status: 'in_review',
-                createdAt: '2024-01-02T00:00:00Z',
-              },
-            ],
-            total: 2,
-            page: 1,
-            pageSize: 10,
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          data: [
+            {
+              id: '1',
+              title: 'Proposal 1',
+              status: 'draft',
+              createdAt: '2024-01-01T00:00:00Z',
+            },
+            {
+              id: '2',
+              title: 'Proposal 2',
+              status: 'in_review',
+              createdAt: '2024-01-02T00:00:00Z',
+            },
+          ],
+          total: 2,
+          page: 1,
+          pageSize: 10,
+        })
       );
 
       const result = await ApiTester.testEndpoint('/api/proposals', 'GET', undefined, {
@@ -462,18 +415,15 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle proposal status updates', async () => {
       // Mock successful status update
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            data: {
-              id: '1',
-              title: 'Proposal 1',
-              status: 'in_review',
-              updatedAt: '2024-01-01T00:00:00Z',
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          data: {
+            id: '1',
+            title: 'Proposal 1',
+            status: 'in_review',
+            updatedAt: '2024-01-01T00:00:00Z',
+          },
+        })
       );
 
       const result = await ApiTester.testEndpoint(
@@ -509,28 +459,25 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle user management requests', async () => {
       // Mock successful user listing
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            data: [
-              {
-                id: '1',
-                email: 'user1@example.com',
-                name: 'User One',
-                role: UserType.PROPOSAL_MANAGER,
-                createdAt: '2024-01-01T00:00:00Z',
-              },
-              {
-                id: '2',
-                email: 'user2@example.com',
-                name: 'User Two',
-                role: UserType.SME,
-                createdAt: '2024-01-02T00:00:00Z',
-              },
-            ],
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          data: [
+            {
+              id: '1',
+              email: 'user1@example.com',
+              name: 'User One',
+              role: UserType.PROPOSAL_MANAGER,
+              createdAt: '2024-01-01T00:00:00Z',
+            },
+            {
+              id: '2',
+              email: 'user2@example.com',
+              name: 'User Two',
+              role: UserType.SME,
+              createdAt: '2024-01-02T00:00:00Z',
+            },
+          ],
+        })
       );
 
       const result = await ApiTester.testEndpoint('/api/admin/users', 'GET', undefined, {
@@ -545,18 +492,15 @@ describe('API Endpoints Integration Tests', () => {
     it('should handle system settings updates', async () => {
       // Mock successful settings update
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            success: true,
-            message: 'Settings updated successfully',
-            data: {
-              maxProposalsPerUser: 10,
-              defaultProposalDeadlineDays: 30,
-              enableEmailNotifications: true,
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          success: true,
+          message: 'Settings updated successfully',
+          data: {
+            maxProposalsPerUser: 10,
+            defaultProposalDeadlineDays: 30,
+            enableEmailNotifications: true,
+          },
+        })
       );
 
       const result = await ApiTester.testEndpoint(
@@ -588,12 +532,7 @@ describe('API Endpoints Integration Tests', () => {
 
       // Mock all responses
       batchRequests.forEach(() => {
-        mockFetch.mockResolvedValueOnce(
-          new MockResponse(JSON.stringify({ success: true, data: [] }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }) as any
-        );
+        mockFetch.mockResolvedValueOnce(mockResponse({ success: true, data: [] }));
       });
 
       const startTime = Date.now();
@@ -629,12 +568,7 @@ describe('API Endpoints Integration Tests', () => {
       ];
 
       failureScenarios.forEach((scenario, index) => {
-        mockFetch.mockResolvedValueOnce(
-          new MockResponse(JSON.stringify(scenario.error), {
-            status: scenario.status,
-            headers: { 'Content-Type': 'application/json' },
-          }) as any
-        );
+        mockFetch.mockResolvedValueOnce(mockResponse(scenario.error));
       });
 
       const results = await ApiTester.testBatchEndpoints([
@@ -658,17 +592,14 @@ describe('API Endpoints Integration Tests', () => {
     it('should validate request payloads and return appropriate errors', async () => {
       // Mock validation error response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
-            type: 'validation_error',
-            message: 'Invalid request payload',
-            details: {
-              title: 'Title is required',
-              email: 'Invalid email format',
-            },
-          }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
-        ) as any
+        mockResponse({
+          type: 'validation_error',
+          message: 'Invalid request payload',
+          details: {
+            title: 'Title is required',
+            email: 'Invalid email format',
+          },
+        })
       );
 
       const result = await ApiTester.testEndpoint(
@@ -702,19 +633,13 @@ describe('API Endpoints Integration Tests', () => {
     it('should enforce rate limiting correctly', async () => {
       // Mock rate limit response
       mockFetch.mockResolvedValueOnce(
-        new MockResponse(
-          JSON.stringify({
+        mockResponse(
+          {
             type: 'rate_limit_exceeded',
             message: 'Too many requests',
-          }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              'Retry-After': '60',
-            },
-          }
-        ) as any
+          },
+          429
+        )
       );
 
       const result = await ApiTester.testEndpoint('/api/content/search', 'POST', {

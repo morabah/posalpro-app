@@ -395,13 +395,13 @@ class EnvironmentManager {
         appName: appName as string,
         appVersion: appVersion as string,
         database: {
-          url: databaseUrl as string,
+          url: databaseUrl,
           maxConnections: databaseMaxConnections as number,
           timeout: databaseTimeout as number,
           ssl: databaseSsl as boolean,
         },
         api: {
-          baseUrl: apiBaseUrl as string,
+          baseUrl: apiBaseUrl,
           timeout: apiTimeout as number,
           retryAttempts: apiRetryAttempts as number,
           retryDelay: apiRetryDelay as number,

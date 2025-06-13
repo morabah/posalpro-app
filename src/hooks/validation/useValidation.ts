@@ -39,7 +39,7 @@ interface ValidationState {
 // Filter state for validation issues
 interface ValidationFilters {
   severity?: string[];
-  status?: string[];
+  status?: ('open' | 'in_progress' | 'resolved' | 'deferred')[];
   category?: string[];
   proposalId?: string;
   search?: string;
@@ -75,80 +75,77 @@ export function useValidation() {
   const analytics = useAnalytics();
 
   // Real-time validation function (US-3.1, AC-3.1.1)
-  const validateConfiguration = useCallback(
-    async (request: ValidationRequest): Promise<ValidationResult> => {
-      const startTime = Date.now();
-
+  const validateConfiguration = async (request: ValidationRequest) => {
+    try {
       setState(prev => ({ ...prev, isValidating: true, error: null }));
 
-      try {
-        // Track validation start event for H8 hypothesis
-        analytics.track('validation_started', {
-          proposalId: request.proposalId,
-          configurationSize: request.products.length,
-          timestamp: startTime,
-        });
+      // Track validation start event for H8 hypothesis
+      analytics.track('validation_started', {
+        proposalId: request.proposalId,
+        configurationSize: request.products.length,
+        timestamp: Date.now(),
+      });
 
-        const result = await validationEngine.validateConfiguration(request);
-        const endTime = Date.now();
-        const validationTime = endTime - startTime;
+      const result = await validationEngine.validateProductConfiguration(request);
+      const endTime = Date.now();
+      const validationTime = endTime - Date.now();
 
-        // Calculate metrics for H8 hypothesis validation
-        const metrics: ValidationMetrics = {
-          validationTime,
-          errorsDetected: result.issues.filter(
-            issue => issue.severity === 'critical' || issue.severity === 'high'
-          ).length,
-          errorsFixed: 0, // Will be updated when fixes are applied
-          fixSuggestionAccuracy:
-            result.issues.reduce((acc, issue) => acc + (issue.fixSuggestions?.length || 0), 0) /
-            Math.max(result.issues.length, 1),
-          userEfficiencyGain: 0, // Will be calculated based on time savings
-        };
+      // Calculate metrics for H8 hypothesis validation
+      const metrics: ValidationMetrics = {
+        validationTime,
+        errorsDetected: result.issues.filter(
+          (issue: ValidationIssue) => issue.severity === 'critical' || issue.severity === 'high'
+        ).length,
+        errorsFixed: 0, // Will be updated when fixes are applied
+        fixSuggestionAccuracy:
+          result.issues.reduce(
+            (acc: number, issue: ValidationIssue) => acc + (issue.fixSuggestions?.length || 0),
+            0
+          ) / Math.max(result.issues.length, 1),
+        userEfficiencyGain: 0, // Will be calculated based on time savings
+      };
 
-        // Track validation completion for H8 hypothesis
-        analytics.track('validation_completed', {
-          ...metrics,
-          proposalId: request.proposalId,
-          issuesFound: result.issues.length,
-          timestamp: endTime,
-          success: true,
-        });
+      // Track validation completion for H8 hypothesis
+      analytics.track('validation_completed', {
+        ...metrics,
+        proposalId: request.proposalId,
+        issuesFound: result.issues.length,
+        timestamp: endTime,
+        success: true,
+      });
 
-        setState(prev => ({
-          ...prev,
-          isValidating: false,
-          results: result,
-          issues: result.issues,
-          activeIssueCount: result.issues.filter(
-            issue => issue.status === 'open' || issue.status === 'in_progress'
-          ).length,
-          criticalIssueCount: result.issues.filter(issue => issue.severity === 'critical').length,
-          lastValidated: new Date(),
-        }));
+      setState(prev => ({
+        ...prev,
+        isValidating: false,
+        results: result,
+        issues: result.issues,
+        activeIssueCount: result.issues.filter(
+          issue => issue.status === 'open' || issue.status === 'in_progress'
+        ).length,
+        criticalIssueCount: result.issues.filter(issue => issue.severity === 'critical').length,
+        lastValidated: new Date(),
+      }));
 
-        return result;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Validation failed';
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Validation failed';
 
-        // Track validation error for monitoring
-        analytics.track('validation_error', {
-          proposalId: request.proposalId,
-          error: errorMessage,
-          timestamp: Date.now(),
-        });
+      // Track validation error for monitoring
+      analytics.track('validation_error', {
+        proposalId: request.proposalId,
+        error: errorMessage,
+        timestamp: Date.now(),
+      });
 
-        setState(prev => ({
-          ...prev,
-          isValidating: false,
-          error: errorMessage,
-        }));
+      setState(prev => ({
+        ...prev,
+        isValidating: false,
+        error: errorMessage,
+      }));
 
-        throw error;
-      }
-    },
-    [validationEngine, analytics]
-  );
+      throw error;
+    }
+  };
 
   // Apply fix suggestion (US-3.1, AC-3.1.2)
   const applyFixSuggestion = useCallback(
@@ -215,7 +212,9 @@ export function useValidation() {
       }
 
       if (filters.status?.length) {
-        filteredIssues = filteredIssues.filter(issue => filters.status!.includes(issue.status));
+        filteredIssues = filteredIssues.filter(
+          issue => issue.status && filters.status!.includes(issue.status)
+        );
       }
 
       if (filters.category?.length) {
@@ -231,8 +230,8 @@ export function useValidation() {
         filteredIssues = filteredIssues.filter(
           issue =>
             issue.message.toLowerCase().includes(searchLower) ||
-            issue.description.toLowerCase().includes(searchLower) ||
-            issue.ruleName.toLowerCase().includes(searchLower)
+            (issue.description || '').toLowerCase().includes(searchLower) ||
+            (issue.ruleName || '').toLowerCase().includes(searchLower)
         );
       }
 
@@ -243,21 +242,21 @@ export function useValidation() {
           const bValue = b[sort.field];
 
           if (sort.field === 'detectedAt') {
-            const aTime = new Date(aValue).getTime();
-            const bTime = new Date(bValue).getTime();
+            const aTime = new Date(aValue || 0).getTime();
+            const bTime = new Date(bValue || 0).getTime();
             return sort.direction === 'asc' ? aTime - bTime : bTime - aTime;
           }
 
           if (sort.field === 'severity') {
             const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-            const aOrder = severityOrder[aValue as keyof typeof severityOrder];
-            const bOrder = severityOrder[bValue as keyof typeof severityOrder];
+            const aOrder = severityOrder[aValue as keyof typeof severityOrder] || 0;
+            const bOrder = severityOrder[bValue as keyof typeof severityOrder] || 0;
             return sort.direction === 'asc' ? aOrder - bOrder : bOrder - aOrder;
           }
 
           return sort.direction === 'asc'
-            ? String(aValue).localeCompare(String(bValue))
-            : String(bValue).localeCompare(String(aValue));
+            ? String(aValue || '').localeCompare(String(bValue || ''))
+            : String(bValue || '').localeCompare(String(aValue || ''));
         });
       }
 

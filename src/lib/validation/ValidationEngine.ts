@@ -103,7 +103,7 @@ export class ValidationEngine {
     const startTime = performance.now();
 
     try {
-      logger.info('Starting multi-product validation', {
+      console.info('Starting multi-product validation', {
         productCount: products.length,
         relationshipCount: relationships.length,
       });
@@ -127,8 +127,8 @@ export class ValidationEngine {
           globalSettings: {},
           relationships: relationships.map(rel => ({
             id: rel.id,
-            productAId: rel.productAId,
-            productBId: rel.productBId,
+            productAId: rel.sourceProductId,
+            productBId: rel.targetProductId,
             type: rel.type as 'requires' | 'conflicts' | 'enhances' | 'replaces',
             strength: 1.0,
           })),
@@ -155,7 +155,7 @@ export class ValidationEngine {
       }
 
       const executionTime = performance.now() - startTime;
-      logger.info('Multi-product validation completed', {
+      console.info('Multi-product validation completed', {
         productCount: products.length,
         totalIssues: results.reduce((sum, r) => sum + r.issues.length, 0),
         executionTime,
@@ -163,7 +163,7 @@ export class ValidationEngine {
 
       return results;
     } catch (error) {
-      logger.error('Multi-product validation error', {
+      console.error('Multi-product validation error', {
         error: error instanceof Error ? error.message : 'Unknown error',
         productCount: products.length,
       });
@@ -227,18 +227,16 @@ export class ValidationEngine {
         summary.overallStatus = 'warning';
       }
 
-      logger.info('Validation report generated', {
+      console.info('Validation report generated', {
         totalProducts: summary.totalProducts,
-        overallStatus: summary.overallStatus,
-        totalIssues:
-          summary.criticalIssues + summary.highIssues + summary.mediumIssues + summary.lowIssues,
+        validProducts: summary.validProducts,
+        criticalIssues: summary.criticalIssues,
       });
 
       return summary;
     } catch (error) {
-      logger.error('Report generation error', {
+      console.error('Report generation error', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        resultCount: results.length,
       });
 
       throw error;
@@ -328,8 +326,8 @@ export class ValidationEngine {
 
       return result;
     } catch (error) {
-      logger.error('Validation workflow error', {
-        workflowId,
+      console.error('Validation workflow error', {
+        validationId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
@@ -487,7 +485,7 @@ export class ValidationEngine {
 
     this.performanceMetrics.set(validationId, metrics);
 
-    logger.info('Validation performance tracked', {
+    console.info('Validation performance tracked', {
       validationId,
       executionTime,
       issuesDetected: metrics.issuesDetected,
@@ -498,7 +496,7 @@ export class ValidationEngine {
   private async trackValidationEvent(event: ValidationAnalyticsEvent): Promise<void> {
     try {
       // This would integrate with the analytics system
-      logger.info('Validation analytics event tracked', {
+      console.info('Validation analytics event tracked', {
         eventType: event.eventType,
         userId: event.userId,
         productCount: event.productIds.length,
@@ -507,7 +505,7 @@ export class ValidationEngine {
 
       // TODO: Integrate with actual analytics service
     } catch (error) {
-      logger.error('Analytics tracking error', {
+      console.error('Analytics tracking error', {
         error: error instanceof Error ? error.message : 'Unknown error',
         eventType: event.eventType,
       });
@@ -524,7 +522,7 @@ export class ValidationEngine {
 
   public clearCache(): void {
     this.validationCache.clear();
-    logger.info('Validation cache cleared');
+    console.info('Validation cache cleared');
   }
 
   public getCacheStats(): { size: number; hitRate: number } {

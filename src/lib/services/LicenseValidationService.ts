@@ -45,6 +45,7 @@ export class LicenseValidationService {
               {
                 id: `license_fix_${Math.random().toString(36).substr(2, 5)}`,
                 type: 'manual',
+                title: 'Configure License Key',
                 description: 'Configure license key for this product',
                 confidence: 0.9,
                 impact: 'high',
@@ -65,6 +66,7 @@ export class LicenseValidationService {
           suggestions.push({
             id: `license_suggestion_${Math.random().toString(36).substr(2, 5)}`,
             type: 'manual',
+            title: 'Configure Product License',
             description: `Configure license for ${product.productId}`,
             confidence: 0.9,
             impact: 'high',

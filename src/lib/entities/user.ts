@@ -44,6 +44,22 @@ export interface UserPermissions {
   effectivePermissions: string[];
 }
 
+interface UserQueryResponse {
+  users: UserProfile[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+interface ApiUserResponse {
+  success: boolean;
+  data: UserQueryResponse;
+  message: string;
+}
+
 /**
  * User Entity Class
  * Provides comprehensive user management with CRUD operations
@@ -205,7 +221,7 @@ export class UserEntity {
   /**
    * Query users with filtering and pagination
    */
-  async query(options: UserQueryOptions = {}): Promise<PaginatedResponse<UserProfile>> {
+  async query(options: UserQueryOptions = {}): Promise<ApiUserResponse> {
     try {
       const queryParams = new URLSearchParams();
 
@@ -218,14 +234,26 @@ export class UserEntity {
       if (options.sortBy) queryParams.set('sortBy', options.sortBy);
       if (options.sortOrder) queryParams.set('sortOrder', options.sortOrder);
 
-      const response = await apiClient.get<UserProfile[]>(`/users?${queryParams.toString()}`);
+      const response = await apiClient.get<UserQueryResponse>(`/users?${queryParams.toString()}`);
 
       // Cache results
-      if (response.success && response.data) {
-        response.data.forEach(user => this.setCache(user.id, user));
+      if (response.success && response.data?.users) {
+        response.data.users.forEach(user => this.setCache(user.id, user));
       }
 
-      return response as PaginatedResponse<UserProfile>;
+      return {
+        success: response.success,
+        data: response.data || {
+          users: [],
+          pagination: {
+            page: options.page || 1,
+            limit: options.limit || 10,
+            total: 0,
+            totalPages: 0,
+          },
+        },
+        message: response.message || 'No users found',
+      };
     } catch (error) {
       console.error('Failed to query users:', error);
       throw error;

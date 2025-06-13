@@ -130,6 +130,10 @@ class WidgetErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Widget Error:', error, errorInfo);
+    // In test environments, re-throw the error to allow tests to catch it
+    if (process.env.NODE_ENV === 'test') {
+      throw error;
+    }
   }
 
   render() {
@@ -147,7 +151,7 @@ const WidgetError: React.FC<{
   error: string;
   onRetry: (widgetId: string) => void;
 }> = ({ widgetId, error, onRetry }) => (
-  <Card className="border-red-200 bg-red-50">
+  <Card className="border-red-200 bg-red-50" data-testid={`widget-error-${widgetId}`}>
     <div className="p-6 text-center">
       <div className="text-red-600 mb-2">
         <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,7 +181,7 @@ const WidgetError: React.FC<{
 export const DashboardShell: React.FC<DashboardShellProps> = ({
   widgets,
   userRole,
-  userId,
+  userId = '',
   data = {},
   loading = {},
   errors = {},
@@ -236,40 +240,45 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     }
   }, [filteredWidgets, loading, errors]);
 
+  // Track page load performance
+  useEffect(() => {
+    const loadStartTime = Date.now();
+
+    const handleLoad = () => {
+      const loadTime = Date.now() - loadStartTime;
+      analytics.trackEvent('dashboard_loaded', { loadTime });
+    };
+
+    if (document.readyState === 'complete') {
+      handleLoad();
+    } else {
+      window.addEventListener('load', handleLoad);
+      return () => window.removeEventListener('load', handleLoad);
+    }
+  }, [analytics]);
+
   // Handle widget visibility toggle
-  const toggleWidgetVisibility = useCallback(
-    (widgetId: string) => {
+  const handleWidgetVisibility = useCallback(
+    (widgetId: string, visible: boolean) => {
       setWidgetStates(prev => ({
         ...prev,
-        [widgetId]: {
-          ...prev[widgetId],
-          visible: !prev[widgetId]?.visible,
-        },
+        [widgetId]: { ...prev[widgetId], visible },
       }));
-
-      analytics.trackWidgetInteraction(widgetId, 'visibility_toggle', {
-        visible: !widgetStates[widgetId]?.visible,
-      });
+      analytics.trackInteraction('widget', visible ? 'show' : 'hide', { widgetId });
     },
-    [analytics, widgetStates]
+    [analytics]
   );
 
   // Handle widget minimize/maximize
-  const toggleWidgetMinimize = useCallback(
-    (widgetId: string) => {
+  const handleWidgetMinimize = useCallback(
+    (widgetId: string, minimized: boolean) => {
       setWidgetStates(prev => ({
         ...prev,
-        [widgetId]: {
-          ...prev[widgetId],
-          minimized: !prev[widgetId]?.minimized,
-        },
+        [widgetId]: { ...prev[widgetId], minimized },
       }));
-
-      analytics.trackWidgetInteraction(widgetId, 'minimize_toggle', {
-        minimized: !widgetStates[widgetId]?.minimized,
-      });
+      analytics.trackInteraction('widget', minimized ? 'minimize' : 'maximize', { widgetId });
     },
-    [analytics, widgetStates]
+    [analytics]
   );
 
   // Handle widget refresh
@@ -277,18 +286,22 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     (widgetId: string) => {
       setWidgetStates(prev => ({
         ...prev,
-        [widgetId]: {
-          ...prev[widgetId],
-          loading: true,
-          error: undefined,
-          lastRefresh: new Date(),
-        },
+        [widgetId]: { ...prev[widgetId], loading: true, error: undefined },
       }));
+      analytics.trackInteraction('widget', 'refresh', { widgetId });
+      onWidgetRefresh?.(widgetId);
+    },
+    [analytics, onWidgetRefresh]
+  );
 
-      analytics.trackWidgetInteraction(widgetId, 'refresh', {
-        timestamp: Date.now(),
-      });
-
+  // Handle widget error retry
+  const handleWidgetRetry = useCallback(
+    (widgetId: string) => {
+      setWidgetStates(prev => ({
+        ...prev,
+        [widgetId]: { ...prev[widgetId], loading: true, error: undefined },
+      }));
+      analytics.trackInteraction('widget', 'retry', { widgetId });
       onWidgetRefresh?.(widgetId);
     },
     [analytics, onWidgetRefresh]
@@ -297,7 +310,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   // Handle widget interactions
   const handleWidgetInteraction = useCallback(
     (widgetId: string, action: string, metadata?: any) => {
-      analytics.trackWidgetInteraction(widgetId, action, metadata);
+      analytics.trackInteraction('widget', action, { widgetId, ...metadata });
       onWidgetInteraction?.(widgetId, action, metadata);
     },
     [analytics, onWidgetInteraction]
@@ -367,7 +380,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => toggleWidgetVisibility(widget.id)}
+                onClick={() => handleWidgetVisibility(widget.id, !isVisible)}
                 className="p-1"
                 aria-label={isVisible ? 'Hide widget' : 'Show widget'}
               >
@@ -387,13 +400,17 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
           {/* Widget Content */}
           {error ? (
-            <WidgetError widgetId={widget.id} error={error} onRetry={handleWidgetRefresh} />
+            <WidgetError
+              widgetId={widget.id}
+              error={error}
+              onRetry={() => handleWidgetRetry(widget.id)}
+            />
           ) : isLoading ? (
             <WidgetSkeleton size={widget.size} />
           ) : isMinimized ? (
             <Card
               className="h-16 flex items-center justify-center cursor-pointer"
-              onClick={() => toggleWidgetMinimize(widget.id)}
+              onClick={() => handleWidgetMinimize(widget.id, !isMinimized)}
             >
               <span className="text-sm text-gray-500">Click to expand</span>
             </Card>
@@ -403,7 +420,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 <WidgetError
                   widgetId={widget.id}
                   error="Widget failed to load"
-                  onRetry={handleWidgetRefresh}
+                  onRetry={() => handleWidgetRetry(widget.id)}
                 />
               }
             >
@@ -423,15 +440,11 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       data,
       handleWidgetRefresh,
       handleWidgetInteraction,
-      toggleWidgetVisibility,
-      toggleWidgetMinimize,
+      handleWidgetVisibility,
+      handleWidgetMinimize,
+      handleWidgetRetry,
     ]
   );
-
-  // Track dashboard load
-  useEffect(() => {
-    analytics.trackDashboardLoaded(Date.now());
-  }, [analytics]);
 
   return (
     <main className={`dashboard-shell ${className}`} role="main">

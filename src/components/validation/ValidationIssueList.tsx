@@ -73,32 +73,13 @@ const getSeverityConfig = (severity: string) => {
   return configs[severity as keyof typeof configs] || configs.info;
 };
 
-// Issue status styles
-const getStatusConfig = (status: string) => {
-  const configs = {
-    open: {
-      badge: 'bg-red-50 text-red-700 border-red-200',
-      text: 'Open',
-    },
-    in_progress: {
-      badge: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-      text: 'In Progress',
-    },
-    resolved: {
-      badge: 'bg-green-50 text-green-700 border-green-200',
-      text: 'Resolved',
-    },
-    suppressed: {
-      badge: 'bg-gray-50 text-gray-700 border-gray-200',
-      text: 'Suppressed',
-    },
-    deferred: {
-      badge: 'bg-purple-50 text-purple-700 border-purple-200',
-      text: 'Deferred',
-    },
-  };
-  return configs[status as keyof typeof configs] || configs.open;
-};
+interface IssueFilters {
+  search: string;
+  severity: string[];
+  status: Array<'open' | 'in_progress' | 'resolved' | 'deferred'>;
+  category: string[];
+  proposalId: string;
+}
 
 interface ValidationIssueListProps {
   issues: ValidationIssue[];
@@ -110,13 +91,23 @@ interface ValidationIssueListProps {
   maxHeight?: string;
 }
 
-interface IssueFilters {
-  search: string;
-  severity: string[];
-  status: string[];
-  category: string[];
-  proposalId: string;
-}
+const filterOptions = {
+  severities: ['critical', 'high', 'medium', 'low'] as const,
+  statuses: ['open', 'in_progress', 'resolved', 'deferred'] as const,
+  categories: ['technical', 'compliance', 'security', 'business'] as const,
+};
+
+type IssueStatus = (typeof filterOptions.statuses)[number];
+
+const getStatusConfig = (status: IssueStatus) => {
+  const configs = {
+    open: { text: 'Open', badge: 'bg-red-100 text-red-800' },
+    in_progress: { text: 'In Progress', badge: 'bg-yellow-100 text-yellow-800' },
+    resolved: { text: 'Resolved', badge: 'bg-green-100 text-green-800' },
+    deferred: { text: 'Deferred', badge: 'bg-gray-100 text-gray-800' },
+  } as const;
+  return configs[status];
+};
 
 export function ValidationIssueList({
   issues,

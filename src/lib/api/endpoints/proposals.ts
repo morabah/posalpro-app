@@ -12,8 +12,11 @@ import type {
   ProposalVersion,
   TeamAssignment,
 } from '@/lib/entities/proposal';
+import { prisma } from '@/lib/prisma';
 import { ApprovalDecision, Priority, ProposalStatus } from '@/types/enums';
+import type { Prisma } from '@prisma/client';
 import { apiClient, type ApiResponse, type PaginatedResponse } from '../client';
+import { formatProposal, type PrismaProposalWithRelations } from './proposals.formatter';
 
 // Mock data for development
 const generateMockProposal = (overrides: Partial<ProposalData> = {}): ProposalData => ({
@@ -71,48 +74,94 @@ const generateMockProposalList = (count: number = 10): ProposalData[] => {
   );
 };
 
+const proposalWithRelations = {
+  include: {
+    creator: true,
+    assignedTo: true,
+    customer: {
+      include: {
+        contacts: true,
+      },
+    },
+  },
+};
+
 export const proposalsApi = {
   /**
    * Create a new proposal
    */
   async createProposal(proposalData: CreateProposalData): Promise<ApiResponse<ProposalData>> {
-    if (process.env.NODE_ENV === 'development') {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    const mockUserId = 'user_2j2ogAULAb895aR4p45nL45b3a8';
 
-      const newProposal = generateMockProposal({
-        ...proposalData.metadata,
-        status: ProposalStatus.DRAFT,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        version: 1,
+    let customer = await prisma.customer.findFirst({
+      where: { name: proposalData.metadata.clientName },
+    });
+
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          name: proposalData.metadata.clientName,
+          status: 'ACTIVE',
+          contacts: {
+            create: [
+              {
+                name: proposalData.metadata.clientContact.name,
+                email: proposalData.metadata.clientContact.email,
+                phone: proposalData.metadata.clientContact.phone,
+                isPrimary: true,
+              },
+            ],
+          },
+        },
       });
-
-      return {
-        data: newProposal,
-        success: true,
-        message: 'Proposal created successfully',
-      };
     }
 
-    return apiClient.post<ProposalData>('/proposals', proposalData);
+    const newProposal = await prisma.proposal.create({
+      data: {
+        title: proposalData.metadata.title,
+        description: proposalData.metadata.description,
+        value: proposalData.metadata.estimatedValue,
+        currency: proposalData.metadata.currency,
+        dueDate: proposalData.metadata.deadline,
+        priority: proposalData.metadata.priority as any,
+        projectType: proposalData.metadata.projectType,
+        tags: proposalData.metadata.tags,
+        customer: { connect: { id: customer.id } },
+        creator: { connect: { id: mockUserId } },
+        assignedTo: { connect: [{ id: mockUserId }] },
+      },
+      ...proposalWithRelations,
+    });
+
+    return {
+      data: formatProposal(newProposal as PrismaProposalWithRelations),
+      success: true,
+      message: 'Proposal created successfully',
+    };
   },
 
   /**
    * Get proposal by ID
    */
   async getProposalById(id: string): Promise<ApiResponse<ProposalData>> {
-    if (process.env.NODE_ENV === 'development') {
-      await new Promise(resolve => setTimeout(resolve, 600));
+    const proposal = await prisma.proposal.findUnique({
+      where: { id },
+      ...proposalWithRelations,
+    });
 
-      const proposal = generateMockProposal({ id });
+    if (!proposal) {
       return {
-        data: proposal,
-        success: true,
-        message: 'Proposal retrieved successfully',
+        data: null as any,
+        success: false,
+        message: 'Proposal not found',
       };
     }
 
-    return apiClient.get<ProposalData>(`/proposals/${id}`);
+    return {
+      data: formatProposal(proposal as PrismaProposalWithRelations),
+      success: true,
+      message: 'Proposal retrieved successfully',
+    };
   },
 
   /**
@@ -122,41 +171,68 @@ export const proposalsApi = {
     id: string,
     updateData: Partial<ProposalData>
   ): Promise<ApiResponse<ProposalData>> {
-    if (process.env.NODE_ENV === 'development') {
-      await new Promise(resolve => setTimeout(resolve, 900));
+    // TODO: Handle updates to relational data, like clientName or assignedTo
+    const {
+      title,
+      description,
+      estimatedValue,
+      currency,
+      deadline,
+      priority,
+      projectType,
+      tags,
+      status,
+    } = updateData;
 
-      const updatedProposal = generateMockProposal({
-        ...updateData,
-        id,
-        updatedAt: new Date(),
-        version: (updateData.version || 1) + 1,
-      });
+    const proposal = await prisma.proposal.update({
+      where: { id },
+      data: {
+        title,
+        description,
+        value: estimatedValue,
+        currency,
+        dueDate: deadline,
+        priority: priority as any,
+        projectType: projectType,
+        tags,
+        status: status as any,
+      },
+      ...proposalWithRelations,
+    });
 
-      return {
-        data: updatedProposal,
-        success: true,
-        message: 'Proposal updated successfully',
-      };
-    }
-
-    return apiClient.put<ProposalData>(`/proposals/${id}`, updateData);
+    return {
+      data: formatProposal(proposal as PrismaProposalWithRelations),
+      success: true,
+      message: 'Proposal updated successfully',
+    };
   },
 
   /**
    * Delete proposal
    */
   async deleteProposal(id: string): Promise<ApiResponse<{ message: string }>> {
-    if (process.env.NODE_ENV === 'development') {
-      await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      await prisma.proposal.delete({
+        where: { id },
+      });
 
       return {
         data: { message: 'Proposal deleted successfully' },
         success: true,
         message: 'Proposal deleted successfully',
       };
+    } catch (error: any) {
+      // Handle cases where the proposal does not exist
+      if (error.code === 'P2025') {
+        return {
+          data: { message: 'Proposal not found' },
+          success: false,
+          message: 'Proposal not found',
+        };
+      }
+      // Re-throw other errors
+      throw error;
     }
-
-    return apiClient.delete<{ message: string }>(`/proposals/${id}`);
   },
 
   /**
@@ -165,121 +241,58 @@ export const proposalsApi = {
   async queryProposals(
     options: ProposalQueryOptions = {}
   ): Promise<PaginatedResponse<ProposalData>> {
-    if (process.env.NODE_ENV === 'development') {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      search,
+      status,
+      priority,
+      assignedTo,
+      createdBy,
+      clientName,
+    } = options;
 
-      let proposals = generateMockProposalList(30);
-
-      // Apply filters
-      if (options.search) {
-        const search = options.search.toLowerCase();
-        proposals = proposals.filter(
-          proposal =>
-            proposal.title.toLowerCase().includes(search) ||
-            proposal.clientName.toLowerCase().includes(search) ||
-            proposal.description.toLowerCase().includes(search)
-        );
-      }
-
-      if (options.status) {
-        proposals = proposals.filter(proposal => proposal.status === options.status);
-      }
-
-      if (options.priority) {
-        proposals = proposals.filter(proposal => proposal.priority === options.priority);
-      }
-
-      if (options.assignedTo) {
-        proposals = proposals.filter(proposal => proposal.assignedTo.includes(options.assignedTo!));
-      }
-
-      if (options.createdBy) {
-        proposals = proposals.filter(proposal => proposal.createdBy === options.createdBy);
-      }
-
-      if (options.clientName) {
-        proposals = proposals.filter(proposal =>
-          proposal.clientName.toLowerCase().includes(options.clientName!.toLowerCase())
-        );
-      }
-
-      // Apply sorting
-      if (options.sortBy) {
-        proposals.sort((a, b) => {
-          let aVal: any, bVal: any;
-
-          switch (options.sortBy) {
-            case 'title':
-              aVal = a.title;
-              bVal = b.title;
-              break;
-            case 'deadline':
-              aVal = a.deadline.getTime();
-              bVal = b.deadline.getTime();
-              break;
-            case 'createdAt':
-              aVal = a.createdAt.getTime();
-              bVal = b.createdAt.getTime();
-              break;
-            case 'priority':
-              const priorityOrder = {
-                [Priority.CRITICAL]: 4,
-                [Priority.HIGH]: 3,
-                [Priority.MEDIUM]: 2,
-                [Priority.LOW]: 1,
-              };
-              aVal = priorityOrder[a.priority];
-              bVal = priorityOrder[b.priority];
-              break;
-            case 'status':
-              aVal = a.status;
-              bVal = b.status;
-              break;
-            default:
-              return 0;
-          }
-
-          if (options.sortOrder === 'desc') {
-            return aVal < bVal ? 1 : -1;
-          }
-          return aVal > bVal ? 1 : -1;
-        });
-      }
-
-      // Apply pagination
-      const page = options.page || 1;
-      const limit = options.limit || 10;
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedProposals = proposals.slice(startIndex, endIndex);
-
-      return {
-        data: paginatedProposals,
-        success: true,
-        message: 'Proposals retrieved successfully',
-        pagination: {
-          page,
-          limit,
-          total: proposals.length,
-          totalPages: Math.ceil(proposals.length / limit),
-        },
-      };
+    const where: Prisma.ProposalWhereInput = {};
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { customer: { name: { contains: search, mode: 'insensitive' } } },
+      ];
     }
+    if (status) where.status = status as any;
+    if (priority) where.priority = priority as any;
+    if (clientName) where.customer = { name: { contains: clientName, mode: 'insensitive' } };
+    if (assignedTo) where.assignedTo = { some: { id: assignedTo } };
+    if (createdBy) where.creator = { id: createdBy };
 
-    const queryParams = new URLSearchParams();
-    Object.entries(options).forEach(([key, value]) => {
-      if (value !== undefined) {
-        if (value instanceof Date) {
-          queryParams.set(key, value.toISOString());
-        } else {
-          queryParams.set(key, String(value));
-        }
-      }
+    const proposals = await prisma.proposal.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: {
+        [sortBy]: sortOrder,
+      },
+      ...proposalWithRelations,
     });
 
-    return apiClient.get<ProposalData[]>(`/proposals?${queryParams.toString()}`) as Promise<
-      PaginatedResponse<ProposalData>
-    >;
+    const total = await prisma.proposal.count({ where });
+
+    const formattedProposals = proposals.map(p => formatProposal(p as PrismaProposalWithRelations));
+
+    return {
+      data: formattedProposals,
+      success: true,
+      message: 'Proposals retrieved successfully',
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   },
 
   /**

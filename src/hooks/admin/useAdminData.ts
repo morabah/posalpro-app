@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 // Interfaces for admin data
-interface SystemUser {
+export interface SystemUser {
   id: string;
   name: string;
   email: string;

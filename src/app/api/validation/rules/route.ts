@@ -257,13 +257,24 @@ export async function POST(request: NextRequest) {
 
     // Create new rule
     const newRule: ValidationRule = {
-      id: `rule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      ...validatedData,
+      id: `rule_${validatedData.name.toLowerCase().replace(/\s/g, '_')}_${Date.now()}`,
       version: '1.0',
       lastModified: new Date(),
+      ...validatedData,
+      conditions: validatedData.conditions.map((c, i) => ({
+        ...c,
+        id: `cond_${i}_${Date.now()}`,
+        value: c.value ?? null,
+      })),
+      actions: validatedData.actions.map((a, i) => ({
+        ...a,
+        id: `act_${i}_${Date.now()}`,
+      })),
     };
+    sampleRules.push(newRule);
 
-    // In production, this would save to database
+    // In a real application, you'd save this to a database
+    // For now, we'll just add it to our in-memory array
     console.log('New validation rule created', {
       ruleId: newRule.id,
       name: newRule.name,

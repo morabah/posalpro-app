@@ -95,7 +95,7 @@ export class ValidationTester {
 
     const results: ValidationTestResult[] = [];
     let totalDuration = 0;
-    let memoryUsages: number[] = [];
+    const memoryUsages: number[] = [];
 
     for (const testCase of suite.testCases) {
       const result = await this.runTestCase(suite.schema, testCase);

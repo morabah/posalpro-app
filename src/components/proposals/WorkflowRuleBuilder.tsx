@@ -327,19 +327,27 @@ export function WorkflowRuleBuilder({
 
     // Performance analysis
     const complexity =
-      rule.conditions?.length > 5 ? 'high' : rule.conditions?.length > 2 ? 'medium' : 'low';
+      rule.conditions && rule.conditions.length > 5
+        ? 'high'
+        : rule.conditions && rule.conditions.length > 2
+          ? 'medium'
+          : 'low';
 
-    const performance = rule.conditions?.some(c => c.operator === 'regex')
-      ? 'slow'
-      : rule.conditions?.length > 10
-        ? 'moderate'
-        : 'fast';
+    const isComplex =
+      (rule.conditions && rule.conditions.length > 10) || (rule.actions && rule.actions.length > 5);
+
+    const performance =
+      rule.conditions && rule.conditions.some(c => c.operator === 'regex')
+        ? 'slow'
+        : rule.conditions && rule.conditions.length > 10
+          ? 'moderate'
+          : 'fast';
 
     // Suggestions
-    if (rule.conditions?.length > 3) {
+    if (rule.conditions && rule.conditions.length > 3) {
       suggestions.push('Consider grouping conditions for better readability');
     }
-    if (rule.actions?.length > 5) {
+    if (rule.actions && rule.actions.length > 5) {
       suggestions.push('Consider splitting into multiple rules for maintainability');
     }
 
@@ -590,7 +598,7 @@ export function WorkflowRuleBuilder({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="primary">{rules.filter(r => r.isActive).length} Active Rules</Badge>
+            <Badge variant="default">{rules.filter(r => r.isActive).length} Active Rules</Badge>
             <Button onClick={handleRuleCreate} className="flex items-center gap-2">
               <PlusIcon className="h-4 w-4" />
               New Rule
@@ -698,7 +706,7 @@ export function WorkflowRuleBuilder({
                         </Badge>
                       )}
                       {!rule.isValid && (
-                        <Badge size="sm" variant="error">
+                        <Badge size="sm" variant="destructive">
                           Invalid
                         </Badge>
                       )}
@@ -759,7 +767,7 @@ export function WorkflowRuleBuilder({
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium text-gray-900">Rule Templates</h3>
-            <Badge variant="primary">{MOCK_TEMPLATES.length} Available</Badge>
+            <Badge variant="default">{MOCK_TEMPLATES.length} Available</Badge>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

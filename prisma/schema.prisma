@@ -1,9 +1,5 @@
-// PosalPro MVP2 - Database Schema
-// Based on DATA_MODEL.md specifications
-// Enhanced RBAC with analytics and audit capabilities
-
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
@@ -12,93 +8,69 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ========================================
-// CORE USER MANAGEMENT ENTITIES
-// ========================================
-
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String   // Hashed with bcrypt
-  department String
-  status    UserStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  lastLogin DateTime?
-
-  // Relationships
-  roles               UserRole[]
-  permissions         UserPermission[]
-  preferences         UserPreferences?
-  analyticsProfile    UserAnalyticsProfile?
-  temporaryAccess     TemporaryAccess[]
-
-  // Audit and Security
-  auditLogs           AuditLog[]
-  securityEvents      SecurityEvent[]
-  sessions            UserSession[]
-
-  // Communication
-  communicationPrefs  CommunicationPreferences?
-  notificationDeliveries NotificationDelivery[]
-
-  // Accessibility
-  accessibilityConfig AccessibilityConfiguration?
-
-  // Analytics Events
-  hypothesisEvents    HypothesisValidationEvent[]
-
-  // Business entity relationships
-  createdProposals    Proposal[]              @relation("ProposalCreator")
-  assignedProposals   Proposal[]              @relation("ProposalAssignees")
-  createdContent      Content[]
-  contentAccessLogs   ContentAccessLog[]
-  productRelationships ProductRelationship[]
-  validationRules     ValidationRule[]
-  validationExecutions ValidationExecution[]
+  id                       String                      @id @default(cuid())
+  email                    String                      @unique
+  name                     String
+  password                 String
+  department               String
+  status                   UserStatus                  @default(ACTIVE)
+  createdAt                DateTime                    @default(now())
+  updatedAt                DateTime                    @updatedAt
+  lastLogin                DateTime?
+  accessibilityConfig      AccessibilityConfiguration?
+  approvalDecisions        ApprovalDecision[]
+  approvalWorkflows        ApprovalWorkflow[]
+  auditLogs                AuditLog[]
+  communicationPrefs       CommunicationPreferences?
+  createdContent           Content[]
+  contentAccessLogs        ContentAccessLog[]
+  hypothesisEvents         HypothesisValidationEvent[]
+  notificationDeliveries   NotificationDelivery[]
+  productRelationships     ProductRelationship[]
+  createdProposals         Proposal[]                  @relation("ProposalCreator")
+  securityEvents           SecurityEvent[]
+  temporaryAccess          TemporaryAccess[]
+  analyticsProfile         UserAnalyticsProfile?
+  permissions              UserPermission[]
+  preferences              UserPreferences?
+  roles                    UserRole[]
+  sessions                 UserSession[]
+  validationExecutions     ValidationExecution[]
   validationIssuesResolved ValidationIssue[]
-  approvalWorkflows   ApprovalWorkflow[]
-  approvalDecisions   ApprovalDecision[]
+  validationRules          ValidationRule[]
+  assignedProposals        Proposal[]                  @relation("ProposalAssignees")
 
   @@map("users")
 }
 
 model Role {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String
-  level       Int      // Hierarchy level
-  isSystem    Boolean  @default(false) // System roles cannot be modified
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Hierarchy
-  parentId    String?
-  parent      Role?    @relation("RoleHierarchy", fields: [parentId], references: [id])
-  children    Role[]   @relation("RoleHierarchy")
-
-  // Relationships
-  permissions RolePermission[]
-  userRoles   UserRole[]
-  contextRules ContextRule[]
-
-  // Performance Expectations
-  performanceExpectations Json? // Record<string, number>
+  id                      String           @id @default(cuid())
+  name                    String           @unique
+  description             String
+  level                   Int
+  isSystem                Boolean          @default(false)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  parentId                String?
+  performanceExpectations Json?
+  contextRules            ContextRule[]
+  permissions             RolePermission[]
+  parent                  Role?            @relation("RoleHierarchy", fields: [parentId], references: [id])
+  children                Role[]           @relation("RoleHierarchy")
+  userRoles               UserRole[]
 
   @@map("roles")
 }
 
 model Permission {
-  id          String   @id @default(cuid())
-  resource    String   // e.g., 'proposals', 'products'
-  action      String   // e.g., 'create', 'read', 'update', 'delete'
-  scope       PermissionScope @default(ALL)
-  constraints Json?    // Additional constraints
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relationships
+  id              String           @id @default(cuid())
+  resource        String
+  action          String
+  scope           PermissionScope  @default(ALL)
+  constraints     Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   rolePermissions RolePermission[]
   userPermissions UserPermission[]
 
@@ -106,193 +78,152 @@ model Permission {
   @@map("permissions")
 }
 
-// ========================================
-// RBAC JUNCTION TABLES
-// ========================================
-
 model UserRole {
-  id     String @id @default(cuid())
-  userId String
-  roleId String
-
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  assignedAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  roleId     String
+  assignedAt DateTime  @default(now())
   assignedBy String
   expiresAt  DateTime?
-  isActive   Boolean  @default(true)
+  isActive   Boolean   @default(true)
+  role       Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
   @@map("user_roles")
 }
 
 model RolePermission {
-  id           String @id @default(cuid())
+  id           String     @id @default(cuid())
   roleId       String
   permissionId String
-
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  grantedAt DateTime @default(now())
-  grantedBy String
+  grantedAt    DateTime   @default(now())
+  grantedBy    String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
   @@map("role_permissions")
 }
 
 model UserPermission {
-  id           String @id @default(cuid())
+  id           String     @id @default(cuid())
   userId       String
   permissionId String
-
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  grantedAt DateTime @default(now())
-  grantedBy String
-  expiresAt DateTime?
-  isActive  Boolean  @default(true)
+  grantedAt    DateTime   @default(now())
+  grantedBy    String
+  expiresAt    DateTime?
+  isActive     Boolean    @default(true)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, permissionId])
   @@map("user_permissions")
 }
 
-// ========================================
-// ENHANCED RBAC FEATURES
-// ========================================
-
 model ContextRule {
-  id       String @id @default(cuid())
-  roleId   String
-  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  attribute String // e.g., 'time', 'location', 'customerTier'
+  id        String          @id @default(cuid())
+  roleId    String
+  attribute String
   operator  ContextOperator
-  value     Json   // Flexible value storage
+  value     Json
   effect    ContextEffect
-
-  createdAt DateTime @default(now())
+  createdAt DateTime        @default(now())
+  role      Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@map("context_rules")
 }
 
 model TemporaryAccess {
-  id        String   @id @default(cuid())
+  id        String                @id @default(cuid())
   userId    String
   roleId    String
   grantedBy String
   reason    String
   expiresAt DateTime
   status    TemporaryAccessStatus @default(ACTIVE)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
+  createdAt DateTime              @default(now())
   revokedAt DateTime?
   revokedBy String?
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("temporary_access")
 }
 
-// ========================================
-// USER PREFERENCES AND ANALYTICS
-// ========================================
-
 model UserPreferences {
-  id       String @id @default(cuid())
-  userId   String @unique
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  theme                String  @default("system") // 'light' | 'dark' | 'system'
-  language             String  @default("en")
-  analyticsConsent     Boolean @default(false)
-  performanceTracking  Boolean @default(false)
-
-  // Dashboard Layout
-  dashboardLayout Json? // LayoutConfiguration
-
-  updatedAt DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  theme               String   @default("system")
+  language            String   @default("en")
+  analyticsConsent    Boolean  @default(false)
+  performanceTracking Boolean  @default(false)
+  dashboardLayout     Json?
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_preferences")
 }
 
 model UserAnalyticsProfile {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  performanceMetrics    Json // Record<string, number>
-  hypothesisContributions Json // Record<string, number>
-  skillAssessments      Json // Record<string, number>
-  efficiencyRatings     Json // Record<string, number>
-
-  lastAssessment DateTime @default(now())
-
-  // Relationships
-  performanceTrends PerformanceTrend[]
+  id                      String             @id @default(cuid())
+  userId                  String             @unique
+  performanceMetrics      Json
+  hypothesisContributions Json
+  skillAssessments        Json
+  efficiencyRatings       Json
+  lastAssessment          DateTime           @default(now())
+  performanceTrends       PerformanceTrend[]
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_analytics_profiles")
 }
 
 model PerformanceTrend {
-  id       String @id @default(cuid())
-  profileId String
-  profile  UserAnalyticsProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-
+  id         String               @id @default(cuid())
+  profileId  String
   metric     String
-  values     Json // Array<{ date: Date; value: number }>
+  values     Json
   trend      TrendDirection
   confidence Float
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  profile    UserAnalyticsProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@map("performance_trends")
 }
 
-// ========================================
-// SECURITY AND AUDIT
-// ========================================
-
 model UserSession {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  id           String   @id @default(cuid())
+  userId       String
   sessionToken String   @unique
   refreshToken String?  @unique
   ipAddress    String
   userAgent    String
   isActive     Boolean  @default(true)
-
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  lastUsed  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  lastUsed     DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_sessions")
 }
 
 model AuditLog {
-  id       String @id @default(cuid())
-  userId   String?
-  user     User?  @relation(fields: [userId], references: [id])
-
-  userRole   String?
-  action     String
-  entity     String
-  entityId   String
-  changes    Json   // AuditChange[]
-  ipAddress  String
-  userAgent  String
-  success    Boolean
+  id           String        @id @default(cuid())
+  userId       String?
+  userRole     String?
+  action       String
+  entity       String
+  entityId     String
+  changes      Json
+  ipAddress    String
+  userAgent    String
+  success      Boolean
   errorMessage String?
-
-  severity AuditSeverity
-  category AuditCategory
-
-  timestamp DateTime @default(now())
+  severity     AuditSeverity
+  category     AuditCategory
+  timestamp    DateTime      @default(now())
+  user         User?         @relation(fields: [userId], references: [id])
 
   @@index([userId, timestamp])
   @@index([entity, entityId])
@@ -301,19 +232,15 @@ model AuditLog {
 }
 
 model SecurityEvent {
-  id      String @id @default(cuid())
-  userId  String?
-  user    User?  @relation(fields: [userId], references: [id])
-
-  type        SecurityEventType
-  ipAddress   String
-  details     Json // Record<string, any>
-  riskLevel   RiskLevel
-  status      SecurityEventStatus @default(DETECTED)
-
-  timestamp DateTime @default(now())
-
-  // Response tracking
+  id        String              @id @default(cuid())
+  userId    String?
+  type      SecurityEventType
+  ipAddress String
+  details   Json
+  riskLevel RiskLevel
+  status    SecurityEventStatus @default(DETECTED)
+  timestamp DateTime            @default(now())
+  user      User?               @relation(fields: [userId], references: [id])
   responses SecurityResponse[]
 
   @@index([timestamp, riskLevel])
@@ -322,166 +249,120 @@ model SecurityEvent {
 }
 
 model SecurityResponse {
-  id      String @id @default(cuid())
-  eventId String
-  event   SecurityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
+  id          String        @id @default(cuid())
+  eventId     String
   action      String
   performedBy String
   result      String
   notes       String?
-
-  timestamp DateTime @default(now())
+  timestamp   DateTime      @default(now())
+  event       SecurityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@map("security_responses")
 }
 
-// ========================================
-// COMMUNICATION AND NOTIFICATIONS
-// ========================================
-
 model CommunicationPreferences {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  language  String @default("en")
-  timezone  String @default("UTC")
-
-  // Quiet Hours
-  quietHoursStart String? // HH:MM format
-  quietHoursEnd   String? // HH:MM format
-
-  // Preferences stored as JSON
-  channels    Json // ChannelPreference[]
-  frequency   Json // FrequencySettings
-  categories  Json // CategoryPreference[]
-
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  language        String   @default("en")
+  timezone        String   @default("UTC")
+  quietHoursStart String?
+  quietHoursEnd   String?
+  channels        Json
+  frequency       Json
+  categories      Json
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("communication_preferences")
 }
 
 model NotificationDelivery {
-  id           String @id @default(cuid())
-  templateId   String
-  recipientId  String
-  recipient    User   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-
+  id            String                    @id @default(cuid())
+  templateId    String
+  recipientId   String
   recipientType NotificationRecipientType
   channel       NotificationChannel
-  status        NotificationStatus @default(PENDING)
-
-  sentAt      DateTime?
-  deliveredAt DateTime?
-  readAt      DateTime?
-  attempts    Int       @default(0)
-  errorMessage String?
-  metadata    Json?
+  status        NotificationStatus        @default(PENDING)
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  attempts      Int                       @default(0)
+  errorMessage  String?
+  metadata      Json?
+  recipient     User                      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([status, sentAt])
   @@index([recipientId, readAt])
   @@map("notification_deliveries")
 }
 
-// ========================================
-// ACCESSIBILITY
-// ========================================
-
 model AccessibilityConfiguration {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  complianceLevel AccessibilityLevel @default(AA)
-
-  // Preferences stored as JSON
-  preferences        Json // AccessibilityPreferences
-  assistiveTechnology Json // AssistiveTechInfo[]
-  customizations     Json // UICustomization[]
-
-  lastUpdated DateTime @updatedAt
-
-  // Test Results
-  testResults AccessibilityTestResult[]
+  id                  String                    @id @default(cuid())
+  userId              String                    @unique
+  complianceLevel     AccessibilityLevel        @default(AA)
+  preferences         Json
+  assistiveTechnology Json
+  customizations      Json
+  lastUpdated         DateTime                  @updatedAt
+  user                User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testResults         AccessibilityTestResult[]
 
   @@map("accessibility_configurations")
 }
 
 model AccessibilityTestResult {
-  id     String @id @default(cuid())
-  configId String
-  config AccessibilityConfiguration @relation(fields: [configId], references: [id], onDelete: Cascade)
-
-  testType   AccessibilityTestType
-  standard   AccessibilityStandard
-  component  String
-  passed     Boolean
-  violations Json // AccessibilityViolation[]
-
-  testedAt    DateTime @default(now())
+  id          String                     @id @default(cuid())
+  configId    String
+  testType    AccessibilityTestType
+  standard    AccessibilityStandard
+  component   String
+  passed      Boolean
+  violations  Json
+  testedAt    DateTime                   @default(now())
   testedBy    String
   environment String
+  config      AccessibilityConfiguration @relation(fields: [configId], references: [id], onDelete: Cascade)
 
   @@map("accessibility_test_results")
 }
 
-// ========================================
-// ANALYTICS AND MEASUREMENT
-// ========================================
-
 model HypothesisValidationEvent {
-  id         String @id @default(cuid())
-  userId     String
-  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  hypothesis      HypothesisType
-  userStoryId     String
-  componentId     String
-  action          String
-  measurementData Json
-  targetValue     Float
-  actualValue     Float
+  id                     String         @id @default(cuid())
+  userId                 String
+  hypothesis             HypothesisType
+  userStoryId            String
+  componentId            String
+  action                 String
+  measurementData        Json
+  targetValue            Float
+  actualValue            Float
   performanceImprovement Float
-
-  userRole  String
-  sessionId String
-  testCaseId String?
-
-  timestamp DateTime @default(now())
+  userRole               String
+  sessionId              String
+  testCaseId             String?
+  timestamp              DateTime       @default(now())
+  user                   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([hypothesis, timestamp])
   @@index([userId, hypothesis])
   @@map("hypothesis_validation_events")
 }
 
-// ========================================
-// ANALYTICS & MEASUREMENT ENTITIES
-// ========================================
-
 model UserStoryMetrics {
-  id         String @id @default(cuid())
-  userStoryId String @unique
-  hypothesis  String[] // Array of hypothesis IDs (H1, H3, H4, H6, H7, H8)
-  acceptanceCriteria String[] // Array of acceptance criteria IDs
-
-  // Performance tracking
-  performanceTargets Json // Record<string, number>
-  actualPerformance  Json // Record<string, number>
-  completionRate     Float @default(0) // 0-1 scale
-
-  // Criteria status
-  passedCriteria     String[] @default([])
-  failedCriteria     String[] @default([])
-
-  // Test results relationships
+  id                 String                @id @default(cuid())
+  userStoryId        String                @unique
+  hypothesis         String[]
+  acceptanceCriteria String[]
+  performanceTargets Json
+  actualPerformance  Json
+  completionRate     Float                 @default(0)
+  passedCriteria     String[]              @default([])
+  failedCriteria     String[]              @default([])
+  baselineMetrics    Json?
+  lastUpdated        DateTime              @default(now()) @updatedAt
+  createdAt          DateTime              @default(now())
   testResults        TestExecutionResult[]
-
-  // Baseline comparison
-  baselineMetrics    Json? // Record<string, number>
-
-  lastUpdated        DateTime @updatedAt @default(now())
-  createdAt          DateTime @default(now())
 
   @@index([userStoryId])
   @@index([completionRate])
@@ -489,27 +370,22 @@ model UserStoryMetrics {
 }
 
 model PerformanceBaseline {
-  id                     String @id @default(cuid())
-  hypothesis             String // H1, H3, H4, H6, H7, H8
-  metricName             String
-  baselineValue          Float
-  targetImprovement      Float // Target improvement percentage (e.g., 0.45 for 45%)
-  currentValue           Float?
-  improvementPercentage  Float? // Calculated improvement percentage
-  measurementUnit        String
-
-  // Validity and confidence
-  collectionDate         DateTime @default(now())
-  validUntil             DateTime?
-  sampleSize             Int
-  confidence             Float // 0-1 scale
-
-  // Environment and methodology
-  environment            String @default("development")
-  methodology            String?
-
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  hypothesis            String
+  metricName            String
+  baselineValue         Float
+  targetImprovement     Float
+  currentValue          Float?
+  improvementPercentage Float?
+  measurementUnit       String
+  collectionDate        DateTime  @default(now())
+  validUntil            DateTime?
+  sampleSize            Int
+  confidence            Float
+  environment           String    @default("development")
+  methodology           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@unique([hypothesis, metricName, collectionDate])
   @@index([hypothesis, metricName])
@@ -518,24 +394,19 @@ model PerformanceBaseline {
 }
 
 model ComponentTraceability {
-  id                    String @id @default(cuid())
-  componentName         String @unique
-  userStories           String[] @default([]) // Array of user story IDs
-  acceptanceCriteria    String[] @default([]) // Array of acceptance criteria IDs
-  methods               String[] @default([]) // Array of method names
-  hypotheses            String[] @default([]) // Array of hypothesis IDs
-  testCases             String[] @default([]) // Array of test case IDs
-  analyticsHooks        String[] @default([]) // Array of analytics hook names
-
-  // Validation status
-  lastValidated         DateTime @default(now())
-  validationStatus      ValidationStatusType @default(PENDING)
-
-  // Relationships
-  testCaseRelations     TestCase[]
-
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                 String               @id @default(cuid())
+  componentName      String               @unique
+  userStories        String[]             @default([])
+  acceptanceCriteria String[]             @default([])
+  methods            String[]             @default([])
+  hypotheses         String[]             @default([])
+  testCases          String[]             @default([])
+  analyticsHooks     String[]             @default([])
+  lastValidated      DateTime             @default(now())
+  validationStatus   ValidationStatusType @default(PENDING)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  testCaseRelations  TestCase[]
 
   @@index([componentName])
   @@index([validationStatus])
@@ -543,36 +414,25 @@ model ComponentTraceability {
   @@map("component_traceability")
 }
 
-// ========================================
-// TESTING & QA ENTITIES
-// ========================================
-
 model TestCase {
-  id                          String @id @default(cuid())
-  userStory                   String // US-X.X format
-  hypothesis                  String // HX format
-  actor                       String // Primary user role
-
-  // Test definition
-  preconditions               String[] @default([]) // Setup requirements
-  testSteps                   String[] @default([]) // Execution steps
-  acceptanceCriteria          String[] @default([]) // Success conditions
-  measurementPoints           Json // MetricDefinition[]
-  successThresholds           Json // Thresholds object
-  instrumentationRequirements String[] @default([])
-
-  // Status and execution
-  status                      TestStatusType @default(DRAFT)
+  id                          String                 @id @default(cuid())
+  userStory                   String
+  hypothesis                  String
+  actor                       String
+  preconditions               String[]               @default([])
+  testSteps                   String[]               @default([])
+  acceptanceCriteria          String[]               @default([])
+  measurementPoints           Json
+  successThresholds           Json
+  instrumentationRequirements String[]               @default([])
+  status                      TestStatusType         @default(DRAFT)
   lastExecuted                DateTime?
-  passRate                    Float @default(0) // 0-1 scale
-
-  // Relationships
+  passRate                    Float                  @default(0)
   componentId                 String?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
   component                   ComponentTraceability? @relation(fields: [componentId], references: [id])
   executions                  TestExecutionResult[]
-
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
 
   @@index([userStory])
   @@index([hypothesis])
@@ -581,25 +441,20 @@ model TestCase {
 }
 
 model TestExecutionResult {
-  id               String @id @default(cuid())
+  id               String           @id @default(cuid())
   testCaseId       String
-  testCase         TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
   userStoryId      String
-  userStoryMetrics UserStoryMetrics @relation(fields: [userStoryId], references: [userStoryId], onDelete: Cascade)
   hypothesis       String
-
-  // Execution details
-  executed         Boolean @default(false)
+  executed         Boolean          @default(false)
   passed           Boolean?
-  executionTime    Int // milliseconds
-  metrics          Json? // Execution-specific metrics
-  errors           String[] @default([])
-
-  // Environment and context
-  environment      String @default("development")
-  executedBy       String? // User ID who executed the test
-
-  timestamp        DateTime @default(now())
+  executionTime    Int
+  metrics          Json?
+  errors           String[]         @default([])
+  environment      String           @default("development")
+  executedBy       String?
+  timestamp        DateTime         @default(now())
+  testCase         TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  userStoryMetrics UserStoryMetrics @relation(fields: [userStoryId], references: [userStoryId], onDelete: Cascade)
 
   @@index([testCaseId])
   @@index([userStoryId])
@@ -609,23 +464,18 @@ model TestExecutionResult {
 }
 
 model BaselineMetrics {
-  id             String @id @default(cuid())
-  hypothesis     String // H1, H3, H4, H6, H7, H8
-  metric         String
-  value          Float
-  unit           String
-
-  // Collection metadata
-  collectedAt    DateTime @default(now())
-  validUntil     DateTime?
-  sampleSize     Int
-  environment    String @default("development")
-  methodology    String
-
-  // Additional context
-  metadata       Json?
-
-  createdAt      DateTime @default(now())
+  id          String    @id @default(cuid())
+  hypothesis  String
+  metric      String
+  value       Float
+  unit        String
+  collectedAt DateTime  @default(now())
+  validUntil  DateTime?
+  sampleSize  Int
+  environment String    @default("development")
+  methodology String
+  metadata    Json?
+  createdAt   DateTime  @default(now())
 
   @@unique([hypothesis, metric, collectedAt])
   @@index([hypothesis, metric])
@@ -633,9 +483,394 @@ model BaselineMetrics {
   @@map("baseline_metrics")
 }
 
-// ========================================
-// ENUMS
-// ========================================
+model Customer {
+  id           String            @id @default(cuid())
+  name         String
+  email        String?
+  phone        String?
+  website      String?
+  address      String?
+  industry     String?
+  companySize  String?
+  revenue      Float?
+  status       CustomerStatus    @default(ACTIVE)
+  tier         CustomerTier      @default(STANDARD)
+  tags         String[]
+  metadata     Json?
+  segmentation Json?
+  riskScore    Float?
+  ltv          Float?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  lastContact  DateTime?
+  cloudId      String?
+  lastSyncedAt DateTime?
+  syncStatus   String?           @default("PENDING")
+  contacts     CustomerContact[]
+  proposals    Proposal[]
+
+  @@index([status, tier])
+  @@index([industry])
+  @@index([cloudId])
+  @@map("customers")
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String
+  email      String
+  phone      String?
+  role       String?
+  department String?
+  isPrimary  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, isPrimary])
+  @@map("customer_contacts")
+}
+
+model Proposal {
+  id                String              @id @default(cuid())
+  title             String
+  description       String?
+  customerId        String
+  createdBy         String
+  status            ProposalStatus      @default(DRAFT)
+  version           Int                 @default(1)
+  priority          Priority            @default(MEDIUM)
+  value             Float?
+  currency          String              @default("USD")
+  validUntil        DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  dueDate           DateTime?
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  performanceData   Json?
+  userStoryTracking Json?
+  riskScore         Float?
+  tags              String[]
+  metadata          Json?
+  cloudId           String?
+  lastSyncedAt      DateTime?
+  syncStatus        String?             @default("PENDING")
+  projectType       String?
+  approvals         ApprovalExecution[]
+  products          ProposalProduct[]
+  sections          ProposalSection[]
+  creator           User                @relation("ProposalCreator", fields: [createdBy], references: [id])
+  customer          Customer            @relation(fields: [customerId], references: [id])
+  validationIssues  ValidationIssue[]
+  assignedTo        User[]              @relation("ProposalAssignees")
+
+  @@index([status, dueDate])
+  @@index([customerId, status])
+  @@index([createdBy])
+  @@index([cloudId])
+  @@map("proposals")
+}
+
+model ProposalSection {
+  id               String           @id @default(cuid())
+  proposalId       String
+  title            String
+  content          String
+  order            Int
+  type             SectionType      @default(TEXT)
+  validationStatus ValidationStatus @default(NOT_VALIDATED)
+  analyticsData    Json?
+  metadata         Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  proposal         Proposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, order])
+  @@map("proposal_sections")
+}
+
+model ProposalProduct {
+  id                 String            @id @default(cuid())
+  proposalId         String
+  productId          String
+  quantity           Int               @default(1)
+  unitPrice          Float
+  discount           Float             @default(0)
+  total              Float
+  configuration      Json?
+  selectionAnalytics Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  product            Product           @relation(fields: [productId], references: [id])
+  proposal           Proposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  validationIssues   ValidationIssue[]
+
+  @@index([proposalId])
+  @@index([productId])
+  @@map("proposal_products")
+}
+
+model Product {
+  id                String                @id @default(cuid())
+  name              String
+  description       String?
+  sku               String                @unique
+  price             Float
+  currency          String                @default("USD")
+  category          String[]
+  tags              String[]
+  attributes        Json?
+  images            String[]
+  isActive          Boolean               @default(true)
+  version           Int                   @default(1)
+  usageAnalytics    Json?
+  userStoryMappings String[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  relationships     ProductRelationship[] @relation("SourceProduct")
+  relatedFrom       ProductRelationship[] @relation("TargetProduct")
+  proposalProducts  ProposalProduct[]
+  validationRules   ValidationRule[]
+
+  @@index([isActive, category])
+  @@index([sku])
+  @@map("products")
+}
+
+model ProductRelationship {
+  id                String           @id @default(cuid())
+  sourceProductId   String
+  targetProductId   String
+  type              RelationshipType
+  quantity          Int?
+  condition         Json?
+  validationHistory Json?
+  performanceImpact Json?
+  createdBy         String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  creator           User             @relation(fields: [createdBy], references: [id])
+  sourceProduct     Product          @relation("SourceProduct", fields: [sourceProductId], references: [id], onDelete: Cascade)
+  targetProduct     Product          @relation("TargetProduct", fields: [targetProductId], references: [id], onDelete: Cascade)
+
+  @@index([sourceProductId])
+  @@index([targetProductId])
+  @@index([type])
+  @@map("product_relationships")
+}
+
+model Content {
+  id                 String             @id @default(cuid())
+  title              String
+  description        String?
+  type               ContentType        @default(TEXT)
+  content            String
+  tags               String[]
+  category           String[]
+  searchableText     String?
+  keywords           String[]
+  quality            Json?
+  usage              Json?
+  isPublic           Boolean            @default(false)
+  allowedRoles       String[]
+  searchOptimization Json?
+  userStoryTracking  Json?
+  version            Int                @default(1)
+  isActive           Boolean            @default(true)
+  createdBy          String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  cloudId            String?
+  lastSyncedAt       DateTime?
+  syncStatus         String?            @default("PENDING")
+  creator            User               @relation(fields: [createdBy], references: [id])
+  accessLogs         ContentAccessLog[]
+
+  @@index([type, isActive])
+  @@index([tags])
+  @@index([category])
+  @@index([cloudId])
+  @@map("content")
+}
+
+model ContentAccessLog {
+  id                String     @id @default(cuid())
+  contentId         String
+  userId            String
+  accessType        AccessType
+  userStory         String?
+  performanceImpact Float?
+  timestamp         DateTime   @default(now())
+  content           Content    @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user              User       @relation(fields: [userId], references: [id])
+
+  @@index([contentId, timestamp])
+  @@index([userId, accessType])
+  @@map("content_access_logs")
+}
+
+model ValidationRule {
+  id                  String             @id @default(cuid())
+  name                String
+  description         String?
+  category            String
+  ruleType            ValidationRuleType
+  conditions          Json
+  actions             Json
+  severity            Severity           @default(WARNING)
+  isActive            Boolean            @default(true)
+  productId           String?
+  executionStats      Json?
+  userStoryMappings   String[]
+  hypothesesSupported String[]
+  createdBy           String
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  issues              ValidationIssue[]
+  creator             User               @relation(fields: [createdBy], references: [id])
+  product             Product?           @relation(fields: [productId], references: [id])
+
+  @@index([category, isActive])
+  @@index([ruleType])
+  @@map("validation_rules")
+}
+
+model ValidationIssue {
+  id                 String            @id @default(cuid())
+  entityId           String
+  entityType         EntityType
+  ruleId             String
+  severity           Severity
+  message            String
+  fixSuggestion      String?
+  status             IssueStatus       @default(OPEN)
+  proposalId         String?
+  proposalProductId  String?
+  detectedAt         DateTime          @default(now())
+  resolvedAt         DateTime?
+  resolvedBy         String?
+  resolutionMethod   ResolutionMethod?
+  performanceMetrics Json?
+  userStoryContext   String[]
+  proposal           Proposal?         @relation(fields: [proposalId], references: [id])
+  proposalProduct    ProposalProduct?  @relation(fields: [proposalProductId], references: [id])
+  resolver           User?             @relation(fields: [resolvedBy], references: [id])
+  rule               ValidationRule    @relation(fields: [ruleId], references: [id])
+
+  @@index([entityType, status])
+  @@index([ruleId, status])
+  @@index([severity, detectedAt])
+  @@map("validation_issues")
+}
+
+model ValidationExecution {
+  id                  String     @id @default(cuid())
+  entityId            String
+  entityType          EntityType
+  rulesExecuted       String[]
+  executionTime       Int
+  issuesFound         Int
+  issuesResolved      Int
+  performanceScore    Float?
+  triggeredBy         String
+  userStoryContext    String[]
+  hypothesesValidated String[]
+  timestamp           DateTime   @default(now())
+  trigger             User       @relation(fields: [triggeredBy], references: [id])
+
+  @@index([entityType, timestamp])
+  @@index([triggeredBy])
+  @@map("validation_executions")
+}
+
+model ApprovalWorkflow {
+  id                 String              @id @default(cuid())
+  name               String
+  description        String?
+  entityType         EntityType
+  isActive           Boolean             @default(true)
+  executionStats     Json?
+  performanceMetrics Json?
+  userStoryMappings  String[]
+  createdBy          String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  executions         ApprovalExecution[]
+  creator            User                @relation(fields: [createdBy], references: [id])
+  stages             WorkflowStage[]
+
+  @@index([entityType, isActive])
+  @@map("approval_workflows")
+}
+
+model WorkflowStage {
+  id                  String              @id @default(cuid())
+  workflowId          String
+  name                String
+  description         String?
+  order               Int
+  approvers           String[]
+  conditions          Json?
+  actions             Json?
+  slaHours            Int?
+  isParallel          Boolean             @default(false)
+  isOptional          Boolean             @default(false)
+  escalationRules     Json?
+  performanceTracking Json?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  decisions           ApprovalDecision[]
+  executions          ApprovalExecution[]
+  workflow            ApprovalWorkflow    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, order])
+  @@map("workflow_stages")
+}
+
+model ApprovalExecution {
+  id                 String             @id @default(cuid())
+  workflowId         String
+  entityId           String
+  currentStage       String?
+  status             ExecutionStatus    @default(PENDING)
+  startedAt          DateTime           @default(now())
+  completedAt        DateTime?
+  slaCompliance      Boolean?
+  proposalId         String?
+  performanceMetrics Json?
+  userStoryContext   String[]
+  decisions          ApprovalDecision[]
+  stageExecution     WorkflowStage?     @relation(fields: [currentStage], references: [id])
+  proposal           Proposal?          @relation(fields: [proposalId], references: [id])
+  workflow           ApprovalWorkflow   @relation(fields: [workflowId], references: [id])
+
+  @@index([workflowId, status])
+  @@index([proposalId])
+  @@map("approval_executions")
+}
+
+model ApprovalDecision {
+  id                String            @id @default(cuid())
+  executionId       String
+  stageId           String
+  approverId        String
+  decision          DecisionType
+  comments          String?
+  timeToDecision    Int?
+  qualityScore      Float?
+  performanceImpact Float?
+  timestamp         DateTime          @default(now())
+  approver          User              @relation(fields: [approverId], references: [id])
+  execution         ApprovalExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stage             WorkflowStage     @relation(fields: [stageId], references: [id])
+
+  @@index([executionId])
+  @@index([approverId])
+  @@map("approval_decisions")
+}
 
 enum UserStatus {
   ACTIVE
@@ -779,536 +1014,6 @@ enum TestStatusType {
   FAILED
   DEPRECATED
 }
-
-// ========================================
-// CORE BUSINESS ENTITIES
-// ========================================
-
-// Customer Management
-model Customer {
-  id          String   @id @default(cuid())
-  name        String
-  email       String?
-  phone       String?
-  website     String?
-  address     String?
-  industry    String?
-  companySize String?
-  revenue     Float?
-  status      CustomerStatus @default(ACTIVE)
-  tier        CustomerTier @default(STANDARD)
-
-  // Cloud Sync Fields
-  cloudId     String?  // ID from cloud database for sync purposes
-  lastSyncedAt DateTime? // Last successful sync timestamp
-  syncStatus   String?   @default("PENDING") // PENDING, SYNCED, CONFLICT, ERROR
-
-  // Relationships
-  proposals   Proposal[]
-  contacts    CustomerContact[]
-
-  // Metadata
-  tags        String[]
-  metadata    Json?
-
-  // Analytics
-  segmentation Json? // CustomerSegmentation
-  riskScore   Float?
-  ltv         Float? // Lifetime Value
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  lastContact DateTime?
-
-  @@index([status, tier])
-  @@index([industry])
-  @@index([cloudId]) // Index for sync performance
-  @@map("customers")
-}
-
-model CustomerContact {
-  id         String   @id @default(cuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  name       String
-  email      String
-  phone      String?
-  role       String?
-  department String?
-  isPrimary  Boolean  @default(false)
-  isActive   Boolean  @default(true)
-
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([customerId, isPrimary])
-  @@map("customer_contacts")
-}
-
-// Proposal Management
-model Proposal {
-  id          String         @id @default(cuid())
-  title       String
-  description String?
-  customerId  String
-  customer    Customer       @relation(fields: [customerId], references: [id])
-
-  // Assignment and ownership
-  createdBy   String
-  creator     User           @relation("ProposalCreator", fields: [createdBy], references: [id])
-  assignedTo  User[]         @relation("ProposalAssignees")
-
-  // Status and lifecycle
-  status      ProposalStatus @default(DRAFT)
-  version     Int            @default(1)
-  priority    Priority       @default(MEDIUM)
-
-  // Business details
-  value       Float?
-  currency    String         @default("USD")
-  validUntil  DateTime?
-
-  // Relationships
-  sections    ProposalSection[]
-  products    ProposalProduct[]
-  approvals   ApprovalExecution[]
-  validationIssues ValidationIssue[]
-
-  // Dates
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  dueDate      DateTime?
-  submittedAt  DateTime?
-  approvedAt   DateTime?
-
-  // Analytics and performance
-  performanceData Json? // ProposalPerformanceMetrics
-  userStoryTracking Json? // UserStoryTracking[]
-  riskScore    Float?
-  tags         String[]
-  metadata     Json?
-
-  // Cloud Sync Fields
-  cloudId      String?  // ID from cloud database for sync purposes
-  lastSyncedAt DateTime? // Last successful sync timestamp
-  syncStatus   String?   @default("PENDING") // PENDING, SYNCED, CONFLICT, ERROR
-
-  @@index([status, dueDate])
-  @@index([customerId, status])
-  @@index([createdBy])
-  @@index([cloudId]) // Index for sync performance
-  @@map("proposals")
-}
-
-model ProposalSection {
-  id         String   @id @default(cuid())
-  proposalId String
-  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-
-  title      String
-  content    String
-  order      Int
-  type       SectionType @default(TEXT)
-
-  // Validation and analytics
-  validationStatus ValidationStatus @default(NOT_VALIDATED)
-  analyticsData    Json? // SectionAnalytics
-
-  // Metadata
-  metadata   Json?
-
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([proposalId, order])
-  @@map("proposal_sections")
-}
-
-model ProposalProduct {
-  id           String   @id @default(cuid())
-  proposalId   String
-  proposal     Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  productId    String
-  product      Product  @relation(fields: [productId], references: [id])
-
-  quantity     Int      @default(1)
-  unitPrice    Float
-  discount     Float    @default(0)
-  total        Float
-
-  // Configuration and validation
-  configuration Json?
-  validationIssues ValidationIssue[]
-
-  // Analytics
-  selectionAnalytics Json? // ProductSelectionAnalytics
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([proposalId])
-  @@index([productId])
-  @@map("proposal_products")
-}
-
-// Product Management
-model Product {
-  id          String    @id @default(cuid())
-  name        String
-  description String?
-  sku         String    @unique
-  price       Float
-  currency    String    @default("USD")
-
-  // Categorization
-  category    String[]
-  tags        String[]
-
-  // Product details
-  attributes  Json? // Product attributes as flexible JSON
-  images      String[]
-
-  // Status and lifecycle
-  isActive    Boolean   @default(true)
-  version     Int       @default(1)
-
-  // Relationships
-  relationships ProductRelationship[] @relation("SourceProduct")
-  relatedFrom   ProductRelationship[] @relation("TargetProduct")
-  validationRules ValidationRule[]
-  proposalProducts ProposalProduct[]
-
-  // Analytics
-  usageAnalytics Json? // ProductUsageAnalytics
-  userStoryMappings String[]
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([isActive, category])
-  @@index([sku])
-  @@map("products")
-}
-
-model ProductRelationship {
-  id              String            @id @default(cuid())
-  sourceProductId String
-  sourceProduct   Product           @relation("SourceProduct", fields: [sourceProductId], references: [id], onDelete: Cascade)
-  targetProductId String
-  targetProduct   Product           @relation("TargetProduct", fields: [targetProductId], references: [id], onDelete: Cascade)
-
-  type            RelationshipType
-  quantity        Int?
-  condition       Json? // RelationshipCondition
-
-  // Validation and performance
-  validationHistory Json? // RelationshipValidationHistory[]
-  performanceImpact Json? // RelationshipPerformanceImpact
-
-  // Metadata
-  createdBy       String
-  creator         User             @relation(fields: [createdBy], references: [id])
-
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-
-  @@index([sourceProductId])
-  @@index([targetProductId])
-  @@index([type])
-  @@map("product_relationships")
-}
-
-// Content Management
-model Content {
-  id          String        @id @default(cuid())
-  title       String
-  description String?
-  type        ContentType   @default(TEXT)
-  content     String
-
-  // Categorization and search
-  tags        String[]
-  category    String[]
-  searchableText String?
-  keywords    String[]
-
-  // Quality and usage metrics
-  quality     Json? // ContentQuality
-  usage       Json? // ContentUsage
-
-  // Access control
-  isPublic    Boolean       @default(false)
-  allowedRoles String[]
-
-  // Analytics and optimization
-  searchOptimization Json? // ContentSearchOptimization
-  userStoryTracking  Json? // ContentUserStoryTracking
-
-  // Lifecycle
-  version     Int           @default(1)
-  isActive    Boolean       @default(true)
-
-  // Relationships
-  createdBy   String
-  creator     User          @relation(fields: [createdBy], references: [id])
-  accessLogs  ContentAccessLog[]
-
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  // Cloud Sync Fields
-  cloudId      String?  // ID from cloud database for sync purposes
-  lastSyncedAt DateTime? // Last successful sync timestamp
-  syncStatus   String?   @default("PENDING") // PENDING, SYNCED, CONFLICT, ERROR
-
-  @@index([type, isActive])
-  @@index([tags])
-  @@index([category])
-  @@index([cloudId]) // Index for sync performance
-  @@map("content")
-}
-
-model ContentAccessLog {
-  id         String      @id @default(cuid())
-  contentId  String
-  content    Content     @relation(fields: [contentId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User        @relation(fields: [userId], references: [id])
-
-  accessType AccessType
-  userStory  String?
-  performanceImpact Float?
-
-  timestamp  DateTime    @default(now())
-
-  @@index([contentId, timestamp])
-  @@index([userId, accessType])
-  @@map("content_access_logs")
-}
-
-// Validation System
-model ValidationRule {
-  id          String           @id @default(cuid())
-  name        String
-  description String?
-  category    String
-  ruleType    ValidationRuleType
-
-  // Rule definition
-  conditions  Json // ValidationCondition[]
-  actions     Json // ValidationAction[]
-  severity    Severity         @default(WARNING)
-
-  // Status and lifecycle
-  isActive    Boolean          @default(true)
-
-  // Relationships
-  productId   String?
-  product     Product?         @relation(fields: [productId], references: [id])
-  issues      ValidationIssue[]
-
-  // Analytics
-  executionStats Json? // RuleExecutionStats
-  userStoryMappings String[]
-  hypothesesSupported String[]
-
-  // Metadata
-  createdBy   String
-  creator     User             @relation(fields: [createdBy], references: [id])
-
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  @@index([category, isActive])
-  @@index([ruleType])
-  @@map("validation_rules")
-}
-
-model ValidationIssue {
-  id           String           @id @default(cuid())
-  entityId     String
-  entityType   EntityType
-  ruleId       String
-  rule         ValidationRule   @relation(fields: [ruleId], references: [id])
-
-  severity     Severity
-  message      String
-  fixSuggestion String?
-  status       IssueStatus      @default(OPEN)
-
-  // Relationships
-  proposalId        String?
-  proposal          Proposal?        @relation(fields: [proposalId], references: [id])
-  proposalProductId String?
-  proposalProduct   ProposalProduct? @relation(fields: [proposalProductId], references: [id])
-
-  // Resolution tracking
-  detectedAt   DateTime         @default(now())
-  resolvedAt   DateTime?
-  resolvedBy   String?
-  resolver     User?            @relation(fields: [resolvedBy], references: [id])
-  resolutionMethod ResolutionMethod?
-
-  // Analytics
-  performanceMetrics Json? // IssuePerformanceMetrics
-  userStoryContext   String[]
-
-  @@index([entityType, status])
-  @@index([ruleId, status])
-  @@index([severity, detectedAt])
-  @@map("validation_issues")
-}
-
-model ValidationExecution {
-  id             String         @id @default(cuid())
-  entityId       String
-  entityType     EntityType
-  rulesExecuted  String[]
-
-  // Execution metrics
-  executionTime  Int // milliseconds
-  issuesFound    Int
-  issuesResolved Int
-  performanceScore Float?
-
-  // Context
-  triggeredBy    String
-  trigger        User           @relation(fields: [triggeredBy], references: [id])
-  userStoryContext String[]
-  hypothesesValidated String[]
-
-  timestamp      DateTime       @default(now())
-
-  @@index([entityType, timestamp])
-  @@index([triggeredBy])
-  @@map("validation_executions")
-}
-
-// Approval Workflow System
-model ApprovalWorkflow {
-  id          String                @id @default(cuid())
-  name        String
-  description String?
-  entityType  EntityType
-
-  // Workflow definition
-  stages      WorkflowStage[]
-
-  // Status and metrics
-  isActive    Boolean               @default(true)
-  executionStats Json? // WorkflowExecutionStats
-  performanceMetrics Json? // WorkflowPerformanceMetrics
-  userStoryMappings String[]
-
-  // Relationships
-  executions  ApprovalExecution[]
-
-  // Metadata
-  createdBy   String
-  creator     User                  @relation(fields: [createdBy], references: [id])
-
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
-
-  @@index([entityType, isActive])
-  @@map("approval_workflows")
-}
-
-model WorkflowStage {
-  id          String            @id @default(cuid())
-  workflowId  String
-  workflow    ApprovalWorkflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-
-  name        String
-  description String?
-  order       Int
-
-  // Stage configuration
-  approvers   String[] // User IDs
-  conditions  Json? // StageCondition[]
-  actions     Json? // StageAction[]
-  slaHours    Int?
-  isParallel  Boolean           @default(false)
-  isOptional  Boolean           @default(false)
-
-  // Escalation
-  escalationRules Json? // EscalationRule[]
-
-  // Analytics
-  performanceTracking Json? // StagePerformanceTracking
-
-  // Relationships
-  decisions   ApprovalDecision[]
-  executions  ApprovalExecution[]
-
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  @@index([workflowId, order])
-  @@map("workflow_stages")
-}
-
-model ApprovalExecution {
-  id           String              @id @default(cuid())
-  workflowId   String
-  workflow     ApprovalWorkflow    @relation(fields: [workflowId], references: [id])
-  entityId     String
-
-  // Current state
-  currentStage String?
-  status       ExecutionStatus     @default(PENDING)
-
-  // Timing
-  startedAt    DateTime            @default(now())
-  completedAt  DateTime?
-  slaCompliance Boolean?
-
-  // Relationships
-  proposalId   String?
-  proposal     Proposal?           @relation(fields: [proposalId], references: [id])
-  decisions    ApprovalDecision[]
-  stageExecution WorkflowStage?    @relation(fields: [currentStage], references: [id])
-
-  // Analytics
-  performanceMetrics Json? // ExecutionPerformanceMetrics
-  userStoryContext   String[]
-
-  @@index([workflowId, status])
-  @@index([proposalId])
-  @@map("approval_executions")
-}
-
-model ApprovalDecision {
-  id           String            @id @default(cuid())
-  executionId  String
-  execution    ApprovalExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  stageId      String
-  stage        WorkflowStage     @relation(fields: [stageId], references: [id])
-
-  approverId   String
-  approver     User              @relation(fields: [approverId], references: [id])
-
-  decision     DecisionType
-  comments     String?
-
-  // Metrics
-  timeToDecision Int? // minutes
-  qualityScore   Float?
-  performanceImpact Float?
-
-  timestamp    DateTime          @default(now())
-
-  @@index([executionId])
-  @@index([approverId])
-  @@map("approval_decisions")
-}
-
-// ========================================
-// BUSINESS ENUMS
-// ========================================
 
 enum CustomerStatus {
   ACTIVE

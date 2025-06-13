@@ -32,8 +32,8 @@ export interface Customer {
   status: CustomerStatus;
   tier: CustomerTier;
   tags: string[];
-  metadata?: any | null;
-  segmentation?: any | null;
+  metadata?: Record<string, unknown> | null;
+  segmentation?: Record<string, unknown> | null;
   riskScore?: number | null;
   ltv?: number | null;
   createdAt: Date;
@@ -84,7 +84,7 @@ export interface CustomerSegmentation {
   secondarySegments: string[];
   confidenceScore: number;
   lastUpdated: Date;
-  segmentationCriteria: Record<string, any>;
+  segmentationCriteria: Record<string, unknown>;
 }
 
 export interface CustomerProfileMetrics {
@@ -118,7 +118,7 @@ export interface CreateCustomerData {
   revenue?: number;
   tier?: CustomerTier;
   tags?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateCustomerData extends Partial<CreateCustomerData> {
@@ -166,7 +166,7 @@ export interface CustomerInsight {
   priority: 'low' | 'medium' | 'high' | 'critical';
   actionable: boolean;
   actions?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CustomerLifetimeValue {
@@ -205,3 +205,24 @@ export interface CustomerValidationResult {
     code: string;
   }>;
 }
+
+export interface CustomerData {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: CustomerStatus;
+  tier: CustomerTier;
+  metadata: Record<string, unknown> | null;
+  tags: string[] | null;
+  totalProposals: number;
+  totalValue: number;
+}
+
+export type CustomerSortBy =
+  | 'name'
+  | 'status'
+  | 'tier'
+  | 'totalProposals'
+  | 'totalValue'
+  | 'createdAt';

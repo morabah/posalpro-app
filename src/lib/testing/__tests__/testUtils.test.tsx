@@ -2,6 +2,7 @@
  * Test utilities validation
  */
 
+import { describe, expect, it } from '@jest/globals';
 import { DatabaseTestUtils, mockSession, renderWithProviders } from '../testUtils';
 
 // Simple test component
@@ -10,19 +11,19 @@ const TestComponent = () => {
 };
 
 describe('Testing Utilities', () => {
-  test('renderWithProviders works correctly', () => {
+  it('renderWithProviders works correctly', () => {
     const { getByTestId } = renderWithProviders(<TestComponent />);
     expect(getByTestId('test-component')).toBeInTheDocument();
   });
 
-  test('mockSession has correct structure', () => {
+  it('mockSession has correct structure', () => {
     expect(mockSession).toHaveProperty('user');
     expect(mockSession.user).toHaveProperty('id');
     expect(mockSession.user).toHaveProperty('email');
     expect(mockSession.user.role).toBe('Administrator');
   });
 
-  test('DatabaseTestUtils creates mock user', () => {
+  it('DatabaseTestUtils creates mock user', () => {
     const user = DatabaseTestUtils.createMockUser();
     expect(user).toHaveProperty('id');
     expect(user).toHaveProperty('name');
@@ -30,7 +31,7 @@ describe('Testing Utilities', () => {
     expect(user.role).toBe('Administrator');
   });
 
-  test('DatabaseTestUtils creates mock proposal', () => {
+  it('DatabaseTestUtils creates mock proposal', () => {
     const proposal = DatabaseTestUtils.createMockProposal();
     expect(proposal).toHaveProperty('id');
     expect(proposal).toHaveProperty('name');

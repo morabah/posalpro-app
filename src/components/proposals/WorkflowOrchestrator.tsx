@@ -555,7 +555,7 @@ export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
           <h3 className="text-lg font-semibold text-gray-900">Workflow Intelligence</h3>
           <Badge
             variant={
-              complexityScore >= 7 ? 'warning' : complexityScore >= 4 ? 'primary' : 'success'
+              complexityScore >= 7 ? 'warning' : complexityScore >= 4 ? 'default' : 'success'
             }
           >
             Complexity: {complexityScore}/10
@@ -589,7 +589,10 @@ export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
               </div>
               <div className="flex justify-between">
                 <span>Regulated Data</span>
-                <Badge variant={complexityFactors.regulatedData ? 'error' : 'success'} size="sm">
+                <Badge
+                  variant={complexityFactors.regulatedData ? 'destructive' : 'success'}
+                  size="sm"
+                >
                   {complexityFactors.regulatedData ? 'Yes' : 'No'}
                 </Badge>
               </div>
@@ -620,7 +623,11 @@ export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
                 <span className="text-sm">Priority Level</span>
                 <Badge
                   variant={
-                    priority === 'High' ? 'error' : priority === 'Medium' ? 'warning' : 'success'
+                    priority === 'High'
+                      ? 'destructive'
+                      : priority === 'Medium'
+                        ? 'warning'
+                        : 'success'
                   }
                 >
                   {priority}
@@ -728,7 +735,7 @@ export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
                   <div>SLA: {stage.slaHours}h</div>
                   <div>Est: {stage.estimatedDuration}h</div>
                   {stage.canRunInParallel && (
-                    <Badge size="sm" variant="primary">
+                    <Badge size="sm" variant="default">
                       Parallel
                     </Badge>
                   )}

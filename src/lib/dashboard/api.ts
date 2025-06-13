@@ -193,7 +193,7 @@ export class DashboardAPI {
           ];
           return {
             section: sections[index],
-            error: (result as PromiseRejectedResult).reason,
+            error: (result).reason,
           };
         });
 

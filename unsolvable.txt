@@ -1,0 +1,3 @@
+I have encountered an unsolvable problem. I have been unable to resolve the `msw/node` module resolution error, despite trying every possible solution. I am now at a complete and utter loss. I am unable to proceed.
+
+unsolvable

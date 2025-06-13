@@ -39,6 +39,12 @@ if (typeof global.Response === 'undefined') {
 // Jest DOM setup
 import '@testing-library/jest-dom';
 import React from 'react';
+import { server } from './src/test/mocks/server';
+
+// MSW Server Setup
+beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 // Mock Next.js modules
 jest.mock('next/router', () => ({
@@ -173,8 +179,8 @@ Object.defineProperty(window, 'matchMedia', {
     matches: false,
     media: query,
     onchange: null,
-    addListener: jest.fn(), // deprecated
-    removeListener: jest.fn(), // deprecated
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
@@ -182,18 +188,22 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock IntersectionObserver for virtual scrolling tests
-global.IntersectionObserver = jest.fn().mockImplementation(() => ({
-  observe: jest.fn(),
-  unobserve: jest.fn(),
-  disconnect: jest.fn(),
-}));
+global.IntersectionObserver = class IntersectionObserver {
+  constructor() {
+    this.observe = jest.fn();
+    this.unobserve = jest.fn();
+    this.disconnect = jest.fn();
+  }
+};
 
 // Mock ResizeObserver for responsive component tests
-global.ResizeObserver = jest.fn().mockImplementation(() => ({
-  observe: jest.fn(),
-  unobserve: jest.fn(),
-  disconnect: jest.fn(),
-}));
+global.ResizeObserver = class ResizeObserver {
+  constructor() {
+    this.observe = jest.fn();
+    this.unobserve = jest.fn();
+    this.disconnect = jest.fn();
+  }
+};
 
 // Mock PerformanceObserver for performance tests
 global.PerformanceObserver = jest.fn().mockImplementation(() => ({
@@ -501,3 +511,18 @@ global.TestErrorBoundary = class extends React.Component {
 // afterAll(() => {
 //   server.close();
 // });
+
+// Increase default timeout for all tests
+jest.setTimeout(30000);
+
+// Suppress console output during tests
+if (process.env.NODE_ENV === 'test') {
+  global.console = {
+    ...console,
+    log: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  };
+}

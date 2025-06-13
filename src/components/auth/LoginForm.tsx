@@ -8,7 +8,7 @@
 
 import { useLoginAnalytics } from '@/hooks/auth/useLoginAnalytics';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, ChevronDown, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, CircleAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { getSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -64,6 +64,35 @@ interface LoginFormProps {
   className?: string;
 }
 
+// Error handling utilities
+const handleAuthError = (
+  error: unknown,
+  email: string,
+  analytics: ReturnType<typeof useLoginAnalytics>,
+  startTime: number
+) => {
+  const isNetworkError = error instanceof Error && error.message.toLowerCase().includes('network');
+
+  const errorMessage = isNetworkError
+    ? 'Network error, please try again.'
+    : error instanceof Error
+      ? error.message
+      : 'Authentication failed';
+
+  analytics.trackAuthenticationFailure(email, errorMessage, Date.now() - startTime);
+  analytics.trackSecurityEvent({
+    eventType: 'login_failed',
+    severity: 'MEDIUM',
+    outcome: 'FAILURE',
+    metadata: { error: errorMessage },
+  });
+
+  return {
+    message: errorMessage,
+    type: isNetworkError ? 'network' : 'auth',
+  };
+};
+
 export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
   const router = useRouter();
   const analytics = useLoginAnalytics();
@@ -71,7 +100,7 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [loginStartTime, setLoginStartTime] = useState<number | null>(null);
 
   const {
@@ -100,52 +129,56 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
 
   // Debug register function
   useEffect(() => {
-    const emailRegister = register('email');
-    const passwordRegister = register('password');
-    console.log('=== REGISTER DEBUG ===');
-    console.log('emailRegister:', emailRegister);
-    console.log('passwordRegister:', passwordRegister);
-    console.log('=== END REGISTER DEBUG ===');
+    if (process.env.NODE_ENV !== 'test') {
+      const emailRegister = register('email');
+      const passwordRegister = register('password');
+      console.log('=== REGISTER DEBUG ===');
+      console.log('emailRegister:', emailRegister);
+      console.log('passwordRegister:', passwordRegister);
+      console.log('=== END REGISTER DEBUG ===');
+    }
   }, [register]);
 
   // Debug form state with more details
   useEffect(() => {
-    const currentValues = getValues();
-    console.log('=== FORM DEBUG INFO ===');
-    console.log('Form validation state:');
-    console.log('  isValid:', isValid);
-    console.log('  isValidating:', isValidating);
+    if (process.env.NODE_ENV !== 'test') {
+      const currentValues = getValues();
+      console.log('=== FORM DEBUG INFO ===');
+      console.log('Form validation state:');
+      console.log('  isValid:', isValid);
+      console.log('  isValidating:', isValidating);
 
-    // Safe error logging to avoid circular structure
-    const safeErrors = Object.keys(errors).reduce(
-      (acc, key) => {
-        const error = errors[key as keyof typeof errors];
-        acc[key] = error ? { message: error.message, type: error.type } : null;
-        return acc;
-      },
-      {} as Record<string, any>
-    );
-    console.log('  errors:', safeErrors);
+      // Safe error logging to avoid circular structure
+      const safeErrors = Object.keys(errors).reduce(
+        (acc, key) => {
+          const error = errors[key as keyof typeof errors];
+          acc[key] = error ? { message: error.message, type: error.type } : null;
+          return acc;
+        },
+        {} as Record<string, any>
+      );
+      console.log('  errors:', safeErrors);
 
-    console.log('  watchedValues:', {
-      email: email,
-      emailLength: email?.length || 0,
-      password: password,
-      passwordLength: password?.length || 0,
-      role: selectedRole,
-      roleLength: selectedRole?.length || 0,
-    });
-    console.log('  getAllValues:', currentValues);
-    console.log('  field status:', {
-      hasEmail: !!email && email.length > 0,
-      hasPassword: !!password && password.length > 0,
-      hasRole: !!selectedRole && selectedRole.length > 0,
-      emailValid: !errors.email,
-      passwordValid: !errors.password,
-      roleValid: !errors.role,
-    });
-    console.log('  button should be enabled:', !!(email && password && selectedRole));
-    console.log('=== END DEBUG INFO ===');
+      console.log('  watchedValues:', {
+        email: email,
+        emailLength: email?.length || 0,
+        password: password,
+        passwordLength: password?.length || 0,
+        role: selectedRole,
+        roleLength: selectedRole?.length || 0,
+      });
+      console.log('  getAllValues:', currentValues);
+      console.log('  field status:', {
+        hasEmail: !!email && email.length > 0,
+        hasPassword: !!password && password.length > 0,
+        hasRole: !!selectedRole && selectedRole.length > 0,
+        emailValid: !errors.email,
+        passwordValid: !errors.password,
+        roleValid: !errors.role,
+      });
+      console.log('  button should be enabled:', !!(email && password && selectedRole));
+      console.log('=== END DEBUG INFO ===');
+    }
   }, [isValid, isValidating, errors, email, password, selectedRole, getValues]);
 
   // Track page load performance
@@ -178,7 +211,7 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
     (role: string) => {
       const selectionStartTime = Date.now() - (loginStartTime || Date.now());
       setValue('role', role);
-      setRoleDropdownOpen(false);
+      setIsRoleDropdownOpen(false);
 
       analytics.trackRoleSelection(
         role,
@@ -198,93 +231,31 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
     setAuthError(null);
 
     try {
-      // Track authentication attempt start
-      trackFieldInteraction('form', 'submit_start');
-
       const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
-        role: data.role,
+        rememberMe: false,
         redirect: false,
       });
 
-      const authDuration = Date.now() - authStartTime;
-
-      if (result?.error) {
-        const errorMessage =
-          result.error === 'CredentialsSignin'
-            ? 'Invalid credentials. Please try again.'
-            : 'Authentication failed. Please try again.';
-
-        setAuthError(errorMessage);
-        setError('root', { message: errorMessage });
-
-        // Track failed authentication
-        analytics.trackAuthenticationAttempt({
-          email: data.email,
-          role: data.role,
-          success: false,
-          duration: authDuration,
-          errorType: result.error,
-          securityFlags: [],
-        });
-
-        analytics.trackSecurityEvent({
-          eventType: 'FAILED_LOGIN',
-          severity: 'MEDIUM',
-          outcome: 'FAILURE',
-          metadata: { email: data.email, role: data.role, error: result.error },
-        });
-
-        return;
+      if (!result?.ok) {
+        throw new Error(result?.error || 'Authentication failed');
       }
 
-      // Successful authentication
-      analytics.trackAuthenticationAttempt({
-        email: data.email,
-        role: data.role,
-        success: true,
-        duration: authDuration,
-        securityFlags: [],
-      });
-
-      // Get updated session to ensure role-based redirection
       const session = await getSession();
-      const redirectUrl = callbackUrl || ROLE_REDIRECTS[data.role] || '/dashboard';
+      if (!session?.user) {
+        throw new Error('Session not found');
+      }
 
-      // Track successful login performance
-      analytics.trackLoginPerformance({
-        roleSelectionTime: 0, // Will be updated with actual timing
-        roleBasedRedirectionSuccess: 1,
-        secureLoginCompliance: 1,
-        loginDuration: authDuration,
-        loginSuccessRate: 100,
-        sessionCreationTime: authDuration,
-      });
+      const roles = session.user.roles || [];
+      const redirectPath = callbackUrl || getDefaultRedirect(roles);
+      router.push(redirectPath);
 
-      router.push(redirectUrl);
+      analytics.trackAuthenticationSuccess(data.email, roles, Date.now() - authStartTime);
     } catch (error) {
-      const authDuration = Date.now() - authStartTime;
-      const errorMessage = 'An unexpected error occurred. Please try again.';
-
-      setAuthError(errorMessage);
-      setError('root', { message: errorMessage });
-
-      analytics.trackAuthenticationAttempt({
-        email: data.email,
-        role: data.role,
-        success: false,
-        duration: authDuration,
-        errorType: 'UNEXPECTED_ERROR',
-        securityFlags: ['EXCEPTION'],
-      });
-
-      analytics.trackSecurityEvent({
-        eventType: 'LOGIN_ERROR',
-        severity: 'HIGH',
-        outcome: 'FAILURE',
-        metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
-      });
+      const errorInfo = handleAuthError(error, data.email, analytics, authStartTime);
+      setAuthError(errorInfo.message);
+      setError('root', errorInfo);
     } finally {
       setIsLoading(false);
     }
@@ -352,7 +323,7 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
               </div>
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" aria-label="Login Form">
               {/* Email Field */}
               <div>
                 <label
@@ -443,53 +414,76 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
 
               {/* Role Selection */}
               <div>
-                <label htmlFor="role" className="block text-sm font-semibold text-neutral-700 mb-2">
+                <label className="block text-sm font-semibold text-neutral-700 mb-2" htmlFor="role">
                   Select Role
                 </label>
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                    id="role"
                     className={`w-full h-12 px-4 border-2 rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 flex items-center justify-between ${
                       errors.role
                         ? 'border-red-300 bg-red-50'
                         : 'border-neutral-300 hover:border-neutral-400'
                     }`}
-                    onFocus={() => trackFieldInteraction('role', 'focus')}
+                    onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                    aria-label="Select a role"
+                    aria-expanded={isRoleDropdownOpen}
+                    aria-haspopup="listbox"
+                    aria-controls="role-listbox"
+                    aria-describedby={errors.role ? 'role-error' : undefined}
+                    role="combobox"
                   >
-                    <span
-                      className={selectedRole ? 'text-neutral-900 font-medium' : 'text-neutral-500'}
-                    >
-                      {selectedRole || 'Choose your role'}
+                    <span className={selectedRole ? 'text-neutral-900' : 'text-neutral-500'}>
+                      {selectedRole || 'Select a role'}
                     </span>
                     <ChevronDown
                       className={`w-5 h-5 text-neutral-400 transition-transform duration-200 ${
-                        roleDropdownOpen ? 'rotate-180' : ''
+                        isRoleDropdownOpen ? 'transform rotate-180' : ''
                       }`}
+                      aria-hidden="true"
                     />
                   </button>
-
-                  {roleDropdownOpen && (
-                    <div className="absolute z-10 w-full mt-2 bg-white border border-neutral-300 rounded-lg shadow-xl max-h-60 overflow-auto">
+                  {isRoleDropdownOpen && (
+                    <div
+                      id="role-listbox"
+                      className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg"
+                      role="listbox"
+                      aria-labelledby="role"
+                    >
                       {AVAILABLE_ROLES.map(role => (
                         <button
                           key={role.value}
                           type="button"
-                          onClick={() => handleRoleSelect(role.value)}
-                          className="w-full px-4 py-3 text-left hover:bg-primary-50 hover:text-primary-700 focus:bg-primary-50 focus:text-primary-700 focus:outline-none transition-colors duration-200 border-b border-neutral-100 last:border-b-0"
+                          className={`w-full px-4 py-2 text-left hover:bg-neutral-50 ${
+                            selectedRole === role.value
+                              ? 'bg-primary-50 text-primary-700'
+                              : 'text-neutral-700'
+                          }`}
+                          onClick={() => {
+                            setValue('role', role.value);
+                            setIsRoleDropdownOpen(false);
+                            trackFieldInteraction('role', 'select');
+                            setAuthError(null);
+                          }}
+                          role="option"
+                          aria-selected={selectedRole === role.value}
                         >
-                          <span className="font-medium">{role.label}</span>
+                          {role.label}
                         </button>
                       ))}
                     </div>
                   )}
+                  {errors.role && (
+                    <p
+                      id="role-error"
+                      className="mt-2 text-sm text-red-600 flex items-center space-x-1"
+                    >
+                      <CircleAlert className="w-4 h-4" />
+                      <span>{errors.role.message}</span>
+                    </p>
+                  )}
                 </div>
-                {errors.role && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{errors.role.message}</span>
-                  </p>
-                )}
               </div>
 
               {/* Remember Me */}
@@ -511,29 +505,16 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
               {/* Submit Button */}
               <button
                 type="submit"
+                className={`w-full h-12 font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white`}
                 disabled={isLoading}
-                className={`w-full h-12 font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl ${
-                  email && password && selectedRole && !isLoading
-                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white'
-                    : !isLoading
-                      ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white'
-                      : 'bg-neutral-300 text-neutral-500 cursor-not-allowed shadow-none'
-                }`}
-                title={
-                  !isValid ? 'Debug mode: Form validation may have issues' : 'Ready to sign in'
-                }
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Signing In...</span>
+                    <span>Signing in...</span>
                   </>
                 ) : (
-                  <span>
-                    {email && password && selectedRole
-                      ? 'Sign In to Dashboard'
-                      : 'Debug: Fill All Fields'}
-                  </span>
+                  <span>Sign in</span>
                 )}
               </button>
 

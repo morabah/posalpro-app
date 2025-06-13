@@ -7,11 +7,12 @@
 
 import { fireEvent, render, RenderOptions, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Mock } from 'jest';
 import { SessionProvider } from 'next-auth/react';
 import { ReactElement, ReactNode } from 'react';
 
 // Mock session type for testing
-interface MockSession {
+export interface MockSession {
   user: {
     id: string;
     name: string;
@@ -20,6 +21,14 @@ interface MockSession {
     permissions: string[];
   };
   expires: string;
+}
+
+// Mock analytics type for testing
+export interface MockAnalytics {
+  track: Mock;
+  identify: Mock;
+  page: Mock;
+  reset: Mock;
 }
 
 // Mock session for testing
@@ -35,7 +44,7 @@ export const mockSession: MockSession = {
 };
 
 // Mock analytics for testing
-export const mockAnalytics = {
+export const mockAnalytics: MockAnalytics = {
   track: jest.fn(),
   identify: jest.fn(),
   page: jest.fn(),
@@ -52,15 +61,35 @@ export function renderWithProviders(
   { session = mockSession, ...renderOptions }: CustomRenderOptions = {}
 ) {
   function Wrapper({ children }: { children: ReactNode }) {
-    return <SessionProvider session={session as any}>{children}</SessionProvider>;
+    return <SessionProvider session={session}>{children}</SessionProvider>;
   }
 
   return render(ui, { wrapper: Wrapper, ...renderOptions });
 }
 
 // Database testing utilities
+interface MockUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  createdAt: Date;
+  lastActive: Date;
+}
+
+interface MockProposal {
+  id: string;
+  name: string;
+  client: string;
+  status: string;
+  progress: number;
+  deadline: Date;
+  createdAt: Date;
+}
+
 export class DatabaseTestUtils {
-  static createMockUser(overrides: Partial<any> = {}) {
+  static createMockUser(overrides: Partial<MockUser> = {}): MockUser {
     return {
       id: 'test-user-1',
       name: 'Test User',
@@ -73,7 +102,7 @@ export class DatabaseTestUtils {
     };
   }
 
-  static createMockProposal(overrides: Partial<any> = {}) {
+  static createMockProposal(overrides: Partial<MockProposal> = {}): MockProposal {
     return {
       id: 'test-proposal-1',
       name: 'Test Proposal',
@@ -88,23 +117,19 @@ export class DatabaseTestUtils {
 }
 
 // API testing utilities
-export class ApiTestUtils {
-  static mockApiResponse(data: any, status: number = 200) {
-    return {
-      ok: status >= 200 && status < 300,
-      status,
-      json: async () => data,
-      text: async () => JSON.stringify(data),
-    };
-  }
+export interface ApiResponse<T> {
+  ok: boolean;
+  status: number;
+  json: () => Promise<T>;
+  text: () => Promise<string>;
+}
 
-  static setupApiMocks() {
-    global.fetch = jest.fn();
-  }
+export function setupApiMocks(): void {
+  global.fetch = jest.fn();
+}
 
-  static resetApiMocks() {
-    jest.resetAllMocks();
-  }
+export function resetApiMocks(): void {
+  jest.resetAllMocks();
 }
 
 // Component testing helpers
@@ -138,8 +163,18 @@ export class ComponentTestHelpers {
 }
 
 // Test data generators
+interface TestUser extends MockUser {}
+interface TestProposal extends MockProposal {}
+interface TestRole {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  userCount: number;
+}
+
 export const TestDataGenerators = {
-  user: (id: number = 1) => ({
+  user: (id: number = 1): TestUser => ({
     id: `user-${id}`,
     name: `Test User ${id}`,
     email: `user${id}@test.com`,
@@ -149,7 +184,7 @@ export const TestDataGenerators = {
     lastActive: new Date(),
   }),
 
-  proposal: (id: number = 1) => ({
+  proposal: (id: number = 1): TestProposal => ({
     id: `proposal-${id}`,
     name: `Test Proposal ${id}`,
     client: `Test Client ${id}`,
@@ -159,7 +194,7 @@ export const TestDataGenerators = {
     createdAt: new Date(),
   }),
 
-  role: (id: number = 1) => ({
+  role: (id: number = 1): TestRole => ({
     id: `role-${id}`,
     name: `Test Role ${id}`,
     description: `Test role description ${id}`,

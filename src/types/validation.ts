@@ -66,11 +66,29 @@ export interface FixSuggestion {
   automatable?: boolean; // Whether the fix can be applied automatically
 }
 
+// Action result types
+export type ActionType = 'replace' | 'configure' | 'add' | 'remove' | 'update';
+export type ActionTarget = 'product' | 'configuration' | 'relationship' | 'license' | 'custom';
+export type SuggestionType = 'automatic' | 'manual' | 'configuration' | 'replacement';
+export type SuggestionImpact = 'low' | 'medium' | 'high';
+
+export interface ActionResult {
+  type: 'error' | 'warning' | 'fix' | 'suggest' | 'block';
+  message: string;
+  data?: {
+    description?: string;
+    confidence?: number;
+    target?: ActionTarget;
+    value?: any;
+  };
+  automated?: boolean;
+}
+
 // Fix action definition
 export interface FixAction {
   id: string;
-  type: 'replace' | 'configure' | 'add' | 'remove' | 'update';
-  target: string; // product ID or configuration key
+  type: ActionType;
+  target: ActionTarget;
   value: any;
   description: string;
   automated: boolean;
@@ -274,15 +292,95 @@ export const VALIDATION_COMPONENT_MAPPING = {
   testCases: ['TC-H8-001', 'TC-H8-002', 'TC-H8-003'],
 } as const;
 
-// Type guards
-export const isValidationResult = (obj: any): obj is ValidationResult => {
-  return obj && typeof obj === 'object' && 'id' in obj && 'status' in obj;
+// Type guards for validation types
+export const isValidationResult = (obj: unknown): obj is ValidationResult => {
+  if (!obj || typeof obj !== 'object') return false;
+  const result = obj as ValidationResult;
+  return (
+    typeof result.id === 'string' &&
+    Array.isArray(result.issues) &&
+    Array.isArray(result.suggestions) &&
+    result.timestamp instanceof Date &&
+    typeof result.executionTime === 'number' &&
+    Array.isArray(result.userStoryMappings)
+  );
 };
 
-export const isValidationIssue = (obj: any): obj is ValidationIssue => {
-  return obj && typeof obj === 'object' && 'id' in obj && 'type' in obj && 'severity' in obj;
+export const isValidationIssue = (obj: unknown): obj is ValidationIssue => {
+  if (!obj || typeof obj !== 'object') return false;
+  const issue = obj as ValidationIssue;
+  return (
+    typeof issue.id === 'string' &&
+    ['error', 'warning', 'info'].includes(issue.type) &&
+    ['critical', 'high', 'medium', 'low'].includes(issue.severity) &&
+    typeof issue.message === 'string' &&
+    Array.isArray(issue.affectedProducts) &&
+    Array.isArray(issue.fixSuggestions)
+  );
 };
 
-export const isFixSuggestion = (obj: any): obj is FixSuggestion => {
-  return obj && typeof obj === 'object' && 'id' in obj && 'type' in obj && 'confidence' in obj;
+export const isFixSuggestion = (obj: unknown): obj is FixSuggestion => {
+  if (!obj || typeof obj !== 'object') return false;
+  const suggestion = obj as FixSuggestion;
+  return (
+    typeof suggestion.id === 'string' &&
+    ['automatic', 'manual', 'configuration', 'replacement'].includes(suggestion.type) &&
+    typeof suggestion.title === 'string' &&
+    typeof suggestion.description === 'string' &&
+    typeof suggestion.confidence === 'number' &&
+    ['low', 'medium', 'high'].includes(suggestion.impact) &&
+    Array.isArray(suggestion.actions)
+  );
+};
+
+export const isFixAction = (obj: unknown): obj is FixAction => {
+  if (!obj || typeof obj !== 'object') return false;
+  const action = obj as FixAction;
+  return (
+    typeof action.id === 'string' &&
+    ['replace', 'configure', 'add', 'remove', 'update'].includes(action.type) &&
+    typeof action.target === 'string' &&
+    typeof action.description === 'string' &&
+    typeof action.automated === 'boolean'
+  );
+};
+
+export const isValidationRule = (obj: unknown): obj is ValidationRule => {
+  if (!obj || typeof obj !== 'object') return false;
+  const rule = obj as ValidationRule;
+  return (
+    typeof rule.id === 'string' &&
+    typeof rule.name === 'string' &&
+    typeof rule.description === 'string' &&
+    typeof rule.category === 'string' &&
+    ['critical', 'high', 'medium', 'low'].includes(rule.severity) &&
+    Array.isArray(rule.conditions) &&
+    Array.isArray(rule.actions) &&
+    typeof rule.enabled === 'boolean' &&
+    Array.isArray(rule.userStoryMappings) &&
+    typeof rule.version === 'string' &&
+    rule.lastModified instanceof Date &&
+    typeof rule.executionOrder === 'number'
+  );
+};
+
+export const isRuleCondition = (obj: unknown): obj is RuleCondition => {
+  if (!obj || typeof obj !== 'object') return false;
+  const condition = obj as RuleCondition;
+  return (
+    typeof condition.id === 'string' &&
+    ['product', 'relationship', 'configuration', 'license', 'custom'].includes(condition.type) &&
+    ['equals', 'contains', 'exists', 'greater', 'less', 'matches'].includes(condition.operator) &&
+    typeof condition.field === 'string'
+  );
+};
+
+export const isRuleAction = (obj: unknown): obj is RuleAction => {
+  if (!obj || typeof obj !== 'object') return false;
+  const action = obj as RuleAction;
+  return (
+    typeof action.id === 'string' &&
+    ['error', 'warning', 'fix', 'suggest', 'block'].includes(action.type) &&
+    typeof action.message === 'string'
+  );
 };

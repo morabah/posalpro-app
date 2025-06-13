@@ -13,6 +13,12 @@ interface AnalyticsHook {
   track: (eventName: string, properties: AnalyticsEvent) => void;
   identify: (userId: string, traits: Record<string, unknown>) => void;
   page: (name: string, properties?: AnalyticsEvent) => void;
+  trackWizardStep: (
+    step: number,
+    stepName: string,
+    action: string,
+    properties: AnalyticsEvent
+  ) => void;
 }
 
 export const useAnalytics = (): AnalyticsHook => {
@@ -63,9 +69,23 @@ export const useAnalytics = (): AnalyticsHook => {
     // gtag('config', 'GA_TRACKING_ID', { page_title: name });
   }, []);
 
+  const trackWizardStep = useCallback(
+    (step: number, stepName: string, action: string, properties: AnalyticsEvent) => {
+      track('wizard_step_completion', {
+        step,
+        stepName,
+        action,
+        ...properties,
+        timestamp: Date.now(),
+      });
+    },
+    [track]
+  );
+
   return {
     track,
     identify,
     page,
+    trackWizardStep,
   };
 };
