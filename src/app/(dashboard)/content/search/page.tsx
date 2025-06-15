@@ -129,7 +129,7 @@ export default function ContentSearch() {
   useEffect(() => {
     searchStartTimeRef.current = searchStartTime;
     performanceMonitor.trackEffect('searchStartTime-update');
-  }, [searchStartTime, performanceMonitor]);
+  }, [searchStartTime]); // Remove performanceMonitor dependency to prevent infinite loop
 
   const { track } = useAnalytics();
 
@@ -238,7 +238,7 @@ export default function ContentSearch() {
     };
 
     fetchContent();
-  }, [performanceMonitor]);
+  }, []); // Remove performanceMonitor dependency to prevent infinite loop
 
   const trackContentAction = useCallback(
     (action: string, data: any) => {
@@ -282,7 +282,7 @@ export default function ContentSearch() {
         searchMetrics: dynamicMetrics,
       });
     }
-  }, [searchQuery, track, searchMetrics, performanceMonitor]);
+  }, [searchQuery, track, searchMetrics]); // Remove performanceMonitor dependency
 
   useEffect(() => {
     performanceMonitor.trackEffect('search-completed');
@@ -312,8 +312,7 @@ export default function ContentSearch() {
     searchResult.searchTime,
     track,
     searchMetrics,
-    performanceMonitor,
-  ]);
+  ]); // Remove performanceMonitor dependency
 
   useEffect(() => {
     performanceMonitor.trackEffect('content-loaded');
@@ -333,7 +332,7 @@ export default function ContentSearch() {
         searchMetrics: dynamicMetrics,
       });
     }
-  }, [originalContent.length, track, searchMetrics, performanceMonitor]);
+  }, [originalContent.length, track, searchMetrics]); // Remove performanceMonitor dependency
 
   const toggleContentType = useCallback((type: ContentType) => {
     setSelectedTypes(prev =>
