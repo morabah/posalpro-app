@@ -111,16 +111,32 @@ export function ValidationProgressMonitor({
     const interval = setInterval(() => {
       // Optimize: Only update if component is visible and progress is incomplete
       if (document.visibilityState === 'visible') {
-        setValidationStatus(prev => {
-          // Only update if actually progressing
-          if (prev.isActive && prev.progress < 100) {
-            return {
-              ...prev,
-              progress: Math.min(prev.progress + 5, 95),
-            };
-          }
-          return prev;
-        });
+        // Use requestIdleCallback for better performance
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => {
+            setValidationStatus(prev => {
+              // Only update if actually progressing
+              if (prev.isActive && prev.progress < 100) {
+                return {
+                  ...prev,
+                  progress: Math.min(prev.progress + 5, 95),
+                };
+              }
+              return prev;
+            });
+          });
+        } else {
+          setValidationStatus(prev => {
+            // Only update if actually progressing
+            if (prev.isActive && prev.progress < 100) {
+              return {
+                ...prev,
+                progress: Math.min(prev.progress + 5, 95),
+              };
+            }
+            return prev;
+          });
+        }
       }
     }, refreshInterval);
 

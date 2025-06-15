@@ -192,7 +192,16 @@ export default function ContentSearch() {
         const response = await fetch('/api/content');
         if (!response.ok) throw new Error('Failed to fetch content');
 
-        const data = await response.json();
+        const responseData = await response.json();
+
+        // Handle the API response structure: {content: [...], pagination: {...}}
+        const data = responseData.content || responseData;
+
+        // Ensure data is an array before calling map
+        if (!Array.isArray(data)) {
+          throw new Error('Invalid response format: expected array of content items');
+        }
+
         const contentWithDates = data.map((item: any) => ({
           ...item,
           createdAt: new Date(item.createdAt),
@@ -201,6 +210,7 @@ export default function ContentSearch() {
 
         setOriginalContent(contentWithDates);
       } catch (err) {
+        console.error('Content fetch error:', err);
         setError(err instanceof Error ? err.message : 'Failed to load content');
       } finally {
         setLoading(false);
