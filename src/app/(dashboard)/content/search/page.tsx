@@ -428,7 +428,7 @@ export default function ContentSearch() {
                     />
                     {searchResult.isLoading && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b border-blue-600"></div>
+                        <span className="animate-spin rounded-full h-4 w-4 border-b border-blue-600 block"></span>
                       </div>
                     )}
                   </div>
