@@ -6,6 +6,7 @@
 
 'use client';
 
+import { AnalyticsStorageMonitor } from '@/components/common/AnalyticsStorageMonitor';
 import { useEffect, useState } from 'react';
 import { AppFooter } from './AppFooter';
 import { AppHeader } from './AppHeader';
@@ -131,6 +132,9 @@ export function AppLayout({ children, user }: AppLayoutProps) {
         {/* Footer */}
         <AppFooter />
       </div>
+
+      {/* Analytics Storage Monitor - Development Only */}
+      <AnalyticsStorageMonitor />
     </div>
   );
 }
