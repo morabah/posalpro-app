@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useOptimizedSearch } from '@/hooks/useOptimizedSearch';
+import { usePerformanceMonitor } from '@/hooks/usePerformanceMonitor';
 import {
   ArrowDownTrayIcon,
   BookmarkIcon,
@@ -23,7 +24,7 @@ import {
   StarIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -111,6 +112,25 @@ export default function ContentSearch() {
   const [sessionStartTime] = useState(Date.now());
   const [searchStartTime, setSearchStartTime] = useState<number | null>(null);
 
+  // Use refs to avoid dependency cycles in useEffect
+  const searchStartTimeRef = useRef<number | null>(null);
+  const sessionStartTimeRef = useRef(Date.now());
+
+  // Enhanced performance monitoring
+  const performanceMonitor = usePerformanceMonitor({
+    componentName: 'ContentSearch',
+    maxRenderTime: 16,
+    maxRenderCount: 50,
+    detectInfiniteLoops: true,
+    trackMemory: true,
+  });
+
+  // Update refs when state changes
+  useEffect(() => {
+    searchStartTimeRef.current = searchStartTime;
+    performanceMonitor.trackEffect('searchStartTime-update');
+  }, [searchStartTime, performanceMonitor]);
+
   const { track } = useAnalytics();
 
   const [searchQuery, updateSearchQuery, searchResult] = useOptimizedSearch(originalContent, {
@@ -155,7 +175,7 @@ export default function ContentSearch() {
     (): ContentSearchMetrics => ({
       searchQuery,
       timeToFirstResult: searchResult.searchTime / 1000,
-      timeToSelection: searchStartTime ? (Date.now() - searchStartTime) / 1000 : 0,
+      timeToSelection: 0, // Will be calculated when needed, not on every render
       searchAccuracy:
         filteredResults.length > 0
           ? (filteredResults.filter(item => (item.relevanceScore || 0) > 80).length /
@@ -166,7 +186,7 @@ export default function ContentSearch() {
       categoriesUsed: selectedTypes,
       filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
       relatedContentClicks: 0,
-      browsingSessionDuration: (Date.now() - sessionStartTime) / 1000,
+      browsingSessionDuration: 0, // Will be calculated when needed, not on every render
       contentSaved: false,
       tagsAccepted: activeTags.length,
       tagsModified: 0,
@@ -180,12 +200,12 @@ export default function ContentSearch() {
       activeTags,
       dateFrom,
       dateTo,
-      searchStartTime,
-      sessionStartTime,
     ]
   );
 
   useEffect(() => {
+    performanceMonitor.trackEffect('content-fetch');
+
     const fetchContent = async () => {
       try {
         setLoading(true);
@@ -218,38 +238,70 @@ export default function ContentSearch() {
     };
 
     fetchContent();
-  }, []);
+  }, [performanceMonitor]);
 
   const trackContentAction = useCallback(
     (action: string, data: any) => {
+      // Calculate dynamic metrics at tracking time using refs to avoid infinite loops
+      const dynamicMetrics = {
+        ...searchMetrics,
+        timeToSelection: searchStartTimeRef.current
+          ? (Date.now() - searchStartTimeRef.current) / 1000
+          : 0,
+        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+      };
+
       track('content_search', {
         action,
         ...data,
-        searchMetrics,
+        searchMetrics: dynamicMetrics,
       });
     },
     [track, searchMetrics]
   );
 
+  // Fixed useEffect - no longer depends on trackContentAction to avoid infinite loop
   useEffect(() => {
+    performanceMonitor.trackEffect('search-initiated');
+
     if (searchQuery.trim()) {
       const currentSearchStartTime = Date.now();
       setSearchStartTime(currentSearchStartTime);
 
-      trackContentAction('search_initiated', {
+      // Track directly using refs to avoid dependency cycle
+      const dynamicMetrics = {
+        ...searchMetrics,
+        timeToSelection: 0, // Just started searching
+        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+      };
+
+      track('content_search', {
+        action: 'search_initiated',
         query: searchQuery,
         timestamp: currentSearchStartTime,
+        searchMetrics: dynamicMetrics,
       });
     }
-  }, [searchQuery, trackContentAction]);
+  }, [searchQuery, track, searchMetrics, performanceMonitor]);
 
   useEffect(() => {
+    performanceMonitor.trackEffect('search-completed');
+
     if (searchStartTime && !searchResult.isLoading) {
-      trackContentAction('search_completed', {
+      // Track directly using refs to avoid dependency cycle
+      const dynamicMetrics = {
+        ...searchMetrics,
+        timeToSelection: (Date.now() - searchStartTime) / 1000,
+        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+      };
+
+      track('content_search', {
+        action: 'search_completed',
         query: searchQuery,
         duration: Date.now() - searchStartTime,
         resultsCount: filteredResults.length,
         searchTime: searchResult.searchTime,
+        searchMetrics: dynamicMetrics,
       });
     }
   }, [
@@ -258,8 +310,30 @@ export default function ContentSearch() {
     searchQuery,
     filteredResults.length,
     searchResult.searchTime,
-    trackContentAction,
+    track,
+    searchMetrics,
+    performanceMonitor,
   ]);
+
+  useEffect(() => {
+    performanceMonitor.trackEffect('content-loaded');
+
+    if (originalContent.length > 0) {
+      // Track directly using refs to avoid dependency cycle
+      const dynamicMetrics = {
+        ...searchMetrics,
+        timeToSelection: 0,
+        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+      };
+
+      track('content_search', {
+        action: 'content_search_loaded',
+        totalContent: originalContent.length,
+        loadTime: Date.now() - sessionStartTimeRef.current,
+        searchMetrics: dynamicMetrics,
+      });
+    }
+  }, [originalContent.length, track, searchMetrics, performanceMonitor]);
 
   const toggleContentType = useCallback((type: ContentType) => {
     setSelectedTypes(prev =>
@@ -339,15 +413,6 @@ export default function ContentSearch() {
     if (score >= 60) return { label: `${Math.round(score)}% match`, color: 'text-yellow-600' };
     return { label: `${Math.round(score)}% match`, color: 'text-red-600' };
   };
-
-  useEffect(() => {
-    if (originalContent.length > 0) {
-      trackContentAction('content_search_loaded', {
-        totalContent: originalContent.length,
-        loadTime: Date.now() - sessionStartTime,
-      });
-    }
-  }, [originalContent.length, sessionStartTime, trackContentAction]);
 
   if (loading) {
     return (

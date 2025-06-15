@@ -1,329 +1,244 @@
 /**
  * PosalPro MVP2 - Performance Monitoring Hook
- * Tracks and prevents performance violations in React components
+ * Enhanced to detect and prevent infinite loops and performance violations
  */
 
 import { useCallback, useEffect, useRef } from 'react';
 
-interface PerformanceMetrics {
-  renderTime: number;
-  componentName: string;
+interface PerformanceViolation {
+  type: 'long-task' | 'infinite-loop' | 'memory-leak' | 'render-cycle';
+  duration: number;
   timestamp: number;
+  component?: string;
+  details?: any;
+}
+
+interface PerformanceMetrics {
+  violations: PerformanceViolation[];
+  renderCount: number;
+  lastRenderTime: number;
+  averageRenderTime: number;
   memoryUsage?: number;
 }
 
-interface PerformanceThresholds {
-  maxRenderTime: number; // milliseconds
-  maxMemoryIncrease: number; // MB
-  maxTimeoutDuration: number; // milliseconds
+interface UsePerformanceMonitorOptions {
+  componentName?: string;
+  maxRenderTime?: number;
+  maxRenderCount?: number;
+  detectInfiniteLoops?: boolean;
+  trackMemory?: boolean;
 }
 
-const DEFAULT_THRESHOLDS: PerformanceThresholds = {
-  maxRenderTime: 16, // 60fps = 16.67ms per frame
-  maxMemoryIncrease: 10, // 10MB
-  maxTimeoutDuration: 50, // 50ms to avoid violations
-};
+export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}) {
+  const {
+    componentName = 'Unknown',
+    maxRenderTime = 16, // 60fps = 16.67ms per frame
+    maxRenderCount = 100, // Max renders per second
+    detectInfiniteLoops = true,
+    trackMemory = false,
+  } = options;
 
-// Global performance metrics storage
-const performanceMetrics: PerformanceMetrics[] = [];
-const MAX_METRICS_HISTORY = 100;
+  const metricsRef = useRef<PerformanceMetrics>({
+    violations: [],
+    renderCount: 0,
+    lastRenderTime: 0,
+    averageRenderTime: 0,
+  });
 
-// Performance violation tracking
-let violationCount = 0;
-const MAX_VIOLATIONS_BEFORE_WARNING = 5;
+  const renderTimesRef = useRef<number[]>([]);
+  const renderCountRef = useRef(0);
+  const lastResetRef = useRef(Date.now());
+  const infiniteLoopDetectorRef = useRef<{
+    lastEffectRun: number;
+    effectRunCount: number;
+    suspiciousPatterns: Map<string, number>;
+  }>({
+    lastEffectRun: 0,
+    effectRunCount: 0,
+    suspiciousPatterns: new Map(),
+  });
 
-export function usePerformanceMonitor(
-  componentName: string,
-  thresholds: Partial<PerformanceThresholds> = {}
-) {
-  const renderStartTime = useRef<number>(0);
-  const lastMemoryUsage = useRef<number>(0);
-  const activeTimeouts = useRef<Set<NodeJS.Timeout>>(new Set());
+  // Track render performance
+  const trackRender = useCallback(() => {
+    const now = performance.now();
+    const renderTime = now - metricsRef.current.lastRenderTime;
 
-  const finalThresholds = { ...DEFAULT_THRESHOLDS, ...thresholds };
+    metricsRef.current.lastRenderTime = now;
+    metricsRef.current.renderCount++;
+    renderCountRef.current++;
 
-  // Start performance measurement
-  const startMeasurement = useCallback(() => {
-    renderStartTime.current = performance.now();
-
-    // Track memory usage if available
-    if ('memory' in performance) {
-      lastMemoryUsage.current = (performance as any).memory.usedJSHeapSize / 1024 / 1024;
-    }
-  }, []);
-
-  // End performance measurement
-  const endMeasurement = useCallback(() => {
-    const renderTime = performance.now() - renderStartTime.current;
-    let memoryIncrease = 0;
-
-    // Calculate memory increase if available
-    if ('memory' in performance) {
-      const currentMemory = (performance as any).memory.usedJSHeapSize / 1024 / 1024;
-      memoryIncrease = currentMemory - lastMemoryUsage.current;
-    }
-
-    const metrics: PerformanceMetrics = {
-      renderTime,
-      componentName,
-      timestamp: Date.now(),
-      memoryUsage: memoryIncrease,
-    };
-
-    // Store metrics
-    performanceMetrics.push(metrics);
-    if (performanceMetrics.length > MAX_METRICS_HISTORY) {
-      performanceMetrics.shift();
+    // Track render times for averaging
+    renderTimesRef.current.push(renderTime);
+    if (renderTimesRef.current.length > 100) {
+      renderTimesRef.current.shift();
     }
 
-    // Check for violations
-    if (renderTime > finalThresholds.maxRenderTime) {
-      violationCount++;
-      console.warn(`Performance violation in ${componentName}:`, {
-        renderTime: `${renderTime.toFixed(2)}ms`,
-        threshold: `${finalThresholds.maxRenderTime}ms`,
-        violationCount,
-      });
+    // Calculate average render time
+    metricsRef.current.averageRenderTime =
+      renderTimesRef.current.reduce((sum, time) => sum + time, 0) / renderTimesRef.current.length;
 
-      if (violationCount >= MAX_VIOLATIONS_BEFORE_WARNING) {
-        console.error(
-          `Multiple performance violations detected (${violationCount}). Consider optimizing ${componentName}.`
-        );
-      }
+    // Check for long render times
+    if (renderTime > maxRenderTime) {
+      const violation: PerformanceViolation = {
+        type: 'long-task',
+        duration: renderTime,
+        timestamp: now,
+        component: componentName,
+        details: { renderCount: metricsRef.current.renderCount },
+      };
+
+      metricsRef.current.violations.push(violation);
+      console.warn(`[Performance] Long render detected in ${componentName}:`, violation);
     }
 
-    if (memoryIncrease > finalThresholds.maxMemoryIncrease) {
-      console.warn(`Memory usage spike in ${componentName}:`, {
-        memoryIncrease: `${memoryIncrease.toFixed(2)}MB`,
-        threshold: `${finalThresholds.maxMemoryIncrease}MB`,
-      });
-    }
+    // Reset render count every second
+    if (now - lastResetRef.current > 1000) {
+      if (renderCountRef.current > maxRenderCount) {
+        const violation: PerformanceViolation = {
+          type: 'render-cycle',
+          duration: renderCountRef.current,
+          timestamp: now,
+          component: componentName,
+          details: { rendersPerSecond: renderCountRef.current },
+        };
 
-    return metrics;
-  }, [componentName, finalThresholds]);
-
-  // Optimized setTimeout that respects performance thresholds
-  const performantSetTimeout = useCallback(
-    (callback: () => void, delay: number): NodeJS.Timeout => {
-      // Warn if delay is too long for performance
-      if (delay > finalThresholds.maxTimeoutDuration) {
-        console.warn(`Long timeout detected in ${componentName}:`, {
-          delay: `${delay}ms`,
-          recommendation: `Consider breaking into smaller chunks or using requestIdleCallback`,
-        });
+        metricsRef.current.violations.push(violation);
+        console.warn(`[Performance] Excessive renders detected in ${componentName}:`, violation);
       }
 
-      // Wrap callback with performance monitoring
-      const wrappedCallback = () => {
-        const start = performance.now();
-
-        try {
-          callback();
-        } finally {
-          const duration = performance.now() - start;
-
-          if (duration > finalThresholds.maxTimeoutDuration) {
-            console.warn(`Slow timeout callback in ${componentName}:`, {
-              duration: `${duration.toFixed(2)}ms`,
-              threshold: `${finalThresholds.maxTimeoutDuration}ms`,
-            });
-          }
-        }
-      };
-
-      const timeoutId = setTimeout(wrappedCallback, delay);
-      activeTimeouts.current.add(timeoutId);
-
-      return timeoutId;
-    },
-    [componentName, finalThresholds]
-  );
-
-  // Optimized setInterval with performance monitoring
-  const performantSetInterval = useCallback(
-    (callback: () => void, delay: number): NodeJS.Timeout => {
-      let intervalCount = 0;
-      const maxIntervals = 1000; // Prevent runaway intervals
-
-      const wrappedCallback = () => {
-        intervalCount++;
-
-        if (intervalCount > maxIntervals) {
-          console.error(`Runaway interval detected in ${componentName}. Clearing interval.`);
-          clearInterval(intervalId);
-          return;
-        }
-
-        const start = performance.now();
-
-        try {
-          callback();
-        } finally {
-          const duration = performance.now() - start;
-
-          if (duration > finalThresholds.maxTimeoutDuration) {
-            console.warn(`Slow interval callback in ${componentName}:`, {
-              duration: `${duration.toFixed(2)}ms`,
-              intervalCount,
-              recommendation: 'Consider optimizing callback or increasing interval delay',
-            });
-          }
-        }
-      };
-
-      const intervalId = setInterval(wrappedCallback, delay);
-      activeTimeouts.current.add(intervalId);
-
-      return intervalId;
-    },
-    [componentName, finalThresholds]
-  );
-
-  // Clear timeout with cleanup
-  const clearPerformantTimeout = useCallback((timeoutId: NodeJS.Timeout) => {
-    clearTimeout(timeoutId);
-    activeTimeouts.current.delete(timeoutId);
-  }, []);
-
-  // Clear interval with cleanup
-  const clearPerformantInterval = useCallback((intervalId: NodeJS.Timeout) => {
-    clearInterval(intervalId);
-    activeTimeouts.current.delete(intervalId);
-  }, []);
-
-  // Optimized requestAnimationFrame
-  const performantRequestAnimationFrame = useCallback(
-    (callback: FrameRequestCallback): number => {
-      const wrappedCallback: FrameRequestCallback = timestamp => {
-        const start = performance.now();
-
-        try {
-          callback(timestamp);
-        } finally {
-          const duration = performance.now() - start;
-
-          if (duration > finalThresholds.maxRenderTime) {
-            console.warn(`Slow animation frame in ${componentName}:`, {
-              duration: `${duration.toFixed(2)}ms`,
-              threshold: `${finalThresholds.maxRenderTime}ms`,
-            });
-          }
-        }
-      };
-
-      return requestAnimationFrame(wrappedCallback);
-    },
-    [componentName, finalThresholds]
-  );
-
-  // Get performance summary
-  const getPerformanceSummary = useCallback(() => {
-    const componentMetrics = performanceMetrics.filter(m => m.componentName === componentName);
-
-    if (componentMetrics.length === 0) {
-      return null;
+      renderCountRef.current = 0;
+      lastResetRef.current = now;
     }
 
-    const renderTimes = componentMetrics.map(m => m.renderTime);
-    const avgRenderTime = renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length;
-    const maxRenderTime = Math.max(...renderTimes);
-    const minRenderTime = Math.min(...renderTimes);
+    // Track memory usage if enabled
+    if (trackMemory && 'memory' in performance) {
+      metricsRef.current.memoryUsage = (performance as any).memory.usedJSHeapSize;
+    }
+  }, [componentName, maxRenderTime, maxRenderCount, trackMemory]);
 
-    return {
-      componentName,
-      totalRenders: componentMetrics.length,
-      avgRenderTime: Number(avgRenderTime.toFixed(2)),
-      maxRenderTime: Number(maxRenderTime.toFixed(2)),
-      minRenderTime: Number(minRenderTime.toFixed(2)),
-      violationsCount: componentMetrics.filter(m => m.renderTime > finalThresholds.maxRenderTime)
-        .length,
-    };
-  }, [componentName, finalThresholds]);
+  // Detect infinite loops in useEffect
+  const trackEffect = useCallback(
+    (effectName: string) => {
+      if (!detectInfiniteLoops) return;
 
-  // Cleanup on unmount
+      const now = Date.now();
+      const detector = infiniteLoopDetectorRef.current;
+
+      // Track effect execution patterns
+      const patternKey = `${componentName}:${effectName}`;
+      const currentCount = detector.suspiciousPatterns.get(patternKey) || 0;
+      detector.suspiciousPatterns.set(patternKey, currentCount + 1);
+
+      // Check for rapid successive effect runs (potential infinite loop)
+      if (now - detector.lastEffectRun < 10) {
+        // Less than 10ms between effects
+        detector.effectRunCount++;
+
+        if (detector.effectRunCount > 10) {
+          // More than 10 rapid executions
+          const violation: PerformanceViolation = {
+            type: 'infinite-loop',
+            duration: detector.effectRunCount,
+            timestamp: now,
+            component: componentName,
+            details: {
+              effectName,
+              rapidExecutions: detector.effectRunCount,
+              pattern: patternKey,
+            },
+          };
+
+          metricsRef.current.violations.push(violation);
+          console.error(
+            `[Performance] Potential infinite loop detected in ${componentName}:`,
+            violation
+          );
+
+          // Reset to prevent spam
+          detector.effectRunCount = 0;
+        }
+      } else {
+        detector.effectRunCount = 0;
+      }
+
+      detector.lastEffectRun = now;
+
+      // Clean up old patterns every minute
+      if (now % 60000 < 1000) {
+        detector.suspiciousPatterns.clear();
+      }
+    },
+    [componentName, detectInfiniteLoops]
+  );
+
+  // Monitor for message handler violations
+  const trackMessageHandler = useCallback(
+    (handlerName: string, startTime: number) => {
+      const duration = performance.now() - startTime;
+
+      if (duration > 50) {
+        // More than 50ms is considered a violation
+        const violation: PerformanceViolation = {
+          type: 'long-task',
+          duration,
+          timestamp: performance.now(),
+          component: componentName,
+          details: {
+            handlerName,
+            violationType: 'message-handler',
+          },
+        };
+
+        metricsRef.current.violations.push(violation);
+        console.warn(`[Performance] Message handler violation in ${componentName}:`, violation);
+      }
+    },
+    [componentName]
+  );
+
+  // Auto-track renders
   useEffect(() => {
-    return () => {
-      // Clear all active timeouts/intervals
-      activeTimeouts.current.forEach(id => {
-        clearTimeout(id);
-        clearInterval(id);
-      });
-      activeTimeouts.current.clear();
-    };
+    trackRender();
+  });
+
+  // Cleanup old violations
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      const now = Date.now();
+      metricsRef.current.violations = metricsRef.current.violations.filter(
+        violation => now - violation.timestamp < 300000 // Keep violations for 5 minutes
+      );
+    }, 60000); // Clean up every minute
+
+    return () => clearInterval(cleanup);
   }, []);
 
-  // Auto-start measurement on mount
-  useEffect(() => {
-    startMeasurement();
-  }, [startMeasurement]);
+  // Get current metrics
+  const getMetrics = useCallback((): PerformanceMetrics => {
+    return { ...metricsRef.current };
+  }, []);
+
+  // Get recent violations
+  const getRecentViolations = useCallback((timeWindow = 60000): PerformanceViolation[] => {
+    const now = Date.now();
+    return metricsRef.current.violations.filter(
+      violation => now - violation.timestamp < timeWindow
+    );
+  }, []);
+
+  // Check if component is performing well
+  const isPerformant = useCallback((): boolean => {
+    const recentViolations = getRecentViolations(30000); // Last 30 seconds
+    return recentViolations.length === 0 && metricsRef.current.averageRenderTime < maxRenderTime;
+  }, [getRecentViolations, maxRenderTime]);
 
   return {
-    startMeasurement,
-    endMeasurement,
-    performantSetTimeout,
-    performantSetInterval,
-    clearPerformantTimeout,
-    clearPerformantInterval,
-    performantRequestAnimationFrame,
-    getPerformanceSummary,
-    metrics: performanceMetrics.filter(m => m.componentName === componentName),
+    trackRender,
+    trackEffect,
+    trackMessageHandler,
+    getMetrics,
+    getRecentViolations,
+    isPerformant,
+    componentName,
   };
 }
-
-// Global performance utilities
-export const PerformanceUtils = {
-  // Get all performance metrics
-  getAllMetrics: () => [...performanceMetrics],
-
-  // Clear all metrics
-  clearMetrics: () => {
-    performanceMetrics.length = 0;
-    violationCount = 0;
-  },
-
-  // Get performance summary for all components
-  getGlobalSummary: () => {
-    const componentGroups = performanceMetrics.reduce(
-      (groups, metric) => {
-        if (!groups[metric.componentName]) {
-          groups[metric.componentName] = [];
-        }
-        groups[metric.componentName].push(metric);
-        return groups;
-      },
-      {} as Record<string, PerformanceMetrics[]>
-    );
-
-    return Object.entries(componentGroups).map(([componentName, metrics]) => {
-      const renderTimes = metrics.map(m => m.renderTime);
-      const avgRenderTime = renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length;
-
-      return {
-        componentName,
-        totalRenders: metrics.length,
-        avgRenderTime: Number(avgRenderTime.toFixed(2)),
-        maxRenderTime: Number(Math.max(...renderTimes).toFixed(2)),
-        violationsCount: metrics.filter(m => m.renderTime > DEFAULT_THRESHOLDS.maxRenderTime)
-          .length,
-      };
-    });
-  },
-
-  // Export metrics for analysis
-  exportMetrics: () => {
-    const data = {
-      timestamp: new Date().toISOString(),
-      metrics: performanceMetrics,
-      summary: PerformanceUtils.getGlobalSummary(),
-      totalViolations: violationCount,
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `performance-metrics-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  },
-};
