@@ -387,7 +387,7 @@ export default function ContentSearch() {
                 time
                 {searchResult.isLoading && (
                   <span className="ml-2 inline-flex items-center">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600 mr-1"></div>
+                    <span className="animate-spin rounded-full h-3 w-3 border-b border-blue-600 mr-1 block"></span>
                     Searching...
                   </span>
                 )}
