@@ -9,6 +9,7 @@
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
+import { useOptimizedDataFetch } from '@/hooks/useOptimizedDataFetch';
 import {
   ArrowLeftIcon,
   BookOpenIcon,
@@ -159,13 +160,6 @@ export default function SMEContributionInterface() {
   const router = useRouter();
 
   const [assignment, setAssignment] = useState<SMEAssignment | null>(null);
-  const [templates, setTemplates] = useState<ContributionTemplate[]>([]);
-  const [resources, setResources] = useState<ContributionResource[]>([]);
-  const [versions, setVersions] = useState<VersionHistory[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [content, setContent] = useState('');
   const [wordCount, setWordCount] = useState(0);
   const [lastSaved, setLastSaved] = useState(new Date());
@@ -173,7 +167,7 @@ export default function SMEContributionInterface() {
   const [autosaveStatus, setAutosaveStatus] = useState('Saved');
   const sessionStartTime = useRef(Date.now());
 
-  const [activeTab, setActiveTab] = useState('context');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
@@ -189,6 +183,84 @@ export default function SMEContributionInterface() {
 
   // Auto-save functionality
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Optimized data fetching with caching and error handling
+  const {
+    data: assignmentData,
+    loading: assignmentLoading,
+    error: assignmentError,
+  } = useOptimizedDataFetch<SMEAssignment>('/api/sme/assignment', {
+    staleTime: 30 * 1000, // 30 seconds
+    cacheTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const { data: templatesData, loading: templatesLoading } = useOptimizedDataFetch<
+    ContributionTemplate[]
+  >('/api/sme/templates', {
+    staleTime: 60 * 1000, // 1 minute (templates change less frequently)
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  const { data: resourcesData, loading: resourcesLoading } = useOptimizedDataFetch<
+    ContributionResource[]
+  >('/api/sme/resources', {
+    staleTime: 60 * 1000, // 1 minute
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  const { data: versionsData, loading: versionsLoading } = useOptimizedDataFetch<VersionHistory[]>(
+    '/api/sme/versions',
+    {
+      staleTime: 10 * 1000, // 10 seconds (version history updates frequently)
+      cacheTime: 2 * 60 * 1000, // 2 minutes
+    }
+  );
+
+  // Combined loading and error states
+  const isLoading = assignmentLoading || templatesLoading || resourcesLoading || versionsLoading;
+  const fetchError = assignmentError;
+
+  // Process assignment data when it loads
+  useEffect(() => {
+    if (assignmentData) {
+      // Convert date strings to Date objects if needed
+      const processedAssignment = {
+        ...assignmentData,
+        assignedAt:
+          assignmentData.assignedAt instanceof Date
+            ? assignmentData.assignedAt
+            : new Date(assignmentData.assignedAt),
+        dueDate:
+          assignmentData.dueDate instanceof Date
+            ? assignmentData.dueDate
+            : new Date(assignmentData.dueDate),
+        content: {
+          ...assignmentData.content,
+          lastSaved:
+            assignmentData.content.lastSaved instanceof Date
+              ? assignmentData.content.lastSaved
+              : new Date(assignmentData.content.lastSaved),
+        },
+      };
+
+      setAssignment(processedAssignment);
+      setContent(processedAssignment.content.draft);
+      setWordCount(processedAssignment.content.wordCount);
+      setLastSaved(processedAssignment.content.lastSaved);
+    }
+  }, [assignmentData]);
+
+  // Process other data when it loads
+  useEffect(() => {
+    if (versionsData) {
+      // Convert date strings to Date objects for versions data
+      const processedVersions = versionsData.map((version: any) => ({
+        ...version,
+        savedAt: version.savedAt instanceof Date ? version.savedAt : new Date(version.savedAt),
+      }));
+      // Store processed versions if needed for display
+    }
+  }, [versionsData]);
 
   const handleAutoSave = useCallback((contentToSave: string) => {
     console.log('Auto-saving content...');
@@ -330,24 +402,20 @@ Please review this initial draft and provide feedback for refinement. The techni
   // Apply template
   const handleApplyTemplate = useCallback(
     (templateId: string) => {
-      const template = templates.find(t => t.id === templateId);
+      const template = templatesData?.find(t => t.id === templateId);
       if (!template) return;
 
       templateUsed.current = true;
+      setSelectedTemplate(templateId);
 
+      // Generate template content
       const templateContent = template.sections
-        .map(
-          section =>
-            `## ${section.title}\n\n${section.placeholder}\n\n${
-              section.guidance ? `<!-- Guidance: ${section.guidance} -->\n\n` : ''
-            }`
-        )
+        .map(section => `## ${section.title}\n\n${section.placeholder}\n\n`)
         .join('');
 
       setContent(templateContent);
       setWordCount(templateContent.trim().split(/\s+/).length);
       setHasUnsavedChanges(true);
-      setShowTemplates(false);
 
       trackAction('template_applied', {
         templateId,
@@ -355,7 +423,7 @@ Please review this initial draft and provide feedback for refinement. The techni
         estimatedTime: template.estimatedTime,
       });
     },
-    [templates, trackAction]
+    [templatesData, trackAction]
   );
 
   // Save draft
@@ -376,16 +444,15 @@ Please review this initial draft and provide feedback for refinement. The techni
 
   // Submit contribution
   const handleSubmit = useCallback(() => {
-    if (!assignment) return;
     trackAction('Submit Contribution', {
       wordCount,
-      versionCount: versions.length,
+      versionCount: versionsData?.length || 0,
       templateUsed: selectedTemplate !== '',
     });
     // In a real app, this would submit the content to the backend.
     toast.success('Contribution submitted successfully!');
     router.push('/dashboard/sme/assignments');
-  }, [assignment, wordCount, versions.length, selectedTemplate, trackAction, router]);
+  }, [assignment, wordCount, versionsData?.length, selectedTemplate, trackAction, router]);
 
   // Format time remaining
   const timeRemainingText = useMemo(() => {
@@ -408,20 +475,22 @@ Please review this initial draft and provide feedback for refinement. The techni
 
   // Filter resources by search
   const filteredResources = useMemo(() => {
-    if (!searchQuery) return resources;
-    return resources.filter(
+    if (!searchQuery || !resourcesData) return resourcesData || [];
+    return resourcesData.filter(
       resource =>
         resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         resource.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [resources, searchQuery]);
+  }, [resourcesData, searchQuery]);
 
   useEffect(() => {
-    trackAction('sme_contribution_session_started', {
-      assignmentId: assignment?.id,
-      sectionType: assignment?.sectionType,
-      dueIn: assignment?.dueDate.getTime() - Date.now(),
-    });
+    if (assignment) {
+      trackAction('sme_contribution_session_started', {
+        assignmentId: assignment.id,
+        sectionType: assignment.sectionType,
+        dueIn: assignment.dueDate.getTime() - Date.now(),
+      });
+    }
 
     return () => {
       if (autoSaveTimer.current) {
@@ -430,52 +499,17 @@ Please review this initial draft and provide feedback for refinement. The techni
     };
   }, [assignment, trackAction]);
 
-  useEffect(() => {
-    const fetchAndSetData = async () => {
-      setLoading(true);
-      try {
-        const [assignmentRes, templatesRes, resourcesRes, versionsRes] = await Promise.all([
-          fetch('/api/sme/assignment'),
-          fetch('/api/sme/templates'),
-          fetch('/api/sme/resources'),
-          fetch('/api/sme/versions'),
-        ]);
-
-        if (!assignmentRes.ok || !templatesRes.ok || !resourcesRes.ok || !versionsRes.ok) {
-          throw new Error('Failed to fetch all SME data');
-        }
-
-        const assignmentData = await assignmentRes.json();
-        const templatesData = await templatesRes.json();
-        const resourcesData = await resourcesRes.json();
-        const versionsData = await versionsRes.json();
-
-        setAssignment(assignmentData);
-        setTemplates(templatesData);
-        setResources(resourcesData);
-        setVersions(versionsData);
-
-        setContent(assignmentData.content.draft);
-        setWordCount(assignmentData.content.wordCount);
-        setLastSaved(new Date(assignmentData.content.lastSaved));
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAndSetData();
-  }, []);
-
-  if (loading)
+  if (isLoading)
     return (
       <div className="flex items-center justify-center h-screen">
         Loading SME contribution portal...
       </div>
     );
-  if (error)
+  if (fetchError)
     return (
-      <div className="flex items-center justify-center h-screen text-red-500">Error: {error}</div>
+      <div className="flex items-center justify-center h-screen text-red-500">
+        Error: {fetchError}
+      </div>
     );
   if (!assignment)
     return <div className="flex items-center justify-center h-screen">No assignment found.</div>;
@@ -754,16 +788,20 @@ Please review this initial draft and provide feedback for refinement. The techni
                     <div className="p-6">
                       <h4 className="text-lg font-medium text-gray-900 mb-4">Choose a Template</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {templates.map(template => (
+                        {templatesData?.map(template => (
                           <div
                             key={template.id}
-                            className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 cursor-pointer"
+                            className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 cursor-pointer"
                             onClick={() => handleApplyTemplate(template.id)}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <h5 className="font-medium text-gray-900">{template.title}</h5>
+                            <h5 className="font-medium text-gray-900">{template.title}</h5>
+                            <p className="text-sm text-gray-600 mt-1">{template.description}</p>
+                            <div className="flex items-center justify-between mt-3">
+                              <span className="text-xs text-gray-500">
+                                {template.estimatedTime} min
+                              </span>
                               <span
-                                className={`px-2 py-1 text-xs rounded-full ${
+                                className={`text-xs px-2 py-1 rounded ${
                                   template.difficulty === 'beginner'
                                     ? 'bg-green-100 text-green-800'
                                     : template.difficulty === 'intermediate'
@@ -773,11 +811,6 @@ Please review this initial draft and provide feedback for refinement. The techni
                               >
                                 {template.difficulty}
                               </span>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-2">{template.description}</p>
-                            <div className="flex items-center text-sm text-gray-500">
-                              <ClockIcon className="w-4 h-4 mr-1" />
-                              {template.estimatedTime} min
                             </div>
                           </div>
                         ))}
@@ -908,83 +941,51 @@ Please review this initial draft and provide feedback for refinement. The techni
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-medium text-gray-900">Version History</h3>
-                  <span className="text-sm text-gray-600">{versions.length} versions</span>
+                  <span className="text-sm text-gray-600">
+                    {versionsData?.length || 0} versions
+                  </span>
                 </div>
 
                 <div className="space-y-4">
-                  {versions.map(version => (
+                  {versionsData?.map(version => (
                     <Card
                       key={version.id}
-                      className="hover:shadow-md transition-shadow duration-200"
+                      className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => {
+                        setContent(version.content);
+                        setWordCount(version.wordCount);
+                        trackAction('version_restored', {
+                          versionId: version.id,
+                          versionNumber: version.version,
+                        });
+                      }}
                     >
-                      <div className="p-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h4 className="text-lg font-medium text-gray-900">
-                                Version {version.version}
-                              </h4>
-                              {version.autoSaved && (
-                                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                                  Auto-saved
-                                </span>
-                              )}
-                              <span className="text-sm text-gray-500">
-                                {version.savedAt.toLocaleDateString()} at{' '}
-                                {version.savedAt.toLocaleTimeString()}
-                              </span>
-                            </div>
-                            <p className="text-gray-600 mb-2">{version.changesSummary}</p>
-                            <div className="flex items-center space-x-4 text-sm text-gray-500">
-                              <span>{version.wordCount} words</span>
-                              <span>•</span>
-                              <span>
-                                {version.version === assignment.content.version
-                                  ? 'Current version'
-                                  : 'Previous version'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2 ml-4">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => {
-                                trackAction('version_viewed', {
-                                  versionId: version.id,
-                                  version: version.version,
-                                });
-                                // Show version content in modal
-                              }}
-                              className="flex items-center"
-                            >
-                              <EyeIcon className="w-4 h-4 mr-1" />
-                              View
-                            </Button>
-                            {version.version !== assignment.content.version && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => {
-                                  setContent(version.content);
-                                  setWordCount(version.wordCount);
-                                  setHasUnsavedChanges(true);
-                                  setActiveTab('editor');
-
-                                  trackAction('version_restored', {
-                                    versionId: version.id,
-                                    version: version.version,
-                                  });
-                                }}
-                              >
-                                Restore
-                              </Button>
-                            )}
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium text-gray-900">
+                            Version {version.version}
+                          </span>
+                          {version.autoSaved && (
+                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                              Auto-saved
+                            </span>
+                          )}
                         </div>
+                        <span className="text-sm text-gray-500">
+                          {version.savedAt.toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-2">{version.changesSummary}</p>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>{version.wordCount} words</span>
+                        <span>Click to restore</span>
                       </div>
                     </Card>
-                  ))}
+                  )) || (
+                    <div className="text-center py-8 text-gray-500">
+                      No version history available
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -265,12 +265,21 @@ export const useUser = (): UseUserState & UseUserActions => {
     [queryUsers]
   );
 
-  const getUsersByRole = useCallback(
-    async (role: UserType): Promise<UserProfile[]> => {
-      return queryUsers({ role });
-    },
-    [queryUsers]
-  );
+  const getUsersByRole = useCallback(async (role: UserType): Promise<UserProfile[]> => {
+    try {
+      const { usersApi } = await import('@/lib/api/endpoints/users');
+      const response = await usersApi.getUsersByRole(role);
+
+      if (response.success && response.data) {
+        return response.data;
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('getUsersByRole hook error:', error);
+      return [];
+    }
+  }, []);
 
   // Permission Operations
   const getUserPermissions = useCallback(

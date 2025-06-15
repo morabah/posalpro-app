@@ -127,7 +127,15 @@ export function ApprovalQueue({
           throw new Error('Failed to fetch approval queue');
         }
         const data = await response.json();
-        setQueueItems(data);
+
+        // Convert date strings to Date objects
+        const processedItems = data.map((item: any) => ({
+          ...item,
+          deadline: new Date(item.deadline),
+          lastActivity: new Date(item.lastActivity),
+        }));
+
+        setQueueItems(processedItems);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred');
       } finally {

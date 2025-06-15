@@ -10,11 +10,22 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
+import { apiClient } from '@/lib/api/client';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+
+// Customer interface for dropdown
+interface Customer {
+  id: string;
+  name: string;
+  email?: string;
+  industry?: string;
+  tier?: string;
+  status?: string;
+}
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -28,7 +39,8 @@ const COMPONENT_MAPPING = {
 // Validation schema based on wireframe requirements
 const basicInformationSchema = z.object({
   client: z.object({
-    name: z.string().min(1, 'Client name is required'),
+    id: z.string().min(1, 'Please select a customer'),
+    name: z.string().min(1, 'Customer name is required'),
     industry: z.string().min(1, 'Industry is required'),
     contactPerson: z.string().min(1, 'Contact person is required'),
     contactEmail: z.string().email('Valid email is required'),
@@ -50,54 +62,56 @@ const basicInformationSchema = z.object({
 
 type BasicInformationFormData = z.infer<typeof basicInformationSchema>;
 
+// Industry options based on common business sectors
+const INDUSTRY_OPTIONS = [
+  { value: 'technology', label: 'Technology' },
+  { value: 'healthcare', label: 'Healthcare' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'retail', label: 'Retail' },
+  { value: 'education', label: 'Education' },
+  { value: 'government', label: 'Government' },
+  { value: 'nonprofit', label: 'Non-profit' },
+  { value: 'other', label: 'Other' },
+];
+
 interface BasicInformationStepProps {
   data: Partial<ProposalWizardStep1Data>;
   onUpdate: (data: Partial<ProposalWizardStep1Data>) => void;
   analytics: any;
 }
 
-// Industry options based on common business sectors
-const INDUSTRY_OPTIONS = [
-  { value: 'technology', label: 'Technology' },
-  { value: 'healthcare', label: 'Healthcare' },
-  { value: 'finance', label: 'Finance & Banking' },
-  { value: 'manufacturing', label: 'Manufacturing' },
-  { value: 'retail', label: 'Retail' },
-  { value: 'education', label: 'Education' },
-  { value: 'government', label: 'Government' },
-  { value: 'non-profit', label: 'Non-Profit' },
-  { value: 'consulting', label: 'Consulting' },
-  { value: 'other', label: 'Other' },
-];
-
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
+  // Customer dropdown state
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
   const [fieldInteractions, setFieldInteractions] = useState(0);
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
 
-  // Keep onUpdate ref current
+  // Keep the ref updated
   useEffect(() => {
     onUpdateRef.current = onUpdate;
-  });
+  }, [onUpdate]);
 
-  // Helper function to safely format date for input
   const formatDateForInput = (dateValue: any): string => {
     if (!dateValue) return '';
-
-    const date = new Date(dateValue);
-    if (isNaN(date.getTime())) return '';
-
-    return date.toISOString().split('T')[0];
+    if (dateValue instanceof Date) {
+      return dateValue.toISOString().split('T')[0];
+    }
+    if (typeof dateValue === 'string') {
+      return new Date(dateValue).toISOString().split('T')[0];
+    }
+    return '';
   };
 
-  // Helper function to safely parse date
   const parseDate = (dateValue: any): Date | null => {
     if (!dateValue) return null;
-
-    const date = new Date(dateValue);
-    if (isNaN(date.getTime())) return null;
-
-    return date;
+    if (dateValue instanceof Date) return dateValue;
+    if (typeof dateValue === 'string') return new Date(dateValue);
+    return null;
   };
 
   const {
@@ -110,6 +124,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     resolver: zodResolver(basicInformationSchema),
     defaultValues: {
       client: {
+        id: data.client?.id || '',
         name: data.client?.name || '',
         industry: data.client?.industry || '',
         contactPerson: data.client?.contactPerson || '',
@@ -138,6 +153,63 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     });
   }, [analytics, fieldInteractions]);
 
+  // Handle customer selection
+  const handleCustomerChange = useCallback(
+    (customerId: string) => {
+      const customer = customers.find(c => c.id === customerId);
+      if (customer) {
+        setSelectedCustomer(customer);
+
+        // Update form values
+        setValue('client.id', customer.id);
+        setValue('client.name', customer.name);
+        setValue('client.industry', customer.industry || '');
+        setValue('client.contactEmail', customer.email || '');
+
+        // Trigger analytics
+        analytics.trackWizardStep(1, 'Basic Information', 'customer_selected', {
+          customerId: customer.id,
+          customerName: customer.name,
+          customerTier: customer.tier,
+        });
+
+        handleFieldInteraction();
+      }
+    },
+    [customers, setValue, analytics, handleFieldInteraction]
+  );
+
+  // Fetch customers on component mount
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setCustomersLoading(true);
+      try {
+        const response = await apiClient.get<{ data: { customers: Customer[] } }>('/customers');
+
+        console.log('🔍 [DEBUG] Customers API response:', response);
+
+        if (response.success && response.data?.data?.customers) {
+          const customerList = response.data.data.customers;
+          setCustomers(customerList);
+
+          // If we have a selected customer ID, find and set the customer
+          if (data.client?.id) {
+            const existingCustomer = customerList.find(c => c.id === data.client?.id);
+            if (existingCustomer) {
+              setSelectedCustomer(existingCustomer);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, [data.client?.id]);
+
   // Stable update function to prevent infinite loops
   const handleUpdate = useCallback(
     (formattedData: ProposalWizardStep1Data) => {
@@ -155,6 +227,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   // Create a memoized stable reference for the watched values
   const stableWatchedValues = useMemo(() => {
     return {
+      clientId: watchedValues.client?.id || '',
       clientName: watchedValues.client?.name || '',
       clientIndustry: watchedValues.client?.industry || '',
       clientContactPerson: watchedValues.client?.contactPerson || '',
@@ -168,6 +241,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       detailsDescription: watchedValues.details?.description || '',
     };
   }, [
+    watchedValues.client?.id,
     watchedValues.client?.name,
     watchedValues.client?.industry,
     watchedValues.client?.contactPerson,
@@ -181,50 +255,31 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     watchedValues.details?.description,
   ]);
 
-  // Update parent component when form data changes (with debouncing and data comparison)
+  // Update parent component when form data changes
   useEffect(() => {
-    if (watchedValues.client && watchedValues.details) {
-      // Only process if we have meaningful data
-      const hasRequiredData =
-        stableWatchedValues.clientName ||
-        stableWatchedValues.detailsTitle ||
-        stableWatchedValues.detailsDueDate;
+    const parsedDueDate = parseDate(stableWatchedValues.detailsDueDate);
 
-      if (!hasRequiredData) return;
+    const formattedData: ProposalWizardStep1Data = {
+      client: {
+        id: stableWatchedValues.clientId,
+        name: stableWatchedValues.clientName,
+        industry: stableWatchedValues.clientIndustry,
+        contactPerson: stableWatchedValues.clientContactPerson,
+        contactEmail: stableWatchedValues.clientContactEmail,
+        contactPhone: stableWatchedValues.clientContactPhone,
+      },
+      details: {
+        title: stableWatchedValues.detailsTitle,
+        rfpReferenceNumber: stableWatchedValues.detailsRfpReference,
+        dueDate: parsedDueDate || new Date(),
+        estimatedValue: stableWatchedValues.detailsEstimatedValue,
+        priority: stableWatchedValues.detailsPriority,
+        description: stableWatchedValues.detailsDescription,
+      },
+    };
 
-      // Debounce the update
-      const timeoutId = setTimeout(() => {
-        const parsedDueDate = parseDate(stableWatchedValues.detailsDueDate);
-
-        const formattedData: ProposalWizardStep1Data = {
-          client: {
-            name: stableWatchedValues.clientName,
-            industry: stableWatchedValues.clientIndustry,
-            contactPerson: stableWatchedValues.clientContactPerson,
-            contactEmail: stableWatchedValues.clientContactEmail,
-            contactPhone: stableWatchedValues.clientContactPhone,
-            requirements: [],
-            previousEngagements: [],
-          },
-          details: {
-            title: stableWatchedValues.detailsTitle,
-            rfpReferenceNumber: stableWatchedValues.detailsRfpReference,
-            dueDate: parsedDueDate || new Date(), // Fallback to current date if invalid
-            estimatedValue: stableWatchedValues.detailsEstimatedValue,
-            priority: stableWatchedValues.detailsPriority,
-            description: stableWatchedValues.detailsDescription,
-            requirements: [],
-            objectives: [],
-          },
-        };
-
-        // Use the stable update function
-        handleUpdate(formattedData);
-      }, 300); // 300ms debounce
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [stableWatchedValues, handleUpdate]);
+    handleUpdate(formattedData);
+  }, [handleUpdate, stableWatchedValues]);
 
   // AI-powered suggestions for client information (placeholder)
   const handleClientNameBlur = useCallback(
@@ -240,6 +295,14 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     [analytics]
   );
 
+  // Create customer options for dropdown
+  const customerOptions = useMemo(() => {
+    return customers.map(customer => ({
+      value: customer.id,
+      label: `${customer.name}${customer.tier ? ` (${customer.tier})` : ''}${customer.industry ? ` - ${customer.industry}` : ''}`,
+    }));
+  }, [customers]);
+
   return (
     <div className="space-y-8">
       {/* Client Information Section */}
@@ -248,20 +311,30 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
           <h3 className="text-lg font-semibold text-neutral-900 mb-6">Client Information</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Label htmlFor="clientName" required>
-                Client Name
+            <div className="md:col-span-2">
+              <Label htmlFor="clientSelect" required>
+                Select Customer
               </Label>
-              <Input
-                id="clientName"
-                placeholder="Acme Corporation"
-                error={errors.client?.name?.message}
-                {...register('client.name')}
+              <Select
+                id="clientSelect"
+                options={customerOptions}
+                value={selectedCustomer?.id || ''}
+                error={errors.client?.id?.message}
+                placeholder={customersLoading ? 'Loading customers...' : 'Select a customer...'}
+                onChange={handleCustomerChange}
                 onFocus={handleFieldInteraction}
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  handleClientNameBlur(e.target.value)
-                }
+                disabled={customersLoading}
               />
+              {selectedCustomer && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <strong>Selected:</strong> {selectedCustomer.name}
+                    {selectedCustomer.industry && ` • ${selectedCustomer.industry}`}
+                    {selectedCustomer.tier && ` • ${selectedCustomer.tier} tier`}
+                    {selectedCustomer.email && ` • ${selectedCustomer.email}`}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>
@@ -437,7 +510,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
             Step 1 of 6: {isValid ? 'Complete' : 'In Progress'}
           </span>
         </div>
-        <div className="text-sm text-neutral-600">Field interactions: {fieldInteractions}</div>
+        <div className="text-sm text-neutral-500">Complete all required fields to continue</div>
       </div>
     </div>
   );

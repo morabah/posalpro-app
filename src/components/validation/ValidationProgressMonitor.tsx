@@ -104,21 +104,24 @@ export function ValidationProgressMonitor({
     updateStatus();
   }, [isValidating, activeIssueCount, criticalIssueCount]); // Remove getValidationSummary dependency
 
-  // Auto-refresh monitoring
+  // Auto-refresh monitoring - optimized for performance
   useEffect(() => {
     if (!isMonitoring) return;
 
     const interval = setInterval(() => {
-      // Simulate real-time updates - in production, this would fetch from API
-      setValidationStatus(prev => {
-        if (prev.isActive && prev.progress < 100) {
-          return {
-            ...prev,
-            progress: Math.min(prev.progress + 5, 95),
-          };
-        }
-        return prev;
-      });
+      // Optimize: Only update if component is visible and progress is incomplete
+      if (document.visibilityState === 'visible') {
+        setValidationStatus(prev => {
+          // Only update if actually progressing
+          if (prev.isActive && prev.progress < 100) {
+            return {
+              ...prev,
+              progress: Math.min(prev.progress + 5, 95),
+            };
+          }
+          return prev;
+        });
+      }
     }, refreshInterval);
 
     return () => clearInterval(interval);

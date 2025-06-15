@@ -256,11 +256,11 @@ export function ProductCreationForm({
 
   // Form steps for better UX
   const formSteps = [
-    { id: 0, title: 'Basic Information', fields: ['name', 'description', 'sku', 'price'] },
-    { id: 1, title: 'Categorization', fields: ['category', 'tags', 'userStoryMappings'] },
-    { id: 2, title: 'Configuration', fields: ['priceModel', 'attributes', 'customizationOptions'] },
-    { id: 3, title: 'Resources & Dependencies', fields: ['resources', 'licenseDependencies'] },
-    { id: 4, title: 'Settings & Review', fields: ['isActive', 'isPublic'] },
+    { id: 0, title: 'Basic Information', fields: ['name', 'sku', 'price'] }, // Removed optional 'description'
+    { id: 1, title: 'Categorization', fields: ['category'] }, // Removed optional 'tags', 'userStoryMappings'
+    { id: 2, title: 'Configuration', fields: ['priceModel'] }, // Removed optional 'attributes', 'customizationOptions'
+    { id: 3, title: 'Resources & Dependencies', fields: [] }, // All fields are optional
+    { id: 4, title: 'Settings & Review', fields: [] }, // All fields have defaults
   ];
 
   // AI-assisted description generation (AC-2.1.2 equivalent for products)
@@ -414,16 +414,25 @@ export function ProductCreationForm({
   // Step navigation
   const canProceedToNextStep = useCallback(() => {
     const values = form.getValues();
+    const errors = form.formState.errors;
 
     switch (currentStep) {
       case 0: // Basic Information
-        return values.name && values.sku && values.price !== undefined && values.price >= 0;
+        // Check if required fields have values and no errors
+        const hasBasicData =
+          values.name && values.sku && values.price !== undefined && values.price >= 0;
+        const hasBasicErrors = errors.name || errors.sku || errors.price;
+        return hasBasicData && !hasBasicErrors;
 
       case 1: // Categorization
-        return values.category && values.category.length > 0;
+        const hasCategory = values.category && values.category.length > 0;
+        const hasCategoryErrors = errors.category;
+        return hasCategory && !hasCategoryErrors;
 
       case 2: // Configuration
-        return values.priceModel; // Price model is always selected, so always valid
+        const hasPriceModel = values.priceModel;
+        const hasPriceModelErrors = errors.priceModel;
+        return hasPriceModel && !hasPriceModelErrors;
 
       case 3: // Resources & Dependencies
         return true; // This step is optional
@@ -436,18 +445,44 @@ export function ProductCreationForm({
     }
   }, [currentStep, form]);
 
-  const nextStep = useCallback(() => {
-    // Trigger validation for current step fields
+  const nextStep = useCallback(async () => {
+    // Get current step fields that need validation
     const currentStepFields = formSteps[currentStep].fields;
-    const isValid = currentStepFields.every(field => {
-      form.trigger(field as any);
-      return !form.formState.errors[field as keyof typeof form.formState.errors];
-    });
 
-    if (currentStep < formSteps.length - 1 && canProceedToNextStep() && isValid) {
-      setCurrentStep(prev => prev + 1);
-      setValidationErrors([]); // Clear any previous errors
-    } else if (!isValid) {
+    console.log('NextStep called - Current step:', currentStep);
+    console.log('Fields to validate:', currentStepFields);
+
+    // If no fields to validate, proceed immediately
+    if (currentStepFields.length === 0) {
+      console.log('No fields to validate, proceeding...');
+      if (currentStep < formSteps.length - 1) {
+        setCurrentStep(prev => prev + 1);
+        setValidationErrors([]);
+      }
+      return;
+    }
+
+    // Trigger validation for current step fields
+    const validationPromises = currentStepFields.map(field =>
+      form.trigger(field as keyof ProductCreationFormData)
+    );
+
+    const validationResults = await Promise.all(validationPromises);
+    const isFormValid = validationResults.every(result => result);
+
+    console.log('Validation results:', validationResults);
+    console.log('Is form valid:', isFormValid);
+    console.log('Can proceed:', canProceedToNextStep());
+
+    // Check both validation results and current step validation
+    if (isFormValid && canProceedToNextStep()) {
+      console.log('Advancing to next step...');
+      if (currentStep < formSteps.length - 1) {
+        setCurrentStep(prev => prev + 1);
+        setValidationErrors([]);
+      }
+    } else {
+      console.log('Validation failed, showing errors...');
       setValidationErrors(['Please complete all required fields before proceeding.']);
     }
   }, [currentStep, canProceedToNextStep, form, formSteps]);
@@ -455,6 +490,7 @@ export function ProductCreationForm({
   const prevStep = useCallback(() => {
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
+      setValidationErrors([]);
     }
   }, [currentStep]);
 
@@ -466,6 +502,15 @@ export function ProductCreationForm({
       setValidationErrors([]);
     }
   }, [isOpen, form]);
+
+  // Watch form values and errors to update button state
+  const watchedValues = form.watch();
+  const formErrors = form.formState.errors;
+
+  // Force re-render when form values or errors change
+  useEffect(() => {
+    // This effect will trigger re-renders when form state changes
+  }, [watchedValues, formErrors, form.formState.isValid]);
 
   if (!isOpen) return null;
 
@@ -571,7 +616,9 @@ export function ProductCreationForm({
                       id="sku"
                       type="text"
                       {...form.register('sku')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        form.formState.errors.sku ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
                       placeholder="PROD-001"
                     />
                     {form.formState.errors.sku && (
@@ -579,6 +626,9 @@ export function ProductCreationForm({
                         {form.formState.errors.sku.message}
                       </p>
                     )}
+                    <p className="mt-1 text-xs text-gray-500">
+                      Only uppercase letters, numbers, hyphens (-), and underscores (_) allowed
+                    </p>
                   </div>
 
                   {/* Price */}
@@ -1206,14 +1256,75 @@ export function ProductCreationForm({
               </Button>
 
               {currentStep < formSteps.length - 1 ? (
-                <Button
-                  type="button"
-                  onClick={nextStep}
-                  disabled={!canProceedToNextStep() || isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  Next Step
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      console.log('Debug - Form Values:', form.getValues());
+                      console.log('Debug - Form Errors:', form.formState.errors);
+                      console.log('Debug - Can Proceed:', canProceedToNextStep());
+                      console.log('Debug - Current Step:', currentStep);
+                      console.log('Debug - Form Steps Length:', formSteps.length);
+                      console.log('Debug - Is Submitting:', isSubmitting);
+                      console.log(
+                        'Debug - Button Disabled:',
+                        !canProceedToNextStep() || isSubmitting
+                      );
+
+                      // Force trigger validation
+                      const currentStepFields = formSteps[currentStep].fields;
+                      console.log('Debug - Fields to validate:', currentStepFields);
+
+                      currentStepFields.forEach(field => {
+                        form.trigger(field as any);
+                        const hasError =
+                          !!form.formState.errors[field as keyof typeof form.formState.errors];
+                        console.log(`Debug - Field ${field} has error:`, hasError);
+                      });
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    Debug
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      console.log('Next Step button clicked!');
+                      console.log(
+                        'Button disabled state:',
+                        !canProceedToNextStep() || isSubmitting
+                      );
+                      nextStep();
+                    }}
+                    disabled={
+                      !canProceedToNextStep() || isSubmitting || form.formState.isValidating
+                    }
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {form.formState.isValidating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Validating...
+                      </>
+                    ) : (
+                      'Next Step'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      console.log('Force Next Step clicked!');
+                      setCurrentStep(prev => prev + 1);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    Force Next
+                  </Button>
+                </div>
               ) : (
                 <Button
                   type="submit"

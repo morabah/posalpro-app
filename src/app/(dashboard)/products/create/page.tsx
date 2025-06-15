@@ -2,31 +2,35 @@
 
 import { ProductCreationForm } from '@/components/products/ProductCreationForm';
 import { Button } from '@/components/ui/forms/Button';
+import { useCreateProduct } from '@/hooks/useProducts';
 import { CreateProductData } from '@/types/entities/product';
 import { ArrowLeft, CheckCircle, Package, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 export default function ProductCreationPage() {
   const [isFormOpen, setIsFormOpen] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
   const [creationSuccess, setCreationSuccess] = useState(false);
   const [createdProduct, setCreatedProduct] = useState<CreateProductData | null>(null);
   const router = useRouter();
 
-  const handleProductSubmit = async (data: CreateProductData) => {
-    setIsCreating(true);
+  // Use React Query mutation for product creation
+  const createProductMutation = useCreateProduct();
 
+  const handleProductSubmit = async (data: CreateProductData) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await createProductMutation.mutateAsync(data);
 
       setCreatedProduct(data);
       setCreationSuccess(true);
       setIsFormOpen(false);
 
-      console.log('Product created successfully:', data);
+      // Show success toast
+      toast.success('Product created successfully!');
+
+      console.log('Product created successfully:', result);
 
       // Auto-navigate back after success
       setTimeout(() => {
@@ -34,13 +38,14 @@ export default function ProductCreationPage() {
       }, 3000);
     } catch (error) {
       console.error('Failed to create product:', error);
-    } finally {
-      setIsCreating(false);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to create product. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
   const handleClose = () => {
-    if (!isCreating) {
+    if (!createProductMutation.isPending) {
       router.push('/products');
     }
   };
@@ -166,7 +171,7 @@ export default function ProductCreationPage() {
 
               {/* Form Content */}
               <div className="p-6">
-                {isCreating ? (
+                {createProductMutation.isPending ? (
                   <div className="text-center py-12">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

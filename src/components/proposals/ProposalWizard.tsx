@@ -103,6 +103,13 @@ const convertPriorityFromEntity = (priority: Priority): ProposalPriority => {
   }
 };
 
+// Helper to validate UUID format
+const isValidUUID = (value: string | undefined): boolean => {
+  if (!value || value.length === 0 || value === 'undefined') return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(value);
+};
+
 interface ProposalWizardProps {
   onComplete?: (proposalData: ProposalWizardData & { proposalId: string }) => void;
   onCancel?: () => void;
@@ -243,11 +250,11 @@ export function ProposalWizard({
           const convertedData: ProposalWizardData = {
             step1: {
               client: {
-                name: proposal.clientName || '',
-                industry: proposal.clientContact?.jobTitle || '',
-                contactPerson: proposal.clientContact?.name || '',
-                contactEmail: proposal.clientContact?.email || '',
-                contactPhone: proposal.clientContact?.phone || '',
+                name: proposal.customerName || '',
+                industry: proposal.customerContact?.jobTitle || '',
+                contactPerson: proposal.customerContact?.name || '',
+                contactEmail: proposal.customerContact?.email || '',
+                contactPhone: proposal.customerContact?.phone || '',
               },
               details: {
                 title: proposal.title,
@@ -419,30 +426,42 @@ export function ProposalWizard({
 
       try {
         // Convert wizard data to proposal entity format
-        const proposalData = {
-          metadata: {
-            title: wizardData.step1.details?.title || 'Untitled Proposal',
-            description:
-              wizardData.step1.details?.description &&
-              wizardData.step1.details.description.length >= 10
-                ? wizardData.step1.details.description
-                : "This proposal provides a comprehensive solution tailored to meet the client's specific requirements and objectives.",
-            clientName: wizardData.step1.client?.name || 'Unknown Client',
-            clientContact: {
-              name: wizardData.step1.client?.contactPerson || 'Unknown Contact',
-              email: wizardData.step1.client?.contactEmail || 'contact@example.com',
-              phone: wizardData.step1.client?.contactPhone || '',
-              jobTitle: wizardData.step1.client?.industry || '',
-            },
-            projectType: 'development' as const,
-            estimatedValue: wizardData.step1.details?.estimatedValue || 0,
-            currency: 'USD' as const,
-            deadline: wizardData.step1.details?.dueDate
-              ? new Date(wizardData.step1.details.dueDate)
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-            priority: convertPriorityToEntity(wizardData.step1.details?.priority),
-            tags: [],
+        const metadata: any = {
+          title: wizardData.step1.details?.title || 'Untitled Proposal',
+          description:
+            wizardData.step1.details?.description &&
+            wizardData.step1.details.description.length >= 10
+              ? wizardData.step1.details.description
+              : "This proposal provides a comprehensive solution tailored to meet the client's specific requirements and objectives.",
+          ...(isValidUUID(wizardData.step1.client?.id)
+            ? { customerId: wizardData.step1.client.id }
+            : {}), // Include customer ID only if valid UUID
+          customerName: wizardData.step1.client?.name || 'Unknown Client',
+          customerContact: {
+            name: wizardData.step1.client?.contactPerson || 'Unknown Contact',
+            email: wizardData.step1.client?.contactEmail || 'contact@example.com',
+            phone: wizardData.step1.client?.contactPhone || '',
+            jobTitle: wizardData.step1.client?.industry || '',
           },
+          projectType: 'development' as const,
+          currency: 'USD' as const,
+          deadline: wizardData.step1.details?.dueDate
+            ? new Date(wizardData.step1.details.dueDate)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+          priority: convertPriorityToEntity(wizardData.step1.details?.priority),
+          tags: [],
+        };
+
+        // Only include estimatedValue if it's a positive number
+        if (
+          wizardData.step1.details?.estimatedValue &&
+          wizardData.step1.details.estimatedValue > 0
+        ) {
+          metadata.estimatedValue = wizardData.step1.details.estimatedValue;
+        }
+
+        const proposalData = {
+          metadata,
         };
 
         if (currentProposalId) {
@@ -577,8 +596,11 @@ export function ProposalWizard({
               wizardData.step1.details.description.length >= 10
                 ? wizardData.step1.details.description
                 : "This proposal provides a comprehensive solution tailored to meet the client's specific requirements and objectives.",
-            clientName: wizardData.step1.client?.name || 'Unknown Client',
-            clientContact: {
+            ...(isValidUUID(wizardData.step1.client?.id)
+              ? { customerId: wizardData.step1.client.id }
+              : {}), // Include customer ID only if valid UUID
+            customerName: wizardData.step1.client?.name || 'Unknown Client',
+            customerContact: {
               name: wizardData.step1.client?.contactPerson || 'Unknown Contact',
               email: wizardData.step1.client?.contactEmail || 'contact@example.com',
               phone: wizardData.step1.client?.contactPhone || '',

@@ -10,7 +10,7 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+const prismaClient = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -56,153 +56,82 @@ const CustomerCreateSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    // Authentication check
+    // Check authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse and validate query parameters
+    // Get query parameters
     const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-    const validatedQuery = CustomerQuerySchema.parse(queryParams);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || '';
+    const tier = searchParams.get('tier') || '';
 
-    // Build where clause for filtering
-    const where: any = {
-      status: validatedQuery.status || 'ACTIVE', // Default to active customers
-    };
+    // Build where clause
+    const where: any = {};
 
-    // Search functionality
-    if (validatedQuery.search) {
+    if (search) {
       where.OR = [
-        { name: { contains: validatedQuery.search, mode: 'insensitive' } },
-        { email: { contains: validatedQuery.search, mode: 'insensitive' } },
-        { industry: { contains: validatedQuery.search, mode: 'insensitive' } },
-        { address: { contains: validatedQuery.search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { industry: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    // Industry filtering
-    if (validatedQuery.industry) {
-      where.industry = { contains: validatedQuery.industry, mode: 'insensitive' };
+    if (status) {
+      where.status = status;
     }
 
-    // Tier filtering
-    if (validatedQuery.tier) {
-      where.tier = validatedQuery.tier;
+    if (tier) {
+      where.tier = tier;
     }
 
-    // Calculate pagination
-    const skip = (validatedQuery.page - 1) * validatedQuery.limit;
+    // Get total count
+    const total = await prismaClient.customer.count({ where });
 
-    // Fetch customers with optional proposal data
-    const customerSelect = {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      website: true,
-      address: true,
-      industry: true,
-      companySize: true,
-      revenue: true,
-      tier: true,
-      status: true,
-      tags: true,
-      segmentation: true,
-      riskScore: true,
-      ltv: true,
-      createdAt: true,
-      updatedAt: true,
-      lastContact: true,
-      _count: {
-        select: {
-          proposals: true,
-          contacts: true,
+    // Get customers with pagination
+    const customers = await prismaClient.customer.findMany({
+      where,
+      include: {
+        _count: {
+          select: {
+            proposals: true,
+          },
         },
       },
-    };
-
-    if (validatedQuery.includeProposals) {
-      (customerSelect as any).proposals = {
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          value: true,
-          currency: true,
-          dueDate: true,
-          createdAt: true,
-        },
-        take: 5, // Latest 5 proposals
-        orderBy: { createdAt: 'desc' },
-      };
-    }
-
-    const [customers, total] = await Promise.all([
-      prisma.customer.findMany({
-        where,
-        select: customerSelect,
-        orderBy: {
-          [validatedQuery.sortBy]: validatedQuery.sortOrder,
-        },
-        skip,
-        take: validatedQuery.limit,
-      }),
-      prisma.customer.count({ where }),
-    ]);
-
-    // Transform customers with enhanced data
-    const transformedCustomers = customers.map(customer => ({
-      ...customer,
-      statistics: {
-        proposalsCount: customer._count.proposals,
-        contactsCount: customer._count.contacts,
-        averageProposalValue:
-          validatedQuery.includeProposals && (customer as any).proposals
-            ? (customer as any).proposals.reduce((sum: number, p: any) => sum + (p.value || 0), 0) /
-              Math.max((customer as any).proposals.length, 1)
-            : null,
+      orderBy: {
+        createdAt: 'desc',
       },
-      // Remove _count as it's now in statistics
-      _count: undefined,
-    }));
-
-    // Track customer search for analytics
-    if (validatedQuery.search) {
-      await trackCustomerSearchEvent(session.user.id, validatedQuery.search, total);
-    }
+      skip: (page - 1) * limit,
+      take: limit,
+    });
 
     return NextResponse.json({
       success: true,
-      data: {
-        customers: transformedCustomers,
-        pagination: {
-          page: validatedQuery.page,
-          limit: validatedQuery.limit,
-          total,
-          totalPages: Math.ceil(total / validatedQuery.limit),
-        },
-        filters: {
-          search: validatedQuery.search,
-          industry: validatedQuery.industry,
-          tier: validatedQuery.tier,
-          status: validatedQuery.status,
-        },
-      },
       message: 'Customers retrieved successfully',
+      data: {
+        customers,
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
-    console.error('Customers fetch error:', error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });
+    console.error('Error fetching customers:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Failed to fetch customers',
+        data: { customers: [] },
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -211,83 +140,82 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // Authentication check
+    // Check authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse and validate request body
     const body = await request.json();
-    const validatedData = CustomerCreateSchema.parse(body);
+    const {
+      name,
+      email,
+      phone,
+      website,
+      industry,
+      companySize,
+      revenue,
+      address,
+      tags,
+      tier = 'STANDARD',
+      status = 'ACTIVE',
+    } = body;
 
-    // Check for duplicate customer (by email if provided)
-    if (validatedData.email) {
-      const existingCustomer = await prisma.customer.findFirst({
-        where: { email: validatedData.email },
-        select: { id: true },
-      });
-
-      if (existingCustomer) {
-        return NextResponse.json(
-          { error: 'A customer with this email already exists' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Create customer with analytics tracking
-    const customer = await prisma.customer.create({
-      data: {
-        ...validatedData,
-        metadata: {
-          ...validatedData.metadata,
-          createdBy: session.user.id,
-          createdAt: new Date().toISOString(),
-          hypothesis: ['H4', 'H6'],
-          userStories: ['US-4.1', 'US-4.2'],
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        website: true,
-        address: true,
-        industry: true,
-        companySize: true,
-        revenue: true,
-        tier: true,
-        status: true,
-        tags: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    // Track customer creation for analytics
-    await trackCustomerCreationEvent(session.user.id, customer.id, customer.name);
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: customer,
-        message: 'Customer created successfully',
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error('Customer creation error:', error);
-
-    if (error instanceof z.ZodError) {
+    // Validate required fields
+    if (!name) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { success: false, message: 'Customer name is required' },
         { status: 400 }
       );
     }
 
-    return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 });
+    // Check if customer with same name already exists
+    const existingCustomer = await prismaClient.customer.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+    });
+
+    if (existingCustomer) {
+      return NextResponse.json(
+        { success: false, message: 'Customer with this name already exists' },
+        { status: 409 }
+      );
+    }
+
+    // Create customer
+    const customer = await prismaClient.customer.create({
+      data: {
+        name,
+        email,
+        phone,
+        website,
+        industry,
+        companySize,
+        revenue: revenue ? parseFloat(revenue) : null,
+        address,
+        tags: tags || [],
+        tier,
+        status,
+      },
+      include: {
+        _count: {
+          select: {
+            proposals: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Customer created successfully',
+      data: { customer },
+    });
+  } catch (error) {
+    console.error('Error creating customer:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to create customer' },
+      { status: 500 }
+    );
   }
 }
 
@@ -296,7 +224,7 @@ export async function POST(request: NextRequest) {
  */
 async function trackCustomerSearchEvent(userId: string, query: string, resultsCount: number) {
   try {
-    await prisma.hypothesisValidationEvent.create({
+    await prismaClient.hypothesisValidationEvent.create({
       data: {
         userId,
         hypothesis: 'H6', // Requirement Extraction
@@ -330,7 +258,7 @@ async function trackCustomerCreationEvent(
   customerName: string
 ) {
   try {
-    await prisma.hypothesisValidationEvent.create({
+    await prismaClient.hypothesisValidationEvent.create({
       data: {
         userId,
         hypothesis: 'H4', // Cross-Department Coordination

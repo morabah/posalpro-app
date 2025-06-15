@@ -3,7 +3,8 @@
  * Supports H8 hypothesis tracking and component traceability
  */
 
-import { Product, ProductRelationship } from '@prisma/client';
+import { ProductRelationship } from '@prisma/client';
+import { Product } from './entities/product';
 
 // Core validation result interface
 export interface ValidationResult {
@@ -17,6 +18,9 @@ export interface ValidationResult {
   executionTime: number;
   userStoryMappings: string[];
   performanceMetrics?: ValidationPerformanceMetrics;
+  isValid: boolean;
+  validationTime: number;
+  configHash: string;
 }
 
 // Validation request interface
@@ -34,22 +38,15 @@ export interface ValidationRequest {
 
 // Individual validation issue
 export interface ValidationIssue {
-  id: string;
-  type: 'error' | 'warning' | 'info';
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  category: 'compatibility' | 'license' | 'configuration' | 'dependency' | 'performance';
+  id?: string;
+  type: ValidationCategory;
+  severity: ValidationSeverity;
   message: string;
-  description?: string;
+  field: string;
+  productId?: string;
+  category: ValidationCategory;
   affectedProducts: string[];
-  fixSuggestions: FixSuggestion[];
-  ruleId?: string;
-  context?: ValidationContext;
-  // Additional properties for UI compatibility
-  status?: 'open' | 'in_progress' | 'resolved' | 'suppressed' | 'deferred';
-  proposalId?: string; // For easier access
-  detectedAt?: Date;
-  updatedAt?: Date;
-  ruleName?: string;
+  fixSuggestions?: FixSuggestion[];
 }
 
 // Fix suggestion interface
@@ -64,6 +61,12 @@ export interface FixSuggestion {
   estimatedTime?: number; // in minutes
   cost?: number;
   automatable?: boolean; // Whether the fix can be applied automatically
+  issueId: string;
+  suggestion: string;
+  priority: ValidationPriority;
+  automated: boolean;
+  steps?: string[];
+  estimatedEffort?: string;
 }
 
 // Action result types
@@ -99,15 +102,12 @@ export interface ValidationRule {
   id: string;
   name: string;
   description: string;
-  category: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  conditions: RuleCondition[];
-  actions: RuleAction[];
-  enabled: boolean;
-  userStoryMappings: string[];
-  version: string;
-  lastModified: Date;
-  executionOrder: number;
+  severity: ValidationSeverity;
+  category: ValidationCategory;
+  field: string;
+  errorMessage: string;
+  condition: string;
+  metadata?: Record<string, any>;
 }
 
 // Rule condition interface
@@ -152,10 +152,14 @@ export interface ValidationContext {
   userId: string;
   products: Product[];
   relationships: ProductRelationship[];
-  configuration: ProductConfiguration;
+  configuration: Record<string, any>;
   environment: 'development' | 'staging' | 'production';
   timestamp: Date;
   rules: ValidationRule[];
+  productId: string;
+  relatedProducts?: Product[];
+  userRole?: string;
+  validationRules?: ValidationRule[];
 }
 
 // Product configuration interface
@@ -210,16 +214,23 @@ export interface ValidationPerformanceMetrics {
   falseNegatives: number;
   userEfficiencyGain: number; // percentage
   errorReductionRate: number; // percentage for H8 hypothesis
+  averageValidationTime: number;
+  totalValidations: number;
+  successRate: number;
+  commonIssues: Array<{
+    type: ValidationCategory;
+    count: number;
+  }>;
+  lastUpdated: Date;
 }
 
 // Rule execution result
 export interface RuleResult {
   ruleId: string;
-  status: 'passed' | 'failed' | 'skipped' | 'error';
-  issues: ValidationIssue[];
-  suggestions: FixSuggestion[];
-  executionTime: number;
-  context: ValidationContext;
+  isValid: boolean;
+  severity: ValidationSeverity;
+  message: string;
+  field: string;
 }
 
 // Validation workflow result
@@ -273,24 +284,16 @@ export interface ValidationAnalyticsEvent {
 
 // Component traceability mapping
 export const VALIDATION_COMPONENT_MAPPING = {
-  userStories: ['US-3.1', 'US-3.2', 'US-3.3'],
-  acceptanceCriteria: [
-    'AC-3.1.1', // Real-time validation
-    'AC-3.1.2', // Error detection accuracy
-    'AC-3.2.1', // Compatibility checking
-    'AC-3.2.2', // Dependency validation
-    'AC-3.3.1', // Fix suggestion generation
-    'AC-3.3.2', // Performance requirements
-  ],
+  userStories: ['US-3.1', 'US-3.2', 'US-3.3'] as const,
+  acceptanceCriteria: ['AC-3.1.1', 'AC-3.2.1', 'AC-3.3.1'] as const,
   methods: [
     'validateProductConfiguration()',
-    'checkProductCompatibility()',
-    'detectCircularDependencies()',
-    'generateFixSuggestions()',
-  ],
-  hypotheses: ['H8'],
-  testCases: ['TC-H8-001', 'TC-H8-002', 'TC-H8-003'],
-} as const;
+    'executeValidationRules()',
+    'checkCompatibility()',
+  ] as const,
+  hypotheses: ['H8'] as const,
+  testCases: ['TC-H8-001', 'TC-H8-002'] as const,
+};
 
 // Type guards for validation types
 export const isValidationResult = (obj: unknown): obj is ValidationResult => {
@@ -354,13 +357,10 @@ export const isValidationRule = (obj: unknown): obj is ValidationRule => {
     typeof rule.description === 'string' &&
     typeof rule.category === 'string' &&
     ['critical', 'high', 'medium', 'low'].includes(rule.severity) &&
-    Array.isArray(rule.conditions) &&
-    Array.isArray(rule.actions) &&
-    typeof rule.enabled === 'boolean' &&
-    Array.isArray(rule.userStoryMappings) &&
-    typeof rule.version === 'string' &&
-    rule.lastModified instanceof Date &&
-    typeof rule.executionOrder === 'number'
+    typeof rule.field === 'string' &&
+    typeof rule.errorMessage === 'string' &&
+    typeof rule.condition === 'string' &&
+    typeof rule.metadata === 'object'
   );
 };
 
@@ -384,3 +384,17 @@ export const isRuleAction = (obj: unknown): obj is RuleAction => {
     typeof action.message === 'string'
   );
 };
+
+export type ValidationSeverity = 'error' | 'warning' | 'info';
+export type ValidationCategory = 'configuration' | 'compatibility' | 'licensing' | 'pricing';
+export type ValidationPriority = 'high' | 'medium' | 'low';
+
+export interface CompatibilityResult {
+  isCompatible: boolean;
+  issues: ValidationIssue[];
+  validationTime: number;
+  relationships: Array<{
+    productId: string;
+    dependencies: string[];
+  }>;
+}

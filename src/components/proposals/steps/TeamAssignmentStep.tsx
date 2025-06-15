@@ -8,8 +8,8 @@
 
 import { Card } from '@/components/ui/Card';
 import { Label } from '@/components/ui/Label';
-import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { Select } from '@/components/ui/forms/Select';
 import { useUser } from '@/hooks/entities/useUser';
 import { UserType } from '@/types/enums';
 import { ExpertiseArea, ProposalWizardStep2Data } from '@/types/proposals';
@@ -296,21 +296,15 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     const fetchTeamData = async () => {
       try {
         setIsLoadingTeamData(true);
-        
+
         // Fetch managers for team leads and sales reps
-        const managersResponse = await getUsersByRole(UserType.PROPOSAL_MANAGER);
-        const managers = Array.isArray(managersResponse) 
-          ? managersResponse 
-          : managersResponse?.data || [];
-        setTeamLeads(managers);
-        setSalesReps(managers); // Using the same pool for now
+        const managers = await getUsersByRole(UserType.PROPOSAL_MANAGER);
+        setTeamLeads(managers || []);
+        setSalesReps(managers || []); // Using the same pool for now
 
         // Fetch executives
-        const executiveResponse = await getUsersByRole(UserType.EXECUTIVE);
-        const executiveUsers = Array.isArray(executiveResponse)
-          ? executiveResponse
-          : executiveResponse?.data || [];
-        setExecutives(executiveUsers);
+        const executiveUsers = await getUsersByRole(UserType.EXECUTIVE);
+        setExecutives(executiveUsers || []);
       } catch (error) {
         console.error('Error fetching team data:', error);
         // Set empty arrays to prevent undefined errors
@@ -321,7 +315,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
         setIsLoadingTeamData(false);
       }
     };
-    
+
     fetchTeamData();
   }, [getUsersByRole]);
 
@@ -410,15 +404,17 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                   id="teamLead"
                   options={teamLeads.map(lead => ({
                     value: lead.id,
-                    label: `${lead.name} (${lead.role || 'No role'})`,
+                    label: `${lead.name} (${lead.roles?.map((r: any) => r.name).join(', ') || lead.department || 'No role'})`,
                   }))}
                   error={errors.teamLead?.message}
                   {...register('teamLead')}
-                  onChange={(value: string) => {
-                    setValue('teamLead', value);
-                    trackTeamAssignment('teamLead', value);
+                  onChange={(value: string | string[]) => {
+                    const stringValue = Array.isArray(value) ? value[0] || '' : value;
+                    setValue('teamLead', stringValue);
+                    trackTeamAssignment('teamLead', stringValue);
                   }}
                   value={watch('teamLead')}
+                  placeholder="Select team lead..."
                 />
               </div>
 
@@ -430,15 +426,17 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                   id="salesRepresentative"
                   options={salesReps.map(rep => ({
                     value: rep.id,
-                    label: `${rep.name} (${rep.role || 'No role'})`,
+                    label: `${rep.name} (${rep.roles?.map((r: any) => r.name).join(', ') || rep.department || 'No role'})`,
                   }))}
                   error={errors.salesRepresentative?.message}
                   {...register('salesRepresentative')}
-                  onChange={(value: string) => {
-                    setValue('salesRepresentative', value);
-                    trackTeamAssignment('salesRepresentative', value);
+                  onChange={(value: string | string[]) => {
+                    const stringValue = Array.isArray(value) ? value[0] || '' : value;
+                    setValue('salesRepresentative', stringValue);
+                    trackTeamAssignment('salesRepresentative', stringValue);
                   }}
                   value={watch('salesRepresentative')}
+                  placeholder="Select sales representative..."
                 />
               </div>
             </div>

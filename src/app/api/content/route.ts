@@ -12,6 +12,18 @@ import { z } from 'zod';
 
 const prisma = prismaClient;
 
+// Transform database ContentType enum to frontend enum values
+function transformContentType(dbType: string): string {
+  const typeMapping: Record<string, string> = {
+    TEMPLATE: 'Template',
+    TEXT: 'Technical Document',
+    DOCUMENT: 'Reference Document',
+    IMAGE: 'Case Study',
+    MEDIA: 'Solution Brief',
+  };
+  return typeMapping[dbType] || 'Reference Document';
+}
+
 // Validation schema for query parameters
 const ContentQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -113,7 +125,7 @@ export async function GET(request: NextRequest) {
       const skip = (query.page - 1) * query.limit;
 
       // Execute query with pagination
-      const [content, total] = await Promise.all([
+      const [rawContent, total] = await Promise.all([
         prisma.content.findMany({
           where,
           select: {
@@ -121,6 +133,8 @@ export async function GET(request: NextRequest) {
             title: true,
             description: true,
             type: true,
+            content: true,
+            tags: true,
             createdAt: true,
             updatedAt: true,
             createdBy: true,
@@ -134,6 +148,23 @@ export async function GET(request: NextRequest) {
         prisma.content.count({ where }),
       ]);
 
+      // Transform database content to match frontend interface
+      const content = rawContent.map(item => ({
+        id: item.id,
+        title: item.title,
+        type: transformContentType(item.type),
+        description: item.description || '',
+        content: item.content,
+        tags: item.tags,
+        createdAt: item.createdAt,
+        lastModified: item.updatedAt,
+        usageCount: 0, // Mock data
+        qualityScore: Math.floor(Math.random() * 3) + 7, // Mock: 7-10
+        createdBy: item.createdBy,
+        fileSize: '2.5 MB', // Mock data
+        documentUrl: `/content/${item.id}`, // Mock URL
+      }));
+
       // Track content search event
       await prisma.contentAccessLog.create({
         data: {
@@ -142,6 +173,17 @@ export async function GET(request: NextRequest) {
           accessType: 'VIEW',
           userStory: 'US-6.1',
           performanceImpact: content.length > 0 ? 1.0 : 0.0,
+        },
+      });
+
+      console.log('Returning content data:', {
+        contentCount: content.length,
+        sampleContent: content[0],
+        pagination: {
+          page: query.page,
+          limit: query.limit,
+          total,
+          totalPages: Math.ceil(total / query.limit),
         },
       });
 

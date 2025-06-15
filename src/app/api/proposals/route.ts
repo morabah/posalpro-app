@@ -29,7 +29,7 @@ const ProposalCreateSchema = z.object({
   customerId: z.string().cuid('Invalid customer ID'),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
   dueDate: z.string().datetime().optional(),
-  value: z.number().positive().optional(),
+  value: z.number().positive('Value must be greater than 0').optional(),
   currency: z.string().length(3).default('USD'),
   products: z
     .array(
@@ -227,8 +227,35 @@ export async function GET(request: NextRequest) {
         updatedAt: true,
         createdBy: true,
         customerId: true,
-        customer: query.includeCustomer,
-        products: query.includeProducts,
+        ...(query.includeCustomer && {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              industry: true,
+              status: true,
+              tier: true,
+            },
+          },
+        }),
+        ...(query.includeProducts && {
+          products: {
+            select: {
+              id: true,
+              quantity: true,
+              unitPrice: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  sku: true,
+                  category: true,
+                },
+              },
+            },
+          },
+        }),
       };
 
       // Execute query with pagination
@@ -332,6 +359,10 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
+    console.log('🔍 [DEBUG] Raw request body:', body);
+    console.log('🔍 [DEBUG] Body type:', typeof body);
+    console.log('🔍 [DEBUG] Body keys:', Object.keys(body || {}));
+
     const validatedData = ProposalCreateSchema.parse(body);
 
     // Verify customer exists

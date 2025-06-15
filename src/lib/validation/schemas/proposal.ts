@@ -17,9 +17,12 @@ export const proposalMetadataSchema = z.object({
 
   description: validationUtils.stringWithLength(10, 2000, 'Proposal description'),
 
-  clientName: validationUtils.stringWithLength(1, 100, 'Client name'),
+  // Customer information - references existing Customer entity
+  customerId: z.string().uuid('Invalid customer ID').optional(),
 
-  clientContact: z.object({
+  customerName: validationUtils.stringWithLength(1, 100, 'Customer name'),
+
+  customerContact: z.object({
     name: validationUtils.stringWithLength(1, 100, 'Contact name'),
     email: z.string().email('Please enter a valid email address'),
     phone: z.string().optional(),

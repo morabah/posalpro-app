@@ -9,7 +9,6 @@ import { trackAuthEvent } from '@/lib/store/authStore';
 import { createProposalSchema, proposalMetadataSchema } from '@/lib/validation';
 import { ApprovalDecision, Priority, ProposalStatus } from '@/types/enums';
 import { z } from 'zod';
-import { CustomerEntity } from './customer';
 
 // Infer types from validation schemas
 export type ProposalMetadata = z.infer<typeof proposalMetadataSchema>;
@@ -34,7 +33,7 @@ export interface ProposalQueryOptions {
   priority?: Priority;
   assignedTo?: string;
   createdBy?: string;
-  clientName?: string;
+  customerName?: string; // Updated from clientName to customerName
   projectType?: string;
   dateFrom?: Date;
   dateTo?: Date;
@@ -42,6 +41,7 @@ export interface ProposalQueryOptions {
   limit?: number;
   sortBy?: 'title' | 'deadline' | 'createdAt' | 'priority' | 'status';
   sortOrder?: 'asc' | 'desc';
+  includeCustomer?: boolean; // Include customer relationship data
 }
 
 interface ProposalsApiResponse {
@@ -134,45 +134,29 @@ export class ProposalEntity {
       const clientValidatedData = createProposalSchema.parse(proposalData);
       console.log('[ProposalEntity] Data validation successful');
 
-      // Get or create customer to get customerId
-      console.log('[ProposalEntity] Getting or creating customer');
-      const customerEntity = CustomerEntity.getInstance();
-      const customerId = await customerEntity.findOrCreate(clientValidatedData.metadata.clientName);
-      console.log('[ProposalEntity] Customer ID:', customerId);
+      // Use live API to create proposal
+      console.log('[ProposalEntity] Creating proposal via API');
+      const { proposalsApi } = await import('@/lib/api/endpoints/proposals');
+      const response = await proposalsApi.createProposal(clientValidatedData);
+      console.log('[ProposalEntity] API response:', response);
 
-      // Mock proposal creation
-      console.log('[ProposalEntity] Creating mock proposal');
-      const mockProposal: ProposalData = {
-        id: 'mock-proposal-' + Date.now(),
-        status: ProposalStatus.DRAFT,
-        createdBy: 'current-user',
-        assignedTo: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        version: 1,
-        ...clientValidatedData.metadata,
-        customerId: customerId,
-      };
+      if (response.success && response.data) {
+        // Cache the new proposal
+        this.setCache(response.data.id, response.data);
+        console.log('[ProposalEntity] Proposal cached');
 
-      // Cache the new proposal
-      this.setCache(mockProposal.id, mockProposal);
-      console.log('[ProposalEntity] Proposal cached');
+        // Track proposal creation event
+        console.log('[ProposalEntity] Tracking proposal creation event');
+        trackAuthEvent('proposal_created', {
+          proposalId: response.data.id,
+          title: response.data.title,
+          priority: response.data.priority,
+          estimatedValue: response.data.estimatedValue,
+        });
+        console.log('[ProposalEntity] Event tracked');
+      }
 
-      // Track proposal creation event
-      console.log('[ProposalEntity] Tracking proposal creation event');
-      trackAuthEvent('proposal_created', {
-        proposalId: mockProposal.id,
-        title: mockProposal.title,
-        priority: mockProposal.priority,
-        estimatedValue: mockProposal.estimatedValue,
-      });
-      console.log('[ProposalEntity] Event tracked');
-
-      return {
-        success: true,
-        data: mockProposal,
-        message: 'Proposal created successfully',
-      };
+      return response;
     } catch (error) {
       console.error('[ProposalEntity] Failed to create proposal:', error);
       throw error;
@@ -277,7 +261,7 @@ export class ProposalEntity {
       if (options.priority) queryParams.set('priority', options.priority);
       if (options.assignedTo) queryParams.set('assignedTo', options.assignedTo);
       if (options.createdBy) queryParams.set('createdBy', options.createdBy);
-      if (options.clientName) queryParams.set('clientName', options.clientName);
+      if (options.customerName) queryParams.set('customerName', options.customerName);
       if (options.projectType) queryParams.set('projectType', options.projectType);
       if (options.dateFrom) queryParams.set('dateFrom', options.dateFrom.toISOString());
       if (options.dateTo) queryParams.set('dateTo', options.dateTo.toISOString());

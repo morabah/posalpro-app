@@ -124,6 +124,7 @@ export default function ProposalManagementDashboard() {
           limit: 50, // Get more proposals to show
           sortBy: 'createdAt',
           sortOrder: 'desc',
+          includeCustomer: true, // Include customer data to resolve client names
         });
 
         debugResponseStructure(response, 'Proposals API Response');
@@ -134,12 +135,13 @@ export default function ProposalManagementDashboard() {
 
           if (proposalsData.length > 0) {
             console.log('Sample proposal data:', proposalsData[0]);
+            console.log('🔍 Customer data in first proposal:', (proposalsData[0] as any).customer);
 
             // Transform API data to match the UI interface
             const transformedProposals: Proposal[] = proposalsData.map((apiProposal: any) => ({
               id: apiProposal.id,
               title: apiProposal.title,
-              client: apiProposal.clientName || 'Unknown Client',
+              client: apiProposal.customer?.name || apiProposal.clientName || 'Unknown Client',
               status: mapApiStatusToUIStatus(apiProposal.status),
               priority: mapApiPriorityToUIPriority(apiProposal.priority),
               dueDate: new Date(apiProposal.deadline || apiProposal.dueDate || Date.now()),

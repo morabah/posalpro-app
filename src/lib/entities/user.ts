@@ -223,34 +223,43 @@ export class UserEntity {
    */
   async query(options: UserQueryOptions = {}): Promise<ApiUserResponse> {
     try {
-      const queryParams = new URLSearchParams();
+      // Import usersApi dynamically to avoid circular dependency
+      const { usersApi } = await import('@/lib/api/endpoints/users');
 
-      if (options.search) queryParams.set('search', options.search);
-      if (options.department) queryParams.set('department', options.department);
-      if (options.role) queryParams.set('role', options.role);
-      if (options.isActive !== undefined) queryParams.set('isActive', String(options.isActive));
-      if (options.page) queryParams.set('page', String(options.page));
-      if (options.limit) queryParams.set('limit', String(options.limit));
-      if (options.sortBy) queryParams.set('sortBy', options.sortBy);
-      if (options.sortOrder) queryParams.set('sortOrder', options.sortOrder);
+      const response = await usersApi.queryUsers(options);
 
-      const response = await apiClient.get<UserQueryResponse>(`/users?${queryParams.toString()}`);
-
-      // Cache results
-      if (response.success && response.data?.users) {
-        response.data.users.forEach(user => this.setCache(user.id, user));
+      // Cache results - Handle both mock and live API responses
+      if (response.success && response.data) {
+        // Check if response.data has users property (live API) or is array (mock API)
+        const users = Array.isArray(response.data) ? response.data : (response.data as any).users;
+        if (users && Array.isArray(users)) {
+          users.forEach((user: any) => this.setCache(user.id, user));
+        }
       }
 
-      return {
-        success: response.success,
-        data: response.data || {
-          users: [],
-          pagination: {
+      // Transform response to expected format
+      const users = Array.isArray(response.data)
+        ? response.data
+        : (response.data as any)?.users || [];
+      const pagination = Array.isArray(response.data)
+        ? {
+            page: options.page || 1,
+            limit: options.limit || 10,
+            total: response.data.length,
+            totalPages: Math.ceil(response.data.length / (options.limit || 10)),
+          }
+        : (response.data as any)?.pagination || {
             page: options.page || 1,
             limit: options.limit || 10,
             total: 0,
             totalPages: 0,
-          },
+          };
+
+      return {
+        success: response.success,
+        data: {
+          users,
+          pagination,
         },
         message: response.message || 'No users found',
       };

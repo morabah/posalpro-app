@@ -199,7 +199,21 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     name: 'Customers',
     href: '/customers',
     icon: UsersIcon,
-    roles: ['manager', 'proposal_specialist', 'account_manager'],
+    // Remove role restrictions to make it visible to all users
+    children: [
+      {
+        id: 'customers-list',
+        name: 'All Customers',
+        href: '/customers',
+        icon: UsersIcon,
+      },
+      {
+        id: 'customers-create',
+        name: 'Create Customer',
+        href: '/customers/create',
+        icon: UsersIcon,
+      },
+    ],
   },
   {
     id: 'analytics',
@@ -221,8 +235,10 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['dashboard']));
 
-  // Auto-expand active group
+  // Auto-expand active group with null check
   useEffect(() => {
+    if (!pathname) return;
+
     const activeGroup = NAVIGATION_ITEMS.find(
       item =>
         pathname.startsWith(item.href) ||
@@ -249,18 +265,23 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
     [user?.id, user?.role]
   );
 
-  // Filter navigation items by user role
+  // Filter navigation items by user role - Make more permissive
   const getFilteredNavigation = useCallback(() => {
     if (!user?.role) return NAVIGATION_ITEMS;
 
     return NAVIGATION_ITEMS.filter(item => {
+      // If no roles specified, show to everyone
       if (!item.roles) return true;
-      return item.roles.includes(user.role.toLowerCase());
+      // Show admin items only to admin users
+      if (item.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+      // For other role restrictions, be more permissive
+      return true;
     }).map(item => ({
       ...item,
       children: item.children?.filter(child => {
         if (!child.roles) return true;
-        return child.roles.includes(user.role.toLowerCase());
+        if (child.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+        return true;
       }),
     }));
   }, [user?.role]);
@@ -283,6 +304,8 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
 
   const handleNavigation = useCallback(
     (item: NavigationItem) => {
+      if (!pathname) return;
+
       trackNavigation('navigate', {
         from: pathname,
         to: item.href,
@@ -298,6 +321,7 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
 
   const isActive = useCallback(
     (href: string) => {
+      if (!pathname) return false;
       return pathname === href || (href !== '/' && pathname.startsWith(href));
     },
     [pathname]

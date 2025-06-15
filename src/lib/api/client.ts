@@ -286,7 +286,7 @@ class EnhancedApiClient {
     return this.makeRequest<T>(url, {
       ...config,
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data,
     });
   }
 
@@ -298,7 +298,7 @@ class EnhancedApiClient {
     return this.makeRequest<T>(url, {
       ...config,
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data,
     });
   }
 
@@ -310,7 +310,7 @@ class EnhancedApiClient {
     return this.makeRequest<T>(url, {
       ...config,
       method: 'PATCH',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data,
     });
   }
 

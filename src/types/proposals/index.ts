@@ -67,6 +67,7 @@ export enum ExpertiseArea {
 
 // Core interfaces
 export interface ClientInformation {
+  id?: string;
   name: string;
   industry: string;
   contactPerson: string;
