@@ -1,11 +1,14 @@
 /**
  * PosalPro MVP2 - User Database Service
  * Database operations for user management using Prisma
+ * Implements robust error handling with StandardError and ErrorCodes
  */
 
 import { UserStatus } from '@prisma/client';
 import { hashPassword } from '../auth/passwordUtils';
 import { prisma } from '../prisma';
+import { ErrorCodes, StandardError, errorHandlingService } from '../errors';
+import { isPrismaError } from '../utils/errorUtils';
 
 export interface CreateUserData {
   email: string;
@@ -56,17 +59,34 @@ export async function createUser(data: CreateUserData): Promise<UserWithoutPassw
       },
     });
 
-    console.log('✅ User created successfully:', user.email);
     return user;
   } catch (error) {
-    console.error('❌ Error creating user:', error);
+    errorHandlingService.processError(error);
 
     // Handle unique constraint violations (duplicate email)
-    if (error instanceof Error && 'code' in error && error.code === 'P2002') {
-      throw new Error('A user with this email already exists');
+    if (isPrismaError(error) && error.code === 'P2002') {
+      throw new StandardError({
+        message: 'A user with this email already exists',
+        code: ErrorCodes.DATA.CONFLICT,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'UserService',
+          operation: 'createUser',
+          email: data.email
+        },
+      });
     }
 
-    throw new Error('Failed to create user');
+    throw new StandardError({
+      message: 'Failed to create user',
+      code: ErrorCodes.DATA.CREATE_FAILED,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'UserService',
+        operation: 'createUser',
+        email: data.email
+      },
+    });
   }
 }
 
@@ -110,16 +130,19 @@ export async function getUserByEmail(email: string): Promise<{
       },
     });
 
-    if (user) {
-      console.log('🔍 User found:', user.email);
-    } else {
-      console.log('❌ User not found:', email);
-    }
-
     return user;
   } catch (error) {
-    console.error('❌ Error retrieving user:', error);
-    throw new Error('Failed to retrieve user');
+    errorHandlingService.processError(error);
+    throw new StandardError({
+      message: 'Failed to retrieve user by email',
+      code: ErrorCodes.DATA.QUERY_FAILED,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'UserService',
+        operation: 'getUserByEmail',
+        email
+      },
+    });
   }
 }
 
@@ -135,10 +158,33 @@ export async function updateLastLogin(userId: string): Promise<boolean> {
       data: { lastLogin: new Date() },
     });
 
-    console.log('✅ Last login updated for user:', userId);
     return true;
   } catch (error) {
-    console.error('❌ Error updating last login:', error);
-    return false;
+    errorHandlingService.processError(error);
+    
+    // Check for Prisma not found error
+    if (isPrismaError(error) && error.code === 'P2025') {
+      throw new StandardError({
+        message: 'User not found',
+        code: ErrorCodes.DATA.NOT_FOUND,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'UserService',
+          operation: 'updateLastLogin',
+          userId
+        },
+      });
+    }
+    
+    throw new StandardError({
+      message: 'Failed to update user last login',
+      code: ErrorCodes.DATA.UPDATE_FAILED,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'UserService',
+        operation: 'updateLastLogin',
+        userId
+      },
+    });
   }
 }

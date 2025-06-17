@@ -9,6 +9,8 @@ import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 const prisma = new PrismaClient();
 
@@ -44,7 +46,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'UsersIdRoute',
+            operation: 'getUserById',
+            userId: id
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to view user profiles' }
+      );
     }
 
     // Parse query parameters
@@ -106,12 +122,41 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: `User with ID ${id} not found`,
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'UsersIdRoute',
+            operation: 'getUserById',
+            userId: id
+          }
+        }),
+        'User not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404,
+        { userFriendlyMessage: 'The requested user profile could not be found' }
+      );
     }
 
     // Only allow access to active users (privacy protection)
     if (user.status !== 'ACTIVE') {
-      return NextResponse.json({ error: 'User not available' }, { status: 403 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: `User with ID ${id} is not active (status: ${user.status})`,
+          code: ErrorCodes.AUTH.PERMISSION_DENIED,
+          metadata: {
+            component: 'UsersIdRoute',
+            operation: 'getUserById',
+            userId: id,
+            userStatus: user.status
+          }
+        }),
+        'User not available',
+        ErrorCodes.AUTH.PERMISSION_DENIED,
+        403,
+        { userFriendlyMessage: 'This user profile is not currently available' }
+      );
     }
 
     // Prepare the base user profile
@@ -266,15 +311,74 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch user ${params.id}:`, error);
+    const userId = params.id;
+    
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Invalid query parameters for user profile request',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'UsersIdRoute',
+            operation: 'getUserById',
+            userId,
+            validationErrors: error.errors
+          }
+        }),
+        'Invalid request parameters',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { 
+          userFriendlyMessage: 'The request contains invalid parameters. Please check your input and try again.',
+          details: error.errors
+        }
       );
     }
 
-    return NextResponse.json({ error: 'Failed to fetch user profile' }, { status: 500 });
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when fetching user ${userId}: ${getPrismaErrorMessage(error.code)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'UsersIdRoute',
+            operation: 'getUserById',
+            userId,
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred while retrieving the user profile. Please try again later.' }
+      );
+    }
+    
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(error);
+    }
+    
+    return createApiErrorResponse(
+      new StandardError({
+        message: `Failed to fetch user profile for ${userId}`,
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'UsersIdRoute',
+          operation: 'getUserById',
+          userId
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while retrieving the user profile. Please try again later.' }
+    );
   }
 }

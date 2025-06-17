@@ -127,7 +127,11 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
       // Track effect execution patterns
       const patternKey = `${componentName}:${effectName}`;
       const currentCount = detector.suspiciousPatterns.get(patternKey) || 0;
-      detector.suspiciousPatterns.set(patternKey, currentCount + 1);
+
+      // Only track if we haven't already flagged this pattern recently
+      if (currentCount < 20) {
+        detector.suspiciousPatterns.set(patternKey, currentCount + 1);
+      }
 
       // Check for rapid successive effect runs (potential infinite loop)
       if (now - detector.lastEffectRun < 10) {
@@ -156,16 +160,21 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
 
           // Reset to prevent spam
           detector.effectRunCount = 0;
+          detector.suspiciousPatterns.clear(); // Clear all patterns when loop detected
         }
       } else {
-        detector.effectRunCount = 0;
+        detector.effectRunCount = Math.max(0, detector.effectRunCount - 1); // Gradually reduce count
       }
 
       detector.lastEffectRun = now;
 
-      // Clean up old patterns every minute
-      if (now % 60000 < 1000) {
+      // Clean up old patterns more aggressively
+      if (detector.suspiciousPatterns.size > 100) {
+        // Clear oldest patterns
+        const entries = Array.from(detector.suspiciousPatterns.entries());
+        const toKeep = entries.slice(-50); // Keep last 50 patterns
         detector.suspiciousPatterns.clear();
+        toKeep.forEach(([key, value]) => detector.suspiciousPatterns.set(key, value));
       }
     },
     [componentName, detectInfiniteLoops]
@@ -196,19 +205,25 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
     [componentName]
   );
 
-  // Auto-track renders
+  // Auto-track renders with throttling to prevent excessive monitoring
+  const lastRenderTrackRef = useRef(0);
   useEffect(() => {
-    trackRender();
+    const now = Date.now();
+    // Only track renders every 16ms (60fps) to avoid excessive tracking
+    if (now - lastRenderTrackRef.current > 16) {
+      trackRender();
+      lastRenderTrackRef.current = now;
+    }
   });
 
-  // Cleanup old violations
+  // Cleanup old violations with longer intervals
   useEffect(() => {
     const cleanup = setInterval(() => {
       const now = Date.now();
       metricsRef.current.violations = metricsRef.current.violations.filter(
         violation => now - violation.timestamp < 300000 // Keep violations for 5 minutes
       );
-    }, 60000); // Clean up every minute
+    }, 120000); // Clean up every 2 minutes instead of 1
 
     return () => clearInterval(cleanup);
   }, []);

@@ -9,6 +9,8 @@ import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 const prisma = new PrismaClient();
 
@@ -181,16 +183,70 @@ export async function GET(request: NextRequest) {
       message: 'Users retrieved successfully',
     });
   } catch (error) {
-    console.error('Users fetch error:', error);
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Invalid query parameters',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'UsersRoute',
+            operation: 'getUsers',
+            validationErrors: error.errors
+          }
+        }),
+        'Invalid request parameters',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { 
+          userFriendlyMessage: 'The request contains invalid parameters. Please check your input and try again.',
+          details: error.errors
+        }
       );
     }
 
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when fetching users: ${getPrismaErrorMessage(error.code)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'UsersRoute',
+            operation: 'getUsers',
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred while retrieving users. Please try again later.' }
+      );
+    }
+    
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(error);
+    }
+    
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to fetch users',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'UsersRoute',
+          operation: 'getUsers'
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while retrieving users. Please try again later.' }
+    );
   }
 }
 
@@ -321,15 +377,69 @@ export async function PUT(request: NextRequest) {
       message: 'Profile updated successfully',
     });
   } catch (error) {
-    console.error('User profile update error:', error);
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Invalid profile update parameters',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'UsersRoute',
+            operation: 'updateUserProfile',
+            validationErrors: error.errors
+          }
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { 
+          userFriendlyMessage: 'The profile update contains invalid data. Please check your input and try again.',
+          details: error.errors
+        }
       );
     }
 
-    return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when updating profile: ${getPrismaErrorMessage(error.code)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'UsersRoute',
+            operation: 'updateUserProfile',
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred while updating your profile. Please try again later.' }
+      );
+    }
+    
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(error);
+    }
+    
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to update user profile',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'UsersRoute',
+          operation: 'updateUserProfile'
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while updating your profile. Please try again later.' }
+    );
   }
 }

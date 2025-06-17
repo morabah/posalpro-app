@@ -113,8 +113,8 @@ export default function ContentSearch() {
   const [searchStartTime, setSearchStartTime] = useState<number | null>(null);
 
   // Use refs to avoid dependency cycles in useEffect
-  const searchStartTimeRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef(Date.now());
+  const searchStartTimeRef = useRef<number | null>(null);
 
   // Enhanced performance monitoring
   const performanceMonitor = usePerformanceMonitor({
@@ -125,11 +125,10 @@ export default function ContentSearch() {
     trackMemory: true,
   });
 
-  // Update refs when state changes
+  // Update refs when state changes (no need to track this effect)
   useEffect(() => {
     searchStartTimeRef.current = searchStartTime;
-    performanceMonitor.trackEffect('searchStartTime-update');
-  }, [searchStartTime]); // Remove performanceMonitor dependency to prevent infinite loop
+  }, [searchStartTime]);
 
   const { track } = useAnalytics();
 
@@ -171,6 +170,7 @@ export default function ContentSearch() {
       .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
   }, [searchResult.items, selectedTypes, activeTags, dateFrom, dateTo]);
 
+  // Stabilize searchMetrics to prevent infinite loops
   const searchMetrics = useMemo(
     (): ContentSearchMetrics => ({
       searchQuery,
@@ -195,20 +195,20 @@ export default function ContentSearch() {
     [
       searchQuery,
       searchResult.searchTime,
-      filteredResults,
-      selectedTypes,
-      activeTags,
+      filteredResults.length,
+      selectedTypes.join(','), // Stabilize array dependency
+      activeTags.join(','), // Stabilize array dependency
       dateFrom,
       dateTo,
     ]
   );
 
   useEffect(() => {
-    performanceMonitor.trackEffect('content-fetch');
-
     const fetchContent = async () => {
       try {
         setLoading(true);
+        performanceMonitor.trackEffect('content-fetch');
+
         const response = await fetch('/api/content');
         if (!response.ok) throw new Error('Failed to fetch content');
 
@@ -238,17 +238,28 @@ export default function ContentSearch() {
     };
 
     fetchContent();
-  }, []); // Remove performanceMonitor dependency to prevent infinite loop
+  }, []);
 
+  // Stable analytics tracking function
   const trackContentAction = useCallback(
     (action: string, data: any) => {
       // Calculate dynamic metrics at tracking time using refs to avoid infinite loops
       const dynamicMetrics = {
-        ...searchMetrics,
+        searchQuery,
+        timeToFirstResult: searchResult.searchTime / 1000,
         timeToSelection: searchStartTimeRef.current
           ? (Date.now() - searchStartTimeRef.current) / 1000
           : 0,
+        searchAccuracy: searchMetrics.searchAccuracy,
+        userSatisfactionScore: 85,
+        categoriesUsed: selectedTypes,
+        filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
+        relatedContentClicks: 0,
         browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+        contentSaved: false,
+        tagsAccepted: activeTags.length,
+        tagsModified: 0,
+        qualityRating: 4.2,
       };
 
       track('content_search', {
@@ -257,43 +268,59 @@ export default function ContentSearch() {
         searchMetrics: dynamicMetrics,
       });
     },
-    [track, searchMetrics]
+    [
+      searchQuery,
+      searchResult.searchTime,
+      searchMetrics.searchAccuracy,
+      selectedTypes,
+      activeTags.length,
+      dateFrom,
+      dateTo,
+      track,
+    ]
   );
 
-  // Fixed useEffect - no longer depends on trackContentAction to avoid infinite loop
+  // Optimized search initiation tracking
   useEffect(() => {
-    performanceMonitor.trackEffect('search-initiated');
+    if (!searchQuery.trim()) return;
 
-    if (searchQuery.trim()) {
+    const timeoutId = setTimeout(() => {
+      performanceMonitor.trackEffect('search-initiated');
       const currentSearchStartTime = Date.now();
       setSearchStartTime(currentSearchStartTime);
 
-      // Track directly using refs to avoid dependency cycle
-      const dynamicMetrics = {
-        ...searchMetrics,
-        timeToSelection: 0, // Just started searching
-        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
-      };
-
+      // Track directly without depending on searchMetrics
       track('content_search', {
         action: 'search_initiated',
         query: searchQuery,
         timestamp: currentSearchStartTime,
-        searchMetrics: dynamicMetrics,
+        searchMetrics: {
+          searchQuery,
+          timeToFirstResult: 0,
+          timeToSelection: 0,
+          searchAccuracy: 0,
+          userSatisfactionScore: 85,
+          categoriesUsed: selectedTypes,
+          filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
+          relatedContentClicks: 0,
+          browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+          contentSaved: false,
+          tagsAccepted: activeTags.length,
+          tagsModified: 0,
+          qualityRating: 4.2,
+        },
       });
-    }
-  }, [searchQuery, track, searchMetrics]); // Remove performanceMonitor dependency
+    }, 100); // Small delay to avoid rapid firing
 
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, selectedTypes, activeTags.length, dateFrom, dateTo, track]);
+
+  // Optimized search completion tracking
   useEffect(() => {
-    performanceMonitor.trackEffect('search-completed');
+    if (!searchStartTime || searchResult.isLoading) return;
 
-    if (searchStartTime && !searchResult.isLoading) {
-      // Track directly using refs to avoid dependency cycle
-      const dynamicMetrics = {
-        ...searchMetrics,
-        timeToSelection: (Date.now() - searchStartTime) / 1000,
-        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
-      };
+    const timeoutId = setTimeout(() => {
+      performanceMonitor.trackEffect('search-completed');
 
       track('content_search', {
         action: 'search_completed',
@@ -301,38 +328,70 @@ export default function ContentSearch() {
         duration: Date.now() - searchStartTime,
         resultsCount: filteredResults.length,
         searchTime: searchResult.searchTime,
-        searchMetrics: dynamicMetrics,
+        searchMetrics: {
+          searchQuery,
+          timeToFirstResult: searchResult.searchTime / 1000,
+          timeToSelection: (Date.now() - searchStartTime) / 1000,
+          searchAccuracy: searchMetrics.searchAccuracy,
+          userSatisfactionScore: 85,
+          categoriesUsed: selectedTypes,
+          filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
+          relatedContentClicks: 0,
+          browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+          contentSaved: false,
+          tagsAccepted: activeTags.length,
+          tagsModified: 0,
+          qualityRating: 4.2,
+        },
       });
-    }
+    }, 50); // Small delay to batch rapid changes
+
+    return () => clearTimeout(timeoutId);
   }, [
     searchResult.isLoading,
     searchStartTime,
     searchQuery,
     filteredResults.length,
     searchResult.searchTime,
+    searchMetrics.searchAccuracy,
+    selectedTypes,
+    activeTags.length,
+    dateFrom,
+    dateTo,
     track,
-    searchMetrics,
-  ]); // Remove performanceMonitor dependency
+  ]);
 
+  // Optimized content loaded tracking
   useEffect(() => {
-    performanceMonitor.trackEffect('content-loaded');
+    if (originalContent.length === 0) return;
 
-    if (originalContent.length > 0) {
-      // Track directly using refs to avoid dependency cycle
-      const dynamicMetrics = {
-        ...searchMetrics,
-        timeToSelection: 0,
-        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
-      };
+    const timeoutId = setTimeout(() => {
+      performanceMonitor.trackEffect('content-loaded');
 
       track('content_search', {
         action: 'content_search_loaded',
         totalContent: originalContent.length,
         loadTime: Date.now() - sessionStartTimeRef.current,
-        searchMetrics: dynamicMetrics,
+        searchMetrics: {
+          searchQuery: '',
+          timeToFirstResult: 0,
+          timeToSelection: 0,
+          searchAccuracy: 0,
+          userSatisfactionScore: 85,
+          categoriesUsed: selectedTypes,
+          filtersApplied: 0,
+          relatedContentClicks: 0,
+          browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
+          contentSaved: false,
+          tagsAccepted: 0,
+          tagsModified: 0,
+          qualityRating: 4.2,
+        },
       });
-    }
-  }, [originalContent.length, track, searchMetrics]); // Remove performanceMonitor dependency
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [originalContent.length, selectedTypes, track]);
 
   const toggleContentType = useCallback((type: ContentType) => {
     setSelectedTypes(prev =>

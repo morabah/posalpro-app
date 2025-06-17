@@ -6,7 +6,413 @@ This document captures insights, patterns, and wisdom gained throughout the
 PosalPro MVP2 development journey. Each lesson includes context, insight, and
 actionable guidance.
 
-**Last Updated**: 2025-06-03 **Entry Count**: 9
+**Last Updated**: 2025-06-17 **Entry Count**: 12
+
+---
+
+## Lesson #11: Service Layer Error Handling Implementation Patterns
+
+**Date**: 2025-06-17 **Phase**: H3.0 - Platform Engineering & Quality Assurance **Category**: Technical **Impact Level**: Medium
+
+### Context
+
+After establishing our standardized error handling framework (see Lesson #10), we needed to implement consistent error handling across all service layers, particularly in data access services like `customerService.ts`. This implementation revealed several practical patterns for effective error handling in TypeScript service layers.
+
+### Insight
+
+Implementing error handling across service layers revealed these key insights:
+
+1. **Prisma Error Type Narrowing**: Creating a type guard function for Prisma errors enables more precise error handling and better TypeScript type inference:
+
+```typescript
+function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+  return error instanceof Prisma.PrismaClientKnownRequestError;
+}
+```
+
+2. **Error Code Mapping**: Mapping specific database error codes to semantic application error codes creates a clean separation between technical implementation details and business logic:
+
+```typescript
+if (isPrismaError(error)) {
+  if (error.code === 'P2025') { // Record not found
+    throw new StandardError({
+      message: 'Customer not found',
+      code: ErrorCodes.DATA.NOT_FOUND,
+      cause: error,
+      // Additional metadata...
+    });
+  } else if (error.code === 'P2002') { // Unique constraint violation
+    throw new StandardError({
+      message: 'A customer with this information already exists',
+      code: ErrorCodes.DATA.CONFLICT,
+      cause: error,
+      // Additional metadata...
+    });
+  }
+}
+```
+
+3. **Contextual Metadata**: Including operation-specific metadata in error objects significantly improves debugging and observability:
+
+```typescript
+throw new StandardError({
+  message: 'Failed to update customer',
+  code: ErrorCodes.DATA.UPDATE_FAILED,
+  cause: error,
+  metadata: {
+    component: 'CustomerService',
+    operation: 'updateCustomer',
+    customerId: id,
+    updateData: JSON.stringify(data)
+  }
+});
+```
+
+4. **Consistent Error Processing**: Using a centralized error processing service ensures uniform handling across all service layers:
+
+```typescript
+try {
+  // Method implementation
+} catch (error) {
+  errorHandlingService.processError(error);
+  // Error-specific handling and re-throwing
+}
+```
+
+5. **User Authentication Error Patterns**: Our implementation in `userService.ts` revealed specific patterns for handling authentication-related errors:
+
+```typescript
+async function getUserByEmail(email: string): Promise<User | null> {
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    return user;
+  } catch (error) {
+    errorHandlingService.processError(error);
+    throw new StandardError({
+      message: 'Failed to retrieve user',
+      code: ErrorCodes.DATA.QUERY_FAILED,
+      cause: error instanceof Error ? error : undefined,
+      metadata: { component: 'UserService', operation: 'getUserByEmail', email },
+    });
+  }
+}
+```
+
+6. **Content Management Error Patterns**: The `contentService.ts` refactoring demonstrated effective patterns for handling content-related operations:
+
+```typescript
+async function getContentById(contentId: string): Promise<Content | null> {
+  try {
+    const content = await prisma.content.findUnique({ where: { id: contentId } });
+    return content;
+  } catch (error) {
+    errorHandlingService.processError(error);
+    if (isPrismaError(error) && error.code === 'P2025') {
+      throw new StandardError({
+        message: 'Content not found',
+        code: ErrorCodes.DATA.NOT_FOUND,
+        cause: error,
+        metadata: { component: 'ContentService', operation: 'getContentById', contentId },
+      });
+    }
+    throw new StandardError({
+      message: 'Failed to retrieve content',
+      code: ErrorCodes.DATA.QUERY_FAILED,
+      cause: error instanceof Error ? error : undefined,
+      metadata: { component: 'ContentService', operation: 'getContentById', contentId },
+    });
+  }
+}
+  cause: error instanceof Error ? error : undefined,
+  metadata: {
+    component: 'CustomerService',
+    operation: 'updateCustomer',
+    customerId: data.id,
+    // Additional context...
+  }
+});
+```
+
+4. **Centralized Error Processing**: Using a centralized error processing service before throwing domain-specific errors ensures consistent logging and telemetry:
+
+```typescript
+// Log the error using ErrorHandlingService
+errorHandlingService.processError(error);
+
+// Then throw the appropriate domain error
+throw new StandardError({ /* ... */ });
+```
+
+5. **Error Hierarchy**: Implementing a hierarchy of error handling ensures that specific errors are caught and processed before falling back to generic error handling:
+
+```typescript
+try {
+  // Database operation
+} catch (error) {
+  // Process error for logging
+  errorHandlingService.processError(error);
+  
+  // Handle specific known errors
+  if (isPrismaError(error)) {
+    if (error.code === 'P2025') { /* specific handling */ }
+    if (error.code === 'P2002') { /* specific handling */ }
+  }
+  
+  // Fall back to generic error
+  throw new StandardError({ /* generic error */ });
+}
+```
+
+6. **Consistent Try-Catch Pattern**: Wrapping all database operations in try-catch blocks with standardized error handling creates a consistent pattern across the codebase:
+
+```typescript
+async function operationName(): Promise<ReturnType> {
+  try {
+    // Perform database operations
+    return result;
+  } catch (error) {
+    // Standard error handling pattern
+    errorHandlingService.processError(error);
+    
+    // Specific error handling
+    // ...
+    
+    // Generic fallback
+    throw new StandardError({ /* ... */ });
+  }
+}
+```
+
+### Action Items
+
+- **Complete Service Layer Coverage**: Apply these error handling patterns to all remaining service layers in the application.
+
+- **Error Handling Linting**: Create ESLint rules to enforce consistent error handling patterns across the codebase.
+
+- **Error Handling Documentation**: Document common error scenarios and their handling patterns in the developer documentation.
+
+- **Error Monitoring**: Implement monitoring for error frequency and patterns to identify areas for improvement.
+
+- **Error Handling Testing**: Create test cases that verify proper error handling for common error scenarios.
+
+### Related Links
+
+- [CustomerService Implementation](../src/lib/services/customerService.ts)
+- [ErrorHandlingService Implementation](../src/lib/errors/ErrorHandlingService.ts)
+- [StandardError Implementation](../src/lib/errors/StandardError.ts)
+- [Error Codes Definition](../src/lib/errors/ErrorCodes.ts)
+
+---
+
+## Lesson #10: Standardized Error Handling for Full-Stack Applications
+
+**Date**: 2025-06-04 **Phase**: H3.0 - Platform Engineering & Quality Assurance **Category**: Technical **Impact Level**: High
+
+### Context
+
+During the evolution of PosalPro MVP2, we encountered inconsistent error handling patterns across different layers of the application (API routes, services, client-side components). This inconsistency led to several challenges:
+
+1. Unpredictable error responses from API endpoints
+2. Difficulty tracing errors across system boundaries
+3. Inconsistent logging practices making troubleshooting difficult
+4. Lack of typed error codes for programmatic handling
+5. Duplicate error handling logic across components
+
+To address these issues, we implemented a standardized error handling system based on platform engineering best practices and TypeScript's strong typing capabilities.
+
+### Insight
+
+Standardizing error handling across a full-stack application revealed several key insights:
+
+1. **Centralized Error Classification**: Organizing error codes into logical categories (System, Auth, Validation, Data, API, Business, UI) creates a shared vocabulary for error handling across the entire application stack. This classification enables consistent error responses and simplifies error handling logic.
+
+2. **Error Inheritance Hierarchy**: Extending the native JavaScript `Error` class with a custom `StandardError` class provides a foundation for typed, metadata-rich errors. This approach maintains compatibility with existing error handling while adding structured information like error codes, severity levels, and contextual metadata.
+
+3. **Error Cause Chaining**: Implementing error cause chaining (similar to Java's exception chaining) allows preservation of the original error context while adding higher-level semantic meaning. This creates a traceable path from low-level technical errors to user-facing messages without losing debugging information.
+
+4. **Singleton Error Service**: A centralized `ErrorHandlingService` singleton provides consistent error processing, logging, and response creation across the application. This eliminates duplicate error handling logic and ensures uniform error treatment.
+
+5. **API Error Mapping**: Mapping HTTP status codes and API-specific error types to standardized error codes creates a bridge between external systems and internal error handling. This mapping ensures that errors from external services are properly categorized and processed within the application's error handling framework.
+
+6. **Retry Logic Integration**: Integrating retry logic with the error handling system allows for intelligent retry decisions based on error types. Transient errors (network issues, timeouts, rate limits) can be automatically retried, while permanent errors (validation, authentication) fail fast.
+
+7. **Severity-Based Logging**: Associating severity levels with error codes enables appropriate logging behavior without duplicating logic. Critical system errors trigger alerts, while expected validation errors are logged at lower severity levels.
+
+### Action Items
+
+- **Standardize Error Handling**: Migrate all remaining components to use the `StandardError` class and `ErrorHandlingService` for consistent error handling.
+
+- **Error Documentation**: Maintain comprehensive documentation of error codes, their meanings, and appropriate handling strategies in code comments and developer documentation.
+
+- **Error Monitoring**: Implement centralized error monitoring that leverages the standardized error codes and metadata for aggregation and analysis.
+
+- **Client-Side Integration**: Extend the error handling system to client-side components with appropriate error boundaries and fallback UI components.
+
+---
+
+## Lesson #12: Prisma JSON Type Safety and Utility Functions
+
+**Date**: 2025-06-17 **Phase**: H3.0 - Platform Engineering & Quality Assurance **Category**: Technical **Impact Level**: Medium
+
+### Context
+
+During our comprehensive error handling implementation across service layers, we encountered TypeScript type safety issues with Prisma JSON fields. Specifically, TypeScript's `Record<string, unknown>` type was not directly compatible with Prisma's expected JSON input types (`NullableJsonNullValueInput | InputJsonValue`), causing type errors in our strictly-typed codebase.
+
+### Insight
+
+Addressing Prisma JSON type safety revealed several key insights:
+
+1. **TypeScript-Prisma Type Mismatch**: Prisma's JSON field types (`Prisma.JsonValue`, `Prisma.InputJsonValue`) are not directly compatible with TypeScript's common object types (`Record<string, unknown>`, `object`), requiring explicit type handling.
+
+2. **Type Utility Functions**: Creating dedicated utility functions for JSON type conversion provides a clean, consistent solution across the codebase:
+
+```typescript
+// Convert TypeScript objects to Prisma-compatible JSON
+export function toPrismaJson<T>(data: T): Prisma.InputJsonValue {
+  return data as unknown as Prisma.InputJsonValue;
+}
+
+// Convert Prisma JSON back to TypeScript types
+export function fromPrismaJson<T>(jsonData: Prisma.JsonValue | null | undefined): T | undefined {
+  if (jsonData === null || jsonData === undefined) {
+    return undefined;
+  }
+  return jsonData as unknown as T;
+}
+```
+
+3. **Consistent Pattern Application**: Applying these utilities consistently across all service methods that interact with JSON fields ensures type safety without compromising code readability:
+
+```typescript
+// Before: Type error
+metadata: data.metadata as Prisma.JsonValue,
+
+// After: Type-safe
+metadata: data.metadata ? toPrismaJson(data.metadata) : undefined,
+```
+
+4. **Specialized JSON Handling**: For complex nested structures like relationship conditions, specialized utility functions provide additional type safety and semantic clarity:
+
+```typescript
+export function relationshipConditionToPrisma(
+  condition: Record<string, unknown> | undefined
+): Prisma.InputJsonValue | undefined {
+  if (!condition) {
+    return undefined;
+  }
+  return toPrismaJson(condition);
+}
+```
+
+5. **Type Guards for Validation**: Implementing type guards for JSON objects improves runtime safety:
+
+```typescript
+export function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+```
+
+### Action Items
+
+- **Centralize Type Utilities**: Maintain all Prisma-related type utilities in a dedicated `prismaUtils.ts` file for easy discovery and reuse.
+
+- **Documentation**: Document common Prisma type challenges and their solutions in code comments and developer onboarding materials.
+
+- **Type Safety Checks**: Include Prisma JSON type compatibility in code review checklists and quality gates.
+
+- **Schema Evolution**: When modifying Prisma schema JSON fields, ensure corresponding TypeScript types and utilities are updated.
+
+- **Knowledge Sharing**: Share these patterns with the broader development team to ensure consistent application across all services.
+
+- **Error Testing**: Create test cases that verify proper error handling across system boundaries, ensuring errors are correctly propagated, transformed, and presented to users.
+
+- **Error Handling Reviews**: Include error handling patterns in code review checklists to ensure new code follows established patterns.
+
+### Implementation Patterns
+
+#### 1. Throwing Standardized Errors
+
+```typescript
+// Instead of:
+throw new Error('User not found');
+
+// Use:
+throw new StandardError({
+  message: 'User not found',
+  code: ErrorCodes.Auth.USER_NOT_FOUND,
+  metadata: { userId: requestedId }
+});
+```
+
+#### 2. Error Cause Chaining
+
+```typescript
+try {
+  await userService.authenticate(credentials);
+} catch (error) {
+  throw new StandardError({
+    message: 'Authentication failed',
+    code: ErrorCodes.Auth.AUTHENTICATION_FAILED,
+    cause: error as Error
+  });
+}
+```
+
+#### 3. API Route Error Handling
+
+```typescript
+try {
+  const result = await proposalService.getProposalById(id);
+  return res.status(200).json(result);
+} catch (error) {
+  return errorHandlingService.handleApiError(error, res);
+}
+```
+
+#### 4. Service Layer Error Handling
+
+```typescript
+try {
+  return await prisma.proposal.findUnique({ where: { id } });
+} catch (error) {
+  throw new StandardError({
+    message: 'Failed to retrieve proposal',
+    code: ErrorCodes.Data.QUERY_FAILED,
+    cause: error as Error,
+    metadata: { proposalId: id }
+  });
+}
+```
+
+#### 5. API Client Error Handling
+
+```typescript
+try {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new ApiError(
+      determineApiErrorType(response),
+      'API request failed',
+      response.status,
+      response.statusText
+    );
+  }
+  return await response.json();
+} catch (error) {
+  // ApiError extends StandardError with additional API-specific properties
+  if (error instanceof ApiError && error.isRetryable() && retries > 0) {
+    return this.executeRequest(config, retries - 1);
+  }
+  throw error;
+}
+```
+
+### Related Links
+
+- [StandardError Implementation](../src/lib/errors/StandardError.ts)
+- [ErrorHandlingService Implementation](../src/lib/errors/ErrorHandlingService.ts)
+- [Error Codes Definition](../src/lib/errors/ErrorCodes.ts)
+- [API Client Error Handling](../src/lib/api.ts)
 
 ---
 

@@ -9,6 +9,8 @@ import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 const prisma = new PrismaClient();
 
@@ -178,8 +180,49 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch customer ${params.id}:`, error);
-    return NextResponse.json({ error: 'Failed to fetch customer' }, { status: 500 });
+    
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when fetching customer: ${getPrismaErrorMessage(error)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'CustomerRoute',
+            operation: 'getCustomer',
+            customerId: params.id,
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        errorCode === ErrorCodes.DATA.NOT_FOUND ? 404 : 500,
+        { userFriendlyMessage: errorCode === ErrorCodes.DATA.NOT_FOUND ? 
+          'The requested customer could not be found' : 
+          'An error occurred while retrieving customer information. Please try again later.' }
+      );
+    }
+    
+    return createApiErrorResponse(
+      new StandardError({
+        message: `Failed to fetch customer ${params.id}`,
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'CustomerRoute',
+          operation: 'getCustomer',
+          customerId: params.id
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while retrieving customer information. Please try again later.' }
+    );
   }
 }
 

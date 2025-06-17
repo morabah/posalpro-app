@@ -1,6 +1,7 @@
 /**
  * Proposal Service
  * Data access layer for Proposal entities and related operations
+ * Uses standardized error handling for consistent error propagation
  */
 
 import {
@@ -21,6 +22,7 @@ import {
   UpdateProposalData,
 } from '../../types/entities/proposal';
 import { prisma } from '../prisma';
+import { StandardError, ErrorCodes, errorHandlingService } from '../errors';
 
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
@@ -116,8 +118,16 @@ export class ProposalService {
         select: { id: true }, // Only select id for existence check
       });
       if (!customer) {
-        // Throw a specific error that can be distinguished or logged
-        throw new Error(`Customer with ID ${data.customerId} not found.`);
+        // Throw a standardized error with proper error code and metadata
+        throw new StandardError({
+          message: `Customer with ID ${data.customerId} not found.`,
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'createProposal',
+            customerId: data.customerId
+          }
+        });
       }
 
       // Explicitly check for creator (user) existence
@@ -126,7 +136,15 @@ export class ProposalService {
         select: { id: true }, // Only select id for existence check
       });
       if (!creator) {
-        throw new Error(`Creator (User) with ID ${data.createdBy} not found.`);
+        throw new StandardError({
+          message: `Creator (User) with ID ${data.createdBy} not found.`,
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'createProposal',
+            userId: data.createdBy
+          }
+        });
       }
 
       return await prisma.proposal.create({
@@ -146,20 +164,59 @@ export class ProposalService {
         },
       });
     } catch (error) {
-      console.error(`[ProposalService] Failed to create proposal:`, error);
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
       if (isPrismaError(error)) {
         if (error.code === 'P2003') {
           const fieldName = (error.meta as { field_name?: string })?.field_name;
-          throw new Error(
-            `Database constraint failed for field: ${fieldName || 'unknown field'}. Ensure related records exist.`
-          );
+          throw new StandardError({
+            message: `Database constraint failed for field: ${fieldName || 'unknown field'}. Ensure related records exist.`,
+            code: ErrorCodes.DATA.INTEGRITY_VIOLATION,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'createProposal',
+              prismaCode: error.code,
+              fieldName
+            }
+          });
         }
-        throw new Error(`Database operation failed during proposal creation: ${error.message}`);
+        throw new StandardError({
+          message: `Database operation failed during proposal creation`,
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'createProposal',
+            prismaCode: error.code
+          }
+        });
       }
       if (error instanceof Error) {
-        throw new Error(`Service error during proposal creation: ${error.message}`);
+        // If it's already a StandardError, just rethrow it
+        if (error instanceof StandardError) {
+          throw error;
+        }
+        // Otherwise wrap it in a StandardError
+        throw new StandardError({
+          message: `Service error during proposal creation`,
+          code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'createProposal'
+          }
+        });
       }
-      throw new Error('An unexpected error occurred in ProposalService while creating proposal.');
+      throw new StandardError({
+        message: 'An unexpected error occurred in ProposalService while creating proposal.',
+        code: ErrorCodes.SYSTEM.UNKNOWN,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'createProposal'
+        }
+      });
     }
   }
 
@@ -171,10 +228,49 @@ export class ProposalService {
         data: updateData,
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Proposal not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'updateProposal',
+              proposalId: data.id
+            }
+          });
+        }
+        throw new StandardError({
+          message: 'Database operation failed during proposal update',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'updateProposal',
+            prismaCode: error.code,
+            proposalId: data.id
+          }
+        });
       }
-      throw new Error('Failed to update proposal');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to update proposal',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'updateProposal',
+          proposalId: data.id
+        }
+      });
     }
   }
 
@@ -185,10 +281,49 @@ export class ProposalService {
         where: { id },
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Proposal not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'deleteProposal',
+              proposalId: id
+            }
+          });
+        }
+        throw new StandardError({
+          message: 'Database operation failed during proposal deletion',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'deleteProposal',
+            prismaCode: error.code,
+            proposalId: id
+          }
+        });
       }
-      throw new Error('Failed to delete proposal');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to delete proposal',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'deleteProposal',
+          proposalId: id
+        }
+      });
     }
   }
 
@@ -198,7 +333,23 @@ export class ProposalService {
         where: { id },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve proposal');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: `Failed to fetch proposal`,
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'getProposalById',
+          proposalId: id
+        }
+      });
     }
   }
 
@@ -219,36 +370,12 @@ export class ProposalService {
               },
             },
           },
-          creator: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          assignedTo: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          sections: {
-            orderBy: { order: 'asc' },
-          },
+          creator: true,
+          assignedTo: true,
+          sections: true,
           products: {
             include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  sku: true,
-                  price: true,
-                  currency: true,
-                  category: true,
-                  isActive: true,
-                },
-              },
+              product: true,
             },
           },
           approvals: {
@@ -271,7 +398,37 @@ export class ProposalService {
 
       return proposal as ProposalWithDetails | null;
     } catch (error) {
-      throw new Error('Failed to retrieve proposal with details');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: `Database error while fetching proposal details`,
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'getProposalWithDetails',
+            proposalId: id,
+            prismaCode: error.code
+          }
+        });
+      }
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: `Failed to fetch proposal details`,
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'getProposalWithDetails',
+          proposalId: id
+        }
+      });
     }
   }
 
@@ -370,7 +527,37 @@ export class ProposalService {
         totalPages: Math.ceil(total / pageSize),
       };
     } catch (error) {
-      throw new Error('Failed to retrieve proposals');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: `Database error while fetching proposals`,
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'getProposals',
+            filters: JSON.stringify(filters),
+            prismaCode: error.code
+          }
+        });
+      }
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: `Failed to fetch proposals`,
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'getProposals',
+          filters: JSON.stringify(filters)
+        }
+      });
     }
   }
 
@@ -391,10 +578,51 @@ export class ProposalService {
         },
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2003') {
-        throw new Error('Proposal not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2003') {
+          throw new StandardError({
+            message: 'Proposal not found when creating section',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'createProposalSection',
+              proposalId,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while creating proposal section',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'createProposalSection',
+            proposalId,
+            prismaCode: error.code
+          }
+        });
       }
-      throw new Error('Failed to create proposal section');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to create proposal section',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'createProposalSection',
+          proposalId
+        }
+      });
     }
   }
 
@@ -408,10 +636,51 @@ export class ProposalService {
         data,
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Proposal section not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal section not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'updateProposalSection',
+              sectionId: id,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while updating proposal section',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'updateProposalSection',
+            sectionId: id,
+            prismaCode: error.code
+          }
+        });
       }
-      throw new Error('Failed to update proposal section');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to update proposal section',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'updateProposalSection',
+          sectionId: id
+        }
+      });
     }
   }
 
@@ -421,10 +690,51 @@ export class ProposalService {
         where: { id },
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Proposal section not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal section not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'deleteProposalSection',
+              sectionId: id,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while deleting proposal section',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'deleteProposalSection',
+            sectionId: id,
+            prismaCode: error.code
+          }
+        });
       }
-      throw new Error('Failed to delete proposal section');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to delete proposal section',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'deleteProposalSection',
+          sectionId: id
+        }
+      });
     }
   }
 
@@ -435,7 +745,37 @@ export class ProposalService {
         orderBy: { order: 'asc' },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve proposal sections');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: 'Database error while fetching proposal sections',
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'getProposalSections',
+            proposalId,
+            prismaCode: error.code
+          }
+        });
+      }
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to retrieve proposal sections',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'getProposalSections',
+          proposalId
+        }
+      });
     }
   }
 
@@ -452,7 +792,15 @@ export class ProposalService {
       });
 
       if (!product) {
-        throw new Error('Product not found');
+        throw new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'addProposalProduct',
+            productId: data.productId
+          }
+        });
       }
 
       const total = data.quantity * data.unitPrice * (1 - (data.discount || 0) / 100);
@@ -469,10 +817,54 @@ export class ProposalService {
         },
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2003') {
-        throw new Error('Proposal or product not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2003') {
+          throw new StandardError({
+            message: 'Proposal or product not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'addProposalProduct',
+              proposalId,
+              productId: data.productId,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while adding product to proposal',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'addProposalProduct',
+            proposalId,
+            productId: data.productId,
+            prismaCode: error.code
+          }
+        });
       }
-      throw new Error('Failed to add product to proposal');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to add product to proposal',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'addProposalProduct',
+          proposalId,
+          productId: data.productId
+        }
+      });
     }
   }
 
@@ -507,10 +899,51 @@ export class ProposalService {
         data: updateData,
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Proposal product not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal product not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'updateProposalProduct',
+              productId: id,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while updating proposal product',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'updateProposalProduct',
+            productId: id,
+            prismaCode: error.code
+          }
+        });
       }
-      throw new Error('Failed to update proposal product');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to update proposal product',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'updateProposalProduct',
+          productId: id
+        }
+      });
     }
   }
 
@@ -520,10 +953,51 @@ export class ProposalService {
         where: { id },
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Proposal product not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal product not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'removeProposalProduct',
+              productId: id,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while removing proposal product',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'removeProposalProduct',
+            productId: id,
+            prismaCode: error.code
+          }
+        });
       }
-      throw new Error('Failed to remove product from proposal');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to remove product from proposal',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'removeProposalProduct',
+          productId: id
+        }
+      });
     }
   }
 
@@ -545,7 +1019,37 @@ export class ProposalService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve proposal products');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: 'Database error while fetching proposal products',
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'getProposalProducts',
+            proposalId,
+            prismaCode: error.code
+          }
+        });
+      }
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to retrieve proposal products',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'getProposalProducts',
+          proposalId
+        }
+      });
     }
   }
 
@@ -573,10 +1077,54 @@ export class ProposalService {
         data: updateData,
       });
     } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Proposal not found');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'updateProposalStatus',
+              proposalId: id,
+              status,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while updating proposal status',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'updateProposalStatus',
+            proposalId: id,
+            status,
+            prismaCode: error.code
+          }
+        });
       }
-      throw new Error('Failed to update proposal status');
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to update proposal status',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'updateProposalStatus',
+          proposalId: id,
+          status
+        }
+      });
     }
   }
 
@@ -597,7 +1145,51 @@ export class ProposalService {
 
       return totalValue;
     } catch (error) {
-      throw new Error('Failed to calculate proposal value');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        if (error.code === 'P2025') {
+          throw new StandardError({
+            message: 'Proposal not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'calculateProposalValue',
+              proposalId: id,
+              prismaCode: error.code
+            }
+          });
+        }
+        
+        throw new StandardError({
+          message: 'Database error while calculating proposal value',
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'calculateProposalValue',
+            proposalId: id,
+            prismaCode: error.code
+          }
+        });
+      }
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to calculate proposal value',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'calculateProposalValue',
+          proposalId: id
+        }
+      });
     }
   }
 
@@ -626,7 +1218,15 @@ export class ProposalService {
       ]);
 
       if (!proposal) {
-        throw new Error('Proposal not found');
+        throw new StandardError({
+          message: 'Proposal not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'getProposalAnalytics',
+            proposalId: id
+          }
+        });
       }
 
       const totalValue = products._sum.total || 0;
@@ -646,7 +1246,37 @@ export class ProposalService {
         timeToCompletion,
       };
     } catch (error) {
-      throw new Error('Failed to retrieve proposal analytics');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: 'Database error while retrieving proposal analytics',
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'getProposalAnalytics',
+            proposalId: id,
+            prismaCode: error.code
+          }
+        });
+      }
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to retrieve proposal analytics',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'getProposalAnalytics',
+          proposalId: id
+        }
+      });
     }
   }
 
@@ -736,7 +1366,37 @@ export class ProposalService {
         conversionRate,
       };
     } catch (error) {
-      throw new Error('Failed to retrieve proposal statistics');
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: 'Database error while retrieving proposal statistics',
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'getProposalStats',
+            filters: filters ? JSON.stringify(filters) : undefined,
+            prismaCode: error.code
+          }
+        });
+      }
+      
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to retrieve proposal statistics',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'getProposalStats',
+          filters: filters ? JSON.stringify(filters) : undefined
+        }
+      });
     }
   }
 }

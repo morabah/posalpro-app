@@ -2,15 +2,13 @@
  * Content Service
  * Enhanced data access layer for Content entities with semantic search and AI integration
  * Supports H1 hypothesis validation for 45% search time reduction
+ * Implements robust error handling with StandardError and ErrorCodes
  */
 
 import { AccessType, Content, ContentAccessLog, ContentType, Prisma } from '@prisma/client';
 import { prisma } from '../prisma';
-
-// Helper function to check if error is a Prisma error
-function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
-  return error instanceof Prisma.PrismaClientKnownRequestError;
-}
+import { ErrorCodes, StandardError, errorHandlingService } from '../errors';
+import { isPrismaError } from '../utils/errorUtils';
 
 // Enhanced interfaces for semantic search and AI integration
 export interface SemanticSearchRequest {
@@ -143,7 +141,17 @@ export class ContentService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to create content');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to create content',
+        code: ErrorCodes.DATA.CREATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'createContent',
+          contentType: data.type
+        },
+      });
     }
   }
 
@@ -176,10 +184,29 @@ export class ContentService {
         },
       });
     } catch (error) {
+      errorHandlingService.processError(error);
       if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Content not found');
+        throw new StandardError({
+          message: 'Content not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          cause: error instanceof Error ? error : undefined,
+          metadata: {
+            component: 'ContentService',
+            operation: 'updateContent',
+            contentId: data.id
+          },
+        });
       }
-      throw new Error('Failed to update content');
+      throw new StandardError({
+        message: 'Failed to update content',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'updateContent',
+          contentId: data.id
+        },
+      });
     }
   }
 
@@ -189,10 +216,29 @@ export class ContentService {
         where: { id },
       });
     } catch (error) {
+      errorHandlingService.processError(error);
       if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Content not found');
+        throw new StandardError({
+          message: 'Content not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          cause: error instanceof Error ? error : undefined,
+          metadata: {
+            component: 'ContentService',
+            operation: 'deleteContent',
+            contentId: id
+          },
+        });
       }
-      throw new Error('Failed to delete content');
+      throw new StandardError({
+        message: 'Failed to delete content',
+        code: ErrorCodes.DATA.DELETE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'deleteContent',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -202,7 +248,17 @@ export class ContentService {
         where: { id },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve content');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve content',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getContentById',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -221,7 +277,17 @@ export class ContentService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve content with creator');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve content with creator',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getContentWithCreator',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -300,7 +366,17 @@ export class ContentService {
         totalPages: Math.ceil(total / pageSize),
       };
     } catch (error) {
-      throw new Error('Failed to retrieve content');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve content',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getContentById',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -321,7 +397,18 @@ export class ContentService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to log content access');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to log content access',
+        code: ErrorCodes.DATA.CREATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'logContentAccess',
+          contentId: contentId,
+          userId: userId
+        },
+      });
     }
   }
 
@@ -342,7 +429,17 @@ export class ContentService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve content access logs');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve content access logs',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getContentAccessLogs',
+          contentId: contentId
+        },
+      });
     }
   }
 
@@ -376,7 +473,17 @@ export class ContentService {
         take: limit || 50,
       });
     } catch (error) {
-      throw new Error('Failed to search content');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to search content',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'searchContent',
+          query: query
+        },
+      });
     }
   }
 
@@ -399,7 +506,17 @@ export class ContentService {
         orderBy: { title: 'asc' },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve content by category');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve content by category',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getContentByCategory',
+          category: category
+        },
+      });
     }
   }
 
@@ -411,7 +528,15 @@ export class ContentService {
       });
 
       if (!content) {
-        throw new Error('Content not found');
+        throw new StandardError({
+          message: 'Content not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ContentService',
+            operation: 'toggleContentStatus',
+            contentId: id
+          },
+        });
       }
 
       return await prisma.content.update({
@@ -419,7 +544,17 @@ export class ContentService {
         data: { isActive: !content.isActive },
       });
     } catch (error) {
-      throw new Error('Failed to toggle content status');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to toggle content status',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'toggleContentStatus',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -430,10 +565,29 @@ export class ContentService {
         data: { quality: qualityData },
       });
     } catch (error) {
+      errorHandlingService.processError(error);
       if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Content not found');
+        throw new StandardError({
+          message: 'Content not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          cause: error instanceof Error ? error : undefined,
+          metadata: {
+            component: 'ContentService',
+            operation: 'updateContentQuality',
+            contentId: id
+          },
+        });
       }
-      throw new Error('Failed to update content quality');
+      throw new StandardError({
+        message: 'Failed to update content quality',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'updateContentQuality',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -444,10 +598,29 @@ export class ContentService {
         data: { usage: usageData },
       });
     } catch (error) {
+      errorHandlingService.processError(error);
       if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Content not found');
+        throw new StandardError({
+          message: 'Content not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          cause: error instanceof Error ? error : undefined,
+          metadata: {
+            component: 'ContentService',
+            operation: 'updateContentUsage',
+            contentId: id
+          },
+        });
       }
-      throw new Error('Failed to update content usage');
+      throw new StandardError({
+        message: 'Failed to update content usage',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'updateContentUsage',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -479,7 +652,15 @@ export class ContentService {
       ]);
 
       if (!content) {
-        throw new Error('Content not found');
+        throw new StandardError({
+          message: 'Content not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ContentService',
+            operation: 'toggleContentStatus',
+            contentId: id
+          },
+        });
       }
 
       const totalAccess = accessLogs.length;
@@ -509,7 +690,17 @@ export class ContentService {
         qualityScore: (content.quality as any)?.score || 0,
       };
     } catch (error) {
-      throw new Error('Failed to retrieve content analytics');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve content analytics',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getContentAnalytics',
+          contentId: id
+        },
+      });
     }
   }
 
@@ -624,7 +815,17 @@ export class ContentService {
         mostPopular,
       };
     } catch (error) {
-      throw new Error('Failed to retrieve content statistics');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve content statistics',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getContentStatistics',
+          filters: JSON.stringify(filters)
+        },
+      });
     }
   }
 
@@ -732,8 +933,18 @@ export class ContentService {
         totalResults: sortedResults.length,
       };
     } catch (error) {
-      console.error('Semantic search failed:', error);
-      throw new Error('Failed to perform semantic search');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to perform semantic search',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'semanticSearch',
+          query: request.query,
+          userId: request.userId
+        },
+      });
     }
   }
 
@@ -763,8 +974,18 @@ export class ContentService {
 
       return Array.from(new Set(combinedCategories)).slice(0, 10);
     } catch (error) {
-      console.error('AI categorization failed:', error);
-      return existingCategories || [];
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'AI categorization failed',
+        code: ErrorCodes.AI.PROCESSING_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'getAICategories',
+          content: content,
+          existingCategories: existingCategories
+        },
+      });
     }
   }
 
@@ -810,8 +1031,17 @@ export class ContentService {
 
       return Math.min(100, Math.max(0, qualityScore));
     } catch (error) {
-      console.error('Quality scoring failed:', error);
-      return 0;
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Quality scoring failed',
+        code: ErrorCodes.AI.PROCESSING_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ContentService',
+          operation: 'calculateContentQualityScore',
+          contentId: contentId
+        },
+      });
     }
   }
 

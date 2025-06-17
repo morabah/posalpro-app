@@ -2,11 +2,13 @@
  * API Client Foundation
  * Provides standardized HTTP client with authentication, error handling,
  * retry mechanisms, and integration with logging and performance monitoring
+ * Uses standardized error handling
  */
 
-import { logInfo, logWarn, logError } from './logger';
+import { logInfo, logWarn } from './logger';
 import { startMeasurement, endMeasurement } from './performance';
 import { getApiConfig, getAuthConfig, getCurrentEnvironment, Environment } from './env';
+import { ErrorCodes, StandardError, errorHandlingService } from './errors';
 
 // HTTP methods enum
 export enum HttpMethod {
@@ -32,14 +34,46 @@ export enum ApiErrorType {
   UNKNOWN = 'unknown',
 }
 
+/**
+ * Map API error type to ErrorCode
+ */
+function mapApiErrorTypeToErrorCode(type: ApiErrorType, status?: number): string {
+  switch (type) {
+    case ApiErrorType.NETWORK:
+      return ErrorCodes.API.NETWORK_ERROR;
+    case ApiErrorType.AUTHENTICATION:
+      return ErrorCodes.AUTH.UNAUTHORIZED;
+    case ApiErrorType.AUTHORIZATION:
+      return ErrorCodes.AUTH.INSUFFICIENT_PERMISSIONS;
+    case ApiErrorType.VALIDATION:
+      return ErrorCodes.VALIDATION.INVALID_INPUT;
+    case ApiErrorType.SERVER:
+      return ErrorCodes.API.RESPONSE_ERROR;
+    case ApiErrorType.CLIENT:
+      return ErrorCodes.API.REQUEST_FAILED;
+    case ApiErrorType.TIMEOUT:
+      return ErrorCodes.API.TIMEOUT;
+    case ApiErrorType.RATE_LIMIT:
+      return ErrorCodes.API.RATE_LIMIT;
+    default:
+      // If we have a status code, try to map it
+      if (status) {
+        if (status === 404) return ErrorCodes.DATA.NOT_FOUND;
+        if (status === 409) return ErrorCodes.DATA.CONFLICT;
+        if (status >= 500) return ErrorCodes.API.RESPONSE_ERROR;
+        if (status >= 400) return ErrorCodes.API.REQUEST_FAILED;
+      }
+      return ErrorCodes.API.REQUEST_FAILED;
+  }
+}
+
 // API error class
-export class ApiError extends Error {
+export class ApiError extends StandardError {
   public readonly type: ApiErrorType;
   public readonly status?: number;
   public readonly statusText?: string;
   public readonly response?: unknown;
   public readonly requestId?: string;
-  public readonly timestamp: string;
 
   constructor(
     type: ApiErrorType,
@@ -49,29 +83,48 @@ export class ApiError extends Error {
     response?: unknown,
     requestId?: string
   ) {
-    super(message);
+    // Create StandardError with appropriate error code
+    super({
+      message,
+      code: mapApiErrorTypeToErrorCode(type, status),
+      metadata: {
+        component: 'ApiClient',
+        type,
+        status,
+        statusText,
+        response,
+        requestId,
+      }
+    });
+    
+    // Set ApiError specific properties
     this.name = 'ApiError';
     this.type = type;
     this.status = status;
     this.statusText = statusText;
     this.response = response;
     this.requestId = requestId;
-    this.timestamp = new Date().toISOString();
   }
 
-  // Convert to JSON for logging
-  toJSON() {
-    return {
-      name: this.name,
-      type: this.type,
-      message: this.message,
-      status: this.status,
-      statusText: this.statusText,
-      response: this.response,
-      requestId: this.requestId,
-      timestamp: this.timestamp,
-      stack: this.stack,
-    };
+  /**
+   * Check if this error is retryable
+   */
+  isRetryable(): boolean {
+    // 5xx (except 501 Not Implemented) and specific 4xx codes are retryable
+    if (this.status) {
+      return (
+        (this.status >= 500 && this.status !== 501) ||
+        this.status === 408 || // Request Timeout
+        this.status === 429    // Too Many Requests
+      );
+    }
+    
+    // Network errors and timeouts are retryable
+    return (
+      this.type === ApiErrorType.NETWORK ||
+      this.type === ApiErrorType.TIMEOUT ||
+      this.type === ApiErrorType.RATE_LIMIT
+    );
   }
 }
 
@@ -375,12 +428,19 @@ class ApiClient {
   // Handle API errors with logging
   private async handleApiError(error: ApiError): Promise<void> {
     if (this.config.enableLogging) {
-      logError('API request failed', error, {
-        type: error.type,
-        status: error.status,
-        requestId: error.requestId,
-        timestamp: error.timestamp,
-      });
+      // Use ErrorHandlingService to log the error with appropriate severity
+      // The error is already a StandardError with proper error code and metadata
+      errorHandlingService.processError(error);
+      
+      // Also log warning for retryable errors
+      if (error.isRetryable()) {
+        logWarn('API request failed, may retry', {
+          requestId: error.requestId,
+          status: error.status,
+          type: error.type,
+          code: error.code
+        });
+      }
     }
   }
 

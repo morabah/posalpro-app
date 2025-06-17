@@ -9,6 +9,8 @@ import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 const prisma = new PrismaClient();
 
@@ -49,7 +51,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProductsIdRoute',
+            operation: 'getProductById',
+            productId: id
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to access this resource' }
+      );
     }
 
     // Fetch product with comprehensive relationships
@@ -173,8 +189,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch product ${params.id}:`, error);
-    return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
+    return createApiErrorResponse(
+      error instanceof StandardError ? error : new StandardError({
+        message: `Failed to fetch product ${params.id}`,
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductsIdRoute',
+          operation: 'getProductById',
+          productId: params.id
+        }
+      }),
+      'Failed to fetch product',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'Unable to retrieve the product. Please try again later.' }
+    );
   }
 }
 

@@ -9,6 +9,8 @@ import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 const prisma = new PrismaClient();
 
@@ -58,7 +60,20 @@ export async function GET(request: NextRequest) {
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'getProducts'
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to view products' }
+      );
     }
 
     // Parse and validate query parameters
@@ -202,16 +217,63 @@ export async function GET(request: NextRequest) {
       message: 'Products retrieved successfully',
     });
   } catch (error) {
-    console.error('Products fetch error:', error);
-
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Validation failed for product query parameters',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'getProducts',
+            validationErrors: error.errors
+          }
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { userFriendlyMessage: 'Please check your search parameters and try again.' }
+      );
+    }
+    
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when fetching products: ${getPrismaErrorMessage(error)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'getProducts',
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred while retrieving products. Please try again later.' }
       );
     }
 
-    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to fetch products',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductsRoute',
+          operation: 'getProducts'
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while retrieving products. Please try again later.' }
+    );
   }
 }
 
@@ -223,7 +285,20 @@ export async function POST(request: NextRequest) {
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'getProducts'
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to view products' }
+      );
     }
 
     // Parse and validate request body
@@ -237,9 +312,20 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingProduct) {
-      return NextResponse.json(
-        { error: 'A product with this SKU already exists' },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Product with SKU ${validatedData.sku} already exists`,
+          code: ErrorCodes.VALIDATION.DUPLICATE_ENTITY,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'createProduct',
+            sku: validatedData.sku
+          }
+        }),
+        'Duplicate product',
+        ErrorCodes.VALIDATION.DUPLICATE_ENTITY,
+        400,
+        { userFriendlyMessage: 'A product with this SKU already exists' }
       );
     }
 
@@ -285,16 +371,70 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Product creation error:', error);
-
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Product validation failed',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'createProduct',
+            validationErrors: error.errors
+          }
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { 
+          userFriendlyMessage: 'Please check your product data and try again',
+          details: error.errors
+        }
       );
     }
-
-    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 });
+    
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when creating product: ${getPrismaErrorMessage(error)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'createProduct',
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred while creating the product. Please try again later.' }
+      );
+    }
+    
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(error);
+    }
+    
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to create product',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductsRoute',
+          operation: 'createProduct'
+        }
+      }),
+      'Internal error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while creating the product. Please try again later.' }
+    );
   }
 }
 

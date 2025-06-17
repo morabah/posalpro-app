@@ -10,6 +10,8 @@ import { UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError } from '@/lib/utils/errorUtils';
 
 const prisma = prismaClient;
 
@@ -157,7 +159,20 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.id) {
       console.error('Unauthorized access attempt - No valid session');
-      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'getProposals'
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to access this resource' }
+      );
     }
 
     // Check read permissions
@@ -167,9 +182,20 @@ export async function GET(request: NextRequest) {
 
     if (!canRead) {
       console.error('Permission denied for user:', session.user.id);
-      return NextResponse.json(
-        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-        { status: 403 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Insufficient permissions to read proposals',
+          code: ErrorCodes.AUTH.FORBIDDEN,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'getProposals',
+            userId: session.user.id
+          }
+        }),
+        'Insufficient permissions',
+        ErrorCodes.AUTH.FORBIDDEN,
+        403,
+        { userFriendlyMessage: 'You do not have permission to access this resource' }
       );
     }
 
@@ -289,53 +315,130 @@ export async function GET(request: NextRequest) {
         },
       });
     } catch (error) {
-      console.error('Database query error:', error);
-      return NextResponse.json(
-        { error: 'Database query failed', code: 'DB_ERROR' },
-        { status: 500 }
+      // Log the error using ErrorHandlingService
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error)) {
+        return createApiErrorResponse(
+          new StandardError({
+            message: 'Database error while retrieving proposals',
+            code: ErrorCodes.DATA.QUERY_FAILED,
+            cause: error,
+            metadata: {
+              component: 'ProposalsRoute',
+              operation: 'getProposals',
+              prismaCode: error.code,
+              query: JSON.stringify(query)
+            }
+          }),
+          'Database query failed',
+          ErrorCodes.DATA.QUERY_FAILED,
+          500,
+          { userFriendlyMessage: 'Unable to retrieve proposals. Please try again later.' }
+        );
+      }
+      
+      return createApiErrorResponse(
+        error instanceof StandardError ? error : new StandardError({
+          message: 'Failed to retrieve proposals',
+          code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          cause: error instanceof Error ? error : undefined,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'getProposals'
+          }
+        }),
+        'Database query failed',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        500,
+        { userFriendlyMessage: 'Unable to retrieve proposals. Please try again later.' }
       );
     }
   } catch (error) {
-    console.error('API route error:', error);
-
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
     // Determine if it's a validation error
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: 'Invalid request parameters',
-          details: error.errors,
-          code: 'VALIDATION_ERROR',
-        },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Invalid request parameters',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'getProposals',
+            validationErrors: error.errors
+          }
+        }),
+        'Invalid request parameters',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { userFriendlyMessage: 'The request contains invalid parameters. Please check your input and try again.' }
       );
     }
 
     // Handle database connection errors
-    if (error instanceof Error && 'code' in error) {
+    if (isPrismaError(error)) {
+      let errorCode = ErrorCodes.DATA.DATABASE_ERROR;
+      let statusCode = 500;
+      let message = 'Database error';
+      let userFriendlyMessage = 'A database error occurred. Please try again later.';
+      
       if (error.code === 'P2021') {
-        return NextResponse.json(
-          {
-            error: 'Database table not found',
-            code: 'DB_TABLE_NOT_FOUND',
-          },
-          { status: 500 }
-        );
+        errorCode = ErrorCodes.DATA.DATABASE_ERROR;
+        message = 'Database table not found';
+      } else if (error.code === 'P2002') {
+        errorCode = ErrorCodes.DATA.CONFLICT;
+        statusCode = 409;
+        message = 'Unique constraint violation';
+        userFriendlyMessage = 'A conflict occurred with existing data. Please check your input and try again.';
       }
-
-      if (error.code === 'P2002') {
-        return NextResponse.json(
-          {
-            error: 'Unique constraint violation',
-            code: 'DB_UNIQUE_VIOLATION',
-          },
-          { status: 409 }
-        );
-      }
+      
+      return createApiErrorResponse(
+        new StandardError({
+          message,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'getProposals',
+            prismaCode: error.code
+          }
+        }),
+        message,
+        errorCode,
+        statusCode,
+        { userFriendlyMessage }
+      );
+    }
+    
+    // Handle StandardError instances
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(
+        error,
+        error.message,
+        error.code,
+        500,
+        { userFriendlyMessage: 'An error occurred while processing your request. Please try again later.' }
+      );
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
-      { status: 500 }
+    // Default case: internal server error
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Internal server error',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalsRoute',
+          operation: 'getProposals'
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred. Please try again later.' }
     );
   }
 }
@@ -345,15 +448,39 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'createProposal'
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to create a proposal' }
+      );
     }
 
     // Check create permissions
     const canCreate = await checkUserPermissions(session.user.id, 'create');
     if (!canCreate) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-        { status: 403 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Insufficient permissions to create proposal',
+          code: ErrorCodes.AUTH.FORBIDDEN,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'createProposal',
+            userId: session.user.id
+          }
+        }),
+        'Insufficient permissions',
+        ErrorCodes.AUTH.FORBIDDEN,
+        403,
+        { userFriendlyMessage: 'You do not have permission to create proposals' }
       );
     }
 
@@ -372,16 +499,39 @@ export async function POST(request: NextRequest) {
     });
 
     if (!customer) {
-      return NextResponse.json(
-        { error: 'Customer not found', code: 'CUSTOMER_NOT_FOUND' },
-        { status: 404 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Customer not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'createProposal',
+            customerId: validatedData.customerId
+          }
+        }),
+        'Customer not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404,
+        { userFriendlyMessage: 'The specified customer could not be found' }
       );
     }
 
     if (customer.status === 'INACTIVE') {
-      return NextResponse.json(
-        { error: 'Cannot create proposal for inactive customer', code: 'CUSTOMER_INACTIVE' },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Cannot create proposal for inactive customer',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'createProposal',
+            customerId: validatedData.customerId,
+            customerStatus: customer.status
+          }
+        }),
+        'Cannot create proposal for inactive customer',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { userFriendlyMessage: 'The customer account is inactive. Proposals can only be created for active customers.' }
       );
     }
 
@@ -395,9 +545,21 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingProducts.length !== productIds.length) {
-        return NextResponse.json(
-          { error: 'One or more products not found or inactive', code: 'INVALID_PRODUCTS' },
-          { status: 400 }
+        return createApiErrorResponse(
+          new StandardError({
+            message: 'One or more products not found or inactive',
+            code: ErrorCodes.VALIDATION.INVALID_INPUT,
+            metadata: {
+              component: 'ProposalsRoute',
+              operation: 'createProposal',
+              requestedProductIds: productIds,
+              foundProductIds: existingProducts.map(p => p.id)
+            }
+          }),
+          'Invalid products',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400,
+          { userFriendlyMessage: 'One or more of the selected products are not available or inactive' }
         );
       }
 
@@ -495,18 +657,62 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Failed to create proposal:', error);
-
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Validation failed when creating proposal',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'createProposal',
+            validationErrors: error.errors
+          }
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { userFriendlyMessage: 'Please check your input and try again.' }
+      );
+    }
+    
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.INTEGRITY_VIOLATION;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when creating proposal: ${getPrismaErrorMessage(error)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'createProposal',
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred while saving your proposal. Please try again later.' }
       );
     }
 
-    return NextResponse.json(
-      { error: 'Failed to create proposal', code: 'INTERNAL_ERROR' },
-      { status: 500 }
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to create proposal',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalsRoute',
+          operation: 'createProposal'
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while creating your proposal. Please try again later.' }
     );
   }
 }
@@ -516,7 +722,20 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'createProposal'
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to create a proposal' }
+      );
     }
 
     // Parse and validate request body
@@ -609,22 +828,62 @@ export async function PUT(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Proposals PUT error:', error);
-
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: 'Invalid request data',
-          code: 'VALIDATION_ERROR',
-          details: error.errors,
-        },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Validation failed when updating proposals',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'updateProposals',
+            validationErrors: error.errors
+          }
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { userFriendlyMessage: 'Please check your input and try again.' }
+      );
+    }
+    
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.INTEGRITY_VIOLATION;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error when updating proposals: ${getPrismaErrorMessage(error)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'ProposalsRoute',
+            operation: 'updateProposals',
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred while saving your changes. Please try again later.' }
       );
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
-      { status: 500 }
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to update proposals',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalsRoute',
+          operation: 'updateProposals'
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while updating proposals. Please try again later.' }
     );
   }
 }
@@ -663,7 +922,22 @@ async function trackProposalSearchEvent(userId: string, query: string, resultsCo
       },
     });
   } catch (error) {
-    console.warn('Failed to track proposal search event:', error);
+    // Log the error but don't fail the main operation
+    errorHandlingService.processError(
+      new StandardError({
+        message: 'Failed to track proposal search event',
+        code: ErrorCodes.ANALYTICS.TRACKING_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalsRoute',
+          operation: 'trackProposalSearchEvent',
+          userId,
+          query,
+          resultsCount
+        }
+      }),
+      { logOnly: true } // Only log, don't propagate the error
+    );
     // Don't fail the main operation if analytics tracking fails
   }
 }
@@ -699,7 +973,22 @@ async function trackProposalCreationEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track proposal creation event:', error);
+    // Log the error but don't fail the main operation
+    errorHandlingService.processError(
+      new StandardError({
+        message: 'Failed to track proposal creation event',
+        code: ErrorCodes.ANALYTICS.TRACKING_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalsRoute',
+          operation: 'trackProposalCreationEvent',
+          userId,
+          proposalId,
+          proposalTitle
+        }
+      }),
+      { logOnly: true } // Only log, don't propagate the error
+    );
     // Don't fail the main operation if analytics tracking fails
   }
 }

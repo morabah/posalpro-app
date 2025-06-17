@@ -12,6 +12,8 @@ import {
     UpdateProductData,
 } from '../../types/entities/product';
 import { prisma } from '../prisma';
+import { StandardError, ErrorCodes, errorHandlingService } from '../errors';
+import { toPrismaJson, relationshipConditionToPrisma } from '../utils/prismaUtils';
 
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
@@ -68,38 +70,95 @@ export class ProductService {
           currency: data.currency || 'USD',
           category: data.category || [],
           tags: data.tags || [],
-          attributes: data.attributes,
+          attributes: data.attributes ? toPrismaJson(data.attributes) : undefined,
           images: data.images || [],
           userStoryMappings: data.userStoryMappings || [],
         },
       });
     } catch (error) {
-      if (isPrismaError(error)) {
-        if (error.code === 'P2002') {
-          throw new Error('A product with this SKU already exists');
-        }
+      // Log the error for observability
+      errorHandlingService.processError(error);
+      
+      if (isPrismaError(error) && error.code === 'P2002') {
+        throw new StandardError({
+          message: 'A product with this SKU already exists',
+          code: ErrorCodes.DATA.CONFLICT,
+          cause: error,
+          metadata: {
+            component: 'ProductService',
+            operation: 'createProduct',
+            sku: data.sku,
+          },
+        });
       }
-      throw new Error('Failed to create product');
+
+      throw new StandardError({
+        message: 'Failed to create product',
+        code: ErrorCodes.DATA.CREATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'createProduct',
+        },
+      });
     }
   }
 
   async updateProduct(data: UpdateProductData): Promise<Product> {
     try {
       const { id, ...updateData } = data;
+      
+      // Handle JSON fields with proper type conversion
+      const prismaData: Prisma.ProductUpdateInput = {
+        ...updateData,
+        attributes: updateData.attributes ? toPrismaJson(updateData.attributes) : undefined,
+      };
+      
       return await prisma.product.update({
         where: { id },
-        data: updateData,
+        data: prismaData,
       });
     } catch (error) {
+      errorHandlingService.processError(error);
+
       if (isPrismaError(error)) {
         if (error.code === 'P2025') {
-          throw new Error('Product not found');
+          throw new StandardError({
+            message: 'Product not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            cause: error,
+            metadata: {
+              component: 'ProductService',
+              operation: 'updateProduct',
+              productId: data.id,
+            },
+          });
         }
         if (error.code === 'P2002') {
-          throw new Error('SKU already exists');
+          throw new StandardError({
+            message: 'SKU already exists',
+            code: ErrorCodes.DATA.CONFLICT,
+            cause: error,
+            metadata: {
+              component: 'ProductService',
+              operation: 'updateProduct',
+              productId: data.id,
+              sku: data.sku,
+            },
+          });
         }
       }
-      throw new Error('Failed to update product');
+
+      throw new StandardError({
+        message: 'Failed to update product',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'updateProduct',
+          productId: data.id,
+        },
+      });
     }
   }
 
@@ -111,17 +170,47 @@ export class ProductService {
       });
 
       if (proposalCount > 0) {
-        throw new Error('Cannot delete product that is used in proposals');
+        throw new StandardError({
+          message: 'Cannot delete product that is used in proposals',
+          code: ErrorCodes.VALIDATION.BUSINESS_RULE_VIOLATION,
+          metadata: {
+            component: 'ProductService',
+            operation: 'deleteProduct',
+            productId: id,
+            proposalCount,
+          },
+        });
       }
 
       await prisma.product.delete({
         where: { id },
       });
     } catch (error) {
+      errorHandlingService.processError(error);
+
       if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Product not found');
+        throw new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          cause: error,
+          metadata: {
+            component: 'ProductService',
+            operation: 'deleteProduct',
+            productId: id,
+          },
+        });
       }
-      throw new Error('Failed to delete product');
+
+      throw new StandardError({
+        message: 'Failed to delete product',
+        code: ErrorCodes.DATA.DELETE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'deleteProduct',
+          productId: id,
+        },
+      });
     }
   }
 
@@ -131,7 +220,17 @@ export class ProductService {
         where: { id },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve product');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve product',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'getProductById',
+          productId: id,
+        },
+      });
     }
   }
 
@@ -153,7 +252,17 @@ export class ProductService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve product with relationships');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve product with relationships',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'getProductWithRelationships',
+          productId: id,
+        },
+      });
     }
   }
 
@@ -174,7 +283,17 @@ export class ProductService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve product with validation rules');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve product with validation rules',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'getProductWithValidation',
+          productId: id,
+        },
+      });
     }
   }
 
@@ -240,7 +359,20 @@ export class ProductService {
         totalPages: Math.ceil(total / pageSize),
       };
     } catch (error) {
-      throw new Error('Failed to retrieve products');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve products',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'getProducts',
+          filters: JSON.stringify(filters),
+          sort: sort ? JSON.stringify(sort) : undefined,
+          page,
+          limit,
+        },
+      });
     }
   }
 
@@ -257,12 +389,30 @@ export class ProductService {
       ]);
 
       if (!sourceProduct || !targetProduct) {
-        throw new Error('One or both products not found');
+        throw new StandardError({
+          message: 'One or both products not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductService',
+            operation: 'createProductRelationship',
+            sourceProductId: data.sourceProductId,
+            targetProductId: data.targetProductId,
+          },
+        });
       }
 
       // Check for circular relationships
       if (data.sourceProductId === data.targetProductId) {
-        throw new Error('Cannot create relationship between a product and itself');
+        throw new StandardError({
+          message: 'Business rule violation: Cannot create circular product relationships',
+          code: ErrorCodes.VALIDATION.BUSINESS_RULE_VIOLATION,
+          metadata: {
+            component: 'ProductService',
+            operation: 'createProductRelationship',
+            sourceProductId: data.sourceProductId,
+            targetProductId: data.targetProductId,
+          },
+        });
       }
 
       // Check if relationship already exists
@@ -275,37 +425,67 @@ export class ProductService {
       });
 
       if (existingRelationship) {
-        throw new Error('Relationship already exists');
+        throw new StandardError({
+          message: 'Product relationship already exists',
+          code: ErrorCodes.DATA.CONFLICT,
+          metadata: {
+            component: 'ProductService',
+            operation: 'createProductRelationship',
+            sourceProductId: data.sourceProductId,
+            targetProductId: data.targetProductId,
+            type: data.type,
+          },
+        });
       }
 
+      // Check if user exists
+      const user = await prisma.user.findUnique({ where: { id: createdBy } });
+      if (!user) {
+        throw new StandardError({
+          message: 'User not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductService',
+            operation: 'createProductRelationship',
+            userId: createdBy,
+          },
+        });
+      }
+
+      // Handle JSON fields with proper type conversion
+      const prismaData: Prisma.ProductRelationshipCreateInput = {
+        sourceProductId: data.sourceProductId,
+        targetProductId: data.targetProductId,
+        type: data.type,
+        quantity: data.quantity,
+        condition: relationshipConditionToPrisma(data.condition),
+        createdBy,
+      };
+
       return await prisma.productRelationship.create({
-        data: {
+        data: prismaData,
+      });
+    } catch (error) {
+      errorHandlingService.processError(error);
+      
+      // If it's already a StandardError, just rethrow it
+      if (error instanceof StandardError) {
+        throw error;
+      }
+      
+      throw new StandardError({
+        message: 'Failed to create product relationship',
+        code: ErrorCodes.DATA.CREATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'createProductRelationship',
           sourceProductId: data.sourceProductId,
           targetProductId: data.targetProductId,
           type: data.type,
-          quantity: data.quantity,
-          condition: data.condition as any,
           createdBy,
         },
       });
-    } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2003') {
-        throw new Error('Referenced product or user not found');
-      }
-      throw new Error('Failed to create product relationship');
-    }
-  }
-
-  async deleteProductRelationship(id: string): Promise<void> {
-    try {
-      await prisma.productRelationship.delete({
-        where: { id },
-      });
-    } catch (error) {
-      if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Product relationship not found');
-      }
-      throw new Error('Failed to delete product relationship');
     }
   }
 
@@ -342,7 +522,18 @@ export class ProductService {
         },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve product relationships');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve product relationships',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'getProductRelationships',
+          productId,
+          type,
+        },
+      });
     }
   }
 
@@ -355,7 +546,11 @@ export class ProductService {
       });
 
       if (!product) {
-        throw new Error('Product not found');
+        throw new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: { component: 'ProductService', operation: 'toggleProductStatus', productId: id },
+        });
       }
 
       return await prisma.product.update({
@@ -363,7 +558,14 @@ export class ProductService {
         data: { isActive: !product.isActive },
       });
     } catch (error) {
-      throw new Error('Failed to toggle product status');
+      errorHandlingService.processError(error);
+      if (error instanceof StandardError) throw error;
+      throw new StandardError({
+        message: 'Failed to toggle product status',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: { component: 'ProductService', operation: 'toggleProductStatus', productId: id },
+      });
     }
   }
 
@@ -372,16 +574,25 @@ export class ProductService {
       return await prisma.product.update({
         where: { id },
         data: {
-          version: {
-            increment: 1,
-          },
+          version: { increment: 1 },
         },
       });
     } catch (error) {
+      errorHandlingService.processError(error);
       if (isPrismaError(error) && error.code === 'P2025') {
-        throw new Error('Product not found');
+        throw new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          cause: error,
+          metadata: { component: 'ProductService', operation: 'updateProductVersion', productId: id },
+        });
       }
-      throw new Error('Failed to update product version');
+      throw new StandardError({
+        message: 'Failed to update product version',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: { component: 'ProductService', operation: 'updateProductVersion', productId: id },
+      });
     }
   }
 
@@ -395,28 +606,51 @@ export class ProductService {
         orderBy: { name: 'asc' },
       });
     } catch (error) {
-      throw new Error('Failed to retrieve products by category');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve products by category',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'getProductsByCategory',
+          category,
+        },
+      });
     }
   }
 
   async searchProducts(query: string, limit?: number): Promise<Product[]> {
     try {
+      const searchLimit = limit || 20;
+      const searchQuery = query.trim().toLowerCase();
+
       return await prisma.product.findMany({
         where: {
-          isActive: true,
           OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
-            { sku: { contains: query, mode: 'insensitive' } },
-            { tags: { hasSome: [query] } },
-            { category: { hasSome: [query] } },
+            { name: { contains: searchQuery, mode: 'insensitive' } },
+            { description: { contains: searchQuery, mode: 'insensitive' } },
+            { sku: { contains: searchQuery, mode: 'insensitive' } },
+            { tags: { hasSome: [searchQuery] } },
           ],
+          isActive: true,
         },
+        take: searchLimit,
         orderBy: { name: 'asc' },
-        take: limit || 50,
       });
     } catch (error) {
-      throw new Error('Failed to search products');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to search products',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService', 
+          operation: 'searchProducts',
+          query,
+          limit,
+        },
+      });
     }
   }
 
@@ -454,7 +688,11 @@ export class ProductService {
       ]);
 
       if (!product) {
-        throw new Error('Product not found');
+        throw new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: { component: 'ProductService', operation: 'getProductAnalytics', productId: id },
+        });
       }
 
       const totalUsage = proposalProducts.length;
@@ -483,7 +721,14 @@ export class ProductService {
         topCategories: product.category,
       };
     } catch (error) {
-      throw new Error('Failed to retrieve product analytics');
+      errorHandlingService.processError(error);
+      if (error instanceof StandardError) throw error;
+      throw new StandardError({
+        message: 'Failed to retrieve product analytics',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: { component: 'ProductService', operation: 'getProductAnalytics', productId: id },
+      });
     }
   }
 
@@ -578,7 +823,17 @@ export class ProductService {
         mostUsedProducts,
       };
     } catch (error) {
-      throw new Error('Failed to retrieve product statistics');
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to retrieve product statistics',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: { 
+          component: 'ProductService', 
+          operation: 'getProductStats',
+          filters: JSON.stringify(filters),
+        },
+      });
     }
   }
 }

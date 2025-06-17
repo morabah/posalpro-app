@@ -2,13 +2,13 @@
  * PosalPro MVP2 - Individual Proposal API Routes
  * Handles operations on specific proposals by ID using service functions
  * Based on PROPOSAL_CREATION_SCREEN.md and proposal management requirements
+ * Uses standardized error handling
  */
 
 import { proposalService } from '@/lib/services';
 import { updateProposalSchema } from '@/lib/validation/schemas/proposal';
-import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError } from '@/lib/errors';
 
 /**
  * Standard API response wrapper
@@ -19,17 +19,6 @@ function createApiResponse<T>(data: T, message: string, status = 200) {
       success: true,
       data,
       message,
-    },
-    { status }
-  );
-}
-
-function createErrorResponse(error: string, details?: any, status = 500) {
-  return NextResponse.json(
-    {
-      success: false,
-      error,
-      details,
     },
     { status }
   );
@@ -47,22 +36,27 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const proposal = await proposalService.getProposalWithDetails(id);
 
     if (!proposal) {
-      return createErrorResponse('Proposal not found', null, 404);
+      throw StandardError.notFound(`Proposal with ID ${id} not found`, {
+        component: 'ProposalRoute',
+        operation: 'getProposal',
+        userFriendlyMessage: 'The requested proposal could not be found.',
+      });
     }
 
     return createApiResponse(proposal, 'Proposal retrieved successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch proposal ${params.id}:`, error);
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return createErrorResponse('Database error', error.message, 500);
-    }
-
-    return createErrorResponse(
-      'Failed to fetch proposal',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    
+    return createApiErrorResponse(
+      error,
+      `Failed to fetch proposal ${params.id}`,
+      ErrorCodes.DATA.NOT_FOUND,
+      404,
+      {
+        component: 'ProposalRoute',
+        operation: 'getProposal',
+        userFriendlyMessage: 'Unable to retrieve the proposal. Please try again later.',
+      }
     );
   }
 }
@@ -99,23 +93,17 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return createApiResponse(updatedProposal, 'Proposal updated successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to update proposal ${params.id}:`, error);
-
-    if (error instanceof z.ZodError) {
-      return createErrorResponse('Validation failed', error.errors, 400);
-    }
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') {
-        return createErrorResponse('Proposal not found', error.message, 404);
+    
+    return createApiErrorResponse(
+      error,
+      `Failed to update proposal ${params.id}`,
+      ErrorCodes.VALIDATION.INVALID_INPUT,
+      400,
+      {
+        component: 'ProposalRoute',
+        operation: 'updateProposal',
+        userFriendlyMessage: 'Unable to update the proposal. Please check your input and try again.',
       }
-      return createErrorResponse('Database error', error.message, 500);
-    }
-
-    return createErrorResponse(
-      'Failed to update proposal',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
     );
   }
 }
@@ -134,19 +122,17 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return createApiResponse(null, 'Proposal deleted successfully');
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to delete proposal ${params.id}:`, error);
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') {
-        return createErrorResponse('Proposal not found', error.message, 404);
+    
+    return createApiErrorResponse(
+      error,
+      `Failed to delete proposal ${params.id}`,
+      ErrorCodes.DATA.NOT_FOUND,
+      404,
+      {
+        component: 'ProposalRoute',
+        operation: 'deleteProposal',
+        userFriendlyMessage: 'Unable to delete the proposal. It may have already been removed or you may not have permission.',
       }
-      return createErrorResponse('Database error', error.message, 500);
-    }
-
-    return createErrorResponse(
-      'Failed to delete proposal',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
     );
   }
 }

@@ -9,6 +9,8 @@ import { prisma } from '@/lib/db/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError } from '@/lib/utils/errorUtils';
 
 // Status update validation schema
 const statusUpdateSchema = z.object({
@@ -32,7 +34,20 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalStatusRoute',
+            operation: 'updateProposalStatus'
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to update proposal status' }
+      );
     }
 
     const params = await context.params;
@@ -58,12 +73,20 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
 
     if (!existingProposal) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Proposal not found',
-        },
-        { status: 404 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Proposal not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalStatusRoute',
+            operation: 'updateProposalStatus',
+            proposalId: id
+          }
+        }),
+        'Proposal not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404,
+        { userFriendlyMessage: 'The requested proposal could not be found' }
       );
     }
 
@@ -73,12 +96,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       existingProposal.createdBy
     );
     if (!canUpdateStatus) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Insufficient permissions to update proposal status',
-        },
-        { status: 403 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Insufficient permissions to update proposal status',
+          code: ErrorCodes.AUTH.FORBIDDEN,
+          metadata: {
+            component: 'ProposalStatusRoute',
+            operation: 'updateProposalStatus',
+            proposalId: id,
+            userId: session.user.id,
+            createdBy: existingProposal.createdBy
+          }
+        }),
+        'Insufficient permissions',
+        ErrorCodes.AUTH.FORBIDDEN,
+        403,
+        { userFriendlyMessage: 'You do not have permission to update this proposal\'s status' }
       );
     }
 
@@ -87,12 +120,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const newStatus = validatedData.status;
 
     if (!isValidStatusTransition(currentStatus, newStatus)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Invalid status transition from ${currentStatus} to ${newStatus}`,
-        },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Invalid status transition from ${currentStatus} to ${newStatus}`,
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProposalStatusRoute',
+            operation: 'updateProposalStatus',
+            proposalId: id,
+            currentStatus,
+            newStatus
+          }
+        }),
+        'Invalid status transition',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { userFriendlyMessage: `Cannot change proposal status from ${currentStatus} to ${newStatus}` }
       );
     }
 
@@ -180,26 +223,68 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to update proposal status ${params.id}:`, error);
-
+    
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
+    // Handle specific error types
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: error.errors,
-        },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Validation failed for status update',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'ProposalStatusRoute',
+            operation: 'updateProposalStatus',
+            proposalId: params.id,
+            validationErrors: error.errors
+          }
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { userFriendlyMessage: 'The provided status update data is invalid' }
       );
     }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to update proposal status',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+    
+    // Handle Prisma errors
+    if (isPrismaError(error)) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Database error during status update',
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          cause: error,
+          metadata: {
+            component: 'ProposalStatusRoute',
+            operation: 'updateProposalStatus',
+            proposalId: params.id,
+            prismaError: error.code
+          }
+        }),
+        'Database error',
+        ErrorCodes.DATA.QUERY_FAILED,
+        500,
+        { userFriendlyMessage: 'Failed to update proposal status due to a database error' }
+      );
+    }
+    
+    // Default case: internal server error
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to update proposal status',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalStatusRoute',
+          operation: 'updateProposalStatus',
+          proposalId: params.id
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'An unexpected error occurred while updating the proposal status' }
     );
   }
 }

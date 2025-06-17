@@ -6,13 +6,27 @@
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalsQueueRoute',
+            operation: 'getProposalsQueue'
+          }
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to access the proposals queue' }
+      );
     }
 
     // Mock approval queue data
@@ -193,7 +207,24 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(queueItems);
   } catch (error) {
-    console.error('Proposals Queue API error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
+    
+    // Return standardized error response
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to retrieve proposals queue',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalsQueueRoute',
+          operation: 'getProposalsQueue'
+        }
+      }),
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'Unable to retrieve proposals queue. Please try again later.' }
+    );
   }
 }

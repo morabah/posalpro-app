@@ -7,6 +7,8 @@
 import { createUser } from '@/lib/services/userService';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
+import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 // Validation schema for registration
 const registerSchema = z.object({
@@ -66,9 +68,22 @@ export async function POST(request: NextRequest) {
     const ip =
       request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
     if (!rateLimit5PerMinute(ip)) {
-      return NextResponse.json(
-        { error: 'Too many registration attempts. Please try again later.' },
-        { status: 429 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Rate limit exceeded for registration attempts',
+          code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+          metadata: {
+            component: 'RegisterRoute',
+            operation: 'registerUser',
+            ip,
+            limit: 5,
+            windowMs: 60 * 1000
+          }
+        }),
+        'Too many attempts',
+        ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        429,
+        { userFriendlyMessage: 'Too many registration attempts. Please try again later.' }
       );
     }
 
@@ -114,31 +129,95 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Registration error:', error);
+    // Log the error using ErrorHandlingService
+    errorHandlingService.processError(error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: 'Validation failed',
-          details: error.errors.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-          })),
-        },
-        { status: 400 }
+      const formattedErrors = error.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+      }));
+      
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Registration validation failed',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'RegisterRoute',
+            operation: 'registerUser',
+            validationErrors: formattedErrors
+          }
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
+        { 
+          userFriendlyMessage: 'Please check your registration information and try again.',
+          details: formattedErrors
+        }
       );
     }
 
     // Handle user creation errors
     if (error instanceof Error) {
       if (error.message === 'A user with this email already exists') {
-        return NextResponse.json(
-          { error: 'A user with this email address already exists.' },
-          { status: 409 }
+        return createApiErrorResponse(
+          new StandardError({
+            message: 'Attempted to register with an existing email address',
+            code: ErrorCodes.DATA.DUPLICATE_ENTRY,
+            cause: error,
+            metadata: {
+              component: 'RegisterRoute',
+              operation: 'registerUser'
+            }
+          }),
+          'Email already exists',
+          ErrorCodes.DATA.DUPLICATE_ENTRY,
+          409,
+          { userFriendlyMessage: 'A user with this email address already exists.' }
         );
       }
     }
+    
+    if (isPrismaError(error)) {
+      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      return createApiErrorResponse(
+        new StandardError({
+          message: `Database error during user registration: ${getPrismaErrorMessage(error.code)}`,
+          code: errorCode,
+          cause: error,
+          metadata: {
+            component: 'RegisterRoute',
+            operation: 'registerUser',
+            prismaErrorCode: error.code
+          }
+        }),
+        'Database error',
+        errorCode,
+        500,
+        { userFriendlyMessage: 'An error occurred during registration. Please try again later.' }
+      );
+    }
+    
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(error);
+    }
 
-    return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 500 });
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Unexpected error during user registration',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'RegisterRoute',
+          operation: 'registerUser'
+        }
+      }),
+      'Registration failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      { userFriendlyMessage: 'Registration failed. Please try again later.' }
+    );
   }
 }

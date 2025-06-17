@@ -2,10 +2,12 @@
  * PosalPro MVP2 - Custom Login API Route
  * Based on LOGIN_SCREEN.md wireframe
  * Role-based redirection and analytics integration
+ * Uses standardized error handling
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createApiErrorResponse, ErrorCodes } from '@/lib/errors';
 
 // Validation schema for login
 const loginSchema = z.object({
@@ -52,22 +54,27 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
+        success: true,
         message: 'Login validation successful',
-        redirectUrl,
-        role: primaryRole,
+        data: {
+          redirectUrl,
+          role: primaryRole,
+        }
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error('Login validation error:', error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Use standardized error handling
+    return createApiErrorResponse(
+      error,
+      'Login validation failed',
+      ErrorCodes.VALIDATION.INVALID_INPUT,
+      400,
+      {
+        component: 'LoginRoute',
+        operation: 'validateLogin',
+        userFriendlyMessage: 'Unable to validate login credentials. Please check your information and try again.'
+      }
+    );
   }
 }
