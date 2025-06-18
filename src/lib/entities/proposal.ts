@@ -179,7 +179,7 @@ export class ProposalEntity {
       }
 
       // Fetch from API
-      const response = await apiClient.get<ProposalData>(`/proposals/${id}`);
+      const response = await apiClient.get<ProposalData>(`proposals/${id}`);
 
       if (response.success && response.data) {
         this.setCache(id, response.data);
@@ -205,7 +205,7 @@ export class ProposalEntity {
   ): Promise<ApiResponse<ProposalData>> {
     try {
       // Update via API
-      const response = await apiClient.put<ProposalData>(`/proposals/${id}`, updateData);
+      const response = await apiClient.put<ProposalData>(`proposals/${id}`, updateData);
 
       if (response.success && response.data) {
         // Update cache
@@ -230,7 +230,7 @@ export class ProposalEntity {
    */
   async delete(id: string): Promise<ApiResponse<{ message: string }>> {
     try {
-      const response = await apiClient.delete<{ message: string }>(`/proposals/${id}`);
+      const response = await apiClient.delete<{ message: string }>(`proposals/${id}`);
 
       if (response.success) {
         // Remove from cache
@@ -271,7 +271,7 @@ export class ProposalEntity {
       if (options.sortOrder) queryParams.set('sortOrder', options.sortOrder);
 
       const response = await apiClient.get<ProposalsApiResponse>(
-        `/proposals?${queryParams.toString()}`
+        `proposals?${queryParams.toString()}`
       );
 
       // Cache results
@@ -318,7 +318,7 @@ export class ProposalEntity {
     notes?: string
   ): Promise<ApiResponse<ProposalData>> {
     try {
-      const response = await apiClient.put<ProposalData>(`/proposals/${id}/status`, {
+      const response = await apiClient.put<ProposalData>(`proposals/${id}/status`, {
         status,
         notes,
       });
@@ -349,7 +349,7 @@ export class ProposalEntity {
     assignments: Omit<TeamAssignment, 'id' | 'proposalId' | 'assignedAt'>[]
   ): Promise<ApiResponse<TeamAssignment[]>> {
     try {
-      const response = await apiClient.post<TeamAssignment[]>(`/proposals/${id}/team`, {
+      const response = await apiClient.post<TeamAssignment[]>(`proposals/${id}/team`, {
         assignments,
       });
 
@@ -378,7 +378,7 @@ export class ProposalEntity {
    */
   async getTeamAssignments(id: string): Promise<ApiResponse<TeamAssignment[]>> {
     try {
-      const response = await apiClient.get<TeamAssignment[]>(`/proposals/${id}/team`);
+      const response = await apiClient.get<TeamAssignment[]>(`proposals/${id}/team`);
       return response;
     } catch (error) {
       console.error(`Failed to get team assignments for proposal ${id}:`, error);
@@ -391,7 +391,7 @@ export class ProposalEntity {
    */
   async submit(id: string): Promise<ApiResponse<ProposalData>> {
     try {
-      const response = await apiClient.post<ProposalData>(`/proposals/${id}/submit`, {});
+      const response = await apiClient.post<ProposalData>(`proposals/${id}/submit`, {});
 
       if (response.success && response.data) {
         this.setCache(id, response.data);
@@ -415,7 +415,7 @@ export class ProposalEntity {
    */
   async getApprovals(id: string): Promise<ApiResponse<ProposalApproval[]>> {
     try {
-      const response = await apiClient.get<ProposalApproval[]>(`/proposals/${id}/approvals`);
+      const response = await apiClient.get<ProposalApproval[]>(`proposals/${id}/approvals`);
       return response;
     } catch (error) {
       console.error(`Failed to get approvals for proposal ${id}:`, error);
@@ -432,7 +432,7 @@ export class ProposalEntity {
     comments?: string
   ): Promise<ApiResponse<ProposalApproval>> {
     try {
-      const response = await apiClient.post<ProposalApproval>(`/proposals/${id}/approve`, {
+      const response = await apiClient.post<ProposalApproval>(`proposals/${id}/approve`, {
         decision,
         comments,
       });
@@ -462,7 +462,7 @@ export class ProposalEntity {
    */
   async getVersionHistory(id: string): Promise<ApiResponse<ProposalVersion[]>> {
     try {
-      const response = await apiClient.get<ProposalVersion[]>(`/proposals/${id}/versions`);
+      const response = await apiClient.get<ProposalVersion[]>(`proposals/${id}/versions`);
       return response;
     } catch (error) {
       console.error(`Failed to get version history for proposal ${id}:`, error);
@@ -479,7 +479,7 @@ export class ProposalEntity {
     changesSummary: string
   ): Promise<ApiResponse<ProposalVersion>> {
     try {
-      const response = await apiClient.post<ProposalVersion>(`/proposals/${id}/versions`, {
+      const response = await apiClient.post<ProposalVersion>(`proposals/${id}/versions`, {
         changes,
         changesSummary,
       });
@@ -509,7 +509,7 @@ export class ProposalEntity {
    */
   async getAnalytics(id: string): Promise<ApiResponse<ProposalAnalytics>> {
     try {
-      const response = await apiClient.get<ProposalAnalytics>(`/proposals/${id}/analytics`);
+      const response = await apiClient.get<ProposalAnalytics>(`proposals/${id}/analytics`);
       return response;
     } catch (error) {
       console.error(`Failed to get analytics for proposal ${id}:`, error);
@@ -522,7 +522,7 @@ export class ProposalEntity {
    */
   async clone(id: string, newTitle: string): Promise<ApiResponse<ProposalData>> {
     try {
-      const response = await apiClient.post<ProposalData>(`/proposals/${id}/clone`, {
+      const response = await apiClient.post<ProposalData>(`proposals/${id}/clone`, {
         newTitle,
       });
 
