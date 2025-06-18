@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "npx prisma migrate deploy && npx prisma generate && npm run build"
   # Let @netlify/plugin-nextjs handle the build output automatically
 
 [build.environment]
@@ -30,6 +30,10 @@
 # Functions are managed by @netlify/plugin-nextjs
 [functions]
   included_files = ["schema.prisma"]
+
+# Database initialization hook
+[dev]
+  command = "npm run dev:smart"
 
 # Add specific image optimization handling
 [[redirects]]
