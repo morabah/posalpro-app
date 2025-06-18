@@ -34,8 +34,8 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Important optimization for Netlify serverless functions
-  output: 'standalone',
+  // Netlify requires default output mode for serverless functions
+  // output: 'standalone', // Disabled for Netlify compatibility
   // Optimize modules to single dependency tree
   modularizeImports: {
     '@heroicons/react': {
