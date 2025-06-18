@@ -42,6 +42,8 @@ const nextConfig = {
       transform: '@heroicons/react/{{member}}',
     },
   },
+  // Ensure trailingSlash is false for Netlify compatibility
+  trailingSlash: false,
   // Note: swcMinify and optimizeFonts are enabled by default in Next.js 15+
 };
 
