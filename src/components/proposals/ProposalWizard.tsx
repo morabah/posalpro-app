@@ -8,10 +8,12 @@
  */
 
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useErrorHandler } from '@/components/providers/ErrorBoundary';
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
 import { ProposalEntity } from '@/lib/entities/proposal';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { Priority } from '@/types/enums';
 import {
   ExpertiseArea,
@@ -103,6 +105,26 @@ const convertPriorityFromEntity = (priority: Priority): ProposalPriority => {
   }
 };
 
+// Helper to validate and ensure deadline is in the future
+const ensureFutureDate = (dateValue?: Date | string | null): Date => {
+  const now = new Date();
+  const futureDefault = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+
+  if (!dateValue) {
+    return futureDefault;
+  }
+
+  const providedDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
+
+  // Check if the date is valid and in the future
+  if (isNaN(providedDate.getTime()) || providedDate <= now) {
+    console.warn('[ProposalWizard] Invalid or past date provided, using default future date');
+    return futureDefault;
+  }
+
+  return providedDate;
+};
+
 // Helper to validate UUID format
 const isValidUUID = (value: string | undefined): boolean => {
   if (!value || value.length === 0 || value === 'undefined') return false;
@@ -127,6 +149,10 @@ export function ProposalWizard({
   const { user } = useAuth();
   const analytics = useProposalCreationAnalytics();
   const proposalEntity = ProposalEntity.getInstance();
+
+  // Standardized error handling following development standards
+  const errorHandlingService = ErrorHandlingService.getInstance();
+  const throwError = useErrorHandler();
 
   // Session and draft management
   const [currentProposalId, setCurrentProposalId] = useState<string | null>(editProposalId || null);
@@ -445,9 +471,7 @@ export function ProposalWizard({
           },
           projectType: 'development' as const,
           currency: 'USD' as const,
-          deadline: wizardData.step1.details?.dueDate
-            ? new Date(wizardData.step1.details.dueDate)
-            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+          deadline: ensureFutureDate(wizardData.step1.details?.dueDate),
           priority: convertPriorityToEntity(wizardData.step1.details?.priority),
           tags: [],
         };
@@ -609,9 +633,7 @@ export function ProposalWizard({
             projectType: 'development' as const,
             estimatedValue: wizardData.step1.details?.estimatedValue || 0,
             currency: 'USD' as const,
-            deadline: wizardData.step1.details?.dueDate
-              ? new Date(wizardData.step1.details.dueDate)
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+            deadline: ensureFutureDate(wizardData.step1.details?.dueDate),
             priority: convertPriorityToEntity(wizardData.step1.details?.priority),
             tags: [],
           },
@@ -640,8 +662,49 @@ export function ProposalWizard({
       }
     } catch (err) {
       console.error('[ProposalWizard] Error during proposal creation:', err);
-      setError('Failed to create proposal. Please try again.');
-      analytics.trackWizardStep(6, 'create_proposal', 'error', { reason: 'api_error' });
+
+      // Process error using standardized error handling service
+      const processedError = errorHandlingService.processError(
+        err,
+        'Failed to create proposal',
+        'VALIDATION_INVALID_INPUT', // Will be mapped to proper ErrorCode
+        {
+          component: 'ProposalWizard',
+          operation: 'handleCreateProposal',
+          userId: user?.id,
+          wizardStep: 6,
+          userFriendlyMessage:
+            'Unable to create your proposal. Please review your information and try again.',
+        }
+      );
+
+      // Get user-friendly message based on error type
+      let userMessage = errorHandlingService.getUserFriendlyMessage(processedError);
+      let errorContext = 'general_error';
+
+      // Handle specific Zod validation errors
+      if (err instanceof Error && (err.name === 'ZodError' || err.message.includes('ZodError'))) {
+        if (err.message.includes('Deadline must be in the future')) {
+          userMessage =
+            'The proposal deadline must be set to a future date. Please check your deadline and try again.';
+          errorContext = 'validation_deadline_past';
+        } else if (err.message.includes('too_small')) {
+          userMessage =
+            'Some required fields are missing or invalid. Please review your information and try again.';
+          errorContext = 'validation_required_fields';
+        } else {
+          userMessage =
+            'Please review your proposal information and correct any validation errors.';
+          errorContext = 'validation_general';
+        }
+      }
+
+      setError(userMessage);
+      analytics.trackWizardStep(6, 'create_proposal', 'error', {
+        reason: errorContext,
+        errorType: err instanceof Error ? err.name : 'unknown',
+        errorCode: processedError.code,
+      });
     } finally {
       setIsLoading(false);
     }

@@ -9,6 +9,54 @@ eliminates the need for future type safety cleanup phases.
 
 ---
 
+## 🚨 **CRITICAL WARNING: Always Use Established Error Handling System**
+
+**⚠️ LESSON LEARNED**: Never implement custom error handling! Always use the
+standardized system:
+
+### **Mandatory Error Handling Imports**
+
+```typescript
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { useErrorHandler } from '@/components/providers/ErrorBoundary';
+```
+
+### **Required Pattern for All Error Handling**
+
+```typescript
+// Initialize in component
+const errorHandlingService = ErrorHandlingService.getInstance();
+const throwError = useErrorHandler();
+
+// Use in catch blocks
+try {
+  // ... your code
+} catch (err) {
+  const processedError = errorHandlingService.processError(
+    err,
+    'Operation failed',
+    ErrorCodes.VALIDATION.INVALID_INPUT,
+    {
+      component: 'ComponentName',
+      operation: 'methodName',
+      userId: user?.id,
+      userFriendlyMessage: 'User-facing message',
+    }
+  );
+
+  const userMessage =
+    errorHandlingService.getUserFriendlyMessage(processedError);
+  setError(userMessage);
+}
+```
+
+**✅ Always check: Are you using ErrorHandlingService.processError()?** **❌
+Never do: Custom error processing or manual error type checking**
+
+---
+
 ## 📋 **Pre-Development Checklist**
 
 ### **Before Writing Any Code**
