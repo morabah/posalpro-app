@@ -1,6 +1,6 @@
 [build]
   command = "npm run build"
-  publish = ".next"
+  # Let @netlify/plugin-nextjs handle the build output automatically
 
 [build.environment]
   NODE_VERSION = "20.15.1"
@@ -10,12 +10,7 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Handle API routes
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/___netlify-server-handler"
-  status = 200
-  force = true
+# API routes are handled automatically by @netlify/plugin-nextjs
 
 # Set proper content type for API responses
 [[headers]]
@@ -32,13 +27,9 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Configure functions - minimize bundle size
+# Functions are managed by @netlify/plugin-nextjs
 [functions]
-  # Only include essential files to reduce bundle size
   included_files = ["schema.prisma"]
-  node_bundler = "esbuild"
-  # Set external_node_modules to reduce bundle size
-  external_node_modules = ["@prisma/client", "prisma"]
 
 # Add specific image optimization handling
 [[redirects]]
