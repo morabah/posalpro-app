@@ -93,7 +93,7 @@ export function useOptimizedSearch<T extends Record<string, any>>(
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const debounceTimer = useRef<NodeJS.Timeout>();
+  const debounceTimer = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Debounced query update
   const updateQuery = useCallback(

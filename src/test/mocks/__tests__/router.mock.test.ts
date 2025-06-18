@@ -13,8 +13,23 @@ interface MockRouterQuery {
   [key: string]: string | string[] | undefined;
 }
 
-interface MockRouter extends NextRouter {
+interface MockRouter
+  extends Omit<
+    NextRouter,
+    'push' | 'replace' | 'prefetch' | 'reload' | 'back' | 'beforePopState' | 'events'
+  > {
   query: MockRouterQuery;
+  push: jest.MockedFunction<NextRouter['push']>;
+  replace: jest.MockedFunction<NextRouter['replace']>;
+  prefetch: jest.MockedFunction<NextRouter['prefetch']>;
+  reload: jest.MockedFunction<() => void>;
+  back: jest.MockedFunction<() => void>;
+  beforePopState: jest.MockedFunction<NextRouter['beforePopState']>;
+  events: {
+    on: jest.MockedFunction<(event: string, handler: (...args: any[]) => void) => void>;
+    off: jest.MockedFunction<(event: string, handler: (...args: any[]) => void) => void>;
+    emit: jest.MockedFunction<(event: string, ...args: any[]) => void>;
+  };
 }
 
 describe('Router Mock', () => {
@@ -25,7 +40,7 @@ describe('Router Mock', () => {
     // This follows our quality-first approach by ensuring test consistency
     mockRouter = require('../router.mock').mockRouter as MockRouter;
     resetRouterMock();
-    
+
     // Restore the default resolved values after reset
     mockRouter.push.mockResolvedValue(true);
     mockRouter.replace.mockResolvedValue(true);
@@ -111,7 +126,7 @@ describe('Router Mock', () => {
     it('resets all router mock functions', () => {
       // Call some methods first
       mockRouter.push('/test');
-      mockRouter.events.on('test', jest.fn());
+      mockRouter.events.on('routeChangeStart', jest.fn());
 
       expect(mockRouter.push).toHaveBeenCalled();
       expect(mockRouter.events.on).toHaveBeenCalled();
@@ -178,10 +193,9 @@ describe('Router Mock', () => {
     });
 
     it('tracks call arguments correctly', () => {
-      const pushArgs = ['/test', { shallow: true }];
-      mockRouter.push(...pushArgs);
+      mockRouter.push('/test', '/test', { shallow: true });
 
-      expect(mockRouter.push).toHaveBeenCalledWith(...pushArgs);
+      expect(mockRouter.push).toHaveBeenCalledWith('/test', '/test', { shallow: true });
     });
   });
 

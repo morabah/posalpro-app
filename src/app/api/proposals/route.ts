@@ -6,12 +6,17 @@
 
 import { authOptions } from '@/lib/auth';
 import prismaClient from '@/lib/db/prisma';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
+import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
-import { isPrismaError } from '@/lib/utils/errorUtils';
 
 const prisma = prismaClient;
 
@@ -165,8 +170,8 @@ export async function GET(request: NextRequest) {
           code: ErrorCodes.AUTH.UNAUTHORIZED,
           metadata: {
             component: 'ProposalsRoute',
-            operation: 'getProposals'
-          }
+            operation: 'getProposals',
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -189,8 +194,8 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'ProposalsRoute',
             operation: 'getProposals',
-            userId: session.user.id
-          }
+            userId: session.user.id,
+          },
         }),
         'Insufficient permissions',
         ErrorCodes.AUTH.FORBIDDEN,
@@ -317,7 +322,7 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error)) {
         return createApiErrorResponse(
           new StandardError({
@@ -328,8 +333,8 @@ export async function GET(request: NextRequest) {
               component: 'ProposalsRoute',
               operation: 'getProposals',
               prismaCode: error.code,
-              query: JSON.stringify(query)
-            }
+              query: JSON.stringify(query),
+            },
           }),
           'Database query failed',
           ErrorCodes.DATA.QUERY_FAILED,
@@ -337,17 +342,19 @@ export async function GET(request: NextRequest) {
           { userFriendlyMessage: 'Unable to retrieve proposals. Please try again later.' }
         );
       }
-      
+
       return createApiErrorResponse(
-        error instanceof StandardError ? error : new StandardError({
-          message: 'Failed to retrieve proposals',
-          code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-          cause: error instanceof Error ? error : undefined,
-          metadata: {
-            component: 'ProposalsRoute',
-            operation: 'getProposals'
-          }
-        }),
+        error instanceof StandardError
+          ? error
+          : new StandardError({
+              message: 'Failed to retrieve proposals',
+              code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+              cause: error instanceof Error ? error : undefined,
+              metadata: {
+                component: 'ProposalsRoute',
+                operation: 'getProposals',
+              },
+            }),
         'Database query failed',
         ErrorCodes.SYSTEM.INTERNAL_ERROR,
         500,
@@ -357,7 +364,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     // Determine if it's a validation error
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
@@ -368,13 +375,16 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'ProposalsRoute',
             operation: 'getProposals',
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Invalid request parameters',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        { userFriendlyMessage: 'The request contains invalid parameters. Please check your input and try again.' }
+        {
+          userFriendlyMessage:
+            'The request contains invalid parameters. Please check your input and try again.',
+        }
       );
     }
 
@@ -384,7 +394,7 @@ export async function GET(request: NextRequest) {
       let statusCode = 500;
       let message = 'Database error';
       let userFriendlyMessage = 'A database error occurred. Please try again later.';
-      
+
       if (error.code === 'P2021') {
         errorCode = ErrorCodes.DATA.DATABASE_ERROR;
         message = 'Database table not found';
@@ -392,9 +402,10 @@ export async function GET(request: NextRequest) {
         errorCode = ErrorCodes.DATA.CONFLICT;
         statusCode = 409;
         message = 'Unique constraint violation';
-        userFriendlyMessage = 'A conflict occurred with existing data. Please check your input and try again.';
+        userFriendlyMessage =
+          'A conflict occurred with existing data. Please check your input and try again.';
       }
-      
+
       return createApiErrorResponse(
         new StandardError({
           message,
@@ -403,8 +414,8 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'ProposalsRoute',
             operation: 'getProposals',
-            prismaCode: error.code
-          }
+            prismaCode: error.code,
+          },
         }),
         message,
         errorCode,
@@ -412,16 +423,13 @@ export async function GET(request: NextRequest) {
         { userFriendlyMessage }
       );
     }
-    
+
     // Handle StandardError instances
     if (error instanceof StandardError) {
-      return createApiErrorResponse(
-        error,
-        error.message,
-        error.code,
-        500,
-        { userFriendlyMessage: 'An error occurred while processing your request. Please try again later.' }
-      );
+      return createApiErrorResponse(error, error.message, error.code, 500, {
+        userFriendlyMessage:
+          'An error occurred while processing your request. Please try again later.',
+      });
     }
 
     // Default case: internal server error
@@ -432,8 +440,8 @@ export async function GET(request: NextRequest) {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ProposalsRoute',
-          operation: 'getProposals'
-        }
+          operation: 'getProposals',
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
@@ -454,8 +462,8 @@ export async function POST(request: NextRequest) {
           code: ErrorCodes.AUTH.UNAUTHORIZED,
           metadata: {
             component: 'ProposalsRoute',
-            operation: 'createProposal'
-          }
+            operation: 'createProposal',
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -474,8 +482,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'ProposalsRoute',
             operation: 'createProposal',
-            userId: session.user.id
-          }
+            userId: session.user.id,
+          },
         }),
         'Insufficient permissions',
         ErrorCodes.AUTH.FORBIDDEN,
@@ -506,8 +514,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'ProposalsRoute',
             operation: 'createProposal',
-            customerId: validatedData.customerId
-          }
+            customerId: validatedData.customerId,
+          },
         }),
         'Customer not found',
         ErrorCodes.DATA.NOT_FOUND,
@@ -525,13 +533,16 @@ export async function POST(request: NextRequest) {
             component: 'ProposalsRoute',
             operation: 'createProposal',
             customerId: validatedData.customerId,
-            customerStatus: customer.status
-          }
+            customerStatus: customer.status,
+          },
         }),
         'Cannot create proposal for inactive customer',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        { userFriendlyMessage: 'The customer account is inactive. Proposals can only be created for active customers.' }
+        {
+          userFriendlyMessage:
+            'The customer account is inactive. Proposals can only be created for active customers.',
+        }
       );
     }
 
@@ -553,13 +564,16 @@ export async function POST(request: NextRequest) {
               component: 'ProposalsRoute',
               operation: 'createProposal',
               requestedProductIds: productIds,
-              foundProductIds: existingProducts.map(p => p.id)
-            }
+              foundProductIds: existingProducts.map(p => p.id),
+            },
           }),
           'Invalid products',
           ErrorCodes.VALIDATION.INVALID_INPUT,
           400,
-          { userFriendlyMessage: 'One or more of the selected products are not available or inactive' }
+          {
+            userFriendlyMessage:
+              'One or more of the selected products are not available or inactive',
+          }
         );
       }
 
@@ -659,7 +673,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
         new StandardError({
@@ -669,8 +683,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'ProposalsRoute',
             operation: 'createProposal',
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
@@ -678,24 +692,29 @@ export async function POST(request: NextRequest) {
         { userFriendlyMessage: 'Please check your input and try again.' }
       );
     }
-    
+
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.INTEGRITY_VIOLATION;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.INTEGRITY_VIOLATION;
       return createApiErrorResponse(
         new StandardError({
-          message: `Database error when creating proposal: ${getPrismaErrorMessage(error)}`,
+          message: `Database error when creating proposal: ${getPrismaErrorMessage(error.code)}`,
           code: errorCode,
           cause: error,
           metadata: {
             component: 'ProposalsRoute',
             operation: 'createProposal',
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
         500,
-        { userFriendlyMessage: 'An error occurred while saving your proposal. Please try again later.' }
+        {
+          userFriendlyMessage:
+            'An error occurred while saving your proposal. Please try again later.',
+        }
       );
     }
 
@@ -706,13 +725,16 @@ export async function POST(request: NextRequest) {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ProposalsRoute',
-          operation: 'createProposal'
-        }
+          operation: 'createProposal',
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      { userFriendlyMessage: 'An unexpected error occurred while creating your proposal. Please try again later.' }
+      {
+        userFriendlyMessage:
+          'An unexpected error occurred while creating your proposal. Please try again later.',
+      }
     );
   }
 }
@@ -728,8 +750,8 @@ export async function PUT(request: NextRequest) {
           code: ErrorCodes.AUTH.UNAUTHORIZED,
           metadata: {
             component: 'ProposalsRoute',
-            operation: 'createProposal'
-          }
+            operation: 'createProposal',
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -830,7 +852,7 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
         new StandardError({
@@ -840,8 +862,8 @@ export async function PUT(request: NextRequest) {
           metadata: {
             component: 'ProposalsRoute',
             operation: 'updateProposals',
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
@@ -849,24 +871,29 @@ export async function PUT(request: NextRequest) {
         { userFriendlyMessage: 'Please check your input and try again.' }
       );
     }
-    
+
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.INTEGRITY_VIOLATION;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.INTEGRITY_VIOLATION;
       return createApiErrorResponse(
         new StandardError({
-          message: `Database error when updating proposals: ${getPrismaErrorMessage(error)}`,
+          message: `Database error when updating proposals: ${getPrismaErrorMessage(error.code)}`,
           code: errorCode,
           cause: error,
           metadata: {
             component: 'ProposalsRoute',
             operation: 'updateProposals',
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
         500,
-        { userFriendlyMessage: 'An error occurred while saving your changes. Please try again later.' }
+        {
+          userFriendlyMessage:
+            'An error occurred while saving your changes. Please try again later.',
+        }
       );
     }
 
@@ -877,13 +904,16 @@ export async function PUT(request: NextRequest) {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ProposalsRoute',
-          operation: 'updateProposals'
-        }
+          operation: 'updateProposals',
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      { userFriendlyMessage: 'An unexpected error occurred while updating proposals. Please try again later.' }
+      {
+        userFriendlyMessage:
+          'An unexpected error occurred while updating proposals. Please try again later.',
+      }
     );
   }
 }
@@ -924,19 +954,16 @@ async function trackProposalSearchEvent(userId: string, query: string, resultsCo
   } catch (error) {
     // Log the error but don't fail the main operation
     errorHandlingService.processError(
-      new StandardError({
-        message: 'Failed to track proposal search event',
-        code: ErrorCodes.ANALYTICS.TRACKING_ERROR,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'ProposalsRoute',
-          operation: 'trackProposalSearchEvent',
-          userId,
-          query,
-          resultsCount
-        }
-      }),
-      { logOnly: true } // Only log, don't propagate the error
+      error,
+      'Failed to track proposal search event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'ProposalsRoute',
+        operation: 'trackProposalSearchEvent',
+        userId,
+        query,
+        resultsCount,
+      }
     );
     // Don't fail the main operation if analytics tracking fails
   }
@@ -975,19 +1002,16 @@ async function trackProposalCreationEvent(
   } catch (error) {
     // Log the error but don't fail the main operation
     errorHandlingService.processError(
-      new StandardError({
-        message: 'Failed to track proposal creation event',
-        code: ErrorCodes.ANALYTICS.TRACKING_ERROR,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'ProposalsRoute',
-          operation: 'trackProposalCreationEvent',
-          userId,
-          proposalId,
-          proposalTitle
-        }
-      }),
-      { logOnly: true } // Only log, don't propagate the error
+      error,
+      'Failed to track proposal creation event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'ProposalsRoute',
+        operation: 'trackProposalCreationEvent',
+        userId,
+        proposalId,
+        proposalTitle,
+      }
     );
     // Don't fail the main operation if analytics tracking fails
   }

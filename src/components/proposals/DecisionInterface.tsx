@@ -241,7 +241,10 @@ export function DecisionInterface({
       return;
     }
 
-    if (decisionForm.decision === 'escalate' && !decisionForm.escalationReason.trim()) {
+    if (
+      decisionForm.decision === 'escalate' &&
+      (!decisionForm.escalationReason || !decisionForm.escalationReason.trim())
+    ) {
       alert('Please provide an escalation reason.');
       return;
     }

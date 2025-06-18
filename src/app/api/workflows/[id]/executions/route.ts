@@ -75,11 +75,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         },
       },
       decisions: true,
-      stageExecution: {
-        include: {
-          stage: true,
-        },
-      },
+      stageExecution: true,
     };
 
     const [executions, total] = await Promise.all([
@@ -208,7 +204,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       where: {
         workflowId,
         entityId: validatedData.entityId,
-        status: { in: ['ACTIVE', 'PENDING'] },
+        status: { in: ['IN_PROGRESS', 'PENDING'] },
       },
     });
 
@@ -231,21 +227,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       });
 
       if (workflow.stages.length > 0) {
-        const executionStagesData = workflow.stages.map(stage => ({
-          executionId: newExecution.id,
-          stageId: stage.id,
-          status: stage.order === 1 ? 'ACTIVE' : 'PENDING',
-        }));
-
-        await tx.approvalExecutionStage.createMany({
-          data: executionStagesData,
-        });
-
         const firstStage = workflow.stages[0];
         await tx.approvalExecution.update({
           where: { id: newExecution.id },
           data: {
-            currentStageId: firstStage.id,
+            currentStage: firstStage.id,
           },
         });
       }
@@ -259,11 +245,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       where: { id: newExecution.id },
       include: {
         proposal: true,
-        stageExecution: {
-          include: {
-            stage: true,
-          },
-        },
+        stageExecution: true,
       },
     });
 

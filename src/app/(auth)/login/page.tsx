@@ -70,11 +70,11 @@ function LoginPageContent() {
   const [selectedRole, setSelectedRole] = useState<UserType>(UserType.PROPOSAL_MANAGER);
   const [loginStartTime, setLoginStartTime] = useState<number>(Date.now());
 
-  // Get URL parameters
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
-  const error = searchParams.get('error');
-  const registered = searchParams.get('registered');
-  const verified = searchParams.get('verified');
+  // Get URL parameters with null checks
+  const callbackUrl = searchParams?.get('callbackUrl') || '/dashboard';
+  const error = searchParams?.get('error');
+  const registered = searchParams?.get('registered');
+  const verified = searchParams?.get('verified');
 
   // H2.3 Track 2 Integration: Enhanced form validation
   const {

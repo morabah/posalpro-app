@@ -5,15 +5,15 @@
 
 import { Prisma, Product, ProductRelationship, RelationshipType } from '@prisma/client';
 import {
-    CreateProductData,
-    CreateProductRelationshipData,
-    ProductFilters,
-    ProductSortOptions,
-    UpdateProductData,
+  CreateProductData,
+  CreateProductRelationshipData,
+  ProductFilters,
+  ProductSortOptions,
+  UpdateProductData,
 } from '../../types/entities/product';
+import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
-import { StandardError, ErrorCodes, errorHandlingService } from '../errors';
-import { toPrismaJson, relationshipConditionToPrisma } from '../utils/prismaUtils';
+import { toPrismaJson } from '../utils/prismaUtils';
 
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
@@ -57,6 +57,50 @@ export interface ProductAnalytics {
   topCategories: string[];
 }
 
+// Type-safe query builder interfaces for Product
+interface ProductWhereInput {
+  isActive?: boolean;
+  category?: { hasSome: string[] };
+  tags?: { hasSome: string[] };
+  price?: {
+    gte?: number;
+    lte?: number;
+  };
+  sku?: { contains: string; mode: Prisma.QueryMode };
+  OR?: Array<{
+    name?: { contains: string; mode: Prisma.QueryMode };
+    description?: { contains: string; mode: Prisma.QueryMode };
+    sku?: { contains: string; mode: Prisma.QueryMode };
+  }>;
+}
+
+interface ProductOrderByInput {
+  name?: Prisma.SortOrder;
+  createdAt?: Prisma.SortOrder;
+  price?: Prisma.SortOrder;
+  sku?: Prisma.SortOrder;
+  category?: Prisma.SortOrder;
+}
+
+interface ProductRelationshipWhereInput {
+  OR?: Array<{
+    sourceProductId?: string;
+    targetProductId?: string;
+  }>;
+  type?: RelationshipType;
+}
+
+interface ProductStatsWhereInput {
+  createdAt?: {
+    gte?: Date;
+    lte?: Date;
+  };
+  category?: {
+    hasSome: string[];
+  };
+  isActive?: boolean;
+}
+
 export class ProductService {
   // Product CRUD operations
   async createProduct(data: CreateProductData, createdBy: string): Promise<Product> {
@@ -78,7 +122,7 @@ export class ProductService {
     } catch (error) {
       // Log the error for observability
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error) && error.code === 'P2002') {
         throw new StandardError({
           message: 'A product with this SKU already exists',
@@ -107,13 +151,13 @@ export class ProductService {
   async updateProduct(data: UpdateProductData): Promise<Product> {
     try {
       const { id, ...updateData } = data;
-      
+
       // Handle JSON fields with proper type conversion
       const prismaData: Prisma.ProductUpdateInput = {
         ...updateData,
         attributes: updateData.attributes ? toPrismaJson(updateData.attributes) : undefined,
       };
-      
+
       return await prisma.product.update({
         where: { id },
         data: prismaData,
@@ -304,7 +348,7 @@ export class ProductService {
     limit?: number
   ): Promise<{ products: Product[]; total: number; page: number; totalPages: number }> {
     try {
-      const where: any = {};
+      const where: ProductWhereInput = {};
 
       if (filters) {
         if (filters.isActive !== undefined) where.isActive = filters.isActive;
@@ -331,7 +375,7 @@ export class ProductService {
         }
       }
 
-      const orderBy: any = {};
+      const orderBy: ProductOrderByInput = {};
       if (sort) {
         orderBy[sort.field] = sort.direction;
       } else {
@@ -453,13 +497,13 @@ export class ProductService {
       }
 
       // Handle JSON fields with proper type conversion
-      const prismaData: Prisma.ProductRelationshipCreateInput = {
-        sourceProductId: data.sourceProductId,
-        targetProductId: data.targetProductId,
+      const prismaData = {
+        sourceProduct: { connect: { id: data.sourceProductId } },
+        targetProduct: { connect: { id: data.targetProductId } },
         type: data.type,
         quantity: data.quantity,
-        condition: relationshipConditionToPrisma(data.condition),
-        createdBy,
+        condition: data.condition ? toPrismaJson(data.condition) : undefined,
+        creator: { connect: { id: createdBy } },
       };
 
       return await prisma.productRelationship.create({
@@ -467,12 +511,12 @@ export class ProductService {
       });
     } catch (error) {
       errorHandlingService.processError(error);
-      
+
       // If it's already a StandardError, just rethrow it
       if (error instanceof StandardError) {
         throw error;
       }
-      
+
       throw new StandardError({
         message: 'Failed to create product relationship',
         code: ErrorCodes.DATA.CREATE_FAILED,
@@ -494,7 +538,7 @@ export class ProductService {
     type?: RelationshipType
   ): Promise<ProductRelationship[]> {
     try {
-      const where: any = {
+      const where: ProductRelationshipWhereInput = {
         OR: [{ sourceProductId: productId }, { targetProductId: productId }],
       };
 
@@ -549,7 +593,11 @@ export class ProductService {
         throw new StandardError({
           message: 'Product not found',
           code: ErrorCodes.DATA.NOT_FOUND,
-          metadata: { component: 'ProductService', operation: 'toggleProductStatus', productId: id },
+          metadata: {
+            component: 'ProductService',
+            operation: 'toggleProductStatus',
+            productId: id,
+          },
         });
       }
 
@@ -584,7 +632,11 @@ export class ProductService {
           message: 'Product not found',
           code: ErrorCodes.DATA.NOT_FOUND,
           cause: error,
-          metadata: { component: 'ProductService', operation: 'updateProductVersion', productId: id },
+          metadata: {
+            component: 'ProductService',
+            operation: 'updateProductVersion',
+            productId: id,
+          },
         });
       }
       throw new StandardError({
@@ -645,7 +697,7 @@ export class ProductService {
         code: ErrorCodes.DATA.QUERY_FAILED,
         cause: error instanceof Error ? error : undefined,
         metadata: {
-          component: 'ProductService', 
+          component: 'ProductService',
           operation: 'searchProducts',
           query,
           limit,
@@ -691,7 +743,11 @@ export class ProductService {
         throw new StandardError({
           message: 'Product not found',
           code: ErrorCodes.DATA.NOT_FOUND,
-          metadata: { component: 'ProductService', operation: 'getProductAnalytics', productId: id },
+          metadata: {
+            component: 'ProductService',
+            operation: 'getProductAnalytics',
+            productId: id,
+          },
         });
       }
 
@@ -748,18 +804,18 @@ export class ProductService {
     mostUsedProducts: Array<{ id: string; name: string; usage: number }>;
   }> {
     try {
-      const where: any = {};
+      const where: ProductStatsWhereInput = {};
 
       if (filters) {
-        if (filters.isActive !== undefined) where.isActive = filters.isActive;
-        if (filters.category && filters.category.length > 0) {
-          where.category = { hasSome: filters.category };
-        }
         if (filters.dateFrom || filters.dateTo) {
           where.createdAt = {};
           if (filters.dateFrom) where.createdAt.gte = filters.dateFrom;
           if (filters.dateTo) where.createdAt.lte = filters.dateTo;
         }
+        if (filters.category && filters.category.length > 0) {
+          where.category = { hasSome: filters.category };
+        }
+        if (filters.isActive !== undefined) where.isActive = filters.isActive;
       }
 
       const [total, active, inactive, priceStats, categoryStats, usageStats] = await Promise.all([
@@ -828,8 +884,8 @@ export class ProductService {
         message: 'Failed to retrieve product statistics',
         code: ErrorCodes.DATA.QUERY_FAILED,
         cause: error instanceof Error ? error : undefined,
-        metadata: { 
-          component: 'ProductService', 
+        metadata: {
+          component: 'ProductService',
           operation: 'getProductStats',
           filters: JSON.stringify(filters),
         },

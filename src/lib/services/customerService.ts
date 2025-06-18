@@ -12,8 +12,8 @@ import {
   UpdateCustomerContactData,
   UpdateCustomerData,
 } from '../../types/entities/customer';
+import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
-import { StandardError, ErrorCodes, errorHandlingService } from '../errors';
 import { toPrismaJson } from '../utils/prismaUtils';
 
 // Helper function to check if error is a Prisma error
@@ -44,6 +44,36 @@ export interface CustomerWithProposals extends Customer {
   }>;
 }
 
+// Type-safe query builder interfaces for Customer
+interface CustomerWhereInput {
+  status?: { in: CustomerStatus[] };
+  tier?: { in: CustomerTier[] };
+  industry?: { in: string[] };
+  tags?: { hasSome: string[] };
+  revenue?: {
+    gte?: number;
+    lte?: number;
+  };
+  createdAt?: {
+    gte?: Date;
+    lte?: Date;
+  };
+  OR?: Array<{
+    name?: { contains: string; mode: Prisma.QueryMode };
+    email?: { contains: string; mode: Prisma.QueryMode };
+    industry?: { contains: string; mode: Prisma.QueryMode };
+  }>;
+}
+
+interface CustomerOrderByInput {
+  name?: Prisma.SortOrder;
+  createdAt?: Prisma.SortOrder;
+  revenue?: Prisma.SortOrder;
+  tier?: Prisma.SortOrder;
+  status?: Prisma.SortOrder;
+  lastContact?: Prisma.SortOrder;
+}
+
 export class CustomerService {
   // Customer CRUD operations
   async createCustomer(data: CreateCustomerData): Promise<Customer> {
@@ -67,7 +97,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error) && error.code === 'P2002') {
         throw new StandardError({
           message: 'A customer with this information already exists',
@@ -77,11 +107,11 @@ export class CustomerService {
             component: 'CustomerService',
             operation: 'createCustomer',
             customerName: data.name,
-            prismaCode: error.code
-          }
+            prismaCode: error.code,
+          },
         });
       }
-      
+
       throw new StandardError({
         message: 'Failed to create customer',
         code: ErrorCodes.DATA.CREATE_FAILED,
@@ -89,8 +119,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'createCustomer',
-          customerName: data.name
-        }
+          customerName: data.name,
+        },
       });
     }
   }
@@ -103,7 +133,7 @@ export class CustomerService {
         ...updateData,
         metadata: updateData.metadata ? toPrismaJson(updateData.metadata) : undefined,
       };
-      
+
       return await prisma.customer.update({
         where: { id },
         data: prismaData,
@@ -111,7 +141,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error) && error.code === 'P2025') {
         throw new StandardError({
           message: 'Customer not found',
@@ -121,11 +151,11 @@ export class CustomerService {
             component: 'CustomerService',
             operation: 'updateCustomer',
             customerId: data.id,
-            prismaCode: error.code
-          }
+            prismaCode: error.code,
+          },
         });
       }
-      
+
       throw new StandardError({
         message: 'Failed to update customer',
         code: ErrorCodes.DATA.UPDATE_FAILED,
@@ -133,8 +163,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'updateCustomer',
-          customerId: data.id
-        }
+          customerId: data.id,
+        },
       });
     }
   }
@@ -147,7 +177,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error) && error.code === 'P2025') {
         throw new StandardError({
           message: 'Customer not found',
@@ -157,11 +187,11 @@ export class CustomerService {
             component: 'CustomerService',
             operation: 'deleteCustomer',
             customerId: id,
-            prismaCode: error.code
-          }
+            prismaCode: error.code,
+          },
         });
       }
-      
+
       throw new StandardError({
         message: 'Failed to delete customer',
         code: ErrorCodes.DATA.DELETE_FAILED,
@@ -169,8 +199,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'deleteCustomer',
-          customerId: id
-        }
+          customerId: id,
+        },
       });
     }
   }
@@ -183,7 +213,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to retrieve customer',
         code: ErrorCodes.DATA.RETRIEVAL_FAILED,
@@ -191,8 +221,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'getCustomerById',
-          customerId: id
-        }
+          customerId: id,
+        },
       });
     }
   }
@@ -208,7 +238,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to retrieve customer with contacts',
         code: ErrorCodes.DATA.RETRIEVAL_FAILED,
@@ -216,8 +246,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'getCustomerWithContacts',
-          customerId: id
-        }
+          customerId: id,
+        },
       });
     }
   }
@@ -264,7 +294,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to retrieve customer with proposals',
         code: ErrorCodes.DATA.RETRIEVAL_FAILED,
@@ -272,8 +302,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'getCustomerWithProposals',
-          customerId: id
-        }
+          customerId: id,
+        },
       });
     }
   }
@@ -285,7 +315,7 @@ export class CustomerService {
     limit?: number
   ): Promise<{ customers: Customer[]; total: number; page: number; totalPages: number }> {
     try {
-      const where: any = {};
+      const where: CustomerWhereInput = {};
 
       if (filters) {
         if (filters.status) where.status = { in: filters.status };
@@ -313,7 +343,7 @@ export class CustomerService {
         }
       }
 
-      const orderBy: any = {};
+      const orderBy: CustomerOrderByInput = {};
       if (sort) {
         orderBy[sort.field] = sort.direction;
       } else {
@@ -343,7 +373,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to retrieve customers',
         code: ErrorCodes.DATA.RETRIEVAL_FAILED,
@@ -354,8 +384,8 @@ export class CustomerService {
           filters: JSON.stringify(filters),
           sort: JSON.stringify(sort),
           page,
-          limit
-        }
+          limit,
+        },
       });
     }
   }
@@ -388,7 +418,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error)) {
         if (error.code === 'P2002') {
           throw new StandardError({
@@ -400,8 +430,8 @@ export class CustomerService {
               operation: 'createCustomerContact',
               customerId,
               contactEmail: data.email,
-              prismaCode: error.code
-            }
+              prismaCode: error.code,
+            },
           });
         }
         if (error.code === 'P2003') {
@@ -413,12 +443,12 @@ export class CustomerService {
               component: 'CustomerService',
               operation: 'createCustomerContact',
               customerId,
-              prismaCode: error.code
-            }
+              prismaCode: error.code,
+            },
           });
         }
       }
-      
+
       throw new StandardError({
         message: 'Failed to create customer contact',
         code: ErrorCodes.DATA.CREATE_FAILED,
@@ -427,8 +457,8 @@ export class CustomerService {
           component: 'CustomerService',
           operation: 'createCustomerContact',
           customerId,
-          contactName: data.name
-        }
+          contactName: data.name,
+        },
       });
     }
   }
@@ -452,12 +482,9 @@ export class CustomerService {
         }
       }
 
-      // Handle JSON fields with proper type conversion
-      const prismaData = {
-        ...updateData,
-        metadata: updateData.metadata ? toPrismaJson(updateData.metadata) : undefined,
-      };
-      
+      // Remove metadata handling since it's not part of CustomerContact schema
+      const prismaData = updateData;
+
       return await prisma.customerContact.update({
         where: { id },
         data: prismaData,
@@ -465,7 +492,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error)) {
         if (error.code === 'P2025') {
           throw new StandardError({
@@ -476,8 +503,8 @@ export class CustomerService {
               component: 'CustomerService',
               operation: 'updateCustomerContact',
               contactId: data.id,
-              prismaCode: error.code
-            }
+              prismaCode: error.code,
+            },
           });
         } else if (error.code === 'P2002') {
           throw new StandardError({
@@ -489,12 +516,12 @@ export class CustomerService {
               operation: 'updateCustomerContact',
               contactId: data.id,
               contactEmail: data.email,
-              prismaCode: error.code
-            }
+              prismaCode: error.code,
+            },
           });
         }
       }
-      
+
       throw new StandardError({
         message: 'Failed to update customer contact',
         code: ErrorCodes.DATA.UPDATE_FAILED,
@@ -502,8 +529,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'updateCustomerContact',
-          contactId: id
-        }
+          contactId: data.id,
+        },
       });
     }
   }
@@ -516,7 +543,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error) && error.code === 'P2025') {
         throw new StandardError({
           message: 'Customer contact not found',
@@ -526,11 +553,11 @@ export class CustomerService {
             component: 'CustomerService',
             operation: 'deleteCustomerContact',
             contactId: id,
-            prismaCode: error.code
-          }
+            prismaCode: error.code,
+          },
         });
       }
-      
+
       throw new StandardError({
         message: 'Failed to delete customer contact',
         code: ErrorCodes.DATA.DELETE_FAILED,
@@ -538,8 +565,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'deleteCustomerContact',
-          contactId: id
-        }
+          contactId: id,
+        },
       });
     }
   }
@@ -559,7 +586,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to retrieve customer contacts',
         code: ErrorCodes.DATA.RETRIEVAL_FAILED,
@@ -567,8 +594,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'getCustomerContacts',
-          customerId
-        }
+          customerId,
+        },
       });
     }
   }
@@ -583,7 +610,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to update last contact',
         code: ErrorCodes.DATA.UPDATE_FAILED,
@@ -591,8 +618,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'updateLastContact',
-          customerId
-        }
+          customerId,
+        },
       });
     }
   }
@@ -606,7 +633,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to update risk score',
         code: ErrorCodes.DATA.UPDATE_FAILED,
@@ -615,8 +642,8 @@ export class CustomerService {
           component: 'CustomerService',
           operation: 'updateRiskScore',
           customerId,
-          riskScore
-        }
+          riskScore,
+        },
       });
     }
   }
@@ -630,7 +657,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to update lifetime value',
         code: ErrorCodes.DATA.UPDATE_FAILED,
@@ -639,8 +666,8 @@ export class CustomerService {
           component: 'CustomerService',
           operation: 'updateLifetimeValue',
           customerId,
-          ltv
-        }
+          ltv,
+        },
       });
     }
   }
@@ -654,7 +681,7 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       if (isPrismaError(error) && error.code === 'P2025') {
         throw new StandardError({
           message: 'Customer not found',
@@ -664,11 +691,11 @@ export class CustomerService {
             component: 'CustomerService',
             operation: 'updateSegmentation',
             customerId,
-            prismaCode: error.code
-          }
+            prismaCode: error.code,
+          },
         });
       }
-      
+
       throw new StandardError({
         message: 'Failed to update customer segmentation',
         code: ErrorCodes.DATA.UPDATE_FAILED,
@@ -676,8 +703,8 @@ export class CustomerService {
         metadata: {
           component: 'CustomerService',
           operation: 'updateSegmentation',
-          customerId
-        }
+          customerId,
+        },
       });
     }
   }
@@ -733,15 +760,15 @@ export class CustomerService {
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
-      
+
       throw new StandardError({
         message: 'Failed to retrieve customer statistics',
         code: ErrorCodes.DATA.RETRIEVAL_FAILED,
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'CustomerService',
-          operation: 'getCustomerStats'
-        }
+          operation: 'getCustomerStats',
+        },
       });
     }
   }

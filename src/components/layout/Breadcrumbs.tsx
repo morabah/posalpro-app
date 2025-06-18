@@ -60,6 +60,16 @@ export function Breadcrumbs({ items, className = '' }: BreadcrumbsProps) {
   const breadcrumbItems = useMemo(() => {
     if (items) return items;
 
+    if (!pathname) {
+      return [
+        {
+          label: 'Home',
+          href: '/dashboard',
+          icon: HomeIcon,
+        },
+      ];
+    }
+
     const segments = pathname.split('/').filter(Boolean);
     const breadcrumbs: BreadcrumbItem[] = [
       {

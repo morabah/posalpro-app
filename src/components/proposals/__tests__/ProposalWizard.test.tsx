@@ -10,13 +10,12 @@
  * @references PROPOSAL_CREATION_SCREEN.md, LESSONS_LEARNED.md
  */
 
-import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@/test/utils/test-utils';
-import { ProposalWizard } from '../ProposalWizard';
 import { ProposalEntity } from '@/lib/entities/proposal';
-import { ExpertiseArea, ProposalPriority } from '@/types/proposals';
+import { act, fireEvent, render, screen, waitFor } from '@/test/utils/test-utils';
 import { Priority } from '@/types/enums';
+import { ExpertiseArea, ProposalPriority } from '@/types/proposals';
 import * as router from 'next/navigation';
+import { ProposalWizard } from '../ProposalWizard';
 
 // Mock dependencies
 jest.mock('@/hooks/proposals/useProposalCreationAnalytics', () => ({
@@ -105,7 +104,7 @@ describe('ProposalWizard Component', () => {
         title: 'Test Proposal',
         description: 'This is a test proposal',
         estimatedValue: 50000,
-        dueDate: '2025-07-15T00:00:00.000Z',
+        dueDate: new Date('2025-07-15T00:00:00.000Z'),
         priority: ProposalPriority.HIGH,
       },
       client: {
@@ -168,7 +167,7 @@ describe('ProposalWizard Component', () => {
 
     // Mock valid step completion
     const nextButton = screen.getByText('Next Step');
-    
+
     // Navigate to step 2
     fireEvent.click(nextButton);
     await waitFor(() => {
@@ -238,8 +237,8 @@ describe('ProposalWizard Component', () => {
     }));
 
     render(
-      <ProposalWizard 
-        initialData={{ ...mockInitialData, currentStep: 6 }} 
+      <ProposalWizard
+        initialData={{ ...mockInitialData, currentStep: 6 }}
         onComplete={mockOnComplete}
       />
     );
@@ -265,11 +264,7 @@ describe('ProposalWizard Component', () => {
       new Error('API Error')
     );
 
-    render(
-      <ProposalWizard 
-        initialData={{ ...mockInitialData, currentStep: 6 }} 
-      />
-    );
+    render(<ProposalWizard initialData={{ ...mockInitialData, currentStep: 6 }} />);
 
     // Click create proposal button
     const createButton = screen.getByText('Create Proposal');
@@ -289,12 +284,8 @@ describe('ProposalWizard Component', () => {
 
     // Complete the wizard
     await act(async () => {
-      render(
-        <ProposalWizard 
-          initialData={{ ...mockInitialData, currentStep: 6 }} 
-        />
-      );
-      
+      render(<ProposalWizard initialData={{ ...mockInitialData, currentStep: 6 }} />);
+
       const createButton = screen.getByText('Create Proposal');
       fireEvent.click(createButton);
     });
@@ -302,7 +293,8 @@ describe('ProposalWizard Component', () => {
     // Verify analytics were tracked
     await waitFor(() => {
       const analyticsModule = require('@/hooks/proposals/useProposalCreationAnalytics');
-      const trackProposalCreation = analyticsModule.useProposalCreationAnalytics().trackProposalCreation;
+      const trackProposalCreation =
+        analyticsModule.useProposalCreationAnalytics().trackProposalCreation;
       expect(trackProposalCreation).toHaveBeenCalledWith(
         expect.objectContaining({
           proposalId: expect.any(String),

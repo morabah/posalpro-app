@@ -3,8 +3,6 @@
  * Based on Prisma models and DATA_MODEL.md specifications
  */
 
-import { Entity, EntityModel, EntityQueryOptions, createEntity } from '@/lib/entities/entity';
-
 // Product Enums (manually defined to match Prisma schema)
 export enum RelationshipType {
   REQUIRES = 'REQUIRES',
@@ -195,15 +193,18 @@ export interface ProductData {
   relatedProducts: ProductRelationship[];
 }
 
-export type ProductRelationship = {
-  id: string;
-  type: 'upsell' | 'cross-sell' | 'related' | 'bundle';
-  productId: string;
-};
+// ProductRelationship interface is defined above (line 35)
 
 export type ProductSortBy = 'name' | 'price' | 'category' | 'isActive' | 'createdAt';
 
-export interface ProductQuery extends EntityQueryOptions {
+// Base query options interface
+export interface BaseQueryOptions {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface ProductQuery extends BaseQueryOptions {
   sortBy?: ProductSortBy;
   category?: string;
   tags?: string[];
@@ -211,30 +212,22 @@ export interface ProductQuery extends EntityQueryOptions {
   isActive?: boolean;
 }
 
-const productModel: EntityModel<ProductData, ProductQuery> = {
-  name: 'Product',
-  schema: ProductSchema,
-  searchableFields: ['name', 'description', 'sku', 'tags'],
-  sortableFields: ['name', 'price', 'category', 'isActive', 'createdAt'],
-  async query(options: ProductQuery, apiClient): Promise<ProductData[]> {
-    const response = await apiClient.get('/products', { params: options });
-    return (response.data as { products: ProductData[] }).products;
-  },
-  async getById(id: string, apiClient): Promise<ProductData | null> {
-    const response = await apiClient.get(`/products/${id}`);
-    return response.data as ProductData;
-  },
-  async create(data: Omit<ProductData, 'id' | 'relatedProducts'>, apiClient): Promise<ProductData> {
-    const response = await apiClient.post('/products', data);
-    return response.data as ProductData;
-  },
-  async update(id: string, data: Partial<ProductData>, apiClient): Promise<ProductData> {
-    const response = await apiClient.put(`/products/${id}`, data);
-    return response.data as ProductData;
-  },
-  async delete(id: string, apiClient): Promise<void> {
-    await apiClient.delete(`/products/${id}`);
-  },
-};
+// API Client type
+export interface ApiClient {
+  get: (url: string, config?: any) => Promise<{ data: any }>;
+  post: (url: string, data?: any) => Promise<{ data: any }>;
+  put: (url: string, data?: any) => Promise<{ data: any }>;
+  delete: (url: string) => Promise<void>;
+}
 
-export const Product: Entity<ProductData, ProductQuery> = createEntity(productModel);
+// Product service interface
+export interface ProductService {
+  query(options: ProductQuery, apiClient: ApiClient): Promise<ProductData[]>;
+  getById(id: string, apiClient: ApiClient): Promise<ProductData | null>;
+  create(
+    data: Omit<ProductData, 'id' | 'relatedProducts'>,
+    apiClient: ApiClient
+  ): Promise<ProductData>;
+  update(id: string, data: Partial<ProductData>, apiClient: ApiClient): Promise<ProductData>;
+  delete(id: string, apiClient: ApiClient): Promise<void>;
+}

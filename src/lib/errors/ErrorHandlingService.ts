@@ -4,10 +4,16 @@
  */
 
 import { Prisma } from '@prisma/client';
-import { z } from 'zod';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { logError, logWarn } from '../logger';
-import { ErrorCategory, ErrorCode, ErrorCodes, errorCodeToHttpStatus, commonErrorsToErrorCodes } from './ErrorCodes';
+import {
+  commonErrorsToErrorCodes,
+  ErrorCategory,
+  ErrorCode,
+  ErrorCodes,
+  errorCodeToHttpStatus,
+} from './ErrorCodes';
 import { ErrorMetadata, StandardError } from './StandardError';
 
 export class ErrorHandlingService {
@@ -26,7 +32,7 @@ export class ErrorHandlingService {
    * Process any error and convert it to a StandardError
    */
   public processError(
-    error: unknown, 
+    error: unknown,
     defaultMessage = 'An unexpected error occurred',
     defaultCode: ErrorCode = ErrorCodes.SYSTEM.UNKNOWN,
     metadata?: ErrorMetadata
@@ -77,9 +83,11 @@ export class ErrorHandlingService {
     metadata?: ErrorMetadata
   ): StandardError {
     const prismaCode = error.code;
-    const errorCode = commonErrorsToErrorCodes.prismaErrors[prismaCode as keyof typeof commonErrorsToErrorCodes.prismaErrors] || 
-      ErrorCodes.DATA.DATABASE_ERROR;
-    
+    const errorCode =
+      commonErrorsToErrorCodes.prismaErrors[
+        prismaCode as keyof typeof commonErrorsToErrorCodes.prismaErrors
+      ] || ErrorCodes.DATA.DATABASE_ERROR;
+
     let message = defaultMessage;
     let additionalMetadata: Record<string, unknown> = {};
 
@@ -90,17 +98,17 @@ export class ErrorHandlingService {
         message = `Duplicate entry: ${target.join(', ')} already exists`;
         additionalMetadata = { fields: target };
         break;
-      
+
       case 'P2003': // Foreign key constraint failed
         const field = (error.meta?.field_name as string) || 'unknown field';
         message = `Referenced record does not exist for ${field}`;
         additionalMetadata = { field };
         break;
-      
+
       case 'P2025': // Record not found
         message = 'Record not found';
         break;
-      
+
       default:
         message = `Database error: ${error.message}`;
     }
@@ -157,13 +165,13 @@ export class ErrorHandlingService {
     metadata?: ErrorMetadata
   ): NextResponse {
     const standardError = this.processError(error, defaultMessage, defaultCode, metadata);
-    
+
     // Determine HTTP status code from error code
     const status = errorCodeToHttpStatus[standardError.code] || defaultStatus;
-    
+
     // Log the error
     this.logError(standardError);
-    
+
     // Return standardized response
     return NextResponse.json(
       {
@@ -209,16 +217,24 @@ export class ErrorHandlingService {
    */
   private getErrorCategory(code: ErrorCode): ErrorCategory {
     const prefix = code.split('_')[0];
-    
+
     switch (prefix) {
-      case 'SYS': return ErrorCategory.SYSTEM;
-      case 'AUTH': return ErrorCategory.AUTH;
-      case 'VAL': return ErrorCategory.VALIDATION;
-      case 'DATA': return ErrorCategory.DATA;
-      case 'API': return ErrorCategory.API;
-      case 'BUS': return ErrorCategory.BUSINESS;
-      case 'UI': return ErrorCategory.UI;
-      default: return ErrorCategory.SYSTEM;
+      case 'SYS':
+        return ErrorCategory.SYSTEM;
+      case 'AUTH':
+        return ErrorCategory.AUTH;
+      case 'VAL':
+        return ErrorCategory.VALIDATION;
+      case 'DATA':
+        return ErrorCategory.DATA;
+      case 'API':
+        return ErrorCategory.API;
+      case 'BUS':
+        return ErrorCategory.BUSINESS;
+      case 'UI':
+        return ErrorCategory.UI;
+      default:
+        return ErrorCategory.SYSTEM;
     }
   }
 
@@ -228,7 +244,7 @@ export class ErrorHandlingService {
   public isRetryableError(error: unknown): boolean {
     const standardError = this.processError(error);
     const category = this.getErrorCategory(standardError.code);
-    
+
     // Network, timeout, and some server errors are retryable
     if (category === ErrorCategory.API) {
       return [
@@ -237,23 +253,21 @@ export class ErrorHandlingService {
         ErrorCodes.API.SERVICE_UNAVAILABLE,
       ].includes(standardError.code as any);
     }
-    
+
     // Database connection and timeout errors are retryable
     if (category === ErrorCategory.DATA) {
-      return [
-        ErrorCodes.DATA.TIMEOUT,
-        ErrorCodes.DATA.QUERY_FAILED,
-      ].includes(standardError.code as any);
+      return [ErrorCodes.DATA.TIMEOUT, ErrorCodes.DATA.QUERY_FAILED].includes(
+        standardError.code as any
+      );
     }
-    
+
     // System timeouts are retryable
     if (category === ErrorCategory.SYSTEM) {
-      return [
-        ErrorCodes.SYSTEM.TIMEOUT,
-        ErrorCodes.SYSTEM.RESOURCE_EXHAUSTED,
-      ].includes(standardError.code as any);
+      return [ErrorCodes.SYSTEM.TIMEOUT, ErrorCodes.SYSTEM.RESOURCE_EXHAUSTED].includes(
+        standardError.code as any
+      );
     }
-    
+
     return false;
   }
 
@@ -262,15 +276,15 @@ export class ErrorHandlingService {
    */
   public getUserFriendlyMessage(error: unknown): string {
     const standardError = this.processError(error);
-    
+
     // Use user-friendly message if available
     if (standardError.metadata?.userFriendlyMessage) {
       return standardError.metadata.userFriendlyMessage as string;
     }
-    
+
     // Default messages based on error category
     const category = this.getErrorCategory(standardError.code);
-    
+
     switch (category) {
       case ErrorCategory.VALIDATION:
         return 'Please check your input and try again.';
@@ -329,5 +343,7 @@ export function getUserFriendlyMessage(error: unknown): string {
 }
 
 // Re-export types and constants
-export { ErrorCategory, ErrorCode, ErrorCodes, errorCodeToHttpStatus } from './ErrorCodes';
-export { StandardError, type ErrorMetadata } from './StandardError';
+export { ErrorCodes, errorCodeToHttpStatus } from './ErrorCodes';
+export type { ErrorCategory, ErrorCode } from './ErrorCodes';
+export { StandardError } from './StandardError';
+export type { ErrorMetadata } from './StandardError';

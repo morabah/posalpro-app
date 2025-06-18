@@ -145,6 +145,7 @@ export class ProductCompatibilityService {
         type: 'error',
         severity: 'critical',
         category: 'configuration',
+        field: 'products',
         message: 'Configuration must contain at least one product',
         affectedProducts: [],
         fixSuggestions: [],

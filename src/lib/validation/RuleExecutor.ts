@@ -4,6 +4,7 @@
  */
 
 import {
+  ActionResult,
   ActionTarget,
   ActionType,
   FixSuggestion,
@@ -41,20 +42,28 @@ export class RuleExecutor {
       if (!rule.enabled) {
         return {
           ruleId: rule.id,
+          isValid: true,
+          severity: rule.severity,
+          message: `Rule ${rule.name} is disabled`,
+          field: rule.field,
           status: 'skipped',
           issues: [],
           suggestions: [],
-          executionTime: 0,
+          executionTime: performance.now() - startTime,
           context,
         };
       }
 
       // Evaluate rule conditions
-      const conditionsPass = await this.checkConditions(rule.conditions, context);
+      const conditionsPass = await this.checkConditions(rule.conditions || [], context);
 
       if (!conditionsPass) {
         return {
           ruleId: rule.id,
+          isValid: true,
+          severity: rule.severity,
+          message: `Rule ${rule.name} conditions not met`,
+          field: rule.field,
           status: 'passed',
           issues: [],
           suggestions: [],
@@ -64,7 +73,7 @@ export class RuleExecutor {
       }
 
       // Execute rule actions
-      const actionResults = await this.executeActions(rule.actions, context);
+      const actionResults = await this.executeActions(rule.actions || [], context);
 
       // Convert action results to issues and suggestions
       const issues: ValidationIssue[] = [];
@@ -83,6 +92,7 @@ export class RuleExecutor {
               | 'dependency'
               | 'performance',
             message: actionResult.message,
+            field: rule.field,
             description: actionResult.data?.description,
             affectedProducts: this.extractAffectedProducts(context, actionResult),
             fixSuggestions: [],
@@ -109,6 +119,10 @@ export class RuleExecutor {
                 automated: actionResult.automated || false,
               },
             ],
+            issueId: `issue_${rule.id}_${Math.random().toString(36).substr(2, 9)}`,
+            suggestion: actionResult.message,
+            priority: this.determineImpact(rule.severity) as 'high' | 'medium' | 'low',
+            automated: actionResult.automated || false,
           });
         }
       });
@@ -129,6 +143,10 @@ export class RuleExecutor {
 
       return {
         ruleId: rule.id,
+        isValid: true,
+        severity: rule.severity,
+        message: `Rule ${rule.name} execution completed`,
+        field: rule.field,
         status,
         issues,
         suggestions,
@@ -143,6 +161,10 @@ export class RuleExecutor {
 
       return {
         ruleId: rule.id,
+        isValid: true,
+        severity: 'critical',
+        message: `Rule execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        field: rule.field,
         status: 'error',
         issues: [
           {
@@ -151,6 +173,7 @@ export class RuleExecutor {
             severity: 'critical',
             category: 'configuration',
             message: `Rule execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            field: rule.field,
             affectedProducts: context.products.map(p => p.id),
             fixSuggestions: [],
             ruleId: rule.id,
@@ -180,7 +203,9 @@ export class RuleExecutor {
       });
 
       // Sort rules by execution order
-      const sortedRules = [...rules].sort((a, b) => a.executionOrder - b.executionOrder);
+      const sortedRules = [...rules].sort(
+        (a, b) => (a.executionOrder || 0) - (b.executionOrder || 0)
+      );
 
       const results: RuleResult[] = [];
 
@@ -204,8 +229,8 @@ export class RuleExecutor {
       console.log('Ruleset execution completed', {
         ruleCount: rules.length,
         resultsCount: results.length,
-        totalIssues: results.reduce((sum, r) => sum + r.issues.length, 0),
-        totalSuggestions: results.reduce((sum, r) => sum + r.suggestions.length, 0),
+        totalIssues: results.reduce((sum, r) => sum + (r.issues?.length || 0), 0),
+        totalSuggestions: results.reduce((sum, r) => sum + (r.suggestions?.length || 0), 0),
         executionTime,
       });
 
@@ -256,7 +281,7 @@ export class RuleExecutor {
     actions: RuleAction[],
     context: ValidationContext
   ): Promise<Array<ActionResult>> {
-    const results: Array<{ type: string; message: string; data?: any; automated?: boolean }> = [];
+    const results: Array<ActionResult> = [];
 
     try {
       for (const action of actions) {
@@ -318,9 +343,9 @@ export class RuleExecutor {
   private async executeAction(
     action: RuleAction,
     context: ValidationContext
-  ): Promise<{ type: string; message: string; data?: any; automated?: boolean }> {
+  ): Promise<ActionResult> {
     return {
-      type: action.type,
+      type: action.type as 'error' | 'warning' | 'fix' | 'suggest' | 'block',
       message: action.message,
       data: action.data,
       automated: action.automated,

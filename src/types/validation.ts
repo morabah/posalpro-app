@@ -47,6 +47,23 @@ export interface ValidationIssue {
   category: ValidationCategory;
   affectedProducts: string[];
   fixSuggestions?: FixSuggestion[];
+  ruleId?: string;
+  context?: {
+    proposalId?: string;
+    productId?: string;
+    userId?: string;
+    timestamp?: Date;
+    proposalOwner?: string;
+    proposalValue?: number;
+    customer?: string;
+    affectedProducts?: string[];
+  };
+  // Additional properties expected by ValidationIssueList component
+  proposalId?: string;
+  ruleName?: string;
+  description?: string;
+  detectedAt?: Date | string;
+  status?: 'open' | 'in_progress' | 'resolved' | 'deferred' | 'suppressed';
 }
 
 // Fix suggestion interface
@@ -71,7 +88,13 @@ export interface FixSuggestion {
 
 // Action result types
 export type ActionType = 'replace' | 'configure' | 'add' | 'remove' | 'update';
-export type ActionTarget = 'product' | 'configuration' | 'relationship' | 'license' | 'custom';
+export type ActionTarget =
+  | 'product'
+  | 'configuration'
+  | 'relationship'
+  | 'license'
+  | 'custom'
+  | string;
 export type SuggestionType = 'automatic' | 'manual' | 'configuration' | 'replacement';
 export type SuggestionImpact = 'low' | 'medium' | 'high';
 
@@ -107,6 +130,13 @@ export interface ValidationRule {
   field: string;
   errorMessage: string;
   condition: string;
+  conditions?: RuleCondition[];
+  actions?: RuleAction[];
+  enabled?: boolean;
+  executionOrder?: number;
+  userStoryMappings?: string[];
+  version?: string;
+  lastModified?: Date;
   metadata?: Record<string, any>;
 }
 
@@ -231,6 +261,11 @@ export interface RuleResult {
   severity: ValidationSeverity;
   message: string;
   field: string;
+  status?: 'passed' | 'failed' | 'skipped' | 'error';
+  issues?: ValidationIssue[];
+  suggestions?: FixSuggestion[];
+  executionTime?: number;
+  context?: ValidationContext;
 }
 
 // Validation workflow result
@@ -385,8 +420,24 @@ export const isRuleAction = (obj: unknown): obj is RuleAction => {
   );
 };
 
-export type ValidationSeverity = 'error' | 'warning' | 'info';
-export type ValidationCategory = 'configuration' | 'compatibility' | 'licensing' | 'pricing';
+export type ValidationSeverity =
+  | 'critical'
+  | 'high'
+  | 'medium'
+  | 'low'
+  | 'error'
+  | 'warning'
+  | 'info';
+export type ValidationCategory =
+  | 'configuration'
+  | 'compatibility'
+  | 'licensing'
+  | 'pricing'
+  | 'license'
+  | 'dependency'
+  | 'performance'
+  | 'error'
+  | 'warning';
 export type ValidationPriority = 'high' | 'medium' | 'low';
 
 export interface CompatibilityResult {

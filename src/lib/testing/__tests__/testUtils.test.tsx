@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, it } from '@jest/globals';
+import '@testing-library/jest-dom';
 import { DatabaseTestUtils, mockSession, renderWithProviders } from '../testUtils';
 
 // Simple test component
@@ -13,7 +14,8 @@ const TestComponent = () => {
 describe('Testing Utilities', () => {
   it('renderWithProviders works correctly', () => {
     const { getByTestId } = renderWithProviders(<TestComponent />);
-    expect(getByTestId('test-component')).toBeInTheDocument();
+    expect(getByTestId('test-component')).toBeTruthy();
+    expect(getByTestId('test-component').textContent).toBe('Hello Test');
   });
 
   it('mockSession has correct structure', () => {

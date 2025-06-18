@@ -101,7 +101,7 @@ const useComponentAnalytics = (
 - **Quality Tools**: TypeScript, ESLint, Prettier
 - **Testing**: Vitest, React Testing Library, Playwright
 - **Analytics**: Custom instrumentation for hypothesis validation
-- **Build & Deploy**: Vercel or self-hosted infrastructure
+- **Build & Deploy**: Netlify (primary) with complete deployment guide
 - **CI/CD**: GitHub Actions or equivalent pipeline
 
 ### Quality Gates

@@ -78,7 +78,7 @@ describe('Production Readiness Validation Tests', () => {
     });
 
     // Setup global mock analytics for production monitoring
-    global.mockTrackAnalytics = mockTrackAnalytics;
+    (global as any).mockTrackAnalytics = mockTrackAnalytics;
     jest.clearAllMocks();
 
     // Start production monitoring

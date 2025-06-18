@@ -303,7 +303,7 @@ describe('LoginForm Integration Tests', () => {
         await user.type(screen.getByTestId('email-input'), xssAttempt);
 
         // Verify input is treated as text, not executed
-        const emailInput = screen.getByTestId('email-input');
+        const emailInput = screen.getByTestId('email-input') as HTMLInputElement;
         expect(emailInput.value).toBe(xssAttempt);
 
         // Verify no script execution

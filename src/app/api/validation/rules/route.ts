@@ -15,6 +15,9 @@ const sampleRules: ValidationRule[] = [
     description: 'Ensures product quantities are positive and within limits',
     category: 'configuration',
     severity: 'critical',
+    field: 'quantity',
+    errorMessage: 'Product quantity must be greater than 0',
+    condition: 'quantity > 0',
     conditions: [
       {
         id: 'cond_quantity_positive',
@@ -45,6 +48,9 @@ const sampleRules: ValidationRule[] = [
     description: 'Detects duplicate products in configuration',
     category: 'configuration',
     severity: 'medium',
+    field: 'products',
+    errorMessage: 'Duplicate products detected in configuration',
+    condition: 'products.length === unique(products).length',
     conditions: [
       {
         id: 'cond_duplicate_check',
@@ -81,6 +87,9 @@ const sampleRules: ValidationRule[] = [
     description: 'Validates that required licenses are configured',
     category: 'license',
     severity: 'high',
+    field: 'settings.requiresLicense',
+    errorMessage: 'Product requires license configuration',
+    condition: 'settings.requiresLicense === true',
     conditions: [
       {
         id: 'cond_license_required',
@@ -224,7 +233,17 @@ export async function GET(request: NextRequest) {
 const createRuleSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
-  category: z.string(),
+  category: z.enum([
+    'configuration',
+    'compatibility',
+    'licensing',
+    'pricing',
+    'license',
+    'dependency',
+    'performance',
+    'error',
+    'warning',
+  ]),
   severity: z.enum(['critical', 'high', 'medium', 'low']),
   conditions: z.array(
     z.object({
@@ -258,6 +277,12 @@ export async function POST(request: NextRequest) {
     // Create new rule
     const newRule: ValidationRule = {
       id: `rule_${validatedData.name.toLowerCase().replace(/\s/g, '_')}_${Date.now()}`,
+      field: validatedData.conditions.length > 0 ? validatedData.conditions[0].field : 'general',
+      errorMessage:
+        validatedData.actions.find(a => a.type === 'error')?.message || 'Validation failed',
+      condition: validatedData.conditions
+        .map(c => `${c.field} ${c.operator} ${c.value}`)
+        .join(' AND '),
       version: '1.0',
       lastModified: new Date(),
       ...validatedData,

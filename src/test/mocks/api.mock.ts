@@ -202,3 +202,28 @@ export const mockApiResponses = {
     },
   },
 };
+
+// Setup API mocks for testing
+export const setupApiMocks = () => {
+  // This function can be used to configure MSW handlers for tests
+  // Return the default mock handlers
+  return [
+    // Auth endpoints
+    createAuthHandler('/api/auth/login', mockApiResponses.auth.login),
+    createGetHandler('/api/auth/logout', mockApiResponses.auth.logout),
+
+    // Proposal endpoints
+    createPostHandler('/api/proposals', mockApiResponses.proposals.create),
+    createGetHandler('/api/proposals', mockApiResponses.proposals.list),
+
+    // Default handlers for any other endpoints
+    rest.get('*', (req, res, ctx) => {
+      console.warn(`Unhandled GET request to ${req.url}`);
+      return res(ctx.status(404), ctx.json({ message: 'Not found' }));
+    }),
+    rest.post('*', (req, res, ctx) => {
+      console.warn(`Unhandled POST request to ${req.url}`);
+      return res(ctx.status(404), ctx.json({ message: 'Not found' }));
+    }),
+  ];
+};

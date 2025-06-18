@@ -4,6 +4,9 @@
  */
 
 class LoggingWorkflowTest {
+  public testId: string;
+  public startTime: Date;
+
   constructor() {
     this.testId = `test-${Date.now()}`;
     this.startTime = new Date();
@@ -23,7 +26,7 @@ class LoggingWorkflowTest {
     return true;
   }
 
-  logTestEvent(event) {
+  logTestEvent(event: Record<string, any>) {
     console.log('📊 Analytics Event:', {
       testId: this.testId,
       duration: Date.now() - this.startTime.getTime(),
@@ -62,5 +65,5 @@ class LoggingWorkflowTest {
 }
 
 // Run the test
-const test = new LoggingWorkflowTest();
-test.runWorkflowTest();
+const loggingTest = new LoggingWorkflowTest();
+loggingTest.runWorkflowTest();

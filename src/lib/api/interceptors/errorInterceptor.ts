@@ -3,7 +3,8 @@
  * Handles global error processing and categorization
  */
 
-import { ApiRequest, ApiResponse } from './authInterceptor';
+import type { ApiResponse } from '../client';
+import { ApiRequest } from './authInterceptor';
 
 // Extend Window interface for gtag
 declare global {
@@ -152,8 +153,8 @@ class ErrorInterceptor {
 
     if ('status' in error) {
       // API Response error
-      status = error.status || 0;
-      responseData = error.data;
+      status = typeof error.status === 'number' ? error.status : 0;
+      responseData = 'data' in error ? error.data : null;
       originalMessage =
         responseData?.message || responseData?.error || `HTTP ${status}` || 'Unknown API error';
     } else {
@@ -336,13 +337,15 @@ class ErrorInterceptor {
     response: Response,
     data: any,
     options: ErrorHandlerOptions = {}
-  ): Promise<ApiResponse> {
+  ): Promise<ApiResponse<any>> {
     if (!response.ok) {
       const error = this.processError(
         {
           status: response.status,
           data: data,
-        } as ApiResponse,
+          success: false,
+          message: `HTTP ${response.status}`,
+        } as ApiResponse<any>,
         {
           url: response.url,
           method: response.type as string,

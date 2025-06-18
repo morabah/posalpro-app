@@ -545,7 +545,7 @@ export class ProposalEntity {
   }
 
   /**
-   * Clear proposal cache
+   * Clear cache for a specific proposal or all proposals
    */
   clearCache(id?: string): void {
     if (id) {
@@ -557,7 +557,46 @@ export class ProposalEntity {
     }
   }
 
-  // Private cache methods
+  /**
+   * Save proposal as draft
+   */
+  async saveDraft(proposalData: CreateProposalData): Promise<ApiResponse<ProposalData>> {
+    try {
+      console.log('[ProposalEntity] Saving proposal as draft');
+
+      // Use the create method but mark as draft status
+      const draftData = {
+        ...proposalData,
+        status: 'draft' as ProposalStatus,
+      };
+
+      const response = await this.create(draftData);
+
+      if (response.success) {
+        console.log('[ProposalEntity] Draft saved successfully');
+        trackAuthEvent('proposal_draft_saved', {
+          proposalId: response.data?.id,
+          title: proposalData.metadata.title,
+        });
+      }
+
+      return response;
+    } catch (error) {
+      console.error('[ProposalEntity] Failed to save draft:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get proposal by ID (alias for findById for compatibility)
+   */
+  async getById(id: string): Promise<ApiResponse<ProposalData | null>> {
+    return this.findById(id);
+  }
+
+  /**
+   * Get proposal from cache
+   */
   private getFromCache(id: string): ProposalData | null {
     const expiry = this.cacheExpiry.get(id);
     if (expiry && Date.now() > expiry) {

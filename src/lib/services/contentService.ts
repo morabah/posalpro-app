@@ -5,9 +5,9 @@
  * Implements robust error handling with StandardError and ErrorCodes
  */
 
-import { AccessType, Content, ContentAccessLog, ContentType, Prisma } from '@prisma/client';
-import { prisma } from '../prisma';
+import { AccessType, Content, ContentAccessLog, ContentType } from '@prisma/client';
 import { ErrorCodes, StandardError, errorHandlingService } from '../errors';
+import { prisma } from '../prisma';
 import { isPrismaError } from '../utils/errorUtils';
 
 // Enhanced interfaces for semantic search and AI integration
@@ -149,7 +149,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'createContent',
-          contentType: data.type
+          contentType: data.type,
         },
       });
     }
@@ -193,7 +193,7 @@ export class ContentService {
           metadata: {
             component: 'ContentService',
             operation: 'updateContent',
-            contentId: data.id
+            contentId: data.id,
           },
         });
       }
@@ -204,7 +204,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'updateContent',
-          contentId: data.id
+          contentId: data.id,
         },
       });
     }
@@ -225,7 +225,7 @@ export class ContentService {
           metadata: {
             component: 'ContentService',
             operation: 'deleteContent',
-            contentId: id
+            contentId: id,
           },
         });
       }
@@ -236,7 +236,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'deleteContent',
-          contentId: id
+          contentId: id,
         },
       });
     }
@@ -256,7 +256,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'getContentById',
-          contentId: id
+          contentId: id,
         },
       });
     }
@@ -285,7 +285,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'getContentWithCreator',
-          contentId: id
+          contentId: id,
         },
       });
     }
@@ -373,8 +373,10 @@ export class ContentService {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ContentService',
-          operation: 'getContentById',
-          contentId: id
+          operation: 'getContent',
+          filters: filters,
+          page: page,
+          limit: limit,
         },
       });
     }
@@ -406,7 +408,7 @@ export class ContentService {
           component: 'ContentService',
           operation: 'logContentAccess',
           contentId: contentId,
-          userId: userId
+          userId: userId,
         },
       });
     }
@@ -437,7 +439,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'getContentAccessLogs',
-          contentId: contentId
+          contentId: contentId,
         },
       });
     }
@@ -481,7 +483,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'searchContent',
-          query: query
+          query: query,
         },
       });
     }
@@ -514,7 +516,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'getContentByCategory',
-          category: category
+          category: category,
         },
       });
     }
@@ -534,7 +536,7 @@ export class ContentService {
           metadata: {
             component: 'ContentService',
             operation: 'toggleContentStatus',
-            contentId: id
+            contentId: id,
           },
         });
       }
@@ -552,7 +554,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'toggleContentStatus',
-          contentId: id
+          contentId: id,
         },
       });
     }
@@ -574,7 +576,7 @@ export class ContentService {
           metadata: {
             component: 'ContentService',
             operation: 'updateContentQuality',
-            contentId: id
+            contentId: id,
           },
         });
       }
@@ -585,7 +587,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'updateContentQuality',
-          contentId: id
+          contentId: id,
         },
       });
     }
@@ -607,7 +609,7 @@ export class ContentService {
           metadata: {
             component: 'ContentService',
             operation: 'updateContentUsage',
-            contentId: id
+            contentId: id,
           },
         });
       }
@@ -618,7 +620,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'updateContentUsage',
-          contentId: id
+          contentId: id,
         },
       });
     }
@@ -658,7 +660,7 @@ export class ContentService {
           metadata: {
             component: 'ContentService',
             operation: 'toggleContentStatus',
-            contentId: id
+            contentId: id,
           },
         });
       }
@@ -698,7 +700,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'getContentAnalytics',
-          contentId: id
+          contentId: id,
         },
       });
     }
@@ -823,7 +825,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'getContentStatistics',
-          filters: JSON.stringify(filters)
+          filters: JSON.stringify(filters),
         },
       });
     }
@@ -942,7 +944,7 @@ export class ContentService {
           component: 'ContentService',
           operation: 'semanticSearch',
           query: request.query,
-          userId: request.userId
+          userId: request.userId,
         },
       });
     }
@@ -983,7 +985,7 @@ export class ContentService {
           component: 'ContentService',
           operation: 'getAICategories',
           content: content,
-          existingCategories: existingCategories
+          existingCategories: existingCategories,
         },
       });
     }
@@ -1039,7 +1041,7 @@ export class ContentService {
         metadata: {
           component: 'ContentService',
           operation: 'calculateContentQualityScore',
-          contentId: contentId
+          contentId: contentId,
         },
       });
     }

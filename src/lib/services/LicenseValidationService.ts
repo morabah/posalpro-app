@@ -39,6 +39,7 @@ export class LicenseValidationService {
             type: 'error',
             severity: 'high',
             category: 'license',
+            field: 'licenseKey',
             message: `Product ${product.productId} requires a license but none is configured`,
             affectedProducts: [product.productId],
             fixSuggestions: [
@@ -59,6 +60,10 @@ export class LicenseValidationService {
                     automated: false,
                   },
                 ],
+                issueId: `license_issue_${Math.random().toString(36).substr(2, 9)}`,
+                suggestion: 'Configure license key for this product',
+                priority: 'high',
+                automated: false,
               },
             ],
           });
@@ -80,6 +85,10 @@ export class LicenseValidationService {
                 automated: false,
               },
             ],
+            issueId: `license_issue_${Math.random().toString(36).substr(2, 9)}`,
+            suggestion: `Configure license for ${product.productId}`,
+            priority: 'high',
+            automated: false,
           });
         }
       });
@@ -111,6 +120,7 @@ export class LicenseValidationService {
             type: 'error',
             severity: 'critical',
             category: 'license',
+            field: 'configuration',
             message: `License validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
             affectedProducts: config.products.map(p => p.productId),
             fixSuggestions: [],

@@ -5,12 +5,17 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
+import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
-import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 const prisma = new PrismaClient();
 
@@ -66,8 +71,8 @@ export async function GET(request: NextRequest) {
           code: ErrorCodes.AUTH.UNAUTHORIZED,
           metadata: {
             component: 'ProductsRoute',
-            operation: 'getProducts'
-          }
+            operation: 'getProducts',
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -219,7 +224,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
         new StandardError({
@@ -229,8 +234,8 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'ProductsRoute',
             operation: 'getProducts',
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
@@ -238,24 +243,29 @@ export async function GET(request: NextRequest) {
         { userFriendlyMessage: 'Please check your search parameters and try again.' }
       );
     }
-    
+
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.NOT_FOUND;
       return createApiErrorResponse(
         new StandardError({
-          message: `Database error when fetching products: ${getPrismaErrorMessage(error)}`,
+          message: `Database error when fetching products: ${getPrismaErrorMessage(error.code)}`,
           code: errorCode,
           cause: error,
           metadata: {
             component: 'ProductsRoute',
             operation: 'getProducts',
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
         500,
-        { userFriendlyMessage: 'An error occurred while retrieving products. Please try again later.' }
+        {
+          userFriendlyMessage:
+            'An error occurred while retrieving products. Please try again later.',
+        }
       );
     }
 
@@ -266,13 +276,16 @@ export async function GET(request: NextRequest) {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ProductsRoute',
-          operation: 'getProducts'
-        }
+          operation: 'getProducts',
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      { userFriendlyMessage: 'An unexpected error occurred while retrieving products. Please try again later.' }
+      {
+        userFriendlyMessage:
+          'An unexpected error occurred while retrieving products. Please try again later.',
+      }
     );
   }
 }
@@ -291,8 +304,8 @@ export async function POST(request: NextRequest) {
           code: ErrorCodes.AUTH.UNAUTHORIZED,
           metadata: {
             component: 'ProductsRoute',
-            operation: 'getProducts'
-          }
+            operation: 'getProducts',
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -319,8 +332,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'ProductsRoute',
             operation: 'createProduct',
-            sku: validatedData.sku
-          }
+            sku: validatedData.sku,
+          },
         }),
         'Duplicate product',
         ErrorCodes.VALIDATION.DUPLICATE_ENTITY,
@@ -373,7 +386,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
         new StandardError({
@@ -383,43 +396,48 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'ProductsRoute',
             operation: 'createProduct',
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        { 
+        {
           userFriendlyMessage: 'Please check your product data and try again',
-          details: error.errors
+          details: error.errors,
         }
       );
     }
-    
+
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.NOT_FOUND;
       return createApiErrorResponse(
         new StandardError({
-          message: `Database error when creating product: ${getPrismaErrorMessage(error)}`,
+          message: `Database error when creating product: ${getPrismaErrorMessage(error.code)}`,
           code: errorCode,
           cause: error,
           metadata: {
             component: 'ProductsRoute',
             operation: 'createProduct',
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
         500,
-        { userFriendlyMessage: 'An error occurred while creating the product. Please try again later.' }
+        {
+          userFriendlyMessage:
+            'An error occurred while creating the product. Please try again later.',
+        }
       );
     }
-    
+
     if (error instanceof StandardError) {
       return createApiErrorResponse(error);
     }
-    
+
     return createApiErrorResponse(
       new StandardError({
         message: 'Failed to create product',
@@ -427,13 +445,16 @@ export async function POST(request: NextRequest) {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ProductsRoute',
-          operation: 'createProduct'
-        }
+          operation: 'createProduct',
+        },
       }),
       'Internal error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      { userFriendlyMessage: 'An unexpected error occurred while creating the product. Please try again later.' }
+      {
+        userFriendlyMessage:
+          'An unexpected error occurred while creating the product. Please try again later.',
+      }
     );
   }
 }

@@ -76,7 +76,7 @@ const getSeverityConfig = (severity: string) => {
 interface IssueFilters {
   search: string;
   severity: string[];
-  status: Array<'open' | 'in_progress' | 'resolved' | 'deferred'>;
+  status: Array<'open' | 'in_progress' | 'resolved' | 'deferred' | 'suppressed'>;
   category: string[];
   proposalId: string;
 }
@@ -93,20 +93,27 @@ interface ValidationIssueListProps {
 
 const filterOptions = {
   severities: ['critical', 'high', 'medium', 'low'] as const,
-  statuses: ['open', 'in_progress', 'resolved', 'deferred'] as const,
+  statuses: ['open', 'in_progress', 'resolved', 'deferred', 'suppressed'] as const,
   categories: ['technical', 'compliance', 'security', 'business'] as const,
 };
 
 type IssueStatus = (typeof filterOptions.statuses)[number];
 
-const getStatusConfig = (status: IssueStatus) => {
+const getStatusConfig = (status: IssueStatus | undefined) => {
   const configs = {
     open: { text: 'Open', badge: 'bg-red-100 text-red-800' },
     in_progress: { text: 'In Progress', badge: 'bg-yellow-100 text-yellow-800' },
     resolved: { text: 'Resolved', badge: 'bg-green-100 text-green-800' },
     deferred: { text: 'Deferred', badge: 'bg-gray-100 text-gray-800' },
+    suppressed: { text: 'Suppressed', badge: 'bg-purple-100 text-purple-800' },
   } as const;
-  return configs[status];
+
+  // Default for undefined status
+  if (!status) {
+    return { text: 'Unknown', badge: 'bg-gray-100 text-gray-800' };
+  }
+
+  return configs[status] || { text: 'Unknown', badge: 'bg-gray-100 text-gray-800' };
 };
 
 export function ValidationIssueList({
@@ -260,9 +267,20 @@ export function ValidationIssueList({
   // Get unique values for filter options
   const getFilterOptions = useCallback(() => {
     const severities = [...new Set(issues.map(issue => issue.severity))];
-    const statuses = [...new Set(issues.map(issue => issue.status).filter(Boolean))]; // Filter out undefined
+    const statuses = [
+      ...new Set(
+        issues
+          .map(issue => issue.status)
+          .filter(
+            (status): status is 'open' | 'in_progress' | 'resolved' | 'deferred' | 'suppressed' =>
+              Boolean(status)
+          )
+      ),
+    ];
     const categories = [...new Set(issues.map(issue => issue.category))];
-    const proposals = [...new Set(issues.map(issue => issue.proposalId).filter(Boolean))]; // Filter out undefined
+    const proposals = [
+      ...new Set(issues.map(issue => issue.proposalId).filter((id): id is string => Boolean(id))),
+    ];
 
     return { severities, statuses, categories, proposals };
   }, [issues]);
@@ -430,16 +448,19 @@ export function ValidationIssueList({
             </p>
           </Card>
         ) : (
-          filteredAndSortedIssues.map(issue => {
+          filteredAndSortedIssues.map((issue, index) => {
+            // Generate a stable ID for issues without one
+            const issueId = issue.id || `issue-${index}-${issue.message.slice(0, 10)}`;
+
             const severityConfig = getSeverityConfig(issue.severity);
             const statusConfig = getStatusConfig(issue.status);
-            const isExpanded = expandedIssues.has(issue.id);
-            const isSelected = selectedIssues.has(issue.id);
+            const isExpanded = expandedIssues.has(issueId);
+            const isSelected = selectedIssues.has(issueId);
             const SeverityIcon = severityConfig.icon;
 
             return (
               <Card
-                key={issue.id}
+                key={issueId}
                 className={`p-4 border-l-4 ${severityConfig.border} ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
               >
                 <div className="flex items-start justify-between">
@@ -448,7 +469,7 @@ export function ValidationIssueList({
                     {showBatchActions && (
                       <Checkbox
                         checked={isSelected}
-                        onChange={() => toggleIssueSelection(issue.id)}
+                        onChange={() => toggleIssueSelection(issueId)}
                         className="mt-1"
                       />
                     )}
@@ -550,7 +571,7 @@ export function ValidationIssueList({
                                       <Button
                                         size="sm"
                                         variant={fix.automatable ? 'primary' : 'outline'}
-                                        onClick={() => handleFixApplication(issue.id, fix.id)}
+                                        onClick={() => handleFixApplication(issueId, fix.id)}
                                         className="ml-4"
                                       >
                                         {fix.automatable ? 'Apply Fix' : 'Manual Fix'}
@@ -568,11 +589,7 @@ export function ValidationIssueList({
 
                   {/* Actions */}
                   <div className="flex items-center space-x-2 ml-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleIssueExpansion(issue.id)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => toggleIssueExpansion(issueId)}>
                       {isExpanded ? (
                         <ChevronDownIcon className="h-4 w-4" />
                       ) : (

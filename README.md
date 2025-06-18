@@ -171,16 +171,65 @@ NEXT_PUBLIC_ANALYTICS_ID=your-analytics-id
 
 ## 🚀 Deployment
 
-### Platform Deployment
+### Netlify Deployment (Primary)
 
-This application will be deployed using the platform's golden path templates:
+**Current Deployment**: https://posalpro-mvp2.windsurf.build
 
-- Automated CI/CD pipeline
-- Infrastructure as Code
-- Monitoring and observability
-- Cost optimization
+**CRITICAL CONFIGURATION REQUIREMENTS:**
 
-### Manual Deployment
+#### 1. netlify.toml (Essential)
+
+```toml
+[build]
+  command = "npx prisma migrate deploy && npx prisma generate && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20.15.1"
+  NEXT_USE_NETLIFY_EDGE = "true"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Essential catch-all for Next.js App Router - MUST be last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+```
+
+#### 2. next.config.js (Critical Settings)
+
+```javascript
+const nextConfig = {
+  // CRITICAL: Never use 'standalone' output with Netlify
+  // output: 'standalone', // Disabled for Netlify compatibility
+  trailingSlash: false,
+  // ... other config
+};
+```
+
+#### 3. Pre-Deployment Checklist
+
+- ✅ Catch-all redirect is LAST rule in netlify.toml
+- ✅ `output: 'standalone'` is disabled/commented out
+- ✅ All NextAuth referenced pages exist (`/auth/error`, `/contact`)
+- ✅ API endpoints tested locally and return JSON
+
+#### 4. Deployment Validation
+
+```bash
+# After deployment, verify API endpoints return JSON
+curl -H "Accept: application/json" https://posalpro-mvp2.windsurf.build/api/auth/session
+curl -H "Accept: application/json" https://posalpro-mvp2.windsurf.build/api/health
+```
+
+**CRITICAL FAILURES TO AVOID:**
+
+- ❌ Using `output: 'standalone'` (breaks Netlify serverless functions)
+- ❌ Missing catch-all redirect (breaks App Router client-side navigation)
+- ❌ Missing NextAuth error pages (causes authentication failures)
+
+### Alternative Deployment Options
 
 ```bash
 # Build application

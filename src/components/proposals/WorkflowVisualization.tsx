@@ -548,9 +548,9 @@ export function WorkflowVisualization({
                         <span>Bottleneck Risk</span>
                         <Badge
                           variant={
-                            stage.status === 'completed'
+                            stage.status === 'Approved'
                               ? 'success'
-                              : stage.status === 'failed'
+                              : stage.status === 'Rejected'
                                 ? 'destructive'
                                 : 'warning'
                           }

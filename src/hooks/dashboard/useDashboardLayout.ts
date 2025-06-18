@@ -192,9 +192,10 @@ export function useDashboardLayout(
   const [containerWidth, setContainerWidth] = useState(1200);
 
   // Analytics integration
-  const { trackEvent, trackRoleBasedUsage } = useDashboardAnalytics(
-    options.userId,
-    options.userRole
+  const { trackEvent, trackInteraction } = useDashboardAnalytics(
+    options.userId || 'unknown',
+    options.userRole || 'unknown',
+    `layout-${Date.now()}`
   );
 
   // Refs for auto-save and performance
@@ -293,7 +294,7 @@ export function useDashboardLayout(
       }));
 
       // Track layout customization
-      trackRoleBasedUsage('layout', 'customize', true);
+      trackInteraction('layout', 'customize', { success: true });
 
       // Trigger auto-save
       if (options.autoSave && options.autoSaveDelay) {
@@ -308,7 +309,7 @@ export function useDashboardLayout(
       // Notify callback
       options.onLayoutChange?.(state.layout);
     },
-    [state.layout, options, trackRoleBasedUsage]
+    [state.layout, options, trackInteraction]
   );
 
   // Update grid positions

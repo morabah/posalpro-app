@@ -195,6 +195,86 @@ curl -X GET http://localhost:3000/api/auth/me \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
+## Deployment Configuration
+
+### Netlify Deployment (CRITICAL)
+
+**Essential Configuration Files:**
+
+#### netlify.toml
+
+```toml
+[build]
+  command = "npx prisma migrate deploy && npx prisma generate && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20.15.1"
+  NEXT_USE_NETLIFY_EDGE = "true"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Set proper content type for API responses
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+
+# Essential catch-all for Next.js App Router - MUST be last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+```
+
+#### next.config.js
+
+```javascript
+const nextConfig = {
+  reactStrictMode: true,
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        'localhost:3001',
+        'localhost:3000',
+        'posalpro-mvp2.windsurf.build',
+      ],
+    },
+  },
+  // CRITICAL: Never use 'standalone' output with Netlify
+  // output: 'standalone', // Disabled for Netlify compatibility
+  trailingSlash: false,
+};
+```
+
+**CRITICAL DEPLOYMENT RULES:**
+
+1. ❌ **NEVER** use `output: 'standalone'` with Netlify
+2. ✅ **ALWAYS** ensure catch-all redirect is the LAST rule in netlify.toml
+3. ✅ **VERIFY** all NextAuth pages exist before deployment
+4. ✅ **TEST** API endpoints return JSON (not HTML) after deployment
+
+### Deployment Verification
+
+```bash
+# Verify deployment configuration
+npm run build
+npm run start
+
+# Test API endpoints
+curl -H "Accept: application/json" http://localhost:3000/api/auth/session
+curl -H "Accept: application/json" http://localhost:3000/api/health
+
+# Pre-deployment checklist
+echo "✅ netlify.toml has catch-all redirect as last rule"
+echo "✅ next.config.js does not use output: 'standalone'"
+echo "✅ All NextAuth pages exist"
+echo "✅ API endpoints tested and return JSON"
+```
+
 ## Security Considerations
 
 ### Development Environment

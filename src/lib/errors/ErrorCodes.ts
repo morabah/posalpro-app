@@ -7,27 +7,33 @@
 export enum ErrorCategory {
   // System-level errors
   SYSTEM = 'SYSTEM',
-  
+
   // Authentication and authorization errors
   AUTH = 'AUTH',
-  
+
+  // Security-specific errors
+  SECURITY = 'SECURITY',
+
   // Validation errors (input validation, business rules)
   VALIDATION = 'VALIDATION',
-  
+
   // Database and data access errors
   DATA = 'DATA',
-  
+
   // API and external service errors
   API = 'API',
-  
+
   // Business logic errors
   BUSINESS = 'BUSINESS',
-  
+
   // UI and client-side errors
   UI = 'UI',
-  
+
   // AI and machine learning errors
   AI = 'AI',
+
+  // Analytics and tracking errors
+  ANALYTICS = 'ANALYTICS',
 }
 
 // Error codes organized by category
@@ -53,6 +59,18 @@ export const ErrorCodes = {
     INVALID_TOKEN: 'AUTH_2005',
     MISSING_TOKEN: 'AUTH_2006',
     FORBIDDEN: 'AUTH_2007',
+    PERMISSION_DENIED: 'AUTH_2008',
+  },
+
+  // Security errors (2500-2999)
+  [ErrorCategory.SECURITY]: {
+    RATE_LIMIT_EXCEEDED: 'SEC_2500',
+    SUSPICIOUS_ACTIVITY: 'SEC_2501',
+    BRUTE_FORCE_DETECTED: 'SEC_2502',
+    INVALID_SESSION: 'SEC_2503',
+    CSRF_TOKEN_INVALID: 'SEC_2504',
+    IP_BLOCKED: 'SEC_2505',
+    SECURITY_VIOLATION: 'SEC_2506',
   },
 
   // Validation errors (3000-3999)
@@ -64,6 +82,7 @@ export const ErrorCodes = {
     BUSINESS_RULE_VIOLATION: 'VAL_3004',
     INVALID_STATE: 'VAL_3005',
     DUPLICATE_ENTRY: 'VAL_3006',
+    DUPLICATE_ENTITY: 'VAL_3007',
   },
 
   // Data errors (4000-4999)
@@ -81,6 +100,7 @@ export const ErrorCodes = {
     UPDATE_FAILED: 'DATA_4010',
     DELETE_FAILED: 'DATA_4011',
     RETRIEVAL_FAILED: 'DATA_4012',
+    DUPLICATE_ENTRY: 'DATA_4013',
   },
 
   // API errors (5000-5999)
@@ -112,7 +132,7 @@ export const ErrorCodes = {
     STATE_ERROR: 'UI_7002',
     INTERACTION_ERROR: 'UI_7003',
   },
-  
+
   // AI errors (8000-8999)
   [ErrorCategory.AI]: {
     PROCESSING_FAILED: 'AI_8000',
@@ -122,18 +142,28 @@ export const ErrorCodes = {
     RATE_LIMIT: 'AI_8004',
     CONTEXT_OVERFLOW: 'AI_8005',
   },
+
+  // Analytics errors (9000-9999)
+  [ErrorCategory.ANALYTICS]: {
+    TRACKING_ERROR: 'ANA_9000',
+    PROCESSING_FAILED: 'ANA_9001',
+    INVALID_EVENT: 'ANA_9002',
+    STORAGE_ERROR: 'ANA_9003',
+  },
 };
 
 // Helper type for accessing error codes
-export type ErrorCode = 
-  | typeof ErrorCodes[ErrorCategory.SYSTEM][keyof typeof ErrorCodes[ErrorCategory.SYSTEM]]
-  | typeof ErrorCodes[ErrorCategory.AUTH][keyof typeof ErrorCodes[ErrorCategory.AUTH]]
-  | typeof ErrorCodes[ErrorCategory.VALIDATION][keyof typeof ErrorCodes[ErrorCategory.VALIDATION]]
-  | typeof ErrorCodes[ErrorCategory.DATA][keyof typeof ErrorCodes[ErrorCategory.DATA]]
-  | typeof ErrorCodes[ErrorCategory.API][keyof typeof ErrorCodes[ErrorCategory.API]]
-  | typeof ErrorCodes[ErrorCategory.BUSINESS][keyof typeof ErrorCodes[ErrorCategory.BUSINESS]]
-  | typeof ErrorCodes[ErrorCategory.UI][keyof typeof ErrorCodes[ErrorCategory.UI]]
-  | typeof ErrorCodes[ErrorCategory.AI][keyof typeof ErrorCodes[ErrorCategory.AI]];
+export type ErrorCode =
+  | (typeof ErrorCodes)[ErrorCategory.SYSTEM][keyof (typeof ErrorCodes)[ErrorCategory.SYSTEM]]
+  | (typeof ErrorCodes)[ErrorCategory.AUTH][keyof (typeof ErrorCodes)[ErrorCategory.AUTH]]
+  | (typeof ErrorCodes)[ErrorCategory.SECURITY][keyof (typeof ErrorCodes)[ErrorCategory.SECURITY]]
+  | (typeof ErrorCodes)[ErrorCategory.VALIDATION][keyof (typeof ErrorCodes)[ErrorCategory.VALIDATION]]
+  | (typeof ErrorCodes)[ErrorCategory.DATA][keyof (typeof ErrorCodes)[ErrorCategory.DATA]]
+  | (typeof ErrorCodes)[ErrorCategory.API][keyof (typeof ErrorCodes)[ErrorCategory.API]]
+  | (typeof ErrorCodes)[ErrorCategory.BUSINESS][keyof (typeof ErrorCodes)[ErrorCategory.BUSINESS]]
+  | (typeof ErrorCodes)[ErrorCategory.UI][keyof (typeof ErrorCodes)[ErrorCategory.UI]]
+  | (typeof ErrorCodes)[ErrorCategory.AI][keyof (typeof ErrorCodes)[ErrorCategory.AI]]
+  | (typeof ErrorCodes)[ErrorCategory.ANALYTICS][keyof (typeof ErrorCodes)[ErrorCategory.ANALYTICS]];
 
 // Map from error code to HTTP status code
 export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
@@ -154,6 +184,17 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   AUTH_2004: 403, // Account locked
   AUTH_2005: 401, // Invalid token
   AUTH_2006: 401, // Missing token
+  AUTH_2007: 403, // Forbidden
+  AUTH_2008: 403, // Permission denied
+
+  // Security errors
+  SEC_2500: 429, // Rate limit exceeded
+  SEC_2501: 403, // Suspicious activity
+  SEC_2502: 429, // Brute force detected
+  SEC_2503: 401, // Invalid session
+  SEC_2504: 403, // CSRF token invalid
+  SEC_2505: 403, // IP blocked
+  SEC_2506: 403, // Security violation
 
   // Validation errors
   VAL_3000: 400, // Invalid input
@@ -163,6 +204,7 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   VAL_3004: 422, // Business rule violation
   VAL_3005: 422, // Invalid state
   VAL_3006: 409, // Duplicate entry
+  VAL_3007: 409, // Duplicate entity
 
   // Data errors
   DATA_4000: 404, // Not found
@@ -173,6 +215,12 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   DATA_4005: 500, // Transaction failed
   DATA_4006: 500, // Integrity violation
   DATA_4007: 409, // Stale data
+  DATA_4008: 504, // Timeout
+  DATA_4009: 500, // Create failed
+  DATA_4010: 500, // Update failed
+  DATA_4011: 500, // Delete failed
+  DATA_4012: 500, // Retrieval failed
+  DATA_4013: 409, // Duplicate entry
 
   // API errors
   API_5000: 400, // Request failed
@@ -205,6 +253,12 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   AI_8003: 422, // Content filter
   AI_8004: 429, // Rate limit
   AI_8005: 413, // Context overflow
+
+  // Analytics errors
+  ANA_9000: 500, // Tracking error
+  ANA_9001: 500, // Processing failed
+  ANA_9002: 400, // Invalid event
+  ANA_9003: 500, // Storage error
 };
 
 // Map from common error scenarios to error codes
@@ -244,7 +298,7 @@ export const commonErrorsToErrorCodes = {
     P2033: ErrorCodes.DATA.DATABASE_ERROR, // Number out of range
     P2034: ErrorCodes.DATA.TRANSACTION_FAILED, // Transaction failed
   },
-  
+
   // Zod validation errors
   zodErrors: {
     invalid_type: ErrorCodes.VALIDATION.INVALID_FORMAT,
@@ -254,7 +308,7 @@ export const commonErrorsToErrorCodes = {
     invalid_string: ErrorCodes.VALIDATION.INVALID_FORMAT,
     invalid_date: ErrorCodes.VALIDATION.INVALID_FORMAT,
   },
-  
+
   // HTTP errors
   httpErrors: {
     400: ErrorCodes.VALIDATION.INVALID_INPUT,

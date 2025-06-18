@@ -4,7 +4,7 @@
  * Supports H8 (System Reliability) hypothesis validation
  */
 
-import { ApiResponse } from '@/lib/testing/testUtils';
+import type { ApiResponse } from '@/lib/api/client';
 import { clearMockSession, setMockSession } from '@/test/mocks/session.mock';
 import { UserType } from '@/types/enums';
 
@@ -12,18 +12,27 @@ import { UserType } from '@/types/enums';
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-interface MockResponse<T> extends ApiResponse<T> {
+interface MockResponse<T> {
   ok: boolean;
   status: number;
-  json: () => Promise<T>;
+  json: () => Promise<ApiResponse<T>>;
   text: () => Promise<string>;
 }
 
 const mockResponse = <T>(data: T, status = 200): MockResponse<T> => ({
   ok: status >= 200 && status < 300,
   status,
-  json: async () => data,
-  text: async () => JSON.stringify(data),
+  json: async () => ({
+    data,
+    success: status >= 200 && status < 300,
+    message: status >= 200 && status < 300 ? 'Success' : 'Error',
+  }),
+  text: async () =>
+    JSON.stringify({
+      data,
+      success: status >= 200 && status < 300,
+      message: status >= 200 && status < 300 ? 'Success' : 'Error',
+    }),
 });
 
 // API endpoint test utilities

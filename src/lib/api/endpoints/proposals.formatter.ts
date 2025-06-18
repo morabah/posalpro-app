@@ -24,8 +24,9 @@ export function formatProposal(proposal: PrismaProposalWithRelations): ProposalD
     id: proposal.id,
     title: proposal.title,
     description: proposal.description ?? '',
-    clientName: proposal.customer.name,
-    clientContact: {
+    customerId: proposal.customerId,
+    customerName: proposal.customer.name,
+    customerContact: {
       name: primaryContact.name,
       email: primaryContact.email,
       phone: primaryContact.phone ?? undefined,

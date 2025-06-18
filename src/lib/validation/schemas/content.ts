@@ -8,11 +8,14 @@ import { baseEntitySchema } from './shared';
 
 export const contentSchema = baseEntitySchema.extend({
   title: z.string().min(1).max(255),
-  description: z.string().min(1).max(2000),
-  type: z.enum(['DOCUMENT', 'TEMPLATE', 'REFERENCE']),
+  description: z.string().optional(),
+  type: z.enum(['TEXT', 'TEMPLATE', 'IMAGE', 'DOCUMENT', 'MEDIA']),
+  content: z.string().min(1),
   tags: z.array(z.string()).optional(),
-  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).default('DRAFT'),
-  metadata: z.record(z.string(), z.any()).optional(),
+  category: z.array(z.string()).optional(),
+  keywords: z.array(z.string()).optional(),
+  isPublic: z.boolean().default(false),
+  isActive: z.boolean().default(true),
 });
 
 export const createContentSchema = contentSchema.omit({
@@ -25,4 +28,5 @@ export const updateContentSchema = contentSchema.partial().omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  createdBy: true,
 });

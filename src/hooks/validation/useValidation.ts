@@ -8,7 +8,12 @@
 
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { ValidationEngine } from '@/lib/validation/ValidationEngine';
-import { ValidationIssue, ValidationRequest, ValidationResult } from '@/types/validation';
+import {
+  ValidationCategory,
+  ValidationIssue,
+  ValidationRequest,
+  ValidationResult,
+} from '@/types/validation';
 import { useCallback, useState } from 'react';
 
 // Component Traceability Matrix
@@ -39,7 +44,7 @@ interface ValidationState {
 // Filter state for validation issues
 interface ValidationFilters {
   severity?: string[];
-  status?: ('open' | 'in_progress' | 'resolved' | 'deferred')[];
+  status?: ('open' | 'in_progress' | 'resolved' | 'deferred' | 'suppressed')[];
   category?: string[];
   proposalId?: string;
   search?: string;
@@ -76,6 +81,7 @@ export function useValidation() {
 
   // Real-time validation function (US-3.1, AC-3.1.1)
   const validateConfiguration = async (request: ValidationRequest) => {
+    const startTime = Date.now();
     try {
       setState(prev => ({ ...prev, isValidating: true, error: null }));
 
@@ -83,12 +89,44 @@ export function useValidation() {
       analytics.track('validation_started', {
         proposalId: request.proposalId,
         configurationSize: request.products.length,
-        timestamp: Date.now(),
+        timestamp: startTime,
       });
 
-      const result = await validationEngine.validateProductConfiguration(request);
+      const validationSummary = await validationEngine.validateProductConfiguration(
+        request.proposalId,
+        {
+          products: request.products,
+        }
+      );
       const endTime = Date.now();
-      const validationTime = endTime - Date.now();
+      const validationTime = endTime - startTime;
+
+      // Transform ValidationSummary to ValidationResult
+      const issues: ValidationIssue[] = validationSummary.results.map(vr => ({
+        id: vr.ruleId,
+        type: 'configuration' as ValidationCategory,
+        severity: vr.severity,
+        message: vr.message,
+        field: 'configuration',
+        category: 'configuration' as ValidationCategory,
+        affectedProducts: [validationSummary.metadata.productId],
+        status: vr.isValid ? 'resolved' : ('open' as const),
+        fixSuggestions: [],
+      }));
+
+      const result: ValidationResult = {
+        id: `validation-${Date.now()}`,
+        proposalId: request.proposalId,
+        status: validationSummary.isValid ? 'valid' : 'invalid',
+        issues,
+        suggestions: [],
+        timestamp: validationSummary.timestamp,
+        executionTime: validationTime,
+        userStoryMappings: COMPONENT_MAPPING.userStories,
+        isValid: validationSummary.isValid,
+        validationTime,
+        configHash: `hash-${Date.now()}`,
+      };
 
       // Calculate metrics for H8 hypothesis validation
       const metrics: ValidationMetrics = {

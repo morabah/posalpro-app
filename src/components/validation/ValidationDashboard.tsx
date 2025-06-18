@@ -114,7 +114,7 @@ export function ValidationDashboard({
         onIssueSelect(issue);
       } else {
         // Default behavior - navigate to proposal
-        if (onNavigateToProposal) {
+        if (onNavigateToProposal && issue.proposalId) {
           onNavigateToProposal(issue.proposalId);
         }
       }

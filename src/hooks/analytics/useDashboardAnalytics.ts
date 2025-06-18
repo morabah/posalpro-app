@@ -96,7 +96,12 @@ export function useDashboardAnalytics(userId?: string, userRole?: string, sessio
     (error: Error | string, context: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics.error(error, {
+        const errorMessage = error instanceof Error ? error.message : error;
+        const errorStack = error instanceof Error ? error.stack : undefined;
+
+        analytics.track('error_occurred', {
+          error: errorMessage,
+          stack: errorStack,
           ...context,
           component: 'dashboard',
           userId: params.userId,

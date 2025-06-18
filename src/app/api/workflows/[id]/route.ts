@@ -116,7 +116,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const performanceMetrics = (workflow.performanceMetrics as any) || {};
 
     const completedExecutions = workflow.executions.filter(e => e.status === 'COMPLETED');
-    const activeExecutions = workflow.executions.filter(e => e.status === 'ACTIVE');
+    const activeExecutions = workflow.executions.filter(e => e.status === 'IN_PROGRESS');
 
     const enhancedWorkflow = {
       ...workflow,
@@ -198,7 +198,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     // Check if workflow has active executions
     const hasActiveExecutions = existingWorkflow.executions.some(
-      execution => execution.status === 'ACTIVE' || execution.status === 'PENDING'
+      execution => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
     );
 
     if (hasActiveExecutions && validatedData.stages) {
@@ -353,7 +353,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     // Check if workflow has active executions
     const hasActiveExecutions = workflow.executions.some(
-      execution => execution.status === 'ACTIVE' || execution.status === 'PENDING'
+      execution => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
     );
 
     if (hasActiveExecutions) {

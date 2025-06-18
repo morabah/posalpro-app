@@ -385,7 +385,7 @@ export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
     };
 
     // Find the longest critical path
-    let longestCriticalPath = { path: [], duration: 0 };
+    let longestCriticalPath: { path: string[]; duration: number } = { path: [], duration: 0 };
     for (const rootStage of rootStages) {
       visited.clear();
       const result = dfs(rootStage.id, [], 0);

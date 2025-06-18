@@ -164,8 +164,11 @@ export function useDashboardData(
   });
 
   // Analytics integration
-  const { trackDashboardLoaded, trackError, trackEvent, trackRoleBasedUsage } =
-    useDashboardAnalytics(options.userId, options.userRole);
+  const { trackError, trackEvent, trackInteraction } = useDashboardAnalytics(
+    options.userId || 'unknown',
+    options.userRole || 'unknown',
+    `dashboard-${Date.now()}`
+  );
 
   // Refs for cleanup and timing
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -198,7 +201,7 @@ export function useDashboardData(
       }));
 
       if (error) {
-        trackError(error, `dashboard_${section}`);
+        trackError(error, { context: `dashboard_${section}` });
         options.onError?.(new Error(error), section);
       }
     },
@@ -253,9 +256,8 @@ export function useDashboardData(
         });
 
         // Track analytics
-        trackDashboardLoaded(loadTime);
-        trackEvent('dashboard_load', { loadTime, userRole: options.userRole });
-        trackRoleBasedUsage('dashboard', 'load', true);
+        trackEvent('dashboard_loaded', { loadTime, userRole: options.userRole });
+        trackInteraction('dashboard', 'load', { loadTime, success: true });
 
         // Notify callback
         options.onDataChange?.(data);
@@ -280,9 +282,8 @@ export function useDashboardData(
       updateLoadingState,
       updateErrorState,
       updateStats,
-      trackDashboardLoaded,
       trackEvent,
-      trackRoleBasedUsage,
+      trackInteraction,
     ]
   );
 
@@ -347,7 +348,7 @@ export function useDashboardData(
         // Track analytics
         const loadTime = Date.now() - loadStartTime;
         trackEvent('section_refresh', { section, loadTime, userRole: options.userRole });
-        trackRoleBasedUsage(section, 'refresh', true);
+        trackInteraction(section, 'refresh', { loadTime, success: true });
       } catch (error) {
         if (!mountedRef.current) return;
 
@@ -370,7 +371,7 @@ export function useDashboardData(
       updateErrorState,
       updateStats,
       trackEvent,
-      trackRoleBasedUsage,
+      trackInteraction,
     ]
   );
 

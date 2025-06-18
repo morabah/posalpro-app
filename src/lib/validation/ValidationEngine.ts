@@ -10,7 +10,14 @@
  */
 
 // Validation rule types
-export type ValidationSeverity = 'error' | 'warning' | 'info';
+export type ValidationSeverity =
+  | 'critical'
+  | 'high'
+  | 'medium'
+  | 'low'
+  | 'error'
+  | 'warning'
+  | 'info';
 export type ValidationRuleType =
   | 'compatibility'
   | 'dependency'
@@ -93,7 +100,7 @@ export class ValidationEngine {
           ruleId: rule.id,
           isValid: false,
           severity: 'error',
-          message: `Validation error: ${error.message}`,
+          message: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
       }
     }
@@ -131,6 +138,19 @@ export class ValidationEngine {
   }
 
   /**
+   * Validate product configuration against business rules
+   */
+  public async validateProductConfiguration(
+    productId: string,
+    configuration: Record<string, any>
+  ): Promise<ValidationSummary> {
+    return this.validateProduct({
+      productId,
+      configuration,
+    });
+  }
+
+  /**
    * Get validation history for a product
    */
   public getValidationHistory(productId: string): ValidationSummary[] {
@@ -149,6 +169,26 @@ export class ValidationEngine {
    */
   public getRegisteredRules(): ValidationRule[] {
     return Array.from(this.rules.values());
+  }
+
+  /**
+   * Apply a fix suggestion for a validation issue
+   */
+  public async applyFix(issueId: string, fixId: string): Promise<boolean> {
+    try {
+      // In a real implementation, this would apply the actual fix
+      // For now, we'll simulate the fix application
+      console.log(`Applying fix ${fixId} for issue ${issueId}`);
+
+      // Simulate some async work
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Return success (in real implementation, this would depend on the actual fix result)
+      return true;
+    } catch (error) {
+      console.error('Failed to apply fix:', error);
+      return false;
+    }
   }
 }
 
