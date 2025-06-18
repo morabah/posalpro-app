@@ -3,6 +3,22 @@
  * Comprehensive HTTP client with authentication, error handling, retry logic, and caching
  */
 
+// Environment-aware API base URL resolution
+function getApiBaseUrl(): string {
+  // Client-side: use current window location
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api`;
+  }
+
+  // Server-side: check environment
+  if (process.env.NODE_ENV === 'production') {
+    // Production: use environment variable or fallback
+    return process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+  }
+
+  // Development: use relative path
+  return '/api';
+}
 import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
 import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
 
@@ -159,7 +175,18 @@ class EnhancedApiClient {
     options: EnhancedRequestConfig = {}
   ): Promise<ApiResponse<T>> {
     console.log('[ApiClient] Starting request:', { url, method: options.method || 'GET' });
-    const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
+
+    // Properly construct full URL with correct slash handling
+    let fullUrl: string;
+    if (url.startsWith('http')) {
+      fullUrl = url;
+    } else {
+      // Ensure proper slash between baseURL and endpoint
+      const baseUrl = this.baseURL.endsWith('/') ? this.baseURL.slice(0, -1) : this.baseURL;
+      const endpoint = url.startsWith('/') ? url : `/${url}`;
+      fullUrl = `${baseUrl}${endpoint}`;
+    }
+
     const config = { ...this.defaultConfig, ...options };
     console.log('[ApiClient] Request config:', config);
 
@@ -343,7 +370,5 @@ class EnhancedApiClient {
   }
 }
 
-// Export enhanced client instance
-export const apiClient = new EnhancedApiClient(
-  process.env.NODE_ENV === 'development' ? '/api' : process.env.NEXT_PUBLIC_API_BASE_URL || ''
-);
+// Export enhanced client instance with environment-aware base URL resolution
+export const apiClient = new EnhancedApiClient(getApiBaseUrl());
