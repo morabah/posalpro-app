@@ -3,6 +3,8 @@
  * Handles individual validation rule processing and execution
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
   ActionResult,
   ActionTarget,
@@ -20,9 +22,11 @@ import {
 
 export class RuleExecutor {
   private executionMetrics: Map<string, { count: number; totalTime: number }>;
+  private errorHandlingService: ErrorHandlingService;
 
   constructor() {
     this.executionMetrics = new Map();
+    this.errorHandlingService = ErrorHandlingService.getInstance();
   }
 
   /**
@@ -32,6 +36,21 @@ export class RuleExecutor {
     const startTime = performance.now();
 
     try {
+      // Log rule execution start with structured error handling
+      this.errorHandlingService.processError(
+        new Error(`Executing validation rule: ${rule.name}`),
+        'Rule execution started',
+        ErrorCodes.VALIDATION.PROCESSING,
+        {
+          component: 'RuleExecutor',
+          operation: 'executeRule',
+          ruleId: rule.id,
+          category: rule.category,
+          severity: rule.severity,
+          userFriendlyMessage: `Validating rule: ${rule.name}`,
+        }
+      );
+
       console.log(`Executing validation rule: ${rule.name}`, {
         ruleId: rule.id,
         category: rule.category,
@@ -133,6 +152,23 @@ export class RuleExecutor {
       // Track execution metrics
       this.trackRuleExecution(rule.id, executionTime);
 
+      // Log rule execution completion with structured error handling
+      this.errorHandlingService.processError(
+        new Error(`Rule execution completed: ${rule.name}`),
+        'Rule execution completed successfully',
+        ErrorCodes.VALIDATION.SUCCESS,
+        {
+          component: 'RuleExecutor',
+          operation: 'executeRule',
+          ruleId: rule.id,
+          status,
+          issueCount: issues.length,
+          suggestionCount: suggestions.length,
+          executionTime,
+          userFriendlyMessage: `Rule validation completed: ${rule.name}`,
+        }
+      );
+
       console.log(`Rule execution completed: ${rule.name}`, {
         ruleId: rule.id,
         status,
@@ -154,10 +190,17 @@ export class RuleExecutor {
         context,
       };
     } catch (error) {
-      console.error(`Rule execution error: ${rule.name}`, {
-        ruleId: rule.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const processedError = this.errorHandlingService.processError(
+        error,
+        `Rule execution error: ${rule.name}`,
+        ErrorCodes.VALIDATION.OPERATION_FAILED,
+        {
+          component: 'RuleExecutor',
+          operation: 'executeRule',
+          ruleId: rule.id,
+          userFriendlyMessage: `Validation rule "${rule.name}" encountered an error. Please check rule configuration.`,
+        }
+      );
 
       return {
         ruleId: rule.id,
@@ -194,6 +237,20 @@ export class RuleExecutor {
     const startTime = performance.now();
 
     try {
+      // Log ruleset execution start with structured error handling
+      this.errorHandlingService.processError(
+        new Error('Executing validation ruleset'),
+        'Ruleset execution started',
+        ErrorCodes.VALIDATION.PROCESSING,
+        {
+          component: 'RuleExecutor',
+          operation: 'executeRuleset',
+          ruleCount: rules.length,
+          productCount: context.products.length,
+          userFriendlyMessage: `Validating ${rules.length} rules...`,
+        }
+      );
+
       console.log('Executing validation ruleset', {
         ruleCount: rules.length,
         context: {
@@ -208,23 +265,60 @@ export class RuleExecutor {
       );
 
       const results: RuleResult[] = [];
+      let criticalErrorEncountered = false;
 
       // Execute rules in sequence
       for (const rule of sortedRules) {
-        const result = await this.executeRule(rule, context);
-        results.push(result);
+        try {
+          const result = await this.executeRule(rule, context);
+          results.push(result);
 
-        // Stop execution on critical errors if configured
-        if (result.status === 'error' && rule.severity === 'critical') {
-          console.warn('Critical error encountered, stopping rule execution', {
-            ruleId: rule.id,
-            ruleName: rule.name,
-          });
+          // Check for critical errors
+          if (
+            result.status === 'error' ||
+            result.issues?.some(issue => issue.severity === 'critical')
+          ) {
+            criticalErrorEncountered = true;
+
+            this.errorHandlingService.processError(
+              new Error('Critical error encountered, stopping rule execution'),
+              'Critical validation error detected',
+              ErrorCodes.VALIDATION.CRITICAL_ERROR,
+              {
+                component: 'RuleExecutor',
+                operation: 'executeRuleset',
+                ruleId: rule.id,
+                userFriendlyMessage: 'Critical validation error detected. Rule execution stopped.',
+              }
+            );
+            break;
+          }
+        } catch (error) {
+          // Handle individual rule execution errors
+          criticalErrorEncountered = true;
           break;
         }
       }
 
       const executionTime = performance.now() - startTime;
+
+      // Log ruleset execution completion
+      this.errorHandlingService.processError(
+        new Error('Ruleset execution completed'),
+        'Ruleset execution finished',
+        criticalErrorEncountered
+          ? ErrorCodes.VALIDATION.PARTIAL_SUCCESS
+          : ErrorCodes.VALIDATION.SUCCESS,
+        {
+          component: 'RuleExecutor',
+          operation: 'executeRuleset',
+          rulesExecuted: results.length,
+          totalRules: rules.length,
+          executionTime,
+          criticalErrors: criticalErrorEncountered,
+          userFriendlyMessage: `Validation completed. ${results.length}/${rules.length} rules executed.`,
+        }
+      );
 
       console.log('Ruleset execution completed', {
         ruleCount: rules.length,
@@ -236,12 +330,19 @@ export class RuleExecutor {
 
       return results;
     } catch (error) {
-      console.error('Ruleset execution error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        ruleCount: rules.length,
-      });
-
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Ruleset execution error',
+        ErrorCodes.VALIDATION.OPERATION_FAILED,
+        {
+          component: 'RuleExecutor',
+          operation: 'executeRuleset',
+          ruleCount: rules.length,
+          userFriendlyMessage:
+            'Validation ruleset execution failed. Please check rule configurations.',
+        }
+      );
+      throw processedError;
     }
   }
 

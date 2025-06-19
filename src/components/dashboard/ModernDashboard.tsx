@@ -1,7 +1,8 @@
 /**
- * PosalPro MVP2 - Modern Dashboard Component
- * Redesigned with sleek, modern UI following DASHBOARD_SCREEN.md wireframe specifications
- * Features: Premium styling, proper spacing, brand colors, modern interactions
+ * PosalPro MVP2 - Modern Dashboard Component - MOBILE ENHANCED
+ * Enhanced with comprehensive mobile responsiveness following DASHBOARD_SCREEN.md specifications
+ * Features: Mobile-first responsive design, touch targets 44px+, progressive disclosure
+ * Component Traceability Matrix: US-2.2, US-8.1, H9, H10, AC-2.2.1.1
  */
 
 'use client';
@@ -11,15 +12,14 @@ import { UserType } from '@/types';
 import {
   BoltIcon,
   CalendarIcon,
-  ChartPieIcon,
   CheckCircleIcon,
   ChevronRightIcon,
   ClockIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
+  EyeIcon,
   MagnifyingGlassIcon,
   PlusIcon,
-  ShieldCheckIcon,
   SparklesIcon,
   UsersIcon,
   XCircleIcon,
@@ -30,6 +30,7 @@ import {
   FireIcon,
 } from '@heroicons/react/24/solid';
 import Link from 'next/link';
+import { useState } from 'react';
 
 interface DashboardData {
   proposals: any[];
@@ -78,27 +79,40 @@ interface ModernDashboardProps {
   onRetry?: () => void;
 }
 
+// Enhanced mobile-first skeleton
 const DashboardSkeleton = () => (
   <div className="animate-pulse">
+    {/* Mobile-optimized header skeleton */}
     <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/60 shadow-sm">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        <div className="h-6 sm:h-8 bg-gray-200 rounded w-2/3 sm:w-1/3 mb-2"></div>
+        <div className="h-3 sm:h-4 bg-gray-200 rounded w-4/5 sm:w-1/2"></div>
       </div>
     </div>
-    <div className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-      <div className="space-y-6">
-        <div className="h-6 bg-gray-200 rounded w-1/4"></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="h-32 bg-gray-200 rounded-2xl"></div>
-          <div className="h-32 bg-gray-200 rounded-2xl"></div>
-          <div className="h-32 bg-gray-200 rounded-2xl"></div>
-          <div className="h-32 bg-gray-200 rounded-2xl"></div>
+
+    {/* Mobile-optimized content skeleton */}
+    <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8 lg:space-y-10">
+      {/* Metrics skeleton - responsive grid */}
+      <div className="space-y-4 sm:space-y-6">
+        <div className="h-5 sm:h-6 bg-gray-200 rounded w-1/2 sm:w-1/4"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              className="h-24 sm:h-28 lg:h-32 bg-gray-200 rounded-xl sm:rounded-2xl"
+            ></div>
+          ))}
         </div>
       </div>
-      <div className="space-y-6">
-        <div className="h-6 bg-gray-200 rounded w-1/4"></div>
-        <div className="h-48 bg-gray-200 rounded-2xl"></div>
+
+      {/* Priority items skeleton */}
+      <div className="space-y-4 sm:space-y-6">
+        <div className="h-5 sm:h-6 bg-gray-200 rounded w-1/2 sm:w-1/4"></div>
+        <div className="space-y-3 sm:space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-16 sm:h-20 bg-gray-200 rounded-lg sm:rounded-xl"></div>
+          ))}
+        </div>
       </div>
     </div>
   </div>
@@ -114,24 +128,36 @@ export default function ModernDashboard({
   onQuickAction,
   onRetry,
 }: ModernDashboardProps) {
+  const [expandedMetrics, setExpandedMetrics] = useState(false);
+  const [expandedProposals, setExpandedProposals] = useState(false);
+
   if (loading) {
     return <DashboardSkeleton />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
           <XCircleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-red-800">Failed to Load Dashboard</h2>
-          <p className="text-gray-600 mt-2 mb-6">{error}</p>
-          {onRetry && <Button onClick={onRetry}>Retry</Button>}
+          <h2 className="text-lg sm:text-xl font-semibold text-red-800">
+            Failed to Load Dashboard
+          </h2>
+          <p className="text-gray-600 mt-2 mb-6 text-sm sm:text-base">{error}</p>
+          {onRetry && (
+            <Button
+              onClick={onRetry}
+              className="min-h-[44px] px-6 py-3 text-base" // Touch-friendly minimum size
+            >
+              Retry
+            </Button>
+          )}
         </div>
       </div>
     );
   }
 
-  // Status badge styling following design system
+  // Enhanced status badge with mobile optimization
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       DRAFT: {
@@ -166,378 +192,371 @@ export default function ModernDashboard({
 
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${config.color}`}
+        className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium border ${config.color}`}
       >
-        <IconComponent className="w-3 h-3" />
-        {config.label}
+        <IconComponent className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+        <span className="truncate">{config.label}</span>
       </span>
     );
   };
 
   const getUrgencyIcon = (urgency: string) => {
+    const baseClasses = 'w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0';
     switch (urgency) {
       case 'critical':
-        return <FireIcon className="w-5 h-5 text-red-500" />;
+        return <FireIcon className={`${baseClasses} text-red-500`} />;
       case 'high':
-        return <ExclamationTriangleIcon className="w-5 h-5 text-orange-500" />;
+        return <ExclamationTriangleIcon className={`${baseClasses} text-orange-500`} />;
       case 'medium':
-        return <ClockIcon className="w-5 h-5 text-amber-500" />;
+        return <ClockIcon className={`${baseClasses} text-amber-500`} />;
       default:
-        return <ClockIcon className="w-5 h-5 text-gray-400" />;
+        return <ClockIcon className={`${baseClasses} text-gray-400`} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      {/* Enhanced Welcome Header with Premium Styling */}
+      {/* Mobile-Enhanced Welcome Header with Touch-Friendly Design */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/60 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
                 Welcome back, {user?.name.split(' ')[0]}
               </h1>
-              <p className="text-gray-600 flex items-center gap-2">
-                <SparklesIcon className="w-4 h-4 text-blue-500" />
-                Here's what's happening with your proposals today
+              <p className="text-sm sm:text-base text-gray-600 flex items-center gap-2">
+                <SparklesIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span className="truncate">Ready to create amazing proposals</span>
               </p>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="text-right space-y-1">
-                <p className="text-sm font-medium text-gray-900">
-                  {new Date().toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <ChartPieIcon className="w-3 h-3" />
-                  {data.metrics.activeProposals} active proposals
-                </div>
-              </div>
+
+            {/* Mobile-optimized quick actions */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <Button
+                onClick={() => onQuickAction?.('create-proposal')}
+                className="min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium rounded-lg shadow-md transition-all duration-200 flex items-center justify-center gap-2 touch-manipulation"
+                style={{ touchAction: 'manipulation' }}
+              >
+                <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>Create Proposal</span>
+              </Button>
+
+              <Button
+                onClick={() => onQuickAction?.('search')}
+                variant="outline"
+                className="min-h-[44px] border-gray-300 text-gray-700 hover:bg-gray-50 px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 touch-manipulation"
+                style={{ touchAction: 'manipulation' }}
+              >
+                <MagnifyingGlassIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Search</span>
+                <span className="sm:hidden" aria-label="Search">
+                  🔍
+                </span>
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-        {/* Quick Actions Section */}
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold text-gray-900">Quick Actions</h2>
-            <BoltIcon className="w-5 h-5 text-blue-500" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Link
-              href="/proposals/create"
-              className="group"
-              onClick={() => onQuickAction?.('new-proposal')}
+      {/* Main Dashboard Content with Enhanced Mobile Layout */}
+      <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8 lg:space-y-10">
+        {/* Key Metrics - Enhanced Mobile Grid */}
+        <section className="space-y-4 sm:space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">Key Metrics</h2>
+            <button
+              onClick={() => setExpandedMetrics(!expandedMetrics)}
+              className="sm:hidden min-h-[44px] min-w-[44px] p-2 text-gray-500 hover:text-gray-700 rounded-lg transition-colors"
+              aria-label={expandedMetrics ? 'Collapse metrics' : 'Expand metrics'}
             >
-              <div className="relative bg-white rounded-2xl border border-gray-200 hover:border-blue-300 transition-all duration-300 p-6 hover:shadow-xl hover:shadow-blue-100/50 hover:-translate-y-1">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 bg-blue-100 group-hover:bg-blue-200 rounded-xl flex items-center justify-center transition-colors duration-200">
-                    <PlusIcon className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors duration-200" />
-                </div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-blue-900 transition-colors duration-200 mb-1">
-                  New Proposal
-                </h3>
-                <p className="text-sm text-gray-600">Create a new proposal</p>
-              </div>
-            </Link>
-
-            <Link
-              href="/content/search"
-              className="group"
-              onClick={() => onQuickAction?.('search')}
-            >
-              <div className="relative bg-white rounded-2xl border border-gray-200 hover:border-emerald-300 transition-all duration-300 p-6 hover:shadow-xl hover:shadow-emerald-100/50 hover:-translate-y-1">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 bg-emerald-100 group-hover:bg-emerald-200 rounded-xl flex items-center justify-center transition-colors duration-200">
-                    <MagnifyingGlassIcon className="w-6 h-6 text-emerald-600" />
-                  </div>
-                  <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-emerald-500 transition-colors duration-200" />
-                </div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-emerald-900 transition-colors duration-200 mb-1">
-                  Search
-                </h3>
-                <p className="text-sm text-gray-600">Find content and templates</p>
-              </div>
-            </Link>
-
-            <Link
-              href="/sme/assignments"
-              className="group"
-              onClick={() => onQuickAction?.('assign-smes')}
-            >
-              <div className="relative bg-white rounded-2xl border border-gray-200 hover:border-purple-300 transition-all duration-300 p-6 hover:shadow-xl hover:shadow-purple-100/50 hover:-translate-y-1">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 bg-purple-100 group-hover:bg-purple-200 rounded-xl flex items-center justify-center transition-colors duration-200">
-                    <UsersIcon className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-500 transition-colors duration-200" />
-                </div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-purple-900 transition-colors duration-200 mb-1">
-                  Assign SMEs
-                </h3>
-                <p className="text-sm text-gray-600">Assign subject matter experts</p>
-              </div>
-            </Link>
-
-            <Link href="/validation" className="group" onClick={() => onQuickAction?.('validate')}>
-              <div className="relative bg-white rounded-2xl border border-gray-200 hover:border-amber-300 transition-all duration-300 p-6 hover:shadow-xl hover:shadow-amber-100/50 hover:-translate-y-1">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 bg-amber-100 group-hover:bg-amber-200 rounded-xl flex items-center justify-center transition-colors duration-200">
-                    <ShieldCheckIcon className="w-6 h-6 text-amber-600" />
-                  </div>
-                  <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-amber-500 transition-colors duration-200" />
-                </div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-amber-900 transition-colors duration-200 mb-1">
-                  Validate
-                </h3>
-                <p className="text-sm text-gray-600">Run proposal validation</p>
-              </div>
-            </Link>
+              <EyeIcon className="w-5 h-5" />
+            </button>
           </div>
-        </section>
 
-        {/* Status Overview Section */}
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold text-gray-900">Status Overview</h2>
-            <ChartPieIconSolid className="w-5 h-5 text-emerald-500" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Proposals Chart */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-lg shadow-gray-200/50">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Proposals</h3>
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <ChartPieIcon className="w-5 h-5 text-blue-600" />
+          {/* Mobile: Show first 2 metrics, expand to show all */}
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 ${!expandedMetrics ? 'sm:grid-cols-2' : ''}`}
+          >
+            {/* Active Proposals Metric */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className="p-2 sm:p-3 bg-blue-50 rounded-lg sm:rounded-xl">
+                  <ChartPieIconSolid className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                 </div>
+                <span className="text-xs sm:text-sm text-gray-500 font-medium">Active</span>
               </div>
-
-              <div className="flex items-center justify-center py-8">
-                <div className="relative w-36 h-36">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 144 144">
-                    <circle
-                      cx="72"
-                      cy="72"
-                      r="60"
-                      fill="none"
-                      stroke="rgb(243 244 246)"
-                      strokeWidth="8"
-                    />
-                    <circle
-                      cx="72"
-                      cy="72"
-                      r="60"
-                      fill="none"
-                      stroke="rgb(59 130 246)"
-                      strokeWidth="8"
-                      strokeLinecap="round"
-                      strokeDasharray={`${(data.metrics.completionRate / 100) * 377} 377`}
-                      className="transition-all duration-1000 ease-out"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 mb-1">
-                        {Math.round(data.metrics.completionRate)}%
-                      </div>
-                      <div className="text-sm text-gray-500 font-medium">Complete</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6 mt-6">
-                <div className="text-center p-4 bg-blue-50 rounded-xl">
-                  <div className="text-2xl font-bold text-blue-900 mb-1">
-                    {data.metrics.activeProposals}
-                  </div>
-                  <div className="text-sm text-blue-600 font-medium">Active</div>
-                </div>
-                <div className="text-center p-4 bg-gray-50 rounded-xl">
-                  <div className="text-2xl font-bold text-gray-900 mb-1">
-                    {data.proposals.length}
-                  </div>
-                  <div className="text-sm text-gray-600 font-medium">Total</div>
-                </div>
+              <div className="space-y-1">
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {data.metrics.activeProposals}
+                </p>
+                <p className="text-xs sm:text-sm text-gray-600">Active Proposals</p>
               </div>
             </div>
 
-            {/* SMEs Chart */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-lg shadow-gray-200/50">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">SMEs</h3>
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                  <UsersIcon className="w-5 h-5 text-emerald-600" />
+            {/* Pending Tasks Metric */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className="p-2 sm:p-3 bg-amber-50 rounded-lg sm:rounded-xl">
+                  <ClockIcon className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
                 </div>
+                <span className="text-xs sm:text-sm text-gray-500 font-medium">Pending</span>
               </div>
-
-              <div className="flex items-center justify-center py-8">
-                <div className="relative w-36 h-36">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 144 144">
-                    <circle
-                      cx="72"
-                      cy="72"
-                      r="60"
-                      fill="none"
-                      stroke="rgb(243 244 246)"
-                      strokeWidth="8"
-                    />
-                    <circle
-                      cx="72"
-                      cy="72"
-                      r="60"
-                      fill="none"
-                      stroke="rgb(16 185 129)"
-                      strokeWidth="8"
-                      strokeLinecap="round"
-                      strokeDasharray={`${(data.metrics.onTimeDelivery / 100) * 377} 377`}
-                      className="transition-all duration-1000 ease-out"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 mb-1">
-                        {data.metrics.onTimeDelivery}%
-                      </div>
-                      <div className="text-sm text-gray-500 font-medium">On Time</div>
-                    </div>
-                  </div>
-                </div>
+              <div className="space-y-1">
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {data.metrics.pendingTasks}
+                </p>
+                <p className="text-xs sm:text-sm text-gray-600">Tasks Due</p>
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-6 mt-6">
-                <div className="text-center p-4 bg-emerald-50 rounded-xl">
-                  <div className="text-2xl font-bold text-emerald-900 mb-1">
-                    {data.metrics.pendingTasks}
-                  </div>
-                  <div className="text-sm text-emerald-600 font-medium">Pending</div>
+            {/* Show additional metrics on larger screens or when expanded on mobile */}
+            <div
+              className={`${expandedMetrics ? 'block' : 'hidden'} sm:block bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200`}
+            >
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className="p-2 sm:p-3 bg-green-50 rounded-lg sm:rounded-xl">
+                  <CheckCircleIconSolid className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-xl">
-                  <div className="text-2xl font-bold text-gray-900 mb-1">
-                    {data.metrics.avgCompletionTime}d
-                  </div>
-                  <div className="text-sm text-gray-600 font-medium">Avg Time</div>
+                <span className="text-xs sm:text-sm text-gray-500 font-medium">Rate</span>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {Math.round(data.metrics.completionRate)}%
+                </p>
+                <p className="text-xs sm:text-sm text-gray-600">Completion Rate</p>
+              </div>
+            </div>
+
+            <div
+              className={`${expandedMetrics ? 'block' : 'hidden'} sm:block bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200`}
+            >
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className="p-2 sm:p-3 bg-purple-50 rounded-lg sm:rounded-xl">
+                  <BoltIcon className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
                 </div>
+                <span className="text-xs sm:text-sm text-gray-500 font-medium">Time</span>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {data.metrics.avgCompletionTime}d
+                </p>
+                <p className="text-xs sm:text-sm text-gray-600">Avg. Completion</p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Active Proposals */}
-          <section>
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-lg shadow-gray-200/50">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-lg font-semibold text-gray-900">Active Proposals</h3>
-                <Link
-                  href="/proposals"
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 hover:gap-2 transition-all duration-200"
+        {/* Priority Items with Mobile Optimization */}
+        <section className="space-y-4 sm:space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
+              Priority Items ({priorityItems.length})
+            </h2>
+            <Link
+              href="/dashboard/tasks"
+              className="min-h-[44px] min-w-[44px] flex items-center gap-1 sm:gap-2 text-sm sm:text-base text-blue-600 hover:text-blue-700 font-medium transition-colors px-3 py-2 rounded-lg hover:bg-blue-50"
+            >
+              <span className="hidden sm:inline">View All</span>
+              <ChevronRightIcon className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {priorityItems.length === 0 ? (
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 p-6 sm:p-8 text-center">
+              <CheckCircleIconSolid className="w-12 h-12 sm:w-16 sm:h-16 text-green-500 mx-auto mb-3 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+                All caught up!
+              </h3>
+              <p className="text-sm sm:text-base text-gray-600">
+                No urgent tasks requiring your attention.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 sm:space-y-4">
+              {priorityItems.slice(0, expandedProposals ? priorityItems.length : 3).map(item => (
+                <div
+                  key={item.id}
+                  className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200"
                 >
-                  View All
-                  <ChevronRightIcon className="w-4 h-4" />
-                </Link>
-              </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      {getUrgencyIcon(item.urgency)}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                          {item.title}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
 
-              {proposals.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <DocumentTextIcon className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p className="text-gray-500 mb-2">No active proposals</p>
-                  <Link
-                    href="/proposals/create"
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    Create your first proposal
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {proposals.map(proposal => (
                     <Link
-                      key={proposal.id}
-                      href={`/proposals/${proposal.id}`}
-                      className="block group"
+                      href={item.actionUrl}
+                      className="min-h-[44px] bg-gray-900 hover:bg-gray-800 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all duration-200 flex items-center justify-center gap-2 w-full sm:w-auto"
                     >
-                      <div className="border border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all duration-200 hover:bg-blue-50/30">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-semibold text-gray-900 group-hover:text-blue-900 transition-colors">
-                            {proposal.title}
-                          </h4>
-                          <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <CalendarIcon className="w-4 h-4" />
-                            Due {proposal.dueDate.toLocaleDateString()}
-                          </div>
-                          {getStatusBadge(proposal.status)}
-                        </div>
-                      </div>
+                      <span>{item.actionLabel}</span>
+                      <ChevronRightIcon className="w-4 h-4" />
                     </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Priority Items */}
-          <section>
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-lg shadow-gray-200/50">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-lg font-semibold text-gray-900">Priority Items</h3>
-                {priorityItems.length > 0 && (
-                  <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                    {priorityItems.length} item{priorityItems.length !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-
-              {priorityItems.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircleIcon className="w-8 h-8 text-green-500" />
                   </div>
-                  <p className="text-gray-500 mb-1">All caught up!</p>
-                  <p className="text-sm text-gray-400">No priority items at the moment</p>
                 </div>
-              ) : (
-                <div className="space-y-5">
-                  {priorityItems.map(item => (
-                    <Link key={item.id} href={item.actionUrl} className="block group">
-                      <div className="border border-gray-200 rounded-xl p-5 hover:border-orange-300 hover:shadow-md transition-all duration-200 hover:bg-orange-50/30">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 mt-0.5">{getUrgencyIcon(item.urgency)}</div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-gray-900 group-hover:text-orange-900 transition-colors mb-2">
-                              {item.title}
-                            </h4>
-                            <p className="text-sm text-gray-600 mb-3">{item.description}</p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="shrink-0 group-hover:border-orange-300 group-hover:text-orange-700 group-hover:bg-orange-50"
-                          >
-                            {item.actionLabel}
-                          </Button>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+              ))}
+
+              {/* Show more/less toggle for mobile */}
+              {priorityItems.length > 3 && (
+                <button
+                  onClick={() => setExpandedProposals(!expandedProposals)}
+                  className="w-full sm:hidden min-h-[44px] bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <span>
+                    {expandedProposals ? 'Show Less' : `Show ${priorityItems.length - 3} More`}
+                  </span>
+                  <ChevronRightIcon
+                    className={`w-4 h-4 transition-transform ${expandedProposals ? 'rotate-90' : ''}`}
+                  />
+                </button>
               )}
             </div>
-          </section>
-        </div>
+          )}
+        </section>
+
+        {/* Recent Proposals with Mobile Enhancement */}
+        <section className="space-y-4 sm:space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
+              Recent Proposals
+            </h2>
+            <Link
+              href="/proposals"
+              className="min-h-[44px] min-w-[44px] flex items-center gap-1 sm:gap-2 text-sm sm:text-base text-blue-600 hover:text-blue-700 font-medium transition-colors px-3 py-2 rounded-lg hover:bg-blue-50"
+            >
+              <span className="hidden sm:inline">View All</span>
+              <ChevronRightIcon className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {proposals.length === 0 ? (
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 p-6 sm:p-8 text-center">
+              <DocumentTextIcon className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+                No proposals yet
+              </h3>
+              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
+                Create your first proposal to get started.
+              </p>
+              <Button
+                onClick={() => onQuickAction?.('create-proposal')}
+                className="min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-sm sm:text-base font-medium rounded-lg"
+              >
+                Create Proposal
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+              {proposals.slice(0, 6).map(proposal => (
+                <Link
+                  key={proposal.id}
+                  href={`/proposals/${proposal.id}`}
+                  className="group bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <div className="space-y-3 sm:space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                        {proposal.title}
+                      </h3>
+                      {getStatusBadge(proposal.status)}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                      <CalendarIcon className="w-4 h-4 flex-shrink-0" />
+                      <span>Due {new Date(proposal.dueDate).toLocaleDateString()}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          proposal.priority === 'CRITICAL'
+                            ? 'bg-red-100 text-red-700'
+                            : proposal.priority === 'HIGH'
+                              ? 'bg-orange-100 text-orange-700'
+                              : proposal.priority === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {proposal.priority}
+                      </span>
+
+                      <ChevronRightIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Quick Actions Grid - Enhanced Mobile Optimization */}
+        <section className="space-y-4 sm:space-y-6">
+          <h2 className="mobile-heading-fluid text-gray-900">Quick Actions</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+            {[
+              {
+                title: 'Create Proposal',
+                description: 'Start a new proposal from scratch or template',
+                icon: PlusIcon,
+                color: 'bg-blue-50 text-blue-600',
+                href: '/proposals/create',
+                action: 'create-proposal',
+              },
+              {
+                title: 'Search Content',
+                description: 'Find existing content and resources',
+                icon: MagnifyingGlassIcon,
+                color: 'bg-green-50 text-green-600',
+                href: '/content',
+                action: 'search-content',
+              },
+              {
+                title: 'Manage Products',
+                description: 'View and configure product catalog',
+                icon: UsersIcon,
+                color: 'bg-purple-50 text-purple-600',
+                href: '/products',
+                action: 'manage-products',
+              },
+            ].map(action => (
+              <Link
+                key={action.action}
+                href={action.href}
+                onClick={() => onQuickAction?.(action.action)}
+                className="group mobile-card touch-target-enhanced touch-manipulation mobile-gpu-boost bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200 touch-feedback"
+              >
+                <div className="space-y-3 sm:space-y-4">
+                  <div
+                    className={`inline-flex p-2 sm:p-3 rounded-lg sm:rounded-xl ${action.color} touch-target-enhanced`}
+                  >
+                    <action.icon className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </div>
+
+                  <div className="space-y-1 sm:space-y-2">
+                    <h3 className="mobile-text-fluid font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      {action.title}
+                    </h3>
+                    <p className="mobile-text-fluid text-gray-600 line-clamp-2">
+                      {action.description}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end">
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

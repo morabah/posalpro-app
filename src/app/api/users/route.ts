@@ -367,7 +367,7 @@ export async function PUT(request: NextRequest) {
         },
       });
     } catch (auditError) {
-      console.warn('Failed to create audit log:', auditError);
+      errorHandlingService.processError(auditError, 'Failed to create audit log', ErrorCodes.SYSTEM.INTERNAL_ERROR, { component: 'UsersRoute', operation: 'trackProfileUpdate', userStories: ['US-2.1', 'US-2.2'], hypotheses: ['H4', 'H7'], userId: session.user.id });
       // Don't fail the main operation if audit logging fails
     }
 

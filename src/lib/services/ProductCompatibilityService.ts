@@ -3,6 +3,8 @@
  * Handles product compatibility checking and dependency validation
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { Product, ProductRelationship } from '@prisma/client';
 import {
   CircularDependency,
@@ -17,9 +19,11 @@ import { ProductConfiguration, ValidationIssue } from '../../types/validation';
 
 export class ProductCompatibilityService {
   private compatibilityCache: Map<string, CompatibilityResult>;
+  private errorHandlingService: ErrorHandlingService;
 
   constructor() {
     this.compatibilityCache = new Map();
+    this.errorHandlingService = ErrorHandlingService.getInstance();
   }
 
   /**
@@ -29,6 +33,20 @@ export class ProductCompatibilityService {
     const startTime = performance.now();
 
     try {
+      // Log compatibility check start with structured error handling
+      this.errorHandlingService.processError(
+        new Error('Starting product compatibility check'),
+        'Compatibility analysis initiated',
+        ErrorCodes.VALIDATION.PROCESSING,
+        {
+          component: 'ProductCompatibilityService',
+          operation: 'checkProductCompatibility',
+          productCount: products.length,
+          productIds: products.map(p => p.id),
+          userFriendlyMessage: `Checking compatibility for ${products.length} products...`,
+        }
+      );
+
       console.log('Starting product compatibility check', {
         productCount: products.length,
         productIds: products.map(p => p.id),
@@ -86,14 +104,37 @@ export class ProductCompatibilityService {
         executionTime,
       });
 
+      // Log completion with structured error handling
+      this.errorHandlingService.processError(
+        new Error('Product compatibility check completed'),
+        'Compatibility analysis completed successfully',
+        ErrorCodes.VALIDATION.SUCCESS,
+        {
+          component: 'ProductCompatibilityService',
+          operation: 'checkProductCompatibility',
+          productCount: products.length,
+          productIds: products.map(p => p.id),
+          compatibilityScore: result.overall,
+          issuesFound: result.compatibility.filter(c => c.status === 'incompatible').length,
+          userFriendlyMessage: `Compatibility check completed. ${result.compatibility.filter(c => c.status === 'incompatible').length} issues found.`,
+        }
+      );
+
       return result;
     } catch (error) {
-      console.error('Product compatibility check error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        productCount: products.length,
-      });
-
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Product compatibility check failed',
+        ErrorCodes.VALIDATION.OPERATION_FAILED,
+        {
+          component: 'ProductCompatibilityService',
+          operation: 'checkProductCompatibility',
+          productCount: products.length,
+          userFriendlyMessage:
+            'Product compatibility analysis failed. Please check product configurations.',
+        }
+      );
+      throw processedError;
     }
   }
 

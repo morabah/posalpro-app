@@ -5,12 +5,17 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
+import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
-import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 const prismaClient = new PrismaClient();
 
@@ -127,7 +132,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
         new StandardError({
@@ -137,8 +142,8 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'CustomersRoute',
             operation: 'getCustomers',
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
@@ -146,9 +151,11 @@ export async function GET(request: NextRequest) {
         { userFriendlyMessage: 'Please check your search parameters and try again.' }
       );
     }
-    
+
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.NOT_FOUND;
       return createApiErrorResponse(
         new StandardError({
           message: `Database error when fetching customers: ${getPrismaErrorMessage(error.code)}`,
@@ -157,16 +164,19 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'CustomersRoute',
             operation: 'getCustomers',
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
         500,
-        { userFriendlyMessage: 'An error occurred while retrieving customers. Please try again later.' }
+        {
+          userFriendlyMessage:
+            'An error occurred while retrieving customers. Please try again later.',
+        }
       );
     }
-    
+
     return createApiErrorResponse(
       new StandardError({
         message: 'Failed to fetch customers',
@@ -174,13 +184,16 @@ export async function GET(request: NextRequest) {
         cause: error,
         metadata: {
           component: 'CustomersRoute',
-          operation: 'getCustomers'
-        }
+          operation: 'getCustomers',
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      { userFriendlyMessage: 'An unexpected error occurred while retrieving customers. Please try again later.' }
+      {
+        userFriendlyMessage:
+          'An unexpected error occurred while retrieving customers. Please try again later.',
+      }
     );
   }
 }
@@ -220,8 +233,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'CustomersRoute',
             operation: 'createCustomer',
-            field: 'name'
-          }
+            field: 'name',
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
@@ -244,8 +257,8 @@ export async function POST(request: NextRequest) {
             component: 'CustomersRoute',
             operation: 'createCustomer',
             field: 'name',
-            value: name
-          }
+            value: name,
+          },
         }),
         'Duplicate customer',
         ErrorCodes.VALIDATION.DUPLICATE_ENTRY,
@@ -286,7 +299,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
         new StandardError({
@@ -296,21 +309,23 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'CustomersRoute',
             operation: 'createCustomer',
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        { 
+        {
           userFriendlyMessage: 'Please check your customer data and try again',
-          details: error.errors
+          details: error.errors,
         }
       );
     }
-    
+
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.NOT_FOUND;
       return createApiErrorResponse(
         new StandardError({
           message: `Database error when creating customer: ${getPrismaErrorMessage(error.code)}`,
@@ -319,20 +334,23 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'CustomersRoute',
             operation: 'createCustomer',
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
         500,
-        { userFriendlyMessage: 'An error occurred while creating the customer. Please try again later.' }
+        {
+          userFriendlyMessage:
+            'An error occurred while creating the customer. Please try again later.',
+        }
       );
     }
-    
+
     if (error instanceof StandardError) {
       return createApiErrorResponse(error);
     }
-    
+
     return createApiErrorResponse(
       new StandardError({
         message: 'Failed to create customer',
@@ -340,13 +358,16 @@ export async function POST(request: NextRequest) {
         cause: error,
         metadata: {
           component: 'CustomersRoute',
-          operation: 'createCustomer'
-        }
+          operation: 'createCustomer',
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      { userFriendlyMessage: 'An unexpected error occurred while creating the customer. Please try again later.' }
+      {
+        userFriendlyMessage:
+          'An unexpected error occurred while creating the customer. Please try again later.',
+      }
     );
   }
 }
@@ -376,7 +397,20 @@ async function trackCustomerSearchEvent(userId: string, query: string, resultsCo
       },
     });
   } catch (error) {
-    console.warn('Failed to track customer search event:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to track customer search event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'CustomersRoute',
+        operation: 'trackCustomerSearchEvent',
+        userStories: ['US-4.2'],
+        hypotheses: ['H6'],
+        userId,
+        query,
+        resultsCount,
+      }
+    );
     // Don't fail the main operation if analytics tracking fails
   }
 }
@@ -410,7 +444,20 @@ async function trackCustomerCreationEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track customer creation event:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to track customer creation event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'CustomersRoute',
+        operation: 'trackCustomerCreationEvent',
+        userStories: ['US-4.1'],
+        hypotheses: ['H4'],
+        userId,
+        customerId,
+        customerName,
+      }
+    );
     // Don't fail the main operation if analytics tracking fails
   }
 }

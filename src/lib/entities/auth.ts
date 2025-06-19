@@ -5,6 +5,8 @@
  */
 
 import { apiClient, type ApiResponse } from '@/lib/api/client';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { trackAuthEvent } from '@/lib/store/authStore';
 import { loginSchema, registrationSchema } from '@/lib/validation';
 import { UserType } from '@/types/enums';
@@ -101,6 +103,7 @@ export class AuthEntity {
   private static instance: AuthEntity;
   private sessionCache = new Map<string, AuthSession>();
   private readonly SESSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly errorHandlingService = ErrorHandlingService.getInstance();
 
   private constructor() {}
 
@@ -148,8 +151,18 @@ export class AuthEntity {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
-      console.error('Login failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Authentication failed',
+        ErrorCodes.AUTH.INVALID_CREDENTIALS,
+        {
+          component: 'AuthEntity',
+          operation: 'login',
+          email: credentials.email,
+          userFriendlyMessage: 'Invalid email or password. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -186,8 +199,18 @@ export class AuthEntity {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
-      console.error('Registration failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'User registration failed',
+        ErrorCodes.AUTH.INVALID_CREDENTIALS,
+        {
+          component: 'AuthEntity',
+          operation: 'register',
+          email: userData.email,
+          userFriendlyMessage: 'Registration failed. Please check your information and try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -211,8 +234,18 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Logout failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Logout operation failed',
+        ErrorCodes.AUTH.LOGOUT_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'logout',
+          allDevices,
+          userFriendlyMessage: 'Unable to logout properly. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -235,8 +268,17 @@ export class AuthEntity {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
-      console.error('Token refresh failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Token refresh failed',
+        ErrorCodes.AUTH.TOKEN_REFRESH_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'refreshTokens',
+          userFriendlyMessage: 'Your session has expired. Please login again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -253,8 +295,17 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Failed to get current session:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to retrieve current session',
+        ErrorCodes.AUTH.SESSION_INVALID,
+        {
+          component: 'AuthEntity',
+          operation: 'getCurrentSession',
+          userFriendlyMessage: 'Unable to verify your session. Please login again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -273,8 +324,18 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Password reset request failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Password reset request failed',
+        ErrorCodes.AUTH.PASSWORD_RESET_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'requestPasswordReset',
+          email,
+          userFriendlyMessage: 'Unable to process password reset request. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -297,8 +358,19 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Password reset confirmation failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Password reset confirmation failed',
+        ErrorCodes.AUTH.PASSWORD_RESET_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'confirmPasswordReset',
+          tokenPrefix: token.substring(0, 8),
+          userFriendlyMessage:
+            'Password reset token is invalid or expired. Please request a new one.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -321,8 +393,18 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Password change failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Password change operation failed',
+        ErrorCodes.AUTH.PASSWORD_CHANGE_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'changePassword',
+          userFriendlyMessage:
+            'Unable to change password. Please verify your current password and try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -339,8 +421,17 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('2FA setup failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Two-factor authentication setup failed',
+        ErrorCodes.SECURITY.SECURITY_VIOLATION,
+        {
+          component: 'AuthEntity',
+          operation: 'setup2FA',
+          userFriendlyMessage: 'Unable to setup two-factor authentication. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -366,8 +457,18 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('2FA confirmation failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Two-factor authentication confirmation failed',
+        ErrorCodes.SECURITY.TWO_FACTOR_VERIFICATION_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'confirm2FA',
+          setupToken: setupToken.substring(0, 8) + '...',
+          userFriendlyMessage: 'Invalid verification code. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -386,8 +487,18 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('2FA disable failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Two-factor authentication disable failed',
+        ErrorCodes.SECURITY.TWO_FACTOR_DISABLE_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'disable2FA',
+          userFriendlyMessage:
+            'Unable to disable two-factor authentication. Please verify your code and try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -399,8 +510,17 @@ export class AuthEntity {
       const response = await apiClient.get<SecuritySettings>('/auth/security-settings');
       return response;
     } catch (error) {
-      console.error('Failed to get security settings:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to retrieve security settings',
+        ErrorCodes.DATA.FETCH_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'getSecuritySettings',
+          userFriendlyMessage: 'Unable to load security settings. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -421,8 +541,19 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Failed to update security settings:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to update security settings',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'updateSecuritySettings',
+          updatedFields: Object.keys(settings),
+          userFriendlyMessage:
+            'Unable to save security settings. Please check your inputs and try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -439,8 +570,19 @@ export class AuthEntity {
       );
       return response;
     } catch (error) {
-      console.error('Failed to get login history:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to retrieve login history',
+        ErrorCodes.DATA.FETCH_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'getLoginHistory',
+          page,
+          limit,
+          userFriendlyMessage: 'Unable to load login history. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -452,8 +594,17 @@ export class AuthEntity {
       const response = await apiClient.get<DeviceSession[]>('/auth/sessions');
       return response;
     } catch (error) {
-      console.error('Failed to get device sessions:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to retrieve device sessions',
+        ErrorCodes.DATA.FETCH_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'getDeviceSessions',
+          userFriendlyMessage: 'Unable to load active sessions. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -470,8 +621,18 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Failed to revoke device session:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to revoke device session',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'revokeDeviceSession',
+          sessionId,
+          userFriendlyMessage: 'Unable to revoke session. Please try again.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -488,8 +649,19 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Email verification failed:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Email verification failed',
+        ErrorCodes.AUTH.EMAIL_VERIFICATION_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'verifyEmail',
+          tokenPrefix: token.substring(0, 8),
+          userFriendlyMessage:
+            'Email verification token is invalid or expired. Please request a new verification email.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -506,8 +678,17 @@ export class AuthEntity {
 
       return response;
     } catch (error) {
-      console.error('Failed to resend email verification:', error);
-      throw error;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to resend email verification',
+        ErrorCodes.AUTH.EMAIL_VERIFICATION_FAILED,
+        {
+          component: 'AuthEntity',
+          operation: 'resendEmailVerification',
+          userFriendlyMessage: 'Unable to send verification email. Please try again later.',
+        }
+      );
+      throw processedError;
     }
   }
 
@@ -519,7 +700,16 @@ export class AuthEntity {
       const response = await apiClient.get<{ valid: boolean }>('/auth/validate');
       return response.success && response.data?.valid === true;
     } catch (error) {
-      console.error('Session validation failed:', error);
+      this.errorHandlingService.processError(
+        error,
+        'Session validation failed',
+        ErrorCodes.AUTH.SESSION_INVALID,
+        {
+          component: 'AuthEntity',
+          operation: 'validateSession',
+          userFriendlyMessage: 'Unable to validate session. Please login again.',
+        }
+      );
       return false;
     }
   }

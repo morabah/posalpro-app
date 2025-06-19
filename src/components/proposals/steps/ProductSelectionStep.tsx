@@ -348,7 +348,7 @@ export function ProductSelectionStep({
           crossStepValidationResults.errors.length === 0 ? 'valid' : 'invalid',
       };
 
-      analytics.trackWizardStep(4, 'Product Selection', action, {
+      analytics?.trackWizardStep?.(4, 'Product Selection', action, {
         productId,
         ...enhancedMetadata,
         component: 'ProductSelectionStep',

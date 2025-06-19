@@ -254,7 +254,7 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
 
         onUpdateRef.current({ sections: updatedSections as ProposalSection[] });
         lastSentDataRef.current = currentJson;
-        analytics.trackWizardStep(5, 'Section Assignment', 'section_assignment_updated', {
+        analytics?.trackWizardStep?.(5, 'Section Assignment', 'section_assignment_updated', {
           component: 'SectionAssignmentStep',
           ...COMPONENT_MAPPING,
           hypothesisId: ['H4', 'H7'],
@@ -360,7 +360,7 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
   // Track analytics for section assignment
   const trackSectionAssignment = useCallback(
     (action: string, sectionId: string, metadata: any = {}) => {
-      analytics.trackWizardStep(5, 'Section Assignment', action, {
+      analytics?.trackWizardStep?.(5, 'Section Assignment', action, {
         sectionId,
         totalSections: sections.length,
         assignedSections: sections.filter(s => s.assignedTo).length,

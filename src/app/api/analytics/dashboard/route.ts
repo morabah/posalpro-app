@@ -5,12 +5,26 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
+const errorHandlingService = ErrorHandlingService.getInstance();
+
+/**
+ * Component Traceability Matrix
+ */
+const COMPONENT_MAPPING = {
+  userStories: ['US-6.1', 'US-6.2'],
+  acceptanceCriteria: ['AC-6.1.1', 'AC-6.2.1'],
+  methods: ['getAnalyticsDashboard()', 'getHypothesisMetrics()', 'getUserStoryMetrics()'],
+  hypotheses: ['H6', 'H7', 'H8'],
+  testCases: ['TC-H6-001', 'TC-H7-001', 'TC-H8-001'],
+};
 
 /**
  * Query schema for analytics dashboard filters
@@ -25,9 +39,11 @@ const DashboardQuerySchema = z.object({
  * GET - Retrieve comprehensive analytics dashboard data
  */
 export async function GET(request: NextRequest) {
+  let session: any = null;
+
   try {
     // Authentication check
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -56,7 +72,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Calculate overall analytics health score
-    const healthScore = calculateAnalyticsHealthScore({
+    const healthScore = await calculateAnalyticsHealthScore({
       hypothesisMetrics,
       userStoryMetrics,
       performanceBaselines,
@@ -79,7 +95,21 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Analytics dashboard error:', error);
+    errorHandlingService.processError(
+      error,
+      'Analytics dashboard fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'analytics_dashboard_api',
+        operation: 'fetch_dashboard_data',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        userId: session?.user?.id || 'unknown',
+        requestUrl: request.url,
+        queryParams: Object.fromEntries(new URL(request.url).searchParams),
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -149,7 +179,21 @@ async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | nul
       hypothesisBreakdown,
     };
   } catch (error) {
-    console.error('Error fetching hypothesis metrics:', error);
+    errorHandlingService.processError(
+      error,
+      'Hypothesis metrics fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'analytics_dashboard_api',
+        operation: 'fetch_hypothesis_metrics',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        hypothesis,
+        dateFilter: dateFilter?.toISOString(),
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return {
       totalEvents: 0,
       avgImprovement: 0,
@@ -183,7 +227,20 @@ async function getUserStoryMetrics(dateFilter?: Date | null) {
       storiesWithFailures: 2,
     };
   } catch (error) {
-    console.error('Error fetching user story metrics:', error);
+    errorHandlingService.processError(
+      error,
+      'User story metrics fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'analytics_dashboard_api',
+        operation: 'fetch_user_story_metrics',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        dateFilter: dateFilter?.toISOString(),
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return {
       totalStories: 0,
       completedStories: 0,
@@ -234,7 +291,21 @@ async function getPerformanceBaselines(hypothesis?: string, environment?: string
       baselines: mockBaselines,
     };
   } catch (error) {
-    console.error('Error fetching performance baselines:', error);
+    errorHandlingService.processError(
+      error,
+      'Performance baselines fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'analytics_dashboard_api',
+        operation: 'fetch_performance_baselines',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        hypothesis,
+        environment,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return {
       totalBaselines: 0,
       avgTargetImprovement: 0,
@@ -270,7 +341,20 @@ async function getComponentTraceabilityMetrics() {
       analyticsCoverage: 60,
     };
   } catch (error) {
-    console.error('Error fetching component traceability:', error);
+    errorHandlingService.processError(
+      error,
+      'Component traceability metrics fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'analytics_dashboard_api',
+        operation: 'fetch_component_traceability',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        componentTypes: ['SearchComponent', 'ProposalCreationForm', 'ValidationEngine'],
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return {
       totalComponents: 0,
       validComponents: 0,
@@ -315,7 +399,20 @@ async function getRecentActivity(dateFilter?: Date | null) {
       user: event.user.name,
     }));
   } catch (error) {
-    console.error('Error fetching recent activity:', error);
+    await errorHandlingService.processError(
+      error,
+      'Recent activity fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'analytics_dashboard_api',
+        operation: 'fetch_recent_activity',
+        userStories: ['US-6.1', 'US-6.2'],
+        hypotheses: ['H6'],
+        dateFilter: dateFilter?.toISOString(),
+        queryLimit: 10,
+      }
+    );
+
     return [];
   }
 }
@@ -323,7 +420,7 @@ async function getRecentActivity(dateFilter?: Date | null) {
 /**
  * Calculate overall analytics health score
  */
-function calculateAnalyticsHealthScore(data: any): number {
+async function calculateAnalyticsHealthScore(data: any): Promise<number> {
   try {
     const weights = {
       hypothesisSuccessRate: 0.3,
@@ -348,7 +445,20 @@ function calculateAnalyticsHealthScore(data: any): number {
 
     return Math.round(weightedScore);
   } catch (error) {
-    console.error('Error calculating health score:', error);
+    errorHandlingService.processError(
+      error,
+      'Health score calculation failed',
+      ErrorCodes.DATA.CALCULATION_FAILED,
+      {
+        context: 'analytics_dashboard_api',
+        operation: 'calculate_health_score',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        dataKeys: Object.keys(data || {}),
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return 0;
   }
 }

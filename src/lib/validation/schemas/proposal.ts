@@ -42,7 +42,7 @@ export const proposalMetadataSchema = z.object({
 
   currency: z.string().length(3, 'Currency must be a 3-letter ISO code').default('USD'),
 
-  deadline: z.date().min(new Date(), 'Deadline must be in the future'),
+  deadline: z.date().refine(date => date > new Date(), 'Deadline must be in the future'),
 
   priority: prioritySchema,
 

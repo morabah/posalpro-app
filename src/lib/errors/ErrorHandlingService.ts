@@ -37,30 +37,83 @@ export class ErrorHandlingService {
     defaultCode: ErrorCode = ErrorCodes.SYSTEM.UNKNOWN,
     metadata?: ErrorMetadata
   ): StandardError {
-    // If it's already a StandardError, return it
-    if (error instanceof StandardError) {
-      return error;
+    // If it's already a StandardError, return it (robust check)
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      'name' in error &&
+      (error as any).name === 'StandardError'
+    ) {
+      return error as StandardError;
     }
 
-    // Process based on error type
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return this.processPrismaError(error, defaultMessage, metadata);
+    // Fallback instanceof check with protection
+    try {
+      if (error instanceof StandardError) {
+        return error;
+      }
+    } catch (instanceofError) {
+      // instanceof failed, continue with other checks
     }
 
-    if (error instanceof z.ZodError) {
-      return this.processZodError(error, defaultMessage, metadata);
+    // Process based on error type with protected instanceof checks
+    try {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        return this.processPrismaError(error, defaultMessage, metadata);
+      }
+    } catch (instanceofError) {
+      // Prisma instanceof failed, check manually
+      if (error && typeof error === 'object' && 'code' in error && 'clientVersion' in error) {
+        return this.processPrismaError(
+          error as Prisma.PrismaClientKnownRequestError,
+          defaultMessage,
+          metadata
+        );
+      }
     }
 
-    if (error instanceof Error) {
-      return new StandardError({
-        message: error.message || defaultMessage,
-        code: defaultCode,
-        cause: error,
-        metadata: {
-          ...metadata,
-          stack: error.stack,
-        },
-      });
+    try {
+      if (error instanceof z.ZodError) {
+        return this.processZodError(error, defaultMessage, metadata);
+      }
+    } catch (instanceofError) {
+      // Zod instanceof failed, check manually
+      if (
+        error &&
+        typeof error === 'object' &&
+        'issues' in error &&
+        Array.isArray((error as any).issues)
+      ) {
+        return this.processZodError(error as z.ZodError, defaultMessage, metadata);
+      }
+    }
+
+    try {
+      if (error instanceof Error) {
+        return new StandardError({
+          message: error.message || defaultMessage,
+          code: defaultCode,
+          cause: error,
+          metadata: {
+            ...metadata,
+            stack: error.stack,
+          },
+        });
+      }
+    } catch (instanceofError) {
+      // Error instanceof failed, check manually
+      if (error && typeof error === 'object' && 'message' in error && 'stack' in error) {
+        return new StandardError({
+          message: (error as Error).message || defaultMessage,
+          code: defaultCode,
+          cause: error,
+          metadata: {
+            ...metadata,
+            stack: (error as Error).stack,
+          },
+        });
+      }
     }
 
     // For unknown error types
@@ -343,7 +396,7 @@ export function getUserFriendlyMessage(error: unknown): string {
 }
 
 // Re-export types and constants
-export { ErrorCodes, errorCodeToHttpStatus } from './ErrorCodes';
-export type { ErrorCategory, ErrorCode } from './ErrorCodes';
+export { ErrorCategory, ErrorCodes, errorCodeToHttpStatus } from './ErrorCodes';
+export type { ErrorCode } from './ErrorCodes';
 export { StandardError } from './StandardError';
 export type { ErrorMetadata } from './StandardError';

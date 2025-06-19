@@ -5,12 +5,15 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
+const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
  * Component Traceability Matrix:
@@ -38,9 +41,12 @@ const SearchQuerySchema = z.object({
  * GET /api/search - Global search across all entities
  */
 export async function GET(request: NextRequest) {
+  let session: any = null;
+  let validatedQuery: any = null;
+
   try {
     // Authentication check
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -48,7 +54,7 @@ export async function GET(request: NextRequest) {
     // Parse and validate query parameters
     const { searchParams } = new URL(request.url);
     const queryParams = Object.fromEntries(searchParams);
-    const validatedQuery = SearchQuerySchema.parse(queryParams);
+    validatedQuery = SearchQuerySchema.parse(queryParams);
 
     // Parse filters if provided
     let parsedFilters: any = {};
@@ -84,7 +90,17 @@ export async function GET(request: NextRequest) {
       message: 'Search completed successfully',
     });
   } catch (error) {
-    console.error('Search error:', error);
+    errorHandlingService.processError(
+      error,
+      'Search operation failed',
+      ErrorCodes.DATA.SEARCH_FAILED,
+      {
+        component: 'SearchRoute',
+        query: validatedQuery?.q,
+        searchType: validatedQuery?.type,
+        userId: session?.user?.id,
+      }
+    );
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -199,7 +215,19 @@ async function searchContent(searchTerm: string, filters: any, query: any) {
       take: 50,
     });
   } catch (error) {
-    console.error('Content search error:', error);
+    errorHandlingService.processError(
+      error,
+      'Content search failed',
+      ErrorCodes.DATA.SEARCH_FAILED,
+      {
+        component: 'SearchRoute',
+        operation: 'searchContent',
+        userStories: ['US-1.1'],
+        hypotheses: ['H1'],
+        searchTerm,
+        filters,
+      }
+    );
     return [];
   }
 }
@@ -261,7 +289,20 @@ async function searchProposals(searchTerm: string, filters: any, query: any, use
       take: 50,
     });
   } catch (error) {
-    console.error('Proposal search error:', error);
+    errorHandlingService.processError(
+      error,
+      'Proposal search failed',
+      ErrorCodes.DATA.SEARCH_FAILED,
+      {
+        component: 'SearchRoute',
+        operation: 'searchProposals',
+        userStories: ['US-1.2'],
+        hypotheses: ['H1'],
+        searchTerm,
+        filters,
+        userId,
+      }
+    );
     return [];
   }
 }
@@ -308,7 +349,19 @@ async function searchProducts(searchTerm: string, filters: any, query: any) {
       take: 50,
     });
   } catch (error) {
-    console.error('Product search error:', error);
+    errorHandlingService.processError(
+      error,
+      'Product search failed',
+      ErrorCodes.DATA.SEARCH_FAILED,
+      {
+        component: 'SearchRoute',
+        operation: 'searchProducts',
+        userStories: ['US-1.2'],
+        hypotheses: ['H1'],
+        searchTerm,
+        filters,
+      }
+    );
     return [];
   }
 }
@@ -354,7 +407,19 @@ async function searchCustomers(searchTerm: string, filters: any, query: any) {
       take: 50,
     });
   } catch (error) {
-    console.error('Customer search error:', error);
+    errorHandlingService.processError(
+      error,
+      'Customer search failed',
+      ErrorCodes.DATA.SEARCH_FAILED,
+      {
+        component: 'SearchRoute',
+        operation: 'searchCustomers',
+        userStories: ['US-1.2'],
+        hypotheses: ['H1'],
+        searchTerm,
+        filters,
+      }
+    );
     return [];
   }
 }
@@ -408,7 +473,14 @@ async function searchUsers(searchTerm: string, filters: any, query: any) {
       take: 50,
     });
   } catch (error) {
-    console.error('User search error:', error);
+    errorHandlingService.processError(error, 'User search failed', ErrorCodes.DATA.SEARCH_FAILED, {
+      component: 'SearchRoute',
+      operation: 'searchUsers',
+      userStories: ['US-1.2'],
+      hypotheses: ['H1'],
+      searchTerm,
+      filters,
+    });
     return [];
   }
 }
@@ -509,7 +581,20 @@ async function trackSearchEvent(userId: string, query: string, type: string) {
       },
     });
   } catch (error) {
-    console.warn('Failed to track search event:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to track search event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'SearchRoute',
+        operation: 'trackSearchEvent',
+        userStories: ['US-1.1'],
+        hypotheses: ['H1'],
+        userId,
+        query,
+        type,
+      }
+    );
     // Don't fail the search if analytics tracking fails
   }
 }

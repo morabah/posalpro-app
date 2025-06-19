@@ -5,12 +5,16 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import { EntityType, Prisma, PrismaClient } from '@prisma/client';
+import prismaClient from '@/lib/db/prisma';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { EntityType, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+const prisma = prismaClient;
+const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
  * Component Traceability Matrix:
@@ -157,7 +161,17 @@ export async function GET(request: NextRequest) {
       message: 'Workflows retrieved successfully',
     });
   } catch (error) {
-    console.error('Workflows fetch error:', error);
+    errorHandlingService.processError(
+      error,
+      'Workflows fetch failed',
+      ErrorCodes.DATA.QUERY_FAILED,
+      {
+        component: 'WorkflowRoute',
+        operation: 'GET',
+        userStories: ['US-4.1', 'US-4.3'],
+        hypotheses: ['H7'],
+      }
+    );
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -221,7 +235,17 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Workflow creation error:', error);
+    errorHandlingService.processError(
+      error,
+      'Workflow creation failed',
+      ErrorCodes.DATA.CREATE_FAILED,
+      {
+        component: 'WorkflowRoute',
+        operation: 'POST',
+        userStories: ['US-4.1', 'US-4.3'],
+        hypotheses: ['H7'],
+      }
+    );
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -272,7 +296,17 @@ export async function PUT(request: NextRequest) {
       message: 'Workflow updated successfully',
     });
   } catch (error) {
-    console.error('Workflow update error:', error);
+    errorHandlingService.processError(
+      error,
+      'Workflow update failed',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      {
+        component: 'WorkflowRoute',
+        operation: 'PUT',
+        userStories: ['US-4.1', 'US-4.3'],
+        hypotheses: ['H7'],
+      }
+    );
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -286,7 +320,34 @@ export async function PUT(request: NextRequest) {
 }
 
 async function trackWorkflowSearchEvent(userId: string, query: string, resultsCount: number) {
-  console.log('ANALYTICS: trackWorkflowSearchEvent', { userId, query, resultsCount });
+  try {
+    await prisma.hypothesisValidationEvent.create({
+      data: {
+        userId,
+        hypothesis: 'H7',
+        userStoryId: 'US-4.1',
+        componentId: 'WorkflowRoute',
+        action: 'workflow_search',
+        measurementData: {
+          query,
+          resultsCount,
+          timestamp: new Date(),
+        },
+        targetValue: 2.0,
+        actualValue: resultsCount > 0 ? 1.0 : 0.0,
+        performanceImprovement: 0,
+        userRole: 'user',
+        sessionId: `workflow_search_${Date.now()}`,
+      },
+    });
+  } catch (error) {
+    errorHandlingService.processError(
+      error,
+      'Failed to track workflow search event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      { component: 'WorkflowRoute', operation: 'trackWorkflowSearchEvent', userId, query }
+    );
+  }
 }
 
 async function trackWorkflowCreationEvent(
@@ -294,7 +355,34 @@ async function trackWorkflowCreationEvent(
   workflowId: string,
   workflowName: string
 ) {
-  console.log('ANALYTICS: trackWorkflowCreationEvent', { userId, workflowId, workflowName });
+  try {
+    await prisma.hypothesisValidationEvent.create({
+      data: {
+        userId,
+        hypothesis: 'H7',
+        userStoryId: 'US-4.3',
+        componentId: 'WorkflowRoute',
+        action: 'workflow_created',
+        measurementData: {
+          workflowId,
+          workflowName,
+          timestamp: new Date(),
+        },
+        targetValue: 1.0,
+        actualValue: 1.0,
+        performanceImprovement: 0,
+        userRole: 'user',
+        sessionId: `workflow_creation_${Date.now()}`,
+      },
+    });
+  } catch (error) {
+    errorHandlingService.processError(
+      error,
+      'Failed to track workflow creation event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      { component: 'WorkflowRoute', operation: 'trackWorkflowCreationEvent', userId, workflowId }
+    );
+  }
 }
 
 async function trackWorkflowUpdateEvent(
@@ -303,10 +391,33 @@ async function trackWorkflowUpdateEvent(
   workflowName: string,
   updatedFields: string[]
 ) {
-  console.log('ANALYTICS: trackWorkflowUpdateEvent', {
-    userId,
-    workflowId,
-    workflowName,
-    updatedFields,
-  });
+  try {
+    await prisma.hypothesisValidationEvent.create({
+      data: {
+        userId,
+        hypothesis: 'H7',
+        userStoryId: 'US-4.3',
+        componentId: 'WorkflowRoute',
+        action: 'workflow_updated',
+        measurementData: {
+          workflowId,
+          workflowName,
+          updatedFields,
+          timestamp: new Date(),
+        },
+        targetValue: 1.0,
+        actualValue: 1.0,
+        performanceImprovement: 0,
+        userRole: 'user',
+        sessionId: `workflow_update_${Date.now()}`,
+      },
+    });
+  } catch (error) {
+    errorHandlingService.processError(
+      error,
+      'Failed to track workflow update event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      { component: 'WorkflowRoute', operation: 'trackWorkflowUpdateEvent', userId, workflowId }
+    );
+  }
 }

@@ -484,7 +484,7 @@ async function trackProductSearchEvent(userId: string, query: string, resultsCou
       },
     });
   } catch (error) {
-    console.warn('Failed to track product search event:', error);
+    errorHandlingService.processError(error, 'Failed to track product search event', ErrorCodes.ANALYTICS.TRACKING_ERROR, { component: 'ProductsRoute', operation: 'trackProductSearchEvent', userStories: ['US-3.1'], hypotheses: ['H3'], userId, query });
     // Don't fail the main operation if analytics tracking fails
   }
 }
@@ -514,7 +514,7 @@ async function trackProductCreationEvent(userId: string, productId: string, prod
       },
     });
   } catch (error) {
-    console.warn('Failed to track product creation event:', error);
+    errorHandlingService.processError(error, 'Failed to track product creation event', ErrorCodes.ANALYTICS.TRACKING_ERROR, { component: 'ProductsRoute', operation: 'trackProductCreationEvent', userStories: ['US-3.1'], hypotheses: ['H4'], userId, productId });
     // Don't fail the main operation if analytics tracking fails
   }
 }

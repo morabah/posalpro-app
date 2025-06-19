@@ -5,9 +5,24 @@
  */
 
 import { prisma } from '@/lib/db/client';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+
+const errorHandlingService = ErrorHandlingService.getInstance();
+
+/**
+ * Component Traceability Matrix
+ */
+const COMPONENT_MAPPING = {
+  userStories: ['US-7.3', 'US-7.4', 'US-7.5'],
+  acceptanceCriteria: ['AC-7.3.1', 'AC-7.4.1', 'AC-7.5.1'],
+  methods: ['getUsers()', 'createUser()', 'updateUser()', 'deleteUser()'],
+  hypotheses: ['H8'],
+  testCases: ['TC-H8-003', 'TC-H8-004', 'TC-H8-005'],
+};
 
 // Validation schemas
 const GetUsersSchema = z.object({
@@ -126,7 +141,20 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Failed to fetch users:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to fetch users',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'admin_users_api',
+        operation: 'fetch_users',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        requestUrl: request.url,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return NextResponse.json(
       {
         error: 'Failed to fetch users',
@@ -139,9 +167,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/admin/users - Create new user
 export async function POST(request: NextRequest) {
+  let userEmail: string | undefined;
+
   try {
     const body = await request.json();
     const userData = CreateUserSchema.parse(body);
+    userEmail = userData.email;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -199,7 +230,21 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Failed to create user:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to create user',
+      ErrorCodes.DATA.CREATE_FAILED,
+      {
+        context: 'admin_users_api',
+        operation: 'create_user',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        requestUrl: request.url,
+        userEmail: userEmail,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return NextResponse.json(
       {
         error: 'Failed to create user',
@@ -212,9 +257,12 @@ export async function POST(request: NextRequest) {
 
 // PUT /api/admin/users - Update user
 export async function PUT(request: NextRequest) {
+  let updateUserId: string | undefined;
+
   try {
     const body = await request.json();
     const { id, ...updateData } = body;
+    updateUserId = id;
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -251,7 +299,21 @@ export async function PUT(request: NextRequest) {
       message: 'User updated successfully',
     });
   } catch (error) {
-    console.error('Failed to update user:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to update user',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      {
+        context: 'admin_users_api',
+        operation: 'update_user',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        requestUrl: request.url,
+        userId: updateUserId,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return NextResponse.json(
       {
         error: 'Failed to update user',
@@ -264,17 +326,19 @@ export async function PUT(request: NextRequest) {
 
 // DELETE /api/admin/users - Delete user
 export async function DELETE(request: NextRequest) {
+  let deleteUserId: string | undefined = undefined;
+
   try {
     const url = new URL(request.url);
-    const userId = url.searchParams.get('id');
+    deleteUserId = url.searchParams.get('id') || undefined;
 
-    if (!userId) {
+    if (!deleteUserId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     // Check if user exists
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: deleteUserId },
     });
 
     if (!user) {
@@ -283,14 +347,28 @@ export async function DELETE(request: NextRequest) {
 
     // Delete user (cascade will handle related records)
     await prisma.user.delete({
-      where: { id: userId },
+      where: { id: deleteUserId },
     });
 
     return NextResponse.json({
       message: 'User deleted successfully',
     });
   } catch (error) {
-    console.error('Failed to delete user:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to delete user',
+      ErrorCodes.DATA.DELETE_FAILED,
+      {
+        context: 'admin_users_api',
+        operation: 'delete_user',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        requestUrl: request.url,
+        userId: deleteUserId,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return NextResponse.json(
       {
         error: 'Failed to delete user',

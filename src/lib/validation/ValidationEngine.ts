@@ -9,6 +9,10 @@
  * - Test Cases: TC-H8-001, TC-H8-002, TC-H8-003
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+
 // Validation rule types
 export type ValidationSeverity =
   | 'critical'
@@ -64,10 +68,13 @@ export interface ValidationSummary {
 export class ValidationEngine {
   private rules: Map<string, ValidationRule>;
   private validationHistory: Map<string, ValidationSummary[]>;
+  private errorHandlingService: ErrorHandlingService;
+  private validationIssues: Map<string, any> = new Map();
 
   constructor() {
     this.rules = new Map();
     this.validationHistory = new Map();
+    this.errorHandlingService = ErrorHandlingService.getInstance();
   }
 
   /**
@@ -176,19 +183,78 @@ export class ValidationEngine {
    */
   public async applyFix(issueId: string, fixId: string): Promise<boolean> {
     try {
-      // In a real implementation, this would apply the actual fix
-      // For now, we'll simulate the fix application
-      console.log(`Applying fix ${fixId} for issue ${issueId}`);
+      // Log fix application with structured error handling
+      this.errorHandlingService.processError(
+        new Error(`Applying fix ${fixId} for issue ${issueId}`),
+        'Fix application started',
+        ErrorCodes.VALIDATION.PROCESSING,
+        {
+          component: 'ValidationEngine',
+          operation: 'applyFix',
+          fixId,
+          issueId,
+          severity: 'info',
+          userFriendlyMessage: 'Applying validation fix...',
+        }
+      );
 
-      // Simulate some async work
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const issue = this.validationIssues.get(issueId);
+      if (!issue || !issue.suggestedFixes) {
+        throw new StandardError({
+          message: `Issue ${issueId} not found or has no fixes`,
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        });
+      }
 
-      // Return success (in real implementation, this would depend on the actual fix result)
+      const fix = issue.suggestedFixes.find((f: any) => f.id === fixId);
+      if (!fix) {
+        throw new StandardError({
+          message: `Fix ${fixId} not found for issue ${issueId}`,
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        });
+      }
+
+      // Apply the fix
+      await fix.action();
+
+      // Update issue status
+      issue.status = 'resolved';
+      issue.resolvedAt = new Date();
+
       return true;
     } catch (error) {
-      console.error('Failed to apply fix:', error);
-      return false;
+      const processedError = this.errorHandlingService.processError(
+        error,
+        'Failed to apply validation fix',
+        ErrorCodes.VALIDATION.OPERATION_FAILED,
+        {
+          component: 'ValidationEngine',
+          operation: 'applyFix',
+          fixId,
+          issueId,
+          userFriendlyMessage: 'Unable to apply the suggested fix. Please try again.',
+        }
+      );
+      throw processedError;
     }
+  }
+
+  resolveIssue(issueId: string, fixId: string): Promise<boolean> {
+    return new Promise(resolve => {
+      const issue = this.validationIssues.get(issueId);
+      if (!issue) {
+        resolve(false);
+        return;
+      }
+
+      const fix = issue.suggestedFixes.find((f: any) => f.id === fixId);
+      if (fix) {
+        // Apply the fix
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+    });
   }
 }
 

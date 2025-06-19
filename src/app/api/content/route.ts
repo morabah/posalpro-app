@@ -6,11 +6,14 @@
 
 import { authOptions } from '@/lib/auth';
 import prismaClient from '@/lib/db/prisma';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const prisma = prismaClient;
+const errorHandlingService = ErrorHandlingService.getInstance();
 
 // Transform database ContentType enum to frontend enum values
 function transformContentType(dbType: string): string {
@@ -63,7 +66,18 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
 
     return hasPermission;
   } catch (error) {
-    console.error('Error checking user permissions:', error);
+    errorHandlingService.processError(
+      error,
+      'Permission check failed',
+      ErrorCodes.AUTH.PERMISSION_DENIED,
+      {
+        component: 'ContentRoute',
+        operation: 'checkUserPermissions',
+        userStories: ['US-6.1'],
+        hypotheses: ['H6'],
+        userId,
+      }
+    );
     return false;
   }
 }
@@ -81,7 +95,17 @@ export async function GET(request: NextRequest) {
     });
 
     if (!session?.user?.id) {
-      console.error('Unauthorized access attempt - No valid session');
+      errorHandlingService.processError(
+        new Error('No valid session'),
+        'Unauthorized access attempt',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        {
+          component: 'ContentRoute',
+          operation: 'GET',
+          userStories: ['US-6.1'],
+          hypotheses: ['H6'],
+        }
+      );
       return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
@@ -91,7 +115,18 @@ export async function GET(request: NextRequest) {
     console.log('Permission check result:', { canRead, userId: session.user.id });
 
     if (!canRead) {
-      console.error('Permission denied for user:', session.user.id);
+      errorHandlingService.processError(
+        new Error('Permission denied'),
+        'User lacks required permissions',
+        ErrorCodes.AUTH.PERMISSION_DENIED,
+        {
+          component: 'ContentRoute',
+          operation: 'GET',
+          userStories: ['US-6.1'],
+          hypotheses: ['H6'],
+          userId: session.user.id,
+        }
+      );
       return NextResponse.json(
         { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
         { status: 403 }
@@ -197,14 +232,30 @@ export async function GET(request: NextRequest) {
         },
       });
     } catch (error) {
-      console.error('Database query error:', error);
+      errorHandlingService.processError(
+        error,
+        'Database query failed',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ContentRoute',
+          operation: 'contentQuery',
+          userStories: ['US-6.1'],
+          hypotheses: ['H6'],
+          query,
+        }
+      );
       return NextResponse.json(
         { error: 'Database query failed', code: 'DB_ERROR' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('API route error:', error);
+    errorHandlingService.processError(
+      error,
+      'Content API route error',
+      ErrorCodes.API.REQUEST_FAILED,
+      { component: 'ContentRoute', operation: 'GET', userStories: ['US-6.1'], hypotheses: ['H6'] }
+    );
 
     // Determine if it's a validation error
     if (error instanceof z.ZodError) {

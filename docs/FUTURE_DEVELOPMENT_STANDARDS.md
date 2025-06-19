@@ -9,6 +9,70 @@ eliminates the need for future type safety cleanup phases.
 
 ---
 
+## ⚡ **QUICK REFERENCE CHECKLIST**
+
+### **Before You Code**
+
+```bash
+# Required pre-development checks
+npm run type-check    # Must return 0 errors
+npm run lint         # Must be clean
+npm run quality:check # All checks pass
+```
+
+### **TypeScript Essentials**
+
+```typescript
+// ✅ DO: Explicit interfaces
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: Date;
+}
+
+// ❌ DON'T: Any types
+const data: any = response; // NEVER use any
+```
+
+### **Component Template Pattern**
+
+```typescript
+// Component Traceability Matrix (MANDATORY)
+const COMPONENT_MAPPING = {
+  userStories: ['US-X.X'],
+  acceptanceCriteria: ['AC-X.X.X'],
+  methods: ['methodName()'],
+  hypotheses: ['HX'],
+  testCases: ['TC-HX-XXX'],
+};
+
+interface Props {
+  data: TypedData;
+  onAction: (result: ActionResult) => void;
+}
+
+export function Component({ data, onAction }: Props) {
+  const { handleAsyncError } = useErrorHandling();
+  const analytics = useAnalytics();
+
+  // Component logic with error handling
+  return <div>Content</div>;
+}
+```
+
+### **Pre-Commit Validation Checklist**
+
+- [ ] `npm run type-check` → 0 errors
+- [ ] `npm run lint` → passes
+- [ ] `npm run test` → all pass
+- [ ] Error handling → standardized patterns
+- [ ] Component Traceability Matrix → implemented
+- [ ] WCAG 2.1 AA → compliant
+- [ ] Documentation → updated
+
+---
+
 ## 🚨 **CRITICAL WARNING: Always Use Established Error Handling System**
 
 **⚠️ LESSON LEARNED**: Never implement custom error handling! Always use the

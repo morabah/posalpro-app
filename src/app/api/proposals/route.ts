@@ -145,7 +145,20 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
 
     return hasPermission;
   } catch (error) {
-    console.error('Error checking user permissions:', error);
+    errorHandlingService.processError(
+      error,
+      'Error checking user permissions',
+      ErrorCodes.AUTH.PERMISSION_DENIED,
+      {
+        component: 'ProposalsRoute',
+        operation: 'checkUserPermissions',
+        userStories: ['US-5.1', 'US-5.2'],
+        hypotheses: ['H4', 'H7'],
+        userId,
+        action,
+        scope,
+      }
+    );
     return false;
   }
 }
@@ -153,17 +166,20 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
 // GET /api/proposals - List proposals with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
-    console.log('GET /api/proposals - Starting request processing');
-
     const session = await getServerSession(authOptions);
-    console.log('Session data:', {
-      userId: session?.user?.id,
-      userEmail: session?.user?.email,
-      isAuthenticated: !!session,
-    });
 
     if (!session?.user?.id) {
-      console.error('Unauthorized access attempt - No valid session');
+      errorHandlingService.processError(
+        new Error('Unauthorized access attempt - No valid session'),
+        'Unauthorized access attempt',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        {
+          component: 'ProposalsRoute',
+          operation: 'getProposals',
+          userStories: ['US-5.1', 'US-5.2'],
+          hypotheses: ['H4', 'H7'],
+        }
+      );
       return createApiErrorResponse(
         new StandardError({
           message: 'Unauthorized access attempt',
@@ -181,12 +197,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Check read permissions
-    console.log('Checking user permissions...');
     const canRead = await checkUserPermissions(session.user.id, 'read');
-    console.log('Permission check result:', { canRead, userId: session.user.id });
 
     if (!canRead) {
-      console.error('Permission denied for user:', session.user.id);
+      errorHandlingService.processError(
+        new Error('Permission denied for user'),
+        'Permission denied for user',
+        ErrorCodes.AUTH.FORBIDDEN,
+        {
+          component: 'ProposalsRoute',
+          operation: 'getProposals',
+          userStories: ['US-5.1', 'US-5.2'],
+          hypotheses: ['H4', 'H7'],
+          userId: session.user.id,
+        }
+      );
       return createApiErrorResponse(
         new StandardError({
           message: 'Insufficient permissions to read proposals',
@@ -207,10 +232,8 @@ export async function GET(request: NextRequest) {
     // Parse and validate query parameters
     const url = new URL(request.url);
     const queryParams = Object.fromEntries(url.searchParams.entries());
-    console.log('Query parameters:', queryParams);
 
     const query = ProposalQuerySchema.parse(queryParams);
-    console.log('Validated query:', query);
 
     // Build where clause
     const where: any = {};
@@ -237,8 +260,6 @@ export async function GET(request: NextRequest) {
         { description: { contains: query.search, mode: 'insensitive' } },
       ];
     }
-
-    console.log('Prisma where clause:', where);
 
     try {
       // Calculate pagination
@@ -397,13 +418,8 @@ export async function GET(request: NextRequest) {
 
       if (error.code === 'P2021') {
         errorCode = ErrorCodes.DATA.DATABASE_ERROR;
-        message = 'Database table not found';
-      } else if (error.code === 'P2002') {
-        errorCode = ErrorCodes.DATA.CONFLICT;
-        statusCode = 409;
-        message = 'Unique constraint violation';
-        userFriendlyMessage =
-          'A conflict occurred with existing data. Please check your input and try again.';
+        message = 'Database connection error';
+        userFriendlyMessage = 'Unable to connect to the database. Please try again later.';
       }
 
       return createApiErrorResponse(
@@ -424,15 +440,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Handle StandardError instances
-    if (error instanceof StandardError) {
-      return createApiErrorResponse(error, error.message, error.code, 500, {
-        userFriendlyMessage:
-          'An error occurred while processing your request. Please try again later.',
-      });
-    }
-
-    // Default case: internal server error
     return createApiErrorResponse(
       new StandardError({
         message: 'Internal server error',
@@ -451,10 +458,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/proposals - Create new proposal
+// POST /api/proposals - Create a new proposal
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+
     if (!session?.user?.id) {
       return createApiErrorResponse(
         new StandardError({
@@ -468,12 +476,13 @@ export async function POST(request: NextRequest) {
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
         401,
-        { userFriendlyMessage: 'You must be logged in to create a proposal' }
+        { userFriendlyMessage: 'You must be logged in to create proposals' }
       );
     }
 
     // Check create permissions
     const canCreate = await checkUserPermissions(session.user.id, 'create');
+
     if (!canCreate) {
       return createApiErrorResponse(
         new StandardError({
@@ -494,9 +503,6 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
-    console.log('🔍 [DEBUG] Raw request body:', body);
-    console.log('🔍 [DEBUG] Body type:', typeof body);
-    console.log('🔍 [DEBUG] Body keys:', Object.keys(body || {}));
 
     const validatedData = ProposalCreateSchema.parse(body);
 

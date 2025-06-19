@@ -5,7 +5,22 @@
  */
 
 import { prisma } from '@/lib/db/client';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { NextRequest, NextResponse } from 'next/server';
+
+const errorHandlingService = ErrorHandlingService.getInstance();
+
+/**
+ * Component Traceability Matrix
+ */
+const COMPONENT_MAPPING = {
+  userStories: ['US-7.1', 'US-7.2'],
+  acceptanceCriteria: ['AC-7.1.1', 'AC-7.2.1'],
+  methods: ['getSystemMetrics()', 'checkSystemHealth()'],
+  hypotheses: ['H8'],
+  testCases: ['TC-H8-001', 'TC-H8-002'],
+};
 
 // GET /api/admin/metrics - Fetch system metrics from database
 export async function GET(request: NextRequest) {
@@ -114,7 +129,19 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Failed to fetch system metrics:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to fetch system metrics',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        context: 'admin_metrics_api',
+        operation: 'fetch_system_metrics',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        requestUrl: request.url,
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     return NextResponse.json(
       {

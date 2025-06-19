@@ -5,7 +5,22 @@
  */
 
 import { prisma } from '@/lib/db/client';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { NextRequest, NextResponse } from 'next/server';
+
+const errorHandlingService = ErrorHandlingService.getInstance();
+
+/**
+ * Component Traceability Matrix
+ */
+const COMPONENT_MAPPING = {
+  userStories: ['US-7.1'],
+  acceptanceCriteria: ['AC-7.1.1'],
+  methods: ['healthCheck()', 'systemHealthValidation()'],
+  hypotheses: ['H8'],
+  testCases: ['TC-H8-001'],
+};
 
 interface HealthCheckResult {
   component: string;
@@ -262,7 +277,19 @@ export async function GET(): Promise<NextResponse> {
       { status: httpStatus }
     );
   } catch (error) {
-    console.error('Health check failed:', error);
+    const processedError = errorHandlingService.processError(
+      error,
+      'Health check system failure',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        context: 'health_check_api',
+        operation: 'system_health_validation',
+        userStories: ['US-7.1'],
+        hypotheses: ['H8'],
+        timestamp: new Date().toISOString(),
+        responseTime: Date.now() - startTime,
+      }
+    );
 
     return NextResponse.json(
       {

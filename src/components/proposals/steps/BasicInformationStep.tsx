@@ -87,6 +87,9 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   const [customersLoading, setCustomersLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
+  // Date validation state
+  const [dateWarning, setDateWarning] = useState<string | null>(null);
+
   const [fieldInteractions, setFieldInteractions] = useState(0);
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
@@ -95,6 +98,37 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   }, [onUpdate]);
+
+  // Fetch customers on component mount
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setCustomersLoading(true);
+      try {
+        const response = await apiClient.get<{ data: { customers: Customer[] } }>('/customers');
+
+        console.log('🔍 [DEBUG] Customers API response:', response);
+
+        if (response.success && response.data?.data?.customers) {
+          const customerList = response.data.data.customers;
+          setCustomers(customerList);
+
+          // If we have a selected customer ID, find and set the customer
+          if (data.client?.id) {
+            const existingCustomer = customerList.find(c => c.id === data.client?.id);
+            if (existingCustomer) {
+              setSelectedCustomer(existingCustomer);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, [data.client?.id]);
 
   const formatDateForInput = (dateValue: any): string => {
     if (!dateValue) return '';
@@ -113,6 +147,73 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     if (typeof dateValue === 'string') return new Date(dateValue);
     return null;
   };
+
+  // Validate due date and show warnings for past dates
+  const validateDueDate = useCallback(
+    (dateString: string) => {
+      if (!dateString) {
+        setDateWarning(null);
+        return;
+      }
+
+      const selectedDate = new Date(dateString);
+      const today = new Date();
+
+      // Set time to start of day for accurate comparison
+      today.setHours(0, 0, 0, 0);
+      selectedDate.setHours(0, 0, 0, 0);
+
+      if (selectedDate < today) {
+        setDateWarning(
+          '⚠️ The selected date is in the past. Please choose a future date for your proposal deadline.'
+        );
+
+        // Track analytics for past date selection
+        if (analytics?.trackWizardStep) {
+          analytics?.trackWizardStep?.(1, 'Basic Information', 'error', {
+            selectedDate: dateString,
+            errorType: 'past_date_warning',
+            daysPast: Math.floor(
+              (today.getTime() - selectedDate.getTime()) / (1000 * 60 * 60 * 24)
+            ),
+          });
+        }
+      } else if (selectedDate.getTime() === today.getTime()) {
+        setDateWarning(
+          "💡 You've selected today's date. Consider choosing a future date to allow adequate time for proposal completion."
+        );
+
+        // Track analytics for same day selection
+        if (analytics?.trackWizardStep) {
+          analytics?.trackWizardStep?.(1, 'Basic Information', 'error', {
+            selectedDate: dateString,
+            errorType: 'same_day_warning',
+          });
+        }
+      } else {
+        setDateWarning(null);
+
+        // Track successful future date selection
+        analytics?.trackWizardStep?.(1, 'Basic Information', 'future_date_selected', {
+          selectedDate: dateString,
+          daysInFuture: Math.floor(
+            (selectedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          ),
+        });
+      }
+    },
+    [analytics]
+  );
+
+  // Validate initial date if present when component loads
+  useEffect(() => {
+    if (data.details?.dueDate) {
+      const dateString = formatDateForInput(data.details.dueDate);
+      if (dateString) {
+        validateDueDate(dateString);
+      }
+    }
+  }, [data.details?.dueDate, formatDateForInput, validateDueDate]);
 
   const {
     register,
@@ -148,7 +249,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   // Track field interactions for analytics
   const handleFieldInteraction = useCallback(() => {
     setFieldInteractions(prev => prev + 1);
-    analytics.trackWizardStep(1, 'Basic Information', 'start', {
+    analytics?.trackWizardStep?.(1, 'Basic Information', 'start', {
       fieldInteractions: fieldInteractions + 1,
     });
   }, [analytics, fieldInteractions]);
@@ -167,7 +268,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         setValue('client.contactEmail', customer.email || '');
 
         // Trigger analytics
-        analytics.trackWizardStep(1, 'Basic Information', 'customer_selected', {
+        analytics?.trackWizardStep?.(1, 'Basic Information', 'customer_selected', {
           customerId: customer.id,
           customerName: customer.name,
           customerTier: customer.tier,
@@ -178,37 +279,6 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     },
     [customers, setValue, analytics, handleFieldInteraction]
   );
-
-  // Fetch customers on component mount
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      setCustomersLoading(true);
-      try {
-        const response = await apiClient.get<{ data: { customers: Customer[] } }>('/customers');
-
-        console.log('🔍 [DEBUG] Customers API response:', response);
-
-        if (response.success && response.data?.data?.customers) {
-          const customerList = response.data.data.customers;
-          setCustomers(customerList);
-
-          // If we have a selected customer ID, find and set the customer
-          if (data.client?.id) {
-            const existingCustomer = customerList.find(c => c.id === data.client?.id);
-            if (existingCustomer) {
-              setSelectedCustomer(existingCustomer);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching customers:', error);
-      } finally {
-        setCustomersLoading(false);
-      }
-    };
-
-    fetchCustomers();
-  }, [data.client?.id]);
 
   // Stable update function to prevent infinite loops
   const handleUpdate = useCallback(
@@ -286,7 +356,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     (clientName: string) => {
       if (clientName.length > 2) {
         // Simulate AI suggestions for industry and previous engagements
-        analytics.trackWizardStep(1, 'Basic Information', 'start', {
+        analytics?.trackWizardStep?.(1, 'Basic Information', 'start', {
           aiSuggestionsShown: 1,
           suggestedIndustry: true,
         });
@@ -439,7 +509,22 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                   error={errors.details?.dueDate?.message}
                   {...register('details.dueDate')}
                   onFocus={handleFieldInteraction}
+                  onChange={e => {
+                    // Update form value
+                    setValue('details.dueDate', e.target.value);
+
+                    // Validate the selected date
+                    validateDueDate(e.target.value);
+
+                    // Track field interaction
+                    handleFieldInteraction();
+                  }}
                 />
+                {dateWarning && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                    <p className="text-sm text-amber-800">{dateWarning}</p>
+                  </div>
+                )}
               </div>
             </div>
 

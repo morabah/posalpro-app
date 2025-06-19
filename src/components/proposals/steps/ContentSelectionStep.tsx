@@ -382,7 +382,7 @@ export function ContentSelectionStep({
       };
 
       if (analytics?.trackContentSelection) {
-        analytics.trackContentSelection(action, contentId, enhancedMetadata);
+        analytics?.trackContentSelection?.(action, contentId, enhancedMetadata);
       }
 
       console.log('Enhanced Content Selection Analytics:', {

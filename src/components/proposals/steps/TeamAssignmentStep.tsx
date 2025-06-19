@@ -182,7 +182,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
   // Track analytics for team assignments
   const trackTeamAssignment = useCallback(
     (memberType: string, memberId: string, suggested: boolean = false) => {
-      analytics.trackWizardStep(2, 'Team Assignment', 'team_member_assigned', {
+      analytics?.trackWizardStep?.(2, 'Team Assignment', 'team_member_assigned', {
         memberType,
         memberId,
         suggested,
@@ -195,7 +195,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
   // Generate AI suggestions based on proposal context
   const generateAISuggestions = useCallback(async () => {
     setIsLoadingSuggestions(true);
-    analytics.trackWizardStep(2, 'Team Assignment', 'ai_suggestions_requested');
+    analytics?.trackWizardStep?.(2, 'Team Assignment', 'ai_suggestions_requested');
 
     // Simulate AI suggestion generation
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -217,7 +217,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     setAiSuggestions(suggestions);
     setIsLoadingSuggestions(false);
 
-    analytics.trackWizardStep(2, 'Team Assignment', 'ai_suggestions_generated', {
+    analytics?.trackWizardStep?.(2, 'Team Assignment', 'ai_suggestions_generated', {
       suggestionsCount: Object.keys(suggestions).length,
     });
   }, [teamLeads, salesReps, executives, analytics]);
@@ -246,7 +246,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     (area: ExpertiseArea) => {
       if (!expertiseAreas.includes(area)) {
         setExpertiseAreas(prev => [...prev, area]);
-        analytics.trackWizardStep(2, 'Team Assignment', 'expertise_area_added', {
+        analytics?.trackWizardStep?.(2, 'Team Assignment', 'expertise_area_added', {
           expertiseArea: area,
         });
       }
@@ -262,7 +262,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
       const currentSMEs = getValues('subjectMatterExperts');
       delete currentSMEs[area];
       setValue('subjectMatterExperts', currentSMEs);
-      analytics.trackWizardStep(2, 'Team Assignment', 'expertise_area_removed', {
+      analytics?.trackWizardStep?.(2, 'Team Assignment', 'expertise_area_removed', {
         expertiseArea: area,
       });
     },
@@ -284,7 +284,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
         setValue('executiveReviewers', [...currentReviewers, executiveId]);
       }
 
-      analytics.trackWizardStep(2, 'Team Assignment', 'executive_reviewer_toggled', {
+      analytics?.trackWizardStep?.(2, 'Team Assignment', 'executive_reviewer_toggled', {
         executiveId,
         action: isSelected ? 'removed' : 'added',
       });

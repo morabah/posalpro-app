@@ -3,6 +3,8 @@
  * Handles role-based authorization for API routes
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -13,6 +15,8 @@ export function withRole(
   handler: (req: NextRequest) => Promise<NextResponse>
 ) {
   return async function (req: NextRequest) {
+    const errorHandlingService = ErrorHandlingService.getInstance();
+
     try {
       const token = await getToken({ req });
 
@@ -32,7 +36,18 @@ export function withRole(
 
       return handler(req);
     } catch (error) {
-      console.error('RBAC Error:', error);
+      const processedError = errorHandlingService.processError(
+        error as Error,
+        'RBAC authorization failed',
+        ErrorCodes.AUTH.AUTHORIZATION_FAILED,
+        {
+          component: 'withRole',
+          operation: 'roleBasedAuthorization',
+          allowedRoles: Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles],
+          userFriendlyMessage: 'Access denied. Please check your permissions.',
+        }
+      );
+
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   };

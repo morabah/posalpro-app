@@ -88,7 +88,7 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
       };
 
       metricsRef.current.violations.push(violation);
-      console.warn(`[Performance] Long render detected in ${componentName}:`, violation);
+      // errorHandlingService.processError(new Error(`Long render detected: ${renderTime}ms`), `Performance violation in ${componentName}`, 'SYS_1006', { component: componentName, operation: 'trackRender', userStories: ['US-4.1'], hypotheses: ['H8'], violation });
     }
 
     // Reset render count every second

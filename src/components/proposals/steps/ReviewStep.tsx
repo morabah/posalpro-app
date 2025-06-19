@@ -276,7 +276,7 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
   const trackReviewAction = useCallback(
     (action: 'start' | 'complete' | 'error') => {
       console.log('[ReviewStep] Tracking review action:', action);
-      analytics.trackWizardStep(6, 'review', action);
+      analytics?.trackWizardStep?.(6, 'review', action);
     },
     [analytics]
   );
