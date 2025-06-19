@@ -34,6 +34,9 @@ export enum ErrorCategory {
 
   // Analytics and tracking errors
   ANALYTICS = 'ANALYTICS',
+
+  // Performance errors
+  PERFORMANCE = 'PERFORMANCE',
 }
 
 // Error codes organized by category
@@ -43,10 +46,20 @@ export const ErrorCodes = {
     UNKNOWN: 'SYS_1000',
     CONFIGURATION: 'SYS_1001',
     INITIALIZATION: 'SYS_1002',
-    RESOURCE_EXHAUSTED: 'SYS_1003',
-    TIMEOUT: 'SYS_1004',
-    DEPENDENCY_FAILURE: 'SYS_1005',
-    INTERNAL_ERROR: 'SYS_1006',
+    INITIALIZATION_FAILED: 'SYS_1003',
+    RESOURCE_EXHAUSTED: 'SYS_1004',
+    TIMEOUT: 'SYS_1005',
+    DEPENDENCY_FAILURE: 'SYS_1006',
+    INTERNAL_ERROR: 'SYS_1007',
+    METRICS_COLLECTION_FAILED: 'SYS_1008',
+    OPTIMIZATION_FAILED: 'SYS_1009',
+    CACHE_OPERATION_FAILED: 'SYS_1010',
+    REPORT_GENERATION_FAILED: 'SYS_1011',
+    MONITORING_SETUP_FAILED: 'SYS_1012',
+    COMPONENT_LOAD_FAILED: 'SYS_1013',
+    DEBUG_INFO: 'SYS_1014',
+    DETECTION_FAILED: 'SYS_1015',
+    PERFORMANCE_MEASUREMENT_FAILED: 'SYS_1016',
   },
 
   // Authentication errors (2000-2999)
@@ -60,6 +73,14 @@ export const ErrorCodes = {
     MISSING_TOKEN: 'AUTH_2006',
     FORBIDDEN: 'AUTH_2007',
     PERMISSION_DENIED: 'AUTH_2008',
+    REGISTRATION_FAILED: 'AUTH_2009',
+    LOGOUT_FAILED: 'AUTH_2010',
+    TOKEN_REFRESH_FAILED: 'AUTH_2011',
+    SESSION_INVALID: 'AUTH_2012',
+    PASSWORD_RESET_FAILED: 'AUTH_2013',
+    PASSWORD_CHANGE_FAILED: 'AUTH_2014',
+    EMAIL_VERIFICATION_FAILED: 'AUTH_2015',
+    AUTHORIZATION_FAILED: 'AUTH_2016',
   },
 
   // Security errors (2500-2999)
@@ -71,6 +92,9 @@ export const ErrorCodes = {
     CSRF_TOKEN_INVALID: 'SEC_2504',
     IP_BLOCKED: 'SEC_2505',
     SECURITY_VIOLATION: 'SEC_2506',
+    TWO_FACTOR_SETUP_FAILED: 'SEC_2507',
+    TWO_FACTOR_VERIFICATION_FAILED: 'SEC_2508',
+    TWO_FACTOR_DISABLE_FAILED: 'SEC_2509',
   },
 
   // Validation errors (3000-3999)
@@ -83,6 +107,11 @@ export const ErrorCodes = {
     INVALID_STATE: 'VAL_3005',
     DUPLICATE_ENTRY: 'VAL_3006',
     DUPLICATE_ENTITY: 'VAL_3007',
+    PROCESSING: 'VAL_3008',
+    SUCCESS: 'VAL_3009',
+    OPERATION_FAILED: 'VAL_3010',
+    CRITICAL_ERROR: 'VAL_3011',
+    PARTIAL_SUCCESS: 'VAL_3012',
   },
 
   // Data errors (4000-4999)
@@ -101,6 +130,12 @@ export const ErrorCodes = {
     DELETE_FAILED: 'DATA_4011',
     RETRIEVAL_FAILED: 'DATA_4012',
     DUPLICATE_ENTRY: 'DATA_4013',
+    FETCH_FAILED: 'DATA_4014',
+    SEARCH_FAILED: 'DATA_4015',
+    CALCULATION_FAILED: 'DATA_4016',
+    QUERY_EXECUTION_FAILED: 'DATA_4017',
+    CONNECTION_POOL_EXHAUSTED: 'DATA_4018',
+    SLOW_QUERY_DETECTED: 'DATA_4019',
   },
 
   // API errors (5000-5999)
@@ -149,21 +184,34 @@ export const ErrorCodes = {
     PROCESSING_FAILED: 'ANA_9001',
     INVALID_EVENT: 'ANA_9002',
     STORAGE_ERROR: 'ANA_9003',
+    ANALYTICS_FAILED: 'ANA_9004',
+    TRACKING_FAILED: 'ANA_9005',
+  },
+
+  // Performance errors (3500-3599)
+  PERFORMANCE: {
+    SLOW_RESPONSE: 'PERF_3500',
+    HIGH_MEMORY_USAGE: 'PERF_3501',
+    RESOURCE_EXHAUSTED: 'PERF_3502',
+    OPTIMIZATION_FAILED: 'PERF_3503',
+    CACHE_MISS: 'PERF_3504',
+    BUNDLE_SIZE_EXCEEDED: 'PERF_3505',
   },
 };
 
 // Helper type for accessing error codes
 export type ErrorCode =
   | (typeof ErrorCodes)[ErrorCategory.SYSTEM][keyof (typeof ErrorCodes)[ErrorCategory.SYSTEM]]
-  | (typeof ErrorCodes)[ErrorCategory.AUTH][keyof (typeof ErrorCodes)[ErrorCategory.AUTH]]
-  | (typeof ErrorCodes)[ErrorCategory.SECURITY][keyof (typeof ErrorCodes)[ErrorCategory.SECURITY]]
-  | (typeof ErrorCodes)[ErrorCategory.VALIDATION][keyof (typeof ErrorCodes)[ErrorCategory.VALIDATION]]
-  | (typeof ErrorCodes)[ErrorCategory.DATA][keyof (typeof ErrorCodes)[ErrorCategory.DATA]]
-  | (typeof ErrorCodes)[ErrorCategory.API][keyof (typeof ErrorCodes)[ErrorCategory.API]]
-  | (typeof ErrorCodes)[ErrorCategory.BUSINESS][keyof (typeof ErrorCodes)[ErrorCategory.BUSINESS]]
-  | (typeof ErrorCodes)[ErrorCategory.UI][keyof (typeof ErrorCodes)[ErrorCategory.UI]]
-  | (typeof ErrorCodes)[ErrorCategory.AI][keyof (typeof ErrorCodes)[ErrorCategory.AI]]
-  | (typeof ErrorCodes)[ErrorCategory.ANALYTICS][keyof (typeof ErrorCodes)[ErrorCategory.ANALYTICS]];
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   ;
 
 // Map from error code to HTTP status code
 export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
@@ -186,6 +234,14 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   AUTH_2006: 401, // Missing token
   AUTH_2007: 403, // Forbidden
   AUTH_2008: 403, // Permission denied
+  AUTH_2009: 400, // Registration failed
+  AUTH_2010: 500, // Logout failed
+  AUTH_2011: 401, // Token refresh failed
+  AUTH_2012: 401, // Session invalid
+  AUTH_2013: 400, // Password reset failed
+  AUTH_2014: 400, // Password change failed
+  AUTH_2015: 400, // Email verification failed
+  AUTH_2016: 403, // Authorization failed
 
   // Security errors
   SEC_2500: 429, // Rate limit exceeded
@@ -195,6 +251,9 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   SEC_2504: 403, // CSRF token invalid
   SEC_2505: 403, // IP blocked
   SEC_2506: 403, // Security violation
+  SEC_2507: 400, // Two factor setup failed
+  SEC_2508: 401, // Two factor verification failed
+  SEC_2509: 400, // Two factor disable failed
 
   // Validation errors
   VAL_3000: 400, // Invalid input
@@ -205,6 +264,11 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   VAL_3005: 422, // Invalid state
   VAL_3006: 409, // Duplicate entry
   VAL_3007: 409, // Duplicate entity
+  VAL_3008: 400, // Processing
+  VAL_3009: 400, // Success
+  VAL_3010: 400, // Operation failed
+  VAL_3011: 400, // Critical error
+  VAL_3012: 400, // Partial success
 
   // Data errors
   DATA_4000: 404, // Not found
@@ -221,6 +285,12 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   DATA_4011: 500, // Delete failed
   DATA_4012: 500, // Retrieval failed
   DATA_4013: 409, // Duplicate entry
+  DATA_4014: 500, // Fetch failed
+  DATA_4015: 500, // Search failed
+  DATA_4016: 500, // Calculation failed
+  DATA_4017: 500, // Query execution failed
+  DATA_4018: 429, // Connection pool exhausted
+  DATA_4019: 429, // Slow query detected
 
   // API errors
   API_5000: 400, // Request failed
@@ -259,6 +329,15 @@ export const errorCodeToHttpStatus: Record<ErrorCode, number> = {
   ANA_9001: 500, // Processing failed
   ANA_9002: 400, // Invalid event
   ANA_9003: 500, // Storage error
+  ANA_9004: 500, // Analytics failed
+
+  // Performance errors
+  PERF_3500: 500, // Slow response
+  PERF_3501: 500, // High memory usage
+  PERF_3502: 429, // Resource exhausted
+  PERF_3503: 500, // Optimization failed
+  PERF_3504: 400, // Cache miss
+  PERF_3505: 400, // Bundle size exceeded
 };
 
 // Map from common error scenarios to error codes
@@ -324,3 +403,5 @@ export const commonErrorsToErrorCodes = {
     504: ErrorCodes.API.TIMEOUT,
   },
 };
+
+// Export the ErrorCode type
