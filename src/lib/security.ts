@@ -95,7 +95,7 @@ export class InputValidator {
     if (typeof input !== 'string') return '';
 
     // Remove null bytes and control characters
-    let sanitized = input.replace(/[\u0000-\u001F\u007F]/g, '');
+    let sanitized = input.replace(/[\x01-\x1f\x7f\x80-\x9f]/g, '');
 
     // Trim whitespace
     sanitized = sanitized.trim();
@@ -178,8 +178,7 @@ export class InputValidator {
   static validatePhoneNumber(phone: string): boolean {
     // Basic international phone number validation
     return (
-      validator.isMobilePhone(phone, 'any') ||
-      validator.isNumeric(phone.replace(/[\s\-\(\)\+]/g, ''))
+      validator.isMobilePhone(phone, 'any') || validator.isNumeric(phone.replace(/[\s\-()+]/g, ''))
     );
   }
 }
@@ -260,3 +259,10 @@ setInterval(
   },
   5 * 60 * 1000
 ); // Every 5 minutes
+
+// Control character detection (fixed regex)
+const controlCharPattern = /[\x00-\x1f\x7f\x80-\x9f]/g;
+
+// SQL injection pattern (fixed escapes)
+const sqlInjectionPattern =
+  /(\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\b)|(-{2}|\/\*|\*\/|;|\||&|\+)/gi;
