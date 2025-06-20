@@ -2,6 +2,7 @@
  * PosalPro MVP2 - Customer Profile Client Component
  * Based on CUSTOMER_PROFILE_SCREEN.md wireframe specifications
  * Supports component traceability and analytics integration for H4 hypothesis validation
+ * PHASE 1 IMPLEMENTATION: Full Customer Profile Edit Functionality
  */
 
 'use client';
@@ -9,23 +10,30 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 import {
   BuildingOfficeIcon,
   CalendarIcon,
+  CheckIcon,
   EnvelopeIcon,
   GlobeAltIcon,
   MapPinIcon,
   PencilIcon,
   PhoneIcon,
   PlusIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
-// Component Traceability Matrix
+// Component Traceability Matrix - Enhanced with CRUD operations
 const COMPONENT_MAPPING = {
-  userStories: ['US-2.3'],
-  acceptanceCriteria: ['AC-2.3.1', 'AC-2.3.2', 'AC-2.3.3'],
+  userStories: ['US-2.3', 'US-6.4'],
+  acceptanceCriteria: ['AC-2.3.1', 'AC-2.3.2', 'AC-2.3.3', 'AC-6.4.1'],
   methods: [
     'configureAccess()',
     'generateRecommendations()',
@@ -33,9 +41,12 @@ const COMPONENT_MAPPING = {
     'trackHistory()',
     'logActivity()',
     'classifyCustomer()',
+    'updateCustomerProfile()',
+    'validateCustomerData()',
+    'saveCustomerChanges()',
   ],
-  hypotheses: ['H4'],
-  testCases: ['TC-H4-002'],
+  hypotheses: ['H4', 'H12'],
+  testCases: ['TC-H4-002', 'TC-H12-001'],
 };
 
 // Customer tier enumeration
@@ -47,8 +58,41 @@ enum CustomerTier {
   ENTERPRISE = 'enterprise',
 }
 
+// Customer interface
+interface Customer {
+  id: string;
+  name: string;
+  industry: string;
+  address: string;
+  phone: string;
+  website: string;
+  email: string;
+  tier: CustomerTier;
+  annualRevenue: number;
+  employeeCount: number;
+  healthScore: number;
+  engagementLevel: 'low' | 'medium' | 'high';
+  lastContact: Date;
+  nextActionDue: Date;
+  tags: string[];
+}
+
+// Edit form data interface
+interface CustomerEditData {
+  name: string;
+  industry: string;
+  address: string;
+  phone: string;
+  website: string;
+  email: string;
+  tier: CustomerTier;
+  annualRevenue: number;
+  employeeCount: number;
+  tags: string[];
+}
+
 // Mock customer data
-const MOCK_CUSTOMER = {
+const MOCK_CUSTOMER: Customer = {
   id: 'cust-001',
   name: 'Acme Corporation',
   industry: 'Manufacturing',
@@ -72,22 +116,164 @@ interface CustomerProfileClientProps {
 
 export function CustomerProfileClient({ customerId }: CustomerProfileClientProps) {
   const router = useRouter();
-  const [customer] = useState(MOCK_CUSTOMER);
+  const analytics = useAnalytics();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
+  // State management
+  const [customer, setCustomer] = useState<Customer>(MOCK_CUSTOMER);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<CustomerEditData>({} as CustomerEditData);
+  const [isLoading, setIsLoading] = useState(false);
   const [sessionStartTime] = useState(Date.now());
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Analytics tracking
   const trackAction = useCallback(
     (action: string, metadata: any = {}) => {
-      console.log('Customer Profile Analytics:', {
+      analytics.track('customer_profile_action', {
         action,
-        metadata,
-        customerId,
+        metadata: {
+          ...metadata,
+          customerId,
+          component: 'CustomerProfileClient',
+          userStory: 'US-2.3',
+          hypothesis: 'H4',
+          sessionDuration: Date.now() - sessionStartTime,
+        },
         timestamp: Date.now(),
-        sessionDuration: Date.now() - sessionStartTime,
       });
     },
-    [customerId, sessionStartTime]
+    [customerId, sessionStartTime, analytics]
   );
+
+  // Error handling
+  const handleError = useCallback(
+    (error: unknown, operation: string, context?: any) => {
+      const standardError =
+        error instanceof Error
+          ? new StandardError({
+              code: ErrorCodes.VALIDATION.OPERATION_FAILED,
+              message: `Customer ${operation} failed: ${error.message}`,
+              cause: error,
+              metadata: { operation, context, customerId, component: 'CustomerProfileClient' },
+            })
+          : new StandardError({
+              code: ErrorCodes.VALIDATION.OPERATION_FAILED,
+              message: `Customer ${operation} failed: Unknown error`,
+              metadata: { operation, context, customerId, component: 'CustomerProfileClient' },
+            });
+
+      errorHandlingService.processError(standardError);
+
+      const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+      toast.error(userMessage);
+
+      trackAction(`${operation}_error`, { error: standardError.message, context });
+    },
+    [errorHandlingService, trackAction, customerId]
+  );
+
+  // Initialize edit data when entering edit mode
+  const initializeEditData = useCallback(() => {
+    setEditData({
+      name: customer.name,
+      industry: customer.industry,
+      address: customer.address,
+      phone: customer.phone,
+      website: customer.website,
+      email: customer.email,
+      tier: customer.tier,
+      annualRevenue: customer.annualRevenue,
+      employeeCount: customer.employeeCount,
+      tags: [...customer.tags],
+    });
+  }, [customer]);
+
+  // Handle edit mode toggle
+  const handleEditToggle = useCallback(() => {
+    if (!isEditing) {
+      trackAction('edit_profile_started');
+      initializeEditData();
+      setIsEditing(true);
+    } else {
+      trackAction('edit_profile_cancelled');
+      setIsEditing(false);
+      setEditData({} as CustomerEditData);
+    }
+  }, [isEditing, trackAction, initializeEditData]);
+
+  // Handle form field changes
+  const handleFieldChange = useCallback((field: keyof CustomerEditData, value: any) => {
+    setEditData(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
+
+  // Validate edit data
+  const validateEditData = useCallback((data: CustomerEditData): string[] => {
+    const errors: string[] = [];
+
+    if (!data.name?.trim()) errors.push('Company name is required');
+    if (!data.email?.trim()) errors.push('Email is required');
+    if (!data.phone?.trim()) errors.push('Phone number is required');
+    if (data.annualRevenue <= 0) errors.push('Annual revenue must be greater than 0');
+    if (data.employeeCount <= 0) errors.push('Employee count must be greater than 0');
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (data.email && !emailRegex.test(data.email)) {
+      errors.push('Please enter a valid email address');
+    }
+
+    return errors;
+  }, []);
+
+  // Save customer changes
+  const handleSaveChanges = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      trackAction('save_customer_started', { editData });
+
+      // Validate data
+      const validationErrors = validateEditData(editData);
+      if (validationErrors.length > 0) {
+        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+      }
+
+      // Simulate API call - in real implementation, this would call an API endpoint
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Update customer state
+      const updatedCustomer: Customer = {
+        ...customer,
+        ...editData,
+        lastContact: new Date(), // Update last contact time
+      };
+
+      setCustomer(updatedCustomer);
+      setIsEditing(false);
+      setEditData({} as CustomerEditData);
+
+      toast.success('Customer profile updated successfully');
+      trackAction('save_customer_success', {
+        customerId,
+        updatedFields: Object.keys(editData),
+      });
+    } catch (error) {
+      handleError(error, 'profile_update', { editData });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [editData, customer, validateEditData, trackAction, handleError, customerId]);
 
   // Get tier display
   const getTierDisplay = (tier: CustomerTier) => {
@@ -138,32 +324,106 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
       <div className="mb-8">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
-            <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
-              <span>{customer.industry}</span>
-              <span>•</span>
-              <span>{customer.employeeCount.toLocaleString()} employees</span>
-              <span>•</span>
-              <span>{formatLargeNumber(customer.annualRevenue)} revenue</span>
-            </div>
+            {isEditing ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={editData.name || ''}
+                  onChange={e => handleFieldChange('name', e.target.value)}
+                  className="text-2xl font-bold text-gray-900 border-b-2 border-blue-500 bg-transparent focus:outline-none"
+                  placeholder="Company name"
+                />
+                <div className="flex items-center space-x-4 text-sm">
+                  <input
+                    type="text"
+                    value={editData.industry || ''}
+                    onChange={e => handleFieldChange('industry', e.target.value)}
+                    className="border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                    placeholder="Industry"
+                  />
+                  <span>•</span>
+                  <input
+                    type="number"
+                    value={editData.employeeCount || ''}
+                    onChange={e =>
+                      handleFieldChange('employeeCount', parseInt(e.target.value) || 0)
+                    }
+                    className="w-20 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                    placeholder="0"
+                  />
+                  <span>employees</span>
+                  <span>•</span>
+                  <input
+                    type="number"
+                    value={editData.annualRevenue || ''}
+                    onChange={e =>
+                      handleFieldChange('annualRevenue', parseInt(e.target.value) || 0)
+                    }
+                    className="w-32 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                    placeholder="0"
+                  />
+                  <span>revenue</span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
+                <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
+                  <span>{customer.industry}</span>
+                  <span>•</span>
+                  <span>{customer.employeeCount.toLocaleString()} employees</span>
+                  <span>•</span>
+                  <span>{formatLargeNumber(customer.annualRevenue)} revenue</span>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="secondary"
-              onClick={() => router.push(`/proposals/create?customer=${customerId}`)}
-              className="flex items-center"
-            >
-              <PlusIcon className="w-4 h-4 mr-2" />
-              New Proposal
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => trackAction('edit_profile_clicked')}
-              className="flex items-center"
-            >
-              <PencilIcon className="w-4 h-4 mr-2" />
-              Edit Profile
-            </Button>
+          <div className="flex items-center space-x-2">
+            {!isEditing && (
+              <Button
+                variant="secondary"
+                onClick={() => router.push(`/proposals/create?customer=${customerId}`)}
+                className="flex items-center min-h-[44px]"
+                aria-label="Create new proposal"
+              >
+                <PlusIcon className="w-4 h-4 mr-2" />
+                {isMobile ? 'Proposal' : 'New Proposal'}
+              </Button>
+            )}
+
+            {isEditing ? (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={handleEditToggle}
+                  className="flex items-center min-h-[44px]"
+                  disabled={isLoading}
+                  aria-label="Cancel editing"
+                >
+                  <XMarkIcon className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveChanges}
+                  className="flex items-center min-h-[44px] bg-green-600 hover:bg-green-700"
+                  disabled={isLoading}
+                  aria-label="Save changes"
+                >
+                  <CheckIcon className="w-4 h-4 mr-2" />
+                  {isLoading ? 'Saving...' : 'Save'}
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                onClick={handleEditToggle}
+                className="flex items-center min-h-[44px]"
+                aria-label="Edit customer profile"
+              >
+                <PencilIcon className="w-4 h-4 mr-2" />
+                {isMobile ? 'Edit' : 'Edit Profile'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -178,35 +438,80 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
               <div className="space-y-3">
                 <div className="flex items-center">
                   <BuildingOfficeIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  <span className="text-gray-900">{customer.name}</span>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editData.name || ''}
+                      onChange={e => handleFieldChange('name', e.target.value)}
+                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                      placeholder="Company name"
+                    />
+                  ) : (
+                    <span className="text-gray-900">{customer.name}</span>
+                  )}
                 </div>
                 <div className="flex items-center">
                   <MapPinIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  <span className="text-gray-700">{customer.address}</span>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editData.address || ''}
+                      onChange={e => handleFieldChange('address', e.target.value)}
+                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                      placeholder="Address"
+                    />
+                  ) : (
+                    <span className="text-gray-700">{customer.address}</span>
+                  )}
                 </div>
                 <div className="flex items-center">
                   <PhoneIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  <span className="text-gray-700">{customer.phone}</span>
-                </div>
-                <div className="flex items-center">
-                  <GlobeAltIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  <a
-                    href={`https://${customer.website}`}
-                    className="text-blue-600 hover:text-blue-800"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {customer.website}
-                  </a>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editData.phone || ''}
+                      onChange={e => handleFieldChange('phone', e.target.value)}
+                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                      placeholder="Phone number"
+                    />
+                  ) : (
+                    <span className="text-gray-700">{customer.phone}</span>
+                  )}
                 </div>
                 <div className="flex items-center">
                   <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  <a
-                    href={`mailto:${customer.email}`}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    {customer.email}
-                  </a>
+                  {isEditing ? (
+                    <input
+                      type="email"
+                      value={editData.email || ''}
+                      onChange={e => handleFieldChange('email', e.target.value)}
+                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                      placeholder="Email address"
+                    />
+                  ) : (
+                    <span className="text-gray-700">{customer.email}</span>
+                  )}
+                </div>
+                <div className="flex items-center">
+                  <GlobeAltIcon className="w-5 h-5 text-gray-400 mr-3" />
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editData.website || ''}
+                      onChange={e => handleFieldChange('website', e.target.value)}
+                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                      placeholder="Website URL"
+                    />
+                  ) : (
+                    <a
+                      href={`https://${customer.website}`}
+                      className="text-blue-600 hover:text-blue-800"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {customer.website}
+                    </a>
+                  )}
                 </div>
                 <div className="flex items-center justify-between mt-4">
                   <span

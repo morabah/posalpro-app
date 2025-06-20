@@ -28,7 +28,7 @@ export const passwordSchema = z
 export const phoneSchema = z
   .string()
   .optional()
-  .refine(val => !val || /^[\+]?[1-9][\d]{0,15}$/.test(val), 'Please enter a valid phone number');
+  .refine(val => !val || /^[+]?[1-9][\d]{0,15}$/.test(val), 'Please enter a valid phone number');
 
 export const urlSchema = z
   .string()

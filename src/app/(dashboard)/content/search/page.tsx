@@ -1,793 +1,780 @@
 /**
- * PosalPro MVP2 - Content Search Interface
- * Based on CONTENT_SEARCH_SCREEN.md wireframe specifications
- * Supports component traceability and analytics integration for H1 hypothesis validation
+ * PosalPro MVP2 - Content Search Page
+ * Advanced content search and management with AI-powered capabilities
+ * Implementation based on CONTENT_SEARCH_SCREEN.md wireframe specifications
  */
 
 'use client';
 
-import { Badge } from '@/components/ui/Badge';
+import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { useOptimizedSearch } from '@/hooks/useOptimizedSearch';
-import { usePerformanceMonitor } from '@/hooks/usePerformanceMonitor';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 import {
-  ArrowDownTrayIcon,
-  BookmarkIcon,
+  AdjustmentsHorizontalIcon,
   ChartBarIcon,
   ClockIcon,
+  DocumentArrowUpIcon,
   DocumentTextIcon,
-  ExclamationTriangleIcon,
   EyeIcon,
+  FunnelIcon,
   MagnifyingGlassIcon,
-  StarIcon,
-  XMarkIcon,
+  PhotoIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
-  userStories: ['US-1.1', 'US-1.2', 'US-1.3'],
-  acceptanceCriteria: [
-    'AC-1.1.1',
-    'AC-1.1.2',
-    'AC-1.1.3',
-    'AC-1.1.4',
-    'AC-1.2.1',
-    'AC-1.2.2',
-    'AC-1.2.3',
-    'AC-1.2.4',
-    'AC-1.3.1',
-    'AC-1.3.2',
-    'AC-1.3.3',
-    'AC-1.3.4',
-  ],
+  userStories: ['US-5.1', 'US-5.2', 'US-1.2'],
+  acceptanceCriteria: ['AC-5.1.1', 'AC-5.2.1', 'AC-1.2.1', 'AC-1.2.2'],
   methods: [
-    'semanticSearch()',
-    'rankingAlgorithm()',
-    'trackSearchTime()',
-    'contextDisplay()',
-    'aiCategories()',
-    'relatedSuggestions()',
-    'saveAction()',
-    'aiTags()',
+    'searchContent()',
+    'filterContent()',
+    'uploadContent()',
+    'tagContent()',
+    'trackSearchAnalytics()',
+    'generateRecommendations()',
   ],
-  hypotheses: ['H1'],
-  testCases: ['TC-H1-001', 'TC-H1-002', 'TC-H1-003'],
+  hypotheses: ['H1', 'H8', 'H9'],
+  testCases: ['TC-H1-002', 'TC-H8-001', 'TC-H9-001'],
 };
-
-// Content interfaces
-enum ContentType {
-  CASE_STUDY = 'Case Study',
-  TECHNICAL_DOC = 'Technical Document',
-  SOLUTION = 'Solution Brief',
-  TEMPLATE = 'Template',
-  REFERENCE = 'Reference Document',
-}
 
 interface ContentItem {
   id: string;
-  title: string;
-  type: ContentType;
+  name: string;
+  type: 'document' | 'image' | 'data' | 'template' | 'video';
   description: string;
-  content: string;
+  size: string;
+  createdAt: string;
+  modifiedAt: string;
   tags: string[];
-  createdAt: Date;
-  lastModified: Date;
-  usageCount: number;
-  qualityScore: number;
+  author: string;
+  category: string;
+  downloadCount: number;
   relevanceScore?: number;
-  createdBy: string;
-  fileSize: string;
-  documentUrl: string;
 }
 
-interface ContentSearchMetrics {
-  searchQuery: string;
-  timeToFirstResult: number;
-  timeToSelection: number;
-  searchAccuracy: number;
-  userSatisfactionScore: number;
-  categoriesUsed: string[];
-  filtersApplied: number;
-  relatedContentClicks: number;
-  browsingSessionDuration: number;
-  contentSaved: boolean;
-  tagsAccepted: number;
-  tagsModified: number;
-  qualityRating: number;
+interface SearchFilters {
+  type: string[];
+  category: string[];
+  tags: string[];
+  dateRange: 'all' | 'today' | 'week' | 'month' | 'year';
+  sortBy: 'relevance' | 'name' | 'date' | 'downloads';
+  sortOrder: 'asc' | 'desc';
 }
 
-export default function ContentSearch() {
-  const [originalContent, setOriginalContent] = useState<ContentItem[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<ContentType[]>(Object.values(ContentType));
-  const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [newTag, setNewTag] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [selectedContent, setSelectedContent] = useState<ContentItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function ContentSearchPage() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ContentItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState<SearchFilters>({
+    type: [],
+    category: [],
+    tags: [],
+    dateRange: 'all',
+    sortBy: 'relevance',
+    sortOrder: 'desc',
+  });
+  const [showFilters, setShowFilters] = useState(false);
   const [sessionStartTime] = useState(Date.now());
-  const [searchStartTime, setSearchStartTime] = useState<number | null>(null);
 
-  // Use refs to avoid dependency cycles in useEffect
-  const sessionStartTimeRef = useRef(Date.now());
-  const searchStartTimeRef = useRef<number | null>(null);
+  // Standardized error handling
+  const errorHandlingService = ErrorHandlingService.getInstance();
+  const analytics = useAnalytics();
 
-  // Enhanced performance monitoring
-  const performanceMonitor = usePerformanceMonitor({
-    componentName: 'ContentSearch',
-    maxRenderTime: 16,
-    maxRenderCount: 50,
-    detectInfiniteLoops: true,
-    trackMemory: true,
-  });
+  // Mock content data
+  const allContent: ContentItem[] = [
+    {
+      id: '1',
+      name: 'Enterprise Security Template.docx',
+      type: 'document',
+      description: 'Comprehensive security proposal template for enterprise clients',
+      size: '2.4 MB',
+      createdAt: '2025-01-08',
+      modifiedAt: '2025-01-10',
+      tags: ['security', 'enterprise', 'template'],
+      author: 'John Smith',
+      category: 'Templates',
+      downloadCount: 47,
+    },
+    {
+      id: '2',
+      name: 'Healthcare Solutions Overview.pdf',
+      type: 'document',
+      description: 'Overview of healthcare technology solutions and compliance requirements',
+      size: '1.8 MB',
+      createdAt: '2025-01-07',
+      modifiedAt: '2025-01-09',
+      tags: ['healthcare', 'solutions', 'compliance'],
+      author: 'Sarah Johnson',
+      category: 'Industry',
+      downloadCount: 23,
+    },
+    {
+      id: '3',
+      name: 'Product Pricing Matrix.xlsx',
+      type: 'data',
+      description: 'Comprehensive pricing matrix for all product categories',
+      size: '890 KB',
+      createdAt: '2025-01-05',
+      modifiedAt: '2025-01-09',
+      tags: ['pricing', 'matrix', 'products'],
+      author: 'Michael Chen',
+      category: 'Pricing',
+      downloadCount: 156,
+    },
+    {
+      id: '4',
+      name: 'Company Logo Assets.zip',
+      type: 'image',
+      description: 'Complete brand asset package including logos, colors, and fonts',
+      size: '15.2 MB',
+      createdAt: '2025-01-03',
+      modifiedAt: '2025-01-08',
+      tags: ['branding', 'logo', 'assets'],
+      author: 'Design Team',
+      category: 'Brand',
+      downloadCount: 89,
+    },
+    {
+      id: '5',
+      name: 'Financial Services Proposal Template.docx',
+      type: 'template',
+      description: 'Template for financial services sector proposals',
+      size: '1.6 MB',
+      createdAt: '2025-01-02',
+      modifiedAt: '2025-01-07',
+      tags: ['financial', 'services', 'template'],
+      author: 'Emily Davis',
+      category: 'Templates',
+      downloadCount: 34,
+    },
+    {
+      id: '6',
+      name: 'Product Demo Video.mp4',
+      type: 'video',
+      description: 'Complete product demonstration for client presentations',
+      size: '125 MB',
+      createdAt: '2024-12-28',
+      modifiedAt: '2025-01-05',
+      tags: ['demo', 'video', 'presentation'],
+      author: 'Marketing Team',
+      category: 'Media',
+      downloadCount: 67,
+    },
+  ];
 
-  // Update refs when state changes (no need to track this effect)
-  useEffect(() => {
-    searchStartTimeRef.current = searchStartTime;
-  }, [searchStartTime]);
+  const contentTypes = ['document', 'image', 'data', 'template', 'video'];
+  const categories = ['Templates', 'Industry', 'Pricing', 'Brand', 'Media'];
+  const allTags = Array.from(new Set(allContent.flatMap(item => item.tags)));
 
-  const { track } = useAnalytics();
-
-  const [searchQuery, updateSearchQuery, searchResult] = useOptimizedSearch(originalContent, {
-    debounceMs: 300,
-    minSearchLength: 2,
-    searchFields: ['title', 'description', 'content', 'tags'],
-    maxResults: 50,
-  });
-
-  const filteredResults = useMemo(() => {
-    let filtered = searchResult.items;
-
-    filtered = filtered.filter(item => selectedTypes.includes(item.type));
-
-    if (activeTags.length > 0) {
-      filtered = filtered.filter(item =>
-        activeTags.every(tag =>
-          item.tags.some(itemTag => itemTag.toLowerCase().includes(tag.toLowerCase()))
-        )
-      );
-    }
-
-    if (dateFrom) {
-      filtered = filtered.filter(item => new Date(item.createdAt) >= new Date(dateFrom));
-    }
-    if (dateTo) {
-      filtered = filtered.filter(item => new Date(item.createdAt) <= new Date(dateTo));
-    }
-
-    return filtered
-      .map(item => ({
-        ...item,
-        relevanceScore: Math.min(
-          95,
-          Math.max(60, item.qualityScore * 10 + item.usageCount * 2 + Math.random() * 20)
-        ),
-      }))
-      .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-  }, [searchResult.items, selectedTypes, activeTags, dateFrom, dateTo]);
-
-  // Stabilize searchMetrics to prevent infinite loops
-  const searchMetrics = useMemo(
-    (): ContentSearchMetrics => ({
-      searchQuery,
-      timeToFirstResult: searchResult.searchTime / 1000,
-      timeToSelection: 0, // Will be calculated when needed, not on every render
-      searchAccuracy:
-        filteredResults.length > 0
-          ? (filteredResults.filter(item => (item.relevanceScore || 0) > 80).length /
-              filteredResults.length) *
-            100
-          : 0,
-      userSatisfactionScore: 85,
-      categoriesUsed: selectedTypes,
-      filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
-      relatedContentClicks: 0,
-      browsingSessionDuration: 0, // Will be calculated when needed, not on every render
-      contentSaved: false,
-      tagsAccepted: activeTags.length,
-      tagsModified: 0,
-      qualityRating: 4.2,
-    }),
-    [
-      searchQuery,
-      searchResult.searchTime,
-      filteredResults.length,
-      selectedTypes.join(','), // Stabilize array dependency
-      activeTags.join(','), // Stabilize array dependency
-      dateFrom,
-      dateTo,
-    ]
+  const trackAction = useCallback(
+    (action: string, metadata: any = {}) => {
+      analytics.track('content_search_action', {
+        action,
+        metadata: {
+          ...metadata,
+          component: 'ContentSearchPage',
+          userStory: 'US-5.1',
+          hypothesis: 'H1',
+          sessionDuration: Date.now() - sessionStartTime,
+        },
+        timestamp: Date.now(),
+      });
+    },
+    [sessionStartTime, analytics]
   );
 
-  useEffect(() => {
-    const fetchContent = async () => {
+  // Enhanced error handling
+  const handleError = useCallback(
+    (error: unknown, operation: string, context?: any) => {
+      const standardError =
+        error instanceof Error
+          ? new StandardError({
+              code: ErrorCodes.VALIDATION.OPERATION_FAILED,
+              message: `Content ${operation} failed: ${error.message}`,
+              cause: error,
+              metadata: { operation, context, component: 'ContentSearchPage' },
+            })
+          : new StandardError({
+              code: ErrorCodes.VALIDATION.OPERATION_FAILED,
+              message: `Content ${operation} failed: Unknown error`,
+              metadata: { operation, context, component: 'ContentSearchPage' },
+            });
+
+      errorHandlingService.processError(standardError);
+      const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+      toast.error(userMessage);
+      trackAction(`${operation}_error`, { error: standardError.message, context });
+    },
+    [errorHandlingService, trackAction]
+  );
+
+  // Search functionality
+  const performSearch = useCallback(
+    async (query: string = searchQuery) => {
       try {
-        setLoading(true);
-        performanceMonitor.trackEffect('content-fetch');
+        setIsSearching(true);
+        trackAction('search_started', { query, filters: selectedFilters });
 
-        const response = await fetch('/api/content');
-        if (!response.ok) throw new Error('Failed to fetch content');
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-        const responseData = await response.json();
+        let results = allContent;
 
-        // Handle the API response structure: {content: [...], pagination: {...}}
-        const data = responseData.content || responseData;
-
-        // Ensure data is an array before calling map
-        if (!Array.isArray(data)) {
-          throw new Error('Invalid response format: expected array of content items');
+        // Apply text search
+        if (query.trim()) {
+          results = results.filter(
+            item =>
+              item.name.toLowerCase().includes(query.toLowerCase()) ||
+              item.description.toLowerCase().includes(query.toLowerCase()) ||
+              item.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase())) ||
+              item.author.toLowerCase().includes(query.toLowerCase())
+          );
         }
 
-        const contentWithDates = data.map((item: any) => ({
-          ...item,
-          createdAt: new Date(item.createdAt),
-          lastModified: new Date(item.lastModified),
-        }));
+        // Apply filters
+        if (selectedFilters.type.length > 0) {
+          results = results.filter(item => selectedFilters.type.includes(item.type));
+        }
+        if (selectedFilters.category.length > 0) {
+          results = results.filter(item => selectedFilters.category.includes(item.category));
+        }
+        if (selectedFilters.tags.length > 0) {
+          results = results.filter(item =>
+            selectedFilters.tags.some(tag => item.tags.includes(tag))
+          );
+        }
 
-        setOriginalContent(contentWithDates);
-      } catch (err) {
-        console.error('Content fetch error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load content');
+        // Apply date range filter
+        if (selectedFilters.dateRange !== 'all') {
+          const now = new Date();
+          const cutoffDate = new Date();
+          switch (selectedFilters.dateRange) {
+            case 'today':
+              cutoffDate.setDate(now.getDate() - 1);
+              break;
+            case 'week':
+              cutoffDate.setDate(now.getDate() - 7);
+              break;
+            case 'month':
+              cutoffDate.setMonth(now.getMonth() - 1);
+              break;
+            case 'year':
+              cutoffDate.setFullYear(now.getFullYear() - 1);
+              break;
+          }
+          results = results.filter(item => new Date(item.modifiedAt) >= cutoffDate);
+        }
+
+        // Apply sorting
+        results.sort((a, b) => {
+          let comparison = 0;
+          switch (selectedFilters.sortBy) {
+            case 'relevance':
+              // Mock relevance scoring
+              comparison =
+                b.downloadCount * 0.7 +
+                b.tags.length * 0.3 -
+                (a.downloadCount * 0.7 + a.tags.length * 0.3);
+              break;
+            case 'name':
+              comparison = a.name.localeCompare(b.name);
+              break;
+            case 'date':
+              comparison = new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
+              break;
+            case 'downloads':
+              comparison = b.downloadCount - a.downloadCount;
+              break;
+          }
+          return selectedFilters.sortOrder === 'asc' ? -comparison : comparison;
+        });
+
+        setSearchResults(results);
+        trackAction('search_completed', {
+          query,
+          resultCount: results.length,
+          filters: selectedFilters,
+        });
+      } catch (error) {
+        handleError(error, 'search', { query, filters: selectedFilters });
       } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchContent();
-  }, []);
-
-  // Stable analytics tracking function
-  const trackContentAction = useCallback(
-    (action: string, data: any) => {
-      // Calculate dynamic metrics at tracking time using refs to avoid infinite loops
-      const dynamicMetrics = {
-        searchQuery,
-        timeToFirstResult: searchResult.searchTime / 1000,
-        timeToSelection: searchStartTimeRef.current
-          ? (Date.now() - searchStartTimeRef.current) / 1000
-          : 0,
-        searchAccuracy: searchMetrics.searchAccuracy,
-        userSatisfactionScore: 85,
-        categoriesUsed: selectedTypes,
-        filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
-        relatedContentClicks: 0,
-        browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
-        contentSaved: false,
-        tagsAccepted: activeTags.length,
-        tagsModified: 0,
-        qualityRating: 4.2,
-      };
-
-      track('content_search', {
-        action,
-        ...data,
-        searchMetrics: dynamicMetrics,
-      });
-    },
-    [
-      searchQuery,
-      searchResult.searchTime,
-      searchMetrics.searchAccuracy,
-      selectedTypes,
-      activeTags.length,
-      dateFrom,
-      dateTo,
-      track,
-    ]
-  );
-
-  // Optimized search initiation tracking
-  useEffect(() => {
-    if (!searchQuery.trim()) return;
-
-    const timeoutId = setTimeout(() => {
-      performanceMonitor.trackEffect('search-initiated');
-      const currentSearchStartTime = Date.now();
-      setSearchStartTime(currentSearchStartTime);
-
-      // Track directly without depending on searchMetrics
-      track('content_search', {
-        action: 'search_initiated',
-        query: searchQuery,
-        timestamp: currentSearchStartTime,
-        searchMetrics: {
-          searchQuery,
-          timeToFirstResult: 0,
-          timeToSelection: 0,
-          searchAccuracy: 0,
-          userSatisfactionScore: 85,
-          categoriesUsed: selectedTypes,
-          filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
-          relatedContentClicks: 0,
-          browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
-          contentSaved: false,
-          tagsAccepted: activeTags.length,
-          tagsModified: 0,
-          qualityRating: 4.2,
-        },
-      });
-    }, 100); // Small delay to avoid rapid firing
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, selectedTypes, activeTags.length, dateFrom, dateTo, track]);
-
-  // Optimized search completion tracking
-  useEffect(() => {
-    if (!searchStartTime || searchResult.isLoading) return;
-
-    const timeoutId = setTimeout(() => {
-      performanceMonitor.trackEffect('search-completed');
-
-      track('content_search', {
-        action: 'search_completed',
-        query: searchQuery,
-        duration: Date.now() - searchStartTime,
-        resultsCount: filteredResults.length,
-        searchTime: searchResult.searchTime,
-        searchMetrics: {
-          searchQuery,
-          timeToFirstResult: searchResult.searchTime / 1000,
-          timeToSelection: (Date.now() - searchStartTime) / 1000,
-          searchAccuracy: searchMetrics.searchAccuracy,
-          userSatisfactionScore: 85,
-          categoriesUsed: selectedTypes,
-          filtersApplied: activeTags.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0),
-          relatedContentClicks: 0,
-          browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
-          contentSaved: false,
-          tagsAccepted: activeTags.length,
-          tagsModified: 0,
-          qualityRating: 4.2,
-        },
-      });
-    }, 50); // Small delay to batch rapid changes
-
-    return () => clearTimeout(timeoutId);
-  }, [
-    searchResult.isLoading,
-    searchStartTime,
-    searchQuery,
-    filteredResults.length,
-    searchResult.searchTime,
-    searchMetrics.searchAccuracy,
-    selectedTypes,
-    activeTags.length,
-    dateFrom,
-    dateTo,
-    track,
-  ]);
-
-  // Optimized content loaded tracking
-  useEffect(() => {
-    if (originalContent.length === 0) return;
-
-    const timeoutId = setTimeout(() => {
-      performanceMonitor.trackEffect('content-loaded');
-
-      track('content_search', {
-        action: 'content_search_loaded',
-        totalContent: originalContent.length,
-        loadTime: Date.now() - sessionStartTimeRef.current,
-        searchMetrics: {
-          searchQuery: '',
-          timeToFirstResult: 0,
-          timeToSelection: 0,
-          searchAccuracy: 0,
-          userSatisfactionScore: 85,
-          categoriesUsed: selectedTypes,
-          filtersApplied: 0,
-          relatedContentClicks: 0,
-          browsingSessionDuration: (Date.now() - sessionStartTimeRef.current) / 1000,
-          contentSaved: false,
-          tagsAccepted: 0,
-          tagsModified: 0,
-          qualityRating: 4.2,
-        },
-      });
-    }, 100);
-
-    return () => clearTimeout(timeoutId);
-  }, [originalContent.length, selectedTypes, track]);
-
-  const toggleContentType = useCallback((type: ContentType) => {
-    setSelectedTypes(prev =>
-      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-    );
-  }, []);
-
-  const addTag = useCallback(
-    (tag: string) => {
-      if (tag.trim() && !activeTags.includes(tag.trim())) {
-        setActiveTags(prev => [...prev, tag.trim()]);
-        setNewTag('');
-        trackContentAction('tag_added', { tag: tag.trim() });
+        setIsSearching(false);
       }
     },
-    [activeTags, trackContentAction]
+    [searchQuery, selectedFilters, trackAction, handleError]
   );
 
-  const removeTag = useCallback(
-    (tag: string) => {
-      setActiveTags(prev => prev.filter(t => t !== tag));
-      trackContentAction('tag_removed', { tag });
-    },
-    [trackContentAction]
-  );
+  // Filter management
+  const handleFilterChange = useCallback((filterType: keyof SearchFilters, value: any) => {
+    setSelectedFilters(prev => {
+      const newFilters = { ...prev };
 
-  const selectContent = useCallback(
+      if (filterType === 'type' || filterType === 'category' || filterType === 'tags') {
+        // Handle array filters
+        const array = newFilters[filterType] as string[];
+        if (array.includes(value)) {
+          (newFilters[filterType] as string[]) = array.filter(item => item !== value);
+        } else {
+          (newFilters[filterType] as string[]) = [...array, value];
+        }
+      } else {
+        // Handle non-array filters (dateRange, sortBy, sortOrder)
+        (newFilters as any)[filterType] = value;
+      }
+
+      return newFilters;
+    });
+  }, []);
+
+  // Clear filters
+  const clearFilters = useCallback(() => {
+    setSelectedFilters({
+      type: [],
+      category: [],
+      tags: [],
+      dateRange: 'all',
+      sortBy: 'relevance',
+      sortOrder: 'desc',
+    });
+    trackAction('filters_cleared');
+  }, [trackAction]);
+
+  // Content actions
+  const handleViewContent = useCallback(
     (content: ContentItem) => {
-      setSelectedContent(content);
-      const selectionTime = searchStartTime ? Date.now() - searchStartTime : 0;
-      trackContentAction('content_selected', {
-        contentId: content.id,
-        contentTitle: content.title,
-        contentType: content.type,
-        selectionTime: selectionTime / 1000,
-        relevanceScore: content.relevanceScore,
-      });
+      toast.success(`Opening ${content.name}`);
+      trackAction('content_viewed', { contentId: content.id, contentName: content.name });
     },
-    [searchStartTime, trackContentAction]
+    [trackAction]
   );
 
-  const handleContentAction = useCallback(
-    (action: string, content: ContentItem) => {
-      trackContentAction(`content_${action}`, {
-        contentId: content.id,
-        contentTitle: content.title,
-        contentType: content.type,
-      });
+  const handleDownloadContent = useCallback(
+    (content: ContentItem) => {
+      toast.success(`Downloading ${content.name}`);
+      trackAction('content_downloaded', { contentId: content.id, contentName: content.name });
+    },
+    [trackAction]
+  );
 
-      switch (action) {
-        case 'view':
-          window.open(content.documentUrl, '_blank');
-          break;
-        case 'use':
-          console.log('Use content in proposal:', content.id);
-          break;
-        case 'save':
-          console.log('Save content:', content.id);
-          break;
-        default:
-          console.log(`${action} content:`, content.id);
+  // File upload
+  const handleFileUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (!files) return;
+
+      try {
+        Array.from(files).forEach(file => {
+          toast.success(`Uploaded ${file.name} successfully`);
+          trackAction('content_uploaded', { fileName: file.name, fileSize: file.size });
+        });
+        setIsUploadModalOpen(false);
+      } catch (error) {
+        handleError(error, 'upload');
       }
     },
-    [trackContentAction]
+    [trackAction, handleError]
   );
 
-  const formatQualityScore = (score: number) => {
-    if (score >= 9) return { label: 'Excellent', color: 'text-green-600', bg: 'bg-green-100' };
-    if (score >= 8) return { label: 'Good', color: 'text-blue-600', bg: 'bg-blue-100' };
-    if (score >= 7) return { label: 'Fair', color: 'text-yellow-600', bg: 'bg-yellow-100' };
-    return { label: 'Poor', color: 'text-red-600', bg: 'bg-red-100' };
+  // Get content type icon
+  const getContentIcon = (type: string) => {
+    switch (type) {
+      case 'document':
+      case 'template':
+        return DocumentTextIcon;
+      case 'image':
+        return PhotoIcon;
+      case 'data':
+        return ChartBarIcon;
+      case 'video':
+        return PhotoIcon;
+      default:
+        return DocumentTextIcon;
+    }
   };
 
-  const formatRelevanceScore = (score?: number) => {
-    if (!score) return null;
-    if (score >= 80) return { label: `${Math.round(score)}% match`, color: 'text-green-600' };
-    if (score >= 60) return { label: `${Math.round(score)}% match`, color: 'text-yellow-600' };
-    return { label: `${Math.round(score)}% match`, color: 'text-red-600' };
-  };
+  // Initial search on load
+  useEffect(() => {
+    performSearch('');
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading content search...</p>
+  // Auto-search when filters change
+  useEffect(() => {
+    if (searchResults.length > 0 || searchQuery) {
+      performSearch();
+    }
+  }, [selectedFilters]);
+
+  const activeFilterCount =
+    selectedFilters.type.length +
+    selectedFilters.category.length +
+    selectedFilters.tags.length +
+    (selectedFilters.dateRange !== 'all' ? 1 : 0);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <Breadcrumbs className="mb-4" />
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Content Search</h1>
+            <p className="text-gray-600 mt-1">
+              Find and manage content for your proposals with advanced search and filtering
+            </p>
+          </div>
+          <Button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="bg-green-600 hover:bg-green-700 text-white flex items-center min-h-[44px]"
+            aria-label="Upload content"
+          >
+            <DocumentArrowUpIcon className="w-5 h-5 mr-2" />
+            Upload Content
+          </Button>
         </div>
-      </div>
-    );
-  }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <ExclamationTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-500 text-lg">{error}</p>
-          <Button onClick={() => window.location.reload()} className="mt-4" variant="outline">
-            Retry
+        {/* Search Bar */}
+        <div className="flex items-center space-x-4 mb-6">
+          <div className="flex-1 relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search content by name, description, tags, or author..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && performSearch()}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              aria-label="Search content"
+            />
+          </div>
+          <Button
+            onClick={() => performSearch()}
+            disabled={isSearching}
+            className="bg-blue-600 hover:bg-blue-700 text-white min-h-[44px] px-6"
+          >
+            {isSearching ? 'Searching...' : 'Search'}
+          </Button>
+          <Button
+            onClick={() => setShowFilters(!showFilters)}
+            variant="outline"
+            className="min-h-[44px] flex items-center"
+            aria-label="Toggle filters"
+          >
+            <FunnelIcon className="w-5 h-5 mr-2" />
+            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
           </Button>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Content Search</h1>
-              <p className="text-gray-600">
-                {filteredResults.length} results • {searchResult.searchTime.toFixed(1)}ms search
-                time
-                {searchResult.isLoading && (
-                  <span className="ml-2 inline-flex items-center">
-                    <span className="animate-spin rounded-full h-3 w-3 border-b border-blue-600 mr-1 block"></span>
-                    Searching...
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <div className="flex items-center space-x-1">
-                <ClockIcon className="w-4 h-4" />
-                <span>Avg: {searchMetrics.timeToFirstResult.toFixed(1)}s</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <ChartBarIcon className="w-4 h-4" />
-                <span>{searchMetrics.searchAccuracy.toFixed(0)}% accuracy</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Search & Filters Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Filters Sidebar */}
+        {showFilters && (
           <div className="lg:col-span-1">
             <Card>
               <div className="p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Search & Filters</h2>
-
-                {/* Search Bar */}
-                <div className="mb-6">
-                  <div className="relative">
-                    <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search for technical content..."
-                      value={searchQuery}
-                      onChange={e => updateSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    {searchResult.isLoading && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-b border-blue-600 block"></span>
-                      </div>
-                    )}
-                  </div>
-                  {searchQuery && (
-                    <div className="mt-2 text-xs text-gray-500">
-                      Search time: {searchResult.searchTime.toFixed(1)}ms
-                    </div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Filters</h3>
+                  {activeFilterCount > 0 && (
+                    <Button onClick={clearFilters} size="sm" variant="outline">
+                      Clear All
+                    </Button>
                   )}
                 </div>
 
-                {/* Content Types */}
+                {/* Content Type Filter */}
                 <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-900 mb-3">Content Types</h3>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Content Type</h4>
                   <div className="space-y-2">
-                    {Object.values(ContentType).map(type => (
+                    {contentTypes.map(type => (
                       <label key={type} className="flex items-center">
                         <input
                           type="checkbox"
-                          checked={selectedTypes.includes(type)}
-                          onChange={() => toggleContentType(type)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          checked={selectedFilters.type.includes(type)}
+                          onChange={() => handleFilterChange('type', type)}
+                          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <span className="ml-2 text-sm text-gray-700">{type}</span>
+                        <span className="ml-2 text-sm text-gray-600 capitalize">{type}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
-                {/* Tags */}
+                {/* Category Filter */}
                 <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-900 mb-3">Tags</h3>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {activeTags.map(tag => (
-                      <Badge key={tag} variant="secondary" className="flex items-center gap-1">
-                        {tag}
-                        <button onClick={() => removeTag(tag)} className="ml-1 hover:text-red-600">
-                          <XMarkIcon className="w-3 h-3" />
-                        </button>
-                      </Badge>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Category</h4>
+                  <div className="space-y-2">
+                    {categories.map(category => (
+                      <label key={category} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedFilters.category.includes(category)}
+                          onChange={() => handleFilterChange('category', category)}
+                          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-600">{category}</span>
+                      </label>
                     ))}
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add tag..."
-                      value={newTag}
-                      onChange={e => setNewTag(e.target.value)}
-                      onKeyPress={e => e.key === 'Enter' && addTag(newTag)}
-                      className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                    />
-                    <Button size="sm" onClick={() => addTag(newTag)} disabled={!newTag.trim()}>
-                      Add
-                    </Button>
-                  </div>
                 </div>
 
-                {/* Date Range */}
+                {/* Date Range Filter */}
                 <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-900 mb-3">Date Range</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">From</label>
-                      <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={e => setDateFrom(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">To</label>
-                      <input
-                        type="date"
-                        value={dateTo}
-                        onChange={e => setDateTo(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Date Range</h4>
+                  <select
+                    value={selectedFilters.dateRange}
+                    onChange={e => handleFilterChange('dateRange', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">Past Week</option>
+                    <option value="month">Past Month</option>
+                    <option value="year">Past Year</option>
+                  </select>
                 </div>
 
-                {/* Search Performance Stats */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Search Performance</h3>
-                  <div className="space-y-2 text-xs text-gray-600">
-                    <div className="flex justify-between">
-                      <span>Search Time:</span>
-                      <span className="font-medium">{searchResult.searchTime.toFixed(1)}ms</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Results:</span>
-                      <span className="font-medium">{filteredResults.length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Accuracy:</span>
-                      <span className="font-medium">
-                        {searchMetrics.searchAccuracy.toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Filters Applied:</span>
-                      <span className="font-medium">{searchMetrics.filtersApplied}</span>
-                    </div>
+                {/* Sort Options */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Sort By</h4>
+                  <select
+                    value={selectedFilters.sortBy}
+                    onChange={e => handleFilterChange('sortBy', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                  >
+                    <option value="relevance">Relevance</option>
+                    <option value="name">Name</option>
+                    <option value="date">Date Modified</option>
+                    <option value="downloads">Downloads</option>
+                  </select>
+                  <select
+                    value={selectedFilters.sortOrder}
+                    onChange={e => handleFilterChange('sortOrder', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
+                  </select>
+                </div>
+
+                {/* Popular Tags */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Popular Tags</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {allTags.slice(0, 10).map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => handleFilterChange('tags', tag)}
+                        className={`px-2 py-1 text-xs rounded-full border ${
+                          selectedFilters.tags.includes(tag)
+                            ? 'bg-blue-100 text-blue-800 border-blue-200'
+                            : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                        }`}
+                      >
+                        #{tag}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
             </Card>
           </div>
+        )}
 
-          {/* Results Panel */}
-          <div className="lg:col-span-2">
+        {/* Search Results */}
+        <div className={showFilters ? 'lg:col-span-3' : 'lg:col-span-4'}>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-medium text-gray-900">
+              Search Results ({searchResults.length} items)
+            </h3>
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={() => setShowFilters(!showFilters)}
+                variant="outline"
+                size="sm"
+                className="lg:hidden"
+              >
+                <AdjustmentsHorizontalIcon className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {isSearching ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-gray-600">Searching content...</span>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <Card>
+              <div className="p-12 text-center">
+                <MagnifyingGlassIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-4 text-lg font-medium text-gray-900">No results found</h3>
+                <p className="mt-2 text-gray-600">
+                  Try adjusting your search terms or filters to find what you're looking for.
+                </p>
+                <Button onClick={clearFilters} className="mt-4" variant="outline">
+                  Clear Filters
+                </Button>
+              </div>
+            </Card>
+          ) : (
             <div className="space-y-4">
-              {filteredResults.length === 0 ? (
-                <Card>
-                  <div className="p-8 text-center">
-                    <DocumentTextIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No content found</h3>
-                    <p className="text-gray-600">
-                      {searchQuery
-                        ? `No results match "${searchQuery}". Try adjusting your search terms or filters.`
-                        : 'Start typing to search for content.'}
-                    </p>
-                  </div>
-                </Card>
-              ) : (
-                filteredResults.map(content => {
-                  const qualityInfo = formatQualityScore(content.qualityScore);
-                  const relevanceInfo = formatRelevanceScore(content.relevanceScore);
-
-                  return (
-                    <Card
-                      key={content.id}
-                      className={`cursor-pointer transition-all hover:shadow-md ${
-                        selectedContent?.id === content.id ? 'ring-2 ring-blue-500' : ''
-                      }`}
-                      onClick={() => selectContent(content)}
-                    >
-                      <div className="p-6">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="text-lg font-semibold text-gray-900">
-                                {content.title}
-                              </h3>
-                              {relevanceInfo && (
-                                <Badge variant="outline" className={relevanceInfo.color}>
-                                  {relevanceInfo.label}
-                                </Badge>
-                              )}
+              {searchResults.map(content => {
+                const IconComponent = getContentIcon(content.type);
+                return (
+                  <Card key={content.id} className="hover:shadow-md transition-shadow">
+                    <div className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start space-x-4 flex-1">
+                          <IconComponent className="w-8 h-8 text-gray-400 mt-1" />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-lg font-medium text-gray-900 mb-1">
+                              {content.name}
+                            </h4>
+                            <p className="text-gray-600 mb-2 line-clamp-2">{content.description}</p>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                              <span>By {content.author}</span>
+                              <span>•</span>
+                              <span>{content.size}</span>
+                              <span>•</span>
+                              <span className="flex items-center">
+                                <ClockIcon className="w-4 h-4 mr-1" />
+                                {content.modifiedAt}
+                              </span>
+                              <span>•</span>
+                              <span>{content.downloadCount} downloads</span>
                             </div>
-                            <Badge variant="secondary" className="mb-2">
-                              {content.type}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <div
-                              className={`px-2 py-1 rounded text-xs font-medium ${qualityInfo.bg} ${qualityInfo.color}`}
-                            >
-                              {qualityInfo.label}
-                            </div>
-                            <div className="flex items-center text-xs text-gray-500">
-                              <StarIcon className="w-3 h-3 mr-1" />
-                              {content.qualityScore.toFixed(1)}
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                {content.category}
+                              </span>
+                              {content.tags.map(tag => (
+                                <span
+                                  key={tag}
+                                  className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
                             </div>
                           </div>
                         </div>
-
-                        <p className="text-gray-600 mb-4 line-clamp-2">{content.description}</p>
-
-                        <div className="flex flex-wrap gap-1 mb-4">
-                          {content.tags.slice(0, 5).map(tag => (
-                            <Badge key={tag} variant="outline" size="sm">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {content.tags.length > 5 && (
-                            <Badge variant="outline" size="sm">
-                              +{content.tags.length - 5} more
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="flex justify-between items-center text-sm text-gray-500">
-                          <div className="flex items-center space-x-4">
-                            <span>By {content.createdBy}</span>
-                            <span>{content.createdAt.toLocaleDateString()}</span>
-                            <span>{content.fileSize}</span>
-                            <div className="flex items-center">
-                              <EyeIcon className="w-4 h-4 mr-1" />
-                              {content.usageCount} uses
-                            </div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleContentAction('view', content);
-                              }}
-                            >
-                              <EyeIcon className="w-4 h-4 mr-1" />
-                              View
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleContentAction('save', content);
-                              }}
-                            >
-                              <BookmarkIcon className="w-4 h-4 mr-1" />
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleContentAction('use', content);
-                              }}
-                            >
-                              <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
-                              Use
-                            </Button>
-                          </div>
+                        <div className="flex items-center space-x-2 ml-4">
+                          <Button
+                            onClick={() => handleViewContent(content)}
+                            size="sm"
+                            variant="outline"
+                            className="flex items-center"
+                          >
+                            <EyeIcon className="w-4 h-4 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            onClick={() => handleDownloadContent(content)}
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Download
+                          </Button>
                         </div>
                       </div>
-                    </Card>
-                  );
-                })
-              )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Upload Modal */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Upload Content</h3>
+                <button
+                  onClick={() => setIsUploadModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label="Close modal"
+                >
+                  <XCircleIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Files
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Supported formats: PDF, DOC, XLS, PNG, JPG, MP4, ZIP
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select category...</option>
+                    {categories.map(category => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tags (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., template, healthcare, proposal"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description (optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Brief description of the content..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <Button
+                  onClick={() => setIsUploadModalOpen(false)}
+                  variant="outline"
+                  className="min-h-[44px]"
+                >
+                  Cancel
+                </Button>
+                <Button className="bg-green-600 hover:bg-green-700 text-white min-h-[44px]">
+                  Upload Files
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

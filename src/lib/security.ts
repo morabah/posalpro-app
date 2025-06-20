@@ -95,7 +95,7 @@ export class InputValidator {
     if (typeof input !== 'string') return '';
 
     // Remove null bytes and control characters
-    let sanitized = input.replace(/[\x00-\x1F\x7F]/g, '');
+    let sanitized = input.replace(/[\u0000-\u001F\u007F]/g, '');
 
     // Trim whitespace
     sanitized = sanitized.trim();

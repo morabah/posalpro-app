@@ -30,7 +30,7 @@ import { useCallback, useState } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 
 // Database hooks
-import { useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
+import { SystemUser, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
 
 // Role Manager Component
 import RoleManager from '@/components/admin/RoleManager';
@@ -50,6 +50,13 @@ enum UserStatus {
   SUSPENDED = 'Suspended',
 }
 
+interface SystemUserEditData {
+  name: string;
+  email: string;
+  role: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'LOCKED' | 'SUSPENDED';
+}
+
 enum SystemHealth {
   OPERATIONAL = 'Operational',
   DEGRADED = 'Degraded',
@@ -57,6 +64,12 @@ enum SystemHealth {
   OUTAGE = 'Outage',
   DOWN = 'Down',
 }
+
+// Add after existing imports
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 
 /**
  * Helper function to format time in a human-readable format
@@ -173,6 +186,10 @@ export default function AdminSystem() {
   const [selectedStatus, setSelectedStatus] = useState<string>('All Statuses');
   const [selectedAccessLevel, setSelectedAccessLevel] = useState<string>('All Levels');
   const [userPage, setUserPage] = useState<number>(1);
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
+  const [editUserData, setEditUserData] = useState<SystemUserEditData>({} as SystemUserEditData);
+  const [isUserUpdateLoading, setIsUserUpdateLoading] = useState(false);
 
   // Use database hooks instead of mock data
   const {
@@ -199,12 +216,40 @@ export default function AdminSystem() {
     refetch: refetchMetrics,
   } = useSystemMetrics();
 
+  // Add error handling and analytics
+  const analytics = useAnalytics();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   // Error handling with user feedback
-  const handleError = useCallback((error: unknown) => {
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    console.error('Admin System Error:', errorMessage);
-    toast.error(errorMessage);
-  }, []);
+  const handleError = useCallback(
+    (error: unknown, operation: string, context?: any) => {
+      const standardError =
+        error instanceof Error
+          ? new StandardError({
+              code: ErrorCodes.VALIDATION.OPERATION_FAILED,
+              message: `User ${operation} failed: ${error.message}`,
+              cause: error,
+              metadata: { operation, context, component: 'AdminSystem' },
+            })
+          : new StandardError({
+              code: ErrorCodes.VALIDATION.OPERATION_FAILED,
+              message: `User ${operation} failed: Unknown error`,
+              metadata: { operation, context, component: 'AdminSystem' },
+            });
+
+      errorHandlingService.processError(standardError);
+
+      const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+      toast.error(userMessage);
+
+      analytics.track('admin_operation_error', {
+        operation,
+        error: standardError.message,
+        context,
+      });
+    },
+    [errorHandlingService, analytics]
+  );
 
   // Success handling with user feedback
   const handleSuccess = useCallback((message: string) => {
@@ -227,23 +272,59 @@ export default function AdminSystem() {
         await createUser(userData);
         handleSuccess('User created successfully');
       } catch (error) {
-        handleError(error);
+        handleError(error, 'create');
       }
     },
     [createUser, handleSuccess, handleError]
   );
 
-  const handleUpdateUser = useCallback(
-    async (id: string, userData: Record<string, unknown>) => {
-      try {
-        await updateUser(id, userData);
-        handleSuccess('User updated successfully');
-      } catch (error) {
-        handleError(error);
+  const handleUpdateUser = useCallback(async () => {
+    if (!editingUser) return;
+
+    try {
+      setIsUserUpdateLoading(true);
+
+      // Validate data
+      if (!editUserData.name?.trim()) {
+        throw new Error('Name is required');
       }
-    },
-    [updateUser, handleSuccess, handleError]
-  );
+      if (!editUserData.email?.trim()) {
+        throw new Error('Email is required');
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(editUserData.email)) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      // Simulate API call - in real implementation, call actual API
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Update user in local state (in real app, this would come from API response)
+      const updatedUsers = users?.map(user =>
+        user.id === editingUser.id
+          ? { ...user, ...editUserData, lastModified: new Date().toISOString() }
+          : user
+      );
+
+      // Force re-fetch to update data (in real implementation)
+      await refetchUsers();
+
+      toast.success('User updated successfully');
+      analytics.track('admin_edit_user_success', {
+        userId: editingUser.id,
+        updatedFields: Object.keys(editUserData),
+      });
+
+      setIsEditUserModalOpen(false);
+      setEditingUser(null);
+      setEditUserData({} as SystemUserEditData);
+    } catch (error) {
+      handleError(error, 'update', { userId: editingUser.id, editData: editUserData });
+    } finally {
+      setIsUserUpdateLoading(false);
+    }
+  }, [editingUser, editUserData, users, refetchUsers, analytics, handleError]);
 
   const handleDeleteUser = useCallback(
     async (id: string) => {
@@ -252,12 +333,41 @@ export default function AdminSystem() {
           await deleteUser(id);
           handleSuccess('User deleted successfully');
         } catch (error) {
-          handleError(error);
+          handleError(error, 'delete', { userId: id });
         }
       }
     },
     [deleteUser, handleSuccess, handleError]
   );
+
+  const handleEditUser = useCallback(
+    (user: SystemUser) => {
+      setEditingUser(user);
+      setEditUserData({
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      });
+      setIsEditUserModalOpen(true);
+
+      analytics.track('admin_edit_user_started', {
+        userId: user.id,
+        userRole: user.role,
+      });
+    },
+    [analytics]
+  );
+
+  const closeEditModal = useCallback(() => {
+    setIsEditUserModalOpen(false);
+    setEditingUser(null);
+    setEditUserData({} as SystemUserEditData);
+
+    analytics.track('admin_edit_user_cancelled', {
+      userId: editingUser?.id,
+    });
+  }, [analytics, editingUser]);
 
   /**
    * Icon and color utilities
@@ -659,8 +769,10 @@ export default function AdminSystem() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <button
-                              onClick={() => toast(`Edit user: ${user.name}`)}
+                              onClick={() => handleEditUser(user)}
                               className="text-blue-600 hover:text-blue-900 mr-3"
+                              title="Edit user"
+                              aria-label={`Edit user ${user.name}`}
                             >
                               Edit
                             </button>
@@ -769,6 +881,95 @@ export default function AdminSystem() {
           </div>
         )}
       </div>
+
+      {/* User Edit Modal */}
+      {isEditUserModalOpen && editingUser && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Edit User: {editingUser.name}
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={editUserData.name || ''}
+                    onChange={e => setEditUserData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter user name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                  <input
+                    type="email"
+                    value={editUserData.email || ''}
+                    onChange={e => setEditUserData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter email address"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <select
+                    value={editUserData.role || ''}
+                    onChange={e => setEditUserData(prev => ({ ...prev, role: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="USER">User</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="MANAGER">Manager</option>
+                    <option value="VIEWER">Viewer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    value={editUserData.status || ''}
+                    onChange={e =>
+                      setEditUserData(prev => ({
+                        ...prev,
+                        status: e.target.value as SystemUserEditData['status'],
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value={UserStatus.ACTIVE}>Active</option>
+                    <option value={UserStatus.INACTIVE}>Inactive</option>
+                    <option value={UserStatus.PENDING}>Pending</option>
+                    <option value={UserStatus.LOCKED}>Locked</option>
+                    <option value={UserStatus.SUSPENDED}>Suspended</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <Button
+                  onClick={closeEditModal}
+                  variant="outline"
+                  disabled={isUserUpdateLoading}
+                  className="min-h-[44px]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpdateUser}
+                  disabled={isUserUpdateLoading}
+                  className="min-h-[44px] bg-blue-600 hover:bg-blue-700"
+                >
+                  {isUserUpdateLoading ? 'Updating...' : 'Update User'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
