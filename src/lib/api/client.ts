@@ -3,7 +3,9 @@
  * Comprehensive HTTP client with authentication, error handling, retry logic, and caching
  */
 
-import { logger } from '@/utils/logger';// Environment-aware API base URL resolution
+import { logger } from '@/utils/logger'; // Environment-aware API base URL resolution
+import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
+import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
 function getApiBaseUrl(): string {
   // Client-side: use current window location
   if (typeof window !== 'undefined') {
@@ -12,15 +14,16 @@ function getApiBaseUrl(): string {
 
   // Server-side: check environment
   if (process.env.NODE_ENV === 'production') {
-    // Production: use environment variable or fallback
-    return process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+    // Production: use environment variable or fallback to current domain
+    return (
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://posalpro-mvp2.windsurf.build'}/api`
+    );
   }
 
   // Development: use relative path
-return '/api';
+  return '/api';
 }
-import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
-import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
 
 // Export the existing types and interfaces
 export interface ApiResponse<T = any> {
@@ -175,17 +178,23 @@ class EnhancedApiClient {
     options: EnhancedRequestConfig = {}
   ): Promise<ApiResponse<T>> {
     logger.debug('[ApiClient] Starting request:', { url, method: options.method || 'GET' });
+    logger.debug('[ApiClient] Base URL:', this.baseURL);
 
     // Properly construct full URL with correct slash handling
     let fullUrl: string;
     if (url.startsWith('http')) {
       fullUrl = url;
+      logger.debug('[ApiClient] Using absolute URL:', fullUrl);
     } else {
       // Ensure proper slash between baseURL and endpoint
       const baseUrl = this.baseURL.endsWith('/') ? this.baseURL.slice(0, -1) : this.baseURL;
       const endpoint = url.startsWith('/') ? url : `/${url}`;
       fullUrl = `${baseUrl}${endpoint}`;
+      logger.debug('[ApiClient] Constructed URL:', { baseUrl, endpoint, fullUrl });
     }
+
+    // Log the actual URL being called for debugging
+    console.log(`[ApiClient] Final URL: ${fullUrl}`);
 
     const config = { ...this.defaultConfig, ...options };
     logger.debug('[ApiClient] Request config:', config);
