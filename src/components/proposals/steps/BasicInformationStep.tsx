@@ -233,15 +233,18 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     const fetchCustomers = async () => {
       setCustomersLoading(true);
       try {
-        // ✅ ENHANCED: Mobile performance optimization with centralized detection
-        const endpoint = '/api/customers';
-
-        const response = await apiClient.get(endpoint);
+        // ✅ FIXED: Correct API endpoint and response handling
+        // The API route returns: { success: true, data: { customers: [...] }, message: string }
+        // The API client wraps this in ApiResponse<T> where T is the entire response
+        const response = await apiClient.get<any>('/customers');
 
         console.log('🔍 [DEBUG] Customers API response:', response);
 
-        if (response && Array.isArray(response)) {
-          const customerList = response;
+        // ✅ FIXED: Proper response structure handling
+        // ApiResponse<T> has structure: { success: boolean, data: T, message: string }
+        // T in this case is the API route response: { success: true, data: { customers: [...] }, ... }
+        if (response.success && response.data?.data?.customers) {
+          const customerList = response.data.data.customers;
           setCustomers(customerList);
 
           // If we have a selected customer ID, find and set the customer
@@ -251,16 +254,20 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               setSelectedCustomer(existingCustomer);
             }
           }
+        } else {
+          console.error('🔍 [DEBUG] Invalid response structure:', response);
+          setCustomers([]);
         }
       } catch (error) {
         console.error('Error fetching customers:', error);
+        setCustomers([]);
       } finally {
         setCustomersLoading(false);
       }
     };
 
     fetchCustomers();
-  }, [data.client?.id, isMobile]); // ✅ FIXED: Added ieMobile dependency for proper optimization
+  }, [data.client?.id, apiClient]); // ✅ FIXED: Removed isMobile dependency, added apiClient
 
   // Handle customer selection
   const handleCustomerChange = useCallback(
