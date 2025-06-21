@@ -38,7 +38,9 @@
     backface-visibility: hidden;
 
     /* Optimize transitions for mobile */
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    transition:
+      border-color 0.15s ease-in-out,
+      box-shadow 0.15s ease-in-out;
 
     /* Ensure proper touch targets */
     min-height: 48px;
@@ -159,7 +161,9 @@
     will-change: transform;
 
     /* Optimize transitions */
-    transition: transform 0.1s ease-out, background-color 0.15s ease-in-out;
+    transition:
+      transform 0.1s ease-out,
+      background-color 0.15s ease-in-out;
 
     /* Ensure proper touch targets */
     min-height: 48px;
@@ -337,5 +341,125 @@
     border-color: #3b82f6 !important;
     color: #111827 !important;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+  }
+}
+
+/* 🚀 MOBILE PERFORMANCE CRITICAL OPTIMIZATIONS */
+@media (max-width: 768px) {
+  /* Eliminate React Hook Form performance issues */
+  .mobile-form-enhanced {
+    /* Optimize form rendering */
+    contain: layout style paint;
+    will-change: contents;
+
+    /* GPU acceleration for smooth interactions */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+
+    /* Optimize reflows */
+    overflow: hidden;
+  }
+
+  .react-hook-form-mobile {
+    /* Prevent expensive form recalculations */
+    contain: layout;
+
+    /* Optimize input field rendering */
+    input,
+    textarea,
+    select {
+      /* Force hardware acceleration */
+      transform: translateZ(0);
+      will-change: transform, opacity;
+
+      /* Optimize text rendering */
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+
+      /* Prevent iOS zoom */
+      font-size: 16px !important;
+
+      /* Optimize touch interactions */
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+
+      /* Immediate visual feedback */
+      transition:
+        border-color 0.1s ease-out,
+        box-shadow 0.1s ease-out;
+    }
+
+    /* Optimize focus states for immediate response */
+    input:focus,
+    textarea:focus,
+    select:focus {
+      /* Immediate border change */
+      border-color: #3b82f6 !important;
+
+      /* Lightweight shadow */
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+
+      /* GPU acceleration */
+      transform: translateZ(0);
+    }
+  }
+
+  /* Critical: Optimize form containers */
+  .form-container {
+    /* Isolate layout calculations */
+    contain: layout style;
+
+    /* Optimize for frequent updates */
+    will-change: contents;
+
+    /* Prevent layout thrashing */
+    overflow: hidden;
+  }
+
+  /* Optimize lazy loading components */
+  .lazy-loading-container {
+    /* Optimize component mounting */
+    contain: layout style paint;
+
+    /* Smooth transitions */
+    transition: opacity 0.2s ease-in-out;
+  }
+}
+
+/* 🚀 CRITICAL: Proposal Wizard Specific Optimizations */
+@media (max-width: 768px) {
+  /* Optimize wizard container */
+  .min-h-screen.mobile-form-enhanced {
+    /* Prevent expensive height calculations */
+    min-height: 100vh;
+    height: auto;
+
+    /* Optimize scrolling */
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+
+    /* GPU acceleration */
+    transform: translateZ(0);
+    will-change: scroll-position;
+  }
+
+  /* Optimize step navigation */
+  .sticky.top-0 {
+    /* Optimize sticky positioning */
+    position: -webkit-sticky;
+    position: sticky;
+
+    /* GPU acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  /* Optimize progress bar animations */
+  .bg-blue-600.transition-all {
+    /* Smooth progress updates */
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* GPU acceleration */
+    transform: translateZ(0);
   }
 }
