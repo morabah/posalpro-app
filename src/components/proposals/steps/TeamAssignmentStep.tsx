@@ -11,11 +11,12 @@ import { Label } from '@/components/ui/Label';
 import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/forms/Select';
 import { useUser } from '@/hooks/entities/useUser';
+import { useResponsive } from '@/hooks/useResponsive';
 import { UserType } from '@/types/enums';
 import { ExpertiseArea, ProposalWizardStep2Data } from '@/types/proposals';
 import { PlusIcon, SparklesIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -94,6 +95,9 @@ interface TeamAssignmentStepProps {
 }
 
 export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignmentStepProps) {
+  // ✅ MOBILE OPTIMIZATION: Add responsive detection
+  const { isMobile } = useResponsive();
+
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({});
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [teamLeads, setTeamLeads] = useState<any[]>([]);
@@ -109,6 +113,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
   ]);
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
+  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Keep onUpdate ref current
   useEffect(() => {
@@ -117,7 +122,6 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
 
   const {
     register,
-    watch,
     setValue,
     control,
     formState: { errors, isValid },
@@ -130,54 +134,46 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
       subjectMatterExperts: data.subjectMatterExperts || {},
       executiveReviewers: data.executiveReviewers || [],
     },
-    mode: 'onChange',
+    // ✅ CRITICAL FIX: Mobile-optimized validation mode
+    mode: isMobile ? 'onBlur' : 'onChange',
+    reValidateMode: 'onBlur',
+    criteriaMode: 'firstError',
   });
 
-  const watchedValues = watch();
-
-  // Stable update function to prevent infinite loops
-  const handleUpdate = useCallback((formattedData: ProposalWizardStep2Data) => {
-    const dataHash = JSON.stringify(formattedData);
-
-    if (dataHash !== lastSentDataRef.current) {
-      lastSentDataRef.current = dataHash;
-      onUpdateRef.current(formattedData);
-    }
-  }, []);
-
-  // Create stable reference for watched values
-  const stableWatchedValues = useMemo(() => {
+  // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
+  const collectFormData = useCallback((): ProposalWizardStep2Data => {
+    const currentValues = getValues();
     return {
-      teamLead: watchedValues.teamLead || '',
-      salesRepresentative: watchedValues.salesRepresentative || '',
-      subjectMatterExperts: watchedValues.subjectMatterExperts || {},
-      executiveReviewers: watchedValues.executiveReviewers || [],
+      teamLead: currentValues.teamLead || '',
+      salesRepresentative: currentValues.salesRepresentative || '',
+      subjectMatterExperts:
+        (currentValues.subjectMatterExperts as Record<ExpertiseArea, string>) || {},
+      executiveReviewers: currentValues.executiveReviewers || [],
     };
-  }, [
-    watchedValues.teamLead,
-    watchedValues.salesRepresentative,
-    watchedValues.subjectMatterExperts,
-    watchedValues.executiveReviewers,
-  ]);
+  }, [getValues]);
 
-  // Update parent component when form data changes
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const formattedData: ProposalWizardStep2Data = {
-        teamLead: stableWatchedValues.teamLead,
-        salesRepresentative: stableWatchedValues.salesRepresentative,
-        subjectMatterExperts: stableWatchedValues.subjectMatterExperts as Record<
-          ExpertiseArea,
-          string
-        >,
-        executiveReviewers: stableWatchedValues.executiveReviewers,
-      };
+  // ✅ PERFORMANCE OPTIMIZATION: Debounced update function
+  const debouncedHandleUpdate = useCallback(
+    (formattedData: ProposalWizardStep2Data) => {
+      // Clear existing timeout
+      if (debouncedUpdateRef.current) {
+        clearTimeout(debouncedUpdateRef.current);
+      }
 
-      handleUpdate(formattedData);
-    }, 300);
+      // Set new timeout with mobile-optimized delay
+      const delay = isMobile ? 500 : 300; // Longer delay on mobile for better performance
+      debouncedUpdateRef.current = setTimeout(() => {
+        const dataHash = JSON.stringify(formattedData);
 
-    return () => clearTimeout(timeoutId);
-  }, [stableWatchedValues, handleUpdate]);
+        // Only update if data has actually changed
+        if (dataHash !== lastSentDataRef.current) {
+          lastSentDataRef.current = dataHash;
+          onUpdateRef.current(formattedData);
+        }
+      }, delay);
+    },
+    [isMobile]
+  );
 
   // Track analytics for team assignments
   const trackTeamAssignment = useCallback(
@@ -413,7 +409,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                     setValue('teamLead', stringValue);
                     trackTeamAssignment('teamLead', stringValue);
                   }}
-                  value={watch('teamLead')}
+                  value={collectFormData().teamLead}
                   placeholder="Select team lead..."
                 />
               </div>
@@ -435,7 +431,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                     setValue('salesRepresentative', stringValue);
                     trackTeamAssignment('salesRepresentative', stringValue);
                   }}
-                  value={watch('salesRepresentative')}
+                  value={collectFormData().salesRepresentative}
                   placeholder="Select sales representative..."
                 />
               </div>
@@ -563,7 +559,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
           </span>
         </div>
         <div className="text-sm text-neutral-600">
-          Team size: {Object.keys(stableWatchedValues.subjectMatterExperts).length + 2} members
+          Team size: {Object.keys(collectFormData().subjectMatterExperts).length + 2} members
         </div>
       </div>
     </div>
