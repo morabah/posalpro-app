@@ -100,24 +100,57 @@ export interface AppConfig {
 class EnvironmentManager {
   private config: AppConfig | null = null;
   private validationResult: ValidationResult | null = null;
+  private isLoading = false;
+  private loadPromise: Promise<void> | null = null;
+
+  // ✅ PERFORMANCE FIX: Browser-specific warning suppression
+  private browserWarningsLogged = new Set<string>();
+  private lastBrowserLogTime = 0;
+  private readonly BROWSER_LOG_THROTTLE = 30000; // 30 seconds
 
   constructor() {
     this.loadConfiguration();
   }
 
-  // Get current environment
   public getCurrentEnvironment(): Environment {
-    const nodeEnv = process.env.NODE_ENV?.toLowerCase() || 'development';
+    // Use browser-safe environment detection
+    if (typeof window !== 'undefined') {
+      // Browser environment - check for build-time environment
+      return (process.env.NODE_ENV as Environment) || Environment.DEVELOPMENT;
+    }
 
-    switch (nodeEnv) {
+    // Server environment
+    const env = process.env.NODE_ENV || 'development';
+    switch (env.toLowerCase()) {
       case 'production':
         return Environment.PRODUCTION;
       case 'staging':
         return Environment.STAGING;
       case 'test':
         return Environment.TEST;
+      case 'development':
       default:
         return Environment.DEVELOPMENT;
+    }
+  }
+
+  // ✅ PERFORMANCE FIX: Throttled browser warning system
+  private logBrowserWarning(warning: string, environment: Environment) {
+    const now = Date.now();
+    const warningKey = `${warning}-${environment}`;
+
+    // Only log each warning once per throttle period
+    if (
+      !this.browserWarningsLogged.has(warningKey) ||
+      now - this.lastBrowserLogTime > this.BROWSER_LOG_THROTTLE
+    ) {
+      this.browserWarningsLogged.add(warningKey);
+      this.lastBrowserLogTime = now;
+
+      // Only log in development mode to reduce production console spam
+      if (environment === Environment.DEVELOPMENT) {
+        logWarn('Environment configuration warning', { warning, environment });
+      }
     }
   }
 
@@ -160,6 +193,20 @@ class EnvironmentManager {
 
   // Load and validate configuration
   private loadConfiguration(): void {
+    // ✅ PERFORMANCE FIX: Prevent multiple simultaneous loads
+    if (this.isLoading) {
+      return;
+    }
+
+    if (this.loadPromise) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.loadPromise = this.performLoad();
+  }
+
+  private async performLoad(): Promise<void> {
     try {
       const currentEnv = this.getCurrentEnvironment();
       const errors: string[] = [];
@@ -191,16 +238,18 @@ class EnvironmentManager {
         type: 'string',
       });
 
-      // Database configuration
+      // Database configuration with enhanced browser optimization
       let databaseUrl: string;
 
-      // Database URL should never be accessed in browser environment for security
       if (isBrowser) {
-        // Browser environment - use placeholder value
+        // ✅ PERFORMANCE FIX: Browser environment - use static placeholder
         databaseUrl = 'browser-placeholder://not-accessible';
-        // ✅ PERFORMANCE FIX: Only warn in development mode to reduce console spam
+        // Only warn in development and throttle warnings
         if (isDevelopment) {
-          warnings.push('Database configuration not available in browser environment');
+          this.logBrowserWarning(
+            'Database configuration not available in browser environment',
+            currentEnv
+          );
         }
       } else {
         // Server environment - load actual DATABASE_URL
@@ -262,76 +311,71 @@ class EnvironmentManager {
         type: 'number',
       });
 
-      // Authentication configuration with reduced warnings
-      if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('default')) {
-        if (isProduction) {
-          errors.push('JWT_SECRET must be set to a secure value in production');
-        } else if (isDevelopment) {
-          // ✅ PERFORMANCE FIX: Only warn once in development
-          warnings.push('Using default JWT_SECRET in development - update for production');
-        }
-      }
-
-      if (!process.env.API_KEY || process.env.API_KEY.includes('default')) {
-        if (isProduction) {
-          errors.push('API_KEY must be set to a secure value in production');
-        } else if (isDevelopment) {
-          // ✅ PERFORMANCE FIX: Only warn once in development
-          warnings.push('Using default API_KEY in development - update for production');
-        }
-      }
-
+      // Authentication configuration with enhanced browser safety
       let jwtSecret: string;
       let apiKey: string;
       let encryptionKey: string;
 
-      try {
+      if (isBrowser) {
+        // ✅ SECURITY FIX: Browser environment - use safe placeholders
+        jwtSecret = 'browser-placeholder-jwt-secret';
+        apiKey = 'browser-placeholder-api-key';
+        encryptionKey = 'browser-placeholder-encryption-key';
+
+        // Throttled warnings for development only
+        if (isDevelopment) {
+          this.logBrowserWarning(
+            'Authentication configuration not available in browser environment',
+            currentEnv
+          );
+        }
+      } else {
+        // Server environment - load actual secrets
         jwtSecret = this.getEnvVar('JWT_SECRET', {
           required: false,
-          default: isDevelopment ? 'dev-secret-key' : 'fallback-jwt-secret-32-chars-long!',
-          type: 'string',
-        }) as string;
-        apiKey = this.getEnvVar('API_KEY', {
-          required: false,
-          default: isDevelopment ? 'dev-api-key' : 'fallback-api-key',
-          type: 'string',
-        }) as string;
-        encryptionKey = this.getEnvVar('ENCRYPTION_KEY', {
-          required: false,
-          default: isDevelopment
-            ? 'dev-encryption-key-32-chars-long!'
-            : 'fallback-encryption-key-32-chars!',
+          default: isTest
+            ? 'test-jwt-secret'
+            : 'posalpro-mvp2-development-secret-key-minimum-32-characters-required',
           type: 'string',
         }) as string;
 
-        // Validate key lengths in production
+        apiKey = this.getEnvVar('API_KEY', {
+          required: false,
+          default: isTest ? 'test-api-key' : 'posalpro-mvp2-development-api-key',
+          type: 'string',
+        }) as string;
+
+        encryptionKey = this.getEnvVar('ENCRYPTION_KEY', {
+          required: false,
+          default: isTest
+            ? 'test-encryption-key-32-chars'
+            : 'posalpro-mvp2-development-encryption-key-32-characters',
+          type: 'string',
+        }) as string;
+
+        // Server-side validation for production
         if (isProduction) {
-          if (jwtSecret.length < 32) {
-            warnings.push(
-              'JWT_SECRET should be at least 32 characters in production (using fallback)'
+          if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('default')) {
+            errors.push('JWT_SECRET must be set to a secure value in production');
+          }
+          if (!process.env.API_KEY || process.env.API_KEY.includes('default')) {
+            errors.push('API_KEY must be set to a secure value in production');
+          }
+        } else if (isDevelopment) {
+          // Development warnings (throttled)
+          if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('default')) {
+            this.logBrowserWarning(
+              'Using default JWT_SECRET in development - update for production',
+              currentEnv
             );
           }
-          if (encryptionKey.length < 32) {
-            warnings.push(
-              'ENCRYPTION_KEY should be at least 32 characters in production (using fallback)'
+          if (!process.env.API_KEY || process.env.API_KEY.includes('default')) {
+            this.logBrowserWarning(
+              'Using default API_KEY in development - update for production',
+              currentEnv
             );
-          }
-        } else {
-          if (jwtSecret === 'dev-secret-key') {
-            warnings.push('Using default JWT_SECRET in development - update for production');
-          }
-          if (apiKey === 'dev-api-key') {
-            warnings.push('Using default API_KEY in development - update for production');
           }
         }
-      } catch (error) {
-        warnings.push(
-          `Authentication configuration warning: ${error instanceof Error ? error.message : String(error)}`
-        );
-        // Use fallback values
-        jwtSecret = 'fallback-secret-32-characters-long!';
-        apiKey = 'fallback-api-key';
-        encryptionKey = 'fallback-encryption-key-32-chars!';
       }
 
       const jwtExpiration = this.getEnvVar('JWT_EXPIRATION', {
@@ -345,33 +389,40 @@ class EnvironmentManager {
         type: 'string',
       }) as string;
 
-      // Services configuration
-      const loggingEndpoint = process.env.LOGGING_ENDPOINT;
+      // External services configuration
+      const loggingEndpoint = this.getEnvVar('LOGGING_ENDPOINT', {
+        required: false,
+        type: 'string',
+      }) as string | undefined;
       const loggingLevel = this.getEnvVar('LOGGING_LEVEL', {
         required: false,
         default: isDevelopment ? 'debug' : 'info',
         type: 'string',
       }) as string;
-      const analyticsTrackingId = process.env.ANALYTICS_TRACKING_ID;
+      const analyticsTrackingId = this.getEnvVar('ANALYTICS_TRACKING_ID', {
+        required: false,
+        type: 'string',
+      }) as string | undefined;
       const storageProvider = this.getEnvVar('STORAGE_PROVIDER', {
         required: false,
         default: 'local',
         type: 'string',
       }) as string;
-      const storageBucket = process.env.STORAGE_BUCKET;
-      const storageRegion = process.env.STORAGE_REGION;
+      const storageBucket = this.getEnvVar('STORAGE_BUCKET', {
+        required: false,
+        type: 'string',
+      }) as string | undefined;
+      const storageRegion = this.getEnvVar('STORAGE_REGION', {
+        required: false,
+        type: 'string',
+      }) as string | undefined;
 
       // Security configuration
-      const corsOrigins = (
-        this.getEnvVar('CORS_ORIGINS', {
-          required: false,
-          default: isDevelopment ? 'http://localhost:3000' : 'https://posalpro.com',
-          type: 'string',
-        }) as string
-      )
-        .split(',')
-        .map(origin => origin.trim());
-
+      const corsOrigins = this.getEnvVar('CORS_ORIGINS', {
+        required: false,
+        default: isDevelopment ? 'http://localhost:3000' : '',
+        type: 'string',
+      }) as string;
       const rateLimitWindowMs = this.getEnvVar('RATE_LIMIT_WINDOW_MS', {
         required: false,
         default: 900000,
@@ -379,7 +430,7 @@ class EnvironmentManager {
       }) as number;
       const rateLimitMaxRequests = this.getEnvVar('RATE_LIMIT_MAX_REQUESTS', {
         required: false,
-        default: isDevelopment ? 1000 : 100,
+        default: 100,
         type: 'number',
       }) as number;
 
@@ -451,7 +502,10 @@ class EnvironmentManager {
           },
         },
         security: {
-          corsOrigins,
+          corsOrigins: corsOrigins
+            .split(',')
+            .map(origin => origin.trim())
+            .filter(Boolean),
           rateLimitWindowMs,
           rateLimitMaxRequests,
           encryptionKey,
@@ -472,35 +526,35 @@ class EnvironmentManager {
         environment: currentEnv,
       };
 
-      // ✅ PERFORMANCE FIX: Reduce logging frequency in browser
+      // ✅ PERFORMANCE FIX: Intelligent logging strategy
       if (errors.length > 0) {
         logError('Environment configuration validation failed', new Error('Configuration errors'), {
           errors,
           warnings,
           environment: currentEnv,
         });
-      } else if (!isBrowser || isDevelopment) {
-        // Only log success in server environment or development
-        logInfo('Environment configuration loaded successfully', {
-          environment: currentEnv,
-          warnings: warnings.length > 0 ? warnings : undefined,
-          configSummary: {
+      } else {
+        // Only log success in server environment or development (and throttled)
+        if (!isBrowser && isDevelopment) {
+          logInfo('Environment configuration loaded successfully', {
             environment: currentEnv,
-            port: this.config.port,
-            databaseConfigured: !!this.config.database.url,
-            apiConfigured: !!this.config.api.baseUrl,
-            authConfigured: !!this.config.auth.jwtSecret,
-            featuresEnabled: Object.values(this.config.features).filter(Boolean).length,
-          },
-        });
+            warnings: warnings.length > 0 ? warnings : undefined,
+            configSummary: {
+              environment: currentEnv,
+              port: this.config.port,
+              databaseConfigured:
+                !!this.config.database.url && !this.config.database.url.includes('placeholder'),
+              apiConfigured: !!this.config.api.baseUrl,
+              authConfigured:
+                !!this.config.auth.jwtSecret && !this.config.auth.jwtSecret.includes('placeholder'),
+              featuresEnabled: Object.values(this.config.features).filter(Boolean).length,
+            },
+          });
+        }
       }
 
-      // ✅ PERFORMANCE FIX: Throttle warning logs to reduce browser console spam
-      if (warnings.length > 0 && (!isBrowser || isDevelopment)) {
-        warnings.forEach(warning => {
-          logWarn('Environment configuration warning', { warning, environment: currentEnv });
-        });
-      }
+      // ✅ PERFORMANCE FIX: No warning logs in browser environment for better performance
+      // Warnings are now handled by throttled logBrowserWarning method
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -516,6 +570,9 @@ class EnvironmentManager {
       };
 
       throw new Error(`Environment configuration failed: ${errorMessage}`);
+    } finally {
+      this.isLoading = false;
+      this.loadPromise = null;
     }
   }
 

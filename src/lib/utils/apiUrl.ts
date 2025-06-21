@@ -1,14 +1,13 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * Dynamic API URL Resolution Utility
  * Resolves API URLs based on current environment and port
  * Prevents hardcoded port issues in development
  */
 
-import { Environment, getCurrentEnvironment } from '../env';
-
 /**
  * Get the current API base URL dynamically
  * Works in both server and client environments
+ * ✅ PERFORMANCE FIX: Avoid environment configuration loading
  */
 export function getApiBaseUrl(): string {
   // Check if we're in the browser
@@ -17,10 +16,10 @@ export function getApiBaseUrl(): string {
     return `${window.location.origin}/api`;
   }
 
-  // Server-side: check environment
-  const currentEnv = getCurrentEnvironment();
+  // Server-side: check environment directly without triggering config loading
+  const nodeEnv = process.env.NODE_ENV?.toLowerCase() || 'development';
 
-  if (currentEnv === Environment.PRODUCTION || currentEnv === Environment.STAGING) {
+  if (nodeEnv === 'production' || nodeEnv === 'staging') {
     // Production/staging: use explicit API_BASE_URL or fallback to relative
     return process.env.API_BASE_URL || '/api';
   }
@@ -33,6 +32,7 @@ export function getApiBaseUrl(): string {
 /**
  * Get the current NextAuth URL dynamically
  * Used for NextAuth configuration in development
+ * ✅ PERFORMANCE FIX: Avoid environment configuration loading
  */
 export function getNextAuthUrl(): string {
   // Check if we're in the browser
@@ -41,10 +41,10 @@ export function getNextAuthUrl(): string {
     return window.location.origin;
   }
 
-  // Server-side: check environment
-  const currentEnv = getCurrentEnvironment();
+  // Server-side: check environment directly
+  const nodeEnv = process.env.NODE_ENV?.toLowerCase() || 'development';
 
-  if (currentEnv === Environment.PRODUCTION || currentEnv === Environment.STAGING) {
+  if (nodeEnv === 'production' || nodeEnv === 'staging') {
     // Production/staging: use explicit NEXTAUTH_URL
     return process.env.NEXTAUTH_URL || 'http://localhost:3000';
   }
