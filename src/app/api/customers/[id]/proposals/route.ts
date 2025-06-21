@@ -1,16 +1,15 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Customer Proposals API Routes
  * Enhanced customer proposal history with analytics tracking
  * Component Traceability: US-4.2, H4, H6
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -275,7 +274,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch proposals for customer ${params.id}:`, error);
+    logger.error(`Failed to fetch proposals for customer ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -349,7 +348,7 @@ async function trackCustomerProposalsAccessEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track customer proposals access event:', error);
+    logger.warn('Failed to track customer proposals access event:', error);
     // Don't fail the main operation if analytics tracking fails
   }
 }

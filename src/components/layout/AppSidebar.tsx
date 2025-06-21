@@ -195,6 +195,26 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     ],
   },
   {
+    id: 'analytics',
+    name: 'Analytics',
+    href: '/analytics',
+    icon: ChartBarIcon,
+    children: [
+      {
+        id: 'analytics-dashboard',
+        name: 'Dashboard',
+        href: '/analytics',
+        icon: ChartBarIcon,
+      },
+      {
+        id: 'analytics-real-time',
+        name: 'Real-Time',
+        href: '/analytics/real-time',
+        icon: ChartBarIcon,
+      },
+    ],
+  },
+  {
     id: 'customers',
     name: 'Customers',
     href: '/customers',
@@ -214,13 +234,6 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
         icon: UsersIcon,
       },
     ],
-  },
-  {
-    id: 'analytics',
-    name: 'Analytics',
-    href: '/analytics',
-    icon: ChartBarIcon,
-    roles: ['manager', 'admin'],
   },
   {
     id: 'admin',

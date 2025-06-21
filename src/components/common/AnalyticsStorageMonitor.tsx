@@ -11,16 +11,16 @@ import React, { useEffect, useState } from 'react';
 
 interface StorageInfo {
   eventCount: number;
-  sizeKB: number;
-  isHealthy: boolean;
+  hasUser: boolean;
+  storageSize: number;
 }
 
 export const AnalyticsStorageMonitor: React.FC = () => {
   const { getStorageInfo, clearStorage } = useAnalytics();
   const [storageInfo, setStorageInfo] = useState<StorageInfo>({
     eventCount: 0,
-    sizeKB: 0,
-    isHealthy: true,
+    hasUser: false,
+    storageSize: 0,
   });
   const [showDetails, setShowDetails] = useState(false);
 
@@ -58,7 +58,7 @@ export const AnalyticsStorageMonitor: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Database className="h-4 w-4 text-blue-500" />
             <span className="text-sm font-medium">Analytics Storage</span>
-            {storageInfo.isHealthy ? (
+            {storageInfo.storageSize < 500000 ? (
               <CheckCircle className="h-4 w-4 text-green-500" />
             ) : (
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
@@ -76,15 +76,15 @@ export const AnalyticsStorageMonitor: React.FC = () => {
           <div className="mt-3 space-y-2">
             <div className="text-xs text-gray-600">
               <div>Events: {storageInfo.eventCount}</div>
-              <div>Size: {storageInfo.sizeKB} KB</div>
+              <div>Size: {Math.round(storageInfo.storageSize / 1024)} KB</div>
               <div
-                className={`font-medium ${storageInfo.isHealthy ? 'text-green-600' : 'text-yellow-600'}`}
+                className={`font-medium ${storageInfo.storageSize < 500000 ? 'text-green-600' : 'text-yellow-600'}`}
               >
-                Status: {storageInfo.isHealthy ? 'Healthy' : 'Needs Cleanup'}
+                Status: {storageInfo.storageSize < 500000 ? 'Healthy' : 'Needs Cleanup'}
               </div>
             </div>
 
-            {!storageInfo.isHealthy && (
+            {storageInfo.storageSize >= 500000 && (
               <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded">
                 Storage is getting full. Consider clearing old data.
               </div>

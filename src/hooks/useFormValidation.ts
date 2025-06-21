@@ -1,10 +1,11 @@
+'use client';
+
+import { logger } from '@/utils/logger';
 /**
  * PosalPro MVP2 - Form Validation Hook
  * React Hook Form + Zod integration for enhanced form validation
  * Simplified version for H2.3 implementation
  */
-
-'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useState } from 'react';
@@ -39,7 +40,7 @@ export function useFormValidation<T extends FieldValues>({
   const trackFieldFocus = useCallback(
     (fieldName: string) => {
       if (enableAnalytics) {
-        console.log(`Field focus: ${formName}.${fieldName}`);
+        logger.info(`Field focus: ${formName}.${fieldName}`);
       }
     },
     [enableAnalytics, formName]
@@ -48,7 +49,7 @@ export function useFormValidation<T extends FieldValues>({
   const trackFieldBlur = useCallback(
     (fieldName: string) => {
       if (enableAnalytics) {
-        console.log(`Field blur: ${formName}.${fieldName}`);
+        logger.info(`Field blur: ${formName}.${fieldName}`);
       }
     },
     [enableAnalytics, formName]
@@ -57,7 +58,7 @@ export function useFormValidation<T extends FieldValues>({
   const trackFieldChange = useCallback(
     (fieldName: string) => {
       if (enableAnalytics) {
-        console.log(`Field change: ${formName}.${fieldName}`);
+        logger.info(`Field change: ${formName}.${fieldName}`);
       }
     },
     [enableAnalytics, formName]
@@ -73,17 +74,17 @@ export function useFormValidation<T extends FieldValues>({
 
         try {
           if (enableAnalytics) {
-            console.log(`Form submit attempt: ${formName}`);
+            logger.info(`Form submit attempt: ${formName}`);
           }
 
           await onValidSubmit(data);
 
           if (enableAnalytics) {
-            console.log(`Form submit success: ${formName}`);
+            logger.info(`Form submit success: ${formName}`);
           }
         } catch (error) {
           if (enableAnalytics) {
-            console.error(`Form submit error: ${formName}`, error);
+            logger.error(`Form submit error: ${formName}`, error);
           }
 
           throw error;

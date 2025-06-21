@@ -7,6 +7,8 @@
  */
 
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertCircle,
@@ -83,6 +85,9 @@ interface PreferencesTabProps {
 }
 
 export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -162,17 +167,15 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch('/api/profile/preferences', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
+      // Use centralized API client instead of direct fetch
+      const response = await apiClient.put<{
+        success: boolean;
+        data?: any;
+        error?: string;
+      }>('/api/profile/preferences', data);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update preferences');
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to update preferences');
       }
 
       const updateTime = Date.now() - startTime;
@@ -208,7 +211,20 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
       setSuccessMessage('Preferences updated successfully');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Update failed';
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to update user preferences',
+        ErrorCodes.VALIDATION.OPERATION_FAILED,
+        {
+          component: 'PreferencesTab',
+          operation: 'updatePreferences',
+          userId: user?.id,
+          preferencesCount: Object.keys(data).length,
+        }
+      );
+
+      const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setError(errorMessage);
     } finally {
       setIsLoading(false);

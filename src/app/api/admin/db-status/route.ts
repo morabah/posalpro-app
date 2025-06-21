@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Database Status API
  * Provides database connectivity and health status information
  */
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(status);
   } catch (error) {
-    console.error('Database status check error:', error);
+    logger.error('Database status check error:', error);
     return NextResponse.json(
       {
         isOnline: false,

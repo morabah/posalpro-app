@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PredictiveValidation Module
  *
  * Component Traceability Matrix:
@@ -98,7 +98,7 @@ export class PredictiveValidation {
         },
       };
     } catch (error: any) {
-      console.error('Prediction error:', error);
+      logger.error('Prediction error:', error);
       return {
         confidence: 0,
         predictedIssues: [],
@@ -138,7 +138,7 @@ export class PredictiveValidation {
         }
       }
     } catch (error: any) {
-      console.error('Learning error:', error);
+      logger.error('Learning error:', error);
     }
   }
 

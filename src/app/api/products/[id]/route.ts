@@ -1,18 +1,17 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Individual Product API Routes
  * Enhanced product operations with authentication and analytics
  * Component Traceability: US-3.1, US-3.2, H3, H4
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
 import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -305,7 +304,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to update product ${params.id}:`, error);
+    logger.error(`Failed to update product ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -404,7 +403,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to delete product ${params.id}:`, error);
+    logger.error(`Failed to delete product ${params.id}:`, error);
     return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
   }
 }
@@ -434,7 +433,7 @@ async function trackProductViewEvent(userId: string, productId: string, productN
       },
     });
   } catch (error) {
-    console.warn('Failed to track product view event:', error);
+    logger.warn('Failed to track product view event:', error);
   }
 }
 
@@ -469,7 +468,7 @@ async function trackProductUpdateEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track product update event:', error);
+    logger.warn('Failed to track product update event:', error);
   }
 }
 
@@ -504,6 +503,6 @@ async function trackProductArchiveEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track product archive event:', error);
+    logger.warn('Failed to track product archive event:', error);
   }
 }

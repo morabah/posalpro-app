@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Proposals API Endpoints
  * Type-safe proposal management operations with live database integration
  */
@@ -30,16 +30,16 @@ export const proposalsApi = {
       if (proposalData.metadata.customerId) {
         // Use existing customer ID if provided
         customerId = proposalData.metadata.customerId;
-        console.log('🔍 [CLIENT DEBUG] Using existing customer ID:', customerId);
+        logger.info('🔍 [CLIENT DEBUG] Using existing customer ID:', customerId);
       } else {
         // Find or create customer based on customerName (fallback to clientName for compatibility)
         const customerName =
           (proposalData.metadata as any).customerName || (proposalData.metadata as any).clientName;
         customerId = await customerEntity.findOrCreate(customerName);
-        console.log('🔍 [CLIENT DEBUG] Customer ID resolved:', customerId);
+        logger.info('🔍 [CLIENT DEBUG] Customer ID resolved:', customerId);
       }
     } catch (error) {
-      console.error('Failed to resolve customer:', error);
+      logger.error('Failed to resolve customer:', error);
       throw new Error('Failed to find or create customer');
     }
 
@@ -62,9 +62,9 @@ export const proposalsApi = {
       serverData.value = proposalData.metadata.estimatedValue;
     }
 
-    console.log('🔍 [CLIENT DEBUG] Original proposal data:', proposalData);
-    console.log('🔍 [CLIENT DEBUG] Transformed server data:', serverData);
-    console.log('🔍 [CLIENT DEBUG] Server data type:', typeof serverData);
+    logger.info('🔍 [CLIENT DEBUG] Original proposal data:', proposalData);
+    logger.info('🔍 [CLIENT DEBUG] Transformed server data:', serverData);
+    logger.info('🔍 [CLIENT DEBUG] Server data type:', typeof serverData);
 
     return apiClient.post<ProposalData>('/proposals', serverData);
   },

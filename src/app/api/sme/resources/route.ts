@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - SME Resources API Route
  * Returns resources for SME contributions
  */
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(resources);
   } catch (error) {
-    console.error('SME Resources API error:', error);
+    logger.error('SME Resources API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

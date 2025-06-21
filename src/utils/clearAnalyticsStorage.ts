@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Analytics Storage Cleanup Utility
  * Provides manual cleanup functions for development and troubleshooting
  */
@@ -17,11 +17,11 @@ export const clearAnalyticsStorage = () => {
         }
       });
 
-      console.log('✅ Analytics storage cleared successfully');
+      logger.info('✅ Analytics storage cleared successfully');
       return true;
     }
   } catch (error) {
-    console.error('❌ Failed to clear analytics storage:', error);
+    logger.error('❌ Failed to clear analytics storage:', error);
     return false;
   }
   return false;
@@ -54,7 +54,7 @@ export const getStorageUsage = () => {
       };
     }
   } catch (error) {
-    console.error('Failed to calculate storage usage:', error);
+    logger.error('Failed to calculate storage usage:', error);
   }
 
   return null;

@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Dynamic API URL Resolution Utility
  * Resolves API URLs based on current environment and port
  * Prevents hardcoded port issues in development
@@ -96,7 +96,7 @@ export function resolveApiUrl(endpoint: string): string {
   try {
     return buildApiUrl(endpoint);
   } catch (error) {
-    console.warn('Failed to build dynamic API URL, falling back to relative URL:', error);
+    logger.warn('Failed to build dynamic API URL, falling back to relative URL:', error);
 
     // Fallback to relative URL
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -121,7 +121,7 @@ export async function validateApiConnection(): Promise<boolean> {
 
     return response.ok;
   } catch (error) {
-    console.warn('API connection validation failed:', error);
+    logger.warn('API connection validation failed:', error);
     return false;
   }
 }
@@ -144,7 +144,7 @@ export function getApiClientConfig() {
  */
 export function logApiConfiguration(): void {
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔧 API Configuration:', {
+    logger.info('🔧 API Configuration:', {
       baseUrl: getApiBaseUrl(),
       nextAuthUrl: getNextAuthUrl(),
       environment: process.env.NODE_ENV,

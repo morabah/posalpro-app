@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - SME Templates API Route
  * Returns contribution templates for SME interface
  */
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(templates);
   } catch (error) {
-    console.error('SME Templates API error:', error);
+    logger.error('SME Templates API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - SME Assignment API Route
  * Returns SME assignment data for the contributions interface
  */
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(assignment);
   } catch (error) {
-    console.error('SME Assignment API error:', error);
+    logger.error('SME Assignment API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

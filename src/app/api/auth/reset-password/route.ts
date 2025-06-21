@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Password Reset API Route
  * Secure password reset with token validation
  */
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
   } catch (error) {
-    console.error('Password reset error:', error);
+    logger.error('Password reset error:', error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

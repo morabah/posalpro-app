@@ -1,10 +1,11 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Individual Customer API Routes
  * Enhanced customer operations with authentication and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -12,12 +13,9 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -341,7 +339,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to update customer ${params.id}:`, error);
+    logger.error(`Failed to update customer ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -436,7 +434,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to delete customer ${params.id}:`, error);
+    logger.error(`Failed to delete customer ${params.id}:`, error);
     return NextResponse.json({ error: 'Failed to delete customer' }, { status: 500 });
   }
 }
@@ -466,7 +464,7 @@ async function trackCustomerViewEvent(userId: string, customerId: string, custom
       },
     });
   } catch (error) {
-    console.warn('Failed to track customer view event:', error);
+    logger.warn('Failed to track customer view event:', error);
   }
 }
 
@@ -501,7 +499,7 @@ async function trackCustomerUpdateEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track customer update event:', error);
+    logger.warn('Failed to track customer update event:', error);
   }
 }
 
@@ -536,6 +534,6 @@ async function trackCustomerArchiveEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track customer archive event:', error);
+    logger.warn('Failed to track customer archive event:', error);
   }
 }

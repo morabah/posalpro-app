@@ -6,6 +6,8 @@
  * Security-focused with rate limiting and validation
  */
 
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, ArrowLeft, Check, Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -56,6 +58,9 @@ interface PasswordResetFormProps {
 
 export function PasswordResetForm({ className = '', initialToken }: PasswordResetFormProps) {
   const router = useRouter();
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   const [currentStep, setCurrentStep] = useState<ResetStep>(
     initialToken ? 'confirmation' : 'request'
   );
@@ -83,26 +88,38 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'request',
-          email: data.email,
-        }),
+      // Use centralized API client instead of direct fetch
+      const result = await apiClient.post<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>('/api/auth/reset-password', {
+        action: 'request',
+        email: data.email,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to send reset email');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send reset email');
       }
 
       setRequestedEmail(data.email);
       setCurrentStep('confirmation');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Password reset request failed',
+        ErrorCodes.AUTH.PASSWORD_RESET_FAILED,
+        {
+          component: 'PasswordResetForm',
+          operation: 'requestPasswordReset',
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          email: data.email,
+        }
+      );
+
+      const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -114,26 +131,38 @@ export function PasswordResetForm({ className = '', initialToken }: PasswordRese
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'confirm',
-          token: data.token,
-          newPassword: data.newPassword,
-        }),
+      // Use centralized API client instead of direct fetch
+      const result = await apiClient.post<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>('/api/auth/reset-password', {
+        action: 'confirm',
+        token: data.token,
+        newPassword: data.newPassword,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to reset password');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to reset password');
       }
 
       setCurrentStep('success');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Password reset confirmation failed',
+        ErrorCodes.AUTH.PASSWORD_RESET_FAILED,
+        {
+          component: 'PasswordResetForm',
+          operation: 'confirmPasswordReset',
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          hasToken: !!data.token,
+        }
+      );
+
+      const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setError(errorMessage);
     } finally {
       setIsLoading(false);

@@ -8,6 +8,7 @@ import { apiClient, type ApiResponse, type PaginatedResponse } from '@/lib/api/c
 import { trackAuthEvent } from '@/lib/store/authStore';
 import { createProposalSchema, proposalMetadataSchema } from '@/lib/validation';
 import { ApprovalDecision, Priority, ProposalStatus } from '@/types/enums';
+import { logger } from '@/utils/logger';
 import { z } from 'zod';
 
 // Infer types from validation schemas
@@ -126,39 +127,39 @@ export class ProposalEntity {
    */
   async create(proposalData: CreateProposalData): Promise<ApiResponse<ProposalData>> {
     try {
-      console.log('[ProposalEntity] Starting proposal creation with data:', proposalData);
+      logger.info('[ProposalEntity] Starting proposal creation with data:', proposalData);
 
       // The validation here is for the client-side entity shape.
       // The server will do its own validation.
-      console.log('[ProposalEntity] Validating proposal data');
+      logger.info('[ProposalEntity] Validating proposal data');
       const clientValidatedData = createProposalSchema.parse(proposalData);
-      console.log('[ProposalEntity] Data validation successful');
+      logger.info('[ProposalEntity] Data validation successful');
 
       // Use live API to create proposal
-      console.log('[ProposalEntity] Creating proposal via API');
+      logger.info('[ProposalEntity] Creating proposal via API');
       const { proposalsApi } = await import('@/lib/api/endpoints/proposals');
       const response = await proposalsApi.createProposal(clientValidatedData);
-      console.log('[ProposalEntity] API response:', response);
+      logger.info('[ProposalEntity] API response:', response);
 
       if (response.success && response.data) {
         // Cache the new proposal
         this.setCache(response.data.id, response.data);
-        console.log('[ProposalEntity] Proposal cached');
+        logger.info('[ProposalEntity] Proposal cached');
 
         // Track proposal creation event
-        console.log('[ProposalEntity] Tracking proposal creation event');
+        logger.info('[ProposalEntity] Tracking proposal creation event');
         trackAuthEvent('proposal_created', {
           proposalId: response.data.id,
           title: response.data.title,
           priority: response.data.priority,
           estimatedValue: response.data.estimatedValue,
         });
-        console.log('[ProposalEntity] Event tracked');
+        logger.info('[ProposalEntity] Event tracked');
       }
 
       return response;
     } catch (error) {
-      console.error('[ProposalEntity] Failed to create proposal:', error);
+      logger.error('[ProposalEntity] Failed to create proposal:', error);
       throw error;
     }
   }
@@ -187,7 +188,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to find proposal ${id}:`, error);
+      logger.error(`Failed to find proposal ${id}:`, error);
       return {
         data: null,
         success: false,
@@ -220,7 +221,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to update proposal ${id}:`, error);
+      logger.error(`Failed to update proposal ${id}:`, error);
       throw error;
     }
   }
@@ -243,7 +244,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to delete proposal ${id}:`, error);
+      logger.error(`Failed to delete proposal ${id}:`, error);
       throw error;
     }
   }
@@ -304,7 +305,7 @@ export class ProposalEntity {
         },
       };
     } catch (error) {
-      console.error('Failed to query proposals:', error);
+      logger.error('Failed to query proposals:', error);
       throw error;
     }
   }
@@ -336,7 +337,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to update status for proposal ${id}:`, error);
+      logger.error(`Failed to update status for proposal ${id}:`, error);
       throw error;
     }
   }
@@ -368,7 +369,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to assign team to proposal ${id}:`, error);
+      logger.error(`Failed to assign team to proposal ${id}:`, error);
       throw error;
     }
   }
@@ -381,7 +382,7 @@ export class ProposalEntity {
       const response = await apiClient.get<TeamAssignment[]>(`proposals/${id}/team`);
       return response;
     } catch (error) {
-      console.error(`Failed to get team assignments for proposal ${id}:`, error);
+      logger.error(`Failed to get team assignments for proposal ${id}:`, error);
       throw error;
     }
   }
@@ -405,7 +406,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to submit proposal ${id}:`, error);
+      logger.error(`Failed to submit proposal ${id}:`, error);
       throw error;
     }
   }
@@ -418,7 +419,7 @@ export class ProposalEntity {
       const response = await apiClient.get<ProposalApproval[]>(`proposals/${id}/approvals`);
       return response;
     } catch (error) {
-      console.error(`Failed to get approvals for proposal ${id}:`, error);
+      logger.error(`Failed to get approvals for proposal ${id}:`, error);
       throw error;
     }
   }
@@ -452,7 +453,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to process approval for proposal ${id}:`, error);
+      logger.error(`Failed to process approval for proposal ${id}:`, error);
       throw error;
     }
   }
@@ -465,7 +466,7 @@ export class ProposalEntity {
       const response = await apiClient.get<ProposalVersion[]>(`proposals/${id}/versions`);
       return response;
     } catch (error) {
-      console.error(`Failed to get version history for proposal ${id}:`, error);
+      logger.error(`Failed to get version history for proposal ${id}:`, error);
       throw error;
     }
   }
@@ -499,7 +500,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to create version for proposal ${id}:`, error);
+      logger.error(`Failed to create version for proposal ${id}:`, error);
       throw error;
     }
   }
@@ -512,7 +513,7 @@ export class ProposalEntity {
       const response = await apiClient.get<ProposalAnalytics>(`proposals/${id}/analytics`);
       return response;
     } catch (error) {
-      console.error(`Failed to get analytics for proposal ${id}:`, error);
+      logger.error(`Failed to get analytics for proposal ${id}:`, error);
       throw error;
     }
   }
@@ -539,7 +540,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to clone proposal ${id}:`, error);
+      logger.error(`Failed to clone proposal ${id}:`, error);
       throw error;
     }
   }
@@ -562,7 +563,7 @@ export class ProposalEntity {
    */
   async saveDraft(proposalData: CreateProposalData): Promise<ApiResponse<ProposalData>> {
     try {
-      console.log('[ProposalEntity] Saving proposal as draft');
+      logger.info('[ProposalEntity] Saving proposal as draft');
 
       // Use the create method but mark as draft status
       const draftData = {
@@ -573,7 +574,7 @@ export class ProposalEntity {
       const response = await this.create(draftData);
 
       if (response.success) {
-        console.log('[ProposalEntity] Draft saved successfully');
+        logger.info('[ProposalEntity] Draft saved successfully');
         trackAuthEvent('proposal_draft_saved', {
           proposalId: response.data?.id,
           title: proposalData.metadata.title,
@@ -582,7 +583,7 @@ export class ProposalEntity {
 
       return response;
     } catch (error) {
-      console.error('[ProposalEntity] Failed to save draft:', error);
+      logger.error('[ProposalEntity] Failed to save draft:', error);
       throw error;
     }
   }

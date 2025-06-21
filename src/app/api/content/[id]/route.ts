@@ -1,11 +1,11 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Individual Content API Routes
  * Handles operations on specific content by ID using service functions
  * Based on CONTENT_SEARCH_SCREEN.md requirements
  */
 
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/db/prisma';
+import prisma from '@/lib/db/prisma';
 import { updateContentSchema } from '@/lib/validation/schemas';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json(content);
   } catch (error) {
-    console.error(error);
+    logger.error(error instanceof Error ? error.message : String(error), error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }
@@ -80,7 +80,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json(updatedContent);
   } catch (error) {
-    console.error(error);
+    logger.error(error instanceof Error ? error.message : String(error), error);
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid request payload' }, { status: 400 });
     }
@@ -109,7 +109,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     await prisma.content.delete({ where: { id: contentId } });
     return NextResponse.json({ message: 'Content deleted successfully' });
   } catch (error) {
-    console.error(error);
+    logger.error(error instanceof Error ? error.message : String(error), error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }

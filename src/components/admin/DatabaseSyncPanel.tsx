@@ -12,6 +12,9 @@
 'use client';
 
 import { Button } from '@/components/ui/forms/Button';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -27,6 +30,15 @@ import {
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+
+// Component Traceability Matrix
+const COMPONENT_MAPPING = {
+  userStories: ['US-8.1', 'US-8.2'],
+  acceptanceCriteria: ['AC-8.1.1', 'AC-8.1.2', 'AC-8.2.1', 'AC-8.2.2'],
+  methods: ['performSync()', 'checkDatabaseStatus()', 'resolveConflicts()'],
+  hypotheses: ['H8'],
+  testCases: ['TC-H8-004', 'TC-H8-005', 'TC-H8-006'],
+};
 
 // Enhanced types for advanced sync tracking
 interface DatabaseStatus {
@@ -73,6 +85,10 @@ export default function DatabaseSyncPanel({
   onConflictDetected,
 }: DatabaseSyncPanelProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const analytics = useAnalytics();
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [localDbStatus, setLocalDbStatus] = useState<DatabaseStatus>({
     isOnline: false,
@@ -113,65 +129,102 @@ export default function DatabaseSyncPanel({
   }, [session, sessionStatus]);
 
   // Real-time database status monitoring
-  const checkDatabaseStatus = useCallback(async (type: 'local' | 'cloud') => {
-    try {
-      const startTime = Date.now();
+  const checkDatabaseStatus = useCallback(
+    async (type: 'local' | 'cloud') => {
+      try {
+        const startTime = Date.now();
 
-      // Prepare headers with authentication
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+        // Track database status check analytics
+        analytics.track('database_status_check_started', {
+          component: 'DatabaseSyncPanel',
+          databaseType: type,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          timestamp: Date.now(),
+        });
 
-      // Add development test bypass if needed
-      if (process.env.NODE_ENV === 'development') {
-        headers['x-test-bypass'] = 'true';
+        // Use centralized API client instead of direct fetch
+        const response = await apiClient.post<{
+          success: boolean;
+          data?: any;
+          error?: string;
+        }>('/api/admin/db-status', { type });
+
+        const latency = Date.now() - startTime;
+        const isOnline = response.success;
+        const health = isOnline ? (latency < 500 ? 'healthy' : 'degraded') : 'offline';
+
+        const status: DatabaseStatus = {
+          isOnline,
+          latency: isOnline ? latency : null,
+          lastChecked: new Date(),
+          connectionType: type,
+          health,
+        };
+
+        if (type === 'local') {
+          setLocalDbStatus(status);
+        } else {
+          setCloudDbStatus(status);
+        }
+
+        // Track successful status check
+        analytics.track('database_status_check_success', {
+          component: 'DatabaseSyncPanel',
+          databaseType: type,
+          status: health,
+          latency,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          timestamp: Date.now(),
+        });
+
+        return status;
+      } catch (error) {
+        // Use standardized error handling
+        const standardError = errorHandlingService.processError(
+          error,
+          `Failed to check ${type} database status`,
+          ErrorCodes.DATA.DATABASE_ERROR,
+          {
+            component: 'DatabaseSyncPanel',
+            operation: 'checkDatabaseStatus',
+            databaseType: type,
+            userStories: COMPONENT_MAPPING.userStories,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+          }
+        );
+
+        const status: DatabaseStatus = {
+          isOnline: false,
+          latency: null,
+          lastChecked: new Date(),
+          connectionType: type,
+          health: 'offline',
+        };
+
+        if (type === 'local') {
+          setLocalDbStatus(status);
+        } else {
+          setCloudDbStatus(status);
+        }
+
+        // Track error analytics
+        analytics.track('database_status_check_error', {
+          component: 'DatabaseSyncPanel',
+          databaseType: type,
+          error: standardError.message,
+          errorCode: standardError.code,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          timestamp: Date.now(),
+        });
+
+        return status;
       }
-
-      const response = await fetch(`/api/admin/db-status`, {
-        method: 'POST',
-        headers,
-        credentials: 'include', // Include cookies for session
-        body: JSON.stringify({ type }),
-        cache: 'no-cache',
-      });
-
-      const latency = Date.now() - startTime;
-      const isOnline = response.ok;
-      const health = isOnline ? (latency < 500 ? 'healthy' : 'degraded') : 'offline';
-
-      const status: DatabaseStatus = {
-        isOnline,
-        latency: isOnline ? latency : null,
-        lastChecked: new Date(),
-        connectionType: type,
-        health,
-      };
-
-      if (type === 'local') {
-        setLocalDbStatus(status);
-      } else {
-        setCloudDbStatus(status);
-      }
-
-      return status;
-    } catch (error) {
-      const status: DatabaseStatus = {
-        isOnline: false,
-        latency: null,
-        lastChecked: new Date(),
-        connectionType: type,
-        health: 'offline',
-      };
-
-      if (type === 'local') {
-        setLocalDbStatus(status);
-      } else {
-        setCloudDbStatus(status);
-      }
-
-      return status;
-    }
-  }, []);
+    },
+    [analytics, apiClient, errorHandlingService]
+  );
 
   // Monitor database status every 30 seconds
   useEffect(() => {
@@ -191,45 +244,36 @@ export default function DatabaseSyncPanel({
   // Advanced synchronization with conflict detection
   const performSync = useCallback(
     async (direction: 'localToCloud' | 'cloudToLocal' | 'bidirectional') => {
+      const startTime = Date.now();
       try {
         setIsSyncing(true);
-        const startTime = Date.now();
         const toastId = toast.loading(`Starting ${direction} synchronization...`);
 
-        // Prepare headers with authentication
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-
-        // Add development test bypass if needed
-        if (process.env.NODE_ENV === 'development') {
-          headers['x-test-bypass'] = 'true';
-        }
-
-        const response = await fetch('/api/admin/db-sync', {
-          method: 'POST',
-          headers,
-          credentials: 'include', // Include cookies for session
-          body: JSON.stringify({
-            direction,
-            includeConflictDetection: true,
-            generateReport: true,
-          }),
+        // Track sync start analytics
+        analytics.track('database_sync_started', {
+          component: 'DatabaseSyncPanel',
+          direction,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          timestamp: Date.now(),
         });
 
-        const result = await response.json();
-        const duration = Date.now() - startTime;
+        // Use centralized API client instead of direct fetch
+        const result = await apiClient.post<{
+          success: boolean;
+          data?: any;
+          error?: string;
+        }>('/api/admin/db-sync', {
+          direction,
+          includeConflictDetection: true,
+          generateReport: true,
+        });
 
+        const duration = Date.now() - startTime;
         toast.dismiss(toastId);
 
-        if (!response.ok) {
-          // Handle authentication errors specifically
-          if (response.status === 401) {
-            throw new Error('Authentication required. Please log in as an administrator.');
-          } else if (response.status === 403) {
-            throw new Error('Admin privileges required for database synchronization.');
-          }
-          throw new Error(result.error || result.message || 'Synchronization failed');
+        if (!result.success) {
+          throw new Error(result.error || 'Synchronization failed');
         }
 
         // Extract sync data from response
@@ -289,6 +333,18 @@ export default function DatabaseSyncPanel({
           );
         }
 
+        // Track successful sync
+        analytics.track('database_sync_success', {
+          component: 'DatabaseSyncPanel',
+          direction,
+          itemsSynced: syncData.itemsSynced,
+          conflicts: syncData.conflicts?.length || 0,
+          duration,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          timestamp: Date.now(),
+        });
+
         if (onSyncComplete) {
           onSyncComplete(new Date(), syncRecord);
         }
@@ -299,8 +355,21 @@ export default function DatabaseSyncPanel({
           void checkDatabaseStatus('cloud');
         }, 1000);
       } catch (error) {
-        console.error('Synchronization failed:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        // Use standardized error handling
+        const standardError = errorHandlingService.processError(
+          error,
+          `Database synchronization failed for ${direction}`,
+          ErrorCodes.DATA.DATABASE_ERROR,
+          {
+            component: 'DatabaseSyncPanel',
+            operation: 'performSync',
+            direction,
+            userStories: COMPONENT_MAPPING.userStories,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+          }
+        );
+
+        const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
 
         const failedRecord: SyncRecord = {
           id: `sync-failed-${Date.now()}`,
@@ -310,18 +379,36 @@ export default function DatabaseSyncPanel({
           itemsSynced: 0,
           itemsFailed: 0,
           tables: [],
-          duration: Date.now() - Date.now(),
+          duration: Date.now() - startTime,
           conflicts: 0,
           errors: [errorMessage],
         };
 
         setSyncRecords(prev => [failedRecord, ...prev.slice(0, 9)]);
         toast.error(`Sync failed: ${errorMessage}`);
+
+        // Track error analytics
+        analytics.track('database_sync_error', {
+          component: 'DatabaseSyncPanel',
+          direction,
+          error: standardError.message,
+          errorCode: standardError.code,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          timestamp: Date.now(),
+        });
       } finally {
         setIsSyncing(false);
       }
     },
-    [onSyncComplete, onConflictDetected, checkDatabaseStatus]
+    [
+      onSyncComplete,
+      onConflictDetected,
+      checkDatabaseStatus,
+      analytics,
+      apiClient,
+      errorHandlingService,
+    ]
   );
 
   // Status indicator component

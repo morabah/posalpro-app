@@ -1,10 +1,11 @@
+'use client';
+
+import { logger } from '@/utils/logger';
 /**
  * PosalPro MVP2 - Validation Hook
  * Real-time validation capabilities with H8 hypothesis tracking
  * Component Traceability: US-3.1, US-3.2, US-3.3, AC-3.1.1, AC-3.1.2, AC-3.2.1, AC-3.3.1
  */
-
-'use client';
 
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { ValidationEngine } from '@/lib/validation/ValidationEngine';
@@ -384,7 +385,7 @@ export function useValidation() {
             await validateConfiguration(request);
           }
         } catch (error) {
-          console.error('Real-time validation error:', error);
+          logger.error('Real-time validation error:', error);
         }
       }, interval);
 

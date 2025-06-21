@@ -1,5 +1,4 @@
-/**
- * Centralized Logging Infrastructure
+/** * Centralized Logging Infrastructure
  * Provides structured logging with environment-aware configuration
  * and comprehensive context data support
  */
@@ -173,7 +172,7 @@ class Logger {
       });
     } catch (error) {
       // Fallback to console if remote logging fails
-      console.error('[Logger] Failed to send log to remote endpoint:', error);
+      logger.error('[Logger] Failed to send log to remote endpoint:', error);
     }
   }
 
@@ -192,7 +191,7 @@ class Logger {
 
     // Log to remote endpoint (async, don't wait)
     this.logToRemote(context).catch(err => {
-      console.error('[Logger] Remote logging failed:', err);
+      logger.error('[Logger] Remote logging failed:', err);
     });
   }
 

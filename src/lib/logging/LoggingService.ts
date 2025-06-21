@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Logging Service
  * Enterprise-grade logging infrastructure
  * Component Traceability Matrix: US-6.1, US-6.2, H8, H11
@@ -152,7 +152,7 @@ export class LoggingService {
       }
     } catch (error) {
       // Fallback to console if logging service fails
-      console.error('LoggingService error:', error, { level, message, metadata });
+      logger.error('LoggingService error: ' + (error instanceof Error ? error.message : String(error)), { level, message, metadata, error });
     }
   }
 

@@ -7,6 +7,9 @@
  */
 
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertCircle,
@@ -91,6 +94,10 @@ interface NotificationsTabProps {
 }
 
 export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
+  // Initialize API client and error handling service
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -175,18 +182,8 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch('/api/profile/notifications', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update notification preferences');
-      }
+      // Use apiClient instead of direct fetch
+      await apiClient.put('/api/profile/notifications', data);
 
       const updateTime = Date.now() - startTime;
 
@@ -219,8 +216,33 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
       setSuccessMessage('Notification preferences updated successfully');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Update failed';
-      setError(errorMessage);
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to update notification preferences',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'NotificationsTab',
+          operation: 'updatePreferences',
+          userStories: ['US-2.4'],
+          acceptanceCriteria: ['AC-2.4.1', 'AC-2.4.2'],
+          hypotheses: ['H5'],
+          testCases: ['TC-H5-001'],
+          userId: user?.id,
+          timestamp: Date.now(),
+        }
+      );
+
+      const userFriendlyMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+      setError(userFriendlyMessage);
+
+      // Track error analytics
+      analytics.trackProfileUpdate({
+        section: 'notifications',
+        field: 'error',
+        newValue: standardError.message,
+        updateTime: Date.now() - startTime,
+      });
     } finally {
       setIsLoading(false);
     }

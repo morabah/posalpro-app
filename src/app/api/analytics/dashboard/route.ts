@@ -5,14 +5,12 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**

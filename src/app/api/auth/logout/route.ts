@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Logout API Route
  * Session cleanup and security logging
  */
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Logout error:', error);
+    logger.error('Logout error:', error);
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

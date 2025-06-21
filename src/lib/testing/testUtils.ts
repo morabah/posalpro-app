@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Comprehensive Testing Framework
  * Implements testing utilities for unit, integration, and accessibility testing
  *
@@ -138,12 +138,12 @@ export class AccessibilityTester {
 export class DatabaseTestUtils {
   static async seedTestData(): Promise<void> {
     // Mock database seeding for tests
-    console.log('Seeding test data...');
+    logger.info('Seeding test data...');
   }
 
   static async cleanupTestData(): Promise<void> {
     // Mock database cleanup for tests
-    console.log('Cleaning up test data...');
+    logger.info('Cleaning up test data...');
   }
 
   static createMockUser(overrides: Partial<any> = {}) {

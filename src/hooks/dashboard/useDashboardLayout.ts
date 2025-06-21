@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Dashboard Layout Hook
  * Comprehensive dashboard layout management with responsive grid, widget positioning, and user customization
  * Based on DASHBOARD_SCREEN.md wireframe specifications
@@ -497,7 +497,7 @@ export function useDashboardLayout(
 
       return true;
     } catch (error) {
-      console.error('Failed to save layout:', error);
+      logger.error('Failed to save layout:', error);
       return false;
     }
   }, [
@@ -534,7 +534,7 @@ export function useDashboardLayout(
 
       return true;
     } catch (error) {
-      console.error('Failed to load layout:', error);
+      logger.error('Failed to load layout:', error);
       return false;
     }
   }, [getLayoutStorageKey, trackEvent, options.userRole]);
@@ -581,7 +581,7 @@ export function useDashboardLayout(
 
         return true;
       } catch (error) {
-        console.error('Failed to import layout:', error);
+        logger.error('Failed to import layout:', error);
         return false;
       }
     },

@@ -14,6 +14,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import {
   ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
@@ -28,9 +31,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 const COMPONENT_MAPPING = {
   userStories: ['US-4.3'],
   acceptanceCriteria: ['AC-4.3.1', 'AC-4.3.2', 'AC-4.3.3'],
-  methods: ['manageQueue()', 'calculatePriority()', 'updateStatus()'],
+  methods: ['prioritizeQueue()', 'trackQueueMetrics()', 'processApprovalItems()'],
   hypotheses: ['H7'],
-  testCases: ['TC-H7-002', 'TC-H7-003'],
+  testCases: ['TC-H7-001', 'TC-H7-002', 'TC-H7-003'],
 };
 
 // Types for approval queue management
@@ -112,39 +115,80 @@ export function ApprovalQueue({
     urgency: [],
     showOverdueOnly: false,
     showCriticalPathOnly: false,
-    showMyTasksOnly: true,
+    showMyTasksOnly: false,
   });
   const [sortBy, setSortBy] = useState<'priority' | 'deadline' | 'sla' | 'complexity'>('priority');
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'board' | 'timeline'>('list');
 
+  // Use centralized API client and error handling
+  const apiClient = useApiClient();
+  const analytics = useAnalytics();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   useEffect(() => {
     const fetchQueueItems = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/proposals/queue');
-        if (!response.ok) {
-          throw new Error('Failed to fetch approval queue');
-        }
-        const data = await response.json();
+        setError(null);
+
+        // Track analytics for fetch attempt
+        analytics.track('approval_queue_fetch_started', {
+          component: 'ApprovalQueue',
+          user: currentUser,
+          timestamp: Date.now(),
+        });
+
+        // Use centralized API client instead of direct fetch
+        const data = await apiClient.get<any[]>('/api/proposals/queue');
 
         // Convert date strings to Date objects
-        const processedItems = data.map((item: any) => ({
+        const processedItems: QueueItem[] = data.map((item: any) => ({
           ...item,
           deadline: new Date(item.deadline),
           lastActivity: new Date(item.lastActivity),
         }));
 
         setQueueItems(processedItems);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+
+        // Track successful fetch
+        analytics.track('approval_queue_fetch_success', {
+          component: 'ApprovalQueue',
+          itemCount: processedItems.length,
+          user: currentUser,
+          timestamp: Date.now(),
+        });
+      } catch (error) {
+        // Use standardized error handling
+        const standardError = errorHandlingService.processError(
+          error,
+          'Failed to fetch approval queue items',
+          ErrorCodes.DATA.FETCH_FAILED,
+          {
+            component: 'ApprovalQueue',
+            operation: 'fetchQueueItems',
+            user: currentUser,
+          }
+        );
+
+        const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+        setError(userMessage);
+
+        // Track error analytics
+        analytics.track('approval_queue_fetch_error', {
+          component: 'ApprovalQueue',
+          error: standardError.message,
+          errorCode: standardError.code,
+          user: currentUser,
+          timestamp: Date.now(),
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchQueueItems();
-  }, []);
+  }, [apiClient, analytics, errorHandlingService, currentUser]);
 
   // AC-4.3.1: Intelligent task prioritization algorithm
   const prioritizeQueue = useCallback((items: QueueItem[]): QueueItem[] => {

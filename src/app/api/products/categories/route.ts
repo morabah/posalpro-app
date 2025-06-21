@@ -1,15 +1,13 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Product Categories API Routes
  * Enhanced category management with analytics tracking
  * Component Traceability: US-3.1, US-3.2, H3
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -140,7 +138,7 @@ export async function GET(request: NextRequest) {
       message: 'Product categories retrieved successfully',
     });
   } catch (error) {
-    console.error('Product categories fetch error:', error);
+    logger.error('Product categories fetch error:', error);
     return NextResponse.json({ error: 'Failed to fetch product categories' }, { status: 500 });
   }
 }
@@ -169,7 +167,7 @@ async function trackCategoryAccessEvent(userId: string, categoriesCount: number)
       },
     });
   } catch (error) {
-    console.warn('Failed to track category access event:', error);
+    logger.warn('Failed to track category access event:', error);
     // Don't fail the main operation if analytics tracking fails
   }
 }

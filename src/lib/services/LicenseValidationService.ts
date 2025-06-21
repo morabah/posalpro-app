@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * License Validation Service for PosalPro MVP2
  * Handles license validation and compliance checking
  */
@@ -19,7 +19,7 @@ export class LicenseValidationService {
    */
   async validateConfiguration(config: ProductConfiguration): Promise<LicenseValidationResult> {
     try {
-      console.log('Starting license validation', {
+      logger.info('Starting license validation', {
         configId: config.id,
         productCount: config.products.length,
       });
@@ -99,7 +99,7 @@ export class LicenseValidationService {
         suggestions,
       };
 
-      console.log('License validation completed', {
+      logger.info('License validation completed', {
         configId: config.id,
         hasIssues: result.hasIssues,
         issueCount: issues.length,
@@ -107,7 +107,7 @@ export class LicenseValidationService {
 
       return result;
     } catch (error) {
-      console.error('License validation error', {
+      logger.error('License validation error', {
         error: error instanceof Error ? error.message : 'Unknown error',
         configId: config.id,
       });

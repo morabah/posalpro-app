@@ -5,14 +5,17 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
+import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
-import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
-
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -53,8 +56,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           metadata: {
             component: 'UsersIdRoute',
             operation: 'getUserById',
-            userId: id
-          }
+            userId: id,
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -129,8 +132,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           metadata: {
             component: 'UsersIdRoute',
             operation: 'getUserById',
-            userId: id
-          }
+            userId: id,
+          },
         }),
         'User not found',
         ErrorCodes.DATA.NOT_FOUND,
@@ -149,8 +152,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             component: 'UsersIdRoute',
             operation: 'getUserById',
             userId: id,
-            userStatus: user.status
-          }
+            userStatus: user.status,
+          },
         }),
         'User not available',
         ErrorCodes.AUTH.PERMISSION_DENIED,
@@ -312,7 +315,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   } catch (error) {
     const params = await context.params;
     const userId = params.id;
-    
+
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
 
@@ -326,21 +329,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             component: 'UsersIdRoute',
             operation: 'getUserById',
             userId,
-            validationErrors: error.errors
-          }
+            validationErrors: error.errors,
+          },
         }),
         'Invalid request parameters',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        { 
-          userFriendlyMessage: 'The request contains invalid parameters. Please check your input and try again.',
-          details: error.errors
+        {
+          userFriendlyMessage:
+            'The request contains invalid parameters. Please check your input and try again.',
+          details: error.errors,
         }
       );
     }
 
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.NOT_FOUND;
       return createApiErrorResponse(
         new StandardError({
           message: `Database error when fetching user ${userId}: ${getPrismaErrorMessage(error.code)}`,
@@ -350,20 +356,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             component: 'UsersIdRoute',
             operation: 'getUserById',
             userId,
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
         500,
-        { userFriendlyMessage: 'An error occurred while retrieving the user profile. Please try again later.' }
+        {
+          userFriendlyMessage:
+            'An error occurred while retrieving the user profile. Please try again later.',
+        }
       );
     }
-    
+
     if (error instanceof StandardError) {
       return createApiErrorResponse(error);
     }
-    
+
     return createApiErrorResponse(
       new StandardError({
         message: `Failed to fetch user profile for ${userId}`,
@@ -372,13 +381,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         metadata: {
           component: 'UsersIdRoute',
           operation: 'getUserById',
-          userId
-        }
+          userId,
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      { userFriendlyMessage: 'An unexpected error occurred while retrieving the user profile. Please try again later.' }
+      {
+        userFriendlyMessage:
+          'An unexpected error occurred while retrieving the user profile. Please try again later.',
+      }
     );
   }
 }

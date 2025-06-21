@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Session API Route
  * NextAuth.js session endpoint
  */
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(session, { status: 200 });
   } catch (error) {
-    console.error('Session API error:', error);
+    logger.error('Session API error:', error);
     return NextResponse.json({ error: 'Failed to get session' }, { status: 500 });
   }
 }

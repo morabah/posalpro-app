@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Database Synchronization API
  * Enables controlled synchronization between local and cloud databases
  * Follows platform engineering best practices for separation of environments
@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 // Import auth options from the correct location
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
@@ -124,15 +125,15 @@ const detectConflicts = async (
 
       case 'Proposal': {
         // TODO: Fix JsonValue type compatibility issues
-        console.log('Proposal sync temporarily disabled due to type compatibility issues');
+        logger.info('Proposal sync temporarily disabled due to type compatibility issues');
         break;
       }
 
       default:
-        console.log(`No conflict detection implemented for table: ${table}`);
+        logger.info(`No conflict detection implemented for table: ${table}`);
     }
   } catch (error) {
-    console.error(`Conflict detection failed for table ${table}:`, error);
+    logger.error(`Conflict detection failed for table ${table}:`, error);
   }
 
   return conflicts;
@@ -180,15 +181,11 @@ const performDatabaseSync = async (
 
     if (!hasSeparateDatabases) {
       // Demo mode: simulate sync operation with single database
-      console.log('Running sync in demo mode (single database)');
-
-      const demoPrisma = new PrismaClient({
-        datasources: { db: { url: primaryDbUrl } },
-      });
+      logger.info('Running sync in demo mode (single database)');
 
       try {
-        // Verify database connection
-        await demoPrisma.$queryRaw`SELECT 1`;
+        // Verify database connection using centralized client
+        await prisma.$queryRaw`SELECT 1`;
 
         // Tables to "sync" (really just validate)
         const tablesToSync = options.tables || [
@@ -210,28 +207,28 @@ const performDatabaseSync = async (
 
             switch (table) {
               case 'User':
-                count = await demoPrisma.user.count();
+                count = await prisma.user.count();
                 break;
               case 'Role':
-                count = await demoPrisma.role.count();
+                count = await prisma.role.count();
                 break;
               case 'Permission':
-                count = await demoPrisma.permission.count();
+                count = await prisma.permission.count();
                 break;
               case 'Customer':
-                count = await demoPrisma.customer.count();
+                count = await prisma.customer.count();
                 break;
               case 'Product':
-                count = await demoPrisma.product.count();
+                count = await prisma.product.count();
                 break;
               case 'Proposal':
-                count = await demoPrisma.proposal.count();
+                count = await prisma.proposal.count();
                 break;
               case 'Content':
-                count = await demoPrisma.content.count();
+                count = await prisma.content.count();
                 break;
               default:
-                console.log(`Table ${table} not supported in demo mode`);
+                logger.info(`Table ${table} not supported in demo mode`);
                 continue;
             }
 
@@ -242,9 +239,9 @@ const performDatabaseSync = async (
               conflicts: 0,
             };
 
-            console.log(`Demo sync: ${table} - ${count} records validated`);
+            logger.info(`Demo sync: ${table} - ${count} records validated`);
           } catch (error) {
-            console.error(`Failed to validate table ${table}:`, error);
+            logger.error(`Failed to validate table ${table}:`, error);
             result.itemsFailed += 1;
             result.errors.push(
               `Table ${table}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -259,11 +256,11 @@ const performDatabaseSync = async (
 
         result.success = result.errors.length === 0;
       } finally {
-        await demoPrisma.$disconnect();
+        await prisma.$disconnect();
       }
     } else {
       // Real dual-database sync mode
-      console.log('Running real database sync with separate local/cloud databases');
+      logger.info('Running real database sync with separate local/cloud databases');
 
       const localPrisma = new PrismaClient({
         datasources: { db: { url: localDbUrl } },
@@ -291,14 +288,14 @@ const performDatabaseSync = async (
 
         // Conflict detection phase
         if (options.includeConflictDetection && (direction === 'bidirectional' || !options.force)) {
-          console.log('Detecting conflicts...');
+          logger.info('Detecting conflicts...');
           for (const table of tablesToSync) {
             const tableConflicts = await detectConflicts(localPrisma, cloudPrisma, table);
             result.conflicts.push(...tableConflicts);
           }
 
           if (result.conflicts.length > 0 && !options.force) {
-            console.log(`Found ${result.conflicts.length} conflicts, stopping sync`);
+            logger.info(`Found ${result.conflicts.length} conflicts, stopping sync`);
             result.duration = Date.now() - startTime;
             return result;
           }
@@ -324,9 +321,9 @@ const performDatabaseSync = async (
               conflicts: result.conflicts.filter(c => c.table === table).length,
             };
 
-            console.log(`Synced ${syncedCount} items from ${table}`);
+            logger.info(`Synced ${syncedCount} items from ${table}`);
           } catch (error) {
-            console.error(`Failed to sync table ${table}:`, error);
+            logger.error(`Failed to sync table ${table}:`, error);
             result.itemsFailed += 1;
             result.errors.push(
               `Table ${table}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -347,11 +344,11 @@ const performDatabaseSync = async (
     }
 
     result.duration = Date.now() - startTime;
-    console.log(`Database sync completed in ${result.duration}ms. Success: ${result.success}`);
+    logger.info(`Database sync completed in ${result.duration}ms. Success: ${result.success}`);
 
     return result;
   } catch (error) {
-    console.error('Database sync failed:', error);
+    logger.error('Database sync failed:', error);
     result.errors.push(error instanceof Error ? error.message : 'Unknown sync error');
     result.duration = Date.now() - startTime;
     return result;
@@ -401,7 +398,7 @@ const syncTableData = async (
             }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync user ${user.email}:`, error);
+            logger.error(`Failed to sync user ${user.email}:`, error);
             // Don't break the loop, continue with other users
           }
         }
@@ -447,7 +444,7 @@ const syncTableData = async (
             }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync role ${role.name}:`, error);
+            logger.error(`Failed to sync role ${role.name}:`, error);
           }
         }
         break;
@@ -498,7 +495,7 @@ const syncTableData = async (
             }
             syncedCount++;
           } catch (error) {
-            console.error(
+            logger.error(
               `Failed to sync permission ${permission.resource}:${permission.action}:`,
               error
             );
@@ -558,7 +555,7 @@ const syncTableData = async (
             }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync customer ${customer.id}:`, error);
+            logger.error(`Failed to sync customer ${customer.id}:`, error);
           }
         }
         break;
@@ -610,7 +607,7 @@ const syncTableData = async (
             }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync product ${product.sku}:`, error);
+            logger.error(`Failed to sync product ${product.sku}:`, error);
           }
         }
         break;
@@ -685,7 +682,7 @@ const syncTableData = async (
             }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync content ${content.id}:`, error);
+            logger.error(`Failed to sync content ${content.id}:`, error);
           }
         }
         break;
@@ -746,17 +743,17 @@ const syncTableData = async (
             }
             syncedCount++;
           } catch (error) {
-            console.error(`Failed to sync proposal ${proposal.id}:`, error);
+            logger.error(`Failed to sync proposal ${proposal.id}:`, error);
           }
         }
         break;
       }
 
       default:
-        console.log(`No sync logic implemented for table: ${table}`);
+        logger.info(`No sync logic implemented for table: ${table}`);
     }
   } catch (error) {
-    console.error(`Sync failed for table ${table}:`, error);
+    logger.error(`Sync failed for table ${table}:`, error);
     throw error;
   }
 
@@ -772,7 +769,7 @@ export async function POST(request: NextRequest) {
     // 1. Authentication & Authorization check
     const isDevelopment = process.env.NODE_ENV === 'development';
     const session = await getServerSession(authOptions);
-    console.log('[DB-SYNC] Session user:', session?.user);
+    logger.info('[DB-SYNC] Session user:', session?.user);
 
     // Define a type for the session user based on expected structure
     interface SessionUser {
@@ -826,7 +823,7 @@ export async function POST(request: NextRequest) {
     const testBypass = isDevelopment && request.headers.get('x-test-bypass') === 'true';
 
     if (!testBypass && (!session || !session.user)) {
-      console.error('[DB-SYNC] Authorization failed: No valid session');
+      logger.error('[DB-SYNC] Authorization failed: No valid session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -835,7 +832,7 @@ export async function POST(request: NextRequest) {
     if (!testBypass && session?.user) {
       // Type assertion with safety check to match actual structure
       const sessionUser = session.user as unknown as SessionUser;
-      console.log('[DB-SYNC] Session user roles:', sessionUser.roles);
+      logger.info('[DB-SYNC] Session user roles:', sessionUser.roles);
 
       // Type assertion to match actual structure
       const user = session.user as SessionUser;
@@ -850,7 +847,7 @@ export async function POST(request: NextRequest) {
       };
 
       // Always log access attempts in structured format
-      console.log(
+      logger.info(
         `[ADMIN-API] DB-Sync access attempt by user: ${JSON.stringify(sessionUserForLog)}`
       );
 
@@ -859,7 +856,7 @@ export async function POST(request: NextRequest) {
         try {
           // Check if user has explicit admin permissions
           if (typeof user.permissions === 'number' && user.permissions >= 10) {
-            console.log('[ADMIN-API] User granted access via permissions level');
+            logger.info('[ADMIN-API] User granted access via permissions level');
             return true;
           }
 
@@ -870,7 +867,7 @@ export async function POST(request: NextRequest) {
             const hasAdminRole = adminTerms.some(term => rolesLower.includes(term));
 
             if (hasAdminRole) {
-              console.log(`[ADMIN-API] User granted access via role string: "${user.roles}"`);
+              logger.info(`[ADMIN-API] User granted access via role string: "${user.roles}"`);
               return true;
             }
           }
@@ -886,7 +883,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (hasAdminRole) {
-              console.log('[ADMIN-API] User granted access via role array');
+              logger.info('[ADMIN-API] User granted access via role array');
               return true;
             }
           }
@@ -895,14 +892,14 @@ export async function POST(request: NextRequest) {
           if (isDevelopment && user.email) {
             const adminEmails = ['admin@posalpro.com', 'test@posalpro.com'];
             if (adminEmails.includes(user.email.toLowerCase())) {
-              console.log('[ADMIN-API] User granted access via development admin email');
+              logger.info('[ADMIN-API] User granted access via development admin email');
               return true;
             }
           }
 
           return false;
         } catch (error) {
-          console.error('[ADMIN-API] Error during role verification:', error);
+          logger.error('[ADMIN-API] Error during role verification:', error);
           return false;
         }
       })();
@@ -912,7 +909,7 @@ export async function POST(request: NextRequest) {
       const userDisplay = session?.user
         ? `${session.user.email} (roles: ${getUserRoleString((session.user as any).roles)})`
         : 'unknown';
-      console.error(`[DB-SYNC] Authorization failed for user: ${userDisplay}`);
+      logger.error(`[DB-SYNC] Authorization failed for user: ${userDisplay}`);
       return NextResponse.json(
         {
           error: 'Forbidden',
@@ -929,7 +926,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedRequest = SyncRequestSchema.parse(body);
 
-    console.log(`[DB-SYNC] Starting ${validatedRequest.direction} sync operation`);
+    logger.info(`[DB-SYNC] Starting ${validatedRequest.direction} sync operation`);
 
     // 3. Perform sync operation
     const result = await performDatabaseSync(validatedRequest.direction, {
@@ -953,7 +950,7 @@ export async function POST(request: NextRequest) {
       tables: result.tables,
     };
 
-    console.log(`[DB-SYNC] Operation completed:`, logEntry);
+    logger.info(`[DB-SYNC] Operation completed:`, logEntry);
 
     return NextResponse.json({
       success: result.success,
@@ -964,7 +961,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[DB-SYNC] Sync operation failed:', error);
+    logger.error('[DB-SYNC] Sync operation failed:', error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

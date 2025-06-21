@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Real-time Dashboard Infrastructure
  * WebSocket-based real-time data synchronization and event management
  * Based on DASHBOARD_SCREEN.md wireframe specifications
@@ -161,19 +161,19 @@ export class RealtimeManager {
    */
   async connect(): Promise<boolean> {
     if (this.isDestroyed) {
-      console.warn('RealtimeManager has been destroyed');
+      logger.warn('RealtimeManager has been destroyed');
       return false;
     }
 
     if (this.socket?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected');
+      logger.info('WebSocket already connected');
       return true;
     }
 
     try {
       this.updateState({ status: 'connecting', error: null });
 
-      console.log('Establishing WebSocket connection:', this.config.url);
+      logger.info('Establishing WebSocket connection:', this.config.url);
 
       const connectPromise = new Promise<boolean>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
@@ -265,10 +265,10 @@ export class RealtimeManager {
         const message = JSON.stringify(event);
         this.socket.send(message);
         this.metrics.messagesSent++;
-        console.log('Sent real-time event:', eventType, data);
+        logger.info('Sent real-time event: ' + eventType, data);
         return true;
       } catch (error) {
-        console.error('Failed to send real-time event:', error);
+        logger.error('Failed to send real-time event:', error);
         this.queueMessage(event);
         return false;
       }
@@ -299,7 +299,7 @@ export class RealtimeManager {
     };
 
     this.subscriptions.set(subscription.id, subscription);
-    console.log(`Subscribed to ${eventType} events:`, subscription.id);
+    logger.info(`Subscribed to ${eventType} events:`, subscription.id);
 
     return subscription.id;
   }
@@ -310,7 +310,7 @@ export class RealtimeManager {
   unsubscribe(subscriptionId: string): boolean {
     const removed = this.subscriptions.delete(subscriptionId);
     if (removed) {
-      console.log('Unsubscribed from events:', subscriptionId);
+      logger.info('Unsubscribed from events:', subscriptionId);
     }
     return removed;
   }
@@ -333,7 +333,7 @@ export class RealtimeManager {
    * Handle connection open
    */
   private handleConnectionOpen(event: Event): void {
-    console.log('WebSocket connection established');
+    logger.info('WebSocket connection established');
 
     this.updateState({
       status: 'connected',
@@ -367,7 +367,7 @@ export class RealtimeManager {
    * Handle connection close
    */
   private handleConnectionClose(event: CloseEvent): void {
-    console.log('WebSocket connection closed:', event.code, event.reason);
+    logger.info('WebSocket connection closed: ' + event.code + ' - ' + event.reason);
 
     this.stopHeartbeat();
     this.updateState({ status: 'disconnected' });
@@ -391,7 +391,7 @@ export class RealtimeManager {
    */
   private handleConnectionError(error: any): void {
     const errorMessage = error instanceof Error ? error.message : 'WebSocket connection error';
-    console.error('WebSocket error:', errorMessage);
+    logger.error('WebSocket error:', errorMessage);
 
     this.metrics.errorCount++;
     this.updateState({
@@ -420,12 +420,12 @@ export class RealtimeManager {
         this.updateLatency(latency);
       }
 
-      console.log('Received real-time event:', realtimeEvent.type, realtimeEvent.data);
+      logger.info('Received real-time event: ' + realtimeEvent.type, realtimeEvent.data);
 
       // Emit to subscribers
       this.emit(realtimeEvent.type, realtimeEvent.data, realtimeEvent);
     } catch (error) {
-      console.error('Failed to parse real-time message:', error);
+      logger.error('Failed to parse real-time message:', error);
       this.metrics.errorCount++;
     }
   }
@@ -452,7 +452,7 @@ export class RealtimeManager {
         try {
           subscription.callback(event);
         } catch (error) {
-          console.error('Error in event subscription callback:', error);
+          logger.error('Error in event subscription callback:', error);
         }
 
         // Remove one-time subscriptions
@@ -474,7 +474,7 @@ export class RealtimeManager {
       this.state.reconnectAttempts >= (this.config.maxReconnectAttempts || 10) ||
       this.isDestroyed
     ) {
-      console.log('Max reconnection attempts reached');
+      logger.info('Max reconnection attempts reached');
       this.updateState({ status: 'error', error: 'Max reconnection attempts reached' });
       return;
     }
@@ -485,7 +485,7 @@ export class RealtimeManager {
     });
 
     const delay = this.config.reconnectInterval! * Math.pow(1.5, this.state.reconnectAttempts);
-    console.log(`Scheduling reconnection attempt ${this.state.reconnectAttempts} in ${delay}ms`);
+    logger.info(`Scheduling reconnection attempt ${this.state.reconnectAttempts} in ${delay}ms`);
 
     this.reconnectTimeoutId = setTimeout(async () => {
       this.metrics.reconnectionCount++;
@@ -548,7 +548,7 @@ export class RealtimeManager {
         this.socket.send(JSON.stringify(event));
         this.metrics.messagesSent++;
       } catch (error) {
-        console.error('Failed to send queued message:', error);
+        logger.error('Failed to send queued message:', error);
         // Re-queue if send fails
         this.messageQueue.unshift(event);
         break;
@@ -664,7 +664,7 @@ export class DashboardRealtimeSync {
    * Handle dashboard data updates
    */
   private handleDashboardUpdate(data: Partial<DashboardData>): void {
-    console.log('Real-time dashboard update received:', data);
+    logger.info('Real-time dashboard update received:', data);
     const callback = this.updateCallbacks.get('dashboard');
     callback?.(data);
   }
@@ -673,7 +673,7 @@ export class DashboardRealtimeSync {
    * Handle proposal updates
    */
   private handleProposalUpdate(data: any): void {
-    console.log('Real-time proposal update received:', data);
+    logger.info('Real-time proposal update received:', data);
     const callback = this.updateCallbacks.get('proposals');
     callback?.(data);
   }
@@ -682,7 +682,7 @@ export class DashboardRealtimeSync {
    * Handle activity feed updates
    */
   private handleActivityUpdate(data: ActivityFeedItem[]): void {
-    console.log('Real-time activity update received:', data);
+    logger.info('Real-time activity update received:', data);
     const callback = this.updateCallbacks.get('activities');
     callback?.(data);
   }
@@ -691,7 +691,7 @@ export class DashboardRealtimeSync {
    * Handle deadline updates
    */
   private handleDeadlineUpdate(data: Deadline[]): void {
-    console.log('Real-time deadline update received:', data);
+    logger.info('Real-time deadline update received:', data);
     const callback = this.updateCallbacks.get('deadlines');
     callback?.(data);
   }
@@ -700,7 +700,7 @@ export class DashboardRealtimeSync {
    * Handle team status updates
    */
   private handleTeamUpdate(data: TeamMember[]): void {
-    console.log('Real-time team update received:', data);
+    logger.info('Real-time team update received:', data);
     const callback = this.updateCallbacks.get('team');
     callback?.(data);
   }
@@ -709,7 +709,7 @@ export class DashboardRealtimeSync {
    * Handle notification updates
    */
   private handleNotificationUpdate(data: Notification[]): void {
-    console.log('Real-time notification update received:', data);
+    logger.info('Real-time notification update received:', data);
     const callback = this.updateCallbacks.get('notifications');
     callback?.(data);
   }

@@ -5,7 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import prismaClient from '@/lib/db/prisma';
+import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -18,7 +18,6 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = prismaClient;
 
 /**
  * Component Traceability Matrix:

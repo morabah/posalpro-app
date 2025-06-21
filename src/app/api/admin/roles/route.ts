@@ -1,10 +1,10 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Admin Roles API Route
  * Database-driven role management API
  * Based on ADMIN_SCREEN.md wireframe and RBAC schema specifications
  */
 
-import { prisma } from '@/lib/db/client';
+import prisma from '@/lib/db/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Failed to fetch roles:', error);
+    logger.error('Failed to fetch roles:', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch roles',
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Failed to create role:', error);
+    logger.error('Failed to create role:', error);
     return NextResponse.json(
       {
         error: 'Failed to create role',
@@ -367,7 +367,7 @@ export async function PUT(request: NextRequest) {
       message: 'Role updated successfully',
     });
   } catch (error) {
-    console.error('Failed to update role:', error);
+    logger.error('Failed to update role:', error);
     return NextResponse.json(
       {
         error: 'Failed to update role',
@@ -434,7 +434,7 @@ export async function DELETE(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Failed to delete role:', error);
+    logger.error('Failed to delete role:', error);
     return NextResponse.json(
       {
         error: 'Failed to delete role',

@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - User Registration API Route
  * Based on USER_REGISTRATION_SCREEN.md wireframe
  * Role assignment and analytics integration
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     const fullName = `${validatedData.firstName} ${validatedData.lastName}`;
 
     // Create user in database
-    console.log('📝 Creating user:', validatedData.email);
+    logger.info('📝 Creating user:', validatedData.email);
     const user = await createUser({
       email: validatedData.email,
       name: fullName,
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       department: validatedData.department,
     });
 
-    console.log('👤 User created:', {
+    logger.info('👤 User created:', {
       id: user.id,
       email: user.email,
       name: user.name,
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
 
     // TODO: Assign roles to user (will be implemented when role assignment system is created)
     // For now, roles are logged but not persisted to the database
-    console.log('🔐 Roles to be assigned:', validatedData.roles);
+    logger.info('🔐 Roles to be assigned:', validatedData.roles);
 
     // Return success response
     return NextResponse.json(

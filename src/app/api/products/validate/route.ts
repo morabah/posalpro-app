@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Product Validation API Endpoint
  * Handles validation requests for product configurations
  */
@@ -54,7 +54,7 @@ const validateRequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('POST /api/products/validate - Starting validation request');
+    logger.info('POST /api/products/validate - Starting validation request');
 
     // Parse and validate request body
     const body = await request.json();
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    console.log('Product validation completed', {
+    logger.info('Product validation completed', {
       productId: combinedResult.metadata.productId,
       isValid: combinedResult.isValid,
       resultCount: combinedResult.results.length,
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Product validation API error:', error);
+    logger.error('Product validation API error:', error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('GET /api/products/validate - Validation status endpoint');
+    logger.info('GET /api/products/validate - Validation status endpoint');
 
     // This could return validation statistics or health check
     return NextResponse.json(
@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Validation status API error:', error);
+    logger.error('Validation status API error:', error);
 
     return NextResponse.json(
       {

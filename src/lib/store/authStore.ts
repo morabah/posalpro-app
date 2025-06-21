@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Authentication Store
  * Zustand store for managing authentication state and user sessions
  * Integrates with NextAuth.js and provides centralized auth management
@@ -155,7 +155,7 @@ export const useAuthStore = create<AuthStore>()(
           // const newSession = await getSession();
           // get().setSession(newSession);
         } catch (error) {
-          console.error('Failed to refresh session:', error);
+          logger.error('Failed to refresh session:', error);
           get().setAuthError('Failed to refresh session');
         } finally {
           set(state => {
@@ -317,5 +317,5 @@ useAuthStore.subscribe(
 // Analytics integration for auth events
 export const trackAuthEvent = (event: string, data?: any) => {
   // TODO: Integrate with analytics system
-  console.log('Auth Event:', event, data);
+  logger.info('Auth Event: ' + event, data);
 };

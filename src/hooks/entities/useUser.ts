@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - useUser Hook
  * React hook for user entity operations with state management
  * Integrates with UserEntity and provides loading states, error handling
@@ -276,7 +276,7 @@ export const useUser = (): UseUserState & UseUserActions => {
         return [];
       }
     } catch (error) {
-      console.error('getUsersByRole hook error:', error);
+      logger.error('getUsersByRole hook error:', error);
       return [];
     }
   }, []);

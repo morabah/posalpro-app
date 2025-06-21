@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Final Validation for Phase 1.4: Environment Configuration & API Client Foundation
  * Executes the required validation logging for prompt completion
  */
@@ -15,9 +15,9 @@ try {
     'Infrastructure client pattern'
   );
 
-  console.log('Phase 1.4 validation completed successfully:', result);
+  logger.info('Phase 1.4 validation completed successfully:', result);
 } catch (error: unknown) {
-  console.error('Phase 1.4 validation failed:', error);
+  logger.error('Phase 1.4 validation failed:', error);
 }
 
 export {};

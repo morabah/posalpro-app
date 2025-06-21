@@ -10,6 +10,10 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
   ArrowRightIcon,
   BellIcon,
@@ -138,6 +142,10 @@ interface FilterState {
 
 export default function ApprovalWorkflowDashboard() {
   const router = useRouter();
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+  const analytics = useAnalytics();
+
   const [approvals, setApprovals] = useState<WorkflowApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,21 +169,58 @@ export default function ApprovalWorkflowDashboard() {
     const fetchApprovals = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/approvals');
-        if (!response.ok) {
-          throw new Error('Failed to fetch approvals');
-        }
-        const data = await response.json();
+        setError(null);
+
+        // Use apiClient instead of direct fetch
+        const data = (await apiClient.get('/api/approvals')) as WorkflowApproval[];
         setApprovals(data);
+
+        // Track successful load with Component Traceability Matrix
+        analytics.track('approval_workflow_loaded', {
+          userStories: COMPONENT_MAPPING.userStories,
+          acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          testCases: COMPONENT_MAPPING.testCases,
+          approvalCount: data.length,
+          timestamp: Date.now(),
+        });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        // Use standardized error handling
+        const standardError = errorHandlingService.processError(
+          err,
+          'Failed to load approval workflow',
+          ErrorCodes.DATA.FETCH_FAILED,
+          {
+            component: 'ApprovalWorkflowDashboard',
+            operation: 'fetchApprovals',
+            userStories: COMPONENT_MAPPING.userStories,
+            acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+            testCases: COMPONENT_MAPPING.testCases,
+            timestamp: Date.now(),
+          }
+        );
+
+        const userFriendlyMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+        setError(userFriendlyMessage);
+
+        // Track error analytics with Component Traceability Matrix
+        analytics.track('approval_workflow_load_error', {
+          userStories: COMPONENT_MAPPING.userStories,
+          acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          testCases: COMPONENT_MAPPING.testCases,
+          errorType: standardError.code,
+          errorMessage: standardError.message,
+          timestamp: Date.now(),
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchApprovals();
-  }, []);
+  }, [apiClient, errorHandlingService, analytics]);
 
   useEffect(() => {
     let filtered = [...approvals];

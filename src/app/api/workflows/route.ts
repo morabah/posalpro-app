@@ -5,7 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import prismaClient from '@/lib/db/prisma';
+import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { EntityType, Prisma } from '@prisma/client';
@@ -13,7 +13,6 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = prismaClient;
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**

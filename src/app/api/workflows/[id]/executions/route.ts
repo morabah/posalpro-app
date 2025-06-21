@@ -1,16 +1,16 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Workflow Executions API Routes
  * Enhanced workflow execution management with authentication and analytics
  * Component Traceability: US-4.1, US-4.3, H7
  */
 
 import { authOptions } from '@/lib/auth';
-import { ExecutionStatus, Prisma, PrismaClient } from '@prisma/client';
+import { ExecutionStatus, Prisma } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch executions for workflow ${params.id}:`, error);
+    logger.error(`Failed to fetch executions for workflow ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to start execution for workflow ${params.id}:`, error);
+    logger.error(`Failed to start execution for workflow ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -274,7 +274,7 @@ async function trackExecutionsListEvent(
   workflowId: string,
   totalExecutions: number
 ) {
-  console.log('ANALYTICS: trackExecutionsListEvent', {
+  logger.info('ANALYTICS: trackExecutionsListEvent', {
     userId,
     workflowId,
     totalExecutions,
@@ -288,7 +288,7 @@ async function trackWorkflowExecutionEvent(
   executionId: string,
   action: string
 ) {
-  console.log('ANALYTICS: trackWorkflowExecutionEvent', {
+  logger.info('ANALYTICS: trackWorkflowExecutionEvent', {
     userId,
     workflowId,
     executionId,

@@ -12,11 +12,11 @@ export const env = createEnv({
     NEXTAUTH_SECRET: z.string().min(32),
     NEXTAUTH_URL: z.string().url(),
     JWT_SECRET: z.string(),
-    SMTP_HOST: z.string(),
-    SMTP_PORT: z.coerce.number(),
-    SMTP_USER: z.string(),
-    SMTP_PASS: z.string(),
-    FROM_EMAIL: z.string().email(),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().optional(),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASS: z.string().optional(),
+    FROM_EMAIL: z.string().email().optional(),
   },
 
   /**

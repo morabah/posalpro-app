@@ -1,11 +1,9 @@
-import { env } from '@/env.mjs';
-
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
 class Logger {
   private static instance: Logger;
   private logLevels: LogLevel[] = ['error', 'warn', 'info', 'debug'];
-  private currentLogLevel: LogLevel = env.NODE_ENV === 'production' ? 'info' : 'debug';
+  private currentLogLevel: LogLevel = typeof window !== 'undefined' ? 'info' : 'debug';
 
   private constructor() {}
 
@@ -25,7 +23,7 @@ class Logger {
 
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-    
+
     if (data) {
       console[level](logMessage, data);
     } else {

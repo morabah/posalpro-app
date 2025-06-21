@@ -17,6 +17,9 @@
 
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertCircle,
@@ -207,22 +210,24 @@ export function UserProfile({ className = '' }: UserProfileProps) {
     setIsLoading(true);
     setError(null);
 
+    // Initialize API client and error handling service
+    const apiClient = useApiClient();
+    const errorHandlingService = ErrorHandlingService.getInstance();
+
     try {
-      const response = await fetch('/api/profile/update', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          expertiseAreas,
-          profileImage,
-        }),
+      // Use centralized API client instead of direct fetch
+      const result = await apiClient.put<{
+        success: boolean;
+        data?: any;
+        error?: string;
+      }>('/api/profile/update', {
+        ...data,
+        expertiseAreas,
+        profileImage,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update profile');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update profile');
       }
 
       const updateTime = Date.now() - startTime;
@@ -240,7 +245,25 @@ export function UserProfile({ className = '' }: UserProfileProps) {
       setIsEditing(false);
       setError(null);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Update failed';
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Profile update failed',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'UserProfile',
+          operation: 'updateProfile',
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          profileData: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            department: data.department,
+          },
+        }
+      );
+
+      const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setError(errorMessage);
     } finally {
       setIsLoading(false);

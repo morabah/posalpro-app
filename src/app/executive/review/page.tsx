@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
@@ -161,6 +162,10 @@ interface ExecutiveMetrics {
 
 export default function ExecutiveReviewPortal() {
   const router = useRouter();
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+  const throwError = useErrorHandler();
+  const analytics = useAnalytics();
   const [proposals, setProposals] = useState<ExecutiveProposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -178,11 +183,6 @@ export default function ExecutiveReviewPortal() {
   const [isMobile, setIsMobile] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
-
-  // Error handling and analytics initialization
-  const errorHandlingService = ErrorHandlingService.getInstance();
-  const throwError = useErrorHandler();
-  const analytics = useAnalytics();
 
   // Mobile detection effect
   useEffect(() => {
@@ -214,27 +214,7 @@ export default function ExecutiveReviewPortal() {
         setLoading(true);
         const startTime = performance.now();
 
-        const response = await fetch('/api/executive/proposals');
-        if (!response.ok) {
-          const errorMessage = `Failed to fetch executive proposals: ${response.status}`;
-          const processedError = errorHandlingService.processError(
-            new Error(errorMessage),
-            'Unable to load executive proposals',
-            ErrorCodes.API.REQUEST_FAILED,
-            {
-              component: 'ExecutiveReviewPortal',
-              operation: 'fetchProposals',
-              userStories: ['US-4.1', 'US-8.1'],
-              hypotheses: ['H7', 'H10'],
-              responseStatus: response.status,
-              isMobile,
-              timestamp: Date.now(),
-            }
-          );
-          throw processedError;
-        }
-
-        const data = await response.json();
+        const data = (await apiClient.get('/api/executive/proposals')) as ExecutiveProposal[];
         setProposals(data);
         if (data.length > 0) {
           setSelectedProposalId(data[0].id);

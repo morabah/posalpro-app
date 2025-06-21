@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Performance Monitoring Hook
  * Enhanced to detect and prevent infinite loops and performance violations
  */
@@ -103,7 +103,7 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
         };
 
         metricsRef.current.violations.push(violation);
-        console.warn(`[Performance] Excessive renders detected in ${componentName}:`, violation);
+        logger.warn(`[Performance] Excessive renders detected in ${componentName}:`, violation);
       }
 
       renderCountRef.current = 0;
@@ -153,7 +153,7 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
           };
 
           metricsRef.current.violations.push(violation);
-          console.error(
+          logger.error(
             `[Performance] Potential infinite loop detected in ${componentName}:`,
             violation
           );
@@ -199,7 +199,7 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
         };
 
         metricsRef.current.violations.push(violation);
-        console.warn(`[Performance] Message handler violation in ${componentName}:`, violation);
+        logger.warn(`[Performance] Message handler violation in ${componentName}:`, violation);
       }
     },
     [componentName]

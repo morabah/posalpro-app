@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - UI Store
  * Zustand store for managing global UI state, modals, notifications, and interface interactions
  * Provides centralized UI state management across the application
@@ -379,7 +379,7 @@ export const useUIStore = create<UIStore>()(
 
       markNotificationRead: id => {
         // TODO: Implement notification read status if needed
-        console.log('Marking notification as read:', id);
+        logger.info('Marking notification as read:', id);
       },
 
       // Loading states
@@ -424,7 +424,7 @@ export const useUIStore = create<UIStore>()(
         const { previousPage } = get();
         if (previousPage) {
           // TODO: Implement navigation logic
-          console.log('Navigating back to:', previousPage);
+          logger.info('Navigating back to:', previousPage);
         }
       },
 
@@ -556,7 +556,7 @@ export const useUIStore = create<UIStore>()(
         });
 
         // TODO: Send to analytics service
-        console.log('Page view tracked:', page);
+        logger.info('Page view tracked:', page);
       },
 
       trackInteraction: () => {
@@ -643,5 +643,5 @@ export const trackUIEvent = (event: string, data?: any) => {
   trackInteraction();
 
   // TODO: Integrate with analytics system
-  console.log('UI Event:', event, data);
+  logger.info('UI Event: ' + event, data);
 };

@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Rule Executor for PosalPro MVP2 Validation Engine
  * Handles individual validation rule processing and execution
  */
@@ -51,7 +51,7 @@ export class RuleExecutor {
         }
       );
 
-      console.log(`Executing validation rule: ${rule.name}`, {
+      logger.info(`Executing validation rule: ${rule.name}`, {
         ruleId: rule.id,
         category: rule.category,
         severity: rule.severity,
@@ -169,7 +169,7 @@ export class RuleExecutor {
         }
       );
 
-      console.log(`Rule execution completed: ${rule.name}`, {
+      logger.info(`Rule execution completed: ${rule.name}`, {
         ruleId: rule.id,
         status,
         issueCount: issues.length,
@@ -251,7 +251,7 @@ export class RuleExecutor {
         }
       );
 
-      console.log('Executing validation ruleset', {
+      logger.info('Executing validation ruleset', {
         ruleCount: rules.length,
         context: {
           productCount: context.products.length,
@@ -320,7 +320,7 @@ export class RuleExecutor {
         }
       );
 
-      console.log('Ruleset execution completed', {
+      logger.info('Ruleset execution completed', {
         ruleCount: rules.length,
         resultsCount: results.length,
         totalIssues: results.reduce((sum, r) => sum + (r.issues?.length || 0), 0),
@@ -366,7 +366,7 @@ export class RuleExecutor {
 
       return true;
     } catch (error) {
-      console.error('Condition evaluation error', {
+      logger.error('Condition evaluation error', {
         error: error instanceof Error ? error.message : 'Unknown error',
         conditionCount: conditions.length,
       });
@@ -392,7 +392,7 @@ export class RuleExecutor {
 
       return results;
     } catch (error) {
-      console.error('Action execution error', {
+      logger.error('Action execution error', {
         error: error instanceof Error ? error.message : 'Unknown error',
         actionCount: actions.length,
       });
@@ -426,11 +426,11 @@ export class RuleExecutor {
         case 'matches':
           return typeof value === 'string' && new RegExp(condition.value).test(value);
         default:
-          console.warn('Unknown condition operator', { operator: condition.operator });
+          logger.warn('Unknown condition operator', { operator: condition.operator });
           return false;
       }
     } catch (error) {
-      console.error('Condition evaluation error', {
+      logger.error('Condition evaluation error', {
         condition: condition.id,
         field: condition.field,
         operator: condition.operator,
@@ -530,6 +530,6 @@ export class RuleExecutor {
 
   public clearMetrics(): void {
     this.executionMetrics.clear();
-    console.log('Rule execution metrics cleared');
+    logger.info('Rule execution metrics cleared');
   }
 }

@@ -1,16 +1,14 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Search Suggestions API Routes
  * Auto-complete and search suggestions functionality
  * Component Traceability: US-1.1, US-1.2, H1
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -78,7 +76,7 @@ export async function GET(request: NextRequest) {
       message: 'Suggestions retrieved successfully',
     });
   } catch (error) {
-    console.error('Search suggestions error:', error);
+    logger.error('Search suggestions error:', error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -118,7 +116,7 @@ async function getContentSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(content.title, searchTerm, 'content'),
     }));
   } catch (error) {
-    console.error('Content suggestions error:', error);
+    logger.error('Content suggestions error:', error);
     return [];
   }
 }
@@ -152,7 +150,7 @@ async function getProductSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(product.name, searchTerm, 'product'),
     }));
   } catch (error) {
-    console.error('Product suggestions error:', error);
+    logger.error('Product suggestions error:', error);
     return [];
   }
 }
@@ -186,7 +184,7 @@ async function getCustomerSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(customer.name, searchTerm, 'customer'),
     }));
   } catch (error) {
-    console.error('Customer suggestions error:', error);
+    logger.error('Customer suggestions error:', error);
     return [];
   }
 }
@@ -238,7 +236,7 @@ async function getTagSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(tag, searchTerm, 'tag'),
     }));
   } catch (error) {
-    console.error('Tag suggestions error:', error);
+    logger.error('Tag suggestions error:', error);
     return [];
   }
 }
@@ -292,7 +290,7 @@ async function getRecentSearches(userId: string, searchTerm: string, limit: numb
       score: calculateSuggestionScore(item.query, searchTerm, 'recent'),
     }));
   } catch (error) {
-    console.error('Recent searches error:', error);
+    logger.error('Recent searches error:', error);
     return [];
   }
 }

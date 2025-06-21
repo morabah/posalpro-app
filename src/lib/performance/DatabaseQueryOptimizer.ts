@@ -1,4 +1,5 @@
-/**
+'use client';
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Database Query Optimization Service
  * Intelligent query caching with performance monitoring and optimization
  *
@@ -7,7 +8,6 @@
  * Hypotheses: H8 (Load Time), H11 (Cache Hit Rate), H12 (Database Performance)
  */
 
-'use client';
 
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -185,7 +185,7 @@ export class DatabaseQueryOptimizer {
           // Track cache hit
           this.trackQueryExecution(queryKey, responseTime, true, queryType);
 
-          console.info('Database query served from cache', {
+          logger.info('Database query served from cache', {
             component: 'DatabaseQueryOptimizer',
             operation: 'executeQuery',
             userStories: ['US-6.1', 'US-6.3'],
@@ -217,7 +217,7 @@ export class DatabaseQueryOptimizer {
         this.recordSlowQuery(queryKey, executionTime);
       }
 
-      console.info('Database query executed successfully', {
+      logger.info('Database query executed successfully', {
         component: 'DatabaseQueryOptimizer',
         operation: 'executeQuery',
         userStories: ['US-6.1', 'US-6.3'],
@@ -463,7 +463,7 @@ export class DatabaseQueryOptimizer {
       // This can be improved with proper tag-based invalidation
       this.cacheManager.clear();
 
-      console.info('Cache invalidated by pattern', {
+      logger.info('Cache invalidated by pattern', {
         component: 'DatabaseQueryOptimizer',
         operation: 'invalidateCache',
         patterns,
@@ -637,7 +637,7 @@ export class DatabaseQueryOptimizer {
     this.executionTimes = [];
     this.slowQueryHistory = [];
 
-    console.info('Database query metrics cleared', {
+    logger.info('Database query metrics cleared', {
       component: 'DatabaseQueryOptimizer',
       operation: 'clearMetrics',
       timestamp: Date.now(),

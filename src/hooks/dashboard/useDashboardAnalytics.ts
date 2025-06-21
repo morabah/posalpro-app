@@ -1,9 +1,10 @@
+'use client';
+
+import { logger } from '@/utils/logger';
 /**
  * PosalPro MVP2 - Dashboard Analytics Hook
  * Specialized analytics tracking for dashboard interactions with stability improvements
  */
-
-'use client';
 
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useCallback, useMemo, useRef } from 'react';
@@ -49,7 +50,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        console.warn('⚠️ Dashboard analytics tracking failed:', error);
+        logger.warn('⚠️ Dashboard analytics tracking failed:', error);
         // Gracefully degrade - don't throw errors that could break the UI
       }
     },
@@ -68,7 +69,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
           sessionId: params.sessionId,
         });
       } catch (error) {
-        console.warn('⚠️ Dashboard page view tracking failed:', error);
+        logger.warn('⚠️ Dashboard page view tracking failed:', error);
       }
     },
     [analytics]
@@ -88,7 +89,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
           sessionId: params.sessionId,
         });
       } catch (error) {
-        console.warn('⚠️ Dashboard interaction tracking failed:', error);
+        logger.warn('⚠️ Dashboard interaction tracking failed:', error);
       }
     },
     [analytics]
@@ -108,7 +109,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
           sessionId: params.sessionId,
         });
       } catch (analyticsError) {
-        console.warn('⚠️ Dashboard error tracking failed:', analyticsError);
+        logger.warn('⚠️ Dashboard error tracking failed:', analyticsError);
       }
     },
     [analytics]

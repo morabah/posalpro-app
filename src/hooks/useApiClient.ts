@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * React Hook for Dynamic API Client
  * Uses dynamic URL resolution to prevent port conflicts in development
  */
@@ -72,7 +72,7 @@ export function useApiClient(): UseApiClientReturn {
         const data = (await response.json()) as T;
         return data;
       } catch (error) {
-        console.error('API request error:', {
+        logger.error('API request error:', {
           url,
           endpoint,
           error: error instanceof Error ? error.message : error,

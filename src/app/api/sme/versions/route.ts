@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - SME Versions API Route
  * Returns version history for SME contributions
  */
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(versions);
   } catch (error) {
-    console.error('SME Versions API error:', error);
+    logger.error('SME Versions API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

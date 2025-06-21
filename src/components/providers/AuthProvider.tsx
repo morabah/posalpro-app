@@ -7,6 +7,9 @@
  */
 
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorHandlingService } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { SessionProvider, useSession } from 'next-auth/react';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
@@ -63,6 +66,8 @@ const AuthContext = createContext<AuthContextState | null>(null);
 function AuthContextProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status, update } = useSession();
   const analytics = useAnalytics();
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
   const [sessionWarning, setSessionWarning] = useState<boolean>(false);
 
@@ -154,26 +159,41 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         userStory: 'US-2.3',
       });
 
-      // Call logout API to cleanup server-side session
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      // Use centralized API client instead of direct fetch
+      try {
+        await apiClient.post('/api/auth/logout', {});
+      } catch (logoutError) {
+        // Log but don't fail the logout process if API call fails
+        console.warn('Logout API call failed:', logoutError);
+      }
 
       // Use NextAuth signOut
       const { signOut } = await import('next-auth/react');
       await signOut({ callbackUrl: '/auth/login' });
     } catch (error) {
-      console.error('Logout error:', error);
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'User logout failed',
+        ErrorCodes.AUTH.LOGOUT_FAILED,
+        {
+          component: 'AuthProvider',
+          operation: 'logout',
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          userId: user?.id,
+        }
+      );
+
+      console.error('Logout error:', standardError);
       analytics.track('logout_error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: standardError.message,
+        errorCode: standardError.code,
         timestamp: Date.now(),
         component: 'AuthProvider',
       });
     }
-  }, [user?.id, lastActivity]); // Remove analytics dependency
+  }, [user?.id, lastActivity, apiClient, errorHandlingService, analytics]);
 
   // Activity tracking
   const trackActivity = useCallback(
@@ -351,59 +371,39 @@ function SessionWarningModal({
   onLogout: () => void;
   onDismiss: () => void;
 }) {
-  const [countdown, setCountdown] = useState(300); // 5 minutes
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          onLogout();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [onLogout]);
-
-  const minutes = Math.floor(countdown / 60);
-  const seconds = countdown % 60;
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold text-neutral-900 mb-4">Session Expiring Soon</h3>
+      <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+        <h3 className="text-lg font-semibold text-neutral-900 mb-2">Session Expiring Soon</h3>
         <p className="text-neutral-600 mb-4">
-          Your session will expire in {minutes}:{seconds.toString().padStart(2, '0')}. Would you
-          like to extend your session?
+          Your session will expire in 5 minutes. Would you like to extend it?
         </p>
         <div className="flex space-x-3">
           <button
             onClick={onExtend}
-            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Extend Session
           </button>
           <button
             onClick={onLogout}
-            className="flex-1 bg-neutral-300 text-neutral-700 px-4 py-2 rounded-md hover:bg-neutral-400 transition-colors"
+            className="flex-1 bg-neutral-600 text-white px-4 py-2 rounded-lg hover:bg-neutral-700 transition-colors"
           >
-            Log Out
+            Logout
+          </button>
+          <button
+            onClick={onDismiss}
+            className="px-4 py-2 text-neutral-600 hover:text-neutral-800 transition-colors"
+          >
+            Dismiss
           </button>
         </div>
-        <button
-          onClick={onDismiss}
-          className="w-full mt-2 text-sm text-neutral-500 hover:text-neutral-700"
-        >
-          Dismiss (will logout automatically)
-        </button>
       </div>
     </div>
   );
 }
 
-// Main provider component
+// Main provider that wraps NextAuth SessionProvider
 export function AuthProvider({ children, session }: AuthProviderProps) {
   return (
     <SessionProvider session={session}>
@@ -420,6 +420,3 @@ export function useAuth(): AuthContextState {
   }
   return context;
 }
-
-// Export additional utility hooks from ProtectedRoute
-export { useHasPermission, useHasRole, useRequireAuth } from '../auth/ProtectedRoute';

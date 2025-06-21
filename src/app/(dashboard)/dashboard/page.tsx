@@ -7,7 +7,9 @@
 'use client';
 
 import ModernDashboard from '@/components/dashboard/ModernDashboard';
-import { useDashboardAnalytics } from '@/hooks/dashboard/useDashboardAnalytics';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { UserType } from '@/types';
 import { XCircleIcon } from '@heroicons/react/24/outline';
 import { useSession } from 'next-auth/react';
@@ -58,6 +60,11 @@ interface PriorityItem {
 export default function DashboardPage() {
   const { data: session, status: sessionStatus } = useSession();
 
+  // Infrastructure initialization
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+  const analytics = useAnalytics();
+
   const formattedUser = useMemo(() => {
     if (!session?.user) return undefined;
     const { id, name, roles } = session.user;
@@ -84,11 +91,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const analytics = useDashboardAnalytics(
-    formattedUser?.id || 'unknown-user',
-    formattedUser?.role || 'VIEWER',
-    session?.user.id || 'unknown-session'
-  );
 
   // Circuit breaker pattern
   const maxRetries = 5;
@@ -124,23 +126,32 @@ export default function DashboardPage() {
     setError(null);
 
     try {
-      // Fetch all data in parallel for better performance
+      // ✅ MIGRATED: Fetch all data in parallel using apiClient
       const [proposalsRes, customersRes, productsRes, contentRes] = await Promise.allSettled([
-        fetchWithTimeout('/api/proposals?limit=5'),
-        fetchWithTimeout('/api/customers?limit=10'),
-        fetchWithTimeout('/api/products?limit=6'),
-        fetchWithTimeout('/api/content?limit=5'),
+        apiClient.get('/api/proposals?limit=5'),
+        apiClient.get('/api/customers?limit=10'),
+        apiClient.get('/api/products?limit=6'),
+        apiClient.get('/api/content?limit=5'),
       ]);
 
-      // Process responses safely
-      const proposals =
-        proposalsRes.status === 'fulfilled' ? await safeJsonParse(proposalsRes.value) : [];
-      const customers =
-        customersRes.status === 'fulfilled' ? await safeJsonParse(customersRes.value) : [];
-      const products =
-        productsRes.status === 'fulfilled' ? await safeJsonParse(productsRes.value) : [];
-      const content =
-        contentRes.status === 'fulfilled' ? await safeJsonParse(contentRes.value) : [];
+      // Process responses safely with proper error handling
+      const proposals = proposalsRes.status === 'fulfilled' ? proposalsRes.value : [];
+      const customers = customersRes.status === 'fulfilled' ? customersRes.value : [];
+      const products = productsRes.status === 'fulfilled' ? productsRes.value : [];
+      const content = contentRes.status === 'fulfilled' ? contentRes.value : [];
+
+      // Track successful load with Component Traceability Matrix
+      analytics.track('dashboard_data_loaded', {
+        userStories: COMPONENT_MAPPING.userStories,
+        acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        testCases: COMPONENT_MAPPING.testCases,
+        proposalCount: Array.isArray(proposals) ? proposals.length : 0,
+        customerCount: Array.isArray(customers) ? customers.length : 0,
+        productCount: Array.isArray(products) ? products.length : 0,
+        contentCount: Array.isArray(content) ? content.length : 0,
+        timestamp: Date.now(),
+      });
 
       // Calculate metrics from the data
       const activeProposals = Array.isArray(proposals)
@@ -194,7 +205,7 @@ export default function DashboardPage() {
   const handleQuickAction = useCallback(
     (action: string) => {
       if (!formattedUser) return;
-      analytics.trackEvent('dashboard_quick_action', {
+      analytics.track('dashboard_quick_action', {
         action,
         timestamp: new Date().toISOString(),
         userId: formattedUser.id,

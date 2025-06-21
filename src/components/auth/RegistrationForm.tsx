@@ -7,6 +7,8 @@
  */
 
 import { useUserRegistrationAnalytics } from '@/hooks/auth/useUserRegistrationAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Lightbulb, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -113,6 +115,8 @@ interface RegistrationFormProps {
 export function RegistrationForm({ className = '', onSuccess }: RegistrationFormProps) {
   const router = useRouter();
   const analytics = useUserRegistrationAnalytics();
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -213,48 +217,73 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
     setSubmitError(null);
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          roles: [data.primaryRole, ...(data.additionalRoles || [])],
-          notificationChannels: ['EMAIL', 'PUSH', 'IN_APP'],
-          notificationFrequency: data.digestPreferences?.includes('daily') ? 'daily' : 'weekly',
-        }),
+      // Track registration attempt analytics
+      analytics.trackRegistrationStep({
+        step: 'submission',
+        completionTime: 0,
+        errors: 0,
+        aiSuggestionsUsed: Object.keys(aiSuggestions).length,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Registration failed');
-      }
+      // Use centralized API client instead of direct fetch
+      const result = await apiClient.post<{
+        success: boolean;
+        userId?: string;
+        data?: any;
+        error?: string;
+      }>('/api/auth/register', {
+        ...data,
+        roles: [data.primaryRole, ...(data.additionalRoles || [])],
+        notificationChannels: ['EMAIL', 'PUSH', 'IN_APP'],
+        notificationFrequency: data.digestPreferences?.includes('daily') ? 'daily' : 'weekly',
+      });
 
-      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Registration failed');
+      }
 
       // Track successful registration
       analytics.trackOnboardingSuccess({
-        userId: result.userId,
+        userId: result.userId || result.data?.userId,
         completionRate: 100,
         timeToFirstLogin: 0, // Will be updated on first login
         stepsCompleted: REGISTRATION_STEPS.map(step => step.id),
       });
 
       analytics.trackRoleAssignment({
-        userId: result.userId,
+        userId: result.userId || result.data?.userId,
         roles: [data.primaryRole, ...(data.additionalRoles || [])],
         teamCount: data.teamAssignments?.length || 0,
         permissionOverrides: data.permissionOverrides || [],
         aiRecommendationsAccepted: Object.keys(aiSuggestions).length,
       });
 
-      onSuccess?.(result.userId);
+      onSuccess?.(result.userId || result.data?.userId);
       router.push('/auth/login?registered=true');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'User registration failed',
+        ErrorCodes.AUTH.REGISTRATION_FAILED,
+        {
+          component: 'RegistrationForm',
+          operation: 'registerUser',
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          step: currentStep,
+          formData: {
+            email: data.email,
+            department: data.department,
+            primaryRole: data.primaryRole,
+          },
+        }
+      );
+
+      const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setSubmitError(errorMessage);
 
+      // Track registration failure analytics
       analytics.trackFormValidation('form', errorMessage, 'confirmation');
     } finally {
       setIsLoading(false);

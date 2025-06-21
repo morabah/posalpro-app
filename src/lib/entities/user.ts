@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - User Entity
  * User entity class with CRUD operations and business logic
  * Integrates with existing validation schemas and API client
@@ -104,7 +104,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error('Failed to create user:', error);
+      logger.error('Failed to create user:', error);
       throw error;
     }
   }
@@ -133,7 +133,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to find user ${id}:`, error);
+      logger.error(`Failed to find user ${id}:`, error);
       return {
         data: null,
         success: false,
@@ -157,7 +157,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to find user by email ${email}:`, error);
+      logger.error(`Failed to find user by email ${email}:`, error);
       return {
         data: null,
         success: false,
@@ -190,7 +190,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to update user ${id}:`, error);
+      logger.error(`Failed to update user ${id}:`, error);
       throw error;
     }
   }
@@ -213,7 +213,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to delete user ${id}:`, error);
+      logger.error(`Failed to delete user ${id}:`, error);
       throw error;
     }
   }
@@ -264,7 +264,7 @@ export class UserEntity {
         message: response.message || 'No users found',
       };
     } catch (error) {
-      console.error('Failed to query users:', error);
+      logger.error('Failed to query users:', error);
       throw error;
     }
   }
@@ -277,7 +277,7 @@ export class UserEntity {
       const response = await apiClient.get<UserPermissions>(`/users/${id}/permissions`);
       return response;
     } catch (error) {
-      console.error(`Failed to get permissions for user ${id}:`, error);
+      logger.error(`Failed to get permissions for user ${id}:`, error);
       throw error;
     }
   }
@@ -306,7 +306,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to update permissions for user ${id}:`, error);
+      logger.error(`Failed to update permissions for user ${id}:`, error);
       throw error;
     }
   }
@@ -331,7 +331,7 @@ export class UserEntity {
 
       return response as PaginatedResponse<UserActivityLog>;
     } catch (error) {
-      console.error(`Failed to get activity log for user ${id}:`, error);
+      logger.error(`Failed to get activity log for user ${id}:`, error);
       throw error;
     }
   }
@@ -350,7 +350,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to activate user ${id}:`, error);
+      logger.error(`Failed to activate user ${id}:`, error);
       throw error;
     }
   }
@@ -369,7 +369,7 @@ export class UserEntity {
 
       return response;
     } catch (error) {
-      console.error(`Failed to deactivate user ${id}:`, error);
+      logger.error(`Failed to deactivate user ${id}:`, error);
       throw error;
     }
   }

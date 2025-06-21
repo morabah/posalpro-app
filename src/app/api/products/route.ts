@@ -5,6 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -12,12 +13,9 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -484,7 +482,19 @@ async function trackProductSearchEvent(userId: string, query: string, resultsCou
       },
     });
   } catch (error) {
-    errorHandlingService.processError(error, 'Failed to track product search event', ErrorCodes.ANALYTICS.TRACKING_ERROR, { component: 'ProductsRoute', operation: 'trackProductSearchEvent', userStories: ['US-3.1'], hypotheses: ['H3'], userId, query });
+    errorHandlingService.processError(
+      error,
+      'Failed to track product search event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'ProductsRoute',
+        operation: 'trackProductSearchEvent',
+        userStories: ['US-3.1'],
+        hypotheses: ['H3'],
+        userId,
+        query,
+      }
+    );
     // Don't fail the main operation if analytics tracking fails
   }
 }
@@ -514,7 +524,19 @@ async function trackProductCreationEvent(userId: string, productId: string, prod
       },
     });
   } catch (error) {
-    errorHandlingService.processError(error, 'Failed to track product creation event', ErrorCodes.ANALYTICS.TRACKING_ERROR, { component: 'ProductsRoute', operation: 'trackProductCreationEvent', userStories: ['US-3.1'], hypotheses: ['H4'], userId, productId });
+    errorHandlingService.processError(
+      error,
+      'Failed to track product creation event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'ProductsRoute',
+        operation: 'trackProductCreationEvent',
+        userStories: ['US-3.1'],
+        hypotheses: ['H4'],
+        userId,
+        productId,
+      }
+    );
     // Don't fail the main operation if analytics tracking fails
   }
 }

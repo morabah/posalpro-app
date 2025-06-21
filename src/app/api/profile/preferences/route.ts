@@ -1,4 +1,4 @@
-import { getServerSession } from 'next-auth';
+import { logger } from '@/utils/logger';import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -56,7 +56,7 @@ export async function PUT(request: NextRequest) {
 
     // In a real implementation, update the database
     // For now, we'll simulate a successful update
-    console.log('Preferences update for user:', session.user.email, preferencesData);
+    logger.info('Preferences update for user: ' + session.user.email, preferencesData);
 
     // Simulate some processing time
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -71,7 +71,7 @@ export async function PUT(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Preferences update error:', error);
+    logger.error('Preferences update error:', error);
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

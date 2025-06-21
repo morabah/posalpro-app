@@ -1,18 +1,16 @@
-/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Content API Route
  * Content management with authentication and analytics
  * Component Traceability: US-6.1, US-6.2
  */
 
 import { authOptions } from '@/lib/auth';
-import prismaClient from '@/lib/db/prisma';
+import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-const prisma = prismaClient;
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 // Transform database ContentType enum to frontend enum values
@@ -85,10 +83,10 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
 // GET /api/content - List content items with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
-    console.log('GET /api/content - Starting request processing');
+    logger.info('GET /api/content - Starting request processing');
 
     const session = await getServerSession(authOptions);
-    console.log('Session data:', {
+    logger.info('Session data:', {
       userId: session?.user?.id,
       userEmail: session?.user?.email,
       isAuthenticated: !!session,
@@ -110,9 +108,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Check read permissions
-    console.log('Checking user permissions...');
+    logger.info('Checking user permissions...');
     const canRead = await checkUserPermissions(session.user.id, 'read');
-    console.log('Permission check result:', { canRead, userId: session.user.id });
+    logger.info('Permission check result:', { canRead, userId: session.user.id });
 
     if (!canRead) {
       errorHandlingService.processError(
@@ -136,10 +134,10 @@ export async function GET(request: NextRequest) {
     // Parse and validate query parameters
     const url = new URL(request.url);
     const queryParams = Object.fromEntries(url.searchParams.entries());
-    console.log('Query parameters:', queryParams);
+    logger.info('Query parameters:', queryParams);
 
     const query = ContentQuerySchema.parse(queryParams);
-    console.log('Validated query:', query);
+    logger.info('Validated query:', query);
 
     // Build where clause
     const where: any = {};
@@ -211,7 +209,7 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      console.log('Returning content data:', {
+      logger.info('Returning content data:', {
         contentCount: content.length,
         sampleContent: content[0],
         pagination: {

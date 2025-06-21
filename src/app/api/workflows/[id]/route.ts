@@ -1,16 +1,14 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Individual Workflow API Routes
  * Enhanced workflow operations with authentication and analytics
  * Component Traceability: US-4.1, US-4.3, H7
  */
 
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -160,7 +158,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to fetch workflow ${params.id}:`, error);
+    logger.error(`Failed to fetch workflow ${params.id}:`, error);
     return NextResponse.json({ error: 'Failed to fetch workflow' }, { status: 500 });
   }
 }
@@ -311,7 +309,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to update workflow ${params.id}:`, error);
+    logger.error(`Failed to update workflow ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -420,7 +418,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
   } catch (error) {
     const params = await context.params;
-    console.error(`Failed to delete workflow ${params.id}:`, error);
+    logger.error(`Failed to delete workflow ${params.id}:`, error);
     return NextResponse.json({ error: 'Failed to delete workflow' }, { status: 500 });
   }
 }
@@ -450,7 +448,7 @@ async function trackWorkflowViewEvent(userId: string, workflowId: string, workfl
       },
     });
   } catch (error) {
-    console.warn('Failed to track workflow view event:', error);
+    logger.warn('Failed to track workflow view event:', error);
   }
 }
 
@@ -485,7 +483,7 @@ async function trackWorkflowUpdateEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track workflow update event:', error);
+    logger.warn('Failed to track workflow update event:', error);
   }
 }
 
@@ -520,6 +518,6 @@ async function trackWorkflowArchiveEvent(
       },
     });
   } catch (error) {
-    console.warn('Failed to track workflow archive event:', error);
+    logger.warn('Failed to track workflow archive event:', error);
   }
 }

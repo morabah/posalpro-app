@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Product Search API
  * Provides advanced search functionality for products
  * Supports H1 hypothesis (Content Discovery Efficiency)
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
       `Found ${results.length} products matching "${validated.search}"`
     );
   } catch (error) {
-    console.error('Product search failed:', error);
+    logger.error('Product search failed:', error);
 
     if (error instanceof z.ZodError) {
       return createErrorResponse('Invalid search parameters', error.errors, 400);

@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Dashboard Data Hook
  * Comprehensive dashboard data management with role-based filtering and real-time updates
  * Based on DASHBOARD_SCREEN.md wireframe specifications
@@ -269,7 +269,7 @@ export function useDashboardData(
         updateErrorState('overall', errorMessage);
         updateStats({ errorCount: state.stats.errorCount + 1 });
 
-        console.error('Dashboard data fetch failed:', error);
+        logger.error('Dashboard data fetch failed:', error);
       } finally {
         if (mountedRef.current) {
           updateLoadingState('overall', false);
@@ -357,7 +357,7 @@ export function useDashboardData(
         updateErrorState(sectionKey, errorMessage);
         updateStats({ errorCount: state.stats.errorCount + 1 });
 
-        console.error(`Failed to refresh ${section}:`, error);
+        logger.error(`Failed to refresh ${section}:`, error);
       } finally {
         if (mountedRef.current) {
           updateLoadingState(sectionKey, false);
@@ -429,7 +429,7 @@ export function useDashboardData(
 
         return success;
       } catch (error) {
-        console.error('Failed to mark notification as read:', error);
+        logger.error('Failed to mark notification as read:', error);
         return false;
       }
     },

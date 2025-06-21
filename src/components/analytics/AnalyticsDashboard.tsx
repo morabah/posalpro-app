@@ -13,6 +13,8 @@ import { UserStoryProgress } from '@/components/analytics/UserStoryProgress';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { ArrowPathIcon, ChartBarIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
@@ -64,6 +66,8 @@ export const AnalyticsDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const analytics = useAnalytics();
+  const apiClient = useApiClient();
+  const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Fetch dashboard data
   const fetchDashboardData = async () => {
@@ -71,20 +75,57 @@ export const AnalyticsDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/analytics/dashboard?timeRange=${timeRange}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch analytics data');
-      }
+      // Track analytics fetch attempt
+      analytics.track('analytics_dashboard_fetch_started', {
+        component: 'AnalyticsDashboard',
+        timeRange,
+        timestamp: Date.now(),
+      });
 
-      const result = await response.json();
-      if (result.success) {
+      // Use centralized API client instead of direct fetch
+      const result = await apiClient.get<{
+        success: boolean;
+        data?: AnalyticsDashboardData;
+        error?: string;
+      }>(`/api/analytics/dashboard?timeRange=${timeRange}`);
+
+      if (result.success && result.data) {
         setDashboardData(result.data);
+
+        // Track successful fetch
+        analytics.track('analytics_dashboard_fetch_success', {
+          component: 'AnalyticsDashboard',
+          timeRange,
+          healthScore: result.data.overview.healthScore,
+          timestamp: Date.now(),
+        });
       } else {
         throw new Error(result.error || 'Unknown error');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load analytics data');
-      console.error('Analytics dashboard error:', err);
+    } catch (error) {
+      // Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to fetch analytics dashboard data',
+        ErrorCodes.DATA.FETCH_FAILED,
+        {
+          component: 'AnalyticsDashboard',
+          operation: 'fetchDashboardData',
+          timeRange,
+        }
+      );
+
+      const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+      setError(userMessage);
+
+      // Track error analytics
+      analytics.track('analytics_dashboard_fetch_error', {
+        component: 'AnalyticsDashboard',
+        error: standardError.message,
+        errorCode: standardError.code,
+        timeRange,
+        timestamp: Date.now(),
+      });
     } finally {
       setLoading(false);
     }

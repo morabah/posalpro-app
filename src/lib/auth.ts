@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - NextAuth.js Configuration
  * Enhanced authentication with role-based access control
  * Analytics integration and security features
@@ -70,28 +70,28 @@ export const authOptions: NextAuthOptions = {
         },
       },
       async authorize(credentials) {
-        console.log('🔐 Authorization attempt:', {
+        logger.info('🔐 Authorization attempt:', {
           email: credentials?.email,
           hasPassword: !!credentials?.password,
           role: credentials?.role,
         });
 
         if (!credentials?.email || !credentials?.password) {
-          console.log('❌ Missing credentials');
+          logger.info('❌ Missing credentials');
           throw new Error('Email and password are required');
         }
 
         try {
-          console.log('🔍 Looking up user:', credentials.email);
+          logger.info('🔍 Looking up user:', credentials.email);
           // Find user in database
           const user = await getUserByEmail(credentials.email);
 
           if (!user) {
-            console.log('❌ User not found');
+            logger.info('❌ User not found');
             throw new Error('Invalid credentials');
           }
 
-          console.log('✅ User found:', {
+          logger.info('✅ User found:', {
             id: user.id,
             email: user.email,
             status: user.status,
@@ -100,19 +100,19 @@ export const authOptions: NextAuthOptions = {
 
           // Check if user is active
           if (user.status !== 'ACTIVE') {
-            console.log('❌ User not active:', user.status);
+            logger.info('❌ User not active:', user.status);
             throw new Error('Account is not active');
           }
 
-          console.log('🔑 Verifying password...');
+          logger.info('🔑 Verifying password...');
           // Verify password
           const isValidPassword = await comparePassword(credentials.password, user.password);
           if (!isValidPassword) {
-            console.log('❌ Invalid password');
+            logger.info('❌ Invalid password');
             throw new Error('Invalid credentials');
           }
 
-          console.log('✅ Password valid');
+          logger.info('✅ Password valid');
 
           // Update last login timestamp
           await updateLastLogin(user.id);
@@ -124,7 +124,7 @@ export const authOptions: NextAuthOptions = {
           // In the future, this can be extended to use the actual permissions from the database
           const permissions = generatePermissionsFromRoles(roles);
 
-          console.log('🔐 Authentication successful for:', user.email, 'Roles:', roles);
+          logger.info('🔐 Authentication successful for: ' + user.email + ' Roles: ' + JSON.stringify(roles));
 
           return {
             id: user.id,
@@ -135,7 +135,7 @@ export const authOptions: NextAuthOptions = {
             permissions: permissions,
           };
         } catch (error) {
-          console.error('Authentication error:', error);
+          logger.error('Authentication error:', error);
           throw error;
         }
       },
@@ -194,13 +194,13 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signIn({ user }) {
       // Track successful sign-in events
-      console.log('✅ User signed in successfully:', user.email);
+      logger.info('✅ User signed in successfully:', user.email);
     },
 
     async signOut({ token }) {
       // Track sign-out events
       if (token?.email) {
-        console.log('👋 User signed out:', token.email);
+        logger.info('👋 User signed out:', token.email);
       }
     },
   },

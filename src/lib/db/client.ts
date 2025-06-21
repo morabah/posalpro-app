@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Database Client Configuration
  * Production-ready Prisma client with optimized connection management
  */
@@ -35,9 +35,9 @@ const prismaClient = (() => {
 
 // Graceful shutdown handling
 const gracefulShutdown = async () => {
-  console.log('🔌 Disconnecting from database...');
+  logger.info('🔌 Disconnecting from database...');
   await prismaClient.$disconnect();
-  console.log('✅ Database connection closed');
+  logger.info('✅ Database connection closed');
 };
 
 // Handle process termination
@@ -113,7 +113,7 @@ export const executeWithRetry = async <T>(
         throw lastError;
       }
 
-      console.warn(
+      logger.warn(
         `Database operation failed (attempt ${attempt}/${maxRetries}):`,
         lastError.message
       );
@@ -173,19 +173,19 @@ export type { PrismaClient } from '@prisma/client';
 
 // Connection status logging
 if (process.env.NODE_ENV === 'development') {
-  console.log('🗄️  Database client initialized for development');
-  console.log(`📊 Connection URL: ${process.env.DATABASE_URL?.replace(/:\/\/.*@/, '://***@')}`);
+  logger.info('🗄️  Database client initialized for development');
+  logger.info(`📊 Connection URL: ${process.env.DATABASE_URL?.replace(/:\/\/.*@/, '://***@')}`);
 }
 
 // Production monitoring
 if (process.env.NODE_ENV === 'production') {
-  console.log('🗄️  Production database client initialized');
+  logger.info('🗄️  Production database client initialized');
 
   // Periodic health checks in production
   setInterval(async () => {
     const health = await checkDatabaseHealth();
     if (health.status === 'unhealthy') {
-      console.error('❌ Database health check failed:', health.error);
+      logger.error('❌ Database health check failed:', health.error);
     }
   }, 60000); // Check every minute
 }

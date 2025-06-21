@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Product Compatibility Service for PosalPro MVP2
  * Handles product compatibility checking and dependency validation
  */
@@ -47,7 +47,7 @@ export class ProductCompatibilityService {
         }
       );
 
-      console.log('Starting product compatibility check', {
+      logger.info('Starting product compatibility check', {
         productCount: products.length,
         productIds: products.map(p => p.id),
       });
@@ -98,7 +98,7 @@ export class ProductCompatibilityService {
         timestamp: new Date(),
       };
 
-      console.log('Product compatibility check completed', {
+      logger.info('Product compatibility check completed', {
         overall: result.overall,
         compatibilityChecks: compatibility.length,
         executionTime,

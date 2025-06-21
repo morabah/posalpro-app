@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Content Service
  * Enhanced data access layer for Content entities with semantic search and AI integration
  * Supports H1 hypothesis validation for 45% search time reduction
@@ -1077,7 +1077,7 @@ export class ContentService {
 
       return relatedContent;
     } catch (error) {
-      console.error('Related content lookup failed:', error);
+      logger.error('Related content lookup failed:', error);
       return [];
     }
   }
@@ -1106,12 +1106,12 @@ export class ContentService {
         userRoles: request.userRoles,
       };
 
-      console.log('Search Analytics (H1 Validation):', analyticsData);
+      logger.info('Search Analytics (H1 Validation):', analyticsData);
 
       // Store in database for analysis (could be separate analytics table)
       // This would typically go to a dedicated analytics service
     } catch (error) {
-      console.error('Failed to log search analytics:', error);
+      logger.error('Failed to log search analytics:', error);
       // Don't throw error - analytics failure shouldn't break search
     }
   }

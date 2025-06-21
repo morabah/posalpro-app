@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Error Interceptor
  * Handles global error processing and categorization
  */
@@ -227,7 +227,7 @@ class ErrorInterceptor {
   private logError(error: ProcessedError): void {
     // Safety check for error object
     if (!error) {
-      console.error('[ErrorInterceptor] No error object provided to logError');
+      logger.error('[ErrorInterceptor] No error object provided to logError');
       return;
     }
 
@@ -249,7 +249,7 @@ class ErrorInterceptor {
     if (logData.message !== 'No error message' || Object.keys(logData.details).length > 0) {
       console[logLevel]('[ErrorInterceptor]', logData);
     } else {
-      console.warn('[ErrorInterceptor] Attempted to log empty error data:', { error, logData });
+      logger.warn('[ErrorInterceptor] Attempted to log empty error data:', { error, logData });
     }
 
     // In production, send to logging service
@@ -329,8 +329,8 @@ class ErrorInterceptor {
 
   private async sendToLoggingService(logData: any): Promise<void> {
     // Implement logging service integration
-    // For now, just console.log
-    console.log('[ErrorInterceptor] Error logged:', logData);
+    // For now, just logger.info
+    logger.info('[ErrorInterceptor] Error logged:', logData);
   }
 
   async interceptResponse(
@@ -379,7 +379,7 @@ if (typeof window !== 'undefined') {
         headers: {},
       });
     } catch (handlerError) {
-      console.error('[ErrorInterceptor] Error in unhandledrejection handler:', handlerError);
+      logger.error('[ErrorInterceptor] Error in unhandledrejection handler:', handlerError);
     }
   });
 
@@ -395,7 +395,7 @@ if (typeof window !== 'undefined') {
         headers: {},
       });
     } catch (handlerError) {
-      console.error('[ErrorInterceptor] Error in error handler:', handlerError);
+      logger.error('[ErrorInterceptor] Error in error handler:', handlerError);
     }
   });
 }

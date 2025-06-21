@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Optimized Data Fetching Hook
  * High-performance data fetching with caching, deduplication, and error handling
  */
@@ -315,6 +315,6 @@ export const prefetchData = async (url: string, options: FetchOptions = {}): Pro
       timestamp: Date.now(),
     });
   } catch (error) {
-    console.warn('Prefetch failed:', error);
+    logger.warn('Prefetch failed:', error);
   }
 };

@@ -1,10 +1,11 @@
+'use client';
+
+import { logger } from '@/utils/logger';
 /**
  * PosalPro MVP2 - Validation Analytics Hook
  * H8 Hypothesis Tracking: 50% Technical Configuration Error Reduction
  * Component Traceability: US-3.1, US-3.2, US-3.3, AC-3.1.3, AC-3.2.4, AC-3.3.3
  */
-
-'use client';
 
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useCallback, useEffect, useState } from 'react';
@@ -128,7 +129,7 @@ export function useValidationAnalytics() {
 
         setIsInitialized(true);
       } catch (error) {
-        console.error('Failed to initialize validation baseline:', error);
+        logger.error('Failed to initialize validation baseline:', error);
       }
     };
 

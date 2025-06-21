@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Product Analytics Hook
  *
  * Component Traceability Matrix:
@@ -54,15 +54,15 @@ export function useProductAnalytics() {
 
   // Placeholder implementations
   const trackEvent = useCallback((event: string, data: any) => {
-    console.log('Analytics Event:', event, data);
+    logger.info('Analytics Event: ' + event, data);
   }, []);
 
   const trackPerformance = useCallback((metric: string, value: number, data: any) => {
-    console.log('Performance Metric:', metric, value, data);
+    logger.info('Performance Metric: ' + metric + ' Value: ' + value, data);
   }, []);
 
   const trackHypothesis = useCallback((hypothesis: string, data: any) => {
-    console.log('Hypothesis Validation:', hypothesis, data);
+    logger.info('Hypothesis Validation: ' + hypothesis, data);
   }, []);
 
   const trackProductCreation = useCallback(

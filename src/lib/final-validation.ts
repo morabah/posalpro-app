@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Final validation for Phase 1.3 completion
  * Executes the required logValidation call to mark infrastructure as ready
  */
@@ -18,8 +18,8 @@ export async function executeFinalValidation(): Promise<void> {
 // Auto-execute validation
 executeFinalValidation()
   .then(() => {
-    console.log('✅ Phase 1.3 validation completed successfully!');
+    logger.info('✅ Phase 1.3 validation completed successfully!');
   })
   .catch(error => {
-    console.error('❌ Phase 1.3 validation failed:', error);
+    logger.error('❌ Phase 1.3 validation failed:', error);
   });

@@ -1,10 +1,11 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Customers API Routes
  * Enhanced customer management with authentication and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -12,12 +13,9 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-const prismaClient = new PrismaClient();
 
 /**
  * Component Traceability Matrix:
@@ -97,10 +95,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get total count
-    const total = await prismaClient.customer.count({ where });
+    const total = await prisma.customer.count({ where });
 
     // Get customers with pagination
-    const customers = await prismaClient.customer.findMany({
+    const customers = await prisma.customer.findMany({
       where,
       include: {
         _count: {
@@ -199,7 +197,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/customers - Create new customer
+ * POST /api/customers - Create a new customer
  */
 export async function POST(request: NextRequest) {
   try {
@@ -209,78 +207,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
+    // Parse and validate request body
     const body = await request.json();
-    const {
-      name,
-      email,
-      phone,
-      website,
-      industry,
-      companySize,
-      revenue,
-      address,
-      tags,
-      tier = 'STANDARD',
-      status = 'ACTIVE',
-    } = body;
+    const validatedData = CustomerCreateSchema.parse(body);
 
-    // Validate required fields
-    if (!name) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Customer name is required',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          metadata: {
-            component: 'CustomersRoute',
-            operation: 'createCustomer',
-            field: 'name',
-          },
-        }),
-        'Validation failed',
-        ErrorCodes.VALIDATION.INVALID_INPUT,
-        400,
-        { userFriendlyMessage: 'Customer name is required' }
-      );
-    }
+    // Check if customer with email already exists
+    if (validatedData.email) {
+      const existingCustomer = await prisma.customer.findFirst({
+        where: {
+          email: validatedData.email,
+        },
+      });
 
-    // Check if customer with same name already exists
-    const existingCustomer = await prismaClient.customer.findFirst({
-      where: { name: { equals: name, mode: 'insensitive' } },
-    });
-
-    if (existingCustomer) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: `Customer with name '${name}' already exists`,
-          code: ErrorCodes.VALIDATION.DUPLICATE_ENTRY,
-          metadata: {
-            component: 'CustomersRoute',
-            operation: 'createCustomer',
-            field: 'name',
-            value: name,
-          },
-        }),
-        'Duplicate customer',
-        ErrorCodes.VALIDATION.DUPLICATE_ENTRY,
-        409,
-        { userFriendlyMessage: 'A customer with this name already exists' }
-      );
+      if (existingCustomer) {
+        return createApiErrorResponse(
+          new StandardError({
+            message: `Customer with email ${validatedData.email} already exists`,
+            code: ErrorCodes.VALIDATION.DUPLICATE_ENTRY,
+            metadata: {
+              component: 'CustomersRoute',
+              operation: 'createCustomer',
+              email: validatedData.email,
+              existingCustomerId: existingCustomer.id,
+            },
+          }),
+          'Customer already exists',
+          ErrorCodes.VALIDATION.DUPLICATE_ENTRY,
+          409,
+          { userFriendlyMessage: 'A customer with this email address already exists.' }
+        );
+      }
     }
 
     // Create customer
-    const customer = await prismaClient.customer.create({
+    const customer = await prisma.customer.create({
       data: {
-        name,
-        email,
-        phone,
-        website,
-        industry,
-        companySize,
-        revenue: revenue ? parseFloat(revenue) : null,
-        address,
-        tags: tags || [],
-        tier,
-        status,
+        name: validatedData.name,
+        email: validatedData.email,
+        phone: validatedData.phone,
+        website: validatedData.website,
+        address: validatedData.address,
+        industry: validatedData.industry,
+        companySize: validatedData.companySize,
+        revenue: validatedData.revenue,
+        tier: validatedData.tier,
+        tags: validatedData.tags,
+        metadata: validatedData.metadata || {},
+        segmentation: validatedData.segmentation || {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
       include: {
         _count: {
@@ -291,10 +266,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Track customer creation event for analytics
+    await trackCustomerCreationEvent(session.user.id, customer.id, customer.name);
+
     return NextResponse.json({
       success: true,
       message: 'Customer created successfully',
-      data: { customer },
+      data: {
+        customer,
+      },
     });
   } catch (error) {
     // Log the error using ErrorHandlingService
@@ -303,7 +283,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(
         new StandardError({
-          message: 'Customer validation failed',
+          message: 'Validation failed for customer creation',
           code: ErrorCodes.VALIDATION.INVALID_INPUT,
           cause: error,
           metadata: {
@@ -315,17 +295,14 @@ export async function POST(request: NextRequest) {
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        {
-          userFriendlyMessage: 'Please check your customer data and try again',
-          details: error.errors,
-        }
+        { userFriendlyMessage: 'Please check your customer information and try again.' }
       );
     }
 
     if (isPrismaError(error)) {
       const errorCode = error.code.startsWith('P2')
         ? ErrorCodes.DATA.DATABASE_ERROR
-        : ErrorCodes.DATA.NOT_FOUND;
+        : ErrorCodes.DATA.CREATE_FAILED;
       return createApiErrorResponse(
         new StandardError({
           message: `Database error when creating customer: ${getPrismaErrorMessage(error.code)}`,
@@ -345,10 +322,6 @@ export async function POST(request: NextRequest) {
             'An error occurred while creating the customer. Please try again later.',
         }
       );
-    }
-
-    if (error instanceof StandardError) {
-      return createApiErrorResponse(error);
     }
 
     return createApiErrorResponse(
@@ -377,41 +350,45 @@ export async function POST(request: NextRequest) {
  */
 async function trackCustomerSearchEvent(userId: string, query: string, resultsCount: number) {
   try {
-    await prismaClient.hypothesisValidationEvent.create({
+    await prisma.userStoryMetrics.create({
+      data: {
+        userStoryId: 'US-4.1',
+        hypothesis: ['H4'],
+        acceptanceCriteria: ['AC-4.1.1'],
+        performanceTargets: {
+          searchQuery: query,
+          userId,
+          timestamp: new Date().toISOString(),
+        },
+        actualPerformance: {
+          resultsCount,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    });
+
+    await prisma.hypothesisValidationEvent.create({
       data: {
         userId,
-        hypothesis: 'H6', // Requirement Extraction
-        userStoryId: 'US-4.2',
+        hypothesis: 'H4',
+        userStoryId: 'US-4.1',
         componentId: 'CustomerSearch',
         action: 'customer_search',
         measurementData: {
-          query,
+          searchQuery: query,
           resultsCount,
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         },
-        targetValue: 2.0, // Target: results in <2 seconds
-        actualValue: 1.3, // Actual search time
-        performanceImprovement: 0.7, // 35% improvement
+        targetValue: 1.0,
+        actualValue: resultsCount > 0 ? 1.0 : 0.0,
+        performanceImprovement: resultsCount > 0 ? 1 : 0,
         userRole: 'user',
         sessionId: `customer_search_${Date.now()}`,
       },
     });
   } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to track customer search event',
-      ErrorCodes.ANALYTICS.TRACKING_ERROR,
-      {
-        component: 'CustomersRoute',
-        operation: 'trackCustomerSearchEvent',
-        userStories: ['US-4.2'],
-        hypotheses: ['H6'],
-        userId,
-        query,
-        resultsCount,
-      }
-    );
-    // Don't fail the main operation if analytics tracking fails
+    logger.error('Failed to track customer search event:', error);
+    // Don't throw error as this is non-critical
   }
 }
 
@@ -424,40 +401,45 @@ async function trackCustomerCreationEvent(
   customerName: string
 ) {
   try {
-    await prismaClient.hypothesisValidationEvent.create({
+    await prisma.userStoryMetrics.create({
+      data: {
+        userStoryId: 'US-4.1',
+        hypothesis: ['H4'],
+        acceptanceCriteria: ['AC-4.1.1'],
+        performanceTargets: {
+          customerId,
+          customerName,
+          userId,
+          timestamp: new Date().toISOString(),
+        },
+        actualPerformance: {
+          created: true,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    });
+
+    await prisma.hypothesisValidationEvent.create({
       data: {
         userId,
-        hypothesis: 'H4', // Cross-Department Coordination
+        hypothesis: 'H4',
         userStoryId: 'US-4.1',
         componentId: 'CustomerCreation',
         action: 'customer_created',
         measurementData: {
           customerId,
           customerName,
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         },
-        targetValue: 3.0, // Target: customer creation in <3 minutes
-        actualValue: 2.2, // Actual creation time
-        performanceImprovement: 0.8, // 27% improvement
+        targetValue: 1.0,
+        actualValue: 1.0,
+        performanceImprovement: 1,
         userRole: 'user',
         sessionId: `customer_creation_${Date.now()}`,
       },
     });
   } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to track customer creation event',
-      ErrorCodes.ANALYTICS.TRACKING_ERROR,
-      {
-        component: 'CustomersRoute',
-        operation: 'trackCustomerCreationEvent',
-        userStories: ['US-4.1'],
-        hypotheses: ['H4'],
-        userId,
-        customerId,
-        customerName,
-      }
-    );
-    // Don't fail the main operation if analytics tracking fails
+    logger.error('Failed to track customer creation event:', error);
+    // Don't throw error as this is non-critical
   }
 }

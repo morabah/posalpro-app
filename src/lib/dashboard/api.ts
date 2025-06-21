@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Dashboard API
  * Comprehensive dashboard data management with role-based filtering and caching
  * Based on DASHBOARD_SCREEN.md wireframe specifications
@@ -133,13 +133,13 @@ export class DashboardAPI {
     if (!refresh) {
       const cached = dashboardCache.get(cacheKey);
       if (cached) {
-        console.log('Dashboard data retrieved from cache');
+        logger.info('Dashboard data retrieved from cache');
         return cached;
       }
     }
 
     try {
-      console.log('Fetching dashboard data from API...');
+      logger.info('Fetching dashboard data from API...');
 
       // Fetch all dashboard components in parallel
       const [
@@ -198,16 +198,16 @@ export class DashboardAPI {
         });
 
       if (failures.length > 0) {
-        console.warn('Some dashboard sections failed to load:', failures);
+        logger.warn('Some dashboard sections failed to load:', failures);
       }
 
       // Cache successful result
       dashboardCache.set(cacheKey, dashboardData, CACHE_CONFIG.dashboardData);
-      console.log('Dashboard data cached successfully');
+      logger.info('Dashboard data cached successfully');
 
       return dashboardData;
     } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      logger.error('Failed to fetch dashboard data:', error);
       throw new Error('Unable to load dashboard data. Please try refreshing the page.');
     }
   }
@@ -265,7 +265,7 @@ export class DashboardAPI {
         metrics,
       };
     } catch (error) {
-      console.error('Failed to fetch proposal data:', error);
+      logger.error('Failed to fetch proposal data:', error);
       throw error;
     }
   }
@@ -300,7 +300,7 @@ export class DashboardAPI {
 
       return activities;
     } catch (error) {
-      console.error('Failed to fetch activity feed:', error);
+      logger.error('Failed to fetch activity feed:', error);
       return [];
     }
   }
@@ -334,7 +334,7 @@ export class DashboardAPI {
 
       return team;
     } catch (error) {
-      console.error('Failed to fetch team status:', error);
+      logger.error('Failed to fetch team status:', error);
       return [];
     }
   }
@@ -373,7 +373,7 @@ export class DashboardAPI {
 
       return deadlines;
     } catch (error) {
-      console.error('Failed to fetch deadlines:', error);
+      logger.error('Failed to fetch deadlines:', error);
       return [];
     }
   }
@@ -407,7 +407,7 @@ export class DashboardAPI {
 
       return performance;
     } catch (error) {
-      console.error('Failed to fetch performance metrics:', error);
+      logger.error('Failed to fetch performance metrics:', error);
       return this.getEmptyPerformanceData();
     }
   }
@@ -451,7 +451,7 @@ export class DashboardAPI {
 
       return notifications;
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      logger.error('Failed to fetch notifications:', error);
       return [];
     }
   }
@@ -473,7 +473,7 @@ export class DashboardAPI {
 
       return false;
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      logger.error('Failed to mark notification as read:', error);
       return false;
     }
   }

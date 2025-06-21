@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Product Statistics API
  * Provides aggregated product data for dashboards and analytics
  * Supports H8 hypothesis (Technical Configuration Validation)
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     return createApiResponse(stats, 'Product statistics retrieved successfully');
   } catch (error) {
-    console.error('Failed to fetch product statistics:', error);
+    logger.error('Failed to fetch product statistics:', error);
     return createErrorResponse(
       'Failed to fetch product statistics',
       error instanceof Error ? error.message : 'Unknown error',

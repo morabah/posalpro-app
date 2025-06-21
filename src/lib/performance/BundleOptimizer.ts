@@ -95,8 +95,8 @@ export class BundleOptimizerService {
 
   private constructor() {
     this.errorHandlingService = ErrorHandlingService.getInstance();
-    this.setupPerformanceObservers();
-    this.setupIntersectionObserver();
+    if (typeof window !== "undefined") { this.setupPerformanceObservers(); }
+    if (typeof window !== "undefined") { this.setupIntersectionObserver(); }
   }
 
   static getInstance(): BundleOptimizerService {
@@ -186,7 +186,7 @@ export class BundleOptimizerService {
       // Dynamic import with chunk name annotation
       const module = await import(
         /* webpackChunkName: "[request]" */
-        `../components/${id}`
+        `@/components/${id}`
       );
 
       const loadTime = performance.now() - startTime;

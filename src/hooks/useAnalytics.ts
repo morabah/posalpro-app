@@ -3,6 +3,7 @@
  * Centralized analytics tracking for hypothesis validation
  */
 
+import { logger } from '@/utils/logger';
 import { useCallback } from 'react';
 
 interface AnalyticsEvent {
@@ -20,7 +21,7 @@ interface AnalyticsHook {
     properties: AnalyticsEvent
   ) => void;
   clearStorage: () => void;
-  getStorageInfo: () => { eventCount: number; sizeKB: number; isHealthy: boolean };
+  getStorageInfo: () => { eventCount: number; hasUser: boolean; storageSize: number };
 }
 
 // Storage management constants
@@ -82,8 +83,9 @@ const manageStorage = (newEvent: any): void => {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(existingEvents));
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
+    // Only log in development (client-side check)
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      logger.info(
         `[Analytics] Stored ${existingEvents.length} events (${Math.round(getStorageSize(JSON.stringify(existingEvents)) / 1024)}KB)`
       );
     }
@@ -92,60 +94,88 @@ const manageStorage = (newEvent: any): void => {
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.setItem(STORAGE_KEY, JSON.stringify([newEvent]));
-      console.warn('[Analytics] Storage cleared due to quota exceeded, starting fresh');
+      logger.warn('[Analytics] Storage cleared due to quota exceeded, starting fresh');
     } catch (retryError) {
-      console.warn('[Analytics] Failed to store analytics event after cleanup:', retryError);
+      logger.warn('[Analytics] Failed to store analytics event after cleanup:', retryError);
     }
   }
 };
 
 export const useAnalytics = (): AnalyticsHook => {
-  const track = useCallback((eventName: string, properties: AnalyticsEvent) => {
-    // In a real implementation, this would send to your analytics service
-    // (e.g., Mixpanel, Amplitude, Google Analytics, PostHog)
+  const trackEvent = useCallback((eventName: string, properties: Record<string, any> = {}) => {
+    try {
+      const event = {
+        event: eventName,
+        properties: {
+          ...properties,
+          timestamp: Date.now(),
+          url: typeof window !== 'undefined' ? window.location.href : '',
+          userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : '',
+        },
+      };
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Analytics] ${eventName}:`, properties);
+      // Store event locally for now
+      try {
+        const existingEvents = JSON.parse(localStorage.getItem('analytics_events') || '[]');
+        existingEvents.push(event);
+        localStorage.setItem('analytics_events', JSON.stringify(existingEvents));
+      } catch (storageError) {
+        if (storageError instanceof Error && storageError.name === 'QuotaExceededError') {
+          logger.warn('[Analytics] Storage quota exceeded, clearing old events');
+          localStorage.setItem('analytics_events', JSON.stringify([event]));
+        } else {
+          localStorage.setItem('analytics_events', JSON.stringify([event]));
+          logger.warn('[Analytics] Failed to store analytics event after cleanup:', storageError);
+        }
+      }
+
+      // In development, log the event (client-side check)
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        logger.info(`[Analytics] ${eventName}:`, properties);
+      }
+
+      // TODO: Send to actual analytics service in production
+    } catch (error) {
+      // Fail silently - analytics should never break the app
     }
-
-    // Store in local storage for development/testing with proper management
-    const eventData = {
-      event: eventName,
-      properties,
-      timestamp: new Date().toISOString(),
-    };
-
-    manageStorage(eventData);
-
-    // Example integration points:
-    // mixpanel.track(eventName, properties);
-    // amplitude.logEvent(eventName, properties);
-    // gtag('event', eventName, properties);
   }, []);
 
-  const identify = useCallback((userId: string, traits: Record<string, unknown>) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Analytics] Identify ${userId}:`, traits);
-    }
+  const identify = useCallback((userId: string, traits: Record<string, any> = {}) => {
+    try {
+      const identifyData = {
+        userId,
+        traits: {
+          ...traits,
+          timestamp: Date.now(),
+        },
+      };
 
-    // Example integration:
-    // mixpanel.identify(userId);
-    // mixpanel.people.set(traits);
+      localStorage.setItem('analytics_user', JSON.stringify(identifyData));
+
+      // In development, log the identify call (client-side check)
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        logger.info(`[Analytics] Identify ${userId}:`, traits);
+      }
+    } catch (error) {
+      // Fail silently
+    }
   }, []);
 
-  const page = useCallback((name: string, properties: AnalyticsEvent = {}) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Analytics] Page ${name}:`, properties);
-    }
+  const page = useCallback(
+    (name: string, properties: Record<string, any> = {}) => {
+      trackEvent('page_view', { page: name, ...properties });
 
-    // Example integration:
-    // mixpanel.track('Page View', { page: name, ...properties });
-    // gtag('config', 'GA_TRACKING_ID', { page_title: name });
-  }, []);
+      // In development, log the page view (client-side check)
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        logger.info(`[Analytics] Page ${name}:`, properties);
+      }
+    },
+    [trackEvent]
+  );
 
   const trackWizardStep = useCallback(
     (step: number, stepName: string, action: string, properties: AnalyticsEvent) => {
-      track('wizard_step_completion', {
+      trackEvent('wizard_step_completion', {
         step,
         stepName,
         action,
@@ -153,43 +183,45 @@ export const useAnalytics = (): AnalyticsHook => {
         timestamp: Date.now(),
       });
     },
-    [track]
+    [trackEvent]
   );
 
-  const clearStorage = useCallback(() => {
+  const reset = useCallback(() => {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      console.log('[Analytics] Storage cleared successfully');
+      localStorage.removeItem('analytics_events');
+      localStorage.removeItem('analytics_user');
+      logger.info('[Analytics] Storage cleared successfully');
     } catch (error) {
-      console.warn('[Analytics] Failed to clear storage:', error);
+      logger.warn('[Analytics] Failed to clear storage:', error);
     }
   }, []);
 
   const getStorageInfo = useCallback(() => {
     try {
-      const data = localStorage.getItem(STORAGE_KEY) || '[]';
-      const events = JSON.parse(data);
-      const sizeKB = Math.round(getStorageSize(data) / 1024);
-      const isHealthy =
-        events.length < MAX_EVENTS && getStorageSize(data) < MAX_STORAGE_SIZE * CLEANUP_THRESHOLD;
+      const events = JSON.parse(localStorage.getItem('analytics_events') || '[]');
+      const user = JSON.parse(localStorage.getItem('analytics_user') || '{}');
 
       return {
         eventCount: events.length,
-        sizeKB,
-        isHealthy,
+        hasUser: !!user.userId,
+        storageSize: JSON.stringify({ events, user }).length,
       };
     } catch (error) {
-      console.warn('[Analytics] Failed to get storage info:', error);
-      return { eventCount: 0, sizeKB: 0, isHealthy: true };
+      logger.warn('[Analytics] Failed to get storage info:', error);
+      return {
+        eventCount: 0,
+        hasUser: false,
+        storageSize: 0,
+      };
     }
   }, []);
 
   return {
-    track,
+    track: trackEvent,
     identify,
     page,
     trackWizardStep,
-    clearStorage,
+    clearStorage: reset,
     getStorageInfo,
   };
 };

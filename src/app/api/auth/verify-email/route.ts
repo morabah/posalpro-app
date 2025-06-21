@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Email Verification API Route
  * Secure email verification with token validation
  */
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
   } catch (error) {
-    console.error('Email verification error:', error);
+    logger.error('Email verification error:', error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     // Redirect to success page
     return NextResponse.redirect(new URL('/auth/login?verified=true', request.url));
   } catch (error) {
-    console.error('Email verification error:', error);
+    logger.error('Email verification error:', error);
     return NextResponse.redirect(new URL('/auth/error?error=VerificationFailed', request.url));
   }
 }

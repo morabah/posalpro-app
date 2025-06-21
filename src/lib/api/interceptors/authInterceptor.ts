@@ -1,4 +1,4 @@
-/**
+import { logger } from '@/utils/logger';/**
  * Authentication Interceptor
  * Handles automatic token refresh and session management
  */
@@ -48,7 +48,7 @@ class AuthInterceptor {
         try {
           this.tokens = JSON.parse(stored);
         } catch (error) {
-          console.error('Failed to parse stored tokens:', error);
+          logger.error('Failed to parse stored tokens:', error);
           this.clearTokens();
         }
       }
@@ -123,7 +123,7 @@ class AuthInterceptor {
       try {
         tokens = await this.refreshTokens();
       } catch (error) {
-        console.error('Token refresh failed:', error);
+        logger.error('Token refresh failed:', error);
         // Redirect to login or handle auth failure
         window.location.href = '/auth/login';
         throw error;

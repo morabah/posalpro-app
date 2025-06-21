@@ -1,10 +1,10 @@
-/**
+import { logger } from '@/utils/logger';/**
  * PosalPro MVP2 - Admin Permissions API Route
  * Database-driven permission management API
  * Based on ADMIN_SCREEN.md wireframe and RBAC schema specifications
  */
 
-import { prisma } from '@/lib/db/client';
+import prisma from '@/lib/db/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Failed to fetch permissions:', error);
+    logger.error('Failed to fetch permissions:', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch permissions',
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Failed to create permission:', error);
+    logger.error('Failed to create permission:', error);
     return NextResponse.json(
       {
         error: 'Failed to create permission',
@@ -287,7 +287,7 @@ export async function PUT(request: NextRequest) {
       message: 'Permission updated successfully',
     });
   } catch (error) {
-    console.error('Failed to update permission:', error);
+    logger.error('Failed to update permission:', error);
     return NextResponse.json(
       {
         error: 'Failed to update permission',
@@ -351,7 +351,7 @@ export async function DELETE(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Failed to delete permission:', error);
+    logger.error('Failed to delete permission:', error);
     return NextResponse.json(
       {
         error: 'Failed to delete permission',
