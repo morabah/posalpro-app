@@ -8,7 +8,6 @@
 
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
@@ -398,212 +397,210 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   }, [customers]);
 
   return (
-    <div className={`space-y-8 ${isMobile ? 'react-hook-form-mobile mobile-form-enhanced' : ''}`}>
+    <div className="space-y-8 mobile-form-enhanced">
       {/* Client Information Section */}
-      <Card>
-        <div className={`p-6 ${isMobile ? 'form-container' : ''}`}>
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6">Client Information</h3>
-
-          <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${isMobile ? 'form-grid' : ''}`}>
+      <Card className="mobile-card-enhanced">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6 mobile-text-responsive">
+            Client Information
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mobile-grid-responsive">
+            {/* Customer Selection */}
             <div className="md:col-span-2">
-              <Label htmlFor="clientSelect" required>
-                Select Customer
-              </Label>
+              <label className="form-label mobile-focus-enhanced">Select Customer *</label>
               <Select
-                id="clientSelect"
-                options={customerOptions}
                 value={selectedCustomer?.id || ''}
-                error={errors.client?.id?.message}
-                placeholder={customersLoading ? 'Loading customers...' : 'Select a customer...'}
                 onChange={handleCustomerChange}
-                onFocus={handleFieldChange('client.id')}
+                options={customers.map(customer => ({
+                  value: customer.id,
+                  label: customer.name,
+                }))}
+                placeholder={customersLoading ? 'Loading customers...' : 'Select a customer...'}
                 disabled={customersLoading}
+                className="mobile-select-enhanced ios-select-optimized touch-target-enhanced"
               />
               {selectedCustomer && (
-                <div className="mt-2 p-3 bg-blue-50 rounded-md">
-                  <p className="text-sm text-blue-800">
-                    <strong>Selected:</strong> {selectedCustomer.name}
-                    {selectedCustomer.industry && ` • ${selectedCustomer.industry}`}
-                    {selectedCustomer.tier && ` • ${selectedCustomer.tier} tier`}
-                    {selectedCustomer.email && ` • ${selectedCustomer.email}`}
-                  </p>
+                <div className="mt-2 text-sm text-gray-600 mobile-caption">
+                  {selectedCustomer.industry && ` • ${selectedCustomer.industry}`}
+                  {selectedCustomer.tier && ` • ${selectedCustomer.tier} tier`}
+                  {selectedCustomer.email && ` • ${selectedCustomer.email}`}
                 </div>
               )}
             </div>
 
-            <div className={`${isMobile ? 'form-field-container' : ''}`}>
-              <Label htmlFor="industry" required>
-                Client Industry
-              </Label>
-              <Select
-                id="industry"
-                options={INDUSTRY_OPTIONS}
-                error={errors.client?.industry?.message}
-                onChange={(value: string) => {
-                  setValue('client.industry', value);
-                  handleFieldChange('client.industry')();
-                }}
-                onFocus={handleFieldChange('client.industry')}
-              />
-            </div>
-
+            {/* Contact Person */}
             <div>
-              <Label htmlFor="contactPerson" required>
-                Contact Person
-              </Label>
+              <label className="form-label mobile-focus-enhanced">Contact Person *</label>
               <Input
-                id="contactPerson"
-                placeholder="Jane Smith"
-                error={errors.client?.contactPerson?.message}
                 {...register('client.contactPerson')}
-                onFocus={handleFieldChange('client.contactPerson')}
+                onChange={handleFieldChange('client.contactPerson')}
+                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                placeholder="Primary contact name"
               />
+              {errors.client?.contactPerson && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.client.contactPerson.message}
+                </p>
+              )}
             </div>
 
+            {/* Contact Email */}
             <div>
-              <Label htmlFor="contactEmail" required>
-                Contact Email
-              </Label>
+              <label className="form-label mobile-focus-enhanced">Contact Email *</label>
               <Input
-                id="contactEmail"
-                type="email"
-                placeholder="j.smith@acme.com"
-                error={errors.client?.contactEmail?.message}
                 {...register('client.contactEmail')}
-                onFocus={handleFieldChange('client.contactEmail')}
+                onChange={handleFieldChange('client.contactEmail')}
+                type="email"
+                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                placeholder="contact@company.com"
               />
+              {errors.client?.contactEmail && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.client.contactEmail.message}
+                </p>
+              )}
             </div>
 
+            {/* Contact Phone */}
             <div>
-              <Label htmlFor="contactPhone" required>
-                Contact Phone
-              </Label>
+              <label className="form-label mobile-focus-enhanced">Contact Phone</label>
               <Input
-                id="contactPhone"
-                placeholder="(555) 123-4567"
-                error={errors.client?.contactPhone?.message}
                 {...register('client.contactPhone')}
-                onFocus={handleFieldChange('client.contactPhone')}
+                onChange={handleFieldChange('client.contactPhone')}
+                type="tel"
+                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                placeholder="+1 (555) 123-4567"
               />
+              {errors.client?.contactPhone && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.client.contactPhone.message}
+                </p>
+              )}
             </div>
           </div>
         </div>
       </Card>
 
       {/* Proposal Details Section */}
-      <Card>
-        <div className={`p-6 ${isMobile ? 'form-container' : ''}`}>
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6">Proposal Details</h3>
-
-          <div className="grid grid-cols-1 gap-6">
-            <div>
-              <Label htmlFor="proposalTitle" required>
-                Proposal Title
-              </Label>
+      <Card className="mobile-card-enhanced">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6 mobile-text-responsive">
+            Proposal Details
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mobile-grid-responsive">
+            {/* Proposal Title */}
+            <div className="md:col-span-2">
+              <label className="form-label mobile-focus-enhanced">Proposal Title *</label>
               <Input
-                id="proposalTitle"
-                placeholder="Cloud Migration Services"
-                error={errors.details?.title?.message}
                 {...register('details.title')}
-                onFocus={handleFieldChange('details.title')}
+                onChange={handleFieldChange('details.title')}
+                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                placeholder="Enter a descriptive title for your proposal"
               />
               {errors.details?.title && (
-                <p className="text-sm text-error-600 mt-1">Title is required</p>
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.details.title.message}
+                </p>
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="rfpReference">RFP Reference Number</Label>
-                <Input
-                  id="rfpReference"
-                  placeholder="ACME-2025-103"
-                  {...register('details.rfpReferenceNumber')}
-                  onFocus={handleFieldChange('details.rfpReferenceNumber')}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="dueDate" required>
-                  Due Date
-                </Label>
-                <Input
-                  id="dueDate"
-                  type="date"
-                  error={errors.details?.dueDate?.message}
-                  {...register('details.dueDate')}
-                  onFocus={handleFieldChange('details.dueDate')}
-                  onChange={e => {
-                    // Update form value
-                    setValue('details.dueDate', e.target.value);
-
-                    // Validate the selected date
-                    validateDueDate(e.target.value);
-
-                    // Track field interaction
-                    handleFieldChange('details.dueDate')();
-                  }}
-                />
-                {dateWarning && (
-                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
-                    <p className="text-sm text-amber-800">{dateWarning}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="estimatedValue" required>
-                  Estimated Value
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500">
-                    $
-                  </span>
-                  <Input
-                    id="estimatedValue"
-                    type="number"
-                    placeholder="250,000"
-                    className="pl-8"
-                    error={errors.details?.estimatedValue?.message}
-                    {...register('details.estimatedValue', { valueAsNumber: true })}
-                    onFocus={handleFieldChange('details.estimatedValue')}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="priority" required>
-                  Priority
-                </Label>
-                <div className="flex items-center space-x-4 mt-2">
-                  {Object.values(ProposalPriority).map(priority => (
-                    <label key={priority} className="flex items-center">
-                      <input
-                        type="radio"
-                        value={priority}
-                        className="mr-2 text-primary-600 focus:ring-primary-500"
-                        {...register('details.priority')}
-                        onChange={() => handleFieldChange('details.priority')()}
-                      />
-                      <span className="text-sm text-neutral-700 capitalize">{priority}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-
+            {/* RFP Reference Number */}
             <div>
-              <Label htmlFor="description">Description (Optional)</Label>
-              <textarea
-                id="description"
-                rows={4}
-                className="form-field"
-                placeholder="Brief description of the proposal requirements..."
-                {...register('details.description')}
-                onFocus={handleFieldChange('details.description')}
+              <label className="form-label mobile-focus-enhanced">RFP Reference Number</label>
+              <Input
+                {...register('details.rfpReferenceNumber')}
+                onChange={handleFieldChange('details.rfpReferenceNumber')}
+                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                placeholder="RFP-2024-001"
               />
+              {errors.details?.rfpReferenceNumber && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.details.rfpReferenceNumber.message}
+                </p>
+              )}
+            </div>
+
+            {/* Due Date */}
+            <div>
+              <label className="form-label mobile-focus-enhanced">Due Date *</label>
+              <Input
+                {...register('details.dueDate')}
+                onChange={e => {
+                  validateDueDate(e.target.value);
+                  handleFieldChange('details.dueDate')();
+                }}
+                type="date"
+                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+              />
+              {dateWarning && (
+                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-800">{dateWarning}</p>
+                </div>
+              )}
+              {errors.details?.dueDate && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.details.dueDate.message}
+                </p>
+              )}
+            </div>
+
+            {/* Estimated Value */}
+            <div>
+              <label className="form-label mobile-focus-enhanced">Estimated Value ($)</label>
+              <Input
+                {...register('details.estimatedValue', { valueAsNumber: true })}
+                onChange={handleFieldChange('details.estimatedValue')}
+                type="number"
+                min="0"
+                step="1000"
+                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                placeholder="100000"
+              />
+              {errors.details?.estimatedValue && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.details.estimatedValue.message}
+                </p>
+              )}
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="form-label mobile-focus-enhanced">Priority *</label>
+              <Select
+                {...register('details.priority')}
+                onChange={value => {
+                  setValue('details.priority', value as ProposalPriority);
+                  handleFieldChange('details.priority')();
+                }}
+                options={[
+                  { value: ProposalPriority.HIGH, label: 'High Priority' },
+                  { value: ProposalPriority.MEDIUM, label: 'Medium Priority' },
+                  { value: ProposalPriority.LOW, label: 'Low Priority' },
+                ]}
+                className="mobile-select-enhanced ios-select-optimized touch-target-enhanced"
+              />
+              {errors.details?.priority && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.details.priority.message}
+                </p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="md:col-span-2">
+              <label className="form-label mobile-focus-enhanced">Description</label>
+              <textarea
+                {...register('details.description')}
+                onChange={handleFieldChange('details.description')}
+                className="form-field mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                rows={4}
+                placeholder="Provide a brief description of the proposal scope and objectives..."
+              />
+              {errors.details?.description && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.details.description.message}
+                </p>
+              )}
             </div>
           </div>
         </div>
