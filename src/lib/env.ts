@@ -192,17 +192,26 @@ class EnvironmentManager {
 
       // Database configuration
       let databaseUrl: string;
-      try {
-        databaseUrl = this.getEnvVar('DATABASE_URL', {
-          required: !isTest,
-          default: isTest ? 'sqlite://memory' : undefined,
-          type: 'string',
-        }) as string;
-      } catch (error) {
-        if (isTest) {
-          databaseUrl = 'sqlite://memory';
-        } else {
-          throw error;
+
+      // Database URL should never be accessed in browser environment for security
+      if (typeof window !== 'undefined') {
+        // Browser environment - use placeholder value
+        databaseUrl = 'browser-placeholder://not-accessible';
+        warnings.push('Database configuration not available in browser environment');
+      } else {
+        // Server environment - load actual DATABASE_URL
+        try {
+          databaseUrl = this.getEnvVar('DATABASE_URL', {
+            required: !isTest,
+            default: isTest ? 'sqlite://memory' : undefined,
+            type: 'string',
+          }) as string;
+        } catch (error) {
+          if (isTest) {
+            databaseUrl = 'sqlite://memory';
+          } else {
+            throw error;
+          }
         }
       }
 
