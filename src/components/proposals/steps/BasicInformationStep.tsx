@@ -123,7 +123,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     return null;
   };
 
-  // ✅ PERFORMANCE FIX: Replace problematic watch() + onChange with optimized pattern
+  // ✅ PERFORMANCE FIX: Mobile-optimized form configuration
   const {
     register,
     setValue,
@@ -150,8 +150,10 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         description: data.details?.description || '',
       },
     },
-    // ✅ CRITICAL FIX: Change from 'onChange' to 'onBlur' for mobile performance
-    mode: isMobile ? 'onBlur' : 'onSubmit',
+    // ✅ CRITICAL FIX: Mobile-optimized validation mode
+    mode: isMobile ? 'onBlur' : 'onChange',
+    reValidateMode: 'onBlur',
+    criteriaMode: 'firstError',
   });
 
   // ✅ PERFORMANCE OPTIMIZATION: Debounced update function
@@ -379,13 +381,13 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   }, [customers]);
 
   return (
-    <div className="space-y-8">
+    <div className={`space-y-8 ${isMobile ? 'react-hook-form-mobile mobile-form-enhanced' : ''}`}>
       {/* Client Information Section */}
       <Card>
-        <div className="p-6">
+        <div className={`p-6 ${isMobile ? 'form-container' : ''}`}>
           <h3 className="text-lg font-semibold text-neutral-900 mb-6">Client Information</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${isMobile ? 'form-grid' : ''}`}>
             <div className="md:col-span-2">
               <Label htmlFor="clientSelect" required>
                 Select Customer
@@ -412,7 +414,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               )}
             </div>
 
-            <div>
+            <div className={`${isMobile ? 'form-field-container' : ''}`}>
               <Label htmlFor="industry" required>
                 Client Industry
               </Label>
@@ -473,7 +475,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
 
       {/* Proposal Details Section */}
       <Card>
-        <div className="p-6">
+        <div className={`p-6 ${isMobile ? 'form-container' : ''}`}>
           <h3 className="text-lg font-semibold text-neutral-900 mb-6">Proposal Details</h3>
 
           <div className="grid grid-cols-1 gap-6">
