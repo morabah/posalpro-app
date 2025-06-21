@@ -9,10 +9,12 @@
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { Select, SelectOption } from '@/components/ui/Select';
+import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { SystemUser, useUsers } from '@/hooks/admin/useAdminData';
+import { useResponsive } from '@/hooks/useResponsive';
+import { debounce } from '@/lib/utils';
 import { ProposalWizardStep5Data } from '@/lib/validation/schemas/proposal';
 import {
   ArrowDownIcon,
@@ -198,26 +200,33 @@ interface SectionAssignmentStepProps {
 }
 
 export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssignmentStepProps) {
+  // ✅ MOBILE RESPONSIVENESS: Add responsive detection
+  const { isMobile } = useResponsive();
+
+  // State for sections and analytics
   const [sections, setSections] = useState<ProposalSection[]>(DEFAULT_PROPOSAL_SECTIONS);
   const [timelineView, setTimelineView] = useState<'table' | 'gantt'>('table');
-  const lastSentDataRef = useRef<string>('');
+  const { users, loading: isLoadingUsers, error: usersError } = useUsers();
   const onUpdateRef = useRef(onUpdate);
+  const lastSentDataRef = useRef<string>('');
 
-  // Keep onUpdate ref current
+  // Update ref when onUpdate changes
   useEffect(() => {
     onUpdateRef.current = onUpdate;
-  });
+  }, [onUpdate]);
 
-  const { users, loading: isLoadingUsers, error: usersError } = useUsers();
-
+  // ✅ PERFORMANCE FIX: Mobile-optimized form configuration
   const {
     control,
-    watch,
     setValue,
-    formState: { errors, isValid },
     getValues,
+    formState: { errors, isValid },
   } = useForm<SectionAssignmentFormData>({
     resolver: zodResolver(sectionAssignmentSchema),
+    // ✅ CRITICAL FIX: Mobile-optimized validation mode
+    mode: isMobile ? 'onBlur' : 'onChange',
+    reValidateMode: 'onBlur',
+    criteriaMode: 'firstError',
     defaultValues: {
       sections: sections.map(section => ({
         id: section.id,
@@ -227,10 +236,9 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
         priority: section.priority,
       })),
     },
-    mode: 'onChange',
   });
 
-  const teamMemberOptions = useMemo((): SelectOption[] => {
+  const teamMemberOptions = useMemo(() => {
     if (!users) return [];
     return users.map((user: SystemUser) => ({
       value: user.id,
@@ -238,43 +246,65 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
     }));
   }, [users]);
 
-  // Debounced update to parent component
-  const debouncedOnUpdate = useCallback(
-    (formData: SectionAssignmentFormData) => {
-      const currentJson = JSON.stringify(formData);
-      if (currentJson !== lastSentDataRef.current) {
-        // Reconstruct the full section object to satisfy the onUpdate type
-        const updatedSections = formData.sections.map(formSection => {
-          const originalSection = sections.find(s => s.id === formSection.id);
-          return {
-            ...originalSection,
-            ...formSection,
-          };
-        });
+  // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
+  const collectFormData = useCallback(() => {
+    const currentValues = getValues();
+    return {
+      sections: currentValues.sections,
+    };
+  }, [getValues]);
 
-        onUpdateRef.current({ sections: updatedSections as ProposalSection[] });
-        lastSentDataRef.current = currentJson;
-        analytics?.trackWizardStep?.(5, 'Section Assignment', 'section_assignment_updated', {
-          component: 'SectionAssignmentStep',
-          ...COMPONENT_MAPPING,
-          hypothesisId: ['H4', 'H7'],
-          metadata: {
-            totalSections: formData.sections.length,
-            assignedSections: formData.sections.filter(s => s.assignedTo).length,
-          },
-        });
-      }
-    },
-    [analytics, sections]
+  // ✅ MOBILE OPTIMIZATION: Debounced updates with mobile-aware delays
+  const debouncedOnUpdate = useCallback(
+    debounce(
+      (formData: SectionAssignmentFormData) => {
+        const currentJson = JSON.stringify(formData);
+        if (currentJson !== lastSentDataRef.current) {
+          // Reconstruct the full section object to satisfy the onUpdate type
+          const updatedSections = formData.sections.map(formSection => {
+            const originalSection = sections.find(s => s.id === formSection.id);
+            return {
+              ...originalSection,
+              ...formSection,
+            };
+          });
+
+          onUpdateRef.current({ sections: updatedSections as ProposalSection[] });
+          lastSentDataRef.current = currentJson;
+
+          // Analytics tracking with mobile context
+          if (analytics?.trackWizardStep) {
+            analytics.trackWizardStep(5, 'Section Assignment', 'section_assignment_updated', {
+              component: 'SectionAssignmentStep',
+              ...COMPONENT_MAPPING,
+              hypothesisId: ['H4', 'H7'],
+              metadata: {
+                totalSections: formData.sections.length,
+                assignedSections: formData.sections.filter(s => s.assignedTo).length,
+                isMobile,
+              },
+            });
+          }
+        }
+      },
+      isMobile ? 500 : 300
+    ), // Mobile-aware delay
+    [analytics, sections, isMobile]
   );
 
-  // Watch for changes and trigger the debounced update
-  useEffect(() => {
-    const subscription = watch(values => {
-      debouncedOnUpdate(values as SectionAssignmentFormData);
-    });
-    return () => subscription.unsubscribe();
-  }, [watch, debouncedOnUpdate]);
+  // ✅ MOBILE-OPTIMIZED: Field change handler with debouncing
+  const handleFieldChange = useCallback(
+    (field: string, value: any) => {
+      // Set new timeout with mobile-optimized delay
+      const delay = isMobile ? 500 : 300;
+
+      setTimeout(() => {
+        const formData = collectFormData();
+        debouncedOnUpdate(formData);
+      }, delay);
+    },
+    [collectFormData, debouncedOnUpdate, isMobile]
+  );
 
   // Initialize sections from props
   useEffect(() => {

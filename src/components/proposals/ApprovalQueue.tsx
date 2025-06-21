@@ -15,7 +15,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { useApiClient } from '@/hooks/useApiClient';
+import { apiClient } from '@/lib/api/client';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import {
   ArrowTopRightOnSquareIcon,
@@ -122,7 +122,6 @@ export function ApprovalQueue({
   const [viewMode, setViewMode] = useState<'list' | 'board' | 'timeline'>('list');
 
   // Use centralized API client and error handling
-  const apiClient = useApiClient();
   const analytics = useAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -139,8 +138,9 @@ export function ApprovalQueue({
           timestamp: Date.now(),
         });
 
-        // Use centralized API client instead of direct fetch
-        const data = await apiClient.get<any[]>('/api/proposals/queue');
+        // Use main apiClient instead of hook to prevent /api/api/ double endpoint
+        const response = await apiClient.get('/proposals/queue');
+        const data = response.data as any[];
 
         // Convert date strings to Date objects
         const processedItems: QueueItem[] = data.map((item: any) => ({
@@ -188,7 +188,7 @@ export function ApprovalQueue({
     };
 
     fetchQueueItems();
-  }, [apiClient, analytics, errorHandlingService, currentUser]);
+  }, [analytics, errorHandlingService, currentUser]);
 
   // AC-4.3.1: Intelligent task prioritization algorithm
   const prioritizeQueue = useCallback((items: QueueItem[]): QueueItem[] => {

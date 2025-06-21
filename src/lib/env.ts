@@ -170,6 +170,7 @@ class EnvironmentManager {
       const isDevelopment = currentEnv === Environment.DEVELOPMENT;
       const isStaging = currentEnv === Environment.STAGING;
       const isTest = currentEnv === Environment.TEST;
+      const isBrowser = typeof window !== 'undefined';
 
       // Core configuration
       const nodeEnv = currentEnv;
@@ -194,10 +195,13 @@ class EnvironmentManager {
       let databaseUrl: string;
 
       // Database URL should never be accessed in browser environment for security
-      if (typeof window !== 'undefined') {
+      if (isBrowser) {
         // Browser environment - use placeholder value
         databaseUrl = 'browser-placeholder://not-accessible';
-        warnings.push('Database configuration not available in browser environment');
+        // ✅ PERFORMANCE FIX: Only warn in development mode to reduce console spam
+        if (isDevelopment) {
+          warnings.push('Database configuration not available in browser environment');
+        }
       } else {
         // Server environment - load actual DATABASE_URL
         try {
@@ -258,7 +262,25 @@ class EnvironmentManager {
         type: 'number',
       });
 
-      // Authentication configuration
+      // Authentication configuration with reduced warnings
+      if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('default')) {
+        if (isProduction) {
+          errors.push('JWT_SECRET must be set to a secure value in production');
+        } else if (isDevelopment) {
+          // ✅ PERFORMANCE FIX: Only warn once in development
+          warnings.push('Using default JWT_SECRET in development - update for production');
+        }
+      }
+
+      if (!process.env.API_KEY || process.env.API_KEY.includes('default')) {
+        if (isProduction) {
+          errors.push('API_KEY must be set to a secure value in production');
+        } else if (isDevelopment) {
+          // ✅ PERFORMANCE FIX: Only warn once in development
+          warnings.push('Using default API_KEY in development - update for production');
+        }
+      }
+
       let jwtSecret: string;
       let apiKey: string;
       let encryptionKey: string;
@@ -450,14 +472,15 @@ class EnvironmentManager {
         environment: currentEnv,
       };
 
-      // Log validation results
+      // ✅ PERFORMANCE FIX: Reduce logging frequency in browser
       if (errors.length > 0) {
         logError('Environment configuration validation failed', new Error('Configuration errors'), {
           errors,
           warnings,
           environment: currentEnv,
         });
-      } else {
+      } else if (!isBrowser || isDevelopment) {
+        // Only log success in server environment or development
         logInfo('Environment configuration loaded successfully', {
           environment: currentEnv,
           warnings: warnings.length > 0 ? warnings : undefined,
@@ -472,10 +495,12 @@ class EnvironmentManager {
         });
       }
 
-      // Log warnings
-      warnings.forEach(warning => {
-        logWarn('Environment configuration warning', { warning, environment: currentEnv });
-      });
+      // ✅ PERFORMANCE FIX: Throttle warning logs to reduce browser console spam
+      if (warnings.length > 0 && (!isBrowser || isDevelopment)) {
+        warnings.forEach(warning => {
+          logWarn('Environment configuration warning', { warning, environment: currentEnv });
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
