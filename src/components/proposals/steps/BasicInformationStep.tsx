@@ -234,9 +234,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       setCustomersLoading(true);
       try {
         // ✅ ENHANCED: Mobile performance optimization with centralized detection
-        const endpoint = isMobile
-          ? '/customers?limit=50&fields=id,name,email,industry,tier'
-          : '/customers';
+        const endpoint = '/api/customers';
 
         const response = await apiClient.get(endpoint);
 

@@ -472,7 +472,7 @@ export function ProposalWizard({
 
   return (
     <div
-      className="min-h-screen bg-gray-50"
+      className={`min-h-screen bg-gray-50 ${isMobile ? 'mobile-form-enhanced react-hook-form-mobile' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -503,7 +503,7 @@ export function ProposalWizard({
           )}
 
           {/* Main content area with mobile optimization */}
-          <Card className="p-6 sm:p-8 mb-6">
+          <Card className={`p-6 sm:p-8 mb-6 ${isMobile ? 'form-container' : ''}`}>
             <div className="space-y-6">
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
