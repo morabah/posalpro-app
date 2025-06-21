@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ProposalWizardStep4Data } from '@/lib/validation/schemas/proposal';
 import {
   CheckIcon,
@@ -262,6 +263,9 @@ export function ProductSelectionStep({
   teamData,
   contentData,
 }: ProductSelectionStepProps) {
+  // ✅ MOBILE OPTIMIZATION: Add responsive detection
+  const { isMobile } = useResponsive();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>(ENHANCED_PRODUCT_CATALOG);
@@ -276,6 +280,7 @@ export function ProductSelectionStep({
   }>({ errors: [], warnings: [], suggestions: [] });
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
+  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Keep onUpdate ref current
   useEffect(() => {
@@ -284,7 +289,6 @@ export function ProductSelectionStep({
 
   const {
     register,
-    watch,
     setValue,
     formState: { errors, isValid },
     getValues,
@@ -302,10 +306,41 @@ export function ProductSelectionStep({
       searchQuery: '',
       selectedCategory: 'All',
     },
-    mode: 'onChange',
+    // ✅ CRITICAL FIX: Mobile-optimized validation mode
+    mode: isMobile ? 'onBlur' : 'onChange',
+    reValidateMode: 'onBlur',
+    criteriaMode: 'firstError',
   });
 
-  const watchedValues = watch();
+  // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
+  const collectFormData = useCallback((): ProposalWizardStep4Data => {
+    const selectedProductsArray = Array.from(selectedProducts.values());
+    const totalValue = selectedProductsArray.reduce((sum, product) => sum + product.totalPrice, 0);
+
+    return {
+      products: selectedProductsArray.map(product => ({
+        id: product.id,
+        name: product.name,
+        included: true,
+        quantity: product.quantity,
+        unitPrice: product.unitPrice,
+        totalPrice: product.totalPrice,
+        category: product.category,
+        configuration: product.configuration,
+        customizations: product.customizations,
+        notes: product.notes,
+      })),
+      totalValue,
+      aiRecommendationsUsed: 0, // Would track actual usage
+      searchHistory: data.searchHistory || [],
+      crossStepValidation: {
+        teamCompatibility: crossStepValidationResults.errors.length === 0,
+        contentAlignment: true, // Would be calculated
+        budgetCompliance: true, // Would be calculated
+        timelineRealistic: true, // Would be calculated
+      },
+    };
+  }, [selectedProducts, crossStepValidationResults, data.searchHistory]);
 
   // Initialize selected products from props
   useEffect(() => {

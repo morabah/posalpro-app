@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ContentItem, ProposalWizardStep3Data, SelectedContent } from '@/types/proposals';
 import {
   CheckIcon,
@@ -302,6 +303,9 @@ export function ContentSelectionStep({
   rfpData,
   productData,
 }: ContentSelectionStepProps) {
+  // ✅ MOBILE OPTIMIZATION: Add responsive detection
+  const { isMobile } = useResponsive();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredContent, setFilteredContent] =
     useState<EnhancedContentItem[]>(ENHANCED_CONTENT_LIBRARY);
@@ -318,6 +322,7 @@ export function ContentSelectionStep({
   }>({ errors: [], warnings: [], suggestions: [] });
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
+  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Keep onUpdate ref current
   useEffect(() => {
@@ -326,7 +331,6 @@ export function ContentSelectionStep({
 
   const {
     register,
-    watch,
     setValue,
     formState: { errors, isValid },
     getValues,
@@ -344,10 +348,52 @@ export function ContentSelectionStep({
       totalContentItems: data.selectedContent?.length || 0,
       searchQuery: '',
     },
-    mode: 'onChange',
+    // ✅ CRITICAL FIX: Mobile-optimized validation mode
+    mode: isMobile ? 'onBlur' : 'onChange',
+    reValidateMode: 'onBlur',
+    criteriaMode: 'firstError',
   });
 
-  const watchedValues = watch();
+  // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
+  const collectFormData = useCallback((): ProposalWizardStep3Data => {
+    return {
+      selectedContent: Array.from(selectedContentMap.values()),
+      searchHistory: data.searchHistory || [],
+      crossStepValidation: {
+        teamAlignment: crossStepValidationResults.errors.length === 0,
+        productCompatibility: true, // Would be calculated based on product data
+        rfpCompliance: true, // Would be calculated based on RFP data
+        sectionCoverage: true, // Would be calculated based on section coverage
+      },
+    };
+  }, [selectedContentMap, data.searchHistory, crossStepValidationResults]);
+
+  // ✅ MOBILE OPTIMIZATION: Debounced updates with mobile-aware delays
+  const debouncedUpdate = useCallback(() => {
+    if (debouncedUpdateRef.current) {
+      clearTimeout(debouncedUpdateRef.current);
+    }
+
+    const delay = isMobile ? 500 : 300; // Longer delay for mobile
+    debouncedUpdateRef.current = setTimeout(() => {
+      const formData = collectFormData();
+      const dataHash = JSON.stringify(formData);
+
+      if (dataHash !== lastSentDataRef.current) {
+        lastSentDataRef.current = dataHash;
+        onUpdateRef.current(formData);
+      }
+    }, delay);
+  }, [isMobile, collectFormData]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debouncedUpdateRef.current) {
+        clearTimeout(debouncedUpdateRef.current);
+      }
+    };
+  }, []);
 
   // Initialize selected content from props
   useEffect(() => {

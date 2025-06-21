@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
 import { useResponsive } from '@/hooks/useResponsive';
-import { apiClient } from '@/lib/api/client';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -232,18 +231,27 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     const fetchCustomers = async () => {
       setCustomersLoading(true);
       try {
-        // ✅ FIXED: Correct API endpoint and response handling
-        // The API route returns: { success: true, data: { customers: [...] }, message: string }
-        // The API client wraps this in ApiResponse<T> where T is the entire response
-        const response = await apiClient.get<any>('/customers');
+        // ✅ FIXED: Use built-in fetch with NextAuth session cookies
+        const response = await fetch('/api/customers', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Important: Include session cookies
+        });
 
-        console.log('🔍 [DEBUG] Customers API response:', response);
+        console.log('🔍 [DEBUG] Customers API response status:', response.status);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('🔍 [DEBUG] Customers API response data:', data);
 
         // ✅ FIXED: Proper response structure handling
-        // ApiResponse<T> has structure: { success: boolean, data: T, message: string }
-        // T in this case is the API route response: { success: true, data: { customers: [...] }, ... }
-        if (response.success && response.data?.data?.customers) {
-          const customerList = response.data.data.customers;
+        if (data.success && data.data?.customers) {
+          const customerList = data.data.customers;
           setCustomers(customerList);
 
           // If we have a selected customer ID, find and set the customer
@@ -254,19 +262,24 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
             }
           }
         } else {
-          console.error('🔍 [DEBUG] Invalid response structure:', response);
+          console.error('🔍 [DEBUG] Invalid response structure:', data);
           setCustomers([]);
         }
       } catch (error) {
         console.error('Error fetching customers:', error);
         setCustomers([]);
+
+        // Show user-friendly error message
+        if (error instanceof Error && error.message.includes('401')) {
+          console.error('Authentication required - user may need to log in again');
+        }
       } finally {
         setCustomersLoading(false);
       }
     };
 
     fetchCustomers();
-  }, [data.client?.id]); // ✅ FIXED: Removed apiClient dependency since it's now a static import
+  }, [data.client?.id]);
 
   // Handle customer selection
   const handleCustomerChange = useCallback(

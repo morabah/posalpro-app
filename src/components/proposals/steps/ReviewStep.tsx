@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/Select';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ProposalWizardStep6Data } from '@/lib/validation/schemas/proposal';
 import {
   ArrowDownTrayIcon,
@@ -91,9 +92,26 @@ interface ReviewStepProps {
   onNext?: () => void;
   analytics: ReturnType<typeof useProposalCreationAnalytics>;
   allWizardData?: any; // Complete wizard data from all steps
+  proposalMetadata?: any; // Add proposalMetadata prop
+  teamData?: any; // Add teamData prop
+  contentData?: any; // Add contentData prop
+  productData?: any; // Add productData prop
 }
 
-export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }: ReviewStepProps) {
+export function ReviewStep({
+  data,
+  onUpdate,
+  onNext,
+  analytics,
+  allWizardData,
+  proposalMetadata,
+  teamData,
+  contentData,
+  productData,
+}: ReviewStepProps) {
+  // ✅ MOBILE OPTIMIZATION: Add responsive detection
+  const { isMobile } = useResponsive();
+
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [loadingValidation, setLoadingValidation] = useState(true);
   const [errorValidation, setErrorValidation] = useState<string | null>(null);
@@ -114,6 +132,7 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
   const [showExportOptions, setShowExportOptions] = useState(false);
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
+  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Keep onUpdate ref current
   useEffect(() => {
@@ -176,7 +195,6 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
 
   const {
     register,
-    watch,
     setValue,
     formState: { errors, isValid },
     getValues,
@@ -187,10 +205,11 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
       exportFormat: data.exportOptions?.format || 'pdf',
       additionalComments: '',
     },
-    mode: 'onChange',
+    // ✅ CRITICAL FIX: Mobile-optimized validation mode
+    mode: isMobile ? 'onBlur' : 'onChange',
+    reValidateMode: 'onBlur',
+    criteriaMode: 'firstError',
   });
-
-  const watchedValues = watch();
 
   // Calculate overall validity
   const calculateOverallValidity = useCallback(() => {
@@ -217,6 +236,48 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
     );
   }, [validationIssues, complianceChecks, approvals, insights]);
 
+  // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
+  const collectFormData = useCallback((): ProposalWizardStep6Data => {
+    const currentValues = getValues();
+
+    // Create a default insights object if none exists
+    const defaultInsights = {
+      complexity: 'medium' as const,
+      winProbability: 50,
+      estimatedEffort: 100,
+      similarProposals: [],
+      keyDifferentiators: [],
+      suggestedFocusAreas: [],
+      riskFactors: [],
+    };
+
+    return {
+      finalValidation: {
+        isValid: calculateOverallValidity(),
+        completeness: calculateCompleteness(),
+        issues: validationIssues,
+        complianceChecks: complianceChecks,
+      },
+      approvals: approvals,
+      insights: insights || defaultInsights, // Use default if insights is null
+      exportOptions: {
+        format: currentValues.exportFormat || 'pdf',
+        includeAppendices: true,
+        includeTeamDetails: true,
+        includeTimeline: true,
+      },
+      finalReviewComplete: currentValues.finalReviewComplete || false,
+    };
+  }, [
+    getValues,
+    calculateOverallValidity,
+    calculateCompleteness,
+    validationIssues,
+    complianceChecks,
+    approvals,
+    insights,
+  ]);
+
   // Initialize data from props
   useEffect(() => {
     if (data.approvals) {
@@ -239,30 +300,14 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
     if (!insights) return; // Don't update parent if insights are not loaded yet
 
     const timeoutId = setTimeout(() => {
-      const formattedData: ProposalWizardStep6Data = {
-        finalValidation: {
-          isValid: calculateOverallValidity(),
-          completeness: calculateCompleteness(),
-          issues: validationIssues,
-          complianceChecks: complianceChecks,
-        },
-        approvals: approvals,
-        insights: insights,
-        exportOptions: {
-          format: watchedValues.exportFormat || 'pdf',
-          includeAppendices: true,
-          includeTeamDetails: true,
-          includeTimeline: true,
-        },
-        finalReviewComplete: watchedValues.finalReviewComplete || false,
-      };
+      const formattedData: ProposalWizardStep6Data = collectFormData();
 
       handleUpdate(formattedData);
     }, 300);
 
     return () => clearTimeout(timeoutId);
   }, [
-    watchedValues,
+    collectFormData,
     handleUpdate,
     calculateOverallValidity,
     calculateCompleteness,
@@ -358,12 +403,12 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
 
   const handleCreateProposal = () => {
     console.log('[ReviewStep][Bottom Button] Create Proposal button clicked');
-    console.log('[ReviewStep][Bottom Button] Current form values:', watchedValues);
+    console.log('[ReviewStep][Bottom Button] Current form values:', getValues());
     console.log('[ReviewStep][Bottom Button] Current data:', data);
     console.log('[ReviewStep][Bottom Button] All wizard data:', allWizardData);
     console.log(
       '[ReviewStep][Bottom Button] Final review complete:',
-      watchedValues.finalReviewComplete
+      getValues().finalReviewComplete
     );
     console.log('[ReviewStep][Bottom Button] Overall valid:', summaryStats.overallValid);
 
@@ -375,23 +420,7 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
       trackReviewAction('complete');
 
       // Prepare the update data
-      const updateData = {
-        finalValidation: {
-          isValid: calculateOverallValidity(),
-          completeness: calculateCompleteness(),
-          issues: validationIssues,
-          complianceChecks: complianceChecks,
-        },
-        approvals: approvals,
-        insights: insights || undefined,
-        exportOptions: {
-          format: watchedValues.exportFormat || 'pdf',
-          includeAppendices: true,
-          includeTeamDetails: true,
-          includeTimeline: true,
-        },
-        finalReviewComplete: true,
-      };
+      const updateData = collectFormData();
 
       console.log('[ReviewStep][Bottom Button] Updating step data with:', updateData);
       onUpdate(updateData);
@@ -693,7 +722,7 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
               <Select
-                value={watchedValues.exportFormat}
+                value={getValues().exportFormat}
                 options={[
                   { value: 'pdf', label: 'PDF Document' },
                   { value: 'docx', label: 'Word Document' },
@@ -709,7 +738,7 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
               <div className="space-x-2">
                 <Button
                   variant="secondary"
-                  onClick={() => exportProposal(watchedValues.exportFormat)}
+                  onClick={() => exportProposal(getValues().exportFormat)}
                   className="flex items-center"
                 >
                   <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
@@ -717,7 +746,7 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
                 </Button>
                 <Button
                   variant="primary"
-                  onClick={() => exportProposal(watchedValues.exportFormat)}
+                  onClick={() => exportProposal(getValues().exportFormat)}
                   disabled={!summaryStats.overallValid}
                   className="flex items-center"
                 >
@@ -758,7 +787,7 @@ export function ReviewStep({ data, onUpdate, onNext, analytics, allWizardData }:
               <Button
                 variant="primary"
                 size="lg"
-                disabled={!watchedValues.finalReviewComplete || !summaryStats.overallValid}
+                disabled={!getValues().finalReviewComplete || !summaryStats.overallValid}
                 onClick={() => {
                   console.log('[ReviewStep][Bottom Button] Create Proposal button clicked');
                   handleCreateProposal();
