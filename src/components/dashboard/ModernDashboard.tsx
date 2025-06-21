@@ -8,6 +8,11 @@
 'use client';
 
 import { Button } from '@/components/ui/forms/Button';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useResponsive } from '@/hooks/useResponsive';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { UserType } from '@/types';
 import {
   BoltIcon,
@@ -118,6 +123,20 @@ const DashboardSkeleton = () => (
   </div>
 );
 
+// Component Traceability Matrix for Mobile Enhancement
+const COMPONENT_MAPPING = {
+  userStories: ['US-2.2', 'US-8.1', 'US-1.1'],
+  acceptanceCriteria: ['AC-2.2.1.1', 'AC-8.1.1', 'AC-8.1.2'],
+  methods: [
+    'enhanceMobileResponsiveness()',
+    'optimizeTouchTargets()',
+    'implementMobileFirstDesign()',
+    'validateAccessibilityCompliance()',
+  ],
+  hypotheses: ['H9', 'H10'], // Mobile UX optimization
+  testCases: ['TC-H9-001', 'TC-H9-002', 'TC-H10-001'],
+};
+
 export default function ModernDashboard({
   user,
   loading,
@@ -130,6 +149,53 @@ export default function ModernDashboard({
 }: ModernDashboardProps) {
   const [expandedMetrics, setExpandedMetrics] = useState(false);
   const [expandedProposals, setExpandedProposals] = useState(false);
+
+  // Mobile responsive and analytics integration
+  const { isMobile, isTablet, isDesktop, screenWidth } = useResponsive();
+  const analytics = useAnalytics();
+  const { handleAsyncError } = useErrorHandler();
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
+  // Track mobile dashboard access (H9: Mobile UX optimization)
+  const handleMobileInteraction = (action: string, details?: any) => {
+    try {
+      analytics.track('mobile_dashboard_interaction', {
+        userStories: COMPONENT_MAPPING.userStories,
+        acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        testCases: COMPONENT_MAPPING.testCases,
+        action,
+        isMobile,
+        isTablet,
+        isDesktop,
+        screenWidth,
+        details,
+        timestamp: Date.now(),
+      });
+    } catch (error) {
+      handleAsyncError(error, 'Failed to track mobile dashboard interaction', {
+        component: 'ModernDashboard',
+        operation: 'handleMobileInteraction',
+        action,
+        errorCode: ErrorCodes.SYSTEM.UNKNOWN,
+      });
+    }
+  };
+
+  // Enhanced quick action handler with mobile analytics
+  const handleEnhancedQuickAction = (action: string) => {
+    try {
+      handleMobileInteraction('quick_action', { action });
+      onQuickAction?.(action);
+    } catch (error) {
+      handleAsyncError(error, 'Failed to execute quick action', {
+        component: 'ModernDashboard',
+        operation: 'handleEnhancedQuickAction',
+        action,
+        errorCode: ErrorCodes.BUSINESS.PROCESS_FAILED,
+      });
+    }
+  };
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -233,7 +299,7 @@ export default function ModernDashboard({
             {/* Mobile-optimized quick actions */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <Button
-                onClick={() => onQuickAction?.('create-proposal')}
+                onClick={() => handleEnhancedQuickAction('create-proposal')}
                 className="min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium rounded-lg shadow-md transition-all duration-200 flex items-center justify-center gap-2 touch-manipulation"
                 style={{ touchAction: 'manipulation' }}
               >
@@ -242,7 +308,7 @@ export default function ModernDashboard({
               </Button>
 
               <Button
-                onClick={() => onQuickAction?.('search')}
+                onClick={() => handleEnhancedQuickAction('search')}
                 variant="outline"
                 className="min-h-[44px] border-gray-300 text-gray-700 hover:bg-gray-50 px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 touch-manipulation"
                 style={{ touchAction: 'manipulation' }}
@@ -266,17 +332,15 @@ export default function ModernDashboard({
             <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">Key Metrics</h2>
             <button
               onClick={() => setExpandedMetrics(!expandedMetrics)}
-              className="sm:hidden min-h-[44px] min-w-[44px] p-2 text-gray-500 hover:text-gray-700 rounded-lg transition-colors"
+              className="sm:hidden touch-target-enhanced p-2 text-gray-500 hover:text-gray-700 rounded-lg transition-colors"
               aria-label={expandedMetrics ? 'Collapse metrics' : 'Expand metrics'}
             >
               <EyeIcon className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Mobile: Show first 2 metrics, expand to show all */}
-          <div
-            className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 ${!expandedMetrics ? 'sm:grid-cols-2' : ''}`}
-          >
+          {/* Mobile-first responsive grid - always stacks on mobile */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
             {/* Active Proposals Metric */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -445,7 +509,7 @@ export default function ModernDashboard({
                 Create your first proposal to get started.
               </p>
               <Button
-                onClick={() => onQuickAction?.('create-proposal')}
+                onClick={() => handleEnhancedQuickAction('create-proposal')}
                 className="min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-sm sm:text-base font-medium rounded-lg"
               >
                 Create Proposal
@@ -530,7 +594,7 @@ export default function ModernDashboard({
               <Link
                 key={action.action}
                 href={action.href}
-                onClick={() => onQuickAction?.(action.action)}
+                onClick={() => handleEnhancedQuickAction(action.action)}
                 className="group mobile-card touch-target-enhanced touch-manipulation mobile-gpu-boost bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200 touch-feedback"
               >
                 <div className="space-y-3 sm:space-y-4">

@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
@@ -179,33 +180,30 @@ export default function ExecutiveReviewPortal() {
   const [sessionStartTime] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Mobile-specific state
-  const [isMobile, setIsMobile] = useState(false);
+  // ✅ FIXED: Use centralized responsive hook and mobile detection
+  const { isMobile, screenWidth } = useResponsive();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
 
-  // Mobile detection effect
+  // Track mobile access for hypothesis validation with improved analytics
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-
-      // Track mobile access for hypothesis validation
-      if (mobile) {
-        analytics.track('executive_mobile_access', {
+    if (isMobile) {
+      analytics.track('executive_mobile_access', {
+        userStories: ['US-8.1'],
+        hypotheses: ['H10'],
+        deviceType: 'mobile',
+        screenWidth,
+        timestamp: Date.now(),
+        componentMapping: {
           userStories: ['US-8.1'],
+          acceptanceCriteria: ['AC-8.1.1'],
+          methods: ['trackMobileExecutiveAccess()'],
           hypotheses: ['H10'],
-          deviceType: 'mobile',
-          screenWidth: window.innerWidth,
-          timestamp: Date.now(),
-        });
-      }
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, [analytics]);
+          testCases: ['TC-H10-001'],
+        },
+      });
+    }
+  }, [isMobile, analytics, screenWidth]);
 
   // Enhanced fetch with error handling
   useEffect(() => {
@@ -214,7 +212,8 @@ export default function ExecutiveReviewPortal() {
         setLoading(true);
         const startTime = performance.now();
 
-        const data = (await apiClient.get('/api/executive/proposals')) as ExecutiveProposal[];
+        const response = await apiClient.get('/api/executive/proposals');
+        const data = Array.isArray(response) ? (response as ExecutiveProposal[]) : [];
         setProposals(data);
         if (data.length > 0) {
           setSelectedProposalId(data[0].id);

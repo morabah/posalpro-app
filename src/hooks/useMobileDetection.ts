@@ -391,13 +391,7 @@ export const useMobileDetection = () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleOrientationChange);
     };
-  }, [
-    detectMobileDevice,
-    optimizeNavigation,
-    trackDeviceMetrics,
-    handleScreenChange,
-    handleAsyncError,
-  ]);
+  }, []); // ✅ FIXED: Empty dependency array to prevent infinite initialization loops
 
   /**
    * CSS Class Generation

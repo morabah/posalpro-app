@@ -13,6 +13,7 @@ import { useErrorHandler } from '@/components/providers/ErrorBoundary';
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ProposalEntity } from '@/lib/entities/proposal';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { Priority } from '@/types/enums';
@@ -176,14 +177,14 @@ export function ProposalWizard({
   const proposalEntity = ProposalEntity.getInstance();
 
   // Mobile-specific state
-  const [isMobile, setIsMobile] = useState(false);
+  const { isMobile, isTablet, isDesktop, screenWidth } = useResponsive();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   // Standardized error handling following development standards
-  const errorHandlingService = ErrorHandlingService.getInstance();
   const throwError = useErrorHandler();
+  const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Session and draft management
   const [currentProposalId, setCurrentProposalId] = useState<string | null>(editProposalId || null);
@@ -248,39 +249,29 @@ export function ProposalWizard({
     };
   });
 
-  // Mobile detection effect
+  // ✅ ENHANCED: Single analytics tracking with Component Traceability Matrix
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-
-      // Track mobile access for hypothesis validation
-      if (mobile) {
-        analytics.trackProposalCreation({
-          proposalId: 'new_proposal',
-          creationTime: Date.now(),
-          complexityScore: 3,
-          estimatedTimeline: 30,
-          teamAssignmentTime: 0,
-          coordinationSetupTime: 0,
-          teamSize: 0,
-          aiSuggestionsAccepted: 0,
-          manualAssignments: 0,
-          assignmentAccuracy: 0,
-          contentSuggestionsUsed: 0,
-          validationIssuesFound: 0,
-          wizardCompletionRate: 0,
-          stepCompletionTimes: [],
-          userStory: ['US-8.1'],
-          hypotheses: ['H9'],
-        });
-      }
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, [analytics]);
+    if (isMobile) {
+      analytics.trackProposalCreation({
+        proposalId: 'mobile_wizard_access',
+        creationTime: Date.now(),
+        complexityScore: 0,
+        estimatedTimeline: 0,
+        teamAssignmentTime: 0,
+        coordinationSetupTime: 0,
+        teamSize: 0,
+        aiSuggestionsAccepted: 0,
+        manualAssignments: 0,
+        assignmentAccuracy: 0,
+        contentSuggestionsUsed: 0,
+        validationIssuesFound: 0,
+        wizardCompletionRate: 0,
+        stepCompletionTimes: [],
+        userStory: ['US-8.1', 'US-2.3'],
+        hypotheses: ['H9', 'H2'],
+      });
+    }
+  }, [isMobile, analytics, screenWidth]);
 
   // Enhanced mobile navigation with swipe support
   const handleTouchStart = useCallback((e: React.TouchEvent) => {

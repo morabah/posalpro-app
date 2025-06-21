@@ -295,15 +295,7 @@ export function ResponsiveBreakpointManager({
         method: 'updateResponsiveState',
       });
     }
-  }, [
-    detectBreakpoint,
-    getMediaQueries,
-    getConnectionInfo,
-    trackAnalytics,
-    enableOfflineDetection,
-    analytics,
-    handleAsyncError,
-  ]);
+  }, []); // ✅ FIXED: Empty dependency array to prevent infinite loop bottleneck
 
   // Debounced resize handler
   const debouncedResize = useMemo(() => {

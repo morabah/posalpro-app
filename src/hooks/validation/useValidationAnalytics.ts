@@ -173,7 +173,7 @@ export function useValidationAnalytics() {
         performanceMetrics: updatedMetrics,
       });
     },
-    [currentMetrics] // Remove analytics dependency
+    [currentMetrics] // ✅ FIXED: Removed analytics dependency to prevent infinite loop
   );
 
   // Measure error detection accuracy (TC-H8-001)

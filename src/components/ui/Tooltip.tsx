@@ -6,6 +6,9 @@
 
 'use client';
 
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useResponsive } from '@/hooks/useResponsive';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { cn } from '@/lib/utils';
 import React, {
   cloneElement,
@@ -94,18 +97,22 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
       children,
       placement = 'top',
       showDelay = 200,
-      hideDelay = 0,
+      hideDelay = 100,
       disabled = false,
-      open: controlledOpen,
+      open,
       trigger = 'hover',
       className,
       arrowClassName,
       showArrow = true,
       maxWidth = '200px',
-      zIndex = 50,
+      zIndex = 1000,
     },
     ref
   ) => {
+    const { isMobile, isTablet, screenWidth, screenHeight } = useResponsive();
+    const { handleAsyncError } = useErrorHandler();
+    const errorHandlingService = ErrorHandlingService.getInstance();
+
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState({ top: 0, left: 0 });
     const tooltipRef = useRef<HTMLDivElement>(null);
@@ -114,7 +121,7 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
     const hideTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
     // Use controlled open state if provided
-    const isVisible = controlledOpen !== undefined ? controlledOpen : isOpen;
+    const isVisible = open !== undefined ? open : isOpen;
 
     // Clear timeouts
     const clearTimeouts = useCallback(() => {
@@ -147,59 +154,81 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
 
     // Calculate position
     const updatePosition = useCallback(() => {
-      if (!triggerRef.current || !tooltipRef.current) return;
+      try {
+        if (!triggerRef.current || !tooltipRef.current) return;
 
-      const triggerRect = triggerRef.current.getBoundingClientRect();
-      const tooltipRect = tooltipRef.current.getBoundingClientRect();
-      const viewport = {
-        width: window.innerWidth,
-        height: window.innerHeight,
-      };
+        const triggerRect = triggerRef.current.getBoundingClientRect();
+        const tooltipRect = tooltipRef.current.getBoundingClientRect();
 
-      let top = 0;
-      let left = 0;
+        const viewport = {
+          width: screenWidth,
+          height: screenHeight,
+        };
 
-      switch (placement) {
-        case 'top':
-          top = triggerRect.top - tooltipRect.height - 8;
-          left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
-          break;
-        case 'bottom':
-          top = triggerRect.bottom + 8;
-          left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
-          break;
-        case 'left':
-          top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
-          left = triggerRect.left - tooltipRect.width - 8;
-          break;
-        case 'right':
-          top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
-          left = triggerRect.right + 8;
-          break;
+        let top = 0;
+        let left = 0;
+
+        const effectivePlacement =
+          isMobile && (placement === 'left' || placement === 'right') ? 'top' : placement;
+
+        switch (effectivePlacement) {
+          case 'top':
+            top = triggerRect.top - tooltipRect.height - 8;
+            left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
+            break;
+          case 'bottom':
+            top = triggerRect.bottom + 8;
+            left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
+            break;
+          case 'left':
+            top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
+            left = triggerRect.left - tooltipRect.width - 8;
+            break;
+          case 'right':
+            top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
+            left = triggerRect.right + 8;
+            break;
+        }
+
+        const padding = isMobile ? 16 : 8;
+        if (left < padding) left = padding;
+        if (left + tooltipRect.width > viewport.width - padding) {
+          left = viewport.width - tooltipRect.width - padding;
+        }
+        if (top < padding) top = padding;
+        if (top + tooltipRect.height > viewport.height - padding) {
+          top = viewport.height - tooltipRect.height - padding;
+        }
+
+        setPosition({ top, left });
+      } catch (error) {
+        handleAsyncError(error, 'Failed to update tooltip position', {
+          component: 'Tooltip',
+          operation: 'updatePosition',
+          viewport: { width: screenWidth, height: screenHeight },
+          isMobile,
+        });
       }
-
-      // Viewport boundary adjustments
-      if (left < 8) left = 8;
-      if (left + tooltipRect.width > viewport.width - 8) {
-        left = viewport.width - tooltipRect.width - 8;
-      }
-      if (top < 8) top = 8;
-      if (top + tooltipRect.height > viewport.height - 8) {
-        top = viewport.height - tooltipRect.height - 8;
-      }
-
-      setPosition({ top, left });
-    }, [placement]);
+    }, [placement, screenWidth, screenHeight, isMobile, handleAsyncError]);
 
     // Update position when visible
     useEffect(() => {
       if (isVisible) {
         updatePosition();
-        window.addEventListener('scroll', updatePosition);
-        window.addEventListener('resize', updatePosition);
+
+        let timeoutId: NodeJS.Timeout;
+        const throttledUpdate = () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(updatePosition, 16);
+        };
+
+        window.addEventListener('scroll', throttledUpdate, { passive: true });
+        window.addEventListener('resize', throttledUpdate, { passive: true });
+
         return () => {
-          window.removeEventListener('scroll', updatePosition);
-          window.removeEventListener('resize', updatePosition);
+          clearTimeout(timeoutId);
+          window.removeEventListener('scroll', throttledUpdate);
+          window.removeEventListener('resize', throttledUpdate);
         };
       }
     }, [isVisible, updatePosition]);
@@ -283,12 +312,13 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
               'fixed px-2 py-1 text-sm text-white bg-neutral-900 rounded shadow-lg pointer-events-none',
               'animate-in fade-in-0 zoom-in-95 duration-200',
               'z-50',
+              isMobile && ['text-base', 'px-3 py-2', 'max-w-[280px]', 'shadow-xl'],
               className
             )}
             style={{
               top: position.top,
               left: position.left,
-              maxWidth,
+              maxWidth: isMobile ? '280px' : maxWidth,
               zIndex,
             }}
           >
@@ -299,7 +329,9 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
               <div
                 className={cn(
                   'absolute w-0 h-0 border-4',
-                  arrowStyles[placement],
+                  arrowStyles[
+                    isMobile && (placement === 'left' || placement === 'right') ? 'top' : placement
+                  ],
                   placement === 'top' && 'border-t-neutral-900',
                   placement === 'bottom' && 'border-b-neutral-900',
                   placement === 'left' && 'border-l-neutral-900',

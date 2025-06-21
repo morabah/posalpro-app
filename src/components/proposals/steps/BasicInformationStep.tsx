@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
+import { useResponsive } from '@/hooks/useResponsive';
 import { apiClient } from '@/lib/api/client';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -82,6 +83,9 @@ interface BasicInformationStepProps {
 }
 
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
+  // ✅ FIXED: Use centralized responsive detection instead of manual detection
+  const { isMobile, isTablet, isDesktop } = useResponsive();
+
   // Customer dropdown state
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -104,7 +108,12 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     const fetchCustomers = async () => {
       setCustomersLoading(true);
       try {
-        const response = await apiClient.get<{ data: { customers: Customer[] } }>('/customers');
+        // ✅ ENHANCED: Mobile performance optimization with centralized detection
+        const endpoint = isMobile
+          ? '/customers?limit=50&fields=id,name,email,industry,tier'
+          : '/customers';
+
+        const response = await apiClient.get<{ data: { customers: Customer[] } }>(endpoint);
 
         console.log('🔍 [DEBUG] Customers API response:', response);
 
@@ -128,7 +137,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     };
 
     fetchCustomers();
-  }, [data.client?.id]);
+  }, [data.client?.id, isMobile]); // ✅ FIXED: Added isMobile dependency for proper optimization
 
   const formatDateForInput = (dateValue: any): string => {
     if (!dateValue) return '';

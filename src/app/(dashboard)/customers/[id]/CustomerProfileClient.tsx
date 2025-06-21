@@ -11,6 +11,7 @@ import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -125,15 +126,8 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
   const [editData, setEditData] = useState<CustomerEditData>({} as CustomerEditData);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionStartTime] = useState(Date.now());
-  const [isMobile, setIsMobile] = useState(false);
-
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // ✅ FIXED: Use centralized responsive hook instead of manual detection
+  const { isMobile } = useResponsive();
 
   // Analytics tracking
   const trackAction = useCallback(

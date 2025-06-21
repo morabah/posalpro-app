@@ -1,7 +1,7 @@
 /**
  * PosalPro MVP2 - Dashboard Page - Redesigned
  * Enhanced modern implementation using sleek ModernDashboard component
- * Features: Wireframe compliance, modern UI, live data integration
+ * Features: Wireframe compliance, modern UI, live data integration, mobile responsive
  */
 
 'use client';
@@ -9,7 +9,10 @@
 import ModernDashboard from '@/components/dashboard/ModernDashboard';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { AdvancedCacheManager } from '@/lib/performance/AdvancedCacheManager';
+import { DatabaseQueryOptimizer } from '@/lib/performance/DatabaseQueryOptimizer';
 import { UserType } from '@/types';
 import { XCircleIcon } from '@heroicons/react/24/outline';
 import { useSession } from 'next-auth/react';
@@ -64,6 +67,11 @@ export default function DashboardPage() {
   const apiClient = useApiClient();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const analytics = useAnalytics();
+  const { isMobile, isTablet, isDesktop } = useResponsive();
+
+  // ✅ ADDED: Database overload protection
+  const cacheManager = useMemo(() => AdvancedCacheManager.getInstance(), []);
+  const dbOptimizer = useMemo(() => DatabaseQueryOptimizer.getInstance(), []);
 
   const formattedUser = useMemo(() => {
     if (!session?.user) return undefined;
@@ -115,7 +123,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Enhanced data loading with retry logic
+  // Enhanced data loading with retry logic and database overload protection
   const loadData = useCallback(async () => {
     if (isCircuitOpen) {
       setError('Service temporarily unavailable. Please try again later.');
@@ -126,12 +134,47 @@ export default function DashboardPage() {
     setError(null);
 
     try {
-      // ✅ MIGRATED: Fetch all data in parallel using apiClient
+      // ✅ FIXED: Database overload protection with throttling and caching
+      const cacheKey = `dashboard_data_${session?.user?.id || 'anonymous'}_${isMobile ? 'mobile' : 'desktop'}`;
+
+      // Check cache first to reduce database load
+      const cachedData = await cacheManager.get<DashboardData>(cacheKey);
+      if (cachedData) {
+        setDashboardData(cachedData);
+        setLoading(false);
+
+        analytics.track('dashboard_cache_hit', {
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          cacheKey,
+          deviceType: isMobile ? 'mobile' : 'desktop',
+          timestamp: Date.now(),
+        });
+        return;
+      }
+
+      // ✅ ENHANCED: Database-optimized parallel queries with throttling
       const [proposalsRes, customersRes, productsRes, contentRes] = await Promise.allSettled([
-        apiClient.get('/api/proposals?limit=5'),
-        apiClient.get('/api/customers?limit=10'),
-        apiClient.get('/api/products?limit=6'),
-        apiClient.get('/api/content?limit=5'),
+        dbOptimizer.executeQuery(
+          'dashboard_proposals',
+          () => apiClient.get('/api/proposals?limit=5'),
+          { cacheable: true, cacheTTL: 300000, queryType: 'SELECT' } // 5 min cache
+        ),
+        dbOptimizer.executeQuery(
+          'dashboard_customers',
+          () => apiClient.get('/api/customers?limit=10'),
+          { cacheable: true, cacheTTL: 600000, queryType: 'SELECT' } // 10 min cache
+        ),
+        dbOptimizer.executeQuery(
+          'dashboard_products',
+          () => apiClient.get('/api/products?limit=6'),
+          { cacheable: true, cacheTTL: 900000, queryType: 'SELECT' } // 15 min cache
+        ),
+        dbOptimizer.executeQuery(
+          'dashboard_content',
+          () => apiClient.get('/api/content?limit=5'),
+          { cacheable: true, cacheTTL: 1800000, queryType: 'SELECT' } // 30 min cache
+        ),
       ]);
 
       // Process responses safely with proper error handling
@@ -140,19 +183,6 @@ export default function DashboardPage() {
       const products = productsRes.status === 'fulfilled' ? productsRes.value : [];
       const content = contentRes.status === 'fulfilled' ? contentRes.value : [];
 
-      // Track successful load with Component Traceability Matrix
-      analytics.track('dashboard_data_loaded', {
-        userStories: COMPONENT_MAPPING.userStories,
-        acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        testCases: COMPONENT_MAPPING.testCases,
-        proposalCount: Array.isArray(proposals) ? proposals.length : 0,
-        customerCount: Array.isArray(customers) ? customers.length : 0,
-        productCount: Array.isArray(products) ? products.length : 0,
-        contentCount: Array.isArray(content) ? content.length : 0,
-        timestamp: Date.now(),
-      });
-
       // Calculate metrics from the data
       const activeProposals = Array.isArray(proposals)
         ? proposals.filter(p => p.status === 'ACTIVE' || p.status === 'REVIEW').length
@@ -160,7 +190,7 @@ export default function DashboardPage() {
       const totalProposals = Array.isArray(proposals) ? proposals.length : 0;
       const completionRate = totalProposals > 0 ? (activeProposals / totalProposals) * 100 : 0;
 
-      setDashboardData({
+      const newDashboardData = {
         proposals: Array.isArray(proposals) ? proposals : [],
         customers: Array.isArray(customers) ? customers : [],
         products: Array.isArray(products) ? products : [],
@@ -172,6 +202,30 @@ export default function DashboardPage() {
           avgCompletionTime: 12,
           onTimeDelivery: 88,
         },
+      };
+
+      setDashboardData(newDashboardData);
+
+      // ✅ ADDED: Cache the processed data to reduce future database load
+      await cacheManager.set(cacheKey, newDashboardData, {
+        ttl: 300000, // 5 minutes
+        tags: ['dashboard', 'user-data', isMobile ? 'mobile' : 'desktop'],
+      });
+
+      // Track successful load with Component Traceability Matrix
+      analytics.track('dashboard_data_loaded', {
+        userStories: COMPONENT_MAPPING.userStories,
+        acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        testCases: COMPONENT_MAPPING.testCases,
+        proposalCount: Array.isArray(proposals) ? proposals.length : 0,
+        customerCount: Array.isArray(customers) ? customers.length : 0,
+        productCount: Array.isArray(products) ? products.length : 0,
+        contentCount: Array.isArray(content) ? content.length : 0,
+        deviceType: isMobile ? 'mobile' : 'desktop',
+        cacheHit: false,
+        databaseOptimized: true,
+        timestamp: Date.now(),
       });
 
       // Reset retry count on success
@@ -192,7 +246,16 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [retryCount, isCircuitOpen]);
+  }, [
+    retryCount,
+    isCircuitOpen,
+    session?.user?.id,
+    isMobile,
+    cacheManager,
+    dbOptimizer,
+    apiClient,
+    analytics,
+  ]);
 
   // Initial data load, dependent on session
   useEffect(() => {

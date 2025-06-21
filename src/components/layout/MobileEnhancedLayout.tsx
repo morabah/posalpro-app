@@ -8,6 +8,7 @@
 'use client';
 
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
@@ -62,8 +63,8 @@ export function MobileEnhancedLayout({
   onBackClick,
   className = '',
 }: MobileEnhancedLayoutProps) {
-  // Mobile state management
-  const [isMobile, setIsMobile] = useState(false);
+  // ✅ FIXED: Use centralized responsive detection and enhanced mobile state management
+  const { isMobile, screenWidth, screenHeight } = useResponsive();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -77,37 +78,21 @@ export function MobileEnhancedLayout({
   const analytics = useAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
-  // Mobile detection with analytics tracking
+  // Enhanced mobile access tracking with Component Traceability Matrix
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      const wasDesktop = !isMobile && !mobile;
-
-      setIsMobile(mobile);
-
-      // Track mobile access patterns
-      if (mobile && wasDesktop) {
-        analytics.track('mobile_layout_access', {
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-          deviceType: 'mobile',
-          screenWidth: window.innerWidth,
-          screenHeight: window.innerHeight,
-          orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait',
-          timestamp: Date.now(),
-        });
-      }
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    window.addEventListener('orientationchange', checkMobile);
-
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      window.removeEventListener('orientationchange', checkMobile);
-    };
-  }, [analytics, isMobile]);
+    if (isMobile) {
+      analytics.track('mobile_layout_access', {
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        deviceType: 'mobile',
+        screenWidth,
+        screenHeight,
+        orientation: screenWidth > screenHeight ? 'landscape' : 'portrait',
+        timestamp: Date.now(),
+        componentMapping: COMPONENT_MAPPING,
+      });
+    }
+  }, [isMobile, analytics, screenWidth, screenHeight]);
 
   // Touch gesture handling for swipe navigation
   const handleTouchStart = useCallback((e: React.TouchEvent) => {

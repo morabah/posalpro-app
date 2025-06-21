@@ -17,6 +17,7 @@ import {
   useProductsManager,
   useUpdateProduct,
 } from '@/hooks/useProducts';
+import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -28,7 +29,8 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
 // Component Traceability Matrix - Enhanced with CRUD operations
@@ -51,6 +53,9 @@ const COMPONENT_MAPPING = {
 };
 
 export default function ProductManagementPage() {
+  const { data: session } = useSession();
+  const analytics = useAnalytics();
+  const errorHandlingService = ErrorHandlingService.getInstance();
   const [sessionStartTime] = useState(Date.now());
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -65,25 +70,14 @@ export default function ProductManagementPage() {
     'Licensing',
   ]);
 
-  // Standardized error handling
-  const errorHandlingService = ErrorHandlingService.getInstance();
-  const analytics = useAnalytics();
+  // ✅ FIXED: Use centralized responsive hook instead of manual detection
+  const { isMobile, isTablet, isDesktop } = useResponsive();
 
   // Product management hooks
   const { products, refetch, isLoading, error } = useProductsManager();
   const createProductMutation = useCreateProduct();
   const updateProductMutation = useUpdateProduct();
   const deleteProductMutation = useDeleteProduct();
-
-  // Mobile responsiveness detection
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const trackAction = useCallback(
     (action: string, metadata: any = {}) => {
