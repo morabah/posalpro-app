@@ -10,8 +10,8 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
+import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
-import { apiClient } from '@/lib/api/client';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -83,62 +83,28 @@ interface BasicInformationStepProps {
 }
 
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
-  // ✅ FIXED: Use centralized responsive detection instead of manual detection
-  const { isMobile, isTablet, isDesktop } = useResponsive();
+  // ✅ MOBILE OPTIMIZATION: Use centralized responsive detection
+  const { isMobile, isTablet } = useResponsive();
+  const apiClient = useApiClient();
 
-  // Customer dropdown state
+  // Form state
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-
-  // Date validation state
+  const [fieldInteractions, setFieldInteractions] = useState(0);
   const [dateWarning, setDateWarning] = useState<string | null>(null);
 
-  const [fieldInteractions, setFieldInteractions] = useState(0);
+  // Performance optimization refs
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
+  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  // Keep the ref updated
+  // Update ref when onUpdate changes
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   }, [onUpdate]);
 
-  // Fetch customers on component mount
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      setCustomersLoading(true);
-      try {
-        // ✅ ENHANCED: Mobile performance optimization with centralized detection
-        const endpoint = isMobile
-          ? '/customers?limit=50&fields=id,name,email,industry,tier'
-          : '/customers';
-
-        const response = await apiClient.get<{ data: { customers: Customer[] } }>(endpoint);
-
-        console.log('🔍 [DEBUG] Customers API response:', response);
-
-        if (response.success && response.data?.data?.customers) {
-          const customerList = response.data.data.customers;
-          setCustomers(customerList);
-
-          // If we have a selected customer ID, find and set the customer
-          if (data.client?.id) {
-            const existingCustomer = customerList.find(c => c.id === data.client?.id);
-            if (existingCustomer) {
-              setSelectedCustomer(existingCustomer);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching customers:', error);
-      } finally {
-        setCustomersLoading(false);
-      }
-    };
-
-    fetchCustomers();
-  }, [data.client?.id, isMobile]); // ✅ FIXED: Added isMobile dependency for proper optimization
-
+  // Utility functions
   const formatDateForInput = (dateValue: any): string => {
     if (!dateValue) return '';
     if (dateValue instanceof Date) {
@@ -156,6 +122,172 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     if (typeof dateValue === 'string') return new Date(dateValue);
     return null;
   };
+
+  // ✅ PERFORMANCE FIX: Replace problematic watch() + onChange with optimized pattern
+  const {
+    register,
+    setValue,
+    getValues,
+    trigger,
+    formState: { errors, isValid },
+  } = useForm<BasicInformationFormData>({
+    resolver: zodResolver(basicInformationSchema),
+    defaultValues: {
+      client: {
+        id: data.client?.id || '',
+        name: data.client?.name || '',
+        industry: data.client?.industry || '',
+        contactPerson: data.client?.contactPerson || '',
+        contactEmail: data.client?.contactEmail || '',
+        contactPhone: data.client?.contactPhone || '',
+      },
+      details: {
+        title: data.details?.title || '',
+        rfpReferenceNumber: data.details?.rfpReferenceNumber || '',
+        dueDate: formatDateForInput(data.details?.dueDate),
+        estimatedValue: data.details?.estimatedValue || 0,
+        priority: data.details?.priority || ProposalPriority.MEDIUM,
+        description: data.details?.description || '',
+      },
+    },
+    // ✅ CRITICAL FIX: Change from 'onChange' to 'onBlur' for mobile performance
+    mode: isMobile ? 'onBlur' : 'onSubmit',
+  });
+
+  // ✅ PERFORMANCE OPTIMIZATION: Debounced update function
+  const debouncedHandleUpdate = useCallback(
+    (formattedData: ProposalWizardStep1Data) => {
+      // Clear existing timeout
+      if (debouncedUpdateRef.current) {
+        clearTimeout(debouncedUpdateRef.current);
+      }
+
+      // Set new timeout with mobile-optimized delay
+      const delay = isMobile ? 500 : 300; // Longer delay on mobile for better performance
+      debouncedUpdateRef.current = setTimeout(() => {
+        const dataHash = JSON.stringify(formattedData);
+
+        // Only update if data has actually changed
+        if (dataHash !== lastSentDataRef.current) {
+          lastSentDataRef.current = dataHash;
+          onUpdateRef.current(formattedData);
+        }
+      }, delay);
+    },
+    [isMobile]
+  );
+
+  // ✅ OPTIMIZED: Manual form data collection instead of watch()
+  const collectFormData = useCallback((): ProposalWizardStep1Data => {
+    const currentValues = getValues();
+    const parsedDueDate = parseDate(currentValues.details?.dueDate);
+
+    return {
+      client: {
+        id: currentValues.client?.id || '',
+        name: currentValues.client?.name || '',
+        industry: currentValues.client?.industry || '',
+        contactPerson: currentValues.client?.contactPerson || '',
+        contactEmail: currentValues.client?.contactEmail || '',
+        contactPhone: currentValues.client?.contactPhone || '',
+      },
+      details: {
+        title: currentValues.details?.title || '',
+        rfpReferenceNumber: currentValues.details?.rfpReferenceNumber || '',
+        dueDate: parsedDueDate || new Date(),
+        estimatedValue: currentValues.details?.estimatedValue || 0,
+        priority: currentValues.details?.priority || ProposalPriority.MEDIUM,
+        description: currentValues.details?.description || '',
+      },
+    };
+  }, [getValues]);
+
+  // ✅ MOBILE-OPTIMIZED: Field change handler with debouncing
+  const handleFieldChange = useCallback(
+    (fieldName: string) => {
+      return () => {
+        // Track field interactions for analytics (throttled)
+        setFieldInteractions(prev => prev + 1);
+
+        // Mobile-optimized analytics throttling
+        if (fieldInteractions % (isMobile ? 5 : 3) === 0) {
+          analytics?.trackWizardStep?.(1, 'Basic Information', 'field_interaction', {
+            fieldName,
+            fieldInteractions: fieldInteractions + 1,
+            isMobile,
+          });
+        }
+
+        // Collect and update form data with debouncing
+        const formData = collectFormData();
+        debouncedHandleUpdate(formData);
+      };
+    },
+    [collectFormData, debouncedHandleUpdate, analytics, fieldInteractions, isMobile]
+  );
+
+  // Fetch customers on component mount
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setCustomersLoading(true);
+      try {
+        // ✅ ENHANCED: Mobile performance optimization with centralized detection
+        const endpoint = isMobile
+          ? '/customers?limit=50&fields=id,name,email,industry,tier'
+          : '/customers';
+
+        const response = await apiClient.get(endpoint);
+
+        console.log('🔍 [DEBUG] Customers API response:', response);
+
+        if (response && Array.isArray(response)) {
+          const customerList = response;
+          setCustomers(customerList);
+
+          // If we have a selected customer ID, find and set the customer
+          if (data.client?.id) {
+            const existingCustomer = customerList.find((c: Customer) => c.id === data.client?.id);
+            if (existingCustomer) {
+              setSelectedCustomer(existingCustomer);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, [data.client?.id, isMobile]); // ✅ FIXED: Added ieMobile dependency for proper optimization
+
+  // Handle customer selection
+  const handleCustomerChange = useCallback(
+    (customerId: string) => {
+      const customer = customers.find((c: Customer) => c.id === customerId);
+      if (customer) {
+        setSelectedCustomer(customer);
+
+        // Update form values
+        setValue('client.id', customer.id);
+        setValue('client.name', customer.name);
+        setValue('client.industry', customer.industry || '');
+        setValue('client.contactEmail', customer.email || '');
+
+        // Trigger analytics
+        analytics?.trackWizardStep?.(1, 'Basic Information', 'customer_selected', {
+          customerId: customer.id,
+          customerName: customer.name,
+          customerTier: customer.tier,
+        });
+
+        // Trigger field change handler
+        handleFieldChange('client.id')();
+      }
+    },
+    [customers, setValue, analytics, handleFieldChange]
+  );
 
   // Validate due date and show warnings for past dates
   const validateDueDate = useCallback(
@@ -224,142 +356,6 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     }
   }, [data.details?.dueDate, formatDateForInput, validateDueDate]);
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors, isValid },
-  } = useForm<BasicInformationFormData>({
-    resolver: zodResolver(basicInformationSchema),
-    defaultValues: {
-      client: {
-        id: data.client?.id || '',
-        name: data.client?.name || '',
-        industry: data.client?.industry || '',
-        contactPerson: data.client?.contactPerson || '',
-        contactEmail: data.client?.contactEmail || '',
-        contactPhone: data.client?.contactPhone || '',
-      },
-      details: {
-        title: data.details?.title || '',
-        rfpReferenceNumber: data.details?.rfpReferenceNumber || '',
-        dueDate: formatDateForInput(data.details?.dueDate),
-        estimatedValue: data.details?.estimatedValue || 0,
-        priority: data.details?.priority || ProposalPriority.MEDIUM,
-        description: data.details?.description || '',
-      },
-    },
-    mode: 'onChange',
-  });
-
-  const watchedValues = watch();
-
-  // Track field interactions for analytics
-  const handleFieldInteraction = useCallback(() => {
-    setFieldInteractions(prev => prev + 1);
-    analytics?.trackWizardStep?.(1, 'Basic Information', 'start', {
-      fieldInteractions: fieldInteractions + 1,
-    });
-  }, [analytics, fieldInteractions]);
-
-  // Handle customer selection
-  const handleCustomerChange = useCallback(
-    (customerId: string) => {
-      const customer = customers.find(c => c.id === customerId);
-      if (customer) {
-        setSelectedCustomer(customer);
-
-        // Update form values
-        setValue('client.id', customer.id);
-        setValue('client.name', customer.name);
-        setValue('client.industry', customer.industry || '');
-        setValue('client.contactEmail', customer.email || '');
-
-        // Trigger analytics
-        analytics?.trackWizardStep?.(1, 'Basic Information', 'customer_selected', {
-          customerId: customer.id,
-          customerName: customer.name,
-          customerTier: customer.tier,
-        });
-
-        handleFieldInteraction();
-      }
-    },
-    [customers, setValue, analytics, handleFieldInteraction]
-  );
-
-  // Stable update function to prevent infinite loops
-  const handleUpdate = useCallback(
-    (formattedData: ProposalWizardStep1Data) => {
-      const dataHash = JSON.stringify(formattedData);
-
-      // Only update if data has actually changed
-      if (dataHash !== lastSentDataRef.current) {
-        lastSentDataRef.current = dataHash;
-        onUpdateRef.current(formattedData);
-      }
-    },
-    [] // Now we can safely remove dependencies since we use the ref
-  );
-
-  // Create a memoized stable reference for the watched values
-  const stableWatchedValues = useMemo(() => {
-    return {
-      clientId: watchedValues.client?.id || '',
-      clientName: watchedValues.client?.name || '',
-      clientIndustry: watchedValues.client?.industry || '',
-      clientContactPerson: watchedValues.client?.contactPerson || '',
-      clientContactEmail: watchedValues.client?.contactEmail || '',
-      clientContactPhone: watchedValues.client?.contactPhone || '',
-      detailsTitle: watchedValues.details?.title || '',
-      detailsRfpReference: watchedValues.details?.rfpReferenceNumber || '',
-      detailsDueDate: watchedValues.details?.dueDate || '',
-      detailsEstimatedValue: watchedValues.details?.estimatedValue || 0,
-      detailsPriority: watchedValues.details?.priority || ProposalPriority.MEDIUM,
-      detailsDescription: watchedValues.details?.description || '',
-    };
-  }, [
-    watchedValues.client?.id,
-    watchedValues.client?.name,
-    watchedValues.client?.industry,
-    watchedValues.client?.contactPerson,
-    watchedValues.client?.contactEmail,
-    watchedValues.client?.contactPhone,
-    watchedValues.details?.title,
-    watchedValues.details?.rfpReferenceNumber,
-    watchedValues.details?.dueDate,
-    watchedValues.details?.estimatedValue,
-    watchedValues.details?.priority,
-    watchedValues.details?.description,
-  ]);
-
-  // Update parent component when form data changes
-  useEffect(() => {
-    const parsedDueDate = parseDate(stableWatchedValues.detailsDueDate);
-
-    const formattedData: ProposalWizardStep1Data = {
-      client: {
-        id: stableWatchedValues.clientId,
-        name: stableWatchedValues.clientName,
-        industry: stableWatchedValues.clientIndustry,
-        contactPerson: stableWatchedValues.clientContactPerson,
-        contactEmail: stableWatchedValues.clientContactEmail,
-        contactPhone: stableWatchedValues.clientContactPhone,
-      },
-      details: {
-        title: stableWatchedValues.detailsTitle,
-        rfpReferenceNumber: stableWatchedValues.detailsRfpReference,
-        dueDate: parsedDueDate || new Date(),
-        estimatedValue: stableWatchedValues.detailsEstimatedValue,
-        priority: stableWatchedValues.detailsPriority,
-        description: stableWatchedValues.detailsDescription,
-      },
-    };
-
-    handleUpdate(formattedData);
-  }, [handleUpdate, stableWatchedValues]);
-
   // AI-powered suggestions for client information (placeholder)
   const handleClientNameBlur = useCallback(
     (clientName: string) => {
@@ -401,7 +397,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 error={errors.client?.id?.message}
                 placeholder={customersLoading ? 'Loading customers...' : 'Select a customer...'}
                 onChange={handleCustomerChange}
-                onFocus={handleFieldInteraction}
+                onFocus={handleFieldChange('client.id')}
                 disabled={customersLoading}
               />
               {selectedCustomer && (
@@ -424,11 +420,11 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 id="industry"
                 options={INDUSTRY_OPTIONS}
                 error={errors.client?.industry?.message}
-                {...register('client.industry')}
                 onChange={(value: string) => {
                   setValue('client.industry', value);
-                  handleFieldInteraction();
+                  handleFieldChange('client.industry')();
                 }}
+                onFocus={handleFieldChange('client.industry')}
               />
             </div>
 
@@ -441,7 +437,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 placeholder="Jane Smith"
                 error={errors.client?.contactPerson?.message}
                 {...register('client.contactPerson')}
-                onFocus={handleFieldInteraction}
+                onFocus={handleFieldChange('client.contactPerson')}
               />
             </div>
 
@@ -455,7 +451,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 placeholder="j.smith@acme.com"
                 error={errors.client?.contactEmail?.message}
                 {...register('client.contactEmail')}
-                onFocus={handleFieldInteraction}
+                onFocus={handleFieldChange('client.contactEmail')}
               />
             </div>
 
@@ -468,7 +464,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 placeholder="(555) 123-4567"
                 error={errors.client?.contactPhone?.message}
                 {...register('client.contactPhone')}
-                onFocus={handleFieldInteraction}
+                onFocus={handleFieldChange('client.contactPhone')}
               />
             </div>
           </div>
@@ -490,7 +486,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 placeholder="Cloud Migration Services"
                 error={errors.details?.title?.message}
                 {...register('details.title')}
-                onFocus={handleFieldInteraction}
+                onFocus={handleFieldChange('details.title')}
               />
               {errors.details?.title && (
                 <p className="text-sm text-error-600 mt-1">Title is required</p>
@@ -504,7 +500,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                   id="rfpReference"
                   placeholder="ACME-2025-103"
                   {...register('details.rfpReferenceNumber')}
-                  onFocus={handleFieldInteraction}
+                  onFocus={handleFieldChange('details.rfpReferenceNumber')}
                 />
               </div>
 
@@ -517,7 +513,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                   type="date"
                   error={errors.details?.dueDate?.message}
                   {...register('details.dueDate')}
-                  onFocus={handleFieldInteraction}
+                  onFocus={handleFieldChange('details.dueDate')}
                   onChange={e => {
                     // Update form value
                     setValue('details.dueDate', e.target.value);
@@ -526,7 +522,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                     validateDueDate(e.target.value);
 
                     // Track field interaction
-                    handleFieldInteraction();
+                    handleFieldChange('details.dueDate')();
                   }}
                 />
                 {dateWarning && (
@@ -553,7 +549,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                     className="pl-8"
                     error={errors.details?.estimatedValue?.message}
                     {...register('details.estimatedValue', { valueAsNumber: true })}
-                    onFocus={handleFieldInteraction}
+                    onFocus={handleFieldChange('details.estimatedValue')}
                   />
                 </div>
               </div>
@@ -570,7 +566,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                         value={priority}
                         className="mr-2 text-primary-600 focus:ring-primary-500"
                         {...register('details.priority')}
-                        onChange={() => handleFieldInteraction()}
+                        onChange={() => handleFieldChange('details.priority')()}
                       />
                       <span className="text-sm text-neutral-700 capitalize">{priority}</span>
                     </label>
@@ -587,7 +583,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 className="form-field"
                 placeholder="Brief description of the proposal requirements..."
                 {...register('details.description')}
-                onFocus={handleFieldInteraction}
+                onFocus={handleFieldChange('details.description')}
               />
             </div>
           </div>

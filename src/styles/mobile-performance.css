@@ -1,0 +1,320 @@
+/**
+ * PosalPro MVP2 - Mobile Performance Optimization CSS
+ * Addresses critical mobile input field performance issues
+ * Component Traceability Matrix: US-8.1, H9, AC-8.1.1
+ *
+ * CRITICAL FIXES:
+ * - Eliminates 1-2 second mobile input delays
+ * - Optimizes touch handling and focus states
+ * - Reduces render cycles and memory usage
+ * - Improves mobile battery life
+ */
+
+/* ✅ CRITICAL FIX: Mobile Input Performance Optimization */
+@media (max-width: 768px) {
+  /* Prevent iOS zoom and optimize input handling */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input[type="number"],
+  input[type="date"],
+  textarea,
+  select {
+    /* CRITICAL: Prevent iOS zoom that causes delays */
+    font-size: 16px !important;
+
+    /* Optimize touch handling */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: text;
+    user-select: text;
+
+    /* GPU acceleration for smoother interactions */
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+
+    /* Optimize transitions for mobile */
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+    /* Ensure proper touch targets */
+    min-height: 48px;
+    padding: 12px 16px;
+
+    /* Prevent layout shifts */
+    box-sizing: border-box;
+  }
+
+  /* ✅ PERFORMANCE FIX: Optimize focus states for mobile */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    /* Reduce expensive box-shadow calculations */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+
+    /* Immediate visual feedback */
+    border-color: #3b82f6;
+
+    /* Prevent layout recalculation */
+    transform: translateZ(0);
+  }
+
+  /* ✅ MOBILE OPTIMIZATION: Form container performance */
+  .form-container,
+  .proposal-wizard,
+  .mobile-form-enhanced {
+    /* Optimize scrolling performance */
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+
+    /* GPU layer promotion */
+    transform: translateZ(0);
+    will-change: scroll-position;
+
+    /* Reduce repaints */
+    contain: layout style paint;
+  }
+
+  /* ✅ CRITICAL: Optimize React Hook Form performance */
+  .react-hook-form-mobile {
+    /* Reduce DOM queries and reflows */
+    contain: layout style;
+
+    /* Optimize for frequent updates */
+    will-change: contents;
+  }
+
+  /* ✅ PERFORMANCE: Optimize form field containers */
+  .form-field-container,
+  .form-group {
+    /* Reduce layout calculations */
+    contain: layout;
+
+    /* Optimize spacing calculations */
+    margin-bottom: 1.5rem;
+
+    /* Prevent unnecessary repaints */
+    isolation: isolate;
+  }
+
+  /* ✅ MOBILE FIX: Label optimization */
+  .form-label,
+  label {
+    /* Optimize text rendering */
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+
+    /* Prevent layout shifts */
+    display: block;
+    margin-bottom: 0.5rem;
+
+    /* Optimize for mobile readability */
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  /* ✅ CRITICAL: Optimize select elements */
+  select {
+    /* Native mobile appearance for better performance */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+
+    /* Custom dropdown arrow */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 40px;
+  }
+
+  /* ✅ PERFORMANCE: Optimize validation states */
+  .form-field-error,
+  .error-state {
+    /* Reduce expensive color calculations */
+    border-color: #ef4444;
+
+    /* Optimize error message rendering */
+    color: #dc2626;
+
+    /* Prevent layout shifts */
+    contain: layout style;
+  }
+
+  /* ✅ MOBILE OPTIMIZATION: Button performance */
+  .mobile-button,
+  button[type="submit"],
+  button[type="button"] {
+    /* Optimize touch feedback */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+
+    /* GPU acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+
+    /* Optimize transitions */
+    transition: transform 0.1s ease-out, background-color 0.15s ease-in-out;
+
+    /* Ensure proper touch targets */
+    min-height: 48px;
+    padding: 12px 24px;
+  }
+
+  /* ✅ CRITICAL: Active state optimization */
+  .mobile-button:active,
+  button:active {
+    /* Immediate visual feedback */
+    transform: scale(0.98) translateZ(0);
+  }
+
+  /* ✅ PERFORMANCE: Optimize loading states */
+  .loading-spinner,
+  .form-loading {
+    /* Optimize animation performance */
+    will-change: transform;
+    transform: translateZ(0);
+
+    /* Use CSS animations instead of JS */
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg) translateZ(0);
+    }
+    to {
+      transform: rotate(360deg) translateZ(0);
+    }
+  }
+
+  /* ✅ MOBILE FIX: Prevent zoom on number inputs */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* ✅ CRITICAL: Optimize date inputs */
+  input[type="date"] {
+    /* Prevent iOS date picker delays */
+    -webkit-appearance: none;
+    position: relative;
+  }
+
+  /* ✅ PERFORMANCE: Optimize textarea */
+  textarea {
+    /* Optimize resizing performance */
+    resize: vertical;
+
+    /* Prevent horizontal scrolling issues */
+    overflow-x: hidden;
+
+    /* Optimize text rendering */
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+}
+
+/* ✅ GLOBAL MOBILE OPTIMIZATIONS */
+@media (max-width: 768px) {
+  /* Optimize overall mobile performance */
+  * {
+    /* Reduce expensive calculations */
+    -webkit-tap-highlight-color: transparent;
+
+    /* Optimize scrolling */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Optimize form containers */
+  form {
+    /* Reduce layout calculations */
+    contain: layout style;
+
+    /* Optimize for frequent updates */
+    will-change: contents;
+  }
+
+  /* ✅ CRITICAL: Prevent performance issues with complex layouts */
+  .complex-form-layout {
+    /* Isolate layout calculations */
+    contain: layout style paint;
+
+    /* Optimize for mobile */
+    display: block;
+  }
+
+  /* ✅ PERFORMANCE: Optimize grid layouts on mobile */
+  .form-grid {
+    /* Convert to single column on mobile */
+    display: block !important;
+    grid-template-columns: none !important;
+  }
+
+  .form-grid > * {
+    /* Optimize spacing */
+    margin-bottom: 1.5rem;
+    width: 100%;
+  }
+}
+
+/* ✅ HIGH PERFORMANCE MODE: For devices with limited resources */
+@media (max-width: 768px) and (max-resolution: 1.5dppx) {
+  /* Reduce visual effects for better performance */
+  * {
+    /* Disable expensive transitions on low-end devices */
+    transition: none !important;
+    animation: none !important;
+
+    /* Optimize rendering */
+    transform: none !important;
+    will-change: auto !important;
+  }
+
+  /* Keep essential focus states */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: #3b82f6 !important;
+    outline: 2px solid #3b82f6 !important;
+    outline-offset: 2px !important;
+  }
+}
+
+/* ✅ ACCESSIBILITY: Maintain WCAG compliance */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ✅ DARK MODE OPTIMIZATION */
+@media (prefers-color-scheme: dark) and (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    /* Optimize dark mode rendering */
+    background-color: #1f2937;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+  }
+}

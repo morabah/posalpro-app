@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ✅ CRITICAL: Import mobile performance optimizations */
+@import './mobile-performance.css';
+
 /* Global base styles for the PosalPro application */
 * {
   box-sizing: border-box;
