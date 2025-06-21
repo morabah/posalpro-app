@@ -321,15 +321,9 @@ select {
 
   /* Mobile Form Enhancements */
   .mobile-form-enhanced {
-    width: 100%;
-    min-height: 44px;
-    padding: 0.75rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-    font-size: 16px; /* Prevents iOS zoom */
-    transition:
-      border-color 0.15s ease-in-out,
-      box-shadow 0.15s ease-in-out;
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    will-change: transform;
   }
 
   .mobile-form-enhanced:focus {
@@ -439,6 +433,119 @@ select {
     cursor: not-allowed;
     transform: none;
   }
+
+  /* iOS-specific optimizations */
+  .ios-optimized input,
+  .ios-optimized select,
+  .ios-optimized textarea {
+    font-size: 16px !important; /* Prevents iOS zoom */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    transform: translateZ(0); /* Force GPU acceleration */
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .ios-optimized select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 20px;
+    padding-right: 40px;
+  }
+
+  .ios-optimized button,
+  .ios-optimized .btn {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    transition: transform 0.1s ease;
+  }
+
+  .ios-optimized button:active,
+  .ios-optimized .btn:active {
+    transform: scale(0.98) translateZ(0);
+    -webkit-transform: scale(0.98) translateZ(0);
+  }
+
+  /* Android-specific optimizations */
+  .android-optimized {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .android-optimized input,
+  .android-optimized select,
+  .android-optimized textarea {
+    touch-action: manipulation;
+    will-change: transform;
+  }
+
+  /* High-performance mobile scrolling */
+  .mobile-optimized {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+    -webkit-overscroll-behavior: contain;
+  }
+
+  /* Fast tap response */
+  .mobile-optimized * {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* GPU acceleration for better performance */
+  .mobile-gpu-boost {
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    perspective: 1000px;
+    -webkit-perspective: 1000px;
+  }
+
+  /* Enhanced touch targets for better accessibility */
+  .touch-target-enhanced {
+    min-width: 44px;
+    min-height: 44px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .touch-target-enhanced::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: inherit;
+    z-index: -1;
+  }
+
+  /* Optimized animations for mobile */
+  @media (max-width: 768px) {
+    * {
+      animation-duration: 0.2s !important;
+      transition-duration: 0.2s !important;
+    }
+
+    .reduced-motion * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
 }
 
 /* High contrast mode support */
@@ -533,5 +640,56 @@ select {
     font-size: 0.75rem;
     line-height: 1rem;
     color: #9ca3af;
+  }
+}
+
+/* Mobile-optimized form interactions */
+.mobile-form-enhanced {
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Enhanced mobile form performance */
+.mobile-select-enhanced {
+  font-size: 16px !important; /* Prevents iOS zoom */
+  min-height: 48px !important; /* Touch target size */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+  padding-right: 40px;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.mobile-input-enhanced {
+  font-size: 16px !important; /* Prevents iOS zoom */
+  min-height: 48px !important; /* Touch target size */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* iOS-specific optimizations */
+@supports (-webkit-touch-callout: none) {
+  .ios-select-optimized {
+    font-size: 16px !important;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  .ios-input-optimized {
+    font-size: 16px !important;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
 }

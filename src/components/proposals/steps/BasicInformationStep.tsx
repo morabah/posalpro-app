@@ -104,7 +104,13 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     const fetchCustomers = async () => {
       setCustomersLoading(true);
       try {
-        const response = await apiClient.get<{ data: { customers: Customer[] } }>('/customers');
+        // Add mobile performance optimization - smaller payload for mobile
+        const isMobile = window.innerWidth < 768;
+        const endpoint = isMobile
+          ? '/customers?limit=50&fields=id,name,email,industry,tier'
+          : '/customers';
+
+        const response = await apiClient.get<{ data: { customers: Customer[] } }>(endpoint);
 
         console.log('🔍 [DEBUG] Customers API response:', response);
 
