@@ -10,8 +10,8 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
-import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
+import { apiClient } from '@/lib/api/client';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -85,7 +85,6 @@ interface BasicInformationStepProps {
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
   // ✅ MOBILE OPTIMIZATION: Use centralized responsive detection
   const { isMobile, isTablet } = useResponsive();
-  const apiClient = useApiClient();
 
   // Form state
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -267,7 +266,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     };
 
     fetchCustomers();
-  }, [data.client?.id, apiClient]); // ✅ FIXED: Removed isMobile dependency, added apiClient
+  }, [data.client?.id]); // ✅ FIXED: Removed apiClient dependency since it's now a static import
 
   // Handle customer selection
   const handleCustomerChange = useCallback(
