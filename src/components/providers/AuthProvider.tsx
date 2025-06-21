@@ -161,7 +161,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
 
       // Use centralized API client instead of direct fetch
       try {
-        await apiClient.post('/api/auth/logout', {});
+        await apiClient.post('auth/logout', {});
       } catch (logoutError) {
         // Log but don't fail the logout process if API call fails
         console.warn('Logout API call failed:', logoutError);

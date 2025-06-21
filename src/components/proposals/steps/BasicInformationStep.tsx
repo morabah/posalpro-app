@@ -9,6 +9,7 @@
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -83,6 +84,9 @@ interface BasicInformationStepProps {
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
   // ✅ MOBILE OPTIMIZATION: Use centralized responsive detection
   const { isMobile, isTablet } = useResponsive();
+
+  // ✅ FIXED: Use proper API client instead of direct fetch
+  const apiClient = useApiClient();
 
   // Form state
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -230,27 +234,17 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     const fetchCustomers = async () => {
       setCustomersLoading(true);
       try {
-        // ✅ FIXED: Use built-in fetch with NextAuth session cookies
-        const response = await fetch('/api/customers', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include', // Important: Include session cookies
-        });
+        // ✅ FIXED: Use apiClient instead of direct fetch to prevent /api/api/ URLs
+        const response = (await apiClient.get('customers')) as {
+          success: boolean;
+          data?: { customers: Customer[] };
+        };
 
-        console.log('🔍 [DEBUG] Customers API response status:', response.status);
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('🔍 [DEBUG] Customers API response data:', data);
+        console.log('🔍 [DEBUG] Customers API response:', response);
 
         // ✅ FIXED: Proper response structure handling
-        if (data.success && data.data?.customers) {
-          const customerList = data.data.customers;
+        if (response.success && response.data?.customers) {
+          const customerList = response.data.customers;
           setCustomers(customerList);
 
           // If we have a selected customer ID, find and set the customer
@@ -261,7 +255,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
             }
           }
         } else {
-          console.error('🔍 [DEBUG] Invalid response structure:', data);
+          console.error('🔍 [DEBUG] Invalid response structure:', response);
           setCustomers([]);
         }
       } catch (error) {
@@ -278,7 +272,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     };
 
     fetchCustomers();
-  }, [data.client?.id]);
+  }, [data.client?.id, apiClient]);
 
   // Handle customer selection
   const handleCustomerChange = useCallback(

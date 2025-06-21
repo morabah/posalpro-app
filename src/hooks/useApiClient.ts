@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * React Hook for Dynamic API Client
  * Uses dynamic URL resolution to prevent port conflicts in development
  */

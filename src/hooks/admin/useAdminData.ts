@@ -197,7 +197,7 @@ export function useUsers(
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get(`/api/admin/users?${params}`)) as {
+      const data = (await apiClient.get(`admin/users?${params}`)) as {
         users: SystemUser[];
         pagination: PaginationInfo;
       };
@@ -282,7 +282,7 @@ export function useUsers(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-        const result = (await apiClient.post('/api/admin/users', userData)) as {
+        const result = (await apiClient.post('admin/users', userData)) as {
           id: string;
           [key: string]: any;
         };
@@ -345,7 +345,7 @@ export function useUsers(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient
-        const result = await apiClient.put('/api/admin/users', { id, ...userData });
+        const result = await apiClient.put('admin/users', { id, ...userData });
 
         await fetchUsers();
 
@@ -397,7 +397,7 @@ export function useUsers(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient
-        const result = await apiClient.delete(`/api/admin/users?id=${id}`);
+        const result = await apiClient.delete(`admin/users?id=${id}`);
 
         await fetchUsers();
 
@@ -492,7 +492,7 @@ export function useRoles(
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get(`/api/admin/roles?${params}`)) as {
+      const data = (await apiClient.get(`admin/roles?${params}`)) as {
         roles: SystemRole[];
         pagination: PaginationInfo;
       };
@@ -561,7 +561,7 @@ export function useRoles(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-        const result = (await apiClient.post('/api/admin/roles', roleData)) as {
+        const result = (await apiClient.post('admin/roles', roleData)) as {
           id: string;
           [key: string]: any;
         };
@@ -626,7 +626,7 @@ export function useRoles(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient
-        const result = await apiClient.put('/api/admin/roles', { id, ...roleData });
+        const result = await apiClient.put('admin/roles', { id, ...roleData });
         await fetchRoles();
 
         analytics.track('admin_role_update_success', {
@@ -677,7 +677,7 @@ export function useRoles(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient
-        const result = await apiClient.delete(`/api/admin/roles?id=${id}`);
+        const result = await apiClient.delete(`admin/roles?id=${id}`);
         await fetchRoles();
 
         analytics.track('admin_role_delete_success', {
@@ -784,7 +784,7 @@ export function usePermissions(
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get(`/api/admin/permissions?${params}`)) as {
+      const data = (await apiClient.get(`admin/permissions?${params}`)) as {
         permissions: SystemPermission[];
         pagination: PaginationInfo;
         filters: {
@@ -870,7 +870,7 @@ export function usePermissions(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-        const result = (await apiClient.post('/api/admin/permissions', permissionData)) as {
+        const result = (await apiClient.post('admin/permissions', permissionData)) as {
           id: string;
           [key: string]: any;
         };
@@ -933,7 +933,7 @@ export function usePermissions(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient
-        const result = await apiClient.put('/api/admin/permissions', { id, ...permissionData });
+        const result = await apiClient.put('admin/permissions', { id, ...permissionData });
         await fetchPermissions();
 
         analytics.track('admin_permission_update_success', {
@@ -984,7 +984,7 @@ export function usePermissions(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient
-        const result = await apiClient.delete(`/api/admin/permissions?id=${id}`);
+        const result = await apiClient.delete(`admin/permissions?id=${id}`);
         await fetchPermissions();
 
         analytics.track('admin_permission_delete_success', {
@@ -1059,7 +1059,7 @@ export function useSystemMetrics() {
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get('/api/admin/metrics')) as SystemMetrics;
+      const data = (await apiClient.get('admin/metrics')) as SystemMetrics;
 
       setMetrics(data);
       setError(null);

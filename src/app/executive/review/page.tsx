@@ -212,7 +212,7 @@ export default function ExecutiveReviewPortal() {
         setLoading(true);
         const startTime = performance.now();
 
-        const response = await apiClient.get('/api/executive/proposals');
+        const response = await apiClient.get('executive/proposals');
         const data = Array.isArray(response) ? (response as ExecutiveProposal[]) : [];
         setProposals(data);
         if (data.length > 0) {

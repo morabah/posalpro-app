@@ -183,7 +183,7 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
 
     try {
       // Use apiClient instead of direct fetch
-      await apiClient.put('/api/profile/notifications', data);
+      await apiClient.put('profile/notifications', data);
 
       const updateTime = Date.now() - startTime;
 

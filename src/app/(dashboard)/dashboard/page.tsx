@@ -157,22 +157,22 @@ export default function DashboardPage() {
       const [proposalsRes, customersRes, productsRes, contentRes] = await Promise.allSettled([
         dbOptimizer.executeQuery(
           'dashboard_proposals',
-          () => apiClient.get('/api/proposals?limit=5'),
+          () => apiClient.get('proposals?limit=5'),
           { cacheable: true, cacheTTL: 300000, queryType: 'SELECT' } // 5 min cache
         ),
         dbOptimizer.executeQuery(
           'dashboard_customers',
-          () => apiClient.get('/api/customers?limit=10'),
+          () => apiClient.get('customers?limit=10'),
           { cacheable: true, cacheTTL: 600000, queryType: 'SELECT' } // 10 min cache
         ),
         dbOptimizer.executeQuery(
           'dashboard_products',
-          () => apiClient.get('/api/products?limit=6'),
+          () => apiClient.get('products?limit=6'),
           { cacheable: true, cacheTTL: 900000, queryType: 'SELECT' } // 15 min cache
         ),
         dbOptimizer.executeQuery(
           'dashboard_content',
-          () => apiClient.get('/api/content?limit=5'),
+          () => apiClient.get('content?limit=5'),
           { cacheable: true, cacheTTL: 1800000, queryType: 'SELECT' } // 30 min cache
         ),
       ]);
