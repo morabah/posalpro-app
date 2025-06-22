@@ -477,13 +477,44 @@
   contain: layout style;
 }
 
-/* ✅ MOBILE PERFORMANCE: Optimize touch interactions */
+/* ✅ CRITICAL FIX: Enhanced touch interactions for proposal forms */
 .mobile-form-enhanced input,
 .mobile-form-enhanced select,
 .mobile-form-enhanced textarea,
 .mobile-form-enhanced button {
-  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  /* Prevent parent touch handlers from interfering */
   touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+
+  /* Ensure form fields capture touch events */
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+
+  /* Immediate touch feedback */
+  transition:
+    transform 0.1s ease-out,
+    box-shadow 0.15s ease-out;
+}
+
+/* ✅ CRITICAL FIX: Active states for immediate feedback */
+.mobile-form-enhanced input:active,
+.mobile-form-enhanced select:active,
+.mobile-form-enhanced textarea:active {
+  /* Provide immediate visual feedback on touch */
+  transform: scale(0.995);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* ✅ CRITICAL FIX: Focus states that work with touch */
+.mobile-form-enhanced input:focus,
+.mobile-form-enhanced select:focus,
+.mobile-form-enhanced textarea:focus {
+  /* Enhanced focus visibility for touch users */
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  transform: none; /* Reset transform on focus */
 }
 
 /* ✅ MOBILE PERFORMANCE: Prevent zoom on input focus (iOS) */
@@ -495,6 +526,34 @@
 .mobile-form-enhanced select,
 .mobile-form-enhanced textarea {
   font-size: 16px !important; /* Prevents zoom on iOS */
+  /* Ensure minimum touch target size */
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* ✅ CRITICAL FIX: Form field container optimization */
+.mobile-form-enhanced .form-field,
+.mobile-form-enhanced [class*="input"],
+.mobile-form-enhanced [class*="select"] {
+  /* Prevent touch event conflicts */
+  isolation: isolate;
+  position: relative;
+  z-index: 2; /* Above swipe detection layer */
+}
+
+/* ✅ CRITICAL FIX: Label click-through for mobile */
+.mobile-form-enhanced label {
+  /* Ensure labels properly activate their inputs */
+  pointer-events: auto;
+  touch-action: manipulation;
+  cursor: pointer;
+
+  /* Provide visual feedback for label taps */
+  transition: color 0.15s ease-out;
+}
+
+.mobile-form-enhanced label:active {
+  color: #3b82f6;
 }
 
 /* ✅ MOBILE PERFORMANCE: Optimize animations for mobile */
@@ -584,7 +643,7 @@
 }
 
 .touch-target-enhanced::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;

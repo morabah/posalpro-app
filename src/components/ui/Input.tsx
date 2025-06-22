@@ -2,7 +2,7 @@
 
 import { useResponsive } from '@/hooks/useResponsive';
 import { cn } from '@/lib/utils';
-import { forwardRef } from 'react';
+import { forwardRef, useCallback } from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
@@ -14,6 +14,21 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, error, label, helpText, ...props }, ref) => {
     // ✅ MOBILE OPTIMIZATION: Use centralized responsive detection
     const { isMobile, isTablet } = useResponsive();
+
+    // ✅ CRITICAL FIX: Touch event handler to ensure proper mobile interaction
+    const handleTouchStart = useCallback((e: React.TouchEvent<HTMLInputElement>) => {
+      // Prevent parent touch handlers from interfering
+      e.stopPropagation();
+
+      // Add visual feedback for touch
+      const target = e.currentTarget;
+      target.style.transform = 'scale(0.995)';
+
+      // Reset transform after short delay
+      setTimeout(() => {
+        target.style.transform = '';
+      }, 100);
+    }, []);
 
     return (
       <div className="w-full">
@@ -49,6 +64,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               'active:scale-[0.98]', // Touch feedback
               'touch-manipulation', // Optimize touch handling
               'will-change-transform', // GPU acceleration
+              // ✅ CRITICAL FIX: Ensure touch events work properly
+              'relative z-10 pointer-events-auto',
             ],
 
             // Tablet optimizations
@@ -63,11 +80,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             className
           )}
           ref={ref}
+          onTouchStart={isMobile ? handleTouchStart : undefined}
           style={
             isMobile
               ? {
                   minHeight: '48px', // WCAG 2.1 AA touch target
                   fontSize: '16px', // Prevents iOS zoom
+                  // ✅ CRITICAL FIX: Ensure touch events are captured
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'rgba(59, 130, 246, 0.1)',
                 }
               : undefined
           }

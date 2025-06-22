@@ -2,7 +2,7 @@
 
 import { useResponsive } from '@/hooks/useResponsive';
 import { cn } from '@/lib/utils';
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useCallback } from 'react';
 
 export interface SelectOption {
   value: string;
@@ -21,6 +21,21 @@ export interface SelectProps
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, options, error, label, placeholder, onChange, ...props }, ref) => {
     const { isMobile } = useResponsive();
+
+    // ✅ CRITICAL FIX: Touch event handler to ensure proper mobile interaction
+    const handleTouchStart = useCallback((e: React.TouchEvent<HTMLSelectElement>) => {
+      // Prevent parent touch handlers from interfering
+      e.stopPropagation();
+
+      // Add visual feedback for touch
+      const target = e.currentTarget;
+      target.style.transform = 'scale(0.995)';
+
+      // Reset transform after short delay
+      setTimeout(() => {
+        target.style.transform = '';
+      }, 100);
+    }, []);
 
     return (
       <div className="w-full">
@@ -48,11 +63,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               'focus:border-blue-500 focus:ring-4 focus:ring-blue-100',
               'active:scale-[0.98]',
               'will-change-transform',
+              // ✅ CRITICAL FIX: Ensure touch events work properly
+              'relative z-10 pointer-events-auto',
             ],
             error && 'border-error-300 focus:border-error-500 focus:ring-error-500',
             className
           )}
           ref={ref}
+          onTouchStart={isMobile ? handleTouchStart : undefined}
           onChange={e => {
             // Add haptic feedback for mobile
             if (isMobile && 'vibrate' in navigator) {
@@ -73,6 +91,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                   paddingRight: '40px',
                   minHeight: '48px', // iOS touch target
                   fontSize: '16px', // Prevents iOS zoom
+                  // ✅ CRITICAL FIX: Ensure touch events are captured
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'rgba(59, 130, 246, 0.1)',
                 }
               : undefined
           }
