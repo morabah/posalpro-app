@@ -287,9 +287,14 @@ export default function ModernDashboard({
         <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Welcome back, {user?.name.split(' ')[0]}
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                  Welcome back, {user?.name.split(' ')[0]}
+                </h1>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                  v0.1.0-alpha.2
+                </span>
+              </div>
               <p className="text-sm sm:text-base text-gray-600 flex items-center gap-2">
                 <SparklesIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
                 <span className="truncate">Ready to create amazing proposals</span>

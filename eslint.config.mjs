@@ -1,9 +1,9 @@
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
 import js from '@eslint/js';
 import nextPlugin from '@next/eslint-plugin-next';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import { dirname } from 'path';
 import tseslint from 'typescript-eslint'; // Renamed for clarity, this is the main export
+import { fileURLToPath } from 'url';
 
 // Get the directory name in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 export default tseslint.config(
   // Core ESLint recommended rules
   js.configs.recommended,
-  
+
   // TypeScript ESLint configurations
   ...tseslint.configs.recommendedTypeChecked, // Base type-checked rules
   {
@@ -41,7 +41,7 @@ export default tseslint.config(
       '@typescript-eslint/explicit-module-boundary-types': 'off',
     },
   },
-  
+
   // Next.js plugin configuration (consolidated)
   {
     files: ['**/*.{js,jsx,ts,tsx}'], // Apply Next.js rules to all relevant files
@@ -70,7 +70,7 @@ export default tseslint.config(
     },
     rules: reactHooksPlugin.configs.recommended.rules,
   },
-  
+
   // Global ignore patterns
   {
     ignores: [
@@ -83,6 +83,7 @@ export default tseslint.config(
       '*.config.mjs', // Ignores this file itself
       'public/**',
       'coverage/**',
+      'scripts/**', // Ignore deployment and utility scripts
     ],
   }
 );

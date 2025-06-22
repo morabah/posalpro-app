@@ -242,6 +242,12 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     icon: CogIcon,
     roles: ['admin'],
   },
+  {
+    id: 'about',
+    name: 'About',
+    href: '/about',
+    icon: DocumentTextIcon,
+  },
 ];
 
 export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps) {
