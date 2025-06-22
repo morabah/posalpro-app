@@ -775,3 +775,192 @@ catch (error) {
 
 **🎯 Following these standards ensures every new feature maintains our historic
 100% TypeScript compliance and enterprise-grade error handling excellence!**
+
+# CORE REQUIREMENTS (Non-Negotiable)
+
+## 🔧 ERROR HANDLING & TYPE SAFETY
+
+### Error Handling: Use standardized ErrorHandlingService system only
+
+- **Import**: ErrorHandlingService, StandardError, ErrorCodes, useErrorHandler
+- **Pattern**: errorHandlingService.processError() in all catch blocks
+- **Never**: Custom error handling - always use established infrastructure
+- **Validation**: All components must use standardized error patterns
+
+### TypeScript: Maintain 100% type safety (0 errors)
+
+- **Verify**: npm run type-check → 0 errors before any commit
+- **Use**: Explicit interfaces, strict typing, no any types
+- **Standard**: Follow FUTURE_DEVELOPMENT_STANDARDS.md patterns
+- **Compliance**: Zero tolerance for type errors in production
+
+## ♻️ EXISTING PATTERNS & INFRASTRUCTURE
+
+### Existing Patterns: Check for established implementations first
+
+- **Search**: src/lib/services/, src/hooks/, src/components/
+- **Reuse**: Don't recreate existing functionality - leverage established
+  patterns
+- **Extend**: Build upon current infrastructure and proven solutions
+- **Analysis**: Conduct systematic pattern analysis before implementation
+
+## 📱 MOBILE TOUCH INTERACTION STANDARDS (CRITICAL)
+
+### Touch Event Conflict Prevention: Mandatory for all touch-enabled components
+
+- **Pattern**: Smart event target filtering for components with gestures + forms
+- **Implementation**:
+  ```javascript
+  const isInteractiveElement =
+    target.matches(
+      'input, select, textarea, button, [role="button"], [tabindex], a'
+    ) ||
+    target.closest(
+      'input, select, textarea, button, [role="button"], [tabindex], a'
+    );
+  if (isInteractiveElement) return; // Skip gesture handling
+  ```
+- **Form Components**: Must use stopPropagation() + visual feedback
+- **Testing**: Single-tap field access verification on mobile devices
+
+### Systematic Analysis Requirement: For components with touch interactions
+
+- **Coverage**: 100% analysis of touch-enabled components required
+- **Classification**: Safe/Problematic/Enhanced component categorization
+- **Documentation**: Touch interaction patterns must be documented
+- **Prevention**: Proactive conflict identification and resolution
+
+## ⚡ PERFORMANCE & ANALYTICS
+
+### Component Traceability Matrix: Map all implementations
+
+- **Required**: User stories, acceptance criteria, hypotheses, test cases
+- **Analytics**: useAnalytics() with hypothesis validation tracking
+- **Performance**: Web Vitals monitoring with usePerformanceOptimization()
+- **Mobile**: Touch interaction performance metrics included
+
+### Optimization: Use existing performance infrastructure
+
+- **Caching**: AdvancedCacheManager, ApiResponseCache
+- **Database**: DatabaseQueryOptimizer for all queries
+- **Bundle**: Lazy loading with BundleOptimizer
+- **Mobile**: Touch event optimization for reduced conflicts
+
+## ♿ ACCESSIBILITY & UI STANDARDS
+
+### Wireframe Compliance: Reference wireframe documents for all UI
+
+- **Path**: front end structure/wireframes/[SCREEN_NAME].md
+- **Pattern**: Follow WIREFRAME_INTEGRATION_GUIDE.md
+- **Consistency**: Apply WIREFRAME_CONSISTENCY_REVIEW.md standards
+- **Mobile**: Touch interaction compliance with wireframe specifications
+
+### WCAG 2.1 AA: Mandatory accessibility compliance
+
+- **Touch**: 44px+ minimum targets for mobile (enforced)
+- **Contrast**: 4.5:1 ratio minimum
+- **Navigation**: Full keyboard and screen reader support
+- **Mobile**: Single-tap field access for all interactive elements
+
+## 📚 DOCUMENTATION & VALIDATION
+
+### Required Updates: Update documentation after implementation
+
+- **Always**: IMPLEMENTATION_LOG.md with phase, status, traceability
+- **Complex**: LESSONS_LEARNED.md for significant implementations
+- **Major**: PROJECT_REFERENCE.md for new components/APIs
+- **Mobile**: Touch interaction patterns and conflict resolution documented
+
+### Quality Gates: All implementations must pass
+
+- **Build**: npm run build → successful compilation
+- **Types**: npm run type-check → 0 errors
+- **Mobile**: Touch interaction testing on real devices
+- **Performance**: Web Vitals within acceptable thresholds
+
+## 🔍 PRE-IMPLEMENTATION CHECKLIST (ENHANCED)
+
+### Technical Validation
+
+- [ ] npm run type-check → 0 errors
+- [ ] Existing pattern search completed (src/lib/, src/hooks/, src/components/)
+- [ ] ErrorHandlingService imports ready
+- [ ] Performance optimization strategy defined
+
+### Mobile Touch Interaction Review (NEW)
+
+- [ ] Component contains touch handlers? → Smart event filtering required
+- [ ] Form fields present? → stopPropagation() pattern applied
+- [ ] Touch target sizing verified (44px+ minimum)
+- [ ] Single-tap field access tested on mobile devices
+
+### UI & Accessibility Compliance
+
+- [ ] Wireframe reference identified and reviewed
+- [ ] WCAG 2.1 AA compliance verified
+- [ ] Component Traceability Matrix planned
+- [ ] Touch interaction accessibility validated
+
+### Documentation & Quality Assurance
+
+- [ ] Documentation update plan established
+- [ ] Analytics integration planned with hypothesis tracking
+- [ ] Systematic analysis methodology applied
+- [ ] Prevention strategy documented for future development
+
+## 🚀 QUALITY ASSURANCE FRAMEWORK (ENHANCED)
+
+### Systematic Analysis Methodology
+
+1. **Pattern Identification**: Search for similar implementations
+2. **Component Classification**: Safe/Problematic/Enhanced categorization
+3. **Conflict Detection**: Touch event hierarchy analysis
+4. **Universal Solutions**: Standardized pattern application
+5. **Prevention Documentation**: Lessons learned capture
+
+### Mobile Touch Interaction Standards
+
+- **Design Pattern**: Smart event target filtering for gesture + form
+  combinations
+- **Code Standards**: Interactive element detection with CSS selectors
+- **Testing Standards**: Cross-platform mobile device verification
+- **Performance Standards**: Reduced event conflicts and improved responsiveness
+
+### Long-term Strategic Value
+
+- **Maintainability**: Clear patterns for future component development
+- **Scalability**: Systematic approach applicable to new features
+- **Quality**: Established testing framework prevents regression
+- **Consistency**: Standardized touch interactions across platform
+
+## 📋 POST-IMPLEMENTATION VALIDATION
+
+### Technical Verification
+
+- [ ] TypeScript compilation: 0 errors
+- [ ] Build successful: All static pages generated
+- [ ] Performance metrics: Within acceptable thresholds
+- [ ] Mobile testing: Single-tap field access verified
+
+### Documentation Compliance
+
+- [ ] IMPLEMENTATION_LOG.md updated with comprehensive details
+- [ ] LESSONS_LEARNED.md updated for complex implementations
+- [ ] Touch interaction patterns documented
+- [ ] Prevention strategies established
+
+### Quality Assurance
+
+- [ ] Systematic analysis completed for touch-enabled components
+- [ ] Universal solution patterns applied consistently
+- [ ] Future development standards updated
+- [ ] Code review checklist includes mobile touch validation
+
+---
+
+**CRITICAL NOTE**: These standards are based on systematic codebase analysis and
+proven solutions. The mobile touch interaction requirements are mandatory
+following our comprehensive audit that achieved 100% touch component coverage
+and zero remaining multi-tap issues. All future development must follow these
+established patterns to maintain the industry-leading mobile touch interaction
+reliability we have achieved.
