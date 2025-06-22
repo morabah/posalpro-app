@@ -72,11 +72,28 @@ export function useApiClient(): UseApiClientReturn {
         const data = (await response.json()) as T;
         return data;
       } catch (error) {
-        logger.error('API request error:', {
+        // ✅ ENHANCED: Better error logging with more context
+        const errorDetails = {
           url,
           endpoint,
-          error: error instanceof Error ? error.message : error,
-        });
+          method: options.method || 'GET',
+          timestamp: new Date().toISOString(),
+        };
+
+        if (error instanceof Error) {
+          logger.error('API request error:', {
+            ...errorDetails,
+            errorMessage: error.message,
+            errorName: error.name,
+            stack: error.stack,
+          });
+        } else {
+          logger.error('API request error (unknown type):', {
+            ...errorDetails,
+            error: String(error),
+            errorType: typeof error,
+          });
+        }
         throw error;
       }
     },

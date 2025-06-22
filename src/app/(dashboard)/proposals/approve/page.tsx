@@ -326,6 +326,27 @@ export default function ApprovalWorkflowDashboard() {
     trackAction('dashboard_viewed');
   }, []);
 
+  // ✅ FIXED: Move useMemo before early returns to comply with Rules of Hooks
+  const dashboardMetrics = useMemo(() => {
+    const total = approvals.length;
+    const pending = approvals.filter(a => a.status === ApprovalStatus.PENDING).length;
+    const overdue = approvals.filter(a => a.timeRemaining < 0).length;
+    const urgent = approvals.filter(a => a.priority === Priority.URGENT).length;
+    const avgDecisionTime =
+      approvals
+        .flatMap(a => a.previousDecisions)
+        .reduce((sum, dec) => sum + dec.timeToDecision, 0) /
+        Math.max(approvals.flatMap(a => a.previousDecisions).length, 1) || 0;
+
+    return {
+      total,
+      pending,
+      overdue,
+      urgent,
+      avgDecisionTime: Math.round(avgDecisionTime * 10) / 10,
+    };
+  }, [approvals]);
+
   if (loading) {
     return <p>Loading approval workflow dashboard...</p>;
   }
@@ -436,26 +457,6 @@ export default function ApprovalWorkflowDashboard() {
       </div>
     );
   };
-
-  const dashboardMetrics = useMemo(() => {
-    const total = approvals.length;
-    const pending = approvals.filter(a => a.status === ApprovalStatus.PENDING).length;
-    const overdue = approvals.filter(a => a.timeRemaining < 0).length;
-    const urgent = approvals.filter(a => a.priority === Priority.URGENT).length;
-    const avgDecisionTime =
-      approvals
-        .flatMap(a => a.previousDecisions)
-        .reduce((sum, dec) => sum + dec.timeToDecision, 0) /
-        Math.max(approvals.flatMap(a => a.previousDecisions).length, 1) || 0;
-
-    return {
-      total,
-      pending,
-      overdue,
-      urgent,
-      avgDecisionTime: Math.round(avgDecisionTime * 10) / 10,
-    };
-  }, [approvals]);
 
   return (
     <div className="min-h-screen bg-gray-50">

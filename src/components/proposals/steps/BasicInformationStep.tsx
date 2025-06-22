@@ -91,6 +91,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   // Form state
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const [customersError, setCustomersError] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [fieldInteractions, setFieldInteractions] = useState(0);
   const [dateWarning, setDateWarning] = useState<string | null>(null);
@@ -233,6 +234,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   useEffect(() => {
     const fetchCustomers = async () => {
       setCustomersLoading(true);
+      setCustomersError(null);
       try {
         // ✅ FIXED: Use apiClient instead of direct fetch to prevent /api/api/ URLs
         const response = (await apiClient.get('customers')) as {
@@ -257,14 +259,32 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         } else {
           console.error('🔍 [DEBUG] Invalid response structure:', response);
           setCustomers([]);
+          setCustomersError('Unable to load customers. Please try again.');
         }
       } catch (error) {
         console.error('Error fetching customers:', error);
         setCustomers([]);
 
-        // Show user-friendly error message
-        if (error instanceof Error && error.message.includes('401')) {
-          console.error('Authentication required - user may need to log in again');
+        // ✅ ENHANCED: Better error handling with user-friendly messages
+        if (error instanceof Error) {
+          if (error.message.includes('401')) {
+            setCustomersError('Please log in to access customer data.');
+            console.error('Authentication required - user may need to log in again');
+          } else if (error.message.includes('404')) {
+            setCustomersError('Customer service is temporarily unavailable.');
+            console.error('Customers API endpoint not found');
+          } else if (error.message.includes('500')) {
+            setCustomersError('Server error. Please try again in a few moments.');
+            console.error('Server error while fetching customers');
+          } else {
+            setCustomersError(
+              'Unable to load customers. Please check your connection and try again.'
+            );
+            console.error('Network or unknown error:', error.message);
+          }
+        } else {
+          setCustomersError('An unexpected error occurred. Please try again.');
+          console.error('Unknown error type:', typeof error, error);
         }
       } finally {
         setCustomersLoading(false);
@@ -413,6 +433,14 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 disabled={customersLoading}
                 className="mobile-select-enhanced ios-select-optimized touch-target-enhanced"
               />
+              {/* ✅ ENHANCED: Show error message when customers fail to load */}
+              {customersError && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-800" role="alert">
+                    {customersError}
+                  </p>
+                </div>
+              )}
               {selectedCustomer && (
                 <div className="mt-2 text-sm text-gray-600 mobile-caption">
                   {selectedCustomer.industry && ` • ${selectedCustomer.industry}`}
