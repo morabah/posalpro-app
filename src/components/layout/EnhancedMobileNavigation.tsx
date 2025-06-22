@@ -182,6 +182,17 @@ export function EnhancedMobileNavigation({
     (e: React.TouchEvent) => {
       if (!shouldUseSwipeGestures || prefersReducedMotion) return;
 
+      // ✅ CRITICAL FIX: Only handle swipes on non-interactive elements
+      const target = e.target as HTMLElement;
+      const isInteractiveElement =
+        target.matches('input, select, textarea, button, [role="button"], [tabindex], a') ||
+        target.closest('input, select, textarea, button, [role="button"], [tabindex], a');
+
+      // Skip swipe handling if touching form fields or interactive elements
+      if (isInteractiveElement) {
+        return;
+      }
+
       try {
         const touch = e.touches[0];
         const startPos = { x: touch.clientX, y: touch.clientY };
@@ -215,6 +226,17 @@ export function EnhancedMobileNavigation({
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
       if (!touchStartPos || !shouldUseSwipeGestures || prefersReducedMotion) return;
+
+      // ✅ CRITICAL FIX: Only handle swipes on non-interactive elements
+      const target = e.target as HTMLElement;
+      const isInteractiveElement =
+        target.matches('input, select, textarea, button, [role="button"], [tabindex], a') ||
+        target.closest('input, select, textarea, button, [role="button"], [tabindex], a');
+
+      // Skip swipe handling if touching form fields or interactive elements
+      if (isInteractiveElement) {
+        return;
+      }
 
       try {
         const touch = e.touches[0];

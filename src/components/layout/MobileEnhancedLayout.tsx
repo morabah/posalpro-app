@@ -96,12 +96,34 @@ export function MobileEnhancedLayout({
 
   // Touch gesture handling for swipe navigation
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // ✅ CRITICAL FIX: Only handle swipes on non-interactive elements
+    const target = e.target as HTMLElement;
+    const isInteractiveElement =
+      target.matches('input, select, textarea, button, [role="button"], [tabindex], a') ||
+      target.closest('input, select, textarea, button, [role="button"], [tabindex], a');
+
+    // Skip swipe handling if touching form fields or interactive elements
+    if (isInteractiveElement) {
+      return;
+    }
+
     const touch = e.touches[0];
     setTouchStart({ x: touch.clientX, y: touch.clientY });
     setTouchEnd(null);
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // ✅ CRITICAL FIX: Only handle swipes on non-interactive elements
+    const target = e.target as HTMLElement;
+    const isInteractiveElement =
+      target.matches('input, select, textarea, button, [role="button"], [tabindex], a') ||
+      target.closest('input, select, textarea, button, [role="button"], [tabindex], a');
+
+    // Skip swipe handling if touching form fields or interactive elements
+    if (isInteractiveElement) {
+      return;
+    }
+
     const touch = e.touches[0];
     setTouchEnd({ x: touch.clientX, y: touch.clientY });
   }, []);
