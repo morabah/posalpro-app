@@ -1,12 +1,49 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - UI Store
  * Zustand store for managing global UI state, modals, notifications, and interface interactions
  * Provides centralized UI state management across the application
  */
 
+import React from 'react';
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+
+// 🔧 CRITICAL TYPE SAFETY FIX: Replace all 'any' types with proper interfaces
+
+// Global search result interface
+export interface GlobalSearchResult {
+  id: string;
+  type: 'proposal' | 'content' | 'product' | 'customer' | 'user' | 'document';
+  title: string;
+  description?: string;
+  url: string;
+  category?: string;
+  tags?: string[];
+  relevanceScore?: number;
+  lastModified?: Date;
+  metadata?: Record<string, string | number | boolean>;
+}
+
+// Modal data interface for type safety
+export interface ModalData {
+  entityId?: string;
+  entityType?: string;
+  formData?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  callbacks?: Record<string, () => void>;
+  metadata?: Record<string, string | number | boolean>;
+}
+
+// UI event tracking data interface
+export interface UIEventData {
+  action: string;
+  component?: string;
+  page?: string;
+  userId?: string;
+  timestamp?: number;
+  metadata?: Record<string, string | number | boolean>;
+}
 
 // Modal state interface
 export interface ModalState {
@@ -17,7 +54,7 @@ export interface ModalState {
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   closable?: boolean;
   onClose?: () => void;
-  data?: any;
+  data?: ModalData; // 🔧 FIXED: Replaced 'any' with proper ModalData interface
 }
 
 // Notification interface
@@ -88,7 +125,7 @@ export interface UIState {
   // Search state
   globalSearchOpen: boolean;
   globalSearchQuery: string;
-  globalSearchResults: any[];
+  globalSearchResults: GlobalSearchResult[]; // 🔧 FIXED: Replaced 'any[]' with proper GlobalSearchResult[]
   globalSearchLoading: boolean;
 
   // Theme and display
@@ -158,7 +195,7 @@ export interface UIActions {
   // Search
   setGlobalSearchOpen: (open: boolean) => void;
   setGlobalSearchQuery: (query: string) => void;
-  setGlobalSearchResults: (results: any[]) => void;
+  setGlobalSearchResults: (results: GlobalSearchResult[]) => void; // 🔧 FIXED: Replaced 'any[]' with GlobalSearchResult[]
   setGlobalSearchLoading: (loading: boolean) => void;
 
   // Theme and display
@@ -638,7 +675,7 @@ export const useFormState = (formId: string) =>
   }));
 
 // Analytics integration
-export const trackUIEvent = (event: string, data?: any) => {
+export const trackUIEvent = (event: string, data?: UIEventData) => {
   const { trackInteraction } = useUIStore.getState();
   trackInteraction();
 

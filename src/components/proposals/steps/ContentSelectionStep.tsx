@@ -490,9 +490,8 @@ export function ContentSelectionStep({
 
     // Validate against team expertise
     if (teamData?.subjectMatterExperts) {
-      const teamExpertise = teamData.subjectMatterExperts.map(
-        (expert: any) => expert.expertiseArea
-      );
+      // subjectMatterExperts is an object where keys are expertise areas and values are expert IDs
+      const teamExpertise = Object.keys(teamData.subjectMatterExperts);
       const contentAreas = selectedContentArray.map(content => content.item.tags).flat();
 
       const expertiseGaps = contentAreas.filter(
@@ -687,8 +686,9 @@ export function ContentSelectionStep({
       const context = {
         projectType: proposalMetadata?.projectType,
         rfpRequirements: rfpData?.parsedContent?.requirements || [],
-        teamExpertise:
-          teamData?.subjectMatterExperts?.map((expert: any) => expert.expertiseArea) || [],
+        teamExpertise: teamData?.subjectMatterExperts
+          ? Object.keys(teamData.subjectMatterExperts)
+          : [],
         productCategories: productData?.products?.map((product: any) => product.category) || [],
         currentSelections: Array.from(selectedContentIds),
       };

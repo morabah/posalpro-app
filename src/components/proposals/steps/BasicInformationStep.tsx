@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
+import { EnhancedProposalAnalytics } from '@/types/analytics';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -78,7 +79,7 @@ const INDUSTRY_OPTIONS = [
 interface BasicInformationStepProps {
   data: Partial<ProposalWizardStep1Data>;
   onUpdate: (data: Partial<ProposalWizardStep1Data>) => void;
-  analytics: any;
+  analytics: EnhancedProposalAnalytics;
 }
 
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
@@ -237,10 +238,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       setCustomersError(null);
       try {
         // ✅ FIXED: Use apiClient instead of direct fetch to prevent /api/api/ URLs
-        const response = (await apiClient.get('customers')) as {
-          success: boolean;
-          data?: { customers: Customer[] };
-        };
+        const response = await apiClient.get<any>('customers');
 
         console.log('🔍 [DEBUG] Customers API response:', response);
 

@@ -8,6 +8,7 @@
 
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { WizardStepAnalytics } from '@/types/analytics';
 import { ProposalCreationMetrics } from '@/types/proposals';
 import { useCallback, useRef, useState } from 'react';
 
@@ -90,7 +91,20 @@ export function useProposalCreationAnalytics() {
 
   // Track individual wizard step performance
   const trackWizardStep = useCallback(
-    (step: number, stepName: string, action: 'start' | 'complete' | 'error', metadata?: any) => {
+    (
+      step: number,
+      stepName: string,
+      action:
+        | 'start'
+        | 'complete'
+        | 'error'
+        | 'field_interaction'
+        | 'validation_error'
+        | 'customer_selected'
+        | 'future_date_selected'
+        | 'ai_suggestion_shown',
+      metadata?: WizardStepAnalytics['metadata']
+    ) => {
       const now = Date.now();
 
       if (action === 'start') {
@@ -130,6 +144,21 @@ export function useProposalCreationAnalytics() {
         });
       } else if (action === 'error' && currentStepRef.current) {
         currentStepRef.current.errors++;
+      } else if (action === 'field_interaction' && currentStepRef.current) {
+        currentStepRef.current.fieldInteractions++;
+      } else if (
+        action === 'customer_selected' ||
+        action === 'future_date_selected' ||
+        action === 'ai_suggestion_shown'
+      ) {
+        // Track specific user interactions for enhanced analytics
+        analytics.track(`wizard_${action}`, {
+          step,
+          stepName,
+          metadata,
+          userStory: step <= 2 ? 'US-4.1' : 'US-2.2',
+          timestamp: now,
+        });
       }
 
       if (metadata) {

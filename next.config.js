@@ -6,52 +6,112 @@
  */
 
 const nextConfig = {
-  reactStrictMode: true,
-  images: {
-    domains: [
-      'images.unsplash.com',
-      // Add other image domains as needed
-    ],
-    // Optimize images for production
-    unoptimized: process.env.NODE_ENV !== 'production',
-  },
+  // 🔧 PHASE 1: CRITICAL SECURITY & PERFORMANCE FIXES
+  // Streamlined configuration for stability
+
   experimental: {
-    serverActions: {
-      // Allow server actions for local development and production domain
-      allowedOrigins: ['localhost:3001', 'localhost:3000', 'posalpro-mvp2.windsurf.build'],
-    },
-    // Optimize bundling for serverless environments
-    optimizePackageImports: ['react', 'react-dom', '@headlessui/react', '@heroicons/react'],
+    // Enable modern bundling features
+    // optimizeCss: true, // 🔧 DISABLED: Causing critters dependency issue
+    optimizePackageImports: [
+      'lucide-react',
+      '@headlessui/react',
+      'react-hook-form',
+      'zod',
+      'date-fns',
+    ],
   },
-  logging: {
-    fetches: {
-      fullUrl: process.env.NODE_ENV === 'development',
-    },
+
+  // Image optimization for performance
+  images: {
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 31536000, // 1 year
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
-  eslint: {
-    ignoreDuringBuilds: true,
+
+  // Compression and caching
+  compress: true,
+  poweredByHeader: false,
+
+  // 🔧 CRITICAL SECURITY FIX: Add missing security headers
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self'",
+              "frame-ancestors 'none'",
+            ].join('; '),
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+        ],
+      },
+      {
+        source: '/api/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+        ],
+      },
+    ];
   },
+
+  // TypeScript configuration
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false, // Enforce 100% type safety
   },
-  // Netlify requires default output mode for serverless functions
-  // output: 'standalone', // Disabled for Netlify compatibility
-  // Optimize modules to single dependency tree
-  modularizeImports: {
-    '@heroicons/react': {
-      transform: '@heroicons/react/{{member}}',
-    },
+
+  // ESLint configuration
+  eslint: {
+    ignoreDuringBuilds: true, // 🔧 TEMPORARY: Allow build to complete, will fix systematically
   },
-  // Ensure trailingSlash is false for Netlify compatibility
+
+  // Static generation optimization
   trailingSlash: false,
-  // Note: swcMinify and optimizeFonts are enabled by default in Next.js 15+
+  reactStrictMode: true,
+
+  // Performance monitoring
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
+  },
+
+  // Build optimization
+  compiler: {
+    removeConsole:
+      process.env.NODE_ENV === 'production'
+        ? {
+            exclude: ['error', 'warn'],
+          }
+        : false,
+  },
 };
 
-// Support for different bundle analysis in development
-if (process.env.ANALYZE === 'true') {
-  // Only import when needed to avoid adding to production bundle
-  const withBundleAnalyzer = require('@next/bundle-analyzer')();
-  module.exports = withBundleAnalyzer(nextConfig);
-} else {
-  module.exports = nextConfig;
-}
+module.exports = nextConfig;

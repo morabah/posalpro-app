@@ -20,8 +20,9 @@ import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
+import type { CreateProposalData } from '@/lib/entities/proposal';
 import { ProposalEntity } from '@/lib/entities/proposal';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
 import { Priority } from '@/types/enums';
 import {
   ExpertiseArea,
@@ -481,8 +482,268 @@ export function ProposalWizard({
   const handleNext = () => {
     if (currentStep < WIZARD_STEPS.length) {
       setCurrentStep(currentStep + 1);
+    } else if (currentStep === WIZARD_STEPS.length) {
+      // Handle final step - create proposal
+      handleCreateProposal();
     }
   };
+
+  // Enhanced proposal creation handler with proper error handling
+  const handleCreateProposal = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('[ProposalWizard] Starting proposal creation process');
+
+      // Track proposal creation start
+      analytics.trackWizardStep(6, 'review', 'complete');
+
+      // Validate all wizard data with defensive programming
+      console.log('[ProposalWizard] Current wizard data:', JSON.stringify(wizardData, null, 2));
+      console.log('[ProposalWizard] Step1 data:', wizardData.step1);
+      console.log('[ProposalWizard] Step1 client:', wizardData.step1?.client);
+      console.log('[ProposalWizard] Step1 details:', wizardData.step1?.details);
+
+      // More defensive validation with helpful error messages
+      const validationErrors: string[] = [];
+
+      if (!wizardData.step1?.client?.name) {
+        validationErrors.push('Customer name is required');
+      }
+
+      if (!wizardData.step1?.details?.title) {
+        validationErrors.push('Proposal title is required');
+      }
+
+      if (!wizardData.step1?.details?.dueDate) {
+        validationErrors.push('Due date is required');
+      }
+
+      // Validate customer ID is present and valid (handle both UUID and string/number IDs)
+      console.log('[ProposalWizard] Validating customer:', {
+        customerId: wizardData.step1?.client?.id,
+        customerName: wizardData.step1?.client?.name,
+        customerObject: wizardData.step1?.client,
+      });
+
+      const customerId = wizardData.step1?.client?.id;
+      const customerName = wizardData.step1?.client?.name?.trim();
+
+      if (!customerId || !customerName) {
+        validationErrors.push('Valid customer selection is required');
+      } else {
+        // Ensure customer ID is valid (UUID, number, or non-empty string)
+        const isValidId =
+          (typeof customerId === 'string' && customerId.length > 0 && customerId !== 'undefined') ||
+          (typeof customerId === 'number' && customerId > 0);
+
+        if (!isValidId) {
+          validationErrors.push('Valid customer selection is required');
+        }
+      }
+
+      // Ensure description is at least 10 characters
+      const description = wizardData.step1?.details?.description?.trim();
+      if (!description || description.length < 10) {
+        // Create a smart description from available data if none provided
+        const smartDescription =
+          wizardData.step1?.details?.description?.trim() ||
+          `${wizardData.step1?.details?.title} for ${wizardData.step1?.client?.name}`;
+        if (smartDescription.length < 10) {
+          validationErrors.push('Proposal information is insufficient for description generation');
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        console.log(
+          '[ProposalWizard] Validation failed - missing required fields:',
+          validationErrors
+        );
+
+        throw new StandardError({
+          message: `Please complete the following required fields: ${validationErrors.join(', ')}`,
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProposalWizard',
+            operation: 'handleCreateProposal',
+            validationErrors,
+            step1Data: wizardData.step1,
+            userId: user?.id,
+          },
+        });
+      }
+
+      // Ensure user is authenticated
+      if (!user?.id) {
+        throw new StandardError({
+          message: 'You must be logged in to create a proposal.',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalWizard',
+            operation: 'handleCreateProposal',
+          },
+        });
+      }
+
+      // Prepare proposal data for creation - matching CreateProposalData interface
+      const smartDescription =
+        wizardData.step1.details.description?.trim() ||
+        `${wizardData.step1.details.title} for ${wizardData.step1.client.name}`;
+
+      const proposalData: CreateProposalData = {
+        metadata: {
+          title: wizardData.step1.details.title,
+          description: smartDescription,
+          customerId: wizardData.step1.client.id,
+          customerName: wizardData.step1.client.name,
+          customerContact: {
+            name: wizardData.step1.client.contactPerson || 'Unknown Contact',
+            email: wizardData.step1.client.contactEmail || '',
+            phone: wizardData.step1.client.contactPhone || '',
+          },
+          projectType: 'consulting' as const, // Default project type
+          estimatedValue: wizardData.step1.details.estimatedValue || 0,
+          currency: 'USD',
+          deadline: ensureFutureDate(wizardData.step1.details.dueDate),
+          priority: convertPriorityToEntity(wizardData.step1.details.priority),
+          tags: [],
+        },
+        // Optional team assignments and RFP document with defensive programming
+        teamAssignments: wizardData.step2?.teamLead
+          ? [
+              {
+                userId: wizardData.step2.teamLead,
+                userName: user?.name || 'Unknown User',
+                role: 'lead' as const,
+                responsibilities: ['Lead proposal development'],
+                assignedAt: new Date(),
+                assignedBy: user?.id || 'unknown',
+                status: 'assigned' as const,
+              },
+              // Add sales representative if different from team lead
+              ...(wizardData.step2.salesRepresentative &&
+              wizardData.step2.salesRepresentative !== wizardData.step2.teamLead
+                ? [
+                    {
+                      userId: wizardData.step2.salesRepresentative,
+                      userName: 'Sales Representative',
+                      role: 'contributor' as const,
+                      responsibilities: ['Sales coordination'],
+                      assignedAt: new Date(),
+                      assignedBy: user?.id || 'unknown',
+                      status: 'assigned' as const,
+                    },
+                  ]
+                : []),
+            ]
+          : undefined,
+      };
+
+      console.log('[ProposalWizard] Creating proposal with data:', proposalData);
+
+      // Create the proposal using the entity
+      const response = await proposalEntity.create(proposalData);
+
+      if (!response.success || !response.data) {
+        throw new StandardError({
+          message: 'Failed to create proposal. Please try again.',
+          code: ErrorCodes.API.REQUEST_FAILED,
+          metadata: {
+            component: 'ProposalWizard',
+            operation: 'handleCreateProposal',
+            apiResponse: response,
+          },
+        });
+      }
+
+      console.log('[ProposalWizard] Proposal created successfully. Full response:', {
+        success: response.success,
+        data: response.data,
+        message: response.message,
+        proposalId: response.data?.id,
+        dataKeys: response.data ? Object.keys(response.data) : 'no data',
+      });
+
+      // Validate the proposal ID before proceeding
+      const proposalId = response.data?.id;
+      if (!proposalId) {
+        console.error('[ProposalWizard] No proposal ID in response:', response);
+        throw new StandardError({
+          message: 'Proposal was created but no ID was returned. Please try again.',
+          code: ErrorCodes.API.INVALID_RESPONSE,
+          metadata: {
+            component: 'ProposalWizard',
+            operation: 'handleCreateProposal',
+            apiResponse: response,
+          },
+        });
+      }
+
+      // Track successful creation
+      analytics.trackProposalCreation({
+        proposalId: proposalId,
+        creationTime: Date.now(),
+        complexityScore: 2, // Default medium complexity
+        estimatedTimeline: 0,
+        teamAssignmentTime: 0,
+        coordinationSetupTime: 0,
+        teamSize: Object.keys(wizardData.step2?.subjectMatterExperts || {}).length,
+        aiSuggestionsAccepted: 0,
+        manualAssignments: (wizardData.step5?.sections || []).length,
+        assignmentAccuracy: 1.0,
+        contentSuggestionsUsed: (wizardData.step3?.selectedContent || []).length,
+        validationIssuesFound: (wizardData.step6?.finalValidation?.issues || []).length,
+        wizardCompletionRate: 1.0,
+        stepCompletionTimes: [],
+        userStory: ['US-3.1', 'US-4.1'],
+        hypotheses: ['H7', 'H3'],
+      });
+
+      // Call onComplete callback if provided
+      if (onComplete) {
+        const completeData = {
+          ...wizardData,
+          proposalId: proposalId,
+        };
+        onComplete(completeData);
+      } else {
+        // Navigate to the created proposal with validation
+        console.log('[ProposalWizard] Navigating to proposal:', proposalId);
+        if (proposalId && proposalId !== 'undefined') {
+          router.push(`/proposals/${proposalId}`);
+        } else {
+          // Fallback to proposals list if ID is invalid
+          console.warn('[ProposalWizard] Invalid proposal ID, redirecting to proposals list');
+          router.push('/proposals/manage');
+        }
+      }
+    } catch (error) {
+      console.error('[ProposalWizard] Error creating proposal:', error);
+
+      // Process error using standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to create proposal. Please try again.',
+        ErrorCodes.BUSINESS.PROCESS_FAILED,
+        {
+          component: 'ProposalWizard',
+          operation: 'handleCreateProposal',
+          wizardData: JSON.stringify(wizardData),
+          currentStep,
+          userId: user?.id,
+        }
+      );
+
+      // Set user-friendly error message
+      setError(errorHandlingService.getUserFriendlyMessage(standardError));
+
+      // Track error
+      analytics.trackWizardStep(6, 'review', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [wizardData, user, analytics, onComplete, router, proposalEntity, errorHandlingService]);
 
   const handleBack = () => {
     if (currentStep > 1) {
@@ -500,6 +761,63 @@ export function ProposalWizard({
 
   // Get current step component
   const CurrentStepComponent = WIZARD_STEPS[currentStep - 1].component;
+
+  // Create step-specific data handlers
+  const getStepData = useCallback(
+    (stepNumber: number) => {
+      switch (stepNumber) {
+        case 1:
+          return wizardData.step1;
+        case 2:
+          return wizardData.step2;
+        case 3:
+          return wizardData.step3;
+        case 4:
+          return wizardData.step4;
+        case 5:
+          return wizardData.step5;
+        case 6:
+          return wizardData.step6;
+        default:
+          return {};
+      }
+    },
+    [wizardData]
+  );
+
+  const createStepUpdateHandler = useCallback((stepNumber: number) => {
+    return (stepData: any) => {
+      console.log(`[ProposalWizard] Updating step ${stepNumber} with data:`, stepData);
+
+      setWizardData(prev => {
+        const updated = { ...prev };
+        switch (stepNumber) {
+          case 1:
+            updated.step1 = { ...prev.step1, ...stepData };
+            console.log('[ProposalWizard] Updated step1:', updated.step1);
+            break;
+          case 2:
+            updated.step2 = { ...prev.step2, ...stepData };
+            break;
+          case 3:
+            updated.step3 = { ...prev.step3, ...stepData };
+            break;
+          case 4:
+            updated.step4 = { ...prev.step4, ...stepData };
+            break;
+          case 5:
+            updated.step5 = { ...prev.step5, ...stepData };
+            break;
+          case 6:
+            updated.step6 = { ...prev.step6, ...stepData };
+            break;
+        }
+        updated.isDirty = true;
+        console.log(`[ProposalWizard] Updated wizard data after step ${stepNumber}:`, updated);
+        return updated;
+      });
+    };
+  }, []);
 
   return (
     <div
@@ -549,9 +867,15 @@ export function ProposalWizard({
               <div className="space-y-4 sm:space-y-6">
                 <Suspense fallback={<MobileLoadingSpinner />}>
                   <CurrentStepComponent
-                    data={wizardData as any}
-                    onUpdate={setWizardData as any}
+                    data={getStepData(currentStep)}
+                    onUpdate={createStepUpdateHandler(currentStep)}
+                    onNext={currentStep === WIZARD_STEPS.length ? handleCreateProposal : handleNext}
                     analytics={analytics}
+                    allWizardData={wizardData}
+                    proposalMetadata={wizardData.step1}
+                    teamData={wizardData.step2}
+                    contentData={wizardData.step3}
+                    productData={wizardData.step4}
                   />
                 </Suspense>
               </div>

@@ -218,3 +218,76 @@ export interface AnalyticsConfig {
   enableHypothesisValidation: boolean;
   samplingRate: number;
 }
+
+/**
+ * 🔧 CRITICAL TYPE SAFETY FIX: Enhanced analytics interfaces to replace 'any' types
+ * Extended existing analytics types with comprehensive tracking capabilities
+ */
+
+// Enhanced wizard step analytics interface
+export interface WizardStepAnalytics {
+  step: number;
+  stepName: string;
+  action:
+    | 'start'
+    | 'complete'
+    | 'error'
+    | 'field_interaction'
+    | 'validation_error'
+    | 'customer_selected'
+    | 'future_date_selected'
+    | 'ai_suggestion_shown';
+  metadata?: {
+    fieldName?: string;
+    fieldInteractions?: number;
+    isMobile?: boolean;
+    validationErrors?: string[];
+    completionTime?: number;
+    userInput?: Record<string, unknown>;
+    selectedDate?: string | Date;
+    aiSuggestionsShown?: number;
+    customerData?: Record<string, unknown>;
+    dateValidation?: Record<string, unknown>;
+    customerId?: string;
+    customerName?: string;
+    customerTier?: string;
+    errorType?: string;
+    daysInFuture?: number;
+    daysPast?: number;
+    suggestedIndustry?: boolean;
+  };
+}
+
+// Enhanced proposal analytics interface extending existing functionality
+export interface EnhancedProposalAnalytics {
+  trackWizardStep?: (
+    step: number,
+    stepName: string,
+    action:
+      | 'start'
+      | 'complete'
+      | 'error'
+      | 'field_interaction'
+      | 'validation_error'
+      | 'customer_selected'
+      | 'future_date_selected'
+      | 'ai_suggestion_shown',
+    metadata?: WizardStepAnalytics['metadata']
+  ) => void;
+  trackProposalCreation?: (metrics: any) => void; // 🔧 TEMPORARY: Match hook signature
+  trackContentSelection?: (contentData: any) => void; // 🔧 TEMPORARY: Match hook signature
+  trackProductSelection?: (productId: string, metadata?: Record<string, unknown>) => void;
+  trackTeamAssignment?: (assignmentData: any) => void; // 🔧 TEMPORARY: Match hook signature
+  trackWorkflowStep?: (
+    workflowId: string,
+    step: string,
+    metadata?: Record<string, unknown>
+  ) => void;
+  trackValidation?: (
+    validationType: string,
+    result: boolean,
+    metadata?: Record<string, unknown>
+  ) => void;
+  trackPerformance?: (metric: string, value: number, metadata?: Record<string, unknown>) => void;
+  track?: (event: string, data: Record<string, unknown>) => void;
+}

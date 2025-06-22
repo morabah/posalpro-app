@@ -339,41 +339,16 @@ export default function ExecutiveReviewPortal() {
         const decisionStartTime = Date.now();
         const sessionDuration = decisionStartTime - sessionStartTime;
 
-        const response = await fetch('/api/executive/decisions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            proposalId: selectedProposal.id,
-            decision: decisionType,
-            conditions: conditions.trim(),
-            signature: signature.trim(),
-            sessionDuration,
-            isMobile,
-            touchInteraction: !!touchStartTime,
-          }),
+        // ✅ MIGRATED: Use apiClient instead of direct fetch
+        const response = await apiClient.post('executive/decisions', {
+          proposalId: selectedProposal.id,
+          decision: decisionType,
+          conditions: conditions.trim(),
+          signature: signature.trim(),
+          sessionDuration,
+          isMobile,
+          touchInteraction: !!touchStartTime,
         });
-
-        if (!response.ok) {
-          const errorMessage = `Decision submission failed: ${response.status}`;
-          const processedError = errorHandlingService.processError(
-            new Error(errorMessage),
-            'Unable to submit your decision',
-            ErrorCodes.API.REQUEST_FAILED,
-            {
-              component: 'ExecutiveReviewPortal',
-              operation: 'handleDecision',
-              userStories: ['US-4.1', 'US-8.1'],
-              hypotheses: ['H7', 'H10'],
-              decisionType,
-              proposalId: selectedProposal.id,
-              isMobile,
-              touchInteraction: !!touchStartTime,
-              responseStatus: response.status,
-              timestamp: Date.now(),
-            }
-          );
-          throw processedError;
-        }
 
         const decisionTime = Date.now() - decisionStartTime;
 
@@ -402,15 +377,43 @@ export default function ExecutiveReviewPortal() {
         setSelectedDecision(decisionType);
         setError(null);
       } catch (err) {
-        const userFriendlyMessage = errorHandlingService.getUserFriendlyMessage(err);
+        // ✅ ENHANCED: Use standardized error handling with Component Traceability Matrix
+        const standardError = errorHandlingService.processError(
+          err,
+          'Unable to submit your executive decision',
+          ErrorCodes.API.REQUEST_FAILED,
+          {
+            component: 'ExecutiveReviewPortal',
+            operation: 'handleDecision',
+            userStories: COMPONENT_MAPPING.userStories,
+            acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+            testCases: COMPONENT_MAPPING.testCases,
+            methods: ['handleDecision()', 'submitExecutiveDecision()'],
+            decisionType,
+            proposalId: selectedProposal.id,
+            isMobile,
+            touchInteraction: !!touchStartTime,
+            timestamp: Date.now(),
+          }
+        );
+
+        const userFriendlyMessage = errorHandlingService.getUserFriendlyMessage(standardError);
         setError(userFriendlyMessage);
 
+        // ✅ ENHANCED: Analytics tracking with Component Traceability Matrix
         analytics.track('executive_decision_submission_error', {
-          userStories: ['US-4.1', 'US-8.1'],
-          hypotheses: ['H7', 'H10'],
-          errorType: err instanceof Error ? err.message : 'Unknown error',
+          userStories: COMPONENT_MAPPING.userStories,
+          acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          testCases: COMPONENT_MAPPING.testCases,
+          methods: ['handleDecision()', 'errorHandling()'],
+          errorType: standardError.code,
+          errorMessage: standardError.message,
           decisionType,
+          proposalId: selectedProposal.id,
           isMobile,
+          touchInteraction: !!touchStartTime,
           timestamp: Date.now(),
         });
       } finally {
@@ -427,6 +430,7 @@ export default function ExecutiveReviewPortal() {
       analytics,
       isMobile,
       touchStartTime,
+      apiClient,
     ]
   );
 

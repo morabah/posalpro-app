@@ -197,10 +197,10 @@ export function useUsers(
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get(`admin/users?${params}`)) as {
+      const data = await apiClient.get<{
         users: SystemUser[];
         pagination: PaginationInfo;
-      };
+      }>(`admin/users?${params}`);
 
       setUsers(data.users);
       setPagination(data.pagination);
@@ -247,18 +247,7 @@ export function useUsers(
     } finally {
       setLoading(false);
     }
-  }, [
-    page,
-    limit,
-    search,
-    role,
-    status,
-    department,
-    apiClient,
-    analytics,
-    clearError,
-    errorHandlingService,
-  ]);
+  }, [page, limit, search, role, status, department]);
 
   useEffect(() => {
     fetchUsers();
@@ -282,10 +271,7 @@ export function useUsers(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-        const result = (await apiClient.post('admin/users', userData)) as {
-          id: string;
-          [key: string]: any;
-        };
+        const result = await apiClient.post<{ id: string }>('admin/users', userData);
 
         await fetchUsers();
 
@@ -492,10 +478,10 @@ export function useRoles(
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get(`admin/roles?${params}`)) as {
+      const data = await apiClient.get<{
         roles: SystemRole[];
         pagination: PaginationInfo;
-      };
+      }>(`admin/roles?${params}`);
 
       setRoles(data.roles);
       setPagination(data.pagination);
@@ -561,10 +547,7 @@ export function useRoles(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-        const result = (await apiClient.post('admin/roles', roleData)) as {
-          id: string;
-          [key: string]: any;
-        };
+        const result = await apiClient.post<{ id: string }>('admin/roles', roleData);
         await fetchRoles();
 
         analytics.track('admin_role_create_success', {
@@ -784,15 +767,11 @@ export function usePermissions(
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get(`admin/permissions?${params}`)) as {
+      const data = await apiClient.get<{
         permissions: SystemPermission[];
         pagination: PaginationInfo;
-        filters: {
-          resources: string[];
-          actions: string[];
-          scopes: string[];
-        };
-      };
+        filters: any;
+      }>(`admin/permissions?${params}`);
 
       setPermissions(data.permissions);
       setPagination(data.pagination);
@@ -870,10 +849,7 @@ export function usePermissions(
         });
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-        const result = (await apiClient.post('admin/permissions', permissionData)) as {
-          id: string;
-          [key: string]: any;
-        };
+        const result = await apiClient.post<{ id: string }>('admin/permissions', permissionData);
         await fetchPermissions();
 
         analytics.track('admin_permission_create_success', {
@@ -1059,7 +1035,7 @@ export function useSystemMetrics() {
       });
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
-      const data = (await apiClient.get('admin/metrics')) as SystemMetrics;
+      const data = await apiClient.get<SystemMetrics>('admin/metrics');
 
       setMetrics(data);
       setError(null);

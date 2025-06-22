@@ -445,10 +445,11 @@ export function ProductSelectionStep({
     // Validate against team data
     if (teamData) {
       const securityProducts = selectedProductsArray.filter(p => p.category === 'Security');
-      const hasSecurityExpert = teamData.subjectMatterExperts?.some(
-        (expert: any) =>
-          expert.expertiseArea === 'Security' || expert.expertiseArea === 'Cybersecurity'
-      );
+      const hasSecurityExpert = teamData.subjectMatterExperts
+        ? Object.keys(teamData.subjectMatterExperts).some(
+            expertiseArea => expertiseArea === 'Security' || expertiseArea === 'Cybersecurity'
+          )
+        : false;
 
       if (securityProducts.length > 0 && !hasSecurityExpert) {
         warnings.push('Security products selected but no security expert assigned to team');
@@ -459,8 +460,9 @@ export function ProductSelectionStep({
 
       // Check if team has expertise for all selected product categories
       const uniqueCategories = [...new Set(selectedProductsArray.map(p => p.category))];
-      const teamExpertise =
-        teamData.subjectMatterExperts?.map((expert: any) => expert.expertiseArea) || [];
+      const teamExpertise = teamData.subjectMatterExperts
+        ? Object.keys(teamData.subjectMatterExperts)
+        : [];
 
       uniqueCategories.forEach(category => {
         const hasExpertise = teamExpertise.includes(category) || teamExpertise.includes('General');
@@ -624,8 +626,9 @@ export function ProductSelectionStep({
       const context = {
         projectType: proposalMetadata?.projectType,
         estimatedValue: proposalMetadata?.estimatedValue,
-        teamExpertise:
-          teamData?.subjectMatterExperts?.map((expert: any) => expert.expertiseArea) || [],
+        teamExpertise: teamData?.subjectMatterExperts
+          ? Object.keys(teamData.subjectMatterExperts)
+          : [],
         contentTopics:
           contentData?.selectedContent?.flatMap((content: any) => content.item.tags) || [],
         currentSelections: Array.from(selectedProducts.keys()),
