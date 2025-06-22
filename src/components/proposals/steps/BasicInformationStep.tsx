@@ -248,14 +248,6 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         if (response.success && response.data?.customers) {
           const customerList = response.data.customers;
           setCustomers(customerList);
-
-          // If we have a selected customer ID, find and set the customer
-          if (data.client?.id) {
-            const existingCustomer = customerList.find((c: Customer) => c.id === data.client?.id);
-            if (existingCustomer) {
-              setSelectedCustomer(existingCustomer);
-            }
-          }
         } else {
           console.error('🔍 [DEBUG] Invalid response structure:', response);
           setCustomers([]);
@@ -292,7 +284,17 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     };
 
     fetchCustomers();
-  }, [data.client?.id, apiClient]);
+  }, []); // ✅ FIXED: Remove unstable dependencies to prevent infinite loop
+
+  // ✅ SEPARATE EFFECT: Handle pre-selected customer when data changes
+  useEffect(() => {
+    if (data.client?.id && customers.length > 0) {
+      const existingCustomer = customers.find((c: Customer) => c.id === data.client?.id);
+      if (existingCustomer && !selectedCustomer) {
+        setSelectedCustomer(existingCustomer);
+      }
+    }
+  }, [data.client?.id, customers, selectedCustomer]);
 
   // Handle customer selection
   const handleCustomerChange = useCallback(
