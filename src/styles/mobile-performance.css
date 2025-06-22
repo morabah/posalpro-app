@@ -354,10 +354,10 @@
 
     /* GPU acceleration for smooth interactions */
     transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
-
-    /* Optimize reflows */
-    overflow: hidden;
+    -webkit-perspective: 1000px;
+    perspective: 1000px;
   }
 
   .react-hook-form-mobile {
@@ -461,5 +461,200 @@
 
     /* GPU acceleration */
     transform: translateZ(0);
+  }
+}
+
+/* PosalPro MVP2 - Mobile Performance Optimizations for Proposal Wizard */
+
+/* ✅ MOBILE PERFORMANCE: Optimized form containers */
+.mobile-form-enhanced .form-container {
+  contain: layout style paint;
+  isolation: isolate;
+}
+
+/* ✅ MOBILE PERFORMANCE: Reduce repaints during scrolling */
+.mobile-form-enhanced .sticky {
+  contain: layout style;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize touch interactions */
+.mobile-form-enhanced input,
+.mobile-form-enhanced select,
+.mobile-form-enhanced textarea,
+.mobile-form-enhanced button {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  touch-action: manipulation;
+}
+
+/* ✅ MOBILE PERFORMANCE: Prevent zoom on input focus (iOS) */
+.mobile-form-enhanced input[type="text"],
+.mobile-form-enhanced input[type="email"],
+.mobile-form-enhanced input[type="tel"],
+.mobile-form-enhanced input[type="number"],
+.mobile-form-enhanced input[type="date"],
+.mobile-form-enhanced select,
+.mobile-form-enhanced textarea {
+  font-size: 16px !important; /* Prevents zoom on iOS */
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize animations for mobile */
+.mobile-form-enhanced .animate-spin {
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+/* ✅ MOBILE PERFORMANCE: Reduce motion for better performance */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-form-enhanced * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize stepper for mobile */
+.mobile-form-enhanced .mobile-stepper {
+  contain: layout style;
+  will-change: transform;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize progress bar animations */
+.mobile-form-enhanced .progress-bar {
+  contain: layout style paint;
+  will-change: width;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize button interactions */
+.mobile-form-enhanced button {
+  contain: layout style;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize lazy loading containers */
+.mobile-form-enhanced .lazy-container {
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 200px;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize React Hook Form mobile mode */
+.react-hook-form-mobile .form-field {
+  contain: layout style;
+}
+
+.react-hook-form-mobile .error-message {
+  contain: layout style paint;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize dropdown/select components */
+.mobile-form-enhanced select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23666' d='m2 0-2 2h4zm0 5 2-2h-4z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize customer selection dropdown */
+.mobile-select-enhanced {
+  contain: layout style;
+  will-change: auto;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize iOS-specific elements */
+.ios-input-optimized {
+  -webkit-appearance: none;
+  border-radius: 8px;
+}
+
+.ios-select-optimized {
+  -webkit-appearance: none;
+  border-radius: 8px;
+}
+
+/* ✅ MOBILE PERFORMANCE: Touch target optimization */
+.touch-target-enhanced {
+  min-height: 44px;
+  min-width: 44px;
+  position: relative;
+}
+
+.touch-target-enhanced::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 44px;
+  z-index: -1;
+}
+
+/* ✅ MOBILE PERFORMANCE: Grid and layout optimizations */
+.mobile-grid-responsive {
+  contain: layout;
+}
+
+/* ✅ MOBILE PERFORMANCE: Text rendering optimizations */
+.mobile-text-responsive {
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ✅ MOBILE PERFORMANCE: Card component optimizations */
+.mobile-card-enhanced {
+  contain: layout style paint;
+  will-change: auto;
+}
+
+/* ✅ MOBILE PERFORMANCE: Focus state optimizations */
+.mobile-focus-enhanced:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  transition: outline-color 0.15s ease-in-out;
+}
+
+/* ✅ MOBILE PERFORMANCE: Caption text optimizations */
+.mobile-caption {
+  contain: layout style paint;
+  font-feature-settings: "kern" 1;
+}
+
+/* ✅ MOBILE PERFORMANCE: Loading spinner optimizations */
+.mobile-loading-optimized {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+/* ✅ MOBILE PERFORMANCE: Memory optimization for large lists */
+.mobile-virtualized-list {
+  contain: strict;
+  content-visibility: auto;
+}
+
+/* ✅ MOBILE PERFORMANCE: Reduce layout thrashing */
+.mobile-form-enhanced * {
+  box-sizing: border-box;
+}
+
+/* ✅ MOBILE PERFORMANCE: Optimize scrolling performance */
+.mobile-form-enhanced {
+  -webkit-overflow-scrolling: touch;
+  overflow-scrolling: touch;
+}
+
+/* ✅ MOBILE PERFORMANCE: Network-aware optimizations */
+@media (prefers-reduced-data: reduce) {
+  .mobile-form-enhanced .background-image {
+    display: none;
+  }
+
+  .mobile-form-enhanced .decorative-animation {
+    display: none;
   }
 }

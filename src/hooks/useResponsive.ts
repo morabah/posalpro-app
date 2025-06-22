@@ -1,23 +1,19 @@
 /**
- * PosalPro MVP2 - Enhanced Responsive Hook - PERFORMANCE OPTIMIZED
- * Consistent mobile detection for all components with analytics integration
+ * PosalPro MVP2 - Enhanced Responsive Hook - MOBILE PERFORMANCE OPTIMIZED
+ * Lightweight mobile detection for optimal performance on mobile devices
  * Component Traceability Matrix: US-8.1, H9, AC-8.1.1
  *
- * PERFORMANCE OPTIMIZATIONS:
- * - Fixed infinite loop bottleneck with stable dependencies
- * - Added caching with AdvancedCacheManager integration
- * - Throttled analytics tracking to prevent spam
- * - Optimized event listeners with passive option
- * - Smart state diffing to prevent unnecessary updates
+ * MOBILE PERFORMANCE OPTIMIZATIONS:
+ * - Removed heavy async operations and caching for mobile speed
+ * - Simplified state updates with direct calculations
+ * - Reduced analytics overhead for better mobile performance
+ * - Optimized event listeners with minimal processing
+ * - Smart throttling with shorter intervals for mobile responsiveness
  */
 
 'use client';
 
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { AdvancedCacheManager } from '@/lib/performance/AdvancedCacheManager';
 import { useEffect, useRef, useState } from 'react';
 
 export interface ResponsiveState {
@@ -48,53 +44,41 @@ const COMPONENT_MAPPING = {
 };
 
 export function useResponsive(): ResponsiveState {
-  const [state, setState] = useState<ResponsiveState>({
-    isMobile: false,
-    isTablet: false,
-    isDesktop: true,
-    screenWidth: typeof window !== 'undefined' ? window.innerWidth : 1920,
-    screenHeight: typeof window !== 'undefined' ? window.innerHeight : 1080,
+  const [state, setState] = useState<ResponsiveState>(() => {
+    // ✅ MOBILE OPTIMIZATION: Direct initialization without async operations
+    const width = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const height = typeof window !== 'undefined' ? window.innerHeight : 1080;
+
+    return {
+      isMobile: width < BREAKPOINTS.mobile,
+      isTablet: width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet,
+      isDesktop: width >= BREAKPOINTS.tablet,
+      screenWidth: width,
+      screenHeight: height,
+    };
   });
 
   const analytics = useAnalytics();
-  const { handleAsyncError } = useErrorHandler();
-  const errorHandlingService = ErrorHandlingService.getInstance();
-  const cacheManager = AdvancedCacheManager.getInstance();
 
   // Performance optimization refs
   const previousStateRef = useRef<ResponsiveState>(state);
   const lastAnalyticsTrackRef = useRef<number>(0);
-  const isInitializedRef = useRef(false);
 
   useEffect(() => {
-    const updateState = async () => {
+    const updateState = () => {
       try {
         const width = window.innerWidth;
         const height = window.innerHeight;
         const previousState = previousStateRef.current;
 
-        // Check cache for known breakpoint
-        const cacheKey = `responsive_state_${width}_${height}`;
-        const cachedState = await cacheManager.get<ResponsiveState>(cacheKey);
-
-        let newState: ResponsiveState;
-        if (cachedState) {
-          newState = cachedState;
-        } else {
-          newState = {
-            isMobile: width < BREAKPOINTS.mobile,
-            isTablet: width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet,
-            isDesktop: width >= BREAKPOINTS.tablet,
-            screenWidth: width,
-            screenHeight: height,
-          };
-
-          // Cache the computed state for performance
-          await cacheManager.set(cacheKey, newState, {
-            ttl: 60000, // 1 minute cache
-            tags: ['responsive', 'mobile'],
-          });
-        }
+        // ✅ MOBILE OPTIMIZATION: Direct state calculation without caching overhead
+        const newState: ResponsiveState = {
+          isMobile: width < BREAKPOINTS.mobile,
+          isTablet: width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet,
+          isDesktop: width >= BREAKPOINTS.tablet,
+          screenWidth: width,
+          screenHeight: height,
+        };
 
         // Only update if state actually changed (performance optimization)
         const hasSignificantChange =
@@ -104,15 +88,14 @@ export function useResponsive(): ResponsiveState {
           Math.abs(previousState.screenWidth - newState.screenWidth) > 50 ||
           Math.abs(previousState.screenHeight - newState.screenHeight) > 50;
 
-        if (hasSignificantChange || !isInitializedRef.current) {
+        if (hasSignificantChange) {
           setState(newState);
           previousStateRef.current = newState;
-          isInitializedRef.current = true;
 
-          // Throttled analytics tracking to prevent spam (H9)
+          // ✅ MOBILE OPTIMIZATION: Simplified analytics tracking with longer throttle
           const now = Date.now();
           const shouldTrackAnalytics =
-            now - lastAnalyticsTrackRef.current > 5000 && // Minimum 5 seconds between tracks
+            now - lastAnalyticsTrackRef.current > 10000 && // 10 seconds minimum for mobile performance
             (previousState.isMobile !== newState.isMobile ||
               previousState.isTablet !== newState.isTablet ||
               previousState.isDesktop !== newState.isDesktop);
@@ -120,11 +103,8 @@ export function useResponsive(): ResponsiveState {
           if (shouldTrackAnalytics) {
             lastAnalyticsTrackRef.current = now;
 
+            // ✅ MOBILE OPTIMIZATION: Simplified analytics payload
             analytics.track('responsive_breakpoint_change', {
-              userStories: COMPONENT_MAPPING.userStories,
-              acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
-              hypotheses: COMPONENT_MAPPING.hypotheses,
-              testCases: COMPONENT_MAPPING.testCases,
               fromBreakpoint: previousState.isMobile
                 ? 'mobile'
                 : previousState.isTablet
@@ -133,30 +113,24 @@ export function useResponsive(): ResponsiveState {
               toBreakpoint: newState.isMobile ? 'mobile' : newState.isTablet ? 'tablet' : 'desktop',
               screenWidth: width,
               screenHeight: height,
-              orientation: width > height ? 'landscape' : 'portrait',
-              cacheHit: !!cachedState,
-              performanceOptimized: true,
               timestamp: now,
             });
           }
         }
       } catch (error) {
-        handleAsyncError(error, 'Failed to update responsive state', {
-          component: 'useResponsive',
-          operation: 'updateState',
-          errorCode: ErrorCodes.SYSTEM.UNKNOWN,
-        });
+        // ✅ MOBILE OPTIMIZATION: Simplified error handling without complex service calls
+        console.warn('Responsive state update failed:', error);
       }
     };
 
     // Initial state update
     updateState();
 
-    // Optimized event listeners with throttling and passive option
+    // ✅ MOBILE OPTIMIZATION: Simplified event listeners with mobile-optimized throttling
     let timeoutId: NodeJS.Timeout;
     const throttledUpdateState = () => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(updateState, 150); // 150ms throttle for optimal performance
+      timeoutId = setTimeout(updateState, 100); // 100ms throttle for mobile responsiveness
     };
 
     window.addEventListener('resize', throttledUpdateState, { passive: true });
