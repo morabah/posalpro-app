@@ -165,3 +165,6 @@ node_modules/@napi-rs/wasm-runtime/dist/fs.js
 
 # Local Netlify folder
 .netlify
+
+# Deployment tracking (local only)
+.deployment-history.json

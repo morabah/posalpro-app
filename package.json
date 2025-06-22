@@ -1,6 +1,6 @@
 {
   "name": "posalpro-mvp2",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "engines": {
     "node": ">=20.17.0",
@@ -40,7 +40,23 @@
     "production:validate": "./scripts/setup-production.sh validate",
     "production:seed": "./scripts/setup-production.sh seed-only",
     "production:backup": "./scripts/setup-production.sh backup-mocks",
-    "rebuild-native": "npm rebuild bcrypt --build-from-source"
+    "rebuild-native": "npm rebuild bcrypt --build-from-source",
+    "version:alpha": "npm version prerelease --preid=alpha",
+    "version:beta": "npm version prerelease --preid=beta",
+    "version:rc": "npm version prerelease --preid=rc",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major",
+    "deploy": "./scripts/deploy.sh",
+    "deploy:alpha": "./scripts/deploy.sh alpha",
+    "deploy:beta": "./scripts/deploy.sh beta",
+    "deploy:rc": "./scripts/deploy.sh rc",
+    "deploy:patch": "./scripts/deploy.sh patch",
+    "deploy:minor": "./scripts/deploy.sh minor",
+    "deploy:major": "./scripts/deploy.sh major",
+    "deploy:staging": "./scripts/deploy.sh staging",
+    "deploy:dry-run": "./scripts/deploy.sh alpha --dry-run",
+    "deployment:info": "node scripts/deployment-info.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,json,css,scss}": [
