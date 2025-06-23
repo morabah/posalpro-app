@@ -350,12 +350,34 @@ export interface ProposalSearchResult {
   filters: ProposalFilters;
   sortBy: string;
   sortOrder: 'asc' | 'desc';
-  pagination: {
-    page: number;
-    limit: number;
-    hasNext: boolean;
-    hasPrev: boolean;
+  pagination: OffsetPagination | CursorPagination;
+  meta?: {
+    paginationType: 'offset' | 'cursor';
+    sortBy: string;
+    sortOrder: 'asc' | 'desc';
   };
+}
+
+/**
+ * Legacy offset-based pagination (for backward compatibility)
+ */
+export interface OffsetPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+/**
+ * Cursor-based pagination (enterprise-scale performance)
+ */
+export interface CursorPagination {
+  limit: number;
+  hasNextPage: boolean;
+  nextCursor: string | null;
+  itemCount: number;
 }
 
 // Error handling

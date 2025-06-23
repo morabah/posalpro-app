@@ -559,6 +559,21 @@ model Proposal {
   lastSyncedAt      DateTime?
   syncStatus        String?             @default("PENDING")
   projectType       String?
+
+  // 🚀 STRATEGIC DENORMALIZATION: Pre-calculated metrics for performance
+  // Eliminates N+1 queries and improves dashboard/list loading
+  creatorName       String?             // Denormalized from User.name
+  creatorEmail      String?             // Denormalized from User.email
+  customerName      String?             // Denormalized from Customer.name
+  customerTier      String?             // Denormalized from Customer.tier
+  productCount      Int                 @default(0)    // Count of associated products
+  sectionCount      Int                 @default(0)    // Count of proposal sections
+  approvalCount     Int                 @default(0)    // Count of approvals
+  totalValue        Float?              // Calculated total with products
+  completionRate    Float               @default(0)    // Percentage complete (0-100)
+  lastActivityAt    DateTime?           // Last modification timestamp
+  // Stats updated via triggers or background jobs
+  statsUpdatedAt    DateTime?           // When denormalized data was last updated
   approvals         ApprovalExecution[]
   products          ProposalProduct[]
   sections          ProposalSection[]

@@ -18,7 +18,6 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-
 /**
  * Component Traceability Matrix:
  * - User Stories: US-5.1 (Proposal Creation), US-5.2 (Proposal Management)
@@ -76,8 +75,14 @@ const ProposalUpdateSchema = ProposalCreateSchema.partial().extend({
 });
 
 const ProposalQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
+  // Cursor-based pagination (NEW - more efficient than offset)
+  cursor: z.string().cuid().optional(), // ID of the last item from previous page
   limit: z.coerce.number().int().positive().max(100).default(20),
+
+  // Legacy offset pagination support (DEPRECATED but maintained for backward compatibility)
+  page: z.coerce.number().int().positive().default(1),
+
+  // Filtering
   status: z
     .enum([
       'DRAFT',
@@ -94,10 +99,14 @@ const ProposalQuerySchema = z.object({
   customerId: z.string().cuid().optional(),
   createdBy: z.string().cuid().optional(),
   search: z.string().max(100).optional(),
+
+  // Sorting
   sortBy: z
     .enum(['title', 'createdAt', 'updatedAt', 'dueDate', 'value', 'priority'])
     .default('updatedAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+
+  // Includes
   includeCustomer: z.coerce.boolean().default(true),
   includeProducts: z.coerce.boolean().default(false),
 });
@@ -261,8 +270,8 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      // Calculate pagination
-      const skip = (query.page - 1) * query.limit;
+      // 🚀 CURSOR-BASED PAGINATION: More efficient for large datasets
+      const useCursorPagination = query.cursor !== undefined;
 
       // Define selection criteria
       const proposalSelect = {
@@ -309,19 +318,68 @@ export async function GET(request: NextRequest) {
         }),
       };
 
-      // Execute query with pagination
-      const [proposals, total] = await Promise.all([
-        prisma.proposal.findMany({
-          where,
+      let proposals: any[];
+      let pagination: any;
+
+      if (useCursorPagination) {
+        // 🚀 CURSOR-BASED PAGINATION: Enterprise-scale performance
+        const cursorWhere = query.cursor
+          ? {
+              ...where,
+              id: { lt: query.cursor }, // Cursor condition for 'desc' order
+            }
+          : where;
+
+        proposals = await prisma.proposal.findMany({
+          where: cursorWhere,
           select: proposalSelect,
-          skip,
-          take: query.limit,
+          take: query.limit + 1, // Get one extra to check if there's a next page
           orderBy: {
             [query.sortBy]: query.sortOrder,
           },
-        }),
-        prisma.proposal.count({ where }),
-      ]);
+        });
+
+        // Check if there are more items
+        const hasNextPage = proposals.length > query.limit;
+        if (hasNextPage) {
+          proposals.pop(); // Remove the extra item
+        }
+
+        // Cursor-based pagination response
+        pagination = {
+          limit: query.limit,
+          hasNextPage,
+          nextCursor:
+            hasNextPage && proposals.length > 0 ? proposals[proposals.length - 1].id : null,
+          itemCount: proposals.length,
+        };
+      } else {
+        // 🔄 LEGACY OFFSET PAGINATION: Backward compatibility
+        const skip = (query.page - 1) * query.limit;
+
+        const [proposalResults, total] = await Promise.all([
+          prisma.proposal.findMany({
+            where,
+            select: proposalSelect,
+            skip,
+            take: query.limit,
+            orderBy: {
+              [query.sortBy]: query.sortOrder,
+            },
+          }),
+          prisma.proposal.count({ where }),
+        ]);
+
+        proposals = proposalResults;
+        pagination = {
+          page: query.page,
+          limit: query.limit,
+          total,
+          totalPages: Math.ceil(total / query.limit),
+          hasNextPage: query.page < Math.ceil(total / query.limit),
+          hasPrevPage: query.page > 1,
+        };
+      }
 
       // Track search event
       await trackProposalSearchEvent(
@@ -332,11 +390,12 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         proposals,
-        pagination: {
-          page: query.page,
-          limit: query.limit,
-          total,
-          totalPages: Math.ceil(total / query.limit),
+        pagination,
+        // Metadata to help clients understand pagination type
+        meta: {
+          paginationType: useCursorPagination ? 'cursor' : 'offset',
+          sortBy: query.sortBy,
+          sortOrder: query.sortOrder,
         },
       });
     } catch (error) {

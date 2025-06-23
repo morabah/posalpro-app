@@ -28,7 +28,7 @@ export interface ApiResponse<T = any> {
 }
 
 /**
- * Pagination interface for list responses
+ * Legacy offset-based pagination interface (DEPRECATED - use cursor for new implementations)
  */
 export interface PaginationParams {
   page: number;
@@ -37,6 +37,19 @@ export interface PaginationParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+/**
+ * Cursor-based pagination parameters (RECOMMENDED for enterprise scale)
+ */
+export interface CursorPaginationParams {
+  cursor?: string; // ID of the last item from previous page
+  limit: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+/**
+ * Legacy paginated response (for backward compatibility)
+ */
 export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   pagination: {
     page: number;
@@ -45,6 +58,23 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
     totalPages: number;
     hasNext: boolean;
     hasPrev: boolean;
+  };
+}
+
+/**
+ * Cursor-based paginated response (enterprise performance)
+ */
+export interface CursorPaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
+    itemCount: number;
+  };
+  meta: {
+    paginationType: 'cursor';
+    sortBy: string;
+    sortOrder: 'asc' | 'desc';
   };
 }
 
