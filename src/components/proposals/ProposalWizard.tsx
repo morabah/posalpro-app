@@ -645,9 +645,22 @@ export function ProposalWizard({
       // Create the proposal using the entity
       const response = await proposalEntity.create(proposalData);
 
-      if (!response.success || !response.data) {
+      // Enhanced response validation and debugging
+      console.log('[ProposalWizard] Proposal creation response received:', {
+        success: response.success,
+        data: response.data,
+        message: response.message,
+        responseType: typeof response,
+        responseKeys: Object.keys(response),
+        hasData: !!response.data,
+        dataType: typeof response.data,
+        dataKeys: response.data ? Object.keys(response.data) : null,
+      });
+
+      // Check for successful API response first
+      if (!response.success) {
         throw new StandardError({
-          message: 'Failed to create proposal. Please try again.',
+          message: response.message || 'Proposal creation failed',
           code: ErrorCodes.API.REQUEST_FAILED,
           metadata: {
             component: 'ProposalWizard',
@@ -657,28 +670,54 @@ export function ProposalWizard({
         });
       }
 
-      console.log('[ProposalWizard] Proposal created successfully. Full response:', {
-        success: response.success,
-        data: response.data,
-        message: response.message,
-        proposalId: response.data?.id,
-        dataKeys: response.data ? Object.keys(response.data) : 'no data',
-      });
+      // Safe proposal ID extraction with comprehensive validation
+      let proposalId: string | undefined;
 
-      // Validate the proposal ID before proceeding
-      const proposalId = response.data?.id;
-      if (!proposalId) {
-        console.error('[ProposalWizard] No proposal ID in response:', response);
-        throw new StandardError({
-          message: 'Proposal was created but no ID was returned. Please try again.',
-          code: ErrorCodes.API.INVALID_RESPONSE,
-          metadata: {
-            component: 'ProposalWizard',
-            operation: 'handleCreateProposal',
-            apiResponse: response,
+      // Try multiple possible response structures
+      if (response.data?.id) {
+        proposalId = response.data.id;
+        console.log('[ProposalWizard] ✅ Proposal ID found in response.data.id:', proposalId);
+      } else if ((response as any).id) {
+        proposalId = (response as any).id;
+        console.log('[ProposalWizard] ✅ Proposal ID found in response.id:', proposalId);
+      } else if (response.data && typeof response.data === 'string') {
+        proposalId = response.data as string;
+        console.log('[ProposalWizard] ✅ Proposal ID found as response.data string:', proposalId);
+      }
+
+      // Validate proposal ID format and content
+      if (
+        !proposalId ||
+        proposalId === 'undefined' ||
+        typeof proposalId !== 'string' ||
+        proposalId.trim().length === 0
+      ) {
+        console.error('[ProposalWizard] ❌ Invalid or missing proposal ID:', {
+          proposalId,
+          proposalIdType: typeof proposalId,
+          responseStructure: {
+            success: response.success,
+            hasData: !!response.data,
+            dataType: typeof response.data,
+            dataContent: response.data,
+            message: response.message,
           },
         });
+
+        // Graceful fallback - proposal was created but we can't navigate to it
+        setError(
+          "Proposal was created successfully, but we couldn't navigate to it. Please check the proposals list."
+        );
+
+        // Navigate to proposals list as fallback
+        setTimeout(() => {
+          router.push('/proposals/manage');
+        }, 2000);
+
+        return; // Don't throw error, just handle gracefully
       }
+
+      console.log('[ProposalWizard] ✅ Proposal created successfully with ID:', proposalId);
 
       // Track successful creation
       analytics.trackProposalCreation({

@@ -1,0 +1,305 @@
+/**
+ * Database Performance Testing API - PosalPro MVP2
+ * 🧪 PHASE 9: DATABASE OPTIMIZATION VALIDATION
+ *
+ * API endpoint to run database performance tests
+ * Component Traceability Matrix: US-6.1, US-6.3, US-4.1 | H8, H11, H12
+ */
+
+import { ErrorHandlingService } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { DatabasePerformanceTestService } from '@/test/database-performance-test';
+import { NextRequest, NextResponse } from 'next/server';
+
+/**
+ * Component Traceability Matrix
+ */
+const COMPONENT_MAPPING = {
+  userStories: ['US-6.1', 'US-6.3', 'US-4.1'],
+  acceptanceCriteria: [
+    'AC-6.1.1', // Database query optimization
+    'AC-6.3.1', // Performance monitoring
+    'AC-4.1.2', // Analytics integration
+  ],
+  methods: ['runPerformanceTests()', 'generateTestReport()', 'validateOptimizations()'],
+  hypotheses: ['H8', 'H11', 'H12'],
+  testCases: ['TC-H8-001', 'TC-H11-002', 'TC-H12-003'],
+};
+
+let errorHandlingService: ErrorHandlingService;
+
+// Initialize services
+function initializeServices() {
+  if (!errorHandlingService) {
+    errorHandlingService = ErrorHandlingService.getInstance();
+  }
+}
+
+/**
+ * POST /api/database/test-performance
+ * Run comprehensive database performance tests
+ */
+export async function POST(request: NextRequest) {
+  initializeServices();
+
+  try {
+    const startTime = Date.now();
+
+    // Initialize the performance test service
+    const testService = new DatabasePerformanceTestService();
+
+    // Run all performance tests
+    const testResults = await testService.runPerformanceTests();
+
+    // Calculate overall performance score
+    let totalScore = 0;
+    let totalTests = 0;
+
+    testResults.forEach(suite => {
+      suite.tests.forEach(test => {
+        totalTests++;
+
+        // Score based on performance improvements
+        let testScore = 0;
+
+        // Cache hit rate contributes to score
+        if (test.cacheHitRate) {
+          testScore += test.cacheHitRate * 40; // 40 points max for cache
+        }
+
+        // Response time contributes to score (lower is better)
+        const responseTimeScore = Math.max(0, 60 - test.averageTime / 10);
+        testScore += responseTimeScore;
+
+        totalScore += testScore;
+      });
+    });
+
+    const overallScore = totalTests > 0 ? Math.round(totalScore / totalTests) : 0;
+
+    // Generate detailed test summary
+    const testSummary = {
+      testSuites: testResults.map(suite => ({
+        name: suite.name,
+        description: suite.description,
+        tests: suite.tests.map(test => ({
+          testName: test.testName,
+          averageTime: test.averageTime,
+          minTime: test.minTime,
+          maxTime: test.maxTime,
+          recordsProcessed: test.recordsProcessed,
+          cacheHitRate: test.cacheHitRate,
+          hypothesis: test.hypothesis,
+          iterations: test.iterations,
+        })),
+        summary: suite.summary,
+      })),
+      overallScore,
+      totalTests,
+      totalSuites: testResults.length,
+      executionTime: Date.now() - startTime,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Performance insights
+    const insights = [];
+
+    // Cache performance insights
+    const avgCacheHitRate = testResults
+      .flatMap(suite => suite.tests)
+      .filter(test => test.cacheHitRate)
+      .reduce((sum, test, _, arr) => sum + (test.cacheHitRate || 0) / arr.length, 0);
+
+    if (avgCacheHitRate > 0.7) {
+      insights.push({
+        type: 'success',
+        message: `Excellent cache performance: ${(avgCacheHitRate * 100).toFixed(1)}% hit rate`,
+        hypothesis: 'H8,H11,H12',
+      });
+    } else if (avgCacheHitRate > 0.4) {
+      insights.push({
+        type: 'warning',
+        message: `Moderate cache performance: ${(avgCacheHitRate * 100).toFixed(1)}% hit rate - consider cache optimization`,
+        hypothesis: 'H8,H11,H12',
+      });
+    } else {
+      insights.push({
+        type: 'error',
+        message: `Poor cache performance: ${(avgCacheHitRate * 100).toFixed(1)}% hit rate - cache optimization needed`,
+        hypothesis: 'H8,H11,H12',
+      });
+    }
+
+    // Response time insights
+    const avgResponseTime = testResults
+      .flatMap(suite => suite.tests)
+      .reduce((sum, test, _, arr) => sum + test.averageTime / arr.length, 0);
+
+    if (avgResponseTime < 200) {
+      insights.push({
+        type: 'success',
+        message: `Excellent response time: ${avgResponseTime.toFixed(1)}ms average`,
+        hypothesis: 'H8',
+      });
+    } else if (avgResponseTime < 500) {
+      insights.push({
+        type: 'warning',
+        message: `Moderate response time: ${avgResponseTime.toFixed(1)}ms average - consider index optimization`,
+        hypothesis: 'H8',
+      });
+    } else {
+      insights.push({
+        type: 'error',
+        message: `Slow response time: ${avgResponseTime.toFixed(1)}ms average - immediate optimization needed`,
+        hypothesis: 'H8',
+      });
+    }
+
+    // Cleanup test service
+    await testService.cleanup();
+
+    return NextResponse.json({
+      success: true,
+      ...testSummary,
+      insights,
+      recommendations: [
+        {
+          priority: 'high',
+          description: 'Monitor cache hit rates and optimize frequently accessed queries',
+          hypothesis: 'H8,H11,H12',
+        },
+        {
+          priority: 'medium',
+          description: 'Review slow queries and consider additional composite indexes',
+          hypothesis: 'H8,H11',
+        },
+        {
+          priority: 'low',
+          description: 'Implement query result pagination for large datasets',
+          hypothesis: 'H11,H12',
+        },
+      ],
+      component: 'DatabasePerformanceTestAPI',
+      userStories: COMPONENT_MAPPING.userStories,
+      hypotheses: COMPONENT_MAPPING.hypotheses,
+    });
+  } catch (error) {
+    errorHandlingService.processError(
+      error as Error,
+      'Database performance testing failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'DatabasePerformanceTestAPI',
+        operation: 'POST',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+      }
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Database performance testing failed',
+        message: errorHandlingService.getUserFriendlyMessage(error as Error),
+        timestamp: new Date().toISOString(),
+        component: 'DatabasePerformanceTestAPI',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/database/test-performance
+ * Get information about available performance tests
+ */
+export async function GET(request: NextRequest) {
+  initializeServices();
+
+  try {
+    const testInfo = {
+      availableTests: [
+        {
+          name: 'Content Search Performance',
+          description: 'Tests search query optimization with indexes and caching',
+          hypothesis: 'H11',
+          expectedDuration: '30-60 seconds',
+          tests: [
+            'Basic Content Search (No Optimization)',
+            'Optimized Content Search (With Indexes)',
+            'GIN Index Search (Keywords/Tags)',
+          ],
+        },
+        {
+          name: 'Proposal Query Performance',
+          description: 'Tests proposal data access with optimization and N+1 prevention',
+          hypothesis: 'H8',
+          expectedDuration: '45-90 seconds',
+          tests: [
+            'Basic Proposal Query (No Optimization)',
+            'Optimized Proposal Query (With Relations)',
+            'Complex Proposal Query (Multiple Filters)',
+          ],
+        },
+        {
+          name: 'Product Search Performance',
+          description: 'Tests product catalog search with filtering and optimization',
+          hypothesis: 'H11',
+          expectedDuration: '30-60 seconds',
+          tests: ['Basic Product Search', 'Optimized Product Search (Price Range)'],
+        },
+        {
+          name: 'Analytics Query Performance',
+          description: 'Tests hypothesis validation and analytics data access',
+          hypothesis: 'H12',
+          expectedDuration: '30-60 seconds',
+          tests: ['Basic Analytics Query', 'Optimized Analytics Query (With User Data)'],
+        },
+        {
+          name: 'RBAC Performance',
+          description: 'Tests role-based access control query performance',
+          hypothesis: 'H8',
+          expectedDuration: '20-40 seconds',
+          tests: ['User Roles Query', 'User Sessions Query'],
+        },
+      ],
+      totalEstimatedDuration: '2.5-5 minutes',
+      performanceTargets: {
+        H8: 'Database query response time: 500ms → 200ms (60% improvement)',
+        H11: 'Search query performance: 800ms → 240ms (70% improvement)',
+        H12: 'Analytics query speed: 300ms → 150ms (50% improvement)',
+      },
+      component: 'DatabasePerformanceTestAPI',
+      userStories: COMPONENT_MAPPING.userStories,
+      hypotheses: COMPONENT_MAPPING.hypotheses,
+    };
+
+    return NextResponse.json({
+      success: true,
+      ...testInfo,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    errorHandlingService.processError(
+      error as Error,
+      'Failed to get performance test information',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'DatabasePerformanceTestAPI',
+        operation: 'GET',
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+      }
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to get performance test information',
+        message: errorHandlingService.getUserFriendlyMessage(error as Error),
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
+    );
+  }
+}

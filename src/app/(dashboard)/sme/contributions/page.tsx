@@ -9,7 +9,7 @@
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
-import { useOptimizedDataFetch } from '@/hooks/useOptimizedDataFetch';
+import { useApiClient } from '@/hooks/useApiClient';
 import {
   ArrowLeftIcon,
   BookOpenIcon,
@@ -158,6 +158,7 @@ interface SMEContributionMetrics {
 
 export default function SMEContributionInterface() {
   const router = useRouter();
+  const apiClient = useApiClient();
 
   const [assignment, setAssignment] = useState<SMEAssignment | null>(null);
   const [content, setContent] = useState('');
@@ -184,41 +185,100 @@ export default function SMEContributionInterface() {
   // Auto-save functionality
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Optimized data fetching with caching and error handling
-  const {
-    data: assignmentData,
-    loading: assignmentLoading,
-    error: assignmentError,
-  } = useOptimizedDataFetch<SMEAssignment>('/api/sme/assignment', {
-    staleTime: 30 * 1000, // 30 seconds
-    cacheTime: 5 * 60 * 1000, // 5 minutes
-  });
+  // ✅ SIMPLIFIED: Use apiClient pattern like customer selection
+  const [assignmentData, setAssignmentData] = useState<SMEAssignment | null>(null);
+  const [templatesData, setTemplatesData] = useState<ContributionTemplate[]>([]);
+  const [resourcesData, setResourcesData] = useState<ContributionResource[]>([]);
+  const [versionsData, setVersionsData] = useState<VersionHistory[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const { data: templatesData, loading: templatesLoading } = useOptimizedDataFetch<
-    ContributionTemplate[]
-  >('/api/sme/templates', {
-    staleTime: 60 * 1000, // 1 minute (templates change less frequently)
-    cacheTime: 10 * 60 * 1000, // 10 minutes
-  });
+  // ✅ SIMPLIFIED: Fetch all data on component mount (like customer selection)
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setFetchError(null);
+      try {
+        console.log('[SMEContributions] 🚀 Fetching SME data via apiClient...');
 
-  const { data: resourcesData, loading: resourcesLoading } = useOptimizedDataFetch<
-    ContributionResource[]
-  >('/api/sme/resources', {
-    staleTime: 60 * 1000, // 1 minute
-    cacheTime: 10 * 60 * 1000, // 10 minutes
-  });
+        // Fetch all data in parallel using apiClient like customer selection
+        const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] =
+          await Promise.all([
+            apiClient.get<any>('sme/assignment'),
+            apiClient.get<any>('sme/templates'),
+            apiClient.get<any>('sme/resources'),
+            apiClient.get<any>('sme/versions'),
+          ]);
 
-  const { data: versionsData, loading: versionsLoading } = useOptimizedDataFetch<VersionHistory[]>(
-    '/api/sme/versions',
-    {
-      staleTime: 10 * 1000, // 10 seconds (version history updates frequently)
-      cacheTime: 2 * 60 * 1000, // 2 minutes
-    }
-  );
+        console.log('[SMEContributions] ✅ Assignment response:', assignmentResponse);
+        console.log('[SMEContributions] ✅ Templates response:', templatesResponse);
 
-  // Combined loading and error states
-  const isLoading = assignmentLoading || templatesLoading || resourcesLoading || versionsLoading;
-  const fetchError = assignmentError;
+        // Handle response structure like customer selection
+        const assignment =
+          assignmentResponse.success && assignmentResponse.data ? assignmentResponse.data : null;
+
+        const templates =
+          templatesResponse.success && templatesResponse.data
+            ? Array.isArray(templatesResponse.data)
+              ? templatesResponse.data
+              : []
+            : [];
+
+        const resources =
+          resourcesResponse.success && resourcesResponse.data
+            ? Array.isArray(resourcesResponse.data)
+              ? resourcesResponse.data
+              : []
+            : [];
+
+        const versions =
+          versionsResponse.success && versionsResponse.data
+            ? Array.isArray(versionsResponse.data)
+              ? versionsResponse.data
+              : []
+            : [];
+
+        console.log('[SMEContributions] ✅ Setting data:', {
+          assignmentLoaded: !!assignment,
+          templatesCount: templates.length,
+          resourcesCount: resources.length,
+          versionsCount: versions.length,
+        });
+
+        setAssignmentData(assignment);
+        setTemplatesData(templates);
+        setResourcesData(resources);
+        setVersionsData(versions);
+      } catch (error) {
+        console.error('[SMEContributions] ❌ Error fetching SME data:', error);
+        setAssignmentData(null);
+        setTemplatesData([]);
+        setResourcesData([]);
+        setVersionsData([]);
+
+        // Error handling like customer selection
+        if (error instanceof Error) {
+          if (error.message.includes('401')) {
+            setFetchError('Please log in to access SME assignment data.');
+          } else if (error.message.includes('404')) {
+            setFetchError('SME service is temporarily unavailable.');
+          } else if (error.message.includes('500')) {
+            setFetchError('Server error. Please try again in a few moments.');
+          } else {
+            setFetchError(
+              'Unable to load SME assignment data. Please check your connection and try again.'
+            );
+          }
+        } else {
+          setFetchError('An unexpected error occurred. Please try again.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []); // Simple dependency like customer selection
 
   // Process assignment data when it loads
   useEffect(() => {

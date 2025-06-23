@@ -33,6 +33,14 @@ for complete certification details
 Platform**: Netlify **Status**: ✅ Operational (Authentication & Core Features
 Working)
 
+**Latest Deployment (v0.1.0-alpha.4)**:
+
+- ✅ Version display prominently shown on dashboard header
+- ✅ Comprehensive About page accessible via navigation (/about)
+- ✅ System information, tech stack, and deployment details
+- ✅ Mobile-responsive version display with proper touch targets
+- ✅ Enhanced user transparency and support efficiency
+
 **Recent Critical Fixes Applied:**
 
 - ✅ Netlify catch-all redirect configuration

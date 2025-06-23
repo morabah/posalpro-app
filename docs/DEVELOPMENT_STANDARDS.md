@@ -1420,3 +1420,250 @@ For all error handling implementations:
 - [ ] **Security Considerations**: Avoid exposing sensitive data in error
       messages
 - [ ] **Recovery Actions**: Provide clear next steps for users
+
+## 📁 **FILE RESPONSIBILITY MATRIX** (Prevent Duplicates)
+
+### Core Principle: Single Responsibility
+
+**Never create files that duplicate existing functionality.** Each file should
+have a clear, unique purpose that doesn't overlap with others.
+
+### **Current File Responsibilities**
+
+#### **Deployment & Build Scripts**
+
+- **`scripts/deploy.sh`** ⭐ **PRIMARY DEPLOYMENT SCRIPT**
+
+  - **Purpose**: Complete deployment orchestration (version bump, build, deploy,
+    commit)
+  - **Scope**: Production deployments with full workflow
+  - **Usage**: `npm run deploy:alpha`, `npm run deploy:beta`, etc.
+
+- **`scripts/deployment-info.js`** ⭐ **DEPLOYMENT INFORMATION**
+
+  - **Purpose**: Display deployment history and current status
+  - **Scope**: Information display only, no deployment actions
+  - **Usage**: `npm run deployment:info`
+
+- **`scripts/update-version-history.js`** ⭐ **VERSION DOCUMENTATION**
+  - **Purpose**: Automated version history updates from git commits
+  - **Scope**: Documentation generation only
+  - **Usage**: Called automatically by pre-deployment hooks
+
+#### **Development Scripts**
+
+- **`scripts/dev-clean.sh`** ⭐ **DEVELOPMENT STARTUP**
+
+  - **Purpose**: Health checks and smart development server startup
+  - **Scope**: Local development environment only
+  - **Usage**: `npm run dev:smart`
+
+- **`scripts/demo-port-management.sh`** ⭐ **DEMO/TESTING**
+  - **Purpose**: Demonstrate port management capabilities
+  - **Scope**: Educational and testing purposes only
+  - **Usage**: Manual execution for demonstrations
+
+#### **Production Setup**
+
+- **`scripts/setup-production.sh`** ⭐ **PRODUCTION ENVIRONMENT SETUP**
+  - **Purpose**: One-time production environment configuration
+  - **Scope**: Initial production setup, not regular deployments
+  - **Usage**: `npm run production:setup`
+
+#### **Configuration Files**
+
+- **`package.json`** ⭐ **NPM SCRIPTS ORCHESTRATION**
+  - **Purpose**: Define all npm commands and coordinate script execution
+  - **Scope**: Script definitions and dependencies only
+  - **Usage**: Central command registry
+
+### **⚠️ DUPLICATE DETECTION CHECKLIST**
+
+Before creating any new file, ask:
+
+1. **Does this functionality already exist?**
+
+   - Search existing scripts: `find scripts/ -name "*.sh" -o -name "*.js"`
+   - Check package.json scripts: `npm run`
+   - Review docs/CRITICAL_REFERENCE_DOCUMENTS.md
+
+2. **Can I extend an existing file instead?**
+
+   - Add functions to existing scripts
+   - Use command-line arguments for variations
+   - Create helper functions within existing files
+
+3. **Is this truly unique functionality?**
+
+   - Different enough to warrant separate file
+   - Serves distinct user needs
+   - Cannot be merged without complexity
+
+4. **Will this create confusion?**
+   - Similar names to existing files
+   - Overlapping command structures
+   - Unclear which script to use
+
+### **🔧 REFACTORING STRATEGY**
+
+When duplicates are found:
+
+#### **Step 1: Identify Primary File**
+
+- Most comprehensive functionality
+- Better error handling and validation
+- More recent and maintained
+- Follows current standards
+
+#### **Step 2: Migration Plan**
+
+- Extract unique functionality from secondary files
+- Integrate into primary file as options/flags
+- Update all references and documentation
+- Test thoroughly before removal
+
+#### **Step 3: Cleanup Process**
+
+- Archive old files in `docs/archive/deprecated-scripts/`
+- Update package.json script references
+- Update documentation and README files
+- Notify team of changes
+
+### **📋 CURRENT DUPLICATION ANALYSIS**
+
+#### **Identified Duplications:**
+
+1. **Version History Updates**
+
+   - **Primary**: `scripts/update-version-history.js` (automated, comprehensive)
+   - **Secondary**: Manual entries in `docs/VERSION_HISTORY.md`
+   - **Resolution**: Keep automated script, remove manual entries
+
+2. **Deployment Information**
+
+   - **Primary**: `scripts/deployment-info.js` (comprehensive status)
+   - **Secondary**: Scattered deployment info in various docs
+   - **Resolution**: Centralize all deployment info in primary script
+
+3. **Development Server Startup**
+   - **Primary**: `scripts/dev-clean.sh` (comprehensive health checks)
+   - **Secondary**: Basic `npm run dev` command
+   - **Resolution**: Use dev-clean.sh as default via `npm run dev:smart`
+
+### **🚀 PREVENTION GUIDELINES**
+
+#### **Before Creating New Scripts:**
+
+1. **Search Existing Functionality**
+
+   ```bash
+   # Search for similar scripts
+   find scripts/ -type f -exec grep -l "keyword" {} \;
+
+   # Check package.json scripts
+   npm run | grep -i "keyword"
+
+   # Search documentation
+   grep -r "functionality" docs/
+   ```
+
+2. **Consult File Responsibility Matrix**
+
+   - Check this section for existing responsibilities
+   - Identify the correct file to extend
+   - Follow established patterns
+
+3. **Use Naming Conventions**
+
+   - **Scripts**: `action-scope.sh` (e.g., `deploy-production.sh`)
+   - **Node Scripts**: `action-scope.js` (e.g., `update-version.js`)
+   - **Documentation**: `CATEGORY_PURPOSE.md` (e.g., `DEPLOYMENT_GUIDE.md`)
+
+4. **Add to Package.json Properly**
+   ```json
+   {
+     "scripts": {
+       "category:action": "path/to/script",
+       "category:action:variant": "path/to/script --variant"
+     }
+   }
+   ```
+
+#### **Documentation Requirements:**
+
+1. **Update File Responsibility Matrix**
+
+   - Add new file purpose and scope
+   - Document relationship to existing files
+   - Specify when to use vs alternatives
+
+2. **Cross-Reference Updates**
+
+   - Update PROJECT_REFERENCE.md
+   - Add to CRITICAL_REFERENCE_DOCUMENTS.md if important
+   - Update relevant guides and documentation
+
+3. **Version History Entry**
+   - Document new file creation
+   - Explain why existing files weren't sufficient
+   - Note any refactoring or consolidation
+
+### **🎯 IMPLEMENTATION EXAMPLE**
+
+#### **Correct Approach: Extending Existing Script**
+
+```bash
+# Instead of creating new-deployment-script.sh
+# Extend existing deploy.sh with new options
+
+./scripts/deploy.sh alpha --with-notifications --skip-tests
+```
+
+#### **Incorrect Approach: Creating Duplicate**
+
+```bash
+# DON'T create these:
+# scripts/deploy-alpha.sh
+# scripts/deploy-with-notifications.sh
+# scripts/quick-deploy.sh
+```
+
+### **📊 MONITORING AND MAINTENANCE**
+
+#### **Regular Audits**
+
+- Monthly review of scripts/ directory
+- Check for similar functionality across files
+- Identify consolidation opportunities
+- Update File Responsibility Matrix
+
+#### **Quality Gates**
+
+- Pre-commit hooks check for duplicate script names
+- Code review process includes duplication check
+- Documentation reviews validate file purposes
+
+#### **Metrics to Track**
+
+- Number of scripts in each category
+- Script usage frequency (via analytics)
+- User confusion reports about which script to use
+- Time spent debugging script conflicts
+
+### **🔗 INTEGRATION WITH EXISTING STANDARDS**
+
+This File Responsibility Matrix integrates with:
+
+- **TypeScript Standards**: Ensure scripts follow typing standards
+- **Error Handling**: Use ErrorHandlingService patterns in Node scripts
+- **Testing Standards**: Include test coverage for all scripts
+- **Documentation Standards**: Maintain comprehensive documentation
+
+### **📝 TEAM COMMUNICATION**
+
+When creating or modifying scripts:
+
+1. **Announce Intent**: Communicate planned script changes
+2. **Review Process**: Include duplication check in code reviews
+3. **Update Training**: Ensure team knows which scripts to use
+4. **Feedback Loop**: Collect user feedback on script clarity

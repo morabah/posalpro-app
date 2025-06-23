@@ -7,7 +7,7 @@
 
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
-import { apiClient } from '@/lib/api/client';
+import { useApiClient } from '@/hooks/useApiClient';
 import { UsersIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
@@ -29,6 +29,8 @@ interface Customer {
 }
 
 export default function CustomersPage() {
+  const apiClient = useApiClient();
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,26 +43,42 @@ export default function CustomersPage() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get<{ data: { customers: Customer[] } }>('/customers');
+      const response = await apiClient.get<any>('/customers');
 
       console.log('🔍 [DEBUG] Full API response:', response);
-      console.log('🔍 [DEBUG] Response success:', response.success);
-      console.log('🔍 [DEBUG] Response data:', response.data);
-      console.log('🔍 [DEBUG] Response data.data:', response.data?.data);
-      console.log('🔍 [DEBUG] Customers array (corrected path):', response.data?.data?.customers);
 
-      if (response.success && response.data && response.data.data) {
-        const customers = response.data.data.customers || [];
-        console.log('🔍 [DEBUG] Setting customers:', customers);
-        console.log('🔍 [DEBUG] Customers length:', customers.length);
-        setCustomers(customers);
+      if (response.success && response.data?.customers) {
+        const customerList = response.data.customers;
+        setCustomers(customerList);
+        console.log('🔍 [DEBUG] Setting customers:', customerList);
+        console.log('🔍 [DEBUG] Customers length:', customerList.length);
       } else {
-        console.error('🔍 [DEBUG] Response not successful or no data');
-        throw new Error(response.message || 'Failed to fetch customers');
+        console.error('🔍 [DEBUG] Invalid response structure:', response);
+        setCustomers([]);
+        setError('Unable to load customers. Please try again.');
       }
     } catch (err) {
       console.error('Error fetching customers:', err);
-      setError('Failed to load customers');
+      setCustomers([]);
+
+      if (err instanceof Error) {
+        if (err.message.includes('401')) {
+          setError('Please log in to access customer data.');
+          console.error('Authentication required - user may need to log in again');
+        } else if (err.message.includes('404')) {
+          setError('Customer service is temporarily unavailable.');
+          console.error('Customers API endpoint not found');
+        } else if (err.message.includes('500')) {
+          setError('Server error. Please try again in a few moments.');
+          console.error('Server error while fetching customers');
+        } else {
+          setError('Unable to load customers. Please check your connection and try again.');
+          console.error('Network or unknown error:', err.message);
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+        console.error('Unknown error type:', typeof err, err);
+      }
     } finally {
       setLoading(false);
     }

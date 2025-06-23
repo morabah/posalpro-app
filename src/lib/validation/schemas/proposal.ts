@@ -9,6 +9,27 @@ import { z } from 'zod';
 import { baseEntitySchema, fileUploadSchema, prioritySchema, validationUtils } from './shared';
 
 /**
+ * Database-agnostic ID validation helper
+ * Supports UUIDs, CUIDs, and other valid ID formats
+ */
+const databaseIdSchema = z
+  .string()
+  .min(1, 'ID is required')
+  .refine(id => {
+    return id !== 'undefined' && id.trim().length > 0;
+  }, 'Invalid ID format');
+
+/**
+ * User-specific ID validation (for CUIDs and other user ID formats)
+ */
+const userIdSchema = z
+  .string()
+  .min(1, 'User ID is required')
+  .refine(id => {
+    return id !== 'undefined' && id !== 'unknown' && id.trim().length > 0;
+  }, 'Invalid user ID format');
+
+/**
  * Proposal metadata validation schema
  * Based on PROPOSAL_CREATION_SCREEN.md Step 1: Basic Information
  */
@@ -167,7 +188,7 @@ export const contentSectionSchema = z.object({
 
   lastModified: z.date(),
 
-  modifiedBy: z.string().uuid(),
+  modifiedBy: userIdSchema,
 
   // Content metadata
   sources: z.array(z.string()).optional(),
@@ -221,7 +242,12 @@ export type ProposalProduct = z.infer<typeof proposalProductSchema>;
  * Proposal team assignment validation schema
  */
 export const teamAssignmentSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z
+    .string()
+    .min(1, 'User ID is required')
+    .refine(id => {
+      return id !== 'undefined' && id.trim().length > 0;
+    }, 'Invalid user ID format'),
 
   userName: validationUtils.stringWithLength(1, 100, 'User name'),
 
@@ -235,7 +261,12 @@ export const teamAssignmentSchema = z.object({
 
   assignedAt: z.date(),
 
-  assignedBy: z.string().uuid(),
+  assignedBy: z
+    .string()
+    .min(1, 'Assigned by ID is required')
+    .refine(id => {
+      return id !== 'undefined' && id.trim().length > 0;
+    }, 'Invalid assignedBy ID format'),
 
   status: z.enum(['assigned', 'accepted', 'declined', 'completed']).default('assigned'),
 });
@@ -485,7 +516,7 @@ export const proposalEntitySchema = baseEntitySchema.extend({
           id: z.string().uuid(),
           name: z.string().min(1, 'Step name is required'),
           order: z.number().int().min(1),
-          assignedTo: z.string().uuid(),
+          assignedTo: userIdSchema,
           status: z.enum(['pending', 'approved', 'rejected', 'skipped']).default('pending'),
           comments: z.string().optional(),
           completedAt: z.date().optional(),
@@ -538,7 +569,7 @@ export const proposalEntitySchema = baseEntitySchema.extend({
       z.object({
         format: z.enum(['pdf', 'docx', 'html']),
         exportedAt: z.date(),
-        exportedBy: z.string().uuid(),
+        exportedBy: userIdSchema,
         version: z.string().min(1, 'Version is required'),
       })
     )
@@ -580,7 +611,7 @@ export const proposalSearchSchema = z.object({
   status: z.array(z.nativeEnum(ProposalStatus)).optional(),
   priority: z.array(prioritySchema).optional(),
   clientName: z.string().optional(),
-  assignedTo: z.array(z.string().uuid()).optional(),
+  assignedTo: z.array(userIdSchema).optional(),
   createdAfter: z.date().optional(),
   createdBefore: z.date().optional(),
   deadlineAfter: z.date().optional(),
@@ -603,11 +634,11 @@ export const proposalCommentSchema = z.object({
   content: validationUtils.stringWithLength(1, 2000, 'Comment content'),
   type: z.enum(['general', 'suggestion', 'issue', 'approval', 'rejection']),
   isResolved: z.boolean().default(false),
-  resolvedBy: z.string().uuid().optional(),
+  resolvedBy: userIdSchema.optional(),
   resolvedAt: z.date().optional(),
-  createdBy: z.string().uuid(),
+  createdBy: userIdSchema,
   createdAt: z.date(),
-  mentions: z.array(z.string().uuid()).optional(),
+  mentions: z.array(userIdSchema).optional(),
 });
 
 export type ProposalComment = z.infer<typeof proposalCommentSchema>;

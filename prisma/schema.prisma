@@ -637,6 +637,7 @@ model Product {
 
   @@index([isActive, category])
   @@index([sku])
+  @@index([isActive, category], map: "idx_products_active_category")
   @@map("products")
 }
 
@@ -693,6 +694,7 @@ model Content {
   @@index([tags])
   @@index([category])
   @@index([cloudId])
+  @@index([type, isActive], map: "idx_content_type_active")
   @@map("content")
 }
 

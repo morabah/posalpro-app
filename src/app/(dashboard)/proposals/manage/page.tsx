@@ -45,7 +45,7 @@ const COMPONENT_MAPPING = {
 enum ProposalStatus {
   DRAFT = 'draft',
   IN_PROGRESS = 'in_progress',
-  REVIEW = 'review',
+  IN_REVIEW = 'in_review',
   APPROVED = 'approved',
   SUBMITTED = 'submitted',
   WON = 'won',
@@ -187,9 +187,9 @@ export default function ProposalManagementDashboard() {
       case 'draft':
         return ProposalStatus.DRAFT;
       case 'in_review':
-        return ProposalStatus.REVIEW;
+        return ProposalStatus.IN_REVIEW;
       case 'pending_approval':
-        return ProposalStatus.REVIEW;
+        return ProposalStatus.IN_REVIEW;
       case 'approved':
         return ProposalStatus.APPROVED;
       case 'submitted':
@@ -387,7 +387,7 @@ export default function ProposalManagementDashboard() {
           return 'bg-gray-100 text-gray-800';
         case ProposalStatus.IN_PROGRESS:
           return 'bg-blue-100 text-blue-800';
-        case ProposalStatus.REVIEW:
+        case ProposalStatus.IN_REVIEW:
           return 'bg-yellow-100 text-yellow-800';
         case ProposalStatus.APPROVED:
           return 'bg-green-100 text-green-800';
@@ -442,7 +442,7 @@ export default function ProposalManagementDashboard() {
     const total = proposals.length;
     const draft = proposals.filter(p => p.status === ProposalStatus.DRAFT).length;
     const inProgress = proposals.filter(p => p.status === ProposalStatus.IN_PROGRESS).length;
-    const review = proposals.filter(p => p.status === ProposalStatus.REVIEW).length;
+    const review = proposals.filter(p => p.status === ProposalStatus.IN_REVIEW).length;
     const submitted = proposals.filter(p => p.status === ProposalStatus.SUBMITTED).length;
     const won = proposals.filter(p => p.status === ProposalStatus.WON).length;
     const totalValue = proposals.reduce((sum, p) => sum + p.estimatedValue, 0);
