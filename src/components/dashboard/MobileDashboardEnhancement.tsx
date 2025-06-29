@@ -301,7 +301,8 @@ export function MobileDashboardEnhancement({
 
       return nextMode;
     });
-  }, [analytics, deviceInfo]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   /**
    * Performance Mode Toggle

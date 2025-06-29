@@ -431,13 +431,7 @@ export function ContentSelectionStep({
         analytics?.trackContentSelection?.(action, contentId, enhancedMetadata);
       }
 
-      console.log('Enhanced Content Selection Analytics:', {
-        action,
-        contentId,
-        metadata: enhancedMetadata,
-        component: 'ContentSelectionStep',
-        traceability: COMPONENT_MAPPING,
-      });
+      // ✅ PERFORMANCE: Removed frequent analytics logging to prevent console spam
     },
     [
       selectedContentIds,
@@ -568,13 +562,15 @@ export function ContentSelectionStep({
 
     setCrossStepValidationResults({ errors, warnings, suggestions });
 
-    // Track validation results
-    trackContentSelection('cross_step_validation', '', {
-      errorsCount: errors.length,
-      warningsCount: warnings.length,
-      suggestionsCount: suggestions.length,
-      validationPassed: errors.length === 0,
-    });
+    // ✅ PERFORMANCE: Track validation results (throttled to prevent spam)
+    if (errors.length > 0 || warnings.length > 2) {
+      trackContentSelection('cross_step_validation', '', {
+        errorsCount: errors.length,
+        warningsCount: warnings.length,
+        suggestionsCount: suggestions.length,
+        validationPassed: errors.length === 0,
+      });
+    }
 
     return { errors, warnings, suggestions };
   }, [selectedContentMap, rfpData, teamData, productData, trackContentSelection]);

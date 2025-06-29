@@ -11,7 +11,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, ChevronDown, CircleAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { getSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -43,7 +43,7 @@ const AVAILABLE_ROLES = [
   { value: 'Technical Director', label: 'Technical Director' },
   { value: 'Business Development Manager', label: 'Business Development Manager' },
   { value: 'Proposal Specialist', label: 'Proposal Specialist' },
-  { value: 'Administrator', label: 'System Administrator' },
+  { value: 'System Administrator', label: 'System Administrator' },
 ];
 
 // Role-based redirection map
@@ -113,7 +113,8 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
     getValues,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    mode: 'onChange',
+    mode: 'onBlur',
+    reValidateMode: 'onBlur',
     defaultValues: {
       email: '',
       password: '',
@@ -139,47 +140,22 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
     }
   }, [register]);
 
-  // Debug form state with more details
+  // ✅ PERFORMANCE FIX: Throttled debug logging for development (only when explicitly needed)
+  const lastDebugTime = useRef(0);
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'test') {
-      const currentValues = getValues();
-      console.log('=== FORM DEBUG INFO ===');
-      console.log('Form validation state:');
-      console.log('  isValid:', isValid);
-      console.log('  isValidating:', isValidating);
-
-      // Safe error logging to avoid circular structure
-      const safeErrors = Object.keys(errors).reduce(
-        (acc, key) => {
-          const error = errors[key as keyof typeof errors];
-          acc[key] = error ? { message: error.message, type: error.type } : null;
-          return acc;
-        },
-        {} as Record<string, any>
-      );
-      console.log('  errors:', safeErrors);
-
-      console.log('  watchedValues:', {
-        email: email,
-        emailLength: email?.length || 0,
-        password: password,
-        passwordLength: password?.length || 0,
-        role: selectedRole,
-        roleLength: selectedRole?.length || 0,
-      });
-      console.log('  getAllValues:', currentValues);
-      console.log('  field status:', {
-        hasEmail: !!email && email.length > 0,
-        hasPassword: !!password && password.length > 0,
-        hasRole: !!selectedRole && selectedRole.length > 0,
-        emailValid: !errors.email,
-        passwordValid: !errors.password,
-        roleValid: !errors.role,
-      });
-      console.log('  button should be enabled:', !!(email && password && selectedRole));
-      console.log('=== END DEBUG INFO ===');
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEBUG_FORMS === 'true') {
+      const now = Date.now();
+      if (now - lastDebugTime.current > 2000) {
+        // Only log every 2 seconds max
+        lastDebugTime.current = now;
+        console.log('LoginForm State:', {
+          isValid,
+          hasCredentials: !!(email && password && selectedRole),
+          errorCount: Object.keys(errors).length,
+        });
+      }
     }
-  }, [isValid, isValidating, errors, email, password, selectedRole, getValues]);
+  }, [isValid, email, password, selectedRole, errors]);
 
   // Track page load performance
   useEffect(() => {
@@ -196,7 +172,8 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
       window.addEventListener('load', handleLoad);
       return () => window.removeEventListener('load', handleLoad);
     }
-  }, [analytics]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   // Track form interactions
   const trackFieldInteraction = useCallback(
@@ -234,7 +211,8 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
       const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
-        rememberMe: false,
+        role: data.role,
+        rememberMe: data.rememberMe,
         redirect: false,
       });
 

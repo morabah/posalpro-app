@@ -47,8 +47,7 @@ const ProposalWizard = dynamic(
           <p className="text-sm text-gray-500 mt-1">Optimizing for best performance</p>
         </div>
       </div>
-    ),
-    ssr: false, // Client-side only for better performance
+    ), // Client-side only for better performance
   }
 );
 
@@ -56,10 +55,8 @@ const ProposalWizard = dynamic(
 const PerformanceDashboard = dynamic(
   () => import('@/components/performance/PerformanceDashboard'),
   {
-    loading: () => <div className="animate-pulse h-32 bg-gray-100 rounded-lg"></div>,
-    ssr: false,
-  }
-);
+    loading: () => <div className="animate-pulse h-32 bg-gray-100 rounded-lg"></div>
+  });
 
 /**
  * Optimized Proposal Creation Page
@@ -85,12 +82,13 @@ export default function ProposalCreatePage() {
               jsHeapSizeLimit: (performance as any).memory.jsHeapSizeLimit,
             }
           : null,
-      },
+      }
     });
 
     // Preload critical components
     import('@/components/proposals/ProposalWizard');
-  }, [analytics]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -1,0 +1,99 @@
+{
+  "timestamp": "2025-06-29T09:04:03.936Z",
+  "summary": {
+    "totalTests": 11,
+    "passed": 7,
+    "failed": 4,
+    "successRate": 64
+  },
+  "results": {
+    "authentication": [
+      {
+        "endpoint": "/api/health",
+        "success": true,
+        "status": 200,
+        "responseTime": 327,
+        "isJsonResponse": true,
+        "error": null
+      },
+      {
+        "endpoint": "/api/customers",
+        "success": true,
+        "status": 401,
+        "responseTime": 5066,
+        "isJsonResponse": true,
+        "error": null
+      },
+      {
+        "endpoint": "/api/products",
+        "success": true,
+        "status": 401,
+        "responseTime": 1976,
+        "isJsonResponse": true,
+        "error": null
+      },
+      {
+        "endpoint": "/api/proposals",
+        "success": true,
+        "status": 401,
+        "responseTime": 649,
+        "isJsonResponse": true,
+        "error": null
+      }
+    ],
+    "performance": [
+      {
+        "page": "/",
+        "loadTime": 11856,
+        "status": 200,
+        "success": false
+      },
+      {
+        "page": "/dashboard",
+        "loadTime": 11882,
+        "status": 200,
+        "success": false
+      },
+      {
+        "page": "/profile",
+        "loadTime": 29704,
+        "status": 500,
+        "success": false
+      },
+      {
+        "page": "/customers",
+        "loadTime": 777,
+        "status": 500,
+        "success": false
+      },
+      {
+        "page": "/products",
+        "loadTime": 1371,
+        "status": 500,
+        "success": false
+      },
+      {
+        "page": "/proposals",
+        "loadTime": 4573,
+        "status": 500,
+        "success": false
+      }
+    ],
+    "session": [
+      {
+        "endpoint": "/api/auth/session",
+        "status": 500,
+        "success": false,
+        "hasValidResponse": false
+      }
+    ],
+    "overall": {
+      "passed": 7,
+      "failed": 4
+    }
+  },
+  "recommendations": [
+    "Performance issues detected - consider additional optimizations",
+    "Session validation issues - verify NextAuth configuration"
+  ]
+}

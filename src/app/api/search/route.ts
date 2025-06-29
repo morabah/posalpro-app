@@ -1,43 +1,59 @@
 /**
- * PosalPro MVP2 - Search API Routes
- * Global search functionality across all entities
- * Component Traceability: US-1.1, US-1.2, H1, H6
+ * PosalPro MVP2 - Enhanced Search API Routes with Cursor Pagination
+ * Global search functionality across all entities with enterprise performance
+ * Component Traceability: US-1.1, US-1.2, US-6.1, H1, H6, H8, H11
  */
 
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { decidePaginationStrategy } from '@/lib/utils/selectiveHydration';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+
+// ✅ EDGE RUNTIME: Strategic optimization for global search endpoints
+// Standard Node.js runtime for NextAuth compatibility
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
  * Component Traceability Matrix:
- * - User Stories: US-1.1 (Content Discovery), US-1.2 (Advanced Search)
- * - Acceptance Criteria: AC-1.1.1, AC-1.1.2, AC-1.2.1, AC-1.2.2
- * - Hypotheses: H1 (Content Discovery), H6 (Requirement Extraction)
- * - Methods: globalSearch(), contentSearch(), advancedSearch()
- * - Test Cases: TC-H1-001, TC-H6-001
+ * - User Stories: US-1.1 (Content Discovery), US-1.2 (Advanced Search), US-6.1 (Performance Optimization)
+ * - Acceptance Criteria: AC-1.1.1, AC-1.1.2, AC-1.2.1, AC-1.2.2, AC-6.1.1 (Cursor Pagination)
+ * - Hypotheses: H1 (Content Discovery), H6 (Requirement Extraction), H8 (Load Time), H11 (Cache Hit Rate)
+ * - Methods: globalSearch(), contentSearch(), advancedSearch(), getCursorPaginatedSearch()
+ * - Test Cases: TC-H1-001, TC-H6-001, TC-H8-021, TC-H11-016
  */
 
 /**
- * Search query validation schema
+ * Enhanced search query validation schema with cursor pagination
  */
 const SearchQuerySchema = z.object({
   q: z.string().min(1, 'Search query is required'),
   type: z.enum(['all', 'content', 'proposals', 'products', 'customers', 'users']).default('all'),
+
+  // Cursor-based pagination (NEW - Enterprise performance)
+  cursor: z.string().optional(),
   limit: z.coerce.number().min(1).max(100).default(20),
-  offset: z.coerce.number().min(0).default(0),
+
+  // Legacy offset pagination (BACKWARD COMPATIBILITY)
+  offset: z.coerce.number().min(0).optional(),
+  page: z.coerce.number().min(1).optional(),
+
+  // Selective hydration support
+  fields: z.string().optional(),
+
+  // Search options
   filters: z.string().optional(),
-  sortBy: z.enum(['relevance', 'date', 'title', 'status']).default('relevance'),
+  sortBy: z.enum(['relevance', 'date', 'title', 'status', 'id']).default('relevance'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
 /**
- * GET /api/search - Global search across all entities
+ * GET /api/search - Enhanced global search with cursor-based pagination
+ * Supports both cursor (default) and offset (legacy) pagination
  */
 export async function GET(request: NextRequest) {
   let session: any = null;
@@ -55,6 +71,16 @@ export async function GET(request: NextRequest) {
     const queryParams = Object.fromEntries(searchParams);
     validatedQuery = SearchQuerySchema.parse(queryParams);
 
+    // Determine pagination strategy
+    const { useCursorPagination, reason } = decidePaginationStrategy({
+      cursor: validatedQuery.cursor,
+      limit: validatedQuery.limit,
+      sortBy: validatedQuery.sortBy,
+      sortOrder: validatedQuery.sortOrder,
+      fields: validatedQuery.fields,
+      page: validatedQuery.page,
+    });
+
     // Parse filters if provided
     let parsedFilters: any = {};
     if (validatedQuery.filters) {
@@ -68,8 +94,34 @@ export async function GET(request: NextRequest) {
     // Track search event for analytics
     await trackSearchEvent(session.user.id, validatedQuery.q, validatedQuery.type);
 
-    // Perform search based on type
-    const searchResults = await performSearch(validatedQuery, parsedFilters, session.user.id);
+    // Perform enhanced search with cursor pagination
+    const searchResults = await performEnhancedSearch(
+      validatedQuery,
+      parsedFilters,
+      session.user.id,
+      useCursorPagination
+    );
+
+    let pagination: any;
+
+    if (useCursorPagination) {
+      // Cursor-based pagination response
+      pagination = {
+        limit: validatedQuery.limit,
+        hasNextPage: searchResults.hasNextPage,
+        nextCursor: searchResults.nextCursor,
+        itemCount: searchResults.results.length,
+      };
+    } else {
+      // Legacy offset pagination response
+      const offset = validatedQuery.offset || 0;
+      pagination = {
+        limit: validatedQuery.limit,
+        offset,
+        hasMore: searchResults.totalCount > offset + validatedQuery.limit,
+        totalCount: searchResults.totalCount,
+      };
+    }
 
     return NextResponse.json({
       success: true,
@@ -77,14 +129,16 @@ export async function GET(request: NextRequest) {
         query: validatedQuery.q,
         type: validatedQuery.type,
         results: searchResults.results,
-        totalCount: searchResults.totalCount,
-        pagination: {
-          limit: validatedQuery.limit,
-          offset: validatedQuery.offset,
-          hasMore: searchResults.totalCount > validatedQuery.offset + validatedQuery.limit,
+        pagination,
+        meta: {
+          paginationType: useCursorPagination ? 'cursor' : 'offset',
+          paginationReason: reason,
+          totalCount: searchResults.totalCount,
+          executionTime: searchResults.executionTime,
+          sortBy: validatedQuery.sortBy,
+          sortOrder: validatedQuery.sortOrder,
         },
         filters: parsedFilters,
-        executionTime: searchResults.executionTime,
       },
       message: 'Search completed successfully',
     });
@@ -113,15 +167,22 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Perform search across specified entities
+ * Enhanced search with cursor pagination support
+ * Handles both cursor and offset pagination strategies
  */
-async function performSearch(query: any, filters: any, userId: string) {
+async function performEnhancedSearch(
+  query: any,
+  filters: any,
+  userId: string,
+  useCursorPagination: boolean
+) {
   const startTime = Date.now();
   const searchTerm = query.q.toLowerCase();
 
   let results: any[] = [];
   let totalCount = 0;
 
+  // Search across entities based on type
   if (query.type === 'all' || query.type === 'content') {
     const contentResults = await searchContent(searchTerm, filters, query);
     results.push(...contentResults.map(item => ({ ...item, entityType: 'content' })));
@@ -159,12 +220,44 @@ async function performSearch(query: any, filters: any, userId: string) {
     results = sortByField(results, query.sortBy, query.sortOrder);
   }
 
-  // Apply pagination
-  const paginatedResults = results.slice(query.offset, query.offset + query.limit);
+  let paginatedResults: any[];
+  let hasNextPage = false;
+  let nextCursor: string | null = null;
+
+  if (useCursorPagination) {
+    // 🚀 CURSOR-BASED PAGINATION: For large result sets
+    let cursorIndex = 0;
+
+    // Find cursor position if provided
+    if (query.cursor) {
+      cursorIndex = results.findIndex(item => item.id === query.cursor) + 1;
+      if (cursorIndex === 0) {
+        // Cursor not found, start from beginning
+        cursorIndex = 0;
+      }
+    }
+
+    // Extract page of results
+    paginatedResults = results.slice(cursorIndex, cursorIndex + query.limit);
+
+    // Check if there are more results for next page
+    hasNextPage = cursorIndex + query.limit < results.length;
+
+    // Generate next cursor from last item
+    if (hasNextPage && paginatedResults.length > 0) {
+      nextCursor = paginatedResults[paginatedResults.length - 1].id;
+    }
+  } else {
+    // 🔄 OFFSET PAGINATION: Legacy support
+    const offset = query.offset || 0;
+    paginatedResults = results.slice(offset, offset + query.limit);
+  }
 
   return {
     results: paginatedResults,
     totalCount: results.length,
+    hasNextPage,
+    nextCursor,
     executionTime: Date.now() - startTime,
   };
 }

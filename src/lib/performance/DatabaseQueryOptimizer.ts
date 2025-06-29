@@ -1,5 +1,5 @@
 'use client';
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Database Query Optimization Service
  * Intelligent query caching with performance monitoring and optimization
  *
@@ -7,7 +7,6 @@ import { logger } from '@/utils/logger';/**
  * User Stories: US-6.1 (Performance), US-6.3 (Data Efficiency), US-4.1 (Analytics)
  * Hypotheses: H8 (Load Time), H11 (Cache Hit Rate), H12 (Database Performance)
  */
-
 
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -217,18 +216,25 @@ export class DatabaseQueryOptimizer {
         this.recordSlowQuery(queryKey, executionTime);
       }
 
-      logger.info('Database query executed successfully', {
-        component: 'DatabaseQueryOptimizer',
-        operation: 'executeQuery',
-        userStories: ['US-6.1', 'US-6.3'],
-        hypotheses: ['H8', 'H11', 'H12'],
-        queryKey,
-        executionTime,
-        queryType,
-        tablesTouched,
-        cacheHit: false,
-        timestamp: Date.now(),
-      });
+      // ✅ PERFORMANCE FIX: Throttle database query logging (only log slow or important queries)
+      if (
+        executionTime > this.config.slowQueryThreshold ||
+        queryType !== 'SELECT' ||
+        Math.random() < 0.1
+      ) {
+        logger.info('Database query executed successfully', {
+          component: 'DatabaseQueryOptimizer',
+          operation: 'executeQuery',
+          userStories: ['US-6.1', 'US-6.3'],
+          hypotheses: ['H8', 'H11', 'H12'],
+          queryKey,
+          executionTime,
+          queryType,
+          tablesTouched,
+          cacheHit: false,
+          timestamp: Date.now(),
+        });
+      }
 
       // Analytics tracking
       if (this.analytics) {

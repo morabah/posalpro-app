@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Customers API Routes
  * Enhanced customer management with authentication and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
@@ -13,6 +13,7 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
+import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -30,8 +31,10 @@ import { z } from 'zod';
  * Validation schemas
  */
 const CustomerQuerySchema = z.object({
+  cursor: z.preprocess(val => (val === '' ? undefined : val), z.string().cuid().nullish()),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
+  fields: z.string().optional(),
   search: z.string().optional(),
   industry: z.string().optional(),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
@@ -63,56 +66,136 @@ export async function GET(request: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+
+    // [AUTH_FIX] Enhanced session validation with detailed logging
+    console.log('[AUTH_FIX] Session validation:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      hasUserId: !!session?.user?.id,
+      userEmail: session?.user?.email,
+      userRoles: session?.user?.roles,
+      timestamp: new Date().toISOString()
+    });
+
+    // [AUTH_FIX] Enhanced session validation with detailed logging
+    console.log('[AUTH_FIX] Session validation:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      hasUserId: !!session?.user?.id,
+      userEmail: session?.user?.email,
+      userRoles: session?.user?.roles,
+      timestamp: new Date().toISOString()
+    });
+    if (!session?.user?.id) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get query parameters
+    // ✅ ENHANCED: Parse query parameters with validation
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const search = searchParams.get('search') || '';
-    const status = searchParams.get('status') || '';
-    const tier = searchParams.get('tier') || '';
+    const queryParams = Object.fromEntries(searchParams.entries());
+
+    let query;
+    try {
+      query = CustomerQuerySchema.parse(queryParams);
+    } catch (parseError) {
+      console.error('[CustomersAPI] Query validation error:', parseError);
+      throw parseError;
+    }
 
     // Build where clause
     const where: any = {};
 
-    if (search) {
+    if (query.search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { industry: { contains: search, mode: 'insensitive' } },
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { email: { contains: query.search, mode: 'insensitive' } },
+        { industry: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 
-    if (status) {
-      where.status = status;
+    if (query.status) {
+      where.status = query.status;
     }
 
-    if (tier) {
-      where.tier = tier;
+    if (query.tier) {
+      where.tier = query.tier;
     }
 
-    // Get total count
-    const total = await prisma.customer.count({ where });
+    // ✅ SELECTIVE HYDRATION: Parse requested fields for performance optimization
+    const queryStartTime = Date.now();
+    const { select: customerSelect, optimizationMetrics } = parseFieldsParam(
+      query.fields || undefined,
+      'customer'
+    );
 
-    // Get customers with pagination
-    const customers = await prisma.customer.findMany({
-      where,
-      include: {
-        _count: {
-          select: {
-            proposals: true,
-          },
+    // ✅ CURSOR-BASED PAGINATION: More efficient for large datasets
+    const useCursorPagination = query.cursor !== undefined;
+
+    let customers: any[];
+    let pagination: any;
+
+    if (useCursorPagination) {
+      // Cursor-based pagination
+      const cursorWhere = query.cursor
+        ? {
+            ...where,
+            id: { lt: query.cursor }, // Cursor condition for 'desc' order
+          }
+        : where;
+
+      customers = await prisma.customer.findMany({
+        where: cursorWhere,
+        select: customerSelect, // ✅ Use selective hydration
+        take: query.limit + 1, // Get one extra to check if there's a next page
+        orderBy: {
+          [query.sortBy]: query.sortOrder,
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+      });
+
+      // Check if there are more items
+      const hasNextPage = customers.length > query.limit;
+      if (hasNextPage) {
+        customers.pop(); // Remove the extra item
+      }
+
+      pagination = {
+        limit: query.limit,
+        hasNextPage,
+        nextCursor: hasNextPage && customers.length > 0 ? customers[customers.length - 1].id : null,
+        itemCount: customers.length,
+      };
+    } else {
+      // Legacy offset pagination for backward compatibility
+      const total = await prisma.customer.count({ where });
+
+      customers = await prisma.customer.findMany({
+        where,
+        select: customerSelect, // ✅ Use selective hydration
+        orderBy: {
+          [query.sortBy]: query.sortOrder,
+        },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      });
+
+      pagination = {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+        hasNextPage: query.page < Math.ceil(total / query.limit),
+        hasPrevPage: query.page > 1,
+      };
+    }
+
+    const queryEndTime = Date.now();
+
+    // Track search event with performance metrics (async, non-blocking)
+    trackCustomerSearchEvent(session.user.id, JSON.stringify(queryParams), customers.length).catch(
+      error => {
+        logger.warn('Analytics tracking failed but not blocking request:', error);
+      }
+    );
 
     return NextResponse.json({
       success: true,
@@ -120,11 +203,14 @@ export async function GET(request: NextRequest) {
       data: {
         customers,
       },
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+      pagination,
+      // ✅ Performance and optimization metadata
+      meta: {
+        paginationType: useCursorPagination ? 'cursor' : 'offset',
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
+        selectiveHydration: optimizationMetrics,
+        responseTimeMs: queryEndTime - queryStartTime,
       },
     });
   } catch (error) {
@@ -203,7 +289,27 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+
+    // [AUTH_FIX] Enhanced session validation with detailed logging
+    console.log('[AUTH_FIX] Session validation:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      hasUserId: !!session?.user?.id,
+      userEmail: session?.user?.email,
+      userRoles: session?.user?.roles,
+      timestamp: new Date().toISOString()
+    });
+
+    // [AUTH_FIX] Enhanced session validation with detailed logging
+    console.log('[AUTH_FIX] Session validation:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      hasUserId: !!session?.user?.id,
+      userEmail: session?.user?.email,
+      userRoles: session?.user?.roles,
+      timestamp: new Date().toISOString()
+    });
+    if (!session?.user?.id) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -266,8 +372,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Track customer creation event for analytics
-    await trackCustomerCreationEvent(session.user.id, customer.id, customer.name);
+    // Track customer creation event for analytics (async, non-blocking)
+    trackCustomerCreationEvent(session.user.id, customer.id, customer.name).catch(error => {
+      logger.warn('Analytics tracking failed but not blocking request:', error);
+    });
 
     return NextResponse.json({
       success: true,
@@ -350,8 +458,17 @@ export async function POST(request: NextRequest) {
  */
 async function trackCustomerSearchEvent(userId: string, query: string, resultsCount: number) {
   try {
-    await prisma.userStoryMetrics.create({
-      data: {
+    await prisma.userStoryMetrics.upsert({
+      where: { userStoryId: 'US-4.1' },
+      update: {
+        actualPerformance: {
+          resultsCount,
+          timestamp: new Date().toISOString(),
+          lastSearchQuery: query,
+        },
+        lastUpdated: new Date(),
+      },
+      create: {
         userStoryId: 'US-4.1',
         hypothesis: ['H4'],
         acceptanceCriteria: ['AC-4.1.1'],
@@ -401,8 +518,17 @@ async function trackCustomerCreationEvent(
   customerName: string
 ) {
   try {
-    await prisma.userStoryMetrics.create({
-      data: {
+    await prisma.userStoryMetrics.upsert({
+      where: { userStoryId: 'US-4.1' },
+      update: {
+        actualPerformance: {
+          created: true,
+          timestamp: new Date().toISOString(),
+          lastCustomerCreated: customerName,
+        },
+        lastUpdated: new Date(),
+      },
+      create: {
         userStoryId: 'US-4.1',
         hypothesis: ['H4'],
         acceptanceCriteria: ['AC-4.1.1'],

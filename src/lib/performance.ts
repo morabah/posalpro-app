@@ -4,7 +4,7 @@
  * for application optimization and debugging
  */
 
-import { logPerformance, logWarn, logError } from './logger';
+import { logError, logPerformance, logWarn } from './logger';
 
 // Performance measurement interface
 export interface PerformanceMeasurement {

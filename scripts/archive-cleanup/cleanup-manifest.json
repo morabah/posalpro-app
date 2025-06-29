@@ -1,0 +1,186 @@
+{
+  "timestamp": "2025-06-29T22:42:29.892Z",
+  "totalDeleted": 36,
+  "deletedFiles": [
+    {
+      "name": "apply-critical-fixes.js",
+      "size": 15100,
+      "reason": "consolidated"
+    },
+    {
+      "name": "apply-performance-optimizations.js",
+      "size": 6924,
+      "reason": "consolidated"
+    },
+    {
+      "name": "auth-enhancement-fix.js",
+      "size": 9400,
+      "reason": "consolidated"
+    },
+    {
+      "name": "bottleneck-detection-fix-cycle.js",
+      "size": 22165,
+      "reason": "consolidated"
+    },
+    {
+      "name": "button-response-test.js",
+      "size": 13458,
+      "reason": "consolidated"
+    },
+    {
+      "name": "comprehensive-auth-performance-fix.js",
+      "size": 17392,
+      "reason": "consolidated"
+    },
+    {
+      "name": "comprehensive-codebase-fix.js",
+      "size": 18697,
+      "reason": "consolidated"
+    },
+    {
+      "name": "comprehensive-error-detector.js",
+      "size": 11032,
+      "reason": "consolidated"
+    },
+    {
+      "name": "critical-performance-fix.js",
+      "size": 22709,
+      "reason": "consolidated"
+    },
+    {
+      "name": "database-performance-optimization.js",
+      "size": 17450,
+      "reason": "consolidated"
+    },
+    {
+      "name": "detect-infinite-loops.js",
+      "size": 8359,
+      "reason": "consolidated"
+    },
+    {
+      "name": "emergency-performance-fix.js",
+      "size": 7720,
+      "reason": "consolidated"
+    },
+    {
+      "name": "enhanced-performance-test.js",
+      "size": 2596,
+      "reason": "consolidated"
+    },
+    {
+      "name": "error-detection-and-fix.js",
+      "size": 13856,
+      "reason": "consolidated"
+    },
+    {
+      "name": "final-performance-validation.js",
+      "size": 17429,
+      "reason": "consolidated"
+    },
+    {
+      "name": "fix-all-imports.js",
+      "size": 2171,
+      "reason": "consolidated"
+    },
+    {
+      "name": "fix-infinite-loops.js",
+      "size": 4497,
+      "reason": "consolidated"
+    },
+    {
+      "name": "fix-performance-issues.js",
+      "size": 11357,
+      "reason": "consolidated"
+    },
+    {
+      "name": "fix-performance-violations.js",
+      "size": 1,
+      "reason": "empty"
+    },
+    {
+      "name": "fix-remaining-infinite-loops.js",
+      "size": 4827,
+      "reason": "consolidated"
+    },
+    {
+      "name": "fix-validation-dashboard.js",
+      "size": 3869,
+      "reason": "consolidated"
+    },
+    {
+      "name": "optimize-database-performance.js",
+      "size": 7574,
+      "reason": "consolidated"
+    },
+    {
+      "name": "performance-enhancement.js",
+      "size": 14816,
+      "reason": "consolidated"
+    },
+    {
+      "name": "performance-monitor.js",
+      "size": 9705,
+      "reason": "consolidated"
+    },
+    {
+      "name": "performance-optimizer.js",
+      "size": 26711,
+      "reason": "consolidated"
+    },
+    {
+      "name": "pre-production-test.js",
+      "size": 13157,
+      "reason": "consolidated"
+    },
+    {
+      "name": "quick-fix-remaining-issues.js",
+      "size": 2504,
+      "reason": "redundant"
+    },
+    {
+      "name": "quick-performance-test.js",
+      "size": 4843,
+      "reason": "redundant"
+    },
+    {
+      "name": "quick-status-check.js",
+      "size": 6265,
+      "reason": "redundant"
+    },
+    {
+      "name": "simple-performance-test.js",
+      "size": 3994,
+      "reason": "redundant"
+    },
+    {
+      "name": "smart-bottleneck-test.js",
+      "size": 14669,
+      "reason": "consolidated"
+    },
+    {
+      "name": "test-performance-violations.js",
+      "size": 2918,
+      "reason": "consolidated"
+    },
+    {
+      "name": "validate-imports.js",
+      "size": 2194,
+      "reason": "consolidated"
+    },
+    {
+      "name": "verify-fixes.js",
+      "size": 10355,
+      "reason": "consolidated"
+    },
+    {
+      "name": "verify-infinite-loop-fixes-final.js",
+      "size": 5174,
+      "reason": "consolidated"
+    },
+    {
+      "name": "verify-infinite-loop-fixes.js",
+      "size": 3160,
+      "reason": "consolidated"
+    }
+  ]
+}

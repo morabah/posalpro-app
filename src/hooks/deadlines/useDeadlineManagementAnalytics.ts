@@ -92,7 +92,7 @@ export function useDeadlineManagementAnalytics() {
       analytics.track('timeline_estimation', {
         ...estimationData,
         userStory: 'US-4.1',
-        acceptanceCriteria: 'AC-4.1.1',
+        acceptanceCriteria: ['AC-4.1.1'],
         method: 'complexityEstimation()',
         sessionInteractions: sessionData.current.interactions++,
         timestamp: Date.now(),
@@ -114,7 +114,7 @@ export function useDeadlineManagementAnalytics() {
           accuracy,
           complexityLevel: estimationData.complexityLevel,
           userStory: 'US-4.1',
-          acceptanceCriteria: 'AC-4.1.1',
+          acceptanceCriteria: ['AC-4.1.1'],
           timestamp: Date.now(),
         });
       }
@@ -140,7 +140,7 @@ export function useDeadlineManagementAnalytics() {
       analytics.track('critical_path_analysis', {
         ...criticalPathData,
         userStory: 'US-4.1',
-        acceptanceCriteria: 'AC-4.1.2',
+        acceptanceCriteria: ['AC-4.1.2'],
         method: 'criticalPath()',
         sessionCalculations: sessionData.current.criticalPathsCalculated,
         timestamp: Date.now(),
@@ -160,7 +160,7 @@ export function useDeadlineManagementAnalytics() {
           actualCount: criticalPathData.actualBottlenecks.length,
           correctPredictions,
           userStory: 'US-4.1',
-          acceptanceCriteria: 'AC-4.1.2',
+          acceptanceCriteria: ['AC-4.1.2'],
           timestamp: Date.now(),
         });
       }
@@ -182,7 +182,7 @@ export function useDeadlineManagementAnalytics() {
       analytics.track('priority_calculation', {
         ...priorityData,
         userStory: 'US-4.3',
-        acceptanceCriteria: 'AC-4.3.1',
+        acceptanceCriteria: ['AC-4.3.1'],
         method: 'calculatePriority()',
         timestamp: Date.now(),
       });
@@ -195,7 +195,7 @@ export function useDeadlineManagementAnalytics() {
           userAgreed: priorityData.userAgreed,
           overrideApplied: !!priorityData.manualOverride,
           userStory: 'US-4.3',
-          acceptanceCriteria: 'AC-4.3.1',
+          acceptanceCriteria: ['AC-4.3.1'],
           timestamp: Date.now(),
         });
       }
@@ -217,7 +217,7 @@ export function useDeadlineManagementAnalytics() {
       analytics.track('dependency_mapping', {
         ...dependencyData,
         userStory: 'US-4.3',
-        acceptanceCriteria: 'AC-4.3.2',
+        acceptanceCriteria: ['AC-4.3.2'],
         method: 'mapDependencies()',
         timestamp: Date.now(),
       });
@@ -239,7 +239,7 @@ export function useDeadlineManagementAnalytics() {
       analytics.track('progress_tracking', {
         ...progressData,
         userStory: 'US-4.3',
-        acceptanceCriteria: 'AC-4.3.3',
+        acceptanceCriteria: ['AC-4.3.3'],
         method: 'trackProgress()',
         timestamp: Date.now(),
       });
@@ -258,7 +258,7 @@ export function useDeadlineManagementAnalytics() {
           accuracy,
           daysEarlyOrLate: (actualTime - estimatedTime) / (24 * 60 * 60 * 1000),
           userStory: 'US-4.3',
-          acceptanceCriteria: 'AC-4.3.3',
+          acceptanceCriteria: ['AC-4.3.3'],
           timestamp: Date.now(),
         });
       }

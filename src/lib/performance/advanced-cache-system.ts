@@ -206,7 +206,10 @@ export class AdvancedCacheSystem {
    */
   async get<T>(key: string): Promise<T | null> {
     const startTime = performance.now();
-    this.requestCounts = { ...this.requestCounts, totalRequests: this.requestCounts.hits + this.requestCounts.misses + 1 };
+    this.requestCounts = {
+      ...this.requestCounts,
+      totalRequests: this.requestCounts.hits + this.requestCounts.misses + 1,
+    };
 
     try {
       const item = this.cache.get(key);

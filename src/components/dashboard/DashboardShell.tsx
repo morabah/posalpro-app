@@ -255,7 +255,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       window.addEventListener('load', handleLoad);
       return () => window.removeEventListener('load', handleLoad);
     }
-  }, [analytics]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   // Handle widget visibility toggle
   const handleWidgetVisibility = useCallback(

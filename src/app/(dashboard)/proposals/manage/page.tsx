@@ -26,7 +26,11 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { proposalEntity } from '../../../../lib/entities/proposal';
+import {
+  ExtendedPaginatedResponse,
+  ProposalData,
+  proposalEntity,
+} from '../../../../lib/entities/proposal';
 import {
   debugResponseStructure,
   extractArrayFromResponse,
@@ -119,13 +123,13 @@ export default function ProposalManagementDashboard() {
         setError(null);
 
         console.log('Fetching proposals from API...');
-        const response = await proposalEntity.query({
+        const response = (await proposalEntity.query({
           page: 1,
           limit: 50, // Get more proposals to show
           sortBy: 'createdAt',
           sortOrder: 'desc',
           includeCustomer: true, // Include customer data to resolve client names
-        });
+        })) as ExtendedPaginatedResponse<ProposalData>;
 
         debugResponseStructure(response, 'Proposals API Response');
 
@@ -135,28 +139,33 @@ export default function ProposalManagementDashboard() {
 
           if (proposalsData.length > 0) {
             console.log('Sample proposal data:', proposalsData[0]);
-            console.log('🔍 Customer data in first proposal:', (proposalsData[0] as any).customer);
+            console.log(
+              '🔍 Customer data in first proposal:',
+              (proposalsData[0] as ProposalData & { customer?: any }).customer
+            );
 
             // Transform API data to match the UI interface
-            const transformedProposals: Proposal[] = proposalsData.map((apiProposal: any) => ({
-              id: apiProposal.id,
-              title: apiProposal.title,
-              client: apiProposal.customer?.name || apiProposal.clientName || 'Unknown Client',
-              status: mapApiStatusToUIStatus(apiProposal.status),
-              priority: mapApiPriorityToUIPriority(apiProposal.priority),
-              dueDate: new Date(apiProposal.deadline || apiProposal.dueDate || Date.now()),
-              createdAt: new Date(apiProposal.createdAt),
-              updatedAt: new Date(apiProposal.updatedAt),
-              estimatedValue: apiProposal.estimatedValue || 0,
-              teamLead: apiProposal.createdBy || 'Unassigned',
-              assignedTeam: apiProposal.assignedTo || [],
-              progress: calculateProgress(apiProposal.status),
-              stage: getStageFromStatus(apiProposal.status),
-              riskLevel: calculateRiskLevel(apiProposal),
-              tags: apiProposal.tags || [],
-              description: apiProposal.description,
-              lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
-            }));
+            const transformedProposals: Proposal[] = proposalsData.map(
+              (apiProposal: ProposalData & { customer?: any }) => ({
+                id: apiProposal.id,
+                title: apiProposal.title,
+                client: apiProposal.customer?.name || apiProposal.customerName || 'Unknown Client',
+                status: mapApiStatusToUIStatus(apiProposal.status),
+                priority: mapApiPriorityToUIPriority(apiProposal.priority),
+                dueDate: new Date(apiProposal.deadline || Date.now()),
+                createdAt: new Date(apiProposal.createdAt),
+                updatedAt: new Date(apiProposal.updatedAt),
+                estimatedValue: apiProposal.estimatedValue || 0,
+                teamLead: apiProposal.createdBy || 'Unassigned',
+                assignedTeam: apiProposal.assignedTo || [],
+                progress: calculateProgress(apiProposal.status),
+                stage: getStageFromStatus(apiProposal.status),
+                riskLevel: calculateRiskLevel(apiProposal),
+                tags: apiProposal.tags || [],
+                description: apiProposal.description,
+                lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
+              })
+            );
 
             setProposals(transformedProposals);
             console.log('Successfully transformed proposals:', transformedProposals.length);
@@ -166,12 +175,39 @@ export default function ProposalManagementDashboard() {
           }
         } else {
           console.warn('API response indicates failure:', response);
-          setError(response.message || 'Failed to load proposals');
+
+          // Check for authentication error
+          if (response.authError) {
+            setError('Authentication required. Please sign in to view proposals.');
+            // Redirect to login after a short delay
+            setTimeout(() => {
+              router.push('/auth/signin?callbackUrl=/proposals/manage');
+            }, 3000);
+          } else {
+            setError(response.message || 'Failed to load proposals');
+          }
+
           setProposals([]);
         }
       } catch (error) {
         console.error('Failed to fetch proposals:', error);
-        setError('Failed to load proposals. Please try refreshing the page.');
+
+        // Check if error is related to authentication
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (
+          errorMessage.includes('session') ||
+          errorMessage.includes('auth') ||
+          errorMessage.includes('sign in')
+        ) {
+          setError('Authentication required. Please sign in to view proposals.');
+          // Redirect to login after a short delay
+          setTimeout(() => {
+            router.push('/auth/signin?callbackUrl=/proposals/manage');
+          }, 3000);
+        } else {
+          setError('Failed to load proposals. Please try refreshing the page.');
+        }
+
         setProposals([]);
       } finally {
         setIsLoading(false);
@@ -179,7 +215,7 @@ export default function ProposalManagementDashboard() {
     };
 
     fetchProposals();
-  }, []);
+  }, [router]);
 
   // Helper functions for data transformation
   const mapApiStatusToUIStatus = (apiStatus: string): ProposalStatus => {

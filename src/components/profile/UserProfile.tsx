@@ -780,3 +780,6 @@ function PersonalTab({
     </div>
   );
 }
+
+
+export default UserProfile;

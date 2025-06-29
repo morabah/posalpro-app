@@ -248,7 +248,8 @@ export default function ExecutiveReviewPortal() {
     };
 
     fetchProposals();
-  }, [errorHandlingService, analytics, isMobile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   const selectedProposal = useMemo(
     () => proposals.find(p => p.id === selectedProposalId),

@@ -172,7 +172,9 @@ export class EnhancedPerformanceService {
 
     this.initializeMetrics();
     this.initializeThresholds();
-    if (typeof window !== "undefined") { this.setupPerformanceObservers(); }
+    if (typeof window !== 'undefined') {
+      this.setupPerformanceObservers();
+    }
   }
 
   static getInstance(): EnhancedPerformanceService {

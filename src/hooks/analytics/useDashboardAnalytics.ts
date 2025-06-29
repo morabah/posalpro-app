@@ -46,7 +46,7 @@ export function useDashboardAnalytics(userId?: string, userRole?: string, sessio
           userId: params.userId,
           userRole: params.userRole,
           sessionId: params.sessionId,
-          timestamp: new Date().toISOString(),
+          timestamp: Date.now(),
         });
       } catch (error) {
         logger.warn('⚠️ Dashboard analytics tracking failed:', error);

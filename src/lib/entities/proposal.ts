@@ -28,6 +28,11 @@ export interface ProposalData extends ProposalMetadata {
   customerId: string;
 }
 
+// Extended PaginatedResponse with authentication error flag
+export interface ExtendedPaginatedResponse<T> extends PaginatedResponse<T> {
+  authError?: boolean;
+}
+
 export interface ProposalQueryOptions {
   search?: string;
   status?: ProposalStatus;
@@ -304,9 +309,42 @@ export class ProposalEntity {
           totalPages: 0,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to query proposals:', error);
-      throw error;
+
+      // Handle authentication errors specifically
+      if (
+        error.message?.includes('Your session has expired') ||
+        error.status === 401 ||
+        (error.name === 'ApiError' && error.status === 401)
+      ) {
+        // Return a structured response for authentication errors
+        trackAuthEvent('session_expired');
+        return {
+          success: false,
+          message: 'Authentication required. Please sign in to view proposals.',
+          data: [],
+          pagination: {
+            page: options.page || 1,
+            limit: options.limit || 10,
+            total: 0,
+            totalPages: 0,
+          },
+        } as ExtendedPaginatedResponse<ProposalData>;
+      }
+
+      // For other errors, return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error.message || 'An unexpected error occurred while fetching proposals.',
+        data: [],
+        pagination: {
+          page: options.page || 1,
+          limit: options.limit || 10,
+          total: 0,
+          totalPages: 0,
+        },
+      };
     }
   }
 

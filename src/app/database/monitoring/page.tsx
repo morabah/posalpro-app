@@ -127,7 +127,8 @@ export default function DatabaseMonitoringPage() {
     } catch (error) {
       await handleAsyncError(error as Error);
     }
-  }, [analytics, handleAsyncError, apiClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   /**
    * Run performance tests

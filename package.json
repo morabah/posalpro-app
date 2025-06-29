@@ -1,6 +1,6 @@
 {
   "name": "posalpro-mvp2",
-  "version": "0.1.0-alpha.9",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=20.17.0",
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "dev:clean": "npm run kill:dev && npm run dev",
+    "dev:clean": "rm -rf .next && npm run dev:smart",
     "dev:smart": "./scripts/dev-clean.sh",
     "dev:demo": "./scripts/demo-port-management.sh",
     "kill:dev": "pkill -f 'next dev' || true",
@@ -17,10 +17,14 @@
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
-    "type-check": "tsc --noEmit --skipLibCheck",
+    "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:ci": "jest --ci --coverage",
+    "test:accessibility": "jest --testPathPattern=accessibility",
+    "test:performance": "node scripts/performance-validation.js",
+    "test:real-world": "node scripts/run-real-world-tests.js",
+    "test:comprehensive": "npm run test:real-world",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "quality:check": "npm run lint && npm run type-check && npm run format:check",
@@ -36,6 +40,7 @@
     "db:format": "prisma format",
     "db:validate": "prisma validate",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
+    "postinstall": "prisma generate",
     "production:setup": "./scripts/setup-production.sh",
     "production:validate": "./scripts/setup-production.sh validate",
     "production:seed": "./scripts/setup-production.sh seed-only",
@@ -62,7 +67,10 @@
     "predeploy:beta": "npm run version:update-history",
     "predeploy:rc": "npm run version:update-history",
     "deployment:info": "node scripts/deployment-info.js",
-    "audit:duplicates": "node scripts/audit-duplicates.js"
+    "audit:duplicates": "node scripts/audit-duplicates.js",
+    "cache:clear": "rm -rf .next && rm -rf node_modules/.cache",
+    "fix:zod": "npm run cache:clear && npm install --legacy-peer-deps && npm run dev:smart",
+    "install:safe": "npm install --legacy-peer-deps"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,json,css,scss}": [
@@ -134,6 +142,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.9",
+    "@types/lodash": "^4.17.19",
     "@types/node": "^20.10.0",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^19.1.6",
@@ -154,11 +163,12 @@
     "jest-junit": "^16.0.0",
     "jest-transform-stub": "^2.0.0",
     "lint-staged": "^16.1.0",
-    "msw": "^1.3.2",
+    "msw": "^2.6.4",
     "next-themes": "^0.4.6",
     "pg": "^8.16.2",
     "prettier": "^3.5.3",
     "prisma": "^5.7.0",
+    "puppeteer": "^24.11.0",
     "react-i18next": "^15.5.2",
     "tsx": "^4.6.0",
     "typescript": "^5.3.2",
@@ -166,5 +176,13 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "typescript": "^5.3.2",
+    "zod": "^3.25.48"
+  },
+  "resolutions": {
+    "typescript": "^5.3.2",
+    "zod": "^3.25.48"
   }
 }

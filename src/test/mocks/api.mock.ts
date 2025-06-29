@@ -1,5 +1,5 @@
 /**
- * API Mocking Infrastructure using MSW
+ * API Mocking Infrastructure using MSW v2
  *
  * This module provides Mock Service Worker setup for API mocking in tests.
  * It follows our functional programming patterns and TypeScript strict mode.
@@ -8,24 +8,26 @@
  * @quality-gate Development
  */
 
-import type { DefaultBodyType, RestContext, RestRequest } from 'msw';
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { UserType } from '../../types';
 
 // Define type for handlers to enforce consistent handler patterns
-export type MockHandler = (req: RestRequest, res: any, ctx: RestContext) => any;
+export type MockHandler = (info: {
+  request: Request;
+  params: Record<string, string>;
+}) => Response | Promise<Response>;
 
 // Create reusable response builder with proper types
-export const createResponseBuilder = <T extends DefaultBodyType>(status: number = 200) => {
-  return (req: RestRequest, res: any, ctx: RestContext) => {
-    return res(ctx.status(status), ctx.json(null));
+export const createResponseBuilder = <T>(status: number = 200) => {
+  return ({ request, params }: { request: Request; params: Record<string, string> }) => {
+    return HttpResponse.json(null, { status });
   };
 };
 
 // Success response builder with data
-export const successResponse = <T extends DefaultBodyType>(data: T) => {
-  return (req: RestRequest, res: any, ctx: RestContext) => {
-    return res(ctx.status(200), ctx.json(data));
+export const successResponse = <T extends Record<string, any>>(data: T) => {
+  return ({ request, params }: { request: Request; params: Record<string, string> }) => {
+    return HttpResponse.json(data as any, { status: 200 });
   };
 };
 
@@ -36,17 +38,17 @@ export const errorResponse = (
   type?: string
 ) => {
   const errorType = type || getErrorTypeFromStatus(status);
-  return (req: RestRequest, res: any, ctx: RestContext) => {
-    return res(
-      ctx.status(status),
-      ctx.json({
+  return ({ request, params }: { request: Request; params: Record<string, string> }) => {
+    return HttpResponse.json(
+      {
         success: false,
         error: {
           type: errorType,
           message,
           status,
         },
-      })
+      },
+      { status }
     );
   };
 };
@@ -84,26 +86,23 @@ export const serverErrorResponse = () => {
 };
 
 // Create a generic handler creator for common endpoints
-export const createGetHandler = <T extends DefaultBodyType>(path: string, responseData: T) => {
-  return rest.get(path, (req, res, ctx) => {
-    return res(ctx.status(200), ctx.json(responseData));
+export const createGetHandler = <T extends Record<string, any>>(path: string, responseData: T) => {
+  return http.get(path, ({ request, params }) => {
+    return HttpResponse.json(responseData as any, { status: 200 });
   });
 };
 
-export const createPostHandler = <
-  T extends DefaultBodyType,
-  B extends DefaultBodyType = DefaultBodyType,
->(
+export const createPostHandler = <T extends Record<string, any>, B = any>(
   path: string,
   responseData: T,
   validator?: (body: B) => boolean
 ) => {
-  return rest.post(path, async (req, res, ctx) => {
-    const body = (await req.json()) as B;
+  return http.post(path, async ({ request, params }) => {
+    const body = (await request.json()) as B;
     if (validator && !validator(body)) {
-      return res(ctx.status(400), ctx.json({ message: 'Validation Error' }));
+      return HttpResponse.json({ message: 'Validation Error' }, { status: 400 });
     }
-    return res(ctx.status(200), ctx.json(responseData));
+    return HttpResponse.json(responseData as any, { status: 200 });
   });
 };
 
@@ -115,25 +114,25 @@ interface AuthRequestBody {
 }
 
 // Specific handler for authentication endpoints that can simulate both success and failure
-export const createAuthHandler = <T extends DefaultBodyType>(
+export const createAuthHandler = <T extends Record<string, any>>(
   path: string,
   successData: T,
   failureMessage: string = 'Invalid credentials'
 ) => {
-  return rest.post(path, async (req, res, ctx) => {
+  return http.post(path, async ({ request, params }) => {
     // Type cast to AuthRequestBody to ensure type safety
-    const body = (await req.json()) as AuthRequestBody;
+    const body = (await request.json()) as AuthRequestBody;
 
     // Check for test credentials that should trigger auth failure
     if (
       (body.email === 'test@example.com' && body.password === 'wrong-password') ||
       body.password === 'invalid-password'
     ) {
-      return res(ctx.status(401), ctx.json({ message: failureMessage }));
+      return HttpResponse.json({ message: failureMessage }, { status: 401 });
     }
 
     // Otherwise return success
-    return res(ctx.status(200), ctx.json(successData));
+    return HttpResponse.json(successData as any, { status: 200 });
   });
 };
 
@@ -201,29 +200,82 @@ export const mockApiResponses = {
       ],
     },
   },
+  customers: {
+    list: {
+      success: true,
+      data: [
+        {
+          id: 'customer-1',
+          name: 'Acme Corp',
+          email: 'contact@acme.com',
+        },
+      ],
+    },
+  },
+  products: {
+    list: {
+      success: true,
+      data: [
+        {
+          id: 'product-1',
+          name: 'Product A',
+          price: 100,
+        },
+      ],
+    },
+  },
 };
 
-// Setup API mocks for testing
+// Mock HTTP client implementation
+export const createMockHttpClient = (): MockHttpClient => ({
+  get: (url: string, config?: Record<string, unknown>) => {
+    // Simple URL-based mock responses
+    if (url.includes('/auth/user')) {
+      return createMockResponse(mockApiResponses.auth.login.data.user);
+    }
+    if (url.includes('/proposals')) {
+      return createMockResponse(mockApiResponses.proposals.list.data);
+    }
+    if (url.includes('/customers')) {
+      return createMockResponse(mockApiResponses.customers.list.data);
+    }
+    if (url.includes('/products')) {
+      return createMockResponse(mockApiResponses.products.list.data);
+    }
+    return createMockResponse();
+  },
+
+  post: (url: string, data?: unknown, config?: Record<string, unknown>) => {
+    if (url.includes('/auth/login')) {
+      return createMockResponse(mockApiResponses.auth.login);
+    }
+    if (url.includes('/proposals')) {
+      return createMockResponse(mockApiResponses.proposals.create);
+    }
+    return createMockResponse();
+  },
+
+  put: (url: string, data?: unknown, config?: Record<string, unknown>) => {
+    return createMockResponse();
+  },
+
+  delete: (url: string, config?: Record<string, unknown>) => {
+    return createMockResponse();
+  },
+});
+
+// Setup function for API mocks in tests
 export const setupApiMocks = () => {
-  // This function can be used to configure MSW handlers for tests
-  // Return the default mock handlers
   return [
-    // Auth endpoints
-    createAuthHandler('/api/auth/login', mockApiResponses.auth.login),
-    createGetHandler('/api/auth/logout', mockApiResponses.auth.logout),
-
-    // Proposal endpoints
-    createPostHandler('/api/proposals', mockApiResponses.proposals.create),
-    createGetHandler('/api/proposals', mockApiResponses.proposals.list),
-
-    // Default handlers for any other endpoints
-    rest.get('*', (req, res, ctx) => {
-      console.warn(`Unhandled GET request to ${req.url}`);
-      return res(ctx.status(404), ctx.json({ message: 'Not found' }));
+    // Health check endpoint
+    http.get('*', ({ request, params }) => {
+      console.log(`Unhandled GET request to: ${request.url}`);
+      return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
     }),
-    rest.post('*', (req, res, ctx) => {
-      console.warn(`Unhandled POST request to ${req.url}`);
-      return res(ctx.status(404), ctx.json({ message: 'Not found' }));
+
+    http.post('*', ({ request, params }) => {
+      console.log(`Unhandled POST request to: ${request.url}`);
+      return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
     }),
   ];
 };

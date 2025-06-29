@@ -187,7 +187,7 @@ export function useProposalCreationAnalytics() {
         efficiency,
         coordinationScore,
         userStory: 'US-2.2',
-        acceptanceCriteria: 'AC-2.2.1',
+        acceptanceCriteria: ['AC-2.2.1'],
         hypothesis: 'H4',
         timestamp: Date.now(),
       });
@@ -214,7 +214,7 @@ export function useProposalCreationAnalytics() {
       analytics.track('timeline_estimation', {
         ...estimationData,
         userStory: 'US-4.1',
-        acceptanceCriteria: 'AC-4.1.1',
+        acceptanceCriteria: ['AC-4.1.1'],
         hypothesis: 'H7',
         timestamp: Date.now(),
       });
@@ -238,7 +238,7 @@ export function useProposalCreationAnalytics() {
         ...coordinationData,
         efficiencyScore,
         userStory: 'US-2.2',
-        acceptanceCriteria: 'AC-2.2.3',
+        acceptanceCriteria: ['AC-2.2.3'],
         hypothesis: 'H4',
         timestamp: Date.now(),
       });
@@ -260,7 +260,7 @@ export function useProposalCreationAnalytics() {
         ...contentData,
         selectionRate: (contentData.selectedItems / contentData.suggestedItems) * 100,
         userStory: 'US-1.2',
-        acceptanceCriteria: 'AC-1.2.1',
+        acceptanceCriteria: ['AC-1.2.1'],
         timestamp: Date.now(),
       });
 
@@ -287,7 +287,7 @@ export function useProposalCreationAnalytics() {
         ...validationData,
         qualityScore: (validationData.completeness + validationData.complianceScore) / 2,
         userStory: 'US-3.1',
-        acceptanceCriteria: 'AC-3.1.1',
+        acceptanceCriteria: ['AC-3.1.1'],
         timestamp: Date.now(),
       });
     },

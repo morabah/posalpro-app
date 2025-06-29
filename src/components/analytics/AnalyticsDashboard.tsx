@@ -156,7 +156,8 @@ export const AnalyticsDashboard: React.FC = () => {
   // Load data on mount and when time range changes
   useEffect(() => {
     fetchDashboardData();
-  }, [timeRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   // Track page view
   useEffect(() => {

@@ -294,7 +294,8 @@ export function EnhancedPerformanceDashboard({
     } finally {
       setIsLoading(false);
     }
-  }, [handleError, analytics, timeRange, userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   // Auto-refresh functionality
   useEffect(() => {

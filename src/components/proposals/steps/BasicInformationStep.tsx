@@ -9,11 +9,13 @@
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
 import { EnhancedProposalAnalytics } from '@/types/analytics';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AlertTriangle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -37,15 +39,15 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H7-001'],
 };
 
-// Validation schema based on wireframe requirements
+// ✅ FIXED: Validation schema based on wireframe requirements
 const basicInformationSchema = z.object({
   client: z.object({
-    id: z.string().min(1, 'Please select a customer'),
+    id: z.string().min(1, 'Valid customer selection is required'),
     name: z.string().min(1, 'Customer name is required'),
-    industry: z.string().min(1, 'Industry is required'),
+    industry: z.string().optional(), // ✅ FIXED: Make industry optional since it comes from customer data
     contactPerson: z.string().min(1, 'Contact person is required'),
     contactEmail: z.string().email('Valid email is required'),
-    contactPhone: z.string().min(1, 'Contact phone is required'),
+    contactPhone: z.string().optional(), // ✅ FIXED: Make phone optional for better UX
     requirements: z.array(z.string()).optional(),
     previousEngagements: z.array(z.string()).optional(),
   }),
@@ -53,9 +55,14 @@ const basicInformationSchema = z.object({
     title: z.string().min(1, 'Proposal title is required'),
     rfpReferenceNumber: z.string().optional(),
     dueDate: z.string().min(1, 'Due date is required'),
-    estimatedValue: z.number().min(0, 'Estimated value must be positive'),
+    estimatedValue: z.number().min(0, 'Estimated value must be positive').optional(),
     priority: z.nativeEnum(ProposalPriority),
-    description: z.string().optional(),
+    description: z
+      .string()
+      .refine(val => !val || val.length >= 10, {
+        message: 'Description must be at least 10 characters long',
+      })
+      .optional(), // ✅ FIXED: Description optional but when provided must be 10+ chars
     requirements: z.array(z.string()).optional(),
     objectives: z.array(z.string()).optional(),
   }),
@@ -89,18 +96,20 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   // ✅ FIXED: Use proper API client instead of direct fetch
   const apiClient = useApiClient();
 
-  // Form state
+  // State management
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [fieldInteractions, setFieldInteractions] = useState(0);
   const [dateWarning, setDateWarning] = useState<string | null>(null);
+  const [fieldInteractions, setFieldInteractions] = useState(0);
 
-  // Performance optimization refs
-  const lastSentDataRef = useRef<string>('');
+  // ✅ PERFORMANCE OPTIMIZATION: Refs for preventing excessive re-renders
   const onUpdateRef = useRef(onUpdate);
-  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const debouncedUpdateRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSentDataRef = useRef<string>('');
+  const lastAnalyticsTime = useRef<number>(0); // ✅ NEW: Analytics throttling
+  const lastFutureDateAnalytics = useRef<number>(0);
 
   // Update ref when onUpdate changes
   useEffect(() => {
@@ -132,9 +141,12 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     setValue,
     getValues,
     trigger,
-    formState: { errors, isValid },
+    reset,
+    formState: { errors, isValid, isValidating, touchedFields },
   } = useForm<BasicInformationFormData>({
     resolver: zodResolver(basicInformationSchema),
+    mode: 'onBlur', // ✅ CRITICAL FIX: Changed from 'onChange' to 'onBlur' to prevent excessive validation
+    reValidateMode: 'onBlur', // Only re-validate when field loses focus
     defaultValues: {
       client: {
         id: data.client?.id || '',
@@ -153,28 +165,33 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         description: data.details?.description || '',
       },
     },
-    // ✅ CRITICAL FIX: Mobile-optimized validation mode
-    mode: isMobile ? 'onBlur' : 'onChange',
-    reValidateMode: 'onBlur',
-    criteriaMode: 'firstError',
   });
 
-  // ✅ PERFORMANCE OPTIMIZATION: Debounced update function
+  // ✅ CRITICAL FIX: Remove the form reset useEffect that was causing infinite loops
+  // The form should only be initialized once with default values, not reset on every data change
+  // This prevents infinite loops between form updates and wizard data updates
+
+  // ✅ PERFORMANCE OPTIMIZATION: Debounced update function - SIMPLIFIED
   const debouncedHandleUpdate = useCallback(
     (formattedData: ProposalWizardStep1Data) => {
+      // ✅ CRITICAL FIX: Check for data changes BEFORE setting timeout
+      const dataHash = JSON.stringify(formattedData);
+      if (dataHash === lastSentDataRef.current) {
+        return; // Skip if data is identical
+      }
+
       // Clear existing timeout
       if (debouncedUpdateRef.current) {
         clearTimeout(debouncedUpdateRef.current);
       }
 
-      // Set new timeout with mobile-optimized delay
-      const delay = isMobile ? 500 : 300; // Longer delay on mobile for better performance
+      // Set new timeout with longer delay to prevent excessive calls
+      const delay = isMobile ? 750 : 500; // Increased delay for stability
       debouncedUpdateRef.current = setTimeout(() => {
-        const dataHash = JSON.stringify(formattedData);
-
-        // Only update if data has actually changed
-        if (dataHash !== lastSentDataRef.current) {
-          lastSentDataRef.current = dataHash;
+        // Double-check that data has changed just before sending
+        const currentHash = JSON.stringify(formattedData);
+        if (currentHash !== lastSentDataRef.current) {
+          lastSentDataRef.current = currentHash;
           onUpdateRef.current(formattedData);
         }
       }, delay);
@@ -186,6 +203,12 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   const collectFormData = useCallback((): ProposalWizardStep1Data => {
     const currentValues = getValues();
     const parsedDueDate = parseDate(currentValues.details?.dueDate);
+
+    // ✅ PERFORMANCE FIX: Remove error logging to prevent infinite loops
+    // Only log when there are actual errors to troubleshoot (not on every call)
+    // if (Object.keys(errors).length > 0) {
+    //   console.log('[BasicInformationStep] Form errors detected:', errors);
+    // }
 
     return {
       client: {
@@ -205,30 +228,39 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         description: currentValues.details?.description || '',
       },
     };
-  }, [getValues]);
+  }, [getValues]); // ✅ CRITICAL FIX: Remove errors from dependencies to prevent infinite loops
 
-  // ✅ MOBILE-OPTIMIZED: Field change handler with debouncing
+  // ✅ MOBILE-OPTIMIZED: Field change handler with debouncing - SIMPLIFIED
   const handleFieldChange = useCallback(
     (fieldName: string) => {
       return () => {
-        // Track field interactions for analytics (throttled)
-        setFieldInteractions(prev => prev + 1);
-
-        // Mobile-optimized analytics throttling
-        if (fieldInteractions % (isMobile ? 5 : 3) === 0) {
-          analytics?.trackWizardStep?.(1, 'Basic Information', 'field_interaction', {
-            fieldName,
-            fieldInteractions: fieldInteractions + 1,
-            isMobile,
-          });
+        // Track field interactions for analytics (heavily throttled)
+        const currentTime = Date.now();
+        if (currentTime - lastAnalyticsTime.current > 10000) {
+          // ✅ INCREASED: Only track every 10 seconds to prevent spam
+          lastAnalyticsTime.current = currentTime;
+          try {
+            analytics?.trackWizardStep?.(1, 'Basic Information', 'field_interaction', {
+              fieldName,
+              isMobile,
+            });
+          } catch (error) {
+            // Silently ignore analytics errors
+          }
         }
 
-        // Collect and update form data with debouncing
-        const formData = collectFormData();
-        debouncedHandleUpdate(formData);
+        // ✅ CRITICAL FIX: Use longer delay and collect data only once
+        setTimeout(() => {
+          try {
+            const formData = collectFormData();
+            debouncedHandleUpdate(formData);
+          } catch (error) {
+            // Silently ignore collection errors to prevent crashes
+          }
+        }, 200); // Increased delay to ensure form state is fully updated
       };
     },
-    [collectFormData, debouncedHandleUpdate, analytics, fieldInteractions, isMobile]
+    [collectFormData, debouncedHandleUpdate, isMobile] // Stable dependencies only
   );
 
   // Fetch customers on component mount
@@ -240,49 +272,46 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         // ✅ FIXED: Use apiClient instead of direct fetch to prevent /api/api/ URLs
         const response = await apiClient.get<any>('customers');
 
-        console.log('🔍 [DEBUG] Customers API response:', response);
+        // ✅ CRITICAL FIX: Remove debug logs to prevent console spam
+        // console.log('🔍 [DEBUG] Customers API response:', response);
 
         // ✅ FIXED: Proper response structure handling
         if (response.success && response.data?.customers) {
           const customerList = response.data.customers;
           setCustomers(customerList);
         } else {
-          console.error('🔍 [DEBUG] Invalid response structure:', response);
+          console.error('❌ [BasicInformationStep] Invalid response structure:', response);
           setCustomers([]);
           setCustomersError('Unable to load customers. Please try again.');
         }
       } catch (error) {
-        console.error('Error fetching customers:', error);
+        console.error('❌ [BasicInformationStep] Error fetching customers:', error);
         setCustomers([]);
 
         // ✅ ENHANCED: Better error handling with user-friendly messages
         if (error instanceof Error) {
           if (error.message.includes('401')) {
             setCustomersError('Please log in to access customer data.');
-            console.error('Authentication required - user may need to log in again');
           } else if (error.message.includes('404')) {
             setCustomersError('Customer service is temporarily unavailable.');
-            console.error('Customers API endpoint not found');
           } else if (error.message.includes('500')) {
             setCustomersError('Server error. Please try again in a few moments.');
-            console.error('Server error while fetching customers');
           } else {
             setCustomersError(
               'Unable to load customers. Please check your connection and try again.'
             );
-            console.error('Network or unknown error:', error.message);
           }
         } else {
           setCustomersError('An unexpected error occurred. Please try again.');
-          console.error('Unknown error type:', typeof error, error);
         }
       } finally {
         setCustomersLoading(false);
       }
     };
 
+    // ✅ CRITICAL FIX: Always fetch on mount, don't depend on customers length
     fetchCustomers();
-  }, []); // ✅ FIXED: Remove unstable dependencies to prevent infinite loop
+  }, []); // ✅ CRITICAL: Empty dependency array for mount-only execution
 
   // ✅ SEPARATE EFFECT: Handle pre-selected customer when data changes
   useEffect(() => {
@@ -290,22 +319,34 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       const existingCustomer = customers.find((c: Customer) => c.id === data.client?.id);
       if (existingCustomer && !selectedCustomer) {
         setSelectedCustomer(existingCustomer);
+        // ✅ CRITICAL FIX: Ensure form values are set when customer is pre-selected
+        setValue('client.id', existingCustomer.id, { shouldValidate: false }); // Don't trigger validation on init
+        setValue('client.name', existingCustomer.name, { shouldValidate: false });
+        setValue('client.industry', existingCustomer.industry || '', { shouldValidate: false });
+        setValue('client.contactEmail', existingCustomer.email || '', { shouldValidate: false });
+
+        // ✅ CRITICAL FIX: Don't call debouncedHandleUpdate on initialization
+        // This prevents immediate updates that conflict with user input
+        console.log('[BasicInformationStep] Pre-selected customer:', existingCustomer.name);
       }
     }
-  }, [data.client?.id, customers, selectedCustomer]);
+  }, [data.client?.id, customers, selectedCustomer, setValue]); // ✅ Stable dependencies
 
-  // Handle customer selection
+  // ✅ FIXED: Handle customer selection with proper form validation
   const handleCustomerChange = useCallback(
     (customerId: string) => {
       const customer = customers.find((c: Customer) => c.id === customerId);
       if (customer) {
         setSelectedCustomer(customer);
 
-        // Update form values
-        setValue('client.id', customer.id);
-        setValue('client.name', customer.name);
-        setValue('client.industry', customer.industry || '');
-        setValue('client.contactEmail', customer.email || '');
+        // ✅ CRITICAL FIX: Update form values and trigger validation
+        setValue('client.id', customer.id, { shouldValidate: true });
+        setValue('client.name', customer.name, { shouldValidate: true });
+        setValue('client.industry', customer.industry || '', { shouldValidate: true });
+        setValue('client.contactEmail', customer.email || '', { shouldValidate: true });
+
+        // ✅ FIXED: Trigger form validation to clear errors (including email)
+        trigger(['client.id', 'client.name', 'client.industry', 'client.contactEmail']);
 
         // Trigger analytics
         analytics?.trackWizardStep?.(1, 'Basic Information', 'customer_selected', {
@@ -314,12 +355,14 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
           customerTier: customer.tier,
         });
 
-        // Trigger field change handler
-        handleFieldChange('client.id')();
+        // ✅ CRITICAL FIX: Don't call handleFieldChange recursively - just collect and update directly
+        // This prevents infinite loops from customer selection → field change → customer selection
+        const formData = collectFormData();
+        debouncedHandleUpdate(formData);
       }
     },
-    [customers, setValue, analytics, handleFieldChange]
-  );
+    [customers, setValue, trigger, analytics, collectFormData, debouncedHandleUpdate]
+  ); // ✅ CRITICAL FIX: Remove handleFieldChange from dependencies to prevent recursion
 
   // Validate due date and show warnings for past dates
   const validateDueDate = useCallback(
@@ -341,52 +384,65 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
           '⚠️ The selected date is in the past. Please choose a future date for your proposal deadline.'
         );
 
-        // Track analytics for past date selection
-        if (analytics?.trackWizardStep) {
-          analytics?.trackWizardStep?.(1, 'Basic Information', 'error', {
-            selectedDate: dateString,
-            errorType: 'past_date_warning',
-            daysPast: Math.floor(
-              (today.getTime() - selectedDate.getTime()) / (1000 * 60 * 60 * 24)
-            ),
-          });
+        // Track analytics for past date selection (heavily throttled)
+        const currentTime = Date.now();
+        if (currentTime - lastAnalyticsTime.current > 30000) {
+          // ✅ INCREASED: 30 second throttle for error events
+          try {
+            analytics?.trackWizardStep?.(1, 'Basic Information', 'error', {
+              selectedDate: dateString,
+              errorType: 'past_date_warning',
+              daysPast: Math.floor(
+                (today.getTime() - selectedDate.getTime()) / (1000 * 60 * 60 * 24)
+              ),
+            });
+            lastAnalyticsTime.current = currentTime;
+          } catch (error) {
+            // Silently ignore analytics errors
+          }
         }
       } else if (selectedDate.getTime() === today.getTime()) {
         setDateWarning(
           "💡 You've selected today's date. Consider choosing a future date to allow adequate time for proposal completion."
         );
 
-        // Track analytics for same day selection
-        if (analytics?.trackWizardStep) {
-          analytics?.trackWizardStep?.(1, 'Basic Information', 'error', {
-            selectedDate: dateString,
-            errorType: 'same_day_warning',
-          });
+        // Track analytics for same day selection (heavily throttled)
+        const currentTime = Date.now();
+        if (currentTime - lastAnalyticsTime.current > 30000) {
+          // ✅ INCREASED: 30 second throttle for warning events
+          try {
+            analytics?.trackWizardStep?.(1, 'Basic Information', 'error', {
+              selectedDate: dateString,
+              errorType: 'same_day_warning',
+            });
+            lastAnalyticsTime.current = currentTime;
+          } catch (error) {
+            // Silently ignore analytics errors
+          }
         }
       } else {
         setDateWarning(null);
 
-        // Track successful future date selection
-        analytics?.trackWizardStep?.(1, 'Basic Information', 'future_date_selected', {
-          selectedDate: dateString,
-          daysInFuture: Math.floor(
-            (selectedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-          ),
-        });
+        // ✅ CRITICAL FIX: Use separate ref for future date analytics to prevent overlap
+        const currentTime = Date.now();
+        if (currentTime - lastFutureDateAnalytics.current > 60000) {
+          // ✅ INCREASED: 60 second throttle for future date selection (much less important)
+          try {
+            analytics?.trackWizardStep?.(1, 'Basic Information', 'future_date_selected', {
+              selectedDate: dateString,
+              daysInFuture: Math.floor(
+                (selectedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+              ),
+            });
+            lastFutureDateAnalytics.current = currentTime;
+          } catch (error) {
+            // Silently ignore analytics errors
+          }
+        }
       }
     },
-    [analytics]
+    [] // ✅ CRITICAL FIX: Remove analytics from dependencies to prevent infinite re-creation
   );
-
-  // Validate initial date if present when component loads
-  useEffect(() => {
-    if (data.details?.dueDate) {
-      const dateString = formatDateForInput(data.details.dueDate);
-      if (dateString) {
-        validateDueDate(dateString);
-      }
-    }
-  }, [data.details?.dueDate, formatDateForInput, validateDueDate]);
 
   // AI-powered suggestions for client information (placeholder)
   const handleClientNameBlur = useCallback(
@@ -412,6 +468,33 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
 
   return (
     <div className="space-y-8 mobile-form-enhanced">
+      {/* ✅ NEW: Validation Summary - Show all errors at once */}
+      {Object.keys(errors).length > 0 && (
+        <Card className="mobile-card-enhanced">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-red-800 mb-2">
+                  Please fix the following errors to continue:
+                </h4>
+                <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
+                  {errors.client?.id && <li>Customer selection is required</li>}
+                  {errors.client?.contactPerson && <li>Contact person is required</li>}
+                  {errors.client?.contactEmail && <li>{errors.client.contactEmail.message}</li>}
+                  {errors.details?.title && <li>Proposal title is required</li>}
+                  {errors.details?.dueDate && <li>Due date is required</li>}
+                  {errors.details?.description && <li>{errors.details.description.message}</li>}
+                  {errors.details?.estimatedValue && (
+                    <li>{errors.details.estimatedValue.message}</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Client Information Section */}
       <Card className="mobile-card-enhanced">
         <div className="p-6">
@@ -431,8 +514,22 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 }))}
                 placeholder={customersLoading ? 'Loading customers...' : 'Select a customer...'}
                 disabled={customersLoading}
-                className="mobile-select-enhanced ios-select-optimized touch-target-enhanced"
+                className={`mobile-select-enhanced ios-select-optimized touch-target-enhanced ${
+                  errors.client?.id ? 'border-red-300' : ''
+                }`}
               />
+              {/* ✅ CRITICAL FIX: Hidden input to properly register with react-hook-form */}
+              <input
+                type="hidden"
+                {...register('client.id', { required: 'Valid customer selection is required' })}
+                value={selectedCustomer?.id || ''}
+              />
+              {/* ✅ CRITICAL FIX: Show validation errors for customer selection */}
+              {errors.client?.id && (
+                <p className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.client.id.message}
+                </p>
+              )}
               {/* ✅ ENHANCED: Show error message when customers fail to load */}
               {customersError && (
                 <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -444,8 +541,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               {selectedCustomer && (
                 <div className="mt-2 text-sm text-gray-600 mobile-caption">
                   {selectedCustomer.industry && ` • ${selectedCustomer.industry}`}
-                  {selectedCustomer.tier && ` • ${selectedCustomer.tier} tier`}
-                  {selectedCustomer.email && ` • ${selectedCustomer.email}`}
+                  {selectedCustomer.tier && ` (${selectedCustomer.tier})`}
                 </div>
               )}
             </div>
@@ -455,8 +551,14 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               <label className="form-label mobile-focus-enhanced">Contact Person *</label>
               <Input
                 {...register('client.contactPerson')}
-                onChange={handleFieldChange('client.contactPerson')}
-                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                onBlur={async () => {
+                  // ✅ CRITICAL FIX: Trigger validation for contact person field specifically
+                  await trigger('client.contactPerson');
+                  handleFieldChange('client.contactPerson')();
+                }}
+                className={`mobile-input-enhanced ios-input-optimized touch-target-enhanced ${
+                  errors.client?.contactPerson ? 'border-red-300' : ''
+                }`}
                 placeholder="Primary contact name"
               />
               {errors.client?.contactPerson && (
@@ -471,9 +573,15 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               <label className="form-label mobile-focus-enhanced">Contact Email *</label>
               <Input
                 {...register('client.contactEmail')}
-                onChange={handleFieldChange('client.contactEmail')}
+                onBlur={async () => {
+                  // ✅ CRITICAL FIX: Trigger validation for email field specifically
+                  await trigger('client.contactEmail');
+                  handleFieldChange('client.contactEmail')();
+                }}
                 type="email"
-                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                className={`mobile-input-enhanced ios-input-optimized touch-target-enhanced ${
+                  errors.client?.contactEmail ? 'border-red-300' : ''
+                }`}
                 placeholder="contact@company.com"
               />
               {errors.client?.contactEmail && (
@@ -488,9 +596,11 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               <label className="form-label mobile-focus-enhanced">Contact Phone</label>
               <Input
                 {...register('client.contactPhone')}
-                onChange={handleFieldChange('client.contactPhone')}
+                onBlur={handleFieldChange('client.contactPhone')}
                 type="tel"
-                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                className={`mobile-input-enhanced ios-input-optimized touch-target-enhanced ${
+                  errors.client?.contactPhone ? 'border-red-300' : ''
+                }`}
                 placeholder="+1 (555) 123-4567"
               />
               {errors.client?.contactPhone && (
@@ -515,8 +625,15 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               <label className="form-label mobile-focus-enhanced">Proposal Title *</label>
               <Input
                 {...register('details.title')}
-                onChange={handleFieldChange('details.title')}
-                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                onBlur={() => {
+                  setTimeout(() => {
+                    const formData = collectFormData();
+                    debouncedHandleUpdate(formData);
+                  }, 100);
+                }}
+                className={`mobile-input-enhanced ios-input-optimized touch-target-enhanced ${
+                  errors.details?.title ? 'border-red-300' : ''
+                }`}
                 placeholder="Enter a descriptive title for your proposal"
               />
               {errors.details?.title && (
@@ -531,8 +648,15 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               <label className="form-label mobile-focus-enhanced">RFP Reference Number</label>
               <Input
                 {...register('details.rfpReferenceNumber')}
-                onChange={handleFieldChange('details.rfpReferenceNumber')}
-                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                onBlur={() => {
+                  setTimeout(() => {
+                    const formData = collectFormData();
+                    debouncedHandleUpdate(formData);
+                  }, 100);
+                }}
+                className={`mobile-input-enhanced ios-input-optimized touch-target-enhanced ${
+                  errors.details?.rfpReferenceNumber ? 'border-red-300' : ''
+                }`}
                 placeholder="RFP-2024-001"
               />
               {errors.details?.rfpReferenceNumber && (
@@ -543,24 +667,51 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
             </div>
 
             {/* Due Date */}
-            <div>
-              <label className="form-label mobile-focus-enhanced">Due Date *</label>
-              <Input
-                {...register('details.dueDate')}
-                onChange={e => {
-                  validateDueDate(e.target.value);
-                  handleFieldChange('details.dueDate')();
-                }}
+            <div className="space-y-2">
+              <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">
+                Due Date{' '}
+                <span className="text-red-500" aria-label="Required field">
+                  *
+                </span>
+              </label>
+              <input
+                id="dueDate"
                 type="date"
-                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                {...register('details.dueDate', { required: 'Due date is required' })}
+                className={`
+                  w-full px-3 py-2 border rounded-md text-sm transition-colors
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                  ${errors.details?.dueDate ? 'border-red-300' : 'border-gray-300'}
+                `}
+                aria-describedby="dueDate-error"
+                aria-invalid={!!errors.details?.dueDate}
+                onBlur={e => {
+                  // ✅ CRITICAL FIX: Single handler to prevent infinite loops
+                  const dateValue = e.target.value;
+
+                  // Validate the date and show warnings
+                  validateDueDate(dateValue);
+
+                  // Update form data (this will trigger the parent update)
+                  setTimeout(() => {
+                    const formData = collectFormData();
+                    debouncedHandleUpdate(formData);
+                  }, 150); // Small delay to ensure form state is updated
+                }}
               />
               {dateWarning && (
-                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <p className="text-sm text-yellow-800">{dateWarning}</p>
+                <div className="flex items-start space-x-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-800">{dateWarning}</p>
                 </div>
               )}
               {errors.details?.dueDate && (
-                <p className="mt-1 text-sm text-red-600" role="alert">
+                <p
+                  id="dueDate-error"
+                  className="text-sm text-red-600"
+                  role="alert"
+                  aria-live="polite"
+                >
                   {errors.details.dueDate.message}
                 </p>
               )}
@@ -571,11 +722,18 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               <label className="form-label mobile-focus-enhanced">Estimated Value ($)</label>
               <Input
                 {...register('details.estimatedValue', { valueAsNumber: true })}
-                onChange={handleFieldChange('details.estimatedValue')}
+                onBlur={() => {
+                  setTimeout(() => {
+                    const formData = collectFormData();
+                    debouncedHandleUpdate(formData);
+                  }, 100);
+                }}
                 type="number"
                 min="0"
                 step="1000"
-                className="mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                className={`mobile-input-enhanced ios-input-optimized touch-target-enhanced ${
+                  errors.details?.estimatedValue ? 'border-red-300' : ''
+                }`}
                 placeholder="100000"
               />
               {errors.details?.estimatedValue && (
@@ -592,14 +750,19 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
                 {...register('details.priority')}
                 onChange={value => {
                   setValue('details.priority', value as ProposalPriority);
-                  handleFieldChange('details.priority')();
+                  setTimeout(() => {
+                    const formData = collectFormData();
+                    debouncedHandleUpdate(formData);
+                  }, 100);
                 }}
                 options={[
                   { value: ProposalPriority.HIGH, label: 'High Priority' },
                   { value: ProposalPriority.MEDIUM, label: 'Medium Priority' },
                   { value: ProposalPriority.LOW, label: 'Low Priority' },
                 ]}
-                className="mobile-select-enhanced ios-select-optimized touch-target-enhanced"
+                className={`mobile-select-enhanced ios-select-optimized touch-target-enhanced ${
+                  errors.details?.priority ? 'border-red-300' : ''
+                }`}
               />
               {errors.details?.priority && (
                 <p className="mt-1 text-sm text-red-600" role="alert">
@@ -610,19 +773,27 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
 
             {/* Description */}
             <div className="md:col-span-2">
-              <label className="form-label mobile-focus-enhanced">Description</label>
-              <textarea
+              <label className="form-label mobile-focus-enhanced">Description *</label>
+              <Textarea
                 {...register('details.description')}
-                onChange={handleFieldChange('details.description')}
-                className="form-field mobile-input-enhanced ios-input-optimized touch-target-enhanced"
+                onBlur={() => {
+                  setTimeout(() => {
+                    const formData = collectFormData();
+                    debouncedHandleUpdate(formData);
+                  }, 100);
+                }}
                 rows={4}
-                placeholder="Provide a brief description of the proposal scope and objectives..."
+                className={`mobile-textarea-enhanced ios-textarea-optimized resize-none touch-target-enhanced ${
+                  errors.details?.description ? 'border-red-300' : ''
+                }`}
+                placeholder="Provide a brief description of the proposal objectives and scope..."
               />
               {errors.details?.description && (
                 <p className="mt-1 text-sm text-red-600" role="alert">
                   {errors.details.description.message}
                 </p>
               )}
+              <p className="mt-1 text-sm text-gray-500">Minimum 10 characters required</p>
             </div>
           </div>
         </div>
@@ -638,8 +809,34 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
             Step 1 of 6: {isValid ? 'Complete' : 'In Progress'}
           </span>
         </div>
-        <div className="text-sm text-neutral-500">Complete all required fields to continue</div>
+        <div className="text-sm text-neutral-500">
+          {isValid ? '✓ All fields completed' : `${Object.keys(errors).length} error(s) to fix`}
+        </div>
       </div>
+
+      {/* ✅ NEW: Form Completion Guide */}
+      {!isValid && (
+        <Card className="mobile-card-enhanced">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-xs font-medium text-blue-600">!</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-blue-800 mb-1">
+                  Complete Required Information
+                </h4>
+                <p className="text-sm text-blue-700">
+                  Fill out all required fields marked with (*) to proceed to the next step.
+                  {Object.keys(errors).length > 0 && ' Check the errors listed above for guidance.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

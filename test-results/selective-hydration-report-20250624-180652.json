@@ -1,0 +1,28 @@
+{
+  "testSuite": "Selective Hydration Performance",
+  "timestamp": "2025-06-24T15:06:52.3NZ",
+  "configuration": {
+    "baseUrl": "http://localhost:3000",
+    "authenticationTests": false,
+    "productionMode": false,
+    "testTimeout": 30
+  },
+  "environment": {
+    "nodeVersion": "v20.19.1",
+    "platform": "Darwin",
+    "architecture": "arm64"
+  },
+  "testResults": {
+    "basicTests": "completed",
+    "healthTests": "completed",
+    "authenticatedTests": "skipped",
+    "productionMonitoring": "skipped"
+  },
+  "optimizationFeatures": {
+    "fieldSelection": true,
+    "performanceTracking": true,
+    "securityValidation": true,
+    "caching": false,
+    "rateLimiting": false
+  }
+}

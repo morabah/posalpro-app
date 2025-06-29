@@ -1,9 +1,10 @@
-import { logger } from '@/utils/logger';/**
+/**
  * PosalPro MVP2 - NextAuth.js Configuration
  * Enhanced authentication with role-based access control
  * Analytics integration and security features
  */
 
+import { logger } from '@/utils/logger';
 import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -104,6 +105,17 @@ export const authOptions: NextAuthOptions = {
             throw new Error('Account is not active');
           }
 
+          // ✅ CRITICAL FIX: Validate that the user has the selected role
+          const roles = user.roles.map(userRole => userRole.role.name);
+          if (credentials.role && !roles.includes(credentials.role)) {
+            logger.error('❌ Role mismatch:', {
+              user: user.email,
+              selectedRole: credentials.role,
+              userRoles: roles,
+            });
+            throw new Error('Invalid credentials or role selection.');
+          }
+
           logger.info('🔑 Verifying password...');
           // Verify password
           const isValidPassword = await comparePassword(credentials.password, user.password);
@@ -117,14 +129,13 @@ export const authOptions: NextAuthOptions = {
           // Update last login timestamp
           await updateLastLogin(user.id);
 
-          // Extract roles from user.roles array
-          const roles = user.roles.map(userRole => userRole.role.name);
-
           // For now, we'll assign basic permissions based on roles
           // In the future, this can be extended to use the actual permissions from the database
           const permissions = generatePermissionsFromRoles(roles);
 
-          logger.info('🔐 Authentication successful for: ' + user.email + ' Roles: ' + JSON.stringify(roles));
+          logger.info(
+            '🔐 Authentication successful for: ' + user.email + ' Roles: ' + JSON.stringify(roles)
+          );
 
           return {
             id: user.id,

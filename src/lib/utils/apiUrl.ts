@@ -139,17 +139,25 @@ export function getApiClientConfig() {
   };
 }
 
+// ✅ PERFORMANCE FIX: Throttle logging to prevent spam
+let lastLogTime = 0;
+const LOG_THROTTLE_INTERVAL = 10000; // 10 seconds
+
 /**
- * Log current API configuration for debugging
+ * Log current API configuration for debugging (throttled)
  */
 export function logApiConfiguration(): void {
   if (process.env.NODE_ENV === 'development') {
-    logger.info('🔧 API Configuration:', {
-      baseUrl: getApiBaseUrl(),
-      nextAuthUrl: getNextAuthUrl(),
-      environment: process.env.NODE_ENV,
-      port: process.env.PORT || 'auto-detected',
-      timestamp: new Date().toISOString(),
-    });
+    const now = Date.now();
+    if (now - lastLogTime > LOG_THROTTLE_INTERVAL) {
+      logger.info('🔧 API Configuration:', {
+        baseUrl: getApiBaseUrl(),
+        nextAuthUrl: getNextAuthUrl(),
+        environment: process.env.NODE_ENV,
+        port: process.env.PORT || 'auto-detected',
+        timestamp: new Date().toISOString(),
+      });
+      lastLogTime = now;
+    }
   }
 }

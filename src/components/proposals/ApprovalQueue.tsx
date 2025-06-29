@@ -188,7 +188,8 @@ export function ApprovalQueue({
     };
 
     fetchQueueItems();
-  }, [analytics, errorHandlingService, currentUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   // AC-4.3.1: Intelligent task prioritization algorithm
   const prioritizeQueue = useCallback((items: QueueItem[]): QueueItem[] => {

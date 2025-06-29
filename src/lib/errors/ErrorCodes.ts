@@ -60,6 +60,8 @@ export const ErrorCodes = {
     DEBUG_INFO: 'SYS_1014',
     DETECTION_FAILED: 'SYS_1015',
     PERFORMANCE_MEASUREMENT_FAILED: 'SYS_1016',
+    PRELOAD_FAILED: 'SYS_1017',
+    CLEANUP_FAILED: 'SYS_1018',
   },
 
   // Authentication errors (2000-2999)
@@ -201,17 +203,7 @@ export const ErrorCodes = {
 
 // Helper type for accessing error codes
 export type ErrorCode =
-  | (typeof ErrorCodes)[ErrorCategory.SYSTEM][keyof (typeof ErrorCodes)[ErrorCategory.SYSTEM]]
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   ;
+  (typeof ErrorCodes)[ErrorCategory.SYSTEM][keyof (typeof ErrorCodes)[ErrorCategory.SYSTEM]];
 
 // Map from error code to HTTP status code
 export const errorCodeToHttpStatus: Record<ErrorCode, number> = {

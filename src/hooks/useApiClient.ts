@@ -1,6 +1,7 @@
 import { logger } from '@/utils/logger'; /**
  * React Hook for Dynamic API Client
  * Uses dynamic URL resolution to prevent port conflicts in development
+ * ✅ ENHANCED: Singleton pattern to prevent multiple instances and infinite loops
  */
 
 import { getApiBaseUrl, logApiConfiguration, validateApiConnection } from '@/lib/utils/apiUrl';
@@ -22,6 +23,116 @@ interface UseApiClientReturn {
   validateConnection: () => Promise<boolean>;
 }
 
+// ✅ NEW: Singleton API client instance
+class ApiClientSingleton {
+  private static instance: ApiClientSingleton;
+  private baseUrl: string;
+  private isInitialized: boolean = false;
+  private initPromise: Promise<void> | null = null;
+
+  private constructor() {
+    this.baseUrl = '';
+  }
+
+  public static getInstance(): ApiClientSingleton {
+    if (!ApiClientSingleton.instance) {
+      ApiClientSingleton.instance = new ApiClientSingleton();
+    }
+    return ApiClientSingleton.instance;
+  }
+
+  public async initialize(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = this.doInitialize();
+    return this.initPromise;
+  }
+
+  private async doInitialize(): Promise<void> {
+    this.baseUrl = getApiBaseUrl();
+    this.isInitialized = true;
+
+    // Log configuration in development only once
+    if (process.env.NODE_ENV === 'development') {
+      logApiConfiguration();
+    }
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl || getApiBaseUrl();
+  }
+
+  public async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    await this.initialize();
+
+    const baseUrl = this.getBaseUrl();
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+    const url = `${baseUrl}/${cleanEndpoint}`;
+
+    const defaultOptions: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const response = await fetch(url, defaultOptions);
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as T;
+      return data;
+    } catch (error) {
+      // ✅ ENHANCED: Better error logging with more context
+      const errorDetails = {
+        url,
+        endpoint,
+        method: options.method || 'GET',
+        timestamp: new Date().toISOString(),
+        singleton: true, // Mark as singleton request
+      };
+
+      if (error instanceof Error) {
+        logger.error('API request error:', {
+          ...errorDetails,
+          errorMessage: error.message,
+          errorName: error.name,
+          stack: error.stack,
+        });
+      } else {
+        logger.error('API request error (unknown type):', {
+          ...errorDetails,
+          error: String(error),
+          errorType: typeof error,
+        });
+      }
+      throw error;
+    }
+  }
+
+  public async validateConnection(): Promise<boolean> {
+    try {
+      await this.initialize();
+      return await validateApiConnection();
+    } catch (error) {
+      return false;
+    }
+  }
+}
+
+// ✅ NEW: Get singleton instance
+const apiClientSingleton = ApiClientSingleton.getInstance();
+
 /**
  * Dynamic API Client Hook
  * Provides API methods that automatically resolve URLs based on current port
@@ -41,63 +152,18 @@ export function useApiClient(): UseApiClientReturn {
       baseUrl,
     }));
 
-    // Log configuration in development
+    // Log configuration in development (throttled at module level)
     if (process.env.NODE_ENV === 'development') {
       logApiConfiguration();
     }
   }, []);
 
-  // Generic request method with dynamic URL resolution
+  // ✅ FIXED: Use singleton makeRequest to prevent multiple API client instances
   const makeRequest = useCallback(
     async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
-      const baseUrl = getApiBaseUrl();
-      const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
-      const url = `${baseUrl}/${cleanEndpoint}`;
-
-      const defaultOptions: RequestInit = {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        ...options,
-      };
-
-      try {
-        const response = await fetch(url, defaultOptions);
-
-        if (!response.ok) {
-          throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-        }
-
-        const data = (await response.json()) as T;
-        return data;
-      } catch (error) {
-        // ✅ ENHANCED: Better error logging with more context
-        const errorDetails = {
-          url,
-          endpoint,
-          method: options.method || 'GET',
-          timestamp: new Date().toISOString(),
-        };
-
-        if (error instanceof Error) {
-          logger.error('API request error:', {
-            ...errorDetails,
-            errorMessage: error.message,
-            errorName: error.name,
-            stack: error.stack,
-          });
-        } else {
-          logger.error('API request error (unknown type):', {
-            ...errorDetails,
-            error: String(error),
-            errorType: typeof error,
-          });
-        }
-        throw error;
-      }
+      return apiClientSingleton.makeRequest<T>(endpoint, options);
     },
-    []
+    [] // No dependencies needed - singleton handles all state
   );
 
   // GET request

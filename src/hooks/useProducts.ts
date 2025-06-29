@@ -290,7 +290,7 @@ export function useProductSearch(query: string, limit = 50, options?: UseQueryOp
         analytics.track('product_search_completion', {
           userStory: 'US-1.2',
           hypothesis: 'H1',
-          acceptanceCriteria: 'AC-1.2.1',
+          acceptanceCriteria: ['AC-1.2.1'],
           searchTime: Date.now() - startTime,
           query,
           resultCount: results.length,
@@ -330,7 +330,7 @@ export function useCreateProduct() {
       analytics.track('product_creation_success', {
         userStory: 'US-3.2',
         hypothesis: 'H8',
-        acceptanceCriteria: 'AC-3.2.1',
+        acceptanceCriteria: ['AC-3.2.1'],
         productId: data.id,
         category: data.category,
       });
@@ -363,7 +363,7 @@ export function useUpdateProduct() {
       analytics.track('product_update_success', {
         userStory: 'US-3.2',
         hypothesis: 'H8',
-        acceptanceCriteria: 'AC-3.2.2',
+        acceptanceCriteria: ['AC-3.2.2'],
         productId: data.id,
       });
     },
@@ -503,7 +503,7 @@ export function useProductValidation() {
         analytics.track('product_validation_performance', {
           userStory: 'US-3.1',
           hypothesis: 'H8',
-          acceptanceCriteria: 'AC-3.1.1',
+          acceptanceCriteria: ['AC-3.1.1'],
           productId,
           validationTime,
           issuesFound: result.data.issues?.length || 0,
@@ -544,7 +544,7 @@ export function useProductValidation() {
         analytics.track('product_compatibility_check', {
           userStory: 'US-3.1',
           hypothesis: 'H8',
-          acceptanceCriteria: 'AC-3.1.1',
+          acceptanceCriteria: ['AC-3.1.1'],
           productCount: productIds.length,
           checkTime: Date.now() - startTime,
           compatibilityIssues: result.data.issues?.length || 0,

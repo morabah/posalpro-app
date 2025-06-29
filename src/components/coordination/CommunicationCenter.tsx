@@ -146,7 +146,7 @@ export function CommunicationCenter({
           action,
           userId: currentUserId,
           userStory: 'US-2.2',
-          acceptanceCriteria: 'AC-2.2.3',
+          acceptanceCriteria: ['AC-2.2.3'],
           hypothesis: 'H4',
           targetReduction: 0.4, // 40% coordination effort reduction
           timestamp: Date.now(),

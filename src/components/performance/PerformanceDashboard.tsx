@@ -88,7 +88,8 @@ export default function PerformanceDashboard({
 
     // Initial metrics collection
     collectMetrics();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- Mount-only effect to prevent infinite loop with analytics and collectMetrics
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern) // eslint-disable-line react-hooks/exhaustive-deps -- Mount-only effect to prevent infinite loop with analytics and collectMetrics
 
   const handleOptimizationTrigger = async () => {
     try {

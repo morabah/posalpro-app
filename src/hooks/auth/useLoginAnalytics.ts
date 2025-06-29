@@ -128,7 +128,7 @@ export const useLoginAnalytics = () => {
         timestamp: Date.now(),
         component: 'RoleSelector',
         userStory: 'US-2.3',
-        acceptanceCriteria: 'AC-2.3.1',
+        acceptanceCriteria: ['AC-2.3.1'],
       });
     },
     [analytics]
@@ -143,7 +143,7 @@ export const useLoginAnalytics = () => {
         timestamp: Date.now(),
         component: 'PermissionManager',
         userStory: 'US-2.3',
-        acceptanceCriteria: 'AC-2.3.1',
+        acceptanceCriteria: ['AC-2.3.1'],
       });
     },
     [analytics]

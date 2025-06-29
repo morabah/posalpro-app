@@ -120,7 +120,7 @@ export const useUserRegistrationAnalytics = () => {
         timestamp: Date.now(),
         component: 'RoleAssignmentForm',
         userStory: 'US-2.3',
-        acceptanceCriteria: 'AC-2.3.1',
+        acceptanceCriteria: ['AC-2.3.1'],
       });
     },
     [analytics]

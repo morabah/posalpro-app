@@ -104,7 +104,7 @@ export const useUserProfileAnalytics = () => {
         timestamp: Date.now(),
         component: 'ProfileManager',
         userStory: 'US-2.3',
-        acceptanceCriteria: 'AC-2.3.1',
+        acceptanceCriteria: ['AC-2.3.1'],
       });
 
       // Hypothesis validation tracking for cross-department coordination
@@ -142,7 +142,7 @@ export const useUserProfileAnalytics = () => {
         timestamp: Date.now(),
         component: 'ExpertiseSelector',
         userStory: 'US-2.1',
-        acceptanceCriteria: 'AC-2.1.1',
+        acceptanceCriteria: ['AC-2.1.1'],
       });
 
       // Hypothesis validation for SME contribution efficiency
@@ -175,7 +175,7 @@ export const useUserProfileAnalytics = () => {
         timestamp: Date.now(),
         component: 'SecuritySettings',
         userStory: 'US-2.3',
-        acceptanceCriteria: 'AC-2.3.2',
+        acceptanceCriteria: ['AC-2.3.2'],
       });
 
       // Track security improvement metrics
@@ -202,7 +202,7 @@ export const useUserProfileAnalytics = () => {
         timestamp: Date.now(),
         component: 'AccessibilitySettings',
         userStory: 'US-4.3',
-        acceptanceCriteria: 'AC-4.3.1',
+        acceptanceCriteria: ['AC-4.3.1'],
       });
     },
     [analytics]
@@ -216,7 +216,7 @@ export const useUserProfileAnalytics = () => {
         timestamp: Date.now(),
         component: 'ProfileManager',
         userStory: 'US-2.3',
-        acceptanceCriteria: 'AC-2.3.1',
+        acceptanceCriteria: ['AC-2.3.1'],
       });
     },
     [analytics]
@@ -230,7 +230,7 @@ export const useUserProfileAnalytics = () => {
         timestamp: Date.now(),
         component: 'SecuritySettings',
         userStory: 'US-2.3',
-        acceptanceCriteria: 'AC-2.3.2',
+        acceptanceCriteria: ['AC-2.3.2'],
       });
     },
     [analytics]
@@ -294,7 +294,7 @@ export const useUserProfileAnalytics = () => {
         timestamp: Date.now(),
         component: 'ProfileManager',
         userStory: 'US-4.3',
-        acceptanceCriteria: 'AC-4.3.1',
+        acceptanceCriteria: ['AC-4.3.1'],
       });
     },
     [analytics]

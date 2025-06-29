@@ -6,16 +6,13 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db/prisma';
 import { createApiErrorResponse, ErrorCodes, StandardError } from '@/lib/errors';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { proposalService } from '@/lib/services';
-import { updateProposalSchema } from '@/lib/validation/schemas/proposal';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
@@ -37,34 +34,213 @@ function createApiResponse<T>(data: T, message: string, status = 200) {
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    // Await params
     const params = await context.params;
-    const { id } = params;
 
-    // Get proposal with details using service
-    const proposal = await proposalService.getProposalWithDetails(id);
-
-    if (!proposal) {
-      throw StandardError.notFound(`Proposal with ID ${id} not found`, {
-        component: 'ProposalRoute',
-        operation: 'getProposal',
-        userFriendlyMessage: 'The requested proposal could not be found.',
-      });
+    // Validate authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Authentication required to access proposal details',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalDetailAPI',
+            operation: 'GET',
+          },
+        }),
+        'Unauthorized access',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
     }
 
-    return createApiResponse(proposal, 'Proposal retrieved successfully');
+    const proposalId = params.id;
+
+    // Validate proposal ID format
+    if (!proposalId || typeof proposalId !== 'string' || proposalId.trim().length === 0) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Invalid proposal ID provided',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProposalDetailAPI',
+            operation: 'GET',
+            proposalId,
+          },
+        }),
+        'Invalid proposal ID',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
+      );
+    }
+
+    console.log('[ProposalDetailAPI] Fetching proposal:', proposalId);
+
+    // Fetch proposal with related data
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            industry: true,
+            tier: true,
+            email: true,
+          },
+        },
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        sections: {
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            type: true,
+            order: true,
+          },
+          orderBy: {
+            order: 'asc',
+          },
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        approvals: {
+          select: {
+            id: true,
+            currentStage: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!proposal) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Proposal not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalDetailAPI',
+            operation: 'GET',
+            proposalId,
+            userId: session.user.id,
+          },
+        }),
+        'Proposal not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404
+      );
+    }
+
+    // Transform proposal data for frontend consumption
+    const proposalDetail = {
+      id: proposal.id,
+      title: proposal.title,
+      description: proposal.description,
+      status: proposal.status,
+      priority: proposal.priority,
+      projectType: proposal.projectType,
+      value: proposal.value || 0,
+      currency: proposal.currency || 'USD',
+      dueDate: proposal.dueDate?.toISOString(),
+      validUntil: proposal.validUntil?.toISOString(),
+      createdAt: proposal.createdAt.toISOString(),
+      updatedAt: proposal.updatedAt.toISOString(),
+      submittedAt: proposal.submittedAt?.toISOString(),
+      approvedAt: proposal.approvedAt?.toISOString(),
+
+      // Customer information
+      customerId: proposal.customerId,
+      customerName: proposal.customer?.name || 'Unknown Customer',
+      customerIndustry: proposal.customer?.industry,
+      customerTier: proposal.customer?.tier,
+      customerEmail: proposal.customer?.email,
+
+      // Creator information
+      createdBy: proposal.creator?.name || 'Unknown Creator',
+      createdByEmail: proposal.creator?.email,
+
+      // Sections
+      sections: proposal.sections.map(section => ({
+        id: section.id,
+        title: section.title,
+        content: section.content,
+        type: section.type,
+        order: section.order,
+      })),
+
+      // Assigned team members
+      assignedTo: proposal.assignedTo.map(user => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      })),
+
+      // Approval executions
+      approvals: proposal.approvals.map(approval => ({
+        id: approval.id,
+        currentStage: approval.currentStage,
+        status: approval.status,
+        startedAt: approval.startedAt.toISOString(),
+        completedAt: approval.completedAt?.toISOString(),
+      })),
+
+      // Computed fields
+      totalSections: proposal.sections.length,
+      teamSize: proposal.assignedTo.length,
+      approvalStages: proposal.approvals.length,
+      isOverdue: proposal.dueDate ? new Date(proposal.dueDate) < new Date() : false,
+      daysUntilDeadline: proposal.dueDate
+        ? Math.ceil(
+            (new Date(proposal.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+          )
+        : null,
+    };
+
+    console.log('[ProposalDetailAPI] Successfully fetched proposal:', proposalId);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: proposalDetail,
+        message: 'Proposal details retrieved successfully',
+      },
+      { status: 200 }
+    );
   } catch (error) {
-    const params = await context.params;
+    console.error('[ProposalDetailAPI] Error fetching proposal:', error);
+
+    // Process error using standardized error handling
+    errorHandlingService.processError(error);
 
     return createApiErrorResponse(
-      error,
-      `Failed to fetch proposal ${params.id}`,
-      ErrorCodes.DATA.NOT_FOUND,
-      404,
-      {
-        component: 'ProposalRoute',
-        operation: 'getProposal',
-        userFriendlyMessage: 'Unable to retrieve the proposal. Please try again later.',
-      }
+      new StandardError({
+        message: 'Failed to retrieve proposal details',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalDetailAPI',
+          operation: 'GET',
+          proposalId: 'unknown',
+        },
+      }),
+      'Failed to retrieve proposal details',
+      ErrorCodes.DATA.QUERY_FAILED,
+      500
     );
   }
 }
@@ -74,45 +250,88 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    // Await params
     const params = await context.params;
-    const { id } = params;
+
+    // Validate authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Authentication required to update proposal',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalDetailAPI',
+            operation: 'PUT',
+          },
+        }),
+        'Unauthorized access',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+    }
+
+    const proposalId = params.id;
     const body = await request.json();
 
-    // Transform date strings to Date objects for validation
-    if (body.validUntil && typeof body.validUntil === 'string') {
-      body.validUntil = new Date(body.validUntil);
-    }
-    if (body.dueDate && typeof body.dueDate === 'string') {
-      body.dueDate = new Date(body.dueDate);
-    }
-
-    // Add the id to the body for validation
-    const updateData = { id, ...body };
-
-    // Validate the update data
-    const validatedData = updateProposalSchema.parse(updateData);
-
-    // Update proposal using service
-    const updatedProposal = await proposalService.updateProposal({
-      ...validatedData,
-      status: validatedData.status as any,
+    // Validate proposal exists
+    const existingProposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
     });
 
-    return createApiResponse(updatedProposal, 'Proposal updated successfully');
+    if (!existingProposal) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Proposal not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalDetailAPI',
+            operation: 'PUT',
+            proposalId,
+          },
+        }),
+        'Proposal not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404
+      );
+    }
+
+    // Update proposal
+    const updatedProposal = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: {
+        ...body,
+        updatedAt: new Date(),
+      },
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: updatedProposal,
+        message: 'Proposal updated successfully',
+      },
+      { status: 200 }
+    );
   } catch (error) {
-    const params = await context.params;
+    console.error('[ProposalDetailAPI] Error updating proposal:', error);
+
+    errorHandlingService.processError(error);
 
     return createApiErrorResponse(
-      error,
-      `Failed to update proposal ${params.id}`,
-      ErrorCodes.VALIDATION.INVALID_INPUT,
-      400,
-      {
-        component: 'ProposalRoute',
-        operation: 'updateProposal',
-        userFriendlyMessage:
-          'Unable to update the proposal. Please check your input and try again.',
-      }
+      new StandardError({
+        message: 'Failed to update proposal',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalDetailAPI',
+          operation: 'PUT',
+          proposalId: 'unknown',
+        },
+      }),
+      'Failed to update proposal',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      500
     );
   }
 }
@@ -122,27 +341,83 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    // Await params
     const params = await context.params;
-    const { id } = params;
 
-    // Delete proposal using service
-    await proposalService.deleteProposal(id);
+    // Validate authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Authentication required to delete proposal',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProposalDetailAPI',
+            operation: 'DELETE',
+          },
+        }),
+        'Unauthorized access',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+    }
 
-    return createApiResponse(null, 'Proposal deleted successfully');
+    const proposalId = params.id;
+
+    // Validate proposal exists
+    const existingProposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+    });
+
+    if (!existingProposal) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Proposal not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalDetailAPI',
+            operation: 'DELETE',
+            proposalId,
+          },
+        }),
+        'Proposal not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404
+      );
+    }
+
+    // Delete proposal (cascade will handle related records)
+    await prisma.proposal.delete({
+      where: { id: proposalId },
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: { id: proposalId },
+        message: 'Proposal deleted successfully',
+      },
+      { status: 200 }
+    );
   } catch (error) {
-    const params = await context.params;
+    console.error('[ProposalDetailAPI] Error deleting proposal:', error);
+
+    errorHandlingService.processError(error);
 
     return createApiErrorResponse(
-      error,
-      `Failed to delete proposal ${params.id}`,
-      ErrorCodes.DATA.NOT_FOUND,
-      404,
-      {
-        component: 'ProposalRoute',
-        operation: 'deleteProposal',
-        userFriendlyMessage:
-          'Unable to delete the proposal. It may have already been removed or you may not have permission.',
-      }
+      new StandardError({
+        message: 'Failed to delete proposal',
+        code: ErrorCodes.DATA.DELETE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProposalDetailAPI',
+          operation: 'DELETE',
+          proposalId: 'unknown',
+        },
+      }),
+      'Failed to delete proposal',
+      ErrorCodes.DATA.DELETE_FAILED,
+      500
     );
   }
 }

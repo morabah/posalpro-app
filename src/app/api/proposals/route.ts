@@ -13,6 +13,7 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
+import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
 import { UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -76,11 +77,17 @@ const ProposalUpdateSchema = ProposalCreateSchema.partial().extend({
 
 const ProposalQuerySchema = z.object({
   // Cursor-based pagination (NEW - more efficient than offset)
-  cursor: z.string().cuid().optional(), // ID of the last item from previous page
+  cursor: z.preprocess(
+    (val) => (val === '' ? undefined : val),
+    z.string().cuid().nullish() // Allow null, undefined, or valid CUID
+  ), // ID of the last item from previous page
   limit: z.coerce.number().int().positive().max(100).default(20),
 
   // Legacy offset pagination support (DEPRECATED but maintained for backward compatibility)
   page: z.coerce.number().int().positive().default(1),
+
+  // Selective Hydration (NEW - Performance Optimization)
+  fields: z.string().optional(), // Comma-separated list of fields to return
 
   // Filtering
   status: z
@@ -106,7 +113,7 @@ const ProposalQuerySchema = z.object({
     .default('updatedAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 
-  // Includes
+  // Includes (DEPRECATED - Use fields parameter instead)
   includeCustomer: z.coerce.boolean().default(true),
   includeProducts: z.coerce.boolean().default(false),
 });
@@ -174,6 +181,7 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
 // GET /api/proposals - List proposals with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
+    console.log('[ProposalsAPI] Request received:', request.url);
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -240,8 +248,16 @@ export async function GET(request: NextRequest) {
     // Parse and validate query parameters
     const url = new URL(request.url);
     const queryParams = Object.fromEntries(url.searchParams.entries());
+    console.log('[ProposalsAPI] Query parameters:', queryParams);
 
-    const query = ProposalQuerySchema.parse(queryParams);
+    let query;
+    try {
+      query = ProposalQuerySchema.parse(queryParams);
+      console.log('[ProposalsAPI] Parsed query:', query);
+    } catch (parseError) {
+      console.error('[ProposalsAPI] Query validation error:', parseError);
+      throw parseError;
+    }
 
     // Build where clause
     const where: any = {};
@@ -270,53 +286,25 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+      // 🚀 SELECTIVE HYDRATION: Dynamic field selection for performance
+      const queryStartTime = Date.now();
+
+      // Parse requested fields or use defaults
+      const { select: proposalSelect, optimizationMetrics } = parseFieldsParam(
+        query.fields || undefined,
+        'proposal'
+      );
+
+      // Build dynamic select object based on requested fields - use the select directly
+      const includeRelations: Record<string, boolean> = {
+        customer: query.includeCustomer || false,
+        products: query.includeProducts || false,
+      };
+
+      // proposalSelect is already defined from parseFieldsParam above
+
       // 🚀 CURSOR-BASED PAGINATION: More efficient for large datasets
       const useCursorPagination = query.cursor !== undefined;
-
-      // Define selection criteria
-      const proposalSelect = {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        priority: true,
-        value: true,
-        currency: true,
-        dueDate: true,
-        createdAt: true,
-        updatedAt: true,
-        createdBy: true,
-        customerId: true,
-        ...(query.includeCustomer && {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              industry: true,
-              status: true,
-              tier: true,
-            },
-          },
-        }),
-        ...(query.includeProducts && {
-          products: {
-            select: {
-              id: true,
-              quantity: true,
-              unitPrice: true,
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  sku: true,
-                  category: true,
-                },
-              },
-            },
-          },
-        }),
-      };
 
       let proposals: any[];
       let pagination: any;
@@ -381,21 +369,28 @@ export async function GET(request: NextRequest) {
         };
       }
 
-      // Track search event
+      // 🎯 PERFORMANCE OPTIMIZATION: Proposals already optimized via selective hydration
+      const enhancedProposals = proposals; // No additional computed fields needed with new pattern
+
+      const queryEndTime = Date.now();
+
+      // Track search event with performance metrics
       await trackProposalSearchEvent(
         session.user.id,
         JSON.stringify(queryParams),
-        proposals.length
+        enhancedProposals.length
       );
 
       return NextResponse.json({
-        proposals,
+        proposals: enhancedProposals,
         pagination,
-        // Metadata to help clients understand pagination type
+        // Metadata to help clients understand pagination type and performance
         meta: {
           paginationType: useCursorPagination ? 'cursor' : 'offset',
           sortBy: query.sortBy,
           sortOrder: query.sortOrder,
+          selectiveHydration: optimizationMetrics,
+          responseTimeMs: queryEndTime - queryStartTime,
         },
       });
     } catch (error) {

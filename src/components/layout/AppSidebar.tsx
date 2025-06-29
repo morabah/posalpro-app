@@ -11,6 +11,7 @@ import {
   AdjustmentsHorizontalIcon,
   ArchiveBoxIcon,
   ChartBarIcon,
+  ChevronDownIcon,
   CircleStackIcon,
   ClockIcon,
   CogIcon,
@@ -24,7 +25,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface NavigationItem {
   id: string;
@@ -253,6 +254,7 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
 export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps) {
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['dashboard']));
+  const navigationThrottleRef = useRef(new Map<string, number>());
 
   // Auto-expand active group with null check
   useEffect(() => {
@@ -269,17 +271,45 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
     }
   }, [pathname]);
 
-  // Analytics tracking for navigation
+  // ✅ PERFORMANCE OPTIMIZED: Analytics tracking with throttling
   const trackNavigation = useCallback(
     (action: string, metadata: any = {}) => {
-      console.log('Navigation Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        userId: user?.id,
-        userRole: user?.role,
-        component: 'AppSidebar',
-      });
+      // Throttle navigation analytics to prevent performance overhead
+      const throttleKey = `${action}_${metadata.itemName || metadata.groupId || 'unknown'}`;
+      const now = Date.now();
+
+      // Only track if last event was more than 2 seconds ago
+      if (
+        !navigationThrottleRef.current.has(throttleKey) ||
+        now - navigationThrottleRef.current.get(throttleKey)! > 2000
+      ) {
+        navigationThrottleRef.current.set(throttleKey, now);
+
+        // Simplified analytics payload
+        console.log('Navigation Analytics:', {
+          action,
+          metadata: {
+            itemName: metadata.itemName,
+            groupId: metadata.groupId,
+            from: metadata.from?.split('/').pop(), // Only last path segment
+            to: metadata.to?.split('/').pop(), // Only last path segment
+          },
+          timestamp: now,
+          userId: user?.id,
+          userRole: user?.role,
+          component: 'AppSidebar',
+        });
+
+        // Cleanup old throttle entries periodically
+        if (navigationThrottleRef.current.size > 20) {
+          const cutoff = now - 10000; // 10 seconds
+          for (const [key, timestamp] of navigationThrottleRef.current.entries()) {
+            if (timestamp < cutoff) {
+              navigationThrottleRef.current.delete(key);
+            }
+          }
+        }
+      }
     },
     [user?.id, user?.role]
   );
@@ -397,97 +427,87 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
-                    {hasChildren ? (
+                    <Link
+                      href={item.href}
+                      prefetch={true}
+                      className="flex items-center flex-1 no-underline"
+                      onClick={() => handleNavigation(item)}
+                      aria-label={`Navigate to ${item.name}`}
+                    >
+                      <IconComponent
+                        className={`mr-3 flex-shrink-0 h-6 w-6 transition-colors duration-150 ${
+                          isItemActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span className="flex-1">{item.name}</span>
+                    </Link>
+
+                    {hasChildren && (
                       <button
-                        onClick={() => toggleGroup(item.id)}
-                        className="flex items-center w-full text-left"
+                        type="button"
+                        onClick={e => {
+                          e.preventDefault();
+                          toggleGroup(item.id);
+                        }}
+                        className={`ml-2 p-1 rounded-md transition-colors duration-150 ${
+                          isItemActive
+                            ? 'text-blue-600 hover:bg-blue-200'
+                            : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
+                        }`}
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${item.name} menu`}
                         aria-expanded={isExpanded}
-                        aria-controls={`nav-group-${item.id}`}
                       >
-                        <IconComponent
-                          className={`mr-3 h-5 w-5 ${
-                            isItemActive
-                              ? 'text-blue-600'
-                              : 'text-gray-400 group-hover:text-gray-500'
+                        <ChevronDownIcon
+                          className={`h-4 w-4 transform transition-transform duration-200 ${
+                            isExpanded ? 'rotate-180' : ''
                           }`}
                         />
-                        <span className="flex-1">{item.name}</span>
-                        {item.badge && (
-                          <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-full">
-                            {item.badge}
-                          </span>
-                        )}
-                        <svg
-                          className={`ml-2 h-4 w-4 transform transition-transform duration-150 ${
-                            isExpanded ? 'rotate-90' : ''
-                          }`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
                       </button>
-                    ) : (
-                      <Link
-                        href={item.href}
-                        onClick={() => handleNavigation(item)}
-                        className="flex items-center w-full"
-                      >
-                        <IconComponent
-                          className={`mr-3 h-5 w-5 ${
-                            isItemActive
-                              ? 'text-blue-600'
-                              : 'text-gray-400 group-hover:text-gray-500'
-                          }`}
-                        />
-                        <span className="flex-1">{item.name}</span>
-                        {item.badge && (
-                          <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-full">
-                            {item.badge}
-                          </span>
-                        )}
-                      </Link>
                     )}
                   </div>
 
-                  {/* Sub-navigation items */}
                   {hasChildren && isExpanded && (
-                    <div id={`nav-group-${item.id}`} className="ml-4 mt-1 space-y-1">
-                      {item.children!.map(child => {
+                    <div className="ml-6 mt-1 space-y-1" role="group" aria-labelledby={item.id}>
+                      {item.children?.map(child => {
                         const ChildIconComponent = child.icon;
                         const isChildActive = isActive(child.href);
 
                         return (
-                          <Link
-                            key={child.id}
-                            href={child.href}
-                            onClick={() => handleNavigation(child)}
-                            className={`group flex items-center px-2 py-2 text-sm rounded-md transition-colors duration-150 ${
-                              isChildActive
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
-                          >
-                            <ChildIconComponent
-                              className={`mr-3 h-4 w-4 ${
+                          <div key={child.id}>
+                            <Link
+                              href={child.href}
+                              prefetch={true}
+                              className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-150 no-underline ${
                                 isChildActive
-                                  ? 'text-blue-600'
-                                  : 'text-gray-400 group-hover:text-gray-500'
+                                  ? 'bg-blue-50 text-blue-900 border-r-2 border-blue-500'
+                                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                               }`}
-                            />
-                            <span>{child.name}</span>
-                            {child.badge && (
-                              <span className="ml-auto px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-full">
-                                {child.badge}
-                              </span>
-                            )}
-                          </Link>
+                              onClick={() => handleNavigation(child)}
+                              aria-label={`Navigate to ${child.name}`}
+                            >
+                              <ChildIconComponent
+                                className={`mr-3 flex-shrink-0 h-5 w-5 transition-colors duration-150 ${
+                                  isChildActive
+                                    ? 'text-blue-500'
+                                    : 'text-gray-400 group-hover:text-gray-500'
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span className="flex-1">{child.name}</span>
+                              {child.badge && (
+                                <span
+                                  className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    isChildActive
+                                      ? 'bg-blue-200 text-blue-800'
+                                      : 'bg-gray-200 text-gray-800'
+                                  }`}
+                                >
+                                  {child.badge}
+                                </span>
+                              )}
+                            </Link>
+                          </div>
                         );
                       })}
                     </div>

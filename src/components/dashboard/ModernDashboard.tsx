@@ -462,6 +462,7 @@ export default function ModernDashboard({
 
                     <Link
                       href={item.actionUrl}
+                      prefetch={true}
                       className="min-h-[44px] bg-gray-900 hover:bg-gray-800 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all duration-200 flex items-center justify-center gap-2 w-full sm:w-auto"
                     >
                       <span>{item.actionLabel}</span>
@@ -497,6 +498,7 @@ export default function ModernDashboard({
             </h2>
             <Link
               href="/proposals"
+              prefetch={true}
               className="min-h-[44px] min-w-[44px] flex items-center gap-1 sm:gap-2 text-sm sm:text-base text-blue-600 hover:text-blue-700 font-medium transition-colors px-3 py-2 rounded-lg hover:bg-blue-50"
             >
               <span className="hidden sm:inline">View All</span>
@@ -526,6 +528,7 @@ export default function ModernDashboard({
                 <Link
                   key={proposal.id}
                   href={`/proposals/${proposal.id}`}
+                  prefetch={true}
                   className="group bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200"
                 >
                   <div className="space-y-3 sm:space-y-4">
@@ -599,6 +602,7 @@ export default function ModernDashboard({
               <Link
                 key={action.action}
                 href={action.href}
+                prefetch={true}
                 onClick={() => handleEnhancedQuickAction(action.action)}
                 className="group mobile-card touch-target-enhanced touch-manipulation mobile-gpu-boost bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-200/60 p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200 touch-feedback"
               >

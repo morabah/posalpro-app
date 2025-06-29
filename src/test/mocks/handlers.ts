@@ -1,9 +1,9 @@
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { createAuthHandler } from './api.mock';
 
 export const handlers = [
-  rest.get('/api/health', (req, res, ctx) => {
-    return res(ctx.json({ status: 'healthy' }));
+  http.get('/api/health', ({ request, params }) => {
+    return HttpResponse.json({ status: 'healthy' });
   }),
 
   createAuthHandler<{ token: string; user: { id: string; email: string; role: string } }>(

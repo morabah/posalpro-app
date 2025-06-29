@@ -24,8 +24,48 @@ class Logger {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
 
-    if (data) {
-      console[level](logMessage, data);
+    // Enhanced meaningful data detection to prevent "Object" logging
+    if (data !== undefined && data !== null) {
+      // Check if data is an empty object or meaningless
+      const isEmptyObject =
+        typeof data === 'object' && data !== null && Object.keys(data).length === 0;
+
+      const isEmptyString = typeof data === 'string' && data.trim() === '';
+
+      // Check if it's a generic object that would show as "Object" in console
+      const isGenericObject =
+        typeof data === 'object' &&
+        data !== null &&
+        data.constructor === Object &&
+        data.toString() === '[object Object]';
+
+      // Check for large objects that would be meaningless to log
+      const isMeaninglessObject =
+        typeof data === 'object' &&
+        data !== null &&
+        Object.keys(data).length > 10 &&
+        !Array.isArray(data);
+
+      if (!isEmptyObject && !isEmptyString && !isGenericObject && !isMeaninglessObject) {
+        // For small objects, try to stringify for better readability
+        if (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length <= 5) {
+          try {
+            const stringified = JSON.stringify(data, null, 2);
+            if (stringified && stringified !== '{}' && stringified !== 'null') {
+              console[level](`${logMessage} ${stringified}`);
+            } else {
+              console[level](logMessage);
+            }
+          } catch {
+            console[level](logMessage);
+          }
+        } else {
+          console[level](logMessage, data);
+        }
+      } else {
+        // Log message only if data is empty/meaningless
+        console[level](logMessage);
+      }
     } else {
       console[level](logMessage);
     }

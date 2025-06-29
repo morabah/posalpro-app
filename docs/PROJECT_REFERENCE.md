@@ -60,19 +60,16 @@ Working)
 ### ⭐ Core Reference Documents (START HERE)
 
 - **[PROJECT_REFERENCE.md](./PROJECT_REFERENCE.md)** - 📍 **THIS CENTRAL HUB**
-
   - Complete project navigation and architecture overview
   - Quick links to all major systems and implementation guides
   - Deployment status and production readiness information
 
 - **[IMPLEMENTATION_LOG.md](./IMPLEMENTATION_LOG.md)** - 📝 **LIVE TRACKING**
-
   - Real-time implementation progress and phase completion
   - Daily development logs with technical details
   - Component Traceability Matrix updates
 
 - **[LESSONS_LEARNED.md](./LESSONS_LEARNED.md)** - 🧠 **WISDOM CAPTURE**
-
   - Critical lessons from ProposalWizard debugging and validation patterns
   - Multi-layer validation failure analysis and database-agnostic patterns
   - Safe navigation and error handling standardization
@@ -90,21 +87,18 @@ Working)
 
 - **[ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md)** - 🔧 **SETUP &
   CONFIGURATION**
-
   - Complete development environment setup instructions
   - Database configuration and environment variables
   - Development tools and IDE configuration
 
 - **[NETLIFY_DEPLOYMENT_GUIDE.md](./NETLIFY_DEPLOYMENT_GUIDE.md)** - 🚀
   **DEPLOYMENT PROCEDURES**
-
   - Critical Netlify deployment procedures and troubleshooting
   - Configuration requirements and catch-all redirect setup
   - Production deployment validation steps
 
 - **[TESTING_GUIDELINES.md](./TESTING_GUIDELINES.md)** - ✅ **TESTING
   STANDARDS**
-
   - Comprehensive testing strategies and implementation guidelines
   - Quality assurance procedures and validation criteria
 
@@ -117,13 +111,11 @@ Working)
 
 - **[ANALYTICS_IMPLEMENTATION_SUMMARY.md](./ANALYTICS_IMPLEMENTATION_SUMMARY.md)** -
   📊 **ANALYTICS REFERENCE**
-
   - Complete analytics implementation and hypothesis validation framework
   - Component Traceability Matrix implementation patterns
 
 - **[ERROR_HANDLING_IMPLEMENTATION.md](./ERROR_HANDLING_IMPLEMENTATION.md)** -
   🔧 **ERROR PATTERNS**
-
   - Standardized error handling patterns and ErrorHandlingService usage
   - Error categorization and user-friendly message generation
 
@@ -135,7 +127,6 @@ Working)
 
 - **[MOBILE_RESPONSIVENESS_GUIDE.md](./MOBILE_RESPONSIVENESS_GUIDE.md)** - 📱
   **MOBILE OPTIMIZATION**
-
   - Complete mobile responsiveness implementation guide (93% ready)
   - Progressive enhancement status, device compatibility matrix
   - Touch interaction patterns and accessibility compliance
@@ -596,6 +587,43 @@ compliance (0 errors)
 - **Security**: Rate limiting, input validation, CSRF protection
 - **Performance**: Advanced caching with query optimization
 
+#### 🚀 **Cursor Pagination Implementation (NEW - Phase 2.3 Complete)**
+
+**Enterprise-Grade Performance Optimization**:
+
+- **Hybrid Pagination**: Automatic strategy selection (cursor vs offset)
+- **Performance Improvement**: 40-70% faster response times for large datasets
+- **Selective Hydration**: Dynamic field selection for optimized payloads
+- **Multi-Entity Search**: Unified search across proposals, customers, and users
+
+**API Endpoints Enhanced**:
+
+- **`/api/search`**: Universal search with cursor pagination support
+- **`/api/users`**: User listing with hybrid pagination strategy
+- **Query Parameters**: `cursor`, `limit`, `fields`, `sortBy`, `sortOrder`
+
+**Implementation Features**:
+
+- **Automatic Fallback**: Cursor pagination for performance, offset for
+  compatibility
+- **Type Safety**: Full TypeScript compliance with Zod validation
+- **Analytics Integration**: Performance tracking and pagination strategy
+  metrics
+- **Component Traceability**: Mapped to US-3.1, US-6.1, US-6.3, H3, H8, H11
+
+**Usage Examples**:
+
+```javascript
+// Cursor-based (high performance)
+GET /api/search?q=proposal&cursor=abc123&limit=50&fields=id,title,status
+
+// Offset-based (legacy compatibility)
+GET /api/search?q=proposal&page=2&limit=20
+
+// Multi-entity search
+GET /api/search?q=customer&type=customers&sortBy=name&sortOrder=desc
+```
+
 ### Data Model (96% Complete)
 
 - **44 Tables**: Users, Proposals, Products, Customers, Workflows, Analytics
@@ -859,5 +887,78 @@ const handleTouchStart = useCallback((e: React.TouchEvent) => {
 - Touch interaction patterns must be documented in IMPLEMENTATION_LOG.md
 - Complex touch implementations require LESSONS_LEARNED.md entries
 - Prevention strategies must be established for future development
+
+## Performance Testing
+
+### CLI Performance Testing Framework
+
+**Location**: `scripts/comprehensive-real-world-test.js`
+
+**Comprehensive Performance Testing**: The CLI framework integrates all tests
+from the web UI performance page (`/performance/test`) for automated testing:
+
+#### Test Categories Integrated:
+
+- **Performance Tests (4 tests)**: ProposalWizard component testing
+  - Initial Load Performance
+  - Step Navigation Performance
+  - Form Input Responsiveness
+  - Validation Speed
+
+- **Sidebar Tests (7 tests)**: Navigation functionality testing
+  - Navigation Item Rendering
+  - Role-Based Access Control
+  - Expand/Collapse Functionality
+  - Navigation Performance
+  - Mobile Responsiveness
+  - Accessibility Compliance
+  - State Management
+
+- **Component Tests (6 tests)**: UI component testing
+  - Form Fields
+  - Tab Components
+  - Button Components
+  - Modal Components
+  - Data Table Components
+  - Search Components
+
+#### Usage:
+
+```bash
+# Ensure server is running
+npm run dev:smart
+
+# Run comprehensive CLI performance tests
+node scripts/comprehensive-real-world-test.js
+```
+
+#### Generated Reports:
+
+- **HTML Report**: `docs/posalpro_test_report_[timestamp].html` (matches web UI
+  format)
+- **Markdown Report**: `real-world-performance-report.md`
+- **Raw Data**: `real-world-test-data.json`
+
+#### Key Features:
+
+- **Performance Scoring**: 0-100 scoring system with critical issue detection
+  (scores < 50)
+- **Browser Automation**: Uses Puppeteer to execute actual UI tests
+- **WCAG Compliance**: Calculates accessibility compliance percentage
+- **Memory Tracking**: Monitors memory usage across all test categories
+- **Critical Issue Detection**: Automatically identifies performance regressions
+
+#### Performance Thresholds:
+
+- **Critical**: Scores < 50 (immediate attention required)
+- **Warning**: Render times > 500ms
+- **Good**: Scores ≥ 80 with render times < 200ms
+
+### Web UI Performance Testing
+
+**Location**: `http://localhost:3000/performance/test`
+
+Interactive performance testing dashboard with real-time test execution and
+visual results.
 
 ---

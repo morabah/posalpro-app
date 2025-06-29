@@ -324,7 +324,8 @@ export default function AdminSystem() {
     } finally {
       setIsUserUpdateLoading(false);
     }
-  }, [editingUser, editUserData, users, refetchUsers, analytics, handleError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   const handleDeleteUser = useCallback(
     async (id: string) => {

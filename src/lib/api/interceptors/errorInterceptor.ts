@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * Error Interceptor
  * Handles global error processing and categorization
  */
@@ -249,7 +249,8 @@ class ErrorInterceptor {
     if (logData.message !== 'No error message' || Object.keys(logData.details).length > 0) {
       console[logLevel]('[ErrorInterceptor]', logData);
     } else {
-      logger.warn('[ErrorInterceptor] Attempted to log empty error data:', { error, logData });
+      // Don't log completely empty errors - they're likely from successful responses
+      logger.debug('[ErrorInterceptor] Skipping empty error log - likely successful response');
     }
 
     // In production, send to logging service
@@ -357,6 +358,13 @@ class ErrorInterceptor {
       throw new Error(error.userMessage);
     }
 
+    // Handle API responses that already have the expected structure
+    if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+      // API route already returns proper ApiResponse structure, pass it through
+      return data;
+    }
+
+    // For raw data, wrap it in ApiResponse structure
     return {
       data: data,
       success: true,

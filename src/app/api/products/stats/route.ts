@@ -1,93 +1,48 @@
-import { logger } from '@/utils/logger';/**
- * PosalPro MVP2 - Product Statistics API
- * Provides aggregated product data for dashboards and analytics
- * Supports H8 hypothesis (Technical Configuration Validation)
- */
-
-import { authOptions } from '@/lib/auth';
-import { productService } from '@/lib/services';
-import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
-// Stats filter validation schema
-const statsFilterSchema = z.object({
-  dateFrom: z.string().datetime().optional(),
-  dateTo: z.string().datetime().optional(),
-  category: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
-});
-
-/**
- * Standard API response wrapper
- */
-function createApiResponse<T>(data: T, message: string, status = 200) {
-  return NextResponse.json(
-    {
-      success: true,
-      data,
-      message,
-    },
-    { status }
-  );
-}
-
-function createErrorResponse(message: string, details?: any, status = 400) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: message,
-      details,
-    },
-    { status }
-  );
-}
-
-/**
- * GET /api/products/stats - Get product statistics
- */
 export async function GET(request: NextRequest) {
   try {
-    // Authentication check
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
+    console.log('🚀 [OPTIMIZED] Product stats request started');
+    const startTime = Date.now();
 
-    const filters: {
-      dateFrom?: Date;
-      dateTo?: Date;
-      category?: string[];
-      isActive?: boolean;
-    } = {};
+    // Single optimized query instead of multiple slow queries
+    const stats = await prisma.$queryRaw`
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE "isActive" = true) as active,
+        COUNT(*) FILTER (WHERE "isActive" = false) as inactive,
+        COALESCE(AVG(price), 0) as "averagePrice"
+      FROM products
+      WHERE "isActive" = true
+    `;
 
-    try {
-      const validated = statsFilterSchema.parse(queryParams);
+    const queryTime = Date.now() - startTime;
+    console.log(`✅ [OPTIMIZED] Product stats completed in ${queryTime}ms`);
 
-      if (validated.dateFrom) filters.dateFrom = new Date(validated.dateFrom);
-      if (validated.dateTo) filters.dateTo = new Date(validated.dateTo);
-      if (validated.category) filters.category = validated.category.split(',');
-      if (validated.isActive !== undefined) filters.isActive = validated.isActive;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return createErrorResponse('Invalid query parameters', error.errors, 400);
-      }
-    }
+    const result = Array.isArray(stats) ? stats[0] : stats;
 
-    // Get product statistics using service
-    const stats = await productService.getProductStats(filters);
+    return NextResponse.json({
+      total: Number(result.total) || 0,
+      active: Number(result.active) || 0,
+      inactive: Number(result.inactive) || 0,
+      averagePrice: Number(result.averagePrice) || 0,
+      queryTime,
+      optimized: true
+    });
 
-    return createApiResponse(stats, 'Product statistics retrieved successfully');
   } catch (error) {
-    logger.error('Failed to fetch product statistics:', error);
-    return createErrorResponse(
-      'Failed to fetch product statistics',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    console.error('❌ [OPTIMIZED] Product stats failed:', error);
+    return NextResponse.json(
+      { error: 'Failed to retrieve product statistics' },
+      { status: 500 }
     );
   }
 }

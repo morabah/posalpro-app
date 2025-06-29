@@ -13,29 +13,48 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
+import {
+  createCursorQuery,
+  decidePaginationStrategy,
+  parseFieldsParam,
+  processCursorResults,
+} from '@/lib/utils/selectiveHydration';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 /**
  * Component Traceability Matrix:
- * - User Stories: US-2.1 (User Profile Management), US-2.2 (User Activity Tracking)
- * - Acceptance Criteria: AC-2.1.1, AC-2.1.2, AC-2.2.1, AC-2.2.2
- * - Hypotheses: H4 (Cross-Department Coordination), H7 (Deadline Management)
- * - Methods: getUserProfile(), updateUserProfile(), getUserActivity()
- * - Test Cases: TC-H4-002, TC-H7-002
+ * - User Stories: US-2.1 (User Profile Management), US-2.2 (User Activity Tracking), US-6.1 (Performance Optimization)
+ * - Acceptance Criteria: AC-2.1.1, AC-2.1.2, AC-2.2.1, AC-2.2.2, AC-6.1.1 (Cursor Pagination)
+ * - Hypotheses: H4 (Cross-Department Coordination), H7 (Deadline Management), H8 (Load Time Optimization), H11 (Cache Hit Rate)
+ * - Methods: getUserProfile(), updateUserProfile(), getUserActivity(), getCursorPaginatedUsers()
+ * - Test Cases: TC-H4-002, TC-H7-002, TC-H8-020, TC-H11-015
  */
 
 /**
- * Validation schemas
+ * Enhanced validation schemas with cursor pagination support
  */
 const UserQuerySchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  // Cursor-based pagination (NEW - Enterprise performance)
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+
+  // Legacy offset pagination (BACKWARD COMPATIBILITY)
+  page: z.coerce.number().int().positive().optional(),
+
+  // Selective Hydration (Performance Optimization)
+  fields: z.string().optional(), // Comma-separated list of fields to return
+
+  // Filtering options
+  search: z.string().optional(),
   department: z.string().optional(),
   role: z.string().optional(),
-  search: z.string().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING']).optional(),
+
+  // Sorting options (enhanced for cursor pagination)
+  sortBy: z.enum(['name', 'email', 'department', 'lastLogin', 'createdAt', 'id']).default('id'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
 const UserPreferencesUpdateSchema = z.object({
@@ -57,8 +76,9 @@ const CommunicationPreferencesUpdateSchema = z.object({
 });
 
 /**
- * GET /api/users - List users with filtering
+ * GET /api/users - List users with enhanced cursor-based pagination
  * Accessible to authenticated users for collaboration purposes
+ * Supports both cursor (default) and offset (legacy) pagination
  */
 export async function GET(request: NextRequest) {
   try {
@@ -73,13 +93,23 @@ export async function GET(request: NextRequest) {
     const queryParams = Object.fromEntries(searchParams);
     const validatedQuery = UserQuerySchema.parse(queryParams);
 
-    // Build where clause
-    const where: any = {
+    // Determine pagination strategy
+    const { useCursorPagination, reason } = decidePaginationStrategy({
+      cursor: validatedQuery.cursor,
+      limit: validatedQuery.limit,
+      sortBy: validatedQuery.sortBy,
+      sortOrder: validatedQuery.sortOrder,
+      fields: validatedQuery.fields,
+      page: validatedQuery.page,
+    });
+
+    // Build base where clause
+    const baseWhere: any = {
       status: 'ACTIVE', // Only show active users for collaboration
     };
 
     if (validatedQuery.search) {
-      where.OR = [
+      baseWhere.OR = [
         { name: { contains: validatedQuery.search, mode: 'insensitive' } },
         { email: { contains: validatedQuery.search, mode: 'insensitive' } },
         { department: { contains: validatedQuery.search, mode: 'insensitive' } },
@@ -87,15 +117,15 @@ export async function GET(request: NextRequest) {
     }
 
     if (validatedQuery.department) {
-      where.department = { equals: validatedQuery.department, mode: 'insensitive' };
+      baseWhere.department = { equals: validatedQuery.department, mode: 'insensitive' };
     }
 
     if (validatedQuery.status) {
-      where.status = validatedQuery.status;
+      baseWhere.status = validatedQuery.status;
     }
 
     if (validatedQuery.role) {
-      where.roles = {
+      baseWhere.roles = {
         some: {
           role: {
             name: { equals: validatedQuery.role, mode: 'insensitive' },
@@ -104,83 +134,84 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Calculate pagination
-    const skip = (validatedQuery.page - 1) * validatedQuery.limit;
+    // 🚀 PERFORMANCE OPTIMIZATION: Start timing
+    const queryStartTime = Date.now();
 
-    // Fetch users with basic info (no sensitive data)
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          department: true,
-          lastLogin: true,
-          roles: {
-            select: {
-              role: {
-                select: {
-                  name: true,
-                  description: true,
-                },
-              },
-            },
-          },
-          preferences: {
-            select: {
-              theme: true,
-              language: true,
-            },
-          },
-          communicationPrefs: {
-            select: {
-              timezone: true,
-            },
-          },
-          _count: {
-            select: {
-              createdProposals: true,
-              assignedProposals: true,
-            },
-          },
+    // Parse requested fields with selective hydration
+    const { select: userSelect, optimizationMetrics } = parseFieldsParam(
+      validatedQuery.fields || undefined,
+      'user'
+    );
+
+    let users: any[];
+    let pagination: any;
+
+    if (useCursorPagination) {
+      // 🚀 CURSOR-BASED PAGINATION: Enterprise-scale performance
+      const cursorQuery = createCursorQuery(
+        {
+          cursor: validatedQuery.cursor,
+          limit: validatedQuery.limit,
+          sortBy: validatedQuery.sortBy,
+          sortOrder: validatedQuery.sortOrder,
+          entityType: 'user',
         },
-        orderBy: [{ lastLogin: 'desc' }, { name: 'asc' }],
-        skip,
-        take: validatedQuery.limit,
-      }),
-      prisma.user.count({ where }),
-    ]);
+        baseWhere
+      );
 
-    // Transform user data for public consumption
-    const transformedUsers = users.map(user => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      department: user.department,
-      lastLogin: user.lastLogin,
-      timezone: user.communicationPrefs?.timezone || 'UTC',
-      language: user.preferences?.language || 'en',
-      theme: user.preferences?.theme || 'system',
-      roles: user.roles.map(ur => ({
-        name: ur.role.name,
-        description: ur.role.description,
-      })),
-      activity: {
-        proposalsCreated: user._count.createdProposals,
-        proposalsAssigned: user._count.assignedProposals,
-      },
-    }));
+      const userResults = await prisma.user.findMany({
+        ...cursorQuery,
+        select: userSelect,
+      });
+
+      const result = processCursorResults(
+        userResults as any[],
+        validatedQuery.limit,
+        validatedQuery.sortBy
+      );
+      users = result.data;
+      pagination = result.pagination;
+    } else {
+      // 🔄 LEGACY OFFSET PAGINATION: Backward compatibility
+      const page = validatedQuery.page || 1;
+      const skip = (page - 1) * validatedQuery.limit;
+
+      const [userResults, total] = await Promise.all([
+        prisma.user.findMany({
+          where: baseWhere,
+          select: userSelect,
+          skip,
+          take: validatedQuery.limit,
+          orderBy: { [validatedQuery.sortBy]: validatedQuery.sortOrder },
+        }),
+        prisma.user.count({ where: baseWhere }),
+      ]);
+
+      users = userResults;
+      pagination = {
+        page,
+        limit: validatedQuery.limit,
+        total,
+        totalPages: Math.ceil(total / validatedQuery.limit),
+        hasNextPage: page < Math.ceil(total / validatedQuery.limit),
+        hasPrevPage: page > 1,
+      };
+    }
+
+    const queryEndTime = Date.now();
 
     return NextResponse.json({
       success: true,
       data: {
-        users: transformedUsers,
-        pagination: {
-          page: validatedQuery.page,
-          limit: validatedQuery.limit,
-          total,
-          totalPages: Math.ceil(total / validatedQuery.limit),
+        users,
+        pagination,
+        meta: {
+          paginationType: useCursorPagination ? 'cursor' : 'offset',
+          paginationReason: reason,
+          selectiveHydration: optimizationMetrics,
+          responseTimeMs: queryEndTime - queryStartTime,
+          sortBy: validatedQuery.sortBy,
+          sortOrder: validatedQuery.sortOrder,
         },
       },
       message: 'Users retrieved successfully',
@@ -251,10 +282,7 @@ export async function GET(request: NextRequest) {
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
-      {
-        userFriendlyMessage:
-          'An unexpected error occurred while retrieving users. Please try again later.',
-      }
+      { userFriendlyMessage: 'An unexpected error occurred. Please try again later.' }
     );
   }
 }
@@ -472,3 +500,6 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
+// ✅ EDGE RUNTIME: Strategic optimization for global user data fetching
+// Standard Node.js runtime for NextAuth compatibility

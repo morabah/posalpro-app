@@ -1,46 +1,29 @@
-/**
- * PosalPro MVP2 - System Health Check API Endpoint
- * Simplified for Netlify serverless environment
- */
+import { NextRequest, NextResponse } from 'next/server';
 
-import { NextResponse } from 'next/server';
-
-interface SimpleHealthCheck {
-  status: 'healthy' | 'error';
-  timestamp: string;
-  environment: string;
-  message: string;
-}
-
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
-    const health: SimpleHealthCheck = {
+    // Simple health check with minimal database interaction
+    const health = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'unknown',
-      message: 'PosalPro MVP2 API is running'
+      uptime: process.uptime(),
+      responseTime: Date.now() - startTime
     };
 
-    return NextResponse.json(health, {
+    return new NextResponse(JSON.stringify(health), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-      },
+        'Cache-Control': 'public, max-age=30, s-maxage=30',
+        'X-Response-Time': `${Date.now() - startTime}ms`
+      }
     });
   } catch (error) {
-    const errorHealth: SimpleHealthCheck = {
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'unknown',
-      message: error instanceof Error ? error.message : 'Health check failed'
-    };
-
-    return NextResponse.json(errorHealth, {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    return NextResponse.json({ 
+      status: 'unhealthy', 
+      error: 'Health check failed' 
+    }, { status: 500 });
   }
 }
