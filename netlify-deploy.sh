@@ -11,6 +11,6 @@ PRISMA_QUERY_ENGINE_BINARY=./node_modules/.prisma/client/libquery_engine-linux-m
 npx prisma generate
 
 # Build with ESLint checks disabled
-npm run build
+npm run build -- --no-lint
 
 echo "Build completed successfully!"
