@@ -2,6 +2,11 @@
  * PosalPro MVP2 - NextAuth.js Configuration
  * Enhanced authentication with role-based access control
  * Analytics integration and security features
+ *
+ * 🚀 NETLIFY PRODUCTION FIX:
+ * - Explicit cookie name configuration for production
+ * - Secure cookie settings for HTTPS environments
+ * - Domain configuration for proper cookie scope
  */
 
 import { logger } from '@/utils/logger';
@@ -49,6 +54,28 @@ export const authOptions: NextAuthOptions = {
   // Secret for JWT signing - use environment variable or fallback
   secret:
     process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+
+  // 🚀 NETLIFY FIX: Production cookie configuration
+  useSecureCookies: process.env.NODE_ENV === 'production',
+
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === 'production'
+          ? '__Secure-next-auth.session-token'
+          : 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        domain:
+          process.env.NODE_ENV === 'production'
+            ? process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, '')
+            : undefined,
+      },
+    },
+  },
 
   providers: [
     CredentialsProvider({

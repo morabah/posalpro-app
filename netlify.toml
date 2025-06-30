@@ -1,5 +1,5 @@
 [build]
-  command = "npx prisma generate && npm run build"
+  command = "bash ./netlify-deploy.sh"
   # Let @netlify/plugin-nextjs handle the build output automatically
 
 [build.environment]

@@ -78,7 +78,7 @@ const ProposalUpdateSchema = ProposalCreateSchema.partial().extend({
 const ProposalQuerySchema = z.object({
   // Cursor-based pagination (NEW - more efficient than offset)
   cursor: z.preprocess(
-    (val) => (val === '' ? undefined : val),
+    val => (val === '' ? undefined : val),
     z.string().cuid().nullish() // Allow null, undefined, or valid CUID
   ), // ID of the last item from previous page
   limit: z.coerce.number().int().positive().max(100).default(20),
@@ -119,45 +119,97 @@ const ProposalQuerySchema = z.object({
 });
 
 // Helper function to check user permissions
-async function checkUserPermissions(userId: string, action: string, scope: string = 'ALL') {
+async function checkUserPermissions(
+  userId: string,
+  action: string,
+  scope: string = 'ALL',
+  bypassCheck: boolean = false
+) {
+  // If bypass is enabled, immediately return true (for test/development purposes only)
+  if (bypassCheck && process.env.NODE_ENV !== 'production') {
+    console.log(`[ProposalsAPI-DIAG] Permission check bypassed for ${action}:${scope}`);
+    return true;
+  }
   try {
-    const userRoles = await prisma.userRole.findMany({
-      where: { userId },
-      include: {
-        role: {
-          include: {
-            permissions: {
-              include: {
-                permission: true,
+    // Log user ID for diagnostics
+    console.log(
+      `[ProposalsAPI-DIAG] Checking permissions for user: ${userId}, action: ${action}, scope: ${scope}`
+    );
+
+    // Query user roles with error handling
+    let userRoles = [];
+    try {
+      userRoles = await prisma.userRole.findMany({
+        where: { userId },
+        include: {
+          role: {
+            include: {
+              permissions: {
+                include: {
+                  permission: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
+      console.log(`[ProposalsAPI-DIAG] Found ${userRoles.length} user roles`);
+    } catch (roleQueryError) {
+      console.error('[ProposalsAPI-DIAG] Error querying user roles:', roleQueryError);
+      return false;
+    }
 
-    const hasPermission = userRoles.some(
-      (
-        userRole: UserRole & {
-          role: {
-            permissions: Array<{
-              permission: {
-                resource: string;
-                action: string;
-                scope: string;
-              };
-            }>;
-          };
+    // Handle empty user roles case explicitly
+    if (!userRoles || userRoles.length === 0) {
+      console.log('[ProposalsAPI-DIAG] No user roles found for permission check');
+      return false;
+    }
+
+    let hasPermission = false;
+    try {
+      hasPermission = userRoles.some(
+        (
+          userRole: UserRole & {
+            role: {
+              permissions: Array<{
+                permission: {
+                  resource: string;
+                  action: string;
+                  scope: string;
+                };
+              }>;
+            };
+          }
+        ) => {
+          // Check if role has permissions
+          if (
+            !userRole.role ||
+            !userRole.role.permissions ||
+            !Array.isArray(userRole.role.permissions)
+          ) {
+            return false;
+          }
+
+          return userRole.role.permissions.some(rolePermission => {
+            if (!rolePermission || !rolePermission.permission) return false;
+
+            return (
+              rolePermission.permission.resource === 'proposals' &&
+              rolePermission.permission.action === action &&
+              (rolePermission.permission.scope === 'ALL' ||
+                rolePermission.permission.scope === scope)
+            );
+          });
         }
-      ) =>
-        userRole.role.permissions.some(
-          rolePermission =>
-            rolePermission.permission.resource === 'proposals' &&
-            rolePermission.permission.action === action &&
-            (rolePermission.permission.scope === 'ALL' || rolePermission.permission.scope === scope)
-        )
-    );
+      );
+    } catch (permissionCheckError) {
+      console.error('[ProposalsAPI-DIAG] Error checking permissions:', permissionCheckError);
+      return false;
+    }
 
+    console.log(
+      `[ProposalsAPI-DIAG] Permission check result: ${hasPermission ? 'GRANTED' : 'DENIED'}`
+    );
     return hasPermission;
   } catch (error) {
     errorHandlingService.processError(
@@ -181,8 +233,18 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
 // GET /api/proposals - List proposals with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
-    console.log('[ProposalsAPI] Request received:', request.url);
+    console.log('[ProposalsAPI-DIAG] ===== REQUEST START =====');
+    console.log('[ProposalsAPI-DIAG] URL:', request.url);
+    console.log(
+      '[ProposalsAPI-DIAG] Headers:',
+      JSON.stringify(Object.fromEntries(request.headers.entries()))
+    );
+
+    // Get session from auth options with Netlify production fix
     const session = await getServerSession(authOptions);
+
+    console.log('[ProposalsAPI-DIAG] Session:', session ? 'VALID' : 'INVALID');
+    console.log('[ProposalsAPI-DIAG] User ID:', session?.user?.id || 'NONE');
 
     if (!session?.user?.id) {
       errorHandlingService.processError(
@@ -213,7 +275,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check read permissions
-    const canRead = await checkUserPermissions(session.user.id, 'read');
+    const canRead = await checkUserPermissions(session.user.id, 'read', 'ALL');
 
     if (!canRead) {
       errorHandlingService.processError(
@@ -289,11 +351,32 @@ export async function GET(request: NextRequest) {
       // 🚀 SELECTIVE HYDRATION: Dynamic field selection for performance
       const queryStartTime = Date.now();
 
-      // Parse requested fields or use defaults
-      const { select: proposalSelect, optimizationMetrics } = parseFieldsParam(
-        query.fields || undefined,
-        'proposal'
+      // 🚀 SELECTIVE HYDRATION: Dynamic field selection for performance
+      console.log(
+        '[ProposalsAPI-DIAG] Parsing field selection, fields param:',
+        query.fields || 'undefined'
       );
+
+      // Declare the variables outside the try block to make them accessible throughout the function
+      let proposalSelect: any;
+      let optimizationMetrics: any;
+
+      try {
+        const result = parseFieldsParam(query.fields || undefined, 'proposal');
+        proposalSelect = result.select;
+        optimizationMetrics = result.optimizationMetrics;
+        console.log(
+          '[ProposalsAPI-DIAG] Field selection successful:',
+          Object.keys(proposalSelect).length,
+          'fields selected'
+        );
+      } catch (fieldError) {
+        console.error(
+          '[ProposalsAPI-DIAG] Field selection error:',
+          fieldError instanceof Error ? fieldError.message : String(fieldError)
+        );
+        throw fieldError;
+      }
 
       // Build dynamic select object based on requested fields - use the select directly
       const includeRelations: Record<string, boolean> = {
@@ -318,14 +401,29 @@ export async function GET(request: NextRequest) {
             }
           : where;
 
-        proposals = await prisma.proposal.findMany({
-          where: cursorWhere,
-          select: proposalSelect,
-          take: query.limit + 1, // Get one extra to check if there's a next page
-          orderBy: {
-            [query.sortBy]: query.sortOrder,
-          },
+        console.log('[ProposalsAPI-DIAG] Executing cursor-based query with:', {
+          where: JSON.stringify(cursorWhere),
+          take: query.limit + 1,
+          orderBy: { [query.sortBy]: query.sortOrder },
         });
+
+        try {
+          proposals = await prisma.proposal.findMany({
+            where: cursorWhere,
+            select: proposalSelect,
+            take: query.limit + 1, // Get one extra to check if there's a next page
+            orderBy: {
+              [query.sortBy]: query.sortOrder,
+            },
+          });
+          console.log('[ProposalsAPI-DIAG] Query succeeded with', proposals.length, 'results');
+        } catch (dbError) {
+          console.error(
+            '[ProposalsAPI-DIAG] Database error:',
+            dbError instanceof Error ? dbError.message : String(dbError)
+          );
+          throw dbError;
+        }
 
         // Check if there are more items
         const hasNextPage = proposals.length > query.limit;
@@ -375,11 +473,21 @@ export async function GET(request: NextRequest) {
       const queryEndTime = Date.now();
 
       // Track search event with performance metrics
-      await trackProposalSearchEvent(
-        session.user.id,
-        JSON.stringify(queryParams),
-        enhancedProposals.length
-      );
+      console.log('[ProposalsAPI-DIAG] Attempting analytics tracking...');
+      try {
+        await trackProposalSearchEvent(
+          session.user.id,
+          JSON.stringify(queryParams),
+          enhancedProposals.length
+        );
+        console.log('[ProposalsAPI-DIAG] Analytics tracking completed successfully');
+      } catch (trackingError) {
+        console.error(
+          '[ProposalsAPI-DIAG] Analytics tracking error (non-blocking):',
+          trackingError instanceof Error ? trackingError.message : String(trackingError)
+        );
+        // We don't throw the error as analytics should not break the main API flow
+      }
 
       return NextResponse.json({
         proposals: enhancedProposals,
@@ -395,9 +503,29 @@ export async function GET(request: NextRequest) {
       });
     } catch (error) {
       // Log the error using ErrorHandlingService
-      errorHandlingService.processError(error);
+      console.error('[ProposalsAPI-DIAG] ===== ERROR IN MAIN HANDLER =====');
+      console.error('[ProposalsAPI-DIAG] Error type:', error && typeof error);
+      console.error(
+        '[ProposalsAPI-DIAG] Error message:',
+        error instanceof Error ? error.message : String(error)
+      );
+      console.error(
+        '[ProposalsAPI-DIAG] Error stack:',
+        error instanceof Error ? error.stack : 'No stack trace'
+      );
+
+      try {
+        errorHandlingService.processError(error);
+      } catch (logError) {
+        console.error(
+          '[ProposalsAPI-DIAG] Error in error handling service:',
+          logError instanceof Error ? logError.message : String(logError)
+        );
+      }
 
       if (isPrismaError(error)) {
+        console.error('[ProposalsAPI-DIAG] Prisma error code:', error.code);
+        console.error('[ProposalsAPI-DIAG] Prisma error meta:', JSON.stringify(error.meta || {}));
         return createApiErrorResponse(
           new StandardError({
             message: 'Database error while retrieving proposals',
@@ -465,7 +593,7 @@ export async function GET(request: NextRequest) {
     // Handle database connection errors
     if (isPrismaError(error)) {
       let errorCode = ErrorCodes.DATA.DATABASE_ERROR;
-      let statusCode = 500;
+      const statusCode = 500;
       let message = 'Database error';
       let userFriendlyMessage = 'A database error occurred. Please try again later.';
 
