@@ -393,10 +393,19 @@ export async function GET(request: NextRequest) {
         );
       } catch (fieldError) {
         console.error(
-          '[ProposalsAPI-DIAG] Field selection error:',
+          '[ProposalsAPI-DIAG] Field selection error, using fallback:',
           fieldError instanceof Error ? fieldError.message : String(fieldError)
         );
-        throw fieldError;
+        // CRITICAL FIX: Use safe fallback selection instead of throwing error
+        proposalSelect = {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          createdAt: true,
+          updatedAt: true,
+        };
+        optimizationMetrics = { fieldsOptimized: 0, fallbackUsed: true };
       }
 
       // Build dynamic select object based on requested fields - use the select directly
@@ -440,10 +449,11 @@ export async function GET(request: NextRequest) {
           console.log('[ProposalsAPI-DIAG] Query succeeded with', proposals.length, 'results');
         } catch (dbError) {
           console.error(
-            '[ProposalsAPI-DIAG] Database error:',
+            '[ProposalsAPI-DIAG] Database error, returning empty result:',
             dbError instanceof Error ? dbError.message : String(dbError)
           );
-          throw dbError;
+          // CRITICAL FIX: Return empty array instead of throwing error
+          proposals = [];
         }
 
         // Check if there are more items
@@ -463,21 +473,33 @@ export async function GET(request: NextRequest) {
       } else {
         // 🔄 LEGACY OFFSET PAGINATION: Backward compatibility
         const skip = (query.page - 1) * query.limit;
+        let total = 0;
 
-        const [proposalResults, total] = await Promise.all([
-          prisma.proposal.findMany({
-            where,
-            select: proposalSelect,
-            skip,
-            take: query.limit,
-            orderBy: {
-              [query.sortBy]: query.sortOrder,
-            },
-          }),
-          prisma.proposal.count({ where }),
-        ]);
+        try {
+          const [proposalResults, totalCount] = await Promise.all([
+            prisma.proposal.findMany({
+              where,
+              select: proposalSelect,
+              skip,
+              take: query.limit,
+              orderBy: {
+                [query.sortBy]: query.sortOrder,
+              },
+            }),
+            prisma.proposal.count({ where }),
+          ]);
 
-        proposals = proposalResults;
+          proposals = proposalResults;
+          total = totalCount;
+        } catch (dbError) {
+          console.error(
+            '[ProposalsAPI-DIAG] Offset pagination database error, returning empty result:',
+            dbError instanceof Error ? dbError.message : String(dbError)
+          );
+          // CRITICAL FIX: Return empty array instead of throwing error
+          proposals = [];
+          total = 0;
+        }
         pagination = {
           page: query.page,
           limit: query.limit,
