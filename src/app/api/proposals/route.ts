@@ -127,6 +127,7 @@ async function checkUserPermissions(
 ) {
   // CRITICAL FIX: Force bypass for ALL environments to fix 500 error for authenticated users
   // The complex permission system is causing 500 errors even for authenticated System Administrators
+  // DEPLOYMENT TIMESTAMP: 2025-06-30T13:35:00Z - FORCE NETLIFY REBUILD
   console.log(
     `[ProposalsAPI-CRITICAL-FIX] FORCING permission bypass for authenticated user ${userId}, action: ${action}, scope: ${scope}`
   );
