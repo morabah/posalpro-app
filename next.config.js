@@ -39,9 +39,8 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
-  experimental: {
-    serverComponentsExternalPackages: ['prisma'],
-  },
+  // ✅ FIXED: Moved from experimental to top-level as per Next.js 15.3.4
+  serverExternalPackages: ['prisma'],
 };
 
 module.exports = nextConfig;

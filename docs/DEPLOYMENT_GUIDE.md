@@ -86,40 +86,87 @@ npm run deploy:dry-run
 npm run deployment:info
 ```
 
+## 🔥 CRITICAL: Database Deployment Requirements
+
+### Environment Understanding
+
+**PosalPro MVP2 uses different database environments:**
+
+- **Development**: `DATABASE_URL` (local PostgreSQL)
+- **Production**: `CLOUD_DATABASE_URL` (Neon PostgreSQL cloud database)
+
+### Mandatory Database Operations
+
+**For ALL production deployments, you MUST:**
+
+```bash
+# 1. Set production database environment
+export CLOUD_DATABASE_URL="postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require"
+
+# 2. Synchronize database schema
+DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db push
+
+# 3. Seed production database (if needed)
+CLOUD_DATABASE_URL=$CLOUD_DATABASE_URL NODE_ENV=production npx prisma db seed
+
+# 4. Verify data exists
+DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db execute --stdin <<< "SELECT COUNT(*) FROM \"Proposal\";"
+
+# 5. Test API endpoints with data
+curl "https://posalpro-mvp2.windsurf.build/api/proposals?page=1&limit=5"
+```
+
+### Database Verification Commands
+
+```bash
+# Check database connection
+DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db execute --stdin <<< "SELECT current_database();"
+
+# Verify key tables have data
+DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db execute --stdin <<< "SELECT
+  (SELECT COUNT(*) FROM \"Proposal\") as proposals,
+  (SELECT COUNT(*) FROM \"Customer\") as customers,
+  (SELECT COUNT(*) FROM \"Product\") as products;"
+
+# Test specific API endpoints
+curl -s "https://posalpro-mvp2.windsurf.build/api/proposals" | jq '.data | length'
+curl -s "https://posalpro-mvp2.windsurf.build/api/customers" | jq '.data | length'
+```
+
 ## 📊 Deployment Process
 
 Each deployment automatically performs these steps:
 
 1. **Pre-flight Checks**
-
    - Verify project directory
    - Check git status (warn about uncommitted changes)
    - Validate environment
 
 2. **Version Management**
-
    - Increment version number based on deployment type
    - Update package.json
 
 3. **Build Process**
-
    - Clean previous build (.next directory)
    - Run TypeScript type checking
    - Execute production build
 
 4. **Deployment**
-
    - Deploy to Netlify (production or staging)
    - Generate unique deployment URL
 
-5. **Post-deployment**
+5. **🔥 CRITICAL: Database Operations**
+   - Synchronize database schema to production
+   - Seed production database with sample data (if needed)
+   - Verify data exists in production database
 
+6. **Post-deployment**
    - Record deployment in local history
    - Create git commit with version bump
    - Create git tag (v0.1.0-alpha.2, etc.)
    - Push changes to remote repository
 
-6. **Notification**
+7. **Notification**
    - Display deployment summary
    - Show live URLs
    - Provide next steps
@@ -182,8 +229,17 @@ npx netlify deploy
 
 - Deploy frequently (multiple times per day/week)
 - Use `npm run deploy:alpha` for all deployments
-- Test each deployment thoroughly
+- **CRITICAL**: Always verify database seeding after deployment
+- Test each deployment thoroughly with real data verification
 - Document any issues in deployment history
+
+### Database Deployment Best Practices
+
+- **Always check environment variables** before database operations
+- **Verify schema synchronization** before seeding data
+- **Test API endpoints** to ensure data is accessible
+- **Document database changes** in deployment history
+- **Never assume** development and production databases are in sync
 
 ### When to Move to Beta
 
@@ -212,7 +268,6 @@ npx netlify deploy
    - Commit changes first, or type 'y' to continue
 
 2. **Build Failures**
-
    - Check TypeScript errors: `npm run type-check`
    - Fix lint issues: `npm run lint:fix`
    - Review build logs for specific errors
@@ -221,6 +276,26 @@ npx netlify deploy
    - Check Netlify CLI authentication
    - Verify build output exists (.next directory)
    - Check network connectivity
+
+4. **Database Issues**
+
+   ```
+   Error: API returns empty data arrays
+   ```
+
+   - **Cause**: Production database not seeded
+   - **Solution**: Run database seeding commands
+   - **Prevention**: Always run database verification after deployment
+
+5. **Environment Variable Issues**
+
+   ```
+   Error: Database connection failed
+   ```
+
+   - **Cause**: Wrong database URL for environment
+   - **Check**: `echo $DATABASE_URL` vs `echo $CLOUD_DATABASE_URL`
+   - **Solution**: Use correct environment variable for target environment
 
 ### Emergency Rollback
 
@@ -254,9 +329,17 @@ If a deployment fails or causes issues:
 npm run deployment:info     # Check current status
 npm run deploy:alpha       # Deploy alpha version
 npm run deploy:dry-run     # Preview deployment
+
+# Database verification (CRITICAL)
+DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db push      # Sync schema
+CLOUD_DATABASE_URL=$CLOUD_DATABASE_URL NODE_ENV=production npx prisma db seed  # Seed data
+curl "https://posalpro-mvp2.windsurf.build/api/proposals?page=1&limit=5"       # Test data
+
+# Git operations
 git status                 # Check for changes
 git log --oneline -5       # Recent commits
 ```
 
 **Remember**: Each deployment increments the version automatically and creates a
-permanent record in git history. Test thoroughly before deploying!
+permanent record in git history. **CRITICAL**: Always verify database seeding
+and test API endpoints with real data after deployment!

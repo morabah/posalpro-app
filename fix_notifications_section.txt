@@ -1,6 +1,0 @@
-    if (!refresh) {
-      const cached = notificationsListCache.get(cacheKey);
-      if (cached) return cached;
-    }
-
-    try {
