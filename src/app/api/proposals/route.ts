@@ -14,7 +14,7 @@ import {
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -28,11 +28,26 @@ import { z } from 'zod';
  * - Test Cases: TC-H4-009, TC-H7-001
  */
 
+// Database-agnostic ID validation patterns (LESSONS_LEARNED.md Lesson #16)
+const userIdSchema = z
+  .string()
+  .min(1)
+  .refine(id => id !== 'undefined' && id !== 'null', {
+    message: 'Valid user ID required',
+  });
+
+const databaseIdSchema = z
+  .string()
+  .min(1)
+  .refine(id => id !== 'undefined' && id !== 'null', {
+    message: 'Valid database ID required',
+  });
+
 // Validation schemas
 const ProposalCreateSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title too long'),
   description: z.string().max(1000, 'Description too long').optional(),
-  customerId: z.string().cuid('Invalid customer ID'),
+  customerId: databaseIdSchema,
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
   dueDate: z.string().datetime().optional(),
   value: z.number().positive('Value must be greater than 0').optional(),
@@ -40,7 +55,7 @@ const ProposalCreateSchema = z.object({
   products: z
     .array(
       z.object({
-        productId: z.string().cuid(),
+        productId: databaseIdSchema,
         quantity: z.number().int().positive().default(1),
         unitPrice: z.number().positive(),
         discount: z.number().min(0).max(100).default(0),
@@ -60,7 +75,7 @@ const ProposalCreateSchema = z.object({
 });
 
 const ProposalUpdateSchema = ProposalCreateSchema.partial().extend({
-  id: z.string().cuid('Invalid proposal ID'),
+  id: databaseIdSchema,
   status: z
     .enum([
       'DRAFT',
@@ -77,10 +92,7 @@ const ProposalUpdateSchema = ProposalCreateSchema.partial().extend({
 
 const ProposalQuerySchema = z.object({
   // Cursor-based pagination (NEW - more efficient than offset)
-  cursor: z.preprocess(
-    val => (val === '' ? undefined : val),
-    z.string().cuid().nullish() // Allow null, undefined, or valid CUID
-  ), // ID of the last item from previous page
+  cursor: z.preprocess(val => (val === '' ? undefined : val), databaseIdSchema.nullish()), // ID of the last item from previous page
   limit: z.coerce.number().int().positive().max(100).default(20),
 
   // Legacy offset pagination support (DEPRECATED but maintained for backward compatibility)
@@ -103,8 +115,8 @@ const ProposalQuerySchema = z.object({
     ])
     .optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
-  customerId: z.string().cuid().optional(),
-  createdBy: z.string().cuid().optional(),
+  customerId: databaseIdSchema.optional(),
+  createdBy: userIdSchema.optional(),
   search: z.string().max(100).optional(),
 
   // Sorting
@@ -342,8 +354,8 @@ export async function GET(request: NextRequest) {
       throw parseError;
     }
 
-    // Build where clause
-    const where: any = {};
+    // Build where clause with proper typing
+    const where: Prisma.ProposalWhereInput = {};
 
     if (query.status) {
       where.status = query.status;
@@ -379,8 +391,19 @@ export async function GET(request: NextRequest) {
       );
 
       // Declare the variables outside the try block to make them accessible throughout the function
-      let proposalSelect: any;
-      let optimizationMetrics: any;
+      let proposalSelect: Prisma.ProposalSelect;
+      let optimizationMetrics:
+        | {
+            requestedFieldCount: number;
+            processedFields: number;
+            processingTimeMs: number;
+            fieldSelection: string;
+            entityType: string;
+          }
+        | {
+            fieldsOptimized: number;
+            fallbackUsed: boolean;
+          };
 
       try {
         const result = parseFieldsParam(query.fields || undefined, 'proposal');
@@ -419,8 +442,17 @@ export async function GET(request: NextRequest) {
       // 🚀 CURSOR-BASED PAGINATION: More efficient for large datasets
       const useCursorPagination = query.cursor !== undefined;
 
-      let proposals: any[];
-      let pagination: any;
+      let proposals: Prisma.ProposalGetPayload<{ select: Prisma.ProposalSelect }>[];
+      let pagination: {
+        page?: number;
+        limit: number;
+        total?: number;
+        totalPages?: number;
+        hasNextPage: boolean;
+        hasPrevPage?: boolean;
+        nextCursor?: string | null;
+        itemCount?: number;
+      };
 
       if (useCursorPagination) {
         // 🚀 CURSOR-BASED PAGINATION: Enterprise-scale performance
@@ -1021,7 +1053,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Prepare update data
-    const updateData: any = {};
+    const updateData: Prisma.ProposalUpdateInput = {};
 
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;

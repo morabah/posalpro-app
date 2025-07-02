@@ -4,8 +4,8 @@
  * Component Traceability: US-6.1, US-6.2, H8, H11
  */
 
-import { ErrorCodes, errorHandlingService } from '@/lib/errors';
-import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
+import { authOptions } from '@/lib/auth';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -17,171 +17,141 @@ import { NextRequest, NextResponse } from 'next/server';
  * - Test Cases: TC-H8-002, TC-H11-004
  */
 
-// Available configuration fields for selective hydration
-const configFields = [
+interface ConfigData {
+  features?: Record<string, boolean>;
+  ui?: Record<string, unknown>;
+  limits?: Record<string, number>;
+  analytics?: Record<string, unknown>;
+  performance?: Record<string, unknown>;
+  security?: Record<string, unknown>;
+  integrations?: Record<string, unknown>;
+  api?: Record<string, unknown>;
+  version?: string;
+  environment?: string;
+  [key: string]: unknown;
+}
+
+const defaultConfig: ConfigData = {
+  features: {
+    analytics: true,
+    proposals: true,
+    products: true,
+    customers: true,
+    workflows: true,
+    validation: true,
+    collaboration: true,
+    mobile: true,
+  },
+  ui: {
+    theme: 'modern',
+    layout: 'responsive',
+    enableTransitions: true,
+    enableTooltips: true,
+  },
+  limits: {
+    maxProposals: 1000,
+    maxProducts: 5000,
+    maxCustomers: 10000,
+    fileUploadSize: 50 * 1024 * 1024, // 50MB
+    sessionTimeout: 30 * 60 * 1000, // 30 minutes
+  },
+  analytics: {
+    enabled: true,
+    trackingId: process.env.ANALYTICS_TRACKING_ID,
+    sessionRecording: false,
+    heatmaps: false,
+  },
+  performance: {
+    enableCaching: true,
+    lazyLoading: true,
+    imageOptimization: true,
+    bundleOptimization: true,
+  },
+  security: {
+    enforceHttps: process.env.NODE_ENV === 'production',
+    csrfProtection: true,
+    ratelimiting: true,
+    sessionSecurity: 'strict',
+  },
+  integrations: {
+    email: !!process.env.SMTP_HOST,
+    storage: !!process.env.STORAGE_PROVIDER,
+    database: !!process.env.DATABASE_URL,
+  },
+  api: {
+    version: '2.0',
+    rateLimit: 1000,
+    timeout: 30000,
+  },
+  version: process.env.npm_package_version || '0.2.1',
+  environment: process.env.NODE_ENV || 'development',
+};
+
+// Configuration field selection for selective response
+const allowedFields = [
   'features',
   'ui',
+  'limits',
   'analytics',
   'performance',
   'security',
   'integrations',
-  'limits',
   'api',
   'version',
   'environment',
 ];
 
 /**
- * GET /api/config - Global configuration with selective hydration
- * Edge-optimized for worldwide performance
+ * GET /api/config - Get application configuration
  */
 export async function GET(request: NextRequest) {
-  const queryStartTime = Date.now();
-
   try {
-    // ✅ PERFORMANCE: Public configuration endpoint (no auth required)
-    // This endpoint provides public configuration data
-
-    const { searchParams } = new URL(request.url);
-
-    // ✅ SELECTIVE HYDRATION: Parse requested configuration fields
-    const { select, optimizationMetrics } = parseFieldsParam(
-      searchParams.get('fields') || undefined,
-      'config'
-    );
-
-    // 🚀 EDGE-OPTIMIZED: Lightweight configuration data
-    const fullConfig = {
-      features: {
-        proposalWizard: true,
-        analytics: true,
-        collaboration: true,
-        mobileSupport: true,
-        edgeRuntime: true,
-        selectiveHydration: true,
-        cursorPagination: true,
-      },
-      ui: {
-        theme: 'modern',
-        colorScheme: 'blue',
-        layout: 'responsive',
-        animations: true,
-        darkMode: true,
-      },
-      analytics: {
-        enabled: true,
-        tracking: ['performance', 'user_interactions', 'errors'],
-        retention: '90d',
-        realtime: true,
-      },
-      performance: {
-        caching: true,
-        compression: true,
-        lazyLoading: true,
-        prefetching: true,
-        edgeRuntime: true,
-      },
-      security: {
-        rateLimiting: true,
-        csrfProtection: true,
-        headerSecurity: true,
-        inputValidation: true,
-      },
-      integrations: {
-        auth: 'nextauth',
-        database: 'prisma',
-        deployment: 'netlify',
-        analytics: 'custom',
-      },
-      limits: {
-        apiCalls: 1000,
-        fileUpload: '10MB',
-        proposalsPerUser: 100,
-        searchResults: 100,
-      },
-      api: {
-        version: 'v1',
-        baseUrl: process.env.NEXTAUTH_URL || 'http://localhost:3000',
-        rateLimit: '100/hour',
-        timeout: 30000,
-      },
-      version: '0.2.0-alpha.10',
-      environment: process.env.NODE_ENV || 'development',
-    };
-
-    // Apply selective hydration if fields specified
-    let responseData = fullConfig;
-    let hydrationMetrics = null;
-
-    if (searchParams.get('fields')) {
-      const selectedData: any = {};
-      const requestedFieldsList = Object.keys(select);
-
-      requestedFieldsList.forEach((field: string) => {
-        if (fullConfig.hasOwnProperty(field)) {
-          selectedData[field] = fullConfig[field as keyof typeof fullConfig];
-        }
-      });
-
-      responseData = selectedData;
-
-      // Calculate performance metrics
-      const queryEndTime = Date.now();
-      hydrationMetrics = {
-        fieldsRequested: requestedFieldsList.length,
-        fieldsAvailable: configFields.length,
-        fieldsReturned: Object.keys(selectedData).length,
-        queryTimeMs: queryEndTime - queryStartTime,
-        bytesReduced: JSON.stringify(fullConfig).length - JSON.stringify(selectedData).length,
-        performanceGain: `${(((JSON.stringify(fullConfig).length - JSON.stringify(selectedData).length) / JSON.stringify(fullConfig).length) * 100).toFixed(1)}% reduction`,
-      };
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const response = {
+    const { searchParams } = new URL(request.url);
+    const config = { ...defaultConfig };
+
+    // Handle field selection for performance optimization
+    if (searchParams.get('fields')) {
+      const selectedData: Record<string, unknown> = {};
+      const requestedFieldsList = searchParams.get('fields')?.split(',') || [];
+
+      for (const field of requestedFieldsList) {
+        if (allowedFields.includes(field) && config[field] !== undefined) {
+          selectedData[field] = config[field];
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: selectedData,
+        meta: {
+          fieldsRequested: requestedFieldsList,
+          fieldsReturned: Object.keys(selectedData),
+        },
+      });
+    }
+
+    // Return full configuration
+    return NextResponse.json({
       success: true,
-      data: responseData,
+      data: config,
       meta: {
         timestamp: new Date().toISOString(),
-        responseTimeMs: Date.now() - queryStartTime,
-        runtime: 'edge',
-        region: process.env.VERCEL_REGION || 'global',
-        ...(hydrationMetrics && { selectiveHydration: hydrationMetrics }),
-        optimizationMetrics,
+        version: config.version,
+        environment: config.environment,
       },
-    };
-
-    // ✅ EDGE RUNTIME: Set edge-optimized headers
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=300, s-maxage=300', // 5 minute cache
-      'X-Edge-Runtime': 'true',
-      'X-Response-Time': `${Date.now() - queryStartTime}ms`,
-    });
-
-    return new NextResponse(JSON.stringify(response), {
-      status: 200,
-      headers,
     });
   } catch (error) {
-    // ✅ REQUIRED: Use ErrorHandlingService (CORE_REQUIREMENTS.md)
-    const standardError = errorHandlingService.processError(
-      error,
-      'Failed to fetch global configuration',
-      ErrorCodes.API.REQUEST_FAILED,
-      {
-        component: 'ConfigRoute',
-        operation: 'getGlobalConfig',
-        runtime: 'edge',
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H11'],
-      }
-    );
-
+    console.error('Config API error:', error);
     return NextResponse.json(
       {
-        success: false,
-        error: 'Configuration fetch failed',
-        message: errorHandlingService.getUserFriendlyMessage(standardError),
+        error: 'Failed to fetch configuration',
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

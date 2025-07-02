@@ -6,6 +6,7 @@
 
 import { ErrorCategory, Priority } from '@/types';
 import { z } from 'zod';
+import { databaseIdSchema, optionalUserIdSchema, userIdSchema } from './common';
 
 /**
  * Common field validation patterns
@@ -41,13 +42,17 @@ export const urlSchema = z
 /**
  * Base entity validation schema
  * Matches BaseEntity interface from H2.1
+ * ✅ UPDATED: Using database-agnostic patterns per LESSONS_LEARNED.md #16
  */
 export const baseEntitySchema = z.object({
-  id: z.string().uuid('Invalid ID format'),
+  // ✅ FIXED: Using database-agnostic databaseIdSchema instead of z.string().uuid()
+  id: databaseIdSchema,
   createdAt: z.date(),
   updatedAt: z.date(),
-  createdBy: z.string().uuid().optional(),
-  updatedBy: z.string().uuid().optional(),
+  // ✅ FIXED: Using database-agnostic optionalUserIdSchema instead of z.string().uuid().optional()
+  createdBy: optionalUserIdSchema,
+  // ✅ FIXED: Using database-agnostic optionalUserIdSchema instead of z.string().uuid().optional()
+  updatedBy: optionalUserIdSchema,
 });
 
 /**
@@ -103,9 +108,11 @@ export const contactInfoSchema = z.object({
 /**
  * File upload validation schema
  * Matches FileUpload interface from H2.1
+ * ✅ UPDATED: Using database-agnostic patterns per LESSONS_LEARNED.md #16
  */
 export const fileUploadSchema = z.object({
-  id: z.string().uuid(),
+  // ✅ FIXED: Using database-agnostic databaseIdSchema instead of z.string().uuid()
+  id: databaseIdSchema,
   name: z.string().min(1, 'File name is required').max(255),
   type: z.string().min(1, 'File type is required'),
   size: z
@@ -114,7 +121,8 @@ export const fileUploadSchema = z.object({
     .min(1, 'File size must be greater than 0')
     .max(50 * 1024 * 1024, 'File size cannot exceed 50MB'),
   url: urlSchema.refine(val => !!val, 'File URL is required'),
-  uploadedBy: z.string().uuid(),
+  // ✅ FIXED: Using database-agnostic userIdSchema instead of z.string().uuid()
+  uploadedBy: userIdSchema,
   uploadedAt: z.date(),
 });
 

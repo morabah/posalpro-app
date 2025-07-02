@@ -6,17 +6,37 @@
 
 import { useCallback, useRef } from 'react';
 
+/**
+ * Type definitions for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
 export interface AnalyticsEvent {
   userStories?: string[];
   hypotheses?: string[];
-  [key: string]: any;
+  userId?: string;
+  page?: string;
+  step?: number | string;
+  stepName?: string;
+  action?: string;
+  [key: string]: unknown;
+}
+
+interface StoredAnalyticsEvent {
+  name: string;
+  timestamp: number;
+  properties?: AnalyticsEvent;
+}
+
+interface AnalyticsStats {
+  eventCount: number;
+  disabled: boolean;
 }
 
 // ✅ EMERGENCY: Global disable flag
 let EMERGENCY_ANALYTICS_DISABLED = false;
 
 class EmergencyAnalyticsManager {
-  private events: any[] = [];
+  private events: StoredAnalyticsEvent[] = [];
   private disabled = false;
 
   track(eventName: string, properties: AnalyticsEvent = {}): void {
@@ -30,6 +50,7 @@ class EmergencyAnalyticsManager {
     this.events.push({
       name: eventName,
       timestamp: Date.now(),
+      properties,
     });
 
     // Keep only last 5 events
@@ -44,7 +65,7 @@ class EmergencyAnalyticsManager {
     this.events = [];
   }
 
-  getStats() {
+  getStats(): AnalyticsStats {
     return {
       eventCount: this.events.length,
       disabled: this.disabled,
@@ -125,8 +146,8 @@ export const useAnalytics = () => {
     // Emergency mode: no-op flush
   }, []);
 
-  const getStats = useCallback(() => {
-    return managerRef.current?.getStats() || { disabled: true };
+  const getStats = useCallback((): AnalyticsStats => {
+    return managerRef.current?.getStats() || { disabled: true, eventCount: 0 };
   }, []);
 
   return {

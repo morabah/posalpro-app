@@ -27,6 +27,51 @@ import { useEffect, useState } from 'react';
  * - Test Cases: TC-H1-001, TC-H4-001, TC-H7-001, TC-H8-001
  */
 
+// Define proper types for analytics data instead of any
+interface PerformanceData {
+  metrics: Array<{
+    name: string;
+    value: number;
+    change: number;
+    trend: 'up' | 'down' | 'neutral';
+  }>;
+  charts: Array<{
+    id: string;
+    type: 'line' | 'bar' | 'pie';
+    data: Array<{ label: string; value: number }>;
+  }>;
+}
+
+interface ComponentData {
+  components: Array<{
+    name: string;
+    usageCount: number;
+    performanceScore: number;
+    userStories: string[];
+    hypotheses: string[];
+  }>;
+  traceabilityMatrix: Record<
+    string,
+    {
+      userStories: string[];
+      acceptanceCriteria: string[];
+      methods: string[];
+      hypotheses: string[];
+      testCases: string[];
+    }
+  >;
+}
+
+interface RecentActivityData {
+  activities: Array<{
+    id: string;
+    type: 'hypothesis' | 'user_story' | 'component' | 'metric';
+    description: string;
+    timestamp: Date;
+    metadata: Record<string, string | number>;
+  }>;
+}
+
 interface AnalyticsDashboardData {
   overview: {
     healthScore: number;
@@ -51,10 +96,22 @@ interface AnalyticsDashboardData {
     completionPercentage: number;
     storiesWithFailures: number;
   };
-  performance: any;
-  components: any;
-  recentActivity: any;
+  performance: PerformanceData;
+  components: ComponentData;
+  recentActivity: RecentActivityData;
 }
+
+// Define proper time range type
+type TimeRange = '7d' | '30d' | '90d' | 'all';
+
+// Component Traceability Matrix
+const COMPONENT_MAPPING = {
+  userStories: ['US-10.1', 'US-10.2'],
+  acceptanceCriteria: ['AC-10.1.1', 'AC-10.2.1'],
+  methods: ['fetchDashboardData()', 'trackAnalyticsEvent()', 'handleRefresh()', 'handleExport()'],
+  hypotheses: ['H10'],
+  testCases: ['TC-H10-001', 'TC-H10-002'],
+};
 
 export const AnalyticsDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -131,12 +188,17 @@ export const AnalyticsDashboard: React.FC = () => {
     }
   };
 
-  // Track analytics events
-  const trackAnalyticsEvent = (action: string, metadata: any = {}) => {
-    analytics.track('analytics_dashboard_interaction', {
-      action,
-      timeRange,
+  // Replace the trackAnalyticsEvent function with proper typing
+  const trackAnalyticsEvent = (
+    action: string,
+    metadata: Record<string, string | number | boolean> = {}
+  ) => {
+    analytics.track(`analytics_${action}`, {
       ...metadata,
+      hypothesis: 'H10',
+      testCase: 'TC-H10-001',
+      componentMapping: COMPONENT_MAPPING,
+      timestamp: new Date().toISOString(),
     });
   };
 
@@ -232,7 +294,7 @@ export const AnalyticsDashboard: React.FC = () => {
             <div className="flex items-center space-x-4">
               <select
                 value={timeRange}
-                onChange={e => setTimeRange(e.target.value as any)}
+                onChange={e => setTimeRange(e.target.value as TimeRange)}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="7d">Last 7 days</option>

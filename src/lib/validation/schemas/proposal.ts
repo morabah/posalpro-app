@@ -6,28 +6,15 @@
 
 import { ProposalStatus } from '@/types';
 import { z } from 'zod';
-import { baseEntitySchema, fileUploadSchema, prioritySchema, validationUtils } from './shared';
-
-/**
- * Database-agnostic ID validation helper
- * Supports UUIDs, CUIDs, and other valid ID formats
- */
-const databaseIdSchema = z
-  .string()
-  .min(1, 'ID is required')
-  .refine(id => {
-    return id !== 'undefined' && id.trim().length > 0;
-  }, 'Invalid ID format');
-
-/**
- * User-specific ID validation (for CUIDs and other user ID formats)
- */
-const userIdSchema = z
-  .string()
-  .min(1, 'User ID is required')
-  .refine(id => {
-    return id !== 'undefined' && id !== 'unknown' && id.trim().length > 0;
-  }, 'Invalid user ID format');
+import {
+  databaseIdArraySchema,
+  databaseIdSchema,
+  optionalDatabaseIdSchema,
+  optionalUserIdSchema,
+  prioritySchema,
+  userIdSchema,
+} from './common';
+import { baseEntitySchema, fileUploadSchema, validationUtils } from './shared';
 
 /**
  * Proposal metadata validation schema
@@ -84,7 +71,7 @@ export type ProposalMetadata = z.infer<typeof proposalMetadataSchema>;
  * Based on PROPOSAL_CREATION_SCREEN.md Step 2: RFP Analysis
  */
 export const rfpDocumentSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
 
   fileName: validationUtils.stringWithLength(1, 255, 'File name'),
 
@@ -99,7 +86,7 @@ export const rfpDocumentSchema = z.object({
     .object({
       requirements: z.array(
         z.object({
-          id: z.string().uuid(),
+          id: databaseIdSchema,
           text: z.string().min(1, 'Requirement text is required'),
           category: z.string().min(1, 'Category is required'),
           priority: prioritySchema,
@@ -155,7 +142,7 @@ export type RFPDocument = z.infer<typeof rfpDocumentSchema>;
  * Based on PROPOSAL_CREATION_SCREEN.md Step 3: Content Selection
  */
 export const contentSectionSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
 
   title: validationUtils.stringWithLength(1, 200, 'Section title'),
 
@@ -203,7 +190,7 @@ export type ContentSection = z.infer<typeof contentSectionSchema>;
  * Based on PROPOSAL_CREATION_SCREEN.md Step 4: Product Selection
  */
 export const proposalProductSchema = z.object({
-  productId: z.string().uuid(),
+  productId: databaseIdSchema,
 
   productName: validationUtils.stringWithLength(1, 200, 'Product name'),
 
@@ -300,7 +287,7 @@ export const proposalWizardStep3Schema = z.object({
     .array(
       z.object({
         item: z.object({
-          id: z.string().uuid(),
+          id: databaseIdSchema,
           title: validationUtils.stringWithLength(1, 200, 'Content title'),
           type: z.string().min(1, 'Content type is required'),
           relevanceScore: z.number().min(0).max(100),
@@ -338,7 +325,7 @@ export const proposalWizardStep4Schema = z.object({
   products: z
     .array(
       z.object({
-        id: z.string().uuid(),
+        id: databaseIdSchema,
         name: validationUtils.stringWithLength(1, 200, 'Product name'),
         included: z.boolean(),
         quantity: z.number().int().min(1, 'Quantity must be at least 1'),
@@ -376,7 +363,7 @@ export const proposalWizardStep5Schema = z.object({
   sections: z
     .array(
       z.object({
-        id: z.string().uuid(),
+        id: databaseIdSchema,
         title: validationUtils.stringWithLength(1, 200, 'Section title'),
         required: z.boolean(),
         order: z.number().int().min(1),
@@ -387,7 +374,7 @@ export const proposalWizardStep5Schema = z.object({
           .enum(['not_started', 'in_progress', 'completed', 'reviewed'])
           .default('not_started'),
         description: z.string().optional(),
-        dependencies: z.array(z.string().uuid()).optional(),
+        dependencies: databaseIdArraySchema.optional(),
         priority: z.enum(['high', 'medium', 'low']).default('medium'),
       })
     )
@@ -397,7 +384,7 @@ export const proposalWizardStep5Schema = z.object({
 
   totalEstimatedHours: z.number().min(0).optional(),
 
-  criticalPath: z.array(z.string().uuid()).optional(),
+  criticalPath: databaseIdArraySchema.optional(),
 
   timelineEstimate: z
     .object({
@@ -451,7 +438,7 @@ export const proposalWizardStep6Schema = z.object({
     similarProposals: z
       .array(
         z.object({
-          id: z.string().uuid(),
+          id: databaseIdSchema,
           title: validationUtils.stringWithLength(1, 200, 'Proposal title'),
           winRate: z.number().min(0).max(100),
           similarity: z.number().min(0).max(100),
@@ -513,7 +500,7 @@ export const proposalEntitySchema = baseEntitySchema.extend({
     .object({
       steps: z.array(
         z.object({
-          id: z.string().uuid(),
+          id: databaseIdSchema,
           name: z.string().min(1, 'Step name is required'),
           order: z.number().int().min(1),
           assignedTo: userIdSchema,
@@ -541,7 +528,7 @@ export const proposalEntitySchema = baseEntitySchema.extend({
   milestones: z
     .array(
       z.object({
-        id: z.string().uuid(),
+        id: databaseIdSchema,
         title: z.string().min(1, 'Milestone title is required'),
         description: z.string().optional(),
         dueDate: z.date(),
@@ -593,7 +580,7 @@ export type CreateProposalData = z.infer<typeof createProposalSchema>;
  * Proposal update schema
  */
 export const updateProposalSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   metadata: proposalMetadataSchema.partial().optional(),
   sections: z.array(contentSectionSchema).optional(),
   products: z.array(proposalProductSchema).optional(),
@@ -627,14 +614,14 @@ export type ProposalSearchCriteria = z.infer<typeof proposalSearchSchema>;
  * Proposal comment/feedback schema
  */
 export const proposalCommentSchema = z.object({
-  id: z.string().uuid(),
-  proposalId: z.string().uuid(),
-  sectionId: z.string().uuid().optional(), // If comment is on specific section
-  parentCommentId: z.string().uuid().optional(), // For threaded comments
+  id: databaseIdSchema,
+  proposalId: databaseIdSchema,
+  sectionId: optionalDatabaseIdSchema,
+  parentCommentId: optionalDatabaseIdSchema,
   content: validationUtils.stringWithLength(1, 2000, 'Comment content'),
   type: z.enum(['general', 'suggestion', 'issue', 'approval', 'rejection']),
   isResolved: z.boolean().default(false),
-  resolvedBy: userIdSchema.optional(),
+  resolvedBy: optionalUserIdSchema,
   resolvedAt: z.date().optional(),
   createdBy: userIdSchema,
   createdAt: z.date(),

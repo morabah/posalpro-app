@@ -24,10 +24,10 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Your TypeScript rule overrides/relaxations
+      // ✅ PHASE 1: Type Safety Enhancement Rules
       '@typescript-eslint/no-unused-vars': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unsafe-assignment': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error', // 🔒 UPGRADED: Prevent new 'any' usage
+      '@typescript-eslint/no-unsafe-assignment': 'error', // 🔒 UPGRADED: Prevent unsafe assignments
       '@typescript-eslint/no-unsafe-member-access': 'warn',
       '@typescript-eslint/no-unsafe-call': 'warn',
       '@typescript-eslint/no-unsafe-return': 'warn',
@@ -39,6 +39,11 @@ export default tseslint.config(
       '@typescript-eslint/no-unnecessary-condition': 'warn',
       '@typescript-eslint/no-unsafe-enum-comparison': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
+
+      // 🚫 PHASE 1: Additional Type Safety Rules
+      // Removed ban-types rule due to compatibility issues
+      '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
+      '@typescript-eslint/array-type': ['error', { default: 'array-simple' }],
     },
   },
 

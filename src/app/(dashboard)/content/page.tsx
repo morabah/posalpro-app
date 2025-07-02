@@ -17,6 +17,18 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
+/**
+ * Type definitions for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
+interface ContentTrackingMetadata {
+  categoryId?: string;
+  contentType?: string;
+  searchQuery?: string;
+  itemCount?: number;
+  [key: string]: unknown;
+}
+
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
   userStories: ['US-5.1', 'US-5.2'],
@@ -31,7 +43,7 @@ export default function ContentPage() {
   const [sessionStartTime] = useState(Date.now());
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: ContentTrackingMetadata = {}) => {
       console.log('Content Analytics:', {
         action,
         metadata,

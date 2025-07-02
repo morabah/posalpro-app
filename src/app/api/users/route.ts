@@ -19,6 +19,7 @@ import {
   parseFieldsParam,
   processCursorResults,
 } from '@/lib/utils/selectiveHydration';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -103,8 +104,8 @@ export async function GET(request: NextRequest) {
       page: validatedQuery.page,
     });
 
-    // Build base where clause
-    const baseWhere: any = {
+    // Build base where clause with proper typing
+    const baseWhere: Prisma.UserWhereInput = {
       status: 'ACTIVE', // Only show active users for collaboration
     };
 
@@ -143,8 +144,17 @@ export async function GET(request: NextRequest) {
       'user'
     );
 
-    let users: any[];
-    let pagination: any;
+    let users: unknown[];
+    let pagination: {
+      page?: number;
+      limit?: number;
+      total?: number;
+      totalPages?: number;
+      hasNextPage: boolean;
+      hasPrevPage?: boolean;
+      nextCursor?: string | null;
+      itemCount?: number;
+    };
 
     if (useCursorPagination) {
       // 🚀 CURSOR-BASED PAGINATION: Enterprise-scale performance
@@ -165,7 +175,7 @@ export async function GET(request: NextRequest) {
       });
 
       const result = processCursorResults(
-        userResults as any[],
+        userResults as unknown as { id: string }[],
         validatedQuery.limit,
         validatedQuery.sortBy
       );

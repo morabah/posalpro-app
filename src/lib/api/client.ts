@@ -6,6 +6,7 @@
 import { logger } from '@/utils/logger'; // Environment-aware API base URL resolution
 import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
 import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
+
 function getApiBaseUrl(): string {
   // Client-side: use current window location
   if (typeof window !== 'undefined') {
@@ -25,8 +26,34 @@ function getApiBaseUrl(): string {
   return '/api';
 }
 
+/**
+ * Types for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
+interface ErrorDetails {
+  field?: string;
+  code?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+interface CacheEntry<T = unknown> {
+  data: ApiResponse<T>;
+  expires: number;
+}
+
+interface EnhancedRequestConfig {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  retry?: Partial<RetryConfig>;
+  cache?: Partial<CustomCacheConfig>;
+  errorHandling?: ErrorHandlerOptions;
+  timeout?: number;
+}
+
 // Export the existing types and interfaces
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T;
   success: boolean;
   message: string;
@@ -52,7 +79,7 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public code?: string,
-    public details?: any
+    public details?: ErrorDetails
   ) {
     super(message);
     this.name = 'ApiError';
@@ -63,7 +90,7 @@ interface RetryConfig {
   attempts: number;
   delay: number;
   backoff: number;
-  retryCondition?: (error: any) => boolean;
+  retryCondition?: (error: Error | ApiError) => boolean;
 }
 
 interface CustomCacheConfig {
@@ -72,21 +99,11 @@ interface CustomCacheConfig {
   enabled: boolean;
 }
 
-interface EnhancedRequestConfig {
-  method?: string;
-  headers?: Record<string, string>;
-  body?: any;
-  retry?: Partial<RetryConfig>;
-  cache?: Partial<CustomCacheConfig>;
-  errorHandling?: ErrorHandlerOptions;
-  timeout?: number;
-}
-
 class EnhancedApiClient {
   private baseURL: string;
   private defaultConfig: EnhancedRequestConfig;
-  private cache: Map<string, { data: ApiResponse<any>; expires: number }> = new Map();
-  private pendingRequests: Map<string, Promise<any>> = new Map();
+  private cache: Map<string, CacheEntry> = new Map();
+  private pendingRequests: Map<string, Promise<ApiResponse<unknown>>> = new Map();
 
   constructor(baseURL: string = '', config: EnhancedRequestConfig = {}) {
     this.baseURL = baseURL;
@@ -143,18 +160,18 @@ class EnhancedApiClient {
   }
 
   private async executeWithRetry<T>(fn: () => Promise<T>, retryConfig: RetryConfig): Promise<T> {
-    let lastError: any;
+    let lastError: Error | ApiError | undefined;
 
     for (let attempt = 0; attempt <= retryConfig.attempts; attempt++) {
       try {
         return await fn();
       } catch (error) {
-        lastError = error;
+        lastError = error instanceof Error ? error : new Error(String(error));
 
         // Check if we should retry
         if (
           attempt === retryConfig.attempts ||
-          (retryConfig.retryCondition && !retryConfig.retryCondition(error))
+          (retryConfig.retryCondition && !retryConfig.retryCondition(lastError))
         ) {
           break;
         }
@@ -314,36 +331,36 @@ class EnhancedApiClient {
     });
   }
 
-  async post<T>(
+  async post<TResponse, TBody = unknown>(
     url: string,
-    data?: any,
+    data?: TBody,
     config?: Omit<EnhancedRequestConfig, 'method'>
-  ): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(url, {
+  ): Promise<ApiResponse<TResponse>> {
+    return this.makeRequest<TResponse>(url, {
       ...config,
       method: 'POST',
       body: data,
     });
   }
 
-  async put<T>(
+  async put<TResponse, TBody = unknown>(
     url: string,
-    data?: any,
+    data?: TBody,
     config?: Omit<EnhancedRequestConfig, 'method'>
-  ): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(url, {
+  ): Promise<ApiResponse<TResponse>> {
+    return this.makeRequest<TResponse>(url, {
       ...config,
       method: 'PUT',
       body: data,
     });
   }
 
-  async patch<T>(
+  async patch<TResponse, TBody = unknown>(
     url: string,
-    data?: any,
+    data?: TBody,
     config?: Omit<EnhancedRequestConfig, 'method'>
-  ): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(url, {
+  ): Promise<ApiResponse<TResponse>> {
+    return this.makeRequest<TResponse>(url, {
       ...config,
       method: 'PATCH',
       body: data,

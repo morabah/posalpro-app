@@ -39,12 +39,13 @@ if (typeof global.Response === 'undefined') {
 // Jest DOM setup
 import '@testing-library/jest-dom';
 import React from 'react';
-import { server } from './src/test/mocks/server';
+// MSW Server Setup - Temporarily disabled for integration testing
+// import { server } from './src/test/mocks/server';
 
 // MSW Server Setup
-beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+// beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
+// afterEach(() => server.resetHandlers());
+// afterAll(() => server.close());
 
 // Mock Next.js modules
 jest.mock('next/router', () => ({
@@ -304,6 +305,42 @@ global.fetch = jest.fn(() =>
     headers: new Headers(),
   })
 );
+
+// Mock Next.js Request/Response for API route testing
+global.Request = class MockRequest {
+  constructor(url, options = {}) {
+    this.url = url;
+    this.method = options.method || 'GET';
+    this.headers = new Headers(options.headers || {});
+    this.body = options.body || null;
+  }
+
+  async json() {
+    return this.body ? JSON.parse(this.body) : {};
+  }
+
+  async text() {
+    return this.body || '';
+  }
+};
+
+global.Response = class MockResponse {
+  constructor(body, init = {}) {
+    this.body = body;
+    this.status = init.status || 200;
+    this.statusText = init.statusText || 'OK';
+    this.headers = new Headers(init.headers || {});
+    this.ok = this.status >= 200 && this.status < 300;
+  }
+
+  async json() {
+    return typeof this.body === 'string' ? JSON.parse(this.body) : this.body;
+  }
+
+  async text() {
+    return typeof this.body === 'string' ? this.body : JSON.stringify(this.body);
+  }
+};
 
 // Mock File and FileReader for upload tests
 global.File = jest.fn().mockImplementation((content, filename, options = {}) => ({

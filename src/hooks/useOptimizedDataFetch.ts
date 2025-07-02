@@ -4,8 +4,13 @@
  * Component Traceability: US-6.1, US-6.2, H8, H11
  */
 
+'use client';
+
 import { useApiClient } from '@/hooks/useApiClient';
-import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
+import { type ApiResponse } from '@/lib/api/client';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 import { useCallback, useEffect, useState } from 'react';
 
 /**
@@ -17,6 +22,30 @@ import { useCallback, useEffect, useState } from 'react';
  * - Test Cases: TC-H8-001, TC-H11-002
  */
 
+/**
+ * Type definitions for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
+interface FilterValue {
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+interface PaginationInfo {
+  hasNextPage: boolean;
+  nextCursor: string | null;
+  itemCount: number;
+}
+
+interface FetchMeta {
+  responseTimeMs?: number;
+  selectiveHydration?: {
+    fieldsRequested: string[];
+    fieldsReturned: string[];
+    optimizationApplied: boolean;
+  };
+  paginationType?: 'cursor' | 'offset';
+}
+
 interface OptimizedFetchOptions {
   endpoint: string;
   fields?: string[]; // For selective hydration
@@ -24,7 +53,7 @@ interface OptimizedFetchOptions {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
-  filters?: Record<string, any>;
+  filters?: FilterValue;
   enablePrefetch?: boolean; // For route prefetching coordination
 }
 
@@ -32,16 +61,8 @@ interface OptimizedFetchResult<T> {
   data: T[];
   loading: boolean;
   error: string | null;
-  pagination: {
-    hasNextPage: boolean;
-    nextCursor: string | null;
-    itemCount: number;
-  } | null;
-  meta: {
-    responseTimeMs?: number;
-    selectiveHydration?: any;
-    paginationType?: 'cursor' | 'offset';
-  } | null;
+  pagination: PaginationInfo | null;
+  meta: FetchMeta | null;
   refetch: () => Promise<void>;
   fetchMore: () => Promise<void>;
 }
@@ -52,7 +73,7 @@ interface OptimizedFetchResult<T> {
  * ✅ IMPLEMENTS: Cursor-based pagination for scalability
  * ✅ FOLLOWS: CORE_REQUIREMENTS.md - useApiClient pattern and ErrorHandlingService
  */
-export function useOptimizedDataFetch<T = any>(
+export function useOptimizedDataFetch<T = unknown>(
   options: OptimizedFetchOptions
 ): OptimizedFetchResult<T> {
   // ✅ REQUIRED: Use useApiClient pattern (CORE_REQUIREMENTS.md)
@@ -63,8 +84,8 @@ export function useOptimizedDataFetch<T = any>(
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState<any>(null);
-  const [meta, setMeta] = useState<any>(null);
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+  const [meta, setMeta] = useState<FetchMeta | null>(null);
   const [currentCursor, setCurrentCursor] = useState<string | null>(options.cursor || null);
 
   // ✅ PERFORMANCE: Build optimized query parameters
@@ -121,11 +142,18 @@ export function useOptimizedDataFetch<T = any>(
         console.log('🚀 [OptimizedDataFetch] Fetching:', url);
 
         // ✅ CRITICAL: Use apiClient pattern (following Lesson #12)
-        const response = await apiClient.get<any>(url);
+        const response: ApiResponse<{
+          data?: T[];
+          customers?: T[];
+          proposals?: T[];
+          pagination?: PaginationInfo;
+          meta?: FetchMeta;
+        }> = await apiClient.get(url);
 
         if (response.success && response.data) {
+          const responseData = response.data;
           const newData =
-            response.data.data || response.data.customers || response.data.proposals || [];
+            responseData.data || responseData.customers || responseData.proposals || [];
 
           // Handle pagination response
           if (append && data) {
@@ -134,12 +162,12 @@ export function useOptimizedDataFetch<T = any>(
             setData(newData);
           }
 
-          setPagination(response.data.pagination || null);
-          setMeta(response.data.meta || null);
+          setPagination(responseData.pagination || null);
+          setMeta(responseData.meta || null);
 
           // Update cursor for next fetch
-          if (response.data.pagination?.nextCursor) {
-            setCurrentCursor(response.data.pagination.nextCursor);
+          if (responseData.pagination?.nextCursor) {
+            setCurrentCursor(responseData.pagination.nextCursor);
           }
         } else {
           throw new StandardError({
@@ -237,12 +265,14 @@ export function useOptimizedCustomers(options: Partial<OptimizedFetchOptions> = 
 }
 
 // Minimal data fetching for dropdowns/selectors
-export function useOptimizedSelector<T = any>(endpoint: string, fields: string[] = ['id', 'name']) {
+export function useOptimizedSelector<T = unknown>(
+  endpoint: string,
+  fields: string[] = ['id', 'name']
+) {
   return useOptimizedDataFetch<T>({
     endpoint,
     fields,
-    limit: 100, // Higher limit for selectors
-    sortBy: 'name',
-    sortOrder: 'asc',
+    limit: 50,
+    enablePrefetch: false,
   });
 }

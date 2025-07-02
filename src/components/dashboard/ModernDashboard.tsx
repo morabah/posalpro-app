@@ -11,9 +11,11 @@ import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useResponsive } from '@/hooks/useResponsive';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { UserType } from '@/types';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { Customer } from '@/types/entities/customer';
+import { Product } from '@/types/entities/product';
+import { Proposal } from '@/types/entities/proposal';
+import { UserType } from '@/types/enums';
 import {
   BoltIcon,
   CalendarIcon,
@@ -34,14 +36,15 @@ import {
   CheckCircleIcon as CheckCircleIconSolid,
   FireIcon,
 } from '@heroicons/react/24/solid';
+import { Content } from '@prisma/client';
 import Link from 'next/link';
 import { useState } from 'react';
 
 interface DashboardData {
-  proposals: any[];
-  customers: any[];
-  products: any[];
-  content: any[];
+  proposals: Proposal[];
+  customers: Customer[];
+  products: Product[];
+  content: Content[];
   metrics: {
     activeProposals: number;
     pendingTasks: number;

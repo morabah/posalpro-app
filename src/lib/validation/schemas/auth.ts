@@ -6,6 +6,7 @@
 
 import { UserType } from '@/types';
 import { z } from 'zod';
+import { userIdSchema } from './common';
 import { emailSchema, passwordSchema, phoneSchema } from './shared';
 
 /**
@@ -305,7 +306,7 @@ export type TwoFactorVerificationData = z.infer<typeof twoFactorVerificationSche
  * Session management schema
  */
 export const sessionSchema = z.object({
-  userId: z.string().uuid(),
+  userId: userIdSchema,
   email: emailSchema,
   role: z.nativeEnum(UserType),
   permissions: z.array(z.string()),

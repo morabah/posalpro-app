@@ -153,16 +153,19 @@ export const FormField: React.FC<FormFieldProps> = ({
       <div className={cn('flex-1', fieldClassName)}>
         {/* Field Content */}
         <div className="form-field-content">
-          {React.cloneElement(children as React.ReactElement<any>, {
-            id: fieldId,
-            'aria-invalid': error ? 'true' : 'false',
-            'aria-describedby': message
-              ? `${fieldId}-message`
-              : helperText
-                ? `${fieldId}-helper`
-                : undefined,
-            disabled,
-          })}
+          {React.cloneElement(
+            children as React.ReactElement,
+            {
+              id: fieldId,
+              'aria-invalid': error ? 'true' : 'false',
+              'aria-describedby': message
+                ? `${fieldId}-message`
+                : helperText
+                  ? `${fieldId}-helper`
+                  : undefined,
+              disabled,
+            } as unknown as Partial<React.HTMLAttributes<HTMLElement>>
+          )}
         </div>
 
         {/* Messages */}

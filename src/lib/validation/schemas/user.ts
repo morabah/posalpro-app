@@ -6,6 +6,7 @@
 
 import { NotificationType, UserType } from '@/types';
 import { z } from 'zod';
+import { databaseIdArraySchema, databaseIdSchema, optionalUserIdSchema } from './common';
 import {
   baseEntitySchema,
   contactInfoSchema,
@@ -56,7 +57,7 @@ export const userProfileSchema = baseEntitySchema.extend({
   // Employment Details
   employeeId: z.string().optional(),
 
-  manager: z.string().uuid().optional(),
+  manager: optionalUserIdSchema,
 
   startDate: z.date().optional(),
 
@@ -80,13 +81,13 @@ export type UserProfile = z.infer<typeof userProfileSchema>;
  * Based on USER_PROFILE_SCREEN.md expertise management
  */
 export const expertiseAreaSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   name: validationUtils.stringWithLength(1, 100, 'Expertise area'),
   category: z.string().min(1, 'Category is required'),
   level: z.enum(['beginner', 'intermediate', 'advanced', 'expert']),
   yearsOfExperience: validationUtils.numberWithRange(0, 50, 'Years of experience'),
   verified: z.boolean().default(false),
-  verifiedBy: z.string().uuid().optional(),
+  verifiedBy: optionalUserIdSchema,
   verifiedAt: z.date().optional(),
   certifications: z.array(z.string()).optional(),
 });
@@ -257,7 +258,7 @@ export const userEntitySchema = userProfileSchema.extend({
   // Additional fields for user management
   permissions: z.array(z.string()).optional(),
 
-  groups: z.array(z.string().uuid()).optional(),
+  groups: databaseIdArraySchema.optional(),
 
   expertiseAreas: z.array(expertiseAreaSchema).optional(),
 
@@ -294,7 +295,7 @@ export const createUserSchema = z.object({
   jobTitle: validationUtils.stringWithLength(1, 100, 'Job title'),
   department: validationUtils.stringWithLength(1, 100, 'Department'),
   phone: phoneSchema,
-  manager: z.string().uuid().optional(),
+  manager: optionalUserIdSchema,
   startDate: z.date().optional(),
 });
 
@@ -304,7 +305,7 @@ export type CreateUserData = z.infer<typeof createUserSchema>;
  * User update schema (partial user entity)
  */
 export const updateUserSchema = createUserSchema.partial().extend({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
 });
 
 export type UpdateUserData = z.infer<typeof updateUserSchema>;

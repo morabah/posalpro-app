@@ -68,6 +68,46 @@ interface SearchFilters {
   sortOrder: 'asc' | 'desc';
 }
 
+/**
+ * Type definitions for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
+interface ContentTrackingMetadata {
+  query?: string;
+  resultCount?: number;
+  filters?: Partial<SearchFilters>;
+  contentId?: string;
+  contentName?: string;
+  fileName?: string;
+  fileSize?: number;
+  error?: string;
+  context?: unknown;
+  [key: string]: unknown;
+}
+
+interface ErrorContext {
+  operation?: string;
+  query?: string;
+  filters?: SearchFilters;
+  fileName?: string;
+  contentId?: string;
+  [key: string]: unknown;
+}
+
+type FilterValue =
+  | string
+  | 'all'
+  | 'today'
+  | 'week'
+  | 'month'
+  | 'year'
+  | 'relevance'
+  | 'name'
+  | 'date'
+  | 'downloads'
+  | 'asc'
+  | 'desc';
+
 export default function ContentSearchPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ContentItem[]>([]);
@@ -175,7 +215,7 @@ export default function ContentSearchPage() {
   const allTags = Array.from(new Set(allContent.flatMap(item => item.tags)));
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: ContentTrackingMetadata = {}) => {
       analytics.track('content_search_action', {
         action,
         metadata: {
@@ -193,7 +233,7 @@ export default function ContentSearchPage() {
 
   // Enhanced error handling
   const handleError = useCallback(
-    (error: unknown, operation: string, context?: any) => {
+    (error: unknown, operation: string, context?: ErrorContext) => {
       const standardError =
         error instanceof Error
           ? new StandardError({
@@ -312,22 +352,29 @@ export default function ContentSearchPage() {
     [searchQuery, selectedFilters, trackAction, handleError]
   );
 
-  // Filter management
-  const handleFilterChange = useCallback((filterType: keyof SearchFilters, value: any) => {
+  // Filter management with proper typing
+  const handleFilterChange = useCallback((filterType: keyof SearchFilters, value: FilterValue) => {
     setSelectedFilters(prev => {
       const newFilters = { ...prev };
 
       if (filterType === 'type' || filterType === 'category' || filterType === 'tags') {
         // Handle array filters
         const array = newFilters[filterType] as string[];
-        if (array.includes(value)) {
-          (newFilters[filterType] as string[]) = array.filter(item => item !== value);
+        const stringValue = value as string;
+        if (array.includes(stringValue)) {
+          (newFilters[filterType] as string[]) = array.filter(item => item !== stringValue);
         } else {
-          (newFilters[filterType] as string[]) = [...array, value];
+          (newFilters[filterType] as string[]) = [...array, stringValue];
         }
       } else {
-        // Handle non-array filters (dateRange, sortBy, sortOrder)
-        (newFilters as any)[filterType] = value;
+        // Handle non-array filters with proper typing
+        if (filterType === 'dateRange') {
+          newFilters.dateRange = value as SearchFilters['dateRange'];
+        } else if (filterType === 'sortBy') {
+          newFilters.sortBy = value as SearchFilters['sortBy'];
+        } else if (filterType === 'sortOrder') {
+          newFilters.sortOrder = value as SearchFilters['sortOrder'];
+        }
       }
 
       return newFilters;
@@ -528,7 +575,7 @@ export default function ContentSearchPage() {
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Date Range</h4>
                   <select
                     value={selectedFilters.dateRange}
-                    onChange={e => handleFilterChange('dateRange', e.target.value)}
+                    onChange={e => handleFilterChange('dateRange', e.target.value as FilterValue)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Time</option>
@@ -544,7 +591,7 @@ export default function ContentSearchPage() {
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Sort By</h4>
                   <select
                     value={selectedFilters.sortBy}
-                    onChange={e => handleFilterChange('sortBy', e.target.value)}
+                    onChange={e => handleFilterChange('sortBy', e.target.value as FilterValue)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
                   >
                     <option value="relevance">Relevance</option>
@@ -554,7 +601,7 @@ export default function ContentSearchPage() {
                   </select>
                   <select
                     value={selectedFilters.sortOrder}
-                    onChange={e => handleFilterChange('sortOrder', e.target.value)}
+                    onChange={e => handleFilterChange('sortOrder', e.target.value as FilterValue)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="desc">Descending</option>

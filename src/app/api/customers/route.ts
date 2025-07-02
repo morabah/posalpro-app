@@ -13,7 +13,6 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
-import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -30,18 +29,26 @@ import { z } from 'zod';
 /**
  * Validation schemas
  */
+// Database-agnostic ID validation (CORE_REQUIREMENTS.md)
+const databaseIdSchema = z
+  .string()
+  .min(1, 'ID is required')
+  .refine(id => id !== 'undefined' && id !== 'null', {
+    message: 'Valid database ID required',
+  });
+
 const CustomerQuerySchema = z.object({
-  cursor: z.preprocess(val => (val === '' ? undefined : val), z.string().cuid().nullish()),
+  cursor: z.preprocess(val => (val === '' ? undefined : val), databaseIdSchema.nullish()),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
-  fields: z.string().optional(),
   search: z.string().optional(),
+  status: z.string().optional(),
+  tier: z.string().optional(),
   industry: z.string().optional(),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']).optional(),
-  sortBy: z.enum(['name', 'industry', 'createdAt', 'lastContact', 'revenue']).default('createdAt'),
+  fields: z.string().optional(),
+  sortBy: z.enum(['name', 'createdAt', 'updatedAt', 'tier']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  includeProposals: z.coerce.boolean().default(false),
+  segmentation: z.record(z.any()).optional(),
 });
 
 const CustomerCreateSchema = z.object({
@@ -59,57 +66,63 @@ const CustomerCreateSchema = z.object({
   segmentation: z.record(z.any()).optional(),
 });
 
+// Database query interfaces
+interface CustomerWhereClause {
+  status?: string;
+  name?: {
+    contains: string;
+    mode: 'insensitive';
+  };
+  industry?: {
+    contains: string;
+    mode: 'insensitive';
+  };
+  id?: {
+    gt: string;
+  };
+  tier?: string;
+  [key: string]: unknown;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  tier: string;
+  industry: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  [key: string]: unknown;
+}
+
+interface CustomerPaginationResult {
+  customers: Customer[];
+  total: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 /**
- * GET /api/customers - List customers with advanced filtering
+ * GET /api/customers - Retrieve customers with filtering and pagination
  */
 export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-
-    // [AUTH_FIX] Enhanced session validation with detailed logging
-    console.log('[AUTH_FIX] Session validation:', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      hasUserId: !!session?.user?.id,
-      userEmail: session?.user?.email,
-      userRoles: session?.user?.roles,
-      timestamp: new Date().toISOString()
-    });
-
-    // [AUTH_FIX] Enhanced session validation with detailed logging
-    console.log('[AUTH_FIX] Session validation:', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      hasUserId: !!session?.user?.id,
-      userEmail: session?.user?.email,
-      userRoles: session?.user?.roles,
-      timestamp: new Date().toISOString()
-    });
-    if (!session?.user?.id) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
-    }
-
-    // ✅ ENHANCED: Parse query parameters with validation
     const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams.entries());
-
-    let query;
-    try {
-      query = CustomerQuerySchema.parse(queryParams);
-    } catch (parseError) {
-      console.error('[CustomersAPI] Query validation error:', parseError);
-      throw parseError;
-    }
+    const query = CustomerQuerySchema.parse(Object.fromEntries(searchParams));
 
     // Build where clause
-    const where: any = {};
+    const where: CustomerWhereClause = {};
 
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
         { email: { contains: query.search, mode: 'insensitive' } },
-        { industry: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 
@@ -121,163 +134,96 @@ export async function GET(request: NextRequest) {
       where.tier = query.tier;
     }
 
-    // ✅ SELECTIVE HYDRATION: Parse requested fields for performance optimization
-    const queryStartTime = Date.now();
-    const { select: customerSelect, optimizationMetrics } = parseFieldsParam(
-      query.fields || undefined,
-      'customer'
-    );
-
-    // ✅ CURSOR-BASED PAGINATION: More efficient for large datasets
-    const useCursorPagination = query.cursor !== undefined;
-
-    let customers: any[];
-    let pagination: any;
-
-    if (useCursorPagination) {
-      // Cursor-based pagination
-      const cursorWhere = query.cursor
-        ? {
-            ...where,
-            id: { lt: query.cursor }, // Cursor condition for 'desc' order
-          }
-        : where;
-
-      customers = await prisma.customer.findMany({
-        where: cursorWhere,
-        select: customerSelect, // ✅ Use selective hydration
-        take: query.limit + 1, // Get one extra to check if there's a next page
-        orderBy: {
-          [query.sortBy]: query.sortOrder,
-        },
-      });
-
-      // Check if there are more items
-      const hasNextPage = customers.length > query.limit;
-      if (hasNextPage) {
-        customers.pop(); // Remove the extra item
-      }
-
-      pagination = {
-        limit: query.limit,
-        hasNextPage,
-        nextCursor: hasNextPage && customers.length > 0 ? customers[customers.length - 1].id : null,
-        itemCount: customers.length,
-      };
-    } else {
-      // Legacy offset pagination for backward compatibility
-      const total = await prisma.customer.count({ where });
-
-      customers = await prisma.customer.findMany({
-        where,
-        select: customerSelect, // ✅ Use selective hydration
-        orderBy: {
-          [query.sortBy]: query.sortOrder,
-        },
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-      });
-
-      pagination = {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-        hasNextPage: query.page < Math.ceil(total / query.limit),
-        hasPrevPage: query.page > 1,
-      };
+    if (query.industry) {
+      where.industry = { contains: query.industry, mode: 'insensitive' };
     }
 
-    const queryEndTime = Date.now();
+    // Determine pagination strategy
+    const useCursorPagination = query.cursor !== undefined;
 
-    // Track search event with performance metrics (async, non-blocking)
-    trackCustomerSearchEvent(session.user.id, JSON.stringify(queryParams), customers.length).catch(
-      error => {
-        logger.warn('Analytics tracking failed but not blocking request:', error);
+    let customers: Customer[];
+    let pagination: CustomerPaginationResult;
+
+    if (useCursorPagination) {
+      if (query.cursor) {
+        where.id = { gt: query.cursor };
       }
-    );
+
+      const results = await prisma.customer.findMany({
+        where: where as any, // Prisma compatibility
+        take: query.limit + 1,
+        orderBy: { [query.sortBy]: query.sortOrder },
+        include: {
+          _count: {
+            select: { proposals: true },
+          },
+        },
+      });
+
+      const hasMore = results.length > query.limit;
+      customers = hasMore ? (results.slice(0, -1) as Customer[]) : (results as Customer[]);
+      const nextCursor = hasMore ? results[results.length - 2]?.id || null : null;
+
+      pagination = {
+        customers,
+        total: customers.length,
+        hasMore,
+        nextCursor,
+      };
+    } else {
+      const skip = (query.page - 1) * query.limit;
+
+      const [results, total] = await Promise.all([
+        prisma.customer.findMany({
+          where: where as any, // Prisma compatibility
+          skip,
+          take: query.limit,
+          orderBy: { [query.sortBy]: query.sortOrder },
+          include: {
+            _count: {
+              select: { proposals: true },
+            },
+          },
+        }),
+        prisma.customer.count({ where: where as any }),
+      ]);
+
+      customers = results as Customer[];
+      pagination = {
+        customers,
+        total,
+        hasMore: skip + query.limit < total,
+        nextCursor: null,
+      };
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Customers retrieved successfully',
       data: {
-        customers,
-      },
-      pagination,
-      // ✅ Performance and optimization metadata
-      meta: {
-        paginationType: useCursorPagination ? 'cursor' : 'offset',
-        sortBy: query.sortBy,
-        sortOrder: query.sortOrder,
-        selectiveHydration: optimizationMetrics,
-        responseTimeMs: queryEndTime - queryStartTime,
+        customers: pagination.customers,
+        pagination: {
+          total: pagination.total,
+          page: query.page,
+          limit: query.limit,
+          hasMore: pagination.hasMore,
+          nextCursor: pagination.nextCursor,
+        },
       },
     });
   } catch (error) {
-    // Log the error using ErrorHandlingService
-    errorHandlingService.processError(error);
-
-    if (error instanceof z.ZodError) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Validation failed for customer query parameters',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          cause: error,
-          metadata: {
-            component: 'CustomersRoute',
-            operation: 'getCustomers',
-            validationErrors: error.errors,
-          },
-        }),
-        'Validation failed',
-        ErrorCodes.VALIDATION.INVALID_INPUT,
-        400,
-        { userFriendlyMessage: 'Please check your search parameters and try again.' }
-      );
-    }
-
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2')
-        ? ErrorCodes.DATA.DATABASE_ERROR
-        : ErrorCodes.DATA.NOT_FOUND;
-      return createApiErrorResponse(
-        new StandardError({
-          message: `Database error when fetching customers: ${getPrismaErrorMessage(error.code)}`,
-          code: errorCode,
-          cause: error,
-          metadata: {
-            component: 'CustomersRoute',
-            operation: 'getCustomers',
-            prismaErrorCode: error.code,
-          },
-        }),
-        'Database error',
-        errorCode,
-        500,
-        {
-          userFriendlyMessage:
-            'An error occurred while retrieving customers. Please try again later.',
-        }
+      return NextResponse.json(
+        { error: 'Database error', details: getPrismaErrorMessage(error.code) },
+        { status: 500 }
       );
     }
 
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to fetch customers',
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        cause: error,
-        metadata: {
-          component: 'CustomersRoute',
-          operation: 'getCustomers',
-        },
-      }),
-      'Internal server error',
-      ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500,
+    return NextResponse.json(
       {
-        userFriendlyMessage:
-          'An unexpected error occurred while retrieving customers. Please try again later.',
-      }
+        error: 'Failed to fetch customers',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
     );
   }
 }
@@ -297,7 +243,7 @@ export async function POST(request: NextRequest) {
       hasUserId: !!session?.user?.id,
       userEmail: session?.user?.email,
       userRoles: session?.user?.roles,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     // [AUTH_FIX] Enhanced session validation with detailed logging
@@ -307,7 +253,7 @@ export async function POST(request: NextRequest) {
       hasUserId: !!session?.user?.id,
       userEmail: session?.user?.email,
       userRoles: session?.user?.roles,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });

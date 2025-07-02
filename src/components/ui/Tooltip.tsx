@@ -288,7 +288,7 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
 
     // Clone children with event handlers
     const triggerElement = isValidElement(children)
-      ? cloneElement(children as React.ReactElement<any>, {
+      ? cloneElement(children, {
           ...triggerHandlers[trigger],
           ref: (node: HTMLElement) => {
             triggerRef.current = node;
@@ -296,7 +296,7 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
           'aria-describedby': isVisible
             ? `tooltip-${Math.random().toString(36).substr(2, 9)}`
             : undefined,
-        })
+        } as unknown as Partial<React.HTMLAttributes<HTMLElement>>)
       : children;
 
     return (

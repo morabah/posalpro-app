@@ -36,6 +36,14 @@ const WorkflowQuerySchema = z.object({
   includeMetrics: z.coerce.boolean().default(true),
 });
 
+// Database-agnostic ID validation patterns (LESSONS_LEARNED.md Lesson #16)
+const userIdSchema = z
+  .string()
+  .min(1)
+  .refine(id => id !== 'undefined' && id !== 'null', {
+    message: 'Valid user ID required',
+  });
+
 const WorkflowCreateSchema = z.object({
   name: z.string().min(1, 'Workflow name is required').max(200),
   description: z.string().max(1000).optional(),
@@ -46,7 +54,7 @@ const WorkflowCreateSchema = z.object({
         name: z.string().min(1),
         description: z.string().optional(),
         order: z.number().int().positive(),
-        assignedToId: z.string().cuid().optional(),
+        assignedToId: userIdSchema.optional(),
         slaHours: z.number().int().positive().default(24),
       })
     )

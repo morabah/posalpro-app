@@ -36,7 +36,7 @@ import { SystemUser, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminDa
 import RoleManager from '@/components/admin/RoleManager';
 
 // Import date-fns with parseISO for string date handling
-import { formatDistanceToNow, isDate, isValid, parseISO } from 'date-fns';
+import { formatDistanceToNow, isValid, parseISO } from 'date-fns';
 
 // Additional components - Fix default import
 import DatabaseSyncPanel from '@/components/admin/DatabaseSyncPanel';
@@ -72,22 +72,40 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
 
 /**
+ * Type definitions for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
+type DateLike = Date | string | number | null | undefined;
+
+interface ErrorContext {
+  userId?: string;
+  operation?: string;
+  editData?: Partial<SystemUserEditData>;
+  [key: string]: unknown;
+}
+
+type AdminTabType = 'overview' | 'users' | 'roles' | 'integration' | 'config' | 'logs' | 'backups';
+
+/**
  * Helper function to format time in a human-readable format
  * Follows platform engineering standards for consistent date formatting
  * Handles both Date objects and ISO strings with proper error handling
  */
-const formatTimeAgo = (date: any): string => {
+const formatTimeAgo = (date: DateLike): string => {
   try {
     if (!date) return 'Never';
 
     let dateObj: Date;
 
-    // Handle different date input types
-    if (isDate(date)) {
+    // Handle different date input types with proper type guards
+    if (date instanceof Date) {
       dateObj = date;
     } else if (typeof date === 'string') {
       // Parse ISO string dates
       dateObj = parseISO(date);
+    } else if (typeof date === 'number') {
+      // Handle timestamp
+      dateObj = new Date(date);
     } else {
       return 'Invalid date';
     }
@@ -178,9 +196,7 @@ interface AuditLogEntry {
  */
 export default function AdminSystem() {
   // State management with TypeScript strict mode
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'users' | 'roles' | 'integration' | 'config' | 'logs' | 'backups'
-  >('overview');
+  const [activeTab, setActiveTab] = useState<AdminTabType>('overview');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('All Roles');
   const [selectedStatus, setSelectedStatus] = useState<string>('All Statuses');
@@ -222,7 +238,7 @@ export default function AdminSystem() {
 
   // Error handling with user feedback
   const handleError = useCallback(
-    (error: unknown, operation: string, context?: any) => {
+    (error: unknown, operation: string, context?: ErrorContext) => {
       const standardError =
         error instanceof Error
           ? new StandardError({
@@ -490,7 +506,7 @@ export default function AdminSystem() {
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
-                onClick={() => setActiveTab(key as any)}
+                onClick={() => setActiveTab(key as AdminTabType)}
                 className={`${
                   activeTab === key
                     ? 'border-blue-500 text-blue-600'

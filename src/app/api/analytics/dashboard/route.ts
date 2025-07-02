@@ -8,7 +8,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { getServerSession } from 'next-auth';
+import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 const errorHandlingService = ErrorHandlingService.getInstance();
@@ -34,10 +34,29 @@ const DashboardQuerySchema = z.object({
 });
 
 /**
+ * Analytics health score calculation data interface
+ */
+interface AnalyticsHealthScoreData {
+  hypothesisMetrics: {
+    successRate: number;
+  };
+  userStoryMetrics: {
+    completionPercentage: number;
+  };
+  performanceBaselines: {
+    totalBaselines: number;
+    onTrackCount: number;
+  };
+  componentTraceability: {
+    validationRate: number;
+  };
+}
+
+/**
  * GET - Retrieve comprehensive analytics dashboard data
  */
 export async function GET(request: NextRequest) {
-  let session: any = null;
+  let session: Session | null = null;
 
   try {
     // Authentication check
@@ -142,7 +161,7 @@ function getDateFilter(timeRange: string) {
  */
 async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | null) {
   try {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (hypothesis) {
       where.hypothesis = hypothesis;
     }
@@ -206,7 +225,7 @@ async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | nul
  */
 async function getUserStoryMetrics(dateFilter?: Date | null) {
   try {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (dateFilter) {
       where.lastUpdated = { gte: dateFilter };
     }
@@ -418,7 +437,7 @@ async function getRecentActivity(dateFilter?: Date | null) {
 /**
  * Calculate overall analytics health score
  */
-async function calculateAnalyticsHealthScore(data: any): Promise<number> {
+async function calculateAnalyticsHealthScore(data: AnalyticsHealthScoreData): Promise<number> {
   try {
     const weights = {
       hypothesisSuccessRate: 0.3,

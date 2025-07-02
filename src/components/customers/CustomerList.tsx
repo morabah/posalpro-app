@@ -194,7 +194,7 @@ const CustomerList = memo(() => {
         // Track analytics event
         analytics.track('customer_list_fetch_started', {
           component: 'CustomerList',
-          page,
+          page: page.toString(),
           search: search.length > 0,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,

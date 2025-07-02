@@ -124,6 +124,31 @@ function sanitizeInput(input: string): string {
   return sanitized;
 }
 
+// Build WHERE clause for filtering
+interface ContentWhereClause {
+  isActive?: boolean;
+  type?: string;
+  createdAt?: {
+    gte?: Date;
+    lte?: Date;
+  };
+  OR?: Array<{
+    title?: { contains: string; mode: 'insensitive' };
+    description?: { contains: string; mode: 'insensitive' };
+    content?: { contains: string; mode: 'insensitive' };
+  }>;
+  tags?: {
+    hasSome: string[];
+  };
+  category?: {
+    hasSome: string[];
+  };
+  creator?: {
+    id: string;
+  };
+  [key: string]: unknown;
+}
+
 // GET /api/content - List content items with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
@@ -184,7 +209,10 @@ export async function GET(request: NextRequest) {
     logger.info('Validated query:', query);
 
     // Build where clause
-    const where: any = {};
+    const where: any = {
+      // Prisma compatibility
+      isActive: true, // Only show active content by default
+    };
 
     if (query.type) {
       where.type = query.type;

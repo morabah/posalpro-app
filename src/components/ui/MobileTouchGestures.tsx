@@ -86,6 +86,21 @@ interface GestureConfig {
   };
 }
 
+// Analytics tracking context for mobile touch gesture interactions
+interface TrackingContext {
+  userId?: string;
+  page?: string;
+  section?: string;
+  hypothesis?: string;
+  testCase?: string;
+  userStory?: string;
+  sessionId?: string;
+  experimentId?: string;
+  cohort?: string;
+  source?: string;
+  metadata?: Record<string, string | number | boolean>;
+}
+
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
   userStories: ['US-8.1', 'US-8.4', 'US-1.1', 'US-4.1'],
@@ -143,7 +158,7 @@ interface MobileTouchGesturesProps {
   onTouchEnd?: (touches: TouchPoint[]) => void;
 
   // Analytics Context
-  trackingContext?: Record<string, any>;
+  trackingContext?: TrackingContext;
   disabled?: boolean;
 }
 

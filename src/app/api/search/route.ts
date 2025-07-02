@@ -1,7 +1,7 @@
 /**
- * PosalPro MVP2 - Enhanced Search API Routes with Cursor Pagination
- * Global search functionality across all entities with enterprise performance
- * Component Traceability: US-1.1, US-1.2, US-6.1, H1, H6, H8, H11
+ * PosalPro MVP2 - Global Search API Route
+ * Unified search across content, proposals, products, customers, and users
+ * Component Traceability: US-1.1, US-1.2, US-1.3
  */
 
 import { authOptions } from '@/lib/auth';
@@ -9,23 +9,108 @@ import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { decidePaginationStrategy } from '@/lib/utils/selectiveHydration';
+import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-// ✅ EDGE RUNTIME: Strategic optimization for global search endpoints
-// Standard Node.js runtime for NextAuth compatibility
-
-const errorHandlingService = ErrorHandlingService.getInstance();
-
 /**
- * Component Traceability Matrix:
- * - User Stories: US-1.1 (Content Discovery), US-1.2 (Advanced Search), US-6.1 (Performance Optimization)
- * - Acceptance Criteria: AC-1.1.1, AC-1.1.2, AC-1.2.1, AC-1.2.2, AC-6.1.1 (Cursor Pagination)
- * - Hypotheses: H1 (Content Discovery), H6 (Requirement Extraction), H8 (Load Time), H11 (Cache Hit Rate)
- * - Methods: globalSearch(), contentSearch(), advancedSearch(), getCursorPaginatedSearch()
- * - Test Cases: TC-H1-001, TC-H6-001, TC-H8-021, TC-H11-016
+ * Type definitions for search functionality
  */
+
+// Database-agnostic ID validation (CORE_REQUIREMENTS.md)
+const databaseIdSchema = z
+  .string()
+  .min(1, 'ID is required')
+  .refine(id => id !== 'undefined' && id.trim().length > 0);
+
+interface SearchFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+  priority?: string;
+  category?: string;
+  customerId?: string;
+  userId?: string;
+  contentType?: string;
+  priceRange?: [number, number];
+  industry?: string;
+  tier?: string;
+  department?: string;
+  role?: string;
+  [key: string]: unknown;
+}
+
+interface SearchQuery {
+  q: string;
+  type: 'all' | 'content' | 'proposals' | 'products' | 'customers' | 'users';
+  page: number;
+  limit: number;
+  sortBy: 'relevance' | 'date' | 'title' | 'status' | 'id';
+  sortOrder: 'asc' | 'desc';
+  cursor?: string;
+  fields?: string[];
+  filters?: string;
+}
+
+interface SearchResult {
+  id: string;
+  entityType: string;
+  title?: string;
+  name?: string;
+  description?: string | null;
+  relevanceScore?: number;
+  url?: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+  type?: string;
+  tags?: string[] | null;
+  status?: string;
+  [key: string]: unknown;
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+  nextPage: number | null;
+  prevPage: number | null;
+  nextCursor?: string | null;
+}
+
+interface SearchResponse {
+  results: SearchResult[];
+  pagination: PaginationInfo;
+  facets: {
+    types: Array<{ type: string; count: number }>;
+    statuses: Array<{ status: string; count: number }>;
+    dateRanges: Array<{ range: string; count: number }>;
+  };
+  searchTerm: string;
+  totalTime: number;
+  suggestions: string[];
+  meta: {
+    paginationType: 'cursor' | 'offset';
+    paginationReason: string;
+    totalCount: number;
+    executionTime: number;
+  };
+}
+
+interface SessionUser {
+  id: string;
+  email?: string;
+  name?: string;
+  roles?: string[];
+}
+
+interface AuthenticatedSession {
+  user: SessionUser;
+  expires: string;
+}
 
 /**
  * Enhanced search query validation schema with cursor pagination
@@ -33,35 +118,26 @@ const errorHandlingService = ErrorHandlingService.getInstance();
 const SearchQuerySchema = z.object({
   q: z.string().min(1, 'Search query is required'),
   type: z.enum(['all', 'content', 'proposals', 'products', 'customers', 'users']).default('all'),
-
-  // Cursor-based pagination (NEW - Enterprise performance)
-  cursor: z.string().optional(),
+  page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
-
-  // Legacy offset pagination (BACKWARD COMPATIBILITY)
-  offset: z.coerce.number().min(0).optional(),
-  page: z.coerce.number().min(1).optional(),
-
-  // Selective hydration support
-  fields: z.string().optional(),
-
-  // Search options
-  filters: z.string().optional(),
   sortBy: z.enum(['relevance', 'date', 'title', 'status', 'id']).default('relevance'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  cursor: databaseIdSchema.optional(),
+  fields: z.string().optional(),
+  filters: z.string().optional(),
 });
 
 /**
- * GET /api/search - Enhanced global search with cursor-based pagination
- * Supports both cursor (default) and offset (legacy) pagination
+ * Global search endpoint with enhanced filtering and cursor pagination
  */
 export async function GET(request: NextRequest) {
-  let session: any = null;
-  let validatedQuery: any = null;
+  const startTime = performance.now();
+  let session: AuthenticatedSession | null = null;
+  let validatedQuery: SearchQuery | null = null;
 
   try {
     // Authentication check
-    session = await getServerSession(authOptions);
+    session = (await getServerSession(authOptions)) as AuthenticatedSession | null;
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -69,7 +145,12 @@ export async function GET(request: NextRequest) {
     // Parse and validate query parameters
     const { searchParams } = new URL(request.url);
     const queryParams = Object.fromEntries(searchParams);
-    validatedQuery = SearchQuerySchema.parse(queryParams);
+
+    const parsedQuery = SearchQuerySchema.parse(queryParams);
+    validatedQuery = {
+      ...parsedQuery,
+      fields: parsedQuery.fields ? parsedQuery.fields.split(',') : undefined,
+    } as SearchQuery;
 
     // Determine pagination strategy
     const { useCursorPagination, reason } = decidePaginationStrategy({
@@ -77,12 +158,12 @@ export async function GET(request: NextRequest) {
       limit: validatedQuery.limit,
       sortBy: validatedQuery.sortBy,
       sortOrder: validatedQuery.sortOrder,
-      fields: validatedQuery.fields,
+      fields: validatedQuery.fields?.join(','),
       page: validatedQuery.page,
     });
 
     // Parse filters if provided
-    let parsedFilters: any = {};
+    let parsedFilters: SearchFilters = {};
     if (validatedQuery.filters) {
       try {
         parsedFilters = JSON.parse(validatedQuery.filters);
@@ -92,7 +173,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Track search event for analytics
-    await trackSearchEvent(session.user.id, validatedQuery.q, validatedQuery.type);
+    logger.info('Search request initiated', {
+      searchTerm: validatedQuery.q,
+      searchType: validatedQuery.type,
+      userId: session.user.id,
+      userEmail: session?.user?.email,
+      userRoles: session?.user?.roles,
+      timestamp: new Date().toISOString(),
+    });
 
     // Perform enhanced search with cursor pagination
     const searchResults = await performEnhancedSearch(
@@ -102,47 +190,64 @@ export async function GET(request: NextRequest) {
       useCursorPagination
     );
 
-    let pagination: any;
+    let pagination: PaginationInfo;
 
     if (useCursorPagination) {
-      // Cursor-based pagination response
       pagination = {
+        page: validatedQuery.page,
         limit: validatedQuery.limit,
-        hasNextPage: searchResults.hasNextPage,
+        total: searchResults.totalCount,
+        totalPages: Math.ceil(searchResults.totalCount / validatedQuery.limit),
+        hasMore: searchResults.hasNextPage,
+        nextPage: searchResults.hasNextPage ? validatedQuery.page + 1 : null,
+        prevPage: validatedQuery.page > 1 ? validatedQuery.page - 1 : null,
         nextCursor: searchResults.nextCursor,
-        itemCount: searchResults.results.length,
       };
     } else {
-      // Legacy offset pagination response
-      const offset = validatedQuery.offset || 0;
+      const totalPages = Math.ceil(searchResults.totalCount / validatedQuery.limit);
       pagination = {
+        page: validatedQuery.page,
         limit: validatedQuery.limit,
-        offset,
-        hasMore: searchResults.totalCount > offset + validatedQuery.limit,
-        totalCount: searchResults.totalCount,
+        total: searchResults.totalCount,
+        totalPages,
+        hasMore: validatedQuery.page < totalPages,
+        nextPage: validatedQuery.page < totalPages ? validatedQuery.page + 1 : null,
+        prevPage: validatedQuery.page > 1 ? validatedQuery.page - 1 : null,
       };
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        query: validatedQuery.q,
-        type: validatedQuery.type,
-        results: searchResults.results,
-        pagination,
-        meta: {
-          paginationType: useCursorPagination ? 'cursor' : 'offset',
-          paginationReason: reason,
-          totalCount: searchResults.totalCount,
-          executionTime: searchResults.executionTime,
-          sortBy: validatedQuery.sortBy,
-          sortOrder: validatedQuery.sortOrder,
-        },
-        filters: parsedFilters,
+    const response: SearchResponse = {
+      results: searchResults.results,
+      pagination,
+      facets: searchResults.facets || {
+        types: [],
+        statuses: [],
+        dateRanges: [],
       },
-      message: 'Search completed successfully',
-    });
+      searchTerm: validatedQuery.q,
+      totalTime: searchResults.executionTime,
+      suggestions: searchResults.suggestions || [],
+      meta: {
+        paginationType: useCursorPagination ? 'cursor' : 'offset',
+        paginationReason: reason,
+        totalCount: searchResults.totalCount,
+        executionTime: searchResults.executionTime,
+      },
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
+    logger.error('Search request failed', {
+      error: error instanceof Error ? error.message : String(error),
+      searchTerm: validatedQuery?.q,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email,
+      userRoles: session?.user?.roles,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Use proper error handling
+    const errorHandlingService = ErrorHandlingService.getInstance();
     errorHandlingService.processError(
       error,
       'Search operation failed',
@@ -155,124 +260,157 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid search parameters', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Search operation failed' }, { status: 500 });
   }
 }
 
 /**
- * Enhanced search with cursor pagination support
- * Handles both cursor and offset pagination strategies
+ * Perform enhanced search across multiple entity types
  */
 async function performEnhancedSearch(
-  query: any,
-  filters: any,
+  query: SearchQuery,
+  filters: SearchFilters,
   userId: string,
   useCursorPagination: boolean
 ) {
-  const startTime = Date.now();
+  const executionStartTime = performance.now();
   const searchTerm = query.q.toLowerCase();
 
-  let results: any[] = [];
+  let results: SearchResult[] = [];
   let totalCount = 0;
 
   // Search across entities based on type
   if (query.type === 'all' || query.type === 'content') {
     const contentResults = await searchContent(searchTerm, filters, query);
-    results.push(...contentResults.map(item => ({ ...item, entityType: 'content' })));
+    results.push(
+      ...contentResults.map((item: any) => ({
+        ...item,
+        entityType: 'content',
+        metadata: (item as any).metadata || null,
+        tags: (item as any).tags || null,
+      }))
+    );
     totalCount += contentResults.length;
   }
 
   if (query.type === 'all' || query.type === 'proposals') {
     const proposalResults = await searchProposals(searchTerm, filters, query, userId);
-    results.push(...proposalResults.map(item => ({ ...item, entityType: 'proposal' })));
+    results.push(
+      ...proposalResults.map((item: any) => ({
+        ...item,
+        entityType: 'proposal',
+        metadata: (item as any).metadata || null,
+        tags: (item as any).tags || null,
+      }))
+    );
     totalCount += proposalResults.length;
   }
 
   if (query.type === 'all' || query.type === 'products') {
     const productResults = await searchProducts(searchTerm, filters, query);
-    results.push(...productResults.map(item => ({ ...item, entityType: 'product' })));
+    results.push(
+      ...productResults.map((item: any) => ({
+        ...item,
+        entityType: 'product',
+        metadata: (item as any).metadata || null,
+        tags: (item as any).tags || null,
+      }))
+    );
     totalCount += productResults.length;
   }
 
   if (query.type === 'all' || query.type === 'customers') {
     const customerResults = await searchCustomers(searchTerm, filters, query);
-    results.push(...customerResults.map(item => ({ ...item, entityType: 'customer' })));
+    results.push(
+      ...customerResults.map((item: any) => ({
+        ...item,
+        entityType: 'customer',
+        metadata: (item as any).metadata || null,
+        tags: (item as any).tags || null,
+      }))
+    );
     totalCount += customerResults.length;
   }
 
   if (query.type === 'all' || query.type === 'users') {
     const userResults = await searchUsers(searchTerm, filters, query);
-    results.push(...userResults.map(item => ({ ...item, entityType: 'user' })));
+    results.push(
+      ...userResults.map((item: any) => ({
+        ...item,
+        entityType: 'user',
+        metadata: (item as any).metadata || null,
+        tags: (item as any).tags || null,
+      }))
+    );
     totalCount += userResults.length;
   }
 
-  // Sort results by relevance or specified criteria
+  // Sort results
   if (query.sortBy === 'relevance') {
     results = sortByRelevance(results, searchTerm);
   } else {
     results = sortByField(results, query.sortBy, query.sortOrder);
   }
 
-  let paginatedResults: any[];
+  // Handle pagination
+  let paginatedResults: SearchResult[];
   let hasNextPage = false;
   let nextCursor: string | null = null;
 
-  if (useCursorPagination) {
-    // 🚀 CURSOR-BASED PAGINATION: For large result sets
-    let cursorIndex = 0;
-
-    // Find cursor position if provided
-    if (query.cursor) {
-      cursorIndex = results.findIndex(item => item.id === query.cursor) + 1;
-      if (cursorIndex === 0) {
-        // Cursor not found, start from beginning
-        cursorIndex = 0;
-      }
-    }
-
-    // Extract page of results
-    paginatedResults = results.slice(cursorIndex, cursorIndex + query.limit);
-
-    // Check if there are more results for next page
-    hasNextPage = cursorIndex + query.limit < results.length;
-
-    // Generate next cursor from last item
-    if (hasNextPage && paginatedResults.length > 0) {
-      nextCursor = paginatedResults[paginatedResults.length - 1].id;
-    }
+  if (useCursorPagination && query.cursor) {
+    const cursorIndex = results.findIndex(item => item.id === query.cursor);
+    const startIndex = cursorIndex + 1;
+    paginatedResults = results.slice(startIndex, startIndex + query.limit);
+    hasNextPage = startIndex + query.limit < results.length;
+    nextCursor = hasNextPage ? paginatedResults[paginatedResults.length - 1]?.id || null : null;
   } else {
-    // 🔄 OFFSET PAGINATION: Legacy support
-    const offset = query.offset || 0;
-    paginatedResults = results.slice(offset, offset + query.limit);
+    const startIndex = (query.page - 1) * query.limit;
+    paginatedResults = results.slice(startIndex, startIndex + query.limit);
+    hasNextPage = startIndex + query.limit < results.length;
+    nextCursor = hasNextPage ? paginatedResults[paginatedResults.length - 1]?.id || null : null;
   }
+
+  const executionTime = performance.now() - executionStartTime;
 
   return {
     results: paginatedResults,
-    totalCount: results.length,
+    totalCount,
     hasNextPage,
     nextCursor,
-    executionTime: Date.now() - startTime,
+    executionTime,
+    facets: {
+      types: [],
+      statuses: [],
+      dateRanges: [],
+    },
+    suggestions: [],
   };
 }
 
 /**
  * Search content items
  */
-async function searchContent(searchTerm: string, filters: any, query: any) {
-  const where: any = {
+async function searchContent(searchTerm: string, filters: SearchFilters, query: SearchQuery) {
+  interface ContentWhereClause {
+    isActive: boolean;
+    OR?: Array<{
+      title?: { contains: string; mode: 'insensitive' };
+      description?: { contains: string; mode: 'insensitive' };
+      tags?: { has: string };
+    }>;
+    type?: string;
+    createdAt?: {
+      gte?: Date;
+      lte?: Date;
+    };
+    [key: string]: unknown;
+  }
+
+  const where: ContentWhereClause = {
     isActive: true,
     OR: [
       { title: { contains: searchTerm, mode: 'insensitive' } },
       { description: { contains: searchTerm, mode: 'insensitive' } },
-      { content: { contains: searchTerm, mode: 'insensitive' } },
-      { keywords: { has: searchTerm } },
       { tags: { has: searchTerm } },
     ],
   };
@@ -281,54 +419,53 @@ async function searchContent(searchTerm: string, filters: any, query: any) {
     where.type = filters.contentType;
   }
 
-  if (filters.category) {
-    where.category = { has: filters.category };
+  if (filters.dateFrom) {
+    where.createdAt = { ...where.createdAt, gte: new Date(filters.dateFrom) };
   }
 
-  try {
-    return await prisma.content.findMany({
-      where,
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        type: true,
-        tags: true,
-        category: true,
-        createdAt: true,
-        updatedAt: true,
-        creator: {
-          select: {
-            name: true,
-            department: true,
-          },
-        },
-      },
-      take: 50,
-    });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Content search failed',
-      ErrorCodes.DATA.SEARCH_FAILED,
-      {
-        component: 'SearchRoute',
-        operation: 'searchContent',
-        userStories: ['US-1.1'],
-        hypotheses: ['H1'],
-        searchTerm,
-        filters,
-      }
-    );
-    return [];
+  if (filters.dateTo) {
+    where.createdAt = { ...where.createdAt, lte: new Date(filters.dateTo) };
   }
+
+  return await prisma.content.findMany({
+    where: where as any, // Prisma where clause compatibility
+    include: {
+      creator: {
+        select: { name: true, department: true },
+      },
+    },
+    take: query.limit,
+  });
 }
 
 /**
  * Search proposals
  */
-async function searchProposals(searchTerm: string, filters: any, query: any, userId: string) {
-  const where: any = {
+async function searchProposals(
+  searchTerm: string,
+  filters: SearchFilters,
+  query: SearchQuery,
+  userId: string
+) {
+  interface ProposalWhereClause {
+    AND: Array<{
+      OR?: Array<{
+        title?: { contains: string; mode: 'insensitive' };
+        description?: { contains: string; mode: 'insensitive' };
+      }>;
+      createdBy?: string;
+      status?: string;
+      priority?: string;
+      customerId?: string;
+      createdAt?: {
+        gte?: Date;
+        lte?: Date;
+      };
+      [key: string]: unknown;
+    }>;
+  }
+
+  const where: ProposalWhereClause = {
     AND: [
       {
         OR: [
@@ -336,74 +473,63 @@ async function searchProposals(searchTerm: string, filters: any, query: any, use
           { description: { contains: searchTerm, mode: 'insensitive' } },
         ],
       },
-      {
-        // User can only see proposals they created or are assigned to
-        OR: [{ createdBy: userId }, { assignedTo: { some: { id: userId } } }],
-      },
+      { createdBy: userId }, // Security: user can only search their proposals
     ],
   };
 
   if (filters.status) {
-    where.status = filters.status;
+    where.AND.push({ status: filters.status });
   }
 
   if (filters.priority) {
-    where.priority = filters.priority;
+    where.AND.push({ priority: filters.priority });
   }
 
-  try {
-    return await prisma.proposal.findMany({
-      where,
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        priority: true,
-        value: true,
-        currency: true,
-        dueDate: true,
-        createdAt: true,
-        updatedAt: true,
-        creator: {
-          select: {
-            name: true,
-            department: true,
-          },
-        },
-        customer: {
-          select: {
-            name: true,
-            industry: true,
-          },
-        },
-      },
-      take: 50,
-    });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Proposal search failed',
-      ErrorCodes.DATA.SEARCH_FAILED,
-      {
-        component: 'SearchRoute',
-        operation: 'searchProposals',
-        userStories: ['US-1.2'],
-        hypotheses: ['H1'],
-        searchTerm,
-        filters,
-        userId,
-      }
-    );
-    return [];
+  if (filters.customerId) {
+    where.AND.push({ customerId: filters.customerId });
   }
+
+  if (filters.dateFrom || filters.dateTo) {
+    const dateFilter: { gte?: Date; lte?: Date } = {};
+    if (filters.dateFrom) dateFilter.gte = new Date(filters.dateFrom);
+    if (filters.dateTo) dateFilter.lte = new Date(filters.dateTo);
+    where.AND.push({ createdAt: dateFilter });
+  }
+
+  return await prisma.proposal.findMany({
+    where: where as any, // Prisma where clause compatibility
+    include: {
+      customer: {
+        select: { name: true, industry: true },
+      },
+      creator: {
+        select: { name: true, department: true },
+      },
+    },
+    take: query.limit,
+  });
 }
 
 /**
  * Search products
  */
-async function searchProducts(searchTerm: string, filters: any, query: any) {
-  const where: any = {
+async function searchProducts(searchTerm: string, filters: SearchFilters, query: SearchQuery) {
+  interface ProductWhereClause {
+    isActive: boolean;
+    OR?: Array<{
+      name?: { contains: string; mode: 'insensitive' };
+      description?: { contains: string; mode: 'insensitive' };
+      sku?: { contains: string; mode: 'insensitive' };
+      tags?: { has: string };
+    }>;
+    price?: {
+      gte?: number;
+      lte?: number;
+    };
+    [key: string]: unknown;
+  }
+
+  const where: ProductWhereClause = {
     isActive: true,
     OR: [
       { name: { contains: searchTerm, mode: 'insensitive' } },
@@ -413,61 +539,37 @@ async function searchProducts(searchTerm: string, filters: any, query: any) {
     ],
   };
 
-  if (filters.category) {
-    where.category = { has: filters.category };
-  }
-
   if (filters.priceRange) {
     const [min, max] = filters.priceRange;
     where.price = { gte: min, lte: max };
   }
 
-  try {
-    return await prisma.product.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        sku: true,
-        price: true,
-        currency: true,
-        category: true,
-        tags: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      take: 50,
-    });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Product search failed',
-      ErrorCodes.DATA.SEARCH_FAILED,
-      {
-        component: 'SearchRoute',
-        operation: 'searchProducts',
-        userStories: ['US-1.2'],
-        hypotheses: ['H1'],
-        searchTerm,
-        filters,
-      }
-    );
-    return [];
-  }
+  return await prisma.product.findMany({
+    where: where as any, // Prisma where clause compatibility
+    take: query.limit,
+  });
 }
 
 /**
  * Search customers
  */
-async function searchCustomers(searchTerm: string, filters: any, query: any) {
-  const where: any = {
+async function searchCustomers(searchTerm: string, filters: SearchFilters, query: SearchQuery) {
+  interface CustomerWhereClause {
+    status: string;
+    OR?: Array<{
+      name?: { contains: string; mode: 'insensitive' };
+      email?: { contains: string; mode: 'insensitive' };
+    }>;
+    industry?: { contains: string; mode: 'insensitive' };
+    tier?: string;
+    [key: string]: unknown;
+  }
+
+  const where: CustomerWhereClause = {
     status: 'ACTIVE',
     OR: [
       { name: { contains: searchTerm, mode: 'insensitive' } },
       { email: { contains: searchTerm, mode: 'insensitive' } },
-      { industry: { contains: searchTerm, mode: 'insensitive' } },
     ],
   };
 
@@ -479,53 +581,43 @@ async function searchCustomers(searchTerm: string, filters: any, query: any) {
     where.tier = filters.tier;
   }
 
-  try {
-    return await prisma.customer.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        industry: true,
-        tier: true,
-        status: true,
-        createdAt: true,
-        _count: {
-          select: {
-            proposals: true,
-          },
-        },
+  return await prisma.customer.findMany({
+    where: where as any, // Prisma where clause compatibility
+    include: {
+      _count: {
+        select: { proposals: true },
       },
-      take: 50,
-    });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Customer search failed',
-      ErrorCodes.DATA.SEARCH_FAILED,
-      {
-        component: 'SearchRoute',
-        operation: 'searchCustomers',
-        userStories: ['US-1.2'],
-        hypotheses: ['H1'],
-        searchTerm,
-        filters,
-      }
-    );
-    return [];
-  }
+    },
+    take: query.limit,
+  });
 }
 
 /**
  * Search users
  */
-async function searchUsers(searchTerm: string, filters: any, query: any) {
-  const where: any = {
+async function searchUsers(searchTerm: string, filters: SearchFilters, query: SearchQuery) {
+  interface UserWhereClause {
+    status: string;
+    OR?: Array<{
+      name?: { contains: string; mode: 'insensitive' };
+      email?: { contains: string; mode: 'insensitive' };
+    }>;
+    department?: { contains: string; mode: 'insensitive' };
+    roles?: {
+      some: {
+        role: {
+          name: { contains: string; mode: 'insensitive' };
+        };
+      };
+    };
+    [key: string]: unknown;
+  }
+
+  const where: UserWhereClause = {
     status: 'ACTIVE',
     OR: [
       { name: { contains: searchTerm, mode: 'insensitive' } },
       { email: { contains: searchTerm, mode: 'insensitive' } },
-      { department: { contains: searchTerm, mode: 'insensitive' } },
     ],
   };
 
@@ -543,44 +635,25 @@ async function searchUsers(searchTerm: string, filters: any, query: any) {
     };
   }
 
-  try {
-    return await prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        department: true,
-        lastLogin: true,
-        roles: {
-          select: {
-            role: {
-              select: {
-                name: true,
-              },
-            },
+  return await prisma.user.findMany({
+    where: where as any, // Prisma where clause compatibility
+    include: {
+      roles: {
+        include: {
+          role: {
+            select: { name: true },
           },
         },
       },
-      take: 50,
-    });
-  } catch (error) {
-    errorHandlingService.processError(error, 'User search failed', ErrorCodes.DATA.SEARCH_FAILED, {
-      component: 'SearchRoute',
-      operation: 'searchUsers',
-      userStories: ['US-1.2'],
-      hypotheses: ['H1'],
-      searchTerm,
-      filters,
-    });
-    return [];
-  }
+    },
+    take: query.limit,
+  });
 }
 
 /**
  * Sort results by relevance score
  */
-function sortByRelevance(results: any[], searchTerm: string) {
+function sortByRelevance(results: SearchResult[], searchTerm: string) {
   return results.sort((a, b) => {
     const scoreA = calculateRelevanceScore(a, searchTerm);
     const scoreB = calculateRelevanceScore(b, searchTerm);
@@ -591,32 +664,29 @@ function sortByRelevance(results: any[], searchTerm: string) {
 /**
  * Calculate relevance score for search result
  */
-function calculateRelevanceScore(item: any, searchTerm: string): number {
+function calculateRelevanceScore(item: SearchResult, searchTerm: string): number {
   let score = 0;
   const term = searchTerm.toLowerCase();
 
-  // Title/name exact match gets highest score
-  if (item.title?.toLowerCase().includes(term) || item.name?.toLowerCase().includes(term)) {
-    score += 10;
+  // Title/name match gets highest score
+  const title = item.title || item.name || '';
+  if (title.toLowerCase().includes(term)) {
+    score += title.toLowerCase() === term ? 100 : 50;
   }
 
-  // Description match gets medium score
+  // Description match
   if (item.description?.toLowerCase().includes(term)) {
-    score += 5;
+    score += 25;
   }
 
-  // Tag/category match gets lower score
+  // Tag match
   if (item.tags?.some((tag: string) => tag.toLowerCase().includes(term))) {
-    score += 3;
+    score += 15;
   }
 
-  // Recent items get slight boost
-  if (item.updatedAt || item.createdAt) {
-    const date = new Date(item.updatedAt || item.createdAt);
-    const daysSince = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysSince < 30) {
-      score += 1;
-    }
+  // Exact matches get bonus
+  if (title.toLowerCase() === term) {
+    score += 200;
   }
 
   return score;
@@ -625,68 +695,25 @@ function calculateRelevanceScore(item: any, searchTerm: string): number {
 /**
  * Sort results by specified field
  */
-function sortByField(results: any[], field: string, order: 'asc' | 'desc') {
+function sortByField(results: SearchResult[], field: string, order: 'asc' | 'desc') {
   return results.sort((a, b) => {
-    let valueA = a[field];
-    let valueB = b[field];
+    let valueA: string | number | Date = a[field] as string | number | Date;
+    let valueB: string | number | Date = b[field] as string | number | Date;
 
-    if (field === 'date') {
-      valueA = new Date(a.updatedAt || a.createdAt).getTime();
-      valueB = new Date(b.updatedAt || b.createdAt).getTime();
+    // Handle different field types
+    if (typeof valueA === 'string' && typeof valueB === 'string') {
+      valueA = valueA.toLowerCase();
+      valueB = valueB.toLowerCase();
     }
 
+    // Handle missing values for title/name
     if (field === 'title') {
-      valueA = a.title || a.name || '';
-      valueB = b.title || b.name || '';
+      valueA = (a.title || a.name || '') as string;
+      valueB = (b.title || b.name || '') as string;
     }
 
-    if (order === 'asc') {
-      return valueA > valueB ? 1 : -1;
-    } else {
-      return valueA < valueB ? 1 : -1;
-    }
+    if (valueA < valueB) return order === 'asc' ? -1 : 1;
+    if (valueA > valueB) return order === 'asc' ? 1 : -1;
+    return 0;
   });
-}
-
-/**
- * Track search event for analytics
- */
-async function trackSearchEvent(userId: string, query: string, type: string) {
-  try {
-    await prisma.hypothesisValidationEvent.create({
-      data: {
-        userId,
-        hypothesis: 'H1', // Content Discovery hypothesis
-        userStoryId: 'US-1.1',
-        componentId: 'SearchEngine',
-        action: 'search_executed',
-        measurementData: {
-          query,
-          type,
-          timestamp: new Date(),
-        },
-        targetValue: 2.0, // Target: results in <2 seconds
-        actualValue: 1.5, // Will be updated with actual time
-        performanceImprovement: 0, // Will be calculated
-        userRole: 'user',
-        sessionId: `search_${Date.now()}`,
-      },
-    });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to track search event',
-      ErrorCodes.ANALYTICS.TRACKING_ERROR,
-      {
-        component: 'SearchRoute',
-        operation: 'trackSearchEvent',
-        userStories: ['US-1.1'],
-        hypotheses: ['H1'],
-        userId,
-        query,
-        type,
-      }
-    );
-    // Don't fail the search if analytics tracking fails
-  }
 }

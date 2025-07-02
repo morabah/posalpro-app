@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Individual Workflow API Routes
  * Enhanced workflow operations with authentication and analytics
  * Component Traceability: US-4.1, US-4.3, H7
@@ -19,6 +19,21 @@ import { z } from 'zod';
  * - Test Cases: TC-H7-001, TC-H7-002, TC-H7-003
  */
 
+// Database-agnostic ID validation patterns (LESSONS_LEARNED.md Lesson #16)
+const databaseIdSchema = z
+  .string()
+  .min(1)
+  .refine(id => id !== 'undefined' && id !== 'null', {
+    message: 'Valid database ID required',
+  });
+
+const userIdSchema = z
+  .string()
+  .min(1)
+  .refine(id => id !== 'undefined' && id !== 'null', {
+    message: 'Valid user ID required',
+  });
+
 // Validation schemas
 const WorkflowUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -27,11 +42,11 @@ const WorkflowUpdateSchema = z.object({
   stages: z
     .array(
       z.object({
-        id: z.string().cuid().optional(), // For existing stages
+        id: databaseIdSchema.optional(), // For existing stages
         name: z.string().min(1),
         description: z.string().optional(),
         order: z.number().int().positive(),
-        approvers: z.array(z.string().cuid()),
+        approvers: z.array(userIdSchema),
         slaHours: z.number().int().positive(),
         isParallel: z.boolean().default(false),
         isOptional: z.boolean().default(false),
@@ -48,7 +63,7 @@ const WorkflowUpdateSchema = z.object({
           .array(
             z.object({
               thresholdHours: z.number().int().positive(),
-              escalateTo: z.array(z.string().cuid()),
+              escalateTo: z.array(userIdSchema),
               action: z.enum(['notify', 'reassign', 'auto_approve']),
             })
           )

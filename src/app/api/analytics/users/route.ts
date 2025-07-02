@@ -12,6 +12,7 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -25,13 +26,45 @@ import { z } from 'zod';
  * - Test Cases: TC-H5-001, TC-H8-003
  */
 
+const COMPONENT_MAPPING = {
+  userStories: ['US-5.1', 'US-6.1'],
+  acceptanceCriteria: ['AC-5.1.1', 'AC-6.1.1'],
+  methods: ['getUserAnalytics()', 'trackAnalyticsAccessEvent()'],
+  hypotheses: ['H8'],
+  testCases: ['TC-H8-003'],
+};
+
+/**
+ * Analytics summary interface for tracking
+ */
+interface AnalyticsSummary {
+  totalUsers: number;
+  activeUsers: number;
+  totalEvents: number;
+  totalMetrics: number;
+  avgPerformanceImprovement: number;
+  responseTime?: number;
+  [key: string]: number | undefined; // Index signature for JSON compatibility
+}
+
+// Database-agnostic ID validation patterns (from LESSONS_LEARNED.md)
+const userIdSchema = z
+  .string()
+  .min(1)
+  .refine(id => id !== 'undefined' && id !== 'null', {
+    message: 'Valid user ID required',
+  });
+
+/**
+ * User analytics query schema
+ */
 const UserAnalyticsSchema = z.object({
-  userId: z.string().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
-  limit: z.coerce.number().min(1).max(100).default(50),
-  includeEvents: z.coerce.boolean().default(true),
-  includeMetrics: z.coerce.boolean().default(true),
+  userId: userIdSchema.optional(),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+  includeEvents: z.coerce.boolean().default(false),
+  includeMetrics: z.coerce.boolean().default(false),
+  limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
 /**
@@ -65,8 +98,8 @@ export async function GET(request: NextRequest) {
     const queryParams = Object.fromEntries(searchParams);
     const validatedQuery = UserAnalyticsSchema.parse(queryParams);
 
-    // Build date filters
-    const dateFilters: any = {};
+    // Build date filters with proper typing
+    const dateFilters: Prisma.DateTimeFilter = {};
     if (validatedQuery.dateFrom) {
       dateFilters.gte = new Date(validatedQuery.dateFrom);
     }
@@ -163,7 +196,7 @@ export async function GET(request: NextRequest) {
       },
       users: users.map(user => ({
         ...user,
-        roles: user.roles.map((r: any) => r.role.name),
+        roles: user.roles.map((r: { role: { name: string } }) => r.role.name),
         eventCount: events.filter(e => e.userId === user.id).length,
         lastActivity: events.find(e => e.userId === user.id)?.timestamp || user.lastLogin,
       })),
@@ -234,7 +267,11 @@ export async function GET(request: NextRequest) {
 /**
  * Track analytics access event for hypothesis validation
  */
-async function trackAnalyticsAccessEvent(userId: string, analyticsType: string, summary: any) {
+async function trackAnalyticsAccessEvent(
+  userId: string,
+  analyticsType: string,
+  summary: AnalyticsSummary
+) {
   try {
     await prisma.hypothesisValidationEvent.create({
       data: {
@@ -245,7 +282,12 @@ async function trackAnalyticsAccessEvent(userId: string, analyticsType: string, 
         action: 'analytics_accessed',
         measurementData: {
           analyticsType,
-          summary,
+          totalUsers: summary.totalUsers,
+          activeUsers: summary.activeUsers,
+          totalEvents: summary.totalEvents,
+          totalMetrics: summary.totalMetrics,
+          avgPerformanceImprovement: summary.avgPerformanceImprovement,
+          responseTime: summary.responseTime || 0,
           timestamp: new Date().toISOString(),
         },
         targetValue: 1000, // Target: analytics load in <1 second

@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Security Hardening Framework
  * Implements rate limiting, input validation, security headers, and audit logging
  *
@@ -8,6 +8,7 @@ import { logger } from '@/utils/logger';/**
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { databaseIdSchema } from '../validation/schemas/common'; // ✅ Import database-agnostic ID schema
 
 // Rate limiting utilities
 export class RateLimiter {
@@ -428,7 +429,7 @@ export const SecuritySchemas = {
   proposalCreation: z.object({
     name: z.string().min(3).max(100),
     description: z.string().max(1000),
-    clientId: z.string().uuid(),
+    clientId: databaseIdSchema, // ✅ FIXED: Using database-agnostic databaseIdSchema instead of z.string().uuid()
     deadline: z.string().datetime(),
   }),
 

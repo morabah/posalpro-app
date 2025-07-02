@@ -6,6 +6,12 @@
  */
 
 import { z } from 'zod';
+import {
+  databaseIdArraySchema,
+  databaseIdSchema,
+  optionalDatabaseIdSchema,
+  userIdSchema,
+} from './common';
 import { baseEntitySchema, urlSchema, validationUtils } from './shared';
 
 /**
@@ -89,7 +95,7 @@ export const productAttributeSchema = z.object({
  * Product option validation schema
  */
 export const productOptionSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   name: validationUtils.stringWithLength(1, 100, 'Option name'),
   description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   type: z.enum(['boolean', 'select', 'multiselect', 'text', 'number']),
@@ -104,7 +110,7 @@ export const productOptionSchema = z.object({
  * Product resource validation schema
  */
 export const productResourceSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   name: validationUtils.stringWithLength(1, 200, 'Resource name'),
   type: z.enum(['document', 'image', 'video', 'link', 'specification']),
   url: urlSchema,
@@ -132,22 +138,22 @@ export const relationshipConditionSchema = z.object({
  * Product relationship validation schema
  */
 export const productRelationshipSchema = z.object({
-  id: z.string().uuid(),
-  sourceProductId: z.string().uuid(),
-  targetProductId: z.string().uuid(),
+  id: databaseIdSchema,
+  sourceProductId: databaseIdSchema,
+  targetProductId: databaseIdSchema,
   type: relationshipTypeSchema,
   quantity: z.number().int().min(1).optional(),
   condition: relationshipConditionSchema.optional(),
   description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   isActive: z.boolean().default(true),
-  createdBy: z.string().uuid(),
+  createdBy: userIdSchema,
 });
 
 /**
  * Validation rule condition validation schema
  */
 export const validationConditionSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   attribute: validationUtils.stringWithLength(1, 100, 'Validation attribute'),
   operator: conditionOperatorSchema,
   value: z.union([z.string(), z.number(), z.boolean()]),
@@ -158,7 +164,7 @@ export const validationConditionSchema = z.object({
  * Validation action validation schema
  */
 export const validationActionSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   type: z.enum(['block', 'warn', 'fix', 'notify']),
   message: validationUtils.stringWithLength(1, 500, 'Validation message'),
   fixSuggestion: z
@@ -166,14 +172,14 @@ export const validationActionSchema = z.object({
     .max(1000, 'Fix suggestion must be less than 1000 characters')
     .optional(),
   autoFix: z.boolean().default(false),
-  notificationTargets: z.array(z.string().uuid()).optional(),
+  notificationTargets: databaseIdArraySchema.optional(),
 });
 
 /**
  * Product validation rule validation schema
  */
 export const productValidationRuleSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   name: validationUtils.stringWithLength(1, 200, 'Validation rule name'),
   description: z.string().max(1000, 'Description must be less than 1000 characters'),
   category: z.enum(['compatibility', 'license', 'configuration', 'compliance', 'custom']),
@@ -183,14 +189,14 @@ export const productValidationRuleSchema = z.object({
   severity: z.enum(['error', 'warning', 'info']),
   isActive: z.boolean().default(true),
   priority: z.number().int().min(1).max(10).default(5),
-  createdBy: z.string().uuid(),
+  createdBy: userIdSchema,
 });
 
 /**
  * Product usage analytics validation schema
  */
 export const productUsageAnalyticsSchema = z.object({
-  productId: z.string().uuid(),
+  productId: databaseIdSchema,
   totalUsage: z.number().int().min(0),
   successRate: z.number().min(0).max(100),
   averageConfigurationTime: z.number().min(0),
@@ -205,8 +211,8 @@ export const productUsageAnalyticsSchema = z.object({
  * License dependency validation schema
  */
 export const licenseDependencySchema = z.object({
-  id: z.string().uuid(),
-  productId: z.string().uuid(),
+  id: databaseIdSchema,
+  productId: databaseIdSchema,
   licenseType: z.enum(['commercial', 'open_source', 'proprietary', 'subscription', 'perpetual']),
   licenseName: validationUtils.stringWithLength(1, 200, 'License name'),
   version: z.string().optional(),
@@ -271,8 +277,8 @@ export const productSchema = baseEntitySchema.extend({
 
   // Client-specific settings
   clientSpecificPricing: z.boolean().default(false),
-  restrictedClients: z.array(z.string().uuid()).optional(),
-  approvedClients: z.array(z.string().uuid()).optional(),
+  restrictedClients: databaseIdArraySchema.optional(),
+  approvedClients: databaseIdArraySchema.optional(),
 
   // Analytics and Performance (supporting H8 hypothesis)
   usageAnalytics: productUsageAnalyticsSchema.optional(),
@@ -310,7 +316,7 @@ export const createProductSchema = productSchema.omit({
  * Product update validation schema
  */
 export const updateProductSchema = productSchema.partial().extend({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
 });
 
 /**
@@ -325,7 +331,7 @@ export const productSearchSchema = z.object({
   tags: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
   isVisible: z.boolean().optional(),
-  clientId: z.string().uuid().optional(),
+  clientId: optionalDatabaseIdSchema,
   page: z.number().int().min(1).default(1),
   limit: z.number().int().min(1).max(100).default(20),
   sortBy: z.enum(['name', 'price', 'category', 'createdAt', 'updatedAt', 'usage']).default('name'),
@@ -336,7 +342,7 @@ export const productSearchSchema = z.object({
  * Product configuration validation schema
  */
 export const productConfigurationSchema = z.object({
-  productId: z.string().uuid(),
+  productId: databaseIdSchema,
   selectedOptions: z.record(
     z.string(),
     z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])
@@ -344,7 +350,7 @@ export const productConfigurationSchema = z.object({
   quantity: z.number().int().min(1),
   customizations: z.array(z.string()).optional(),
   notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional(),
-  clientId: z.string().uuid().optional(),
+  clientId: optionalDatabaseIdSchema,
   validationOverrides: z.array(z.string()).optional(), // Override validation rule IDs
 });
 
@@ -352,9 +358,9 @@ export const productConfigurationSchema = z.object({
  * Product license validation schema for H8 hypothesis
  */
 export const productLicenseValidationSchema = z.object({
-  productId: z.string().uuid(),
+  productId: databaseIdSchema,
   requiredLicenses: z.array(licenseDependencySchema),
-  availableLicenses: z.array(z.string().uuid()),
+  availableLicenses: databaseIdArraySchema,
   conflicts: z.array(z.string()).optional(),
   warnings: z.array(z.string()).optional(),
   recommendations: z.array(z.string()).optional(),
@@ -367,7 +373,7 @@ export const productLicenseValidationSchema = z.object({
  */
 export const productBulkOperationSchema = z.object({
   operation: z.enum(['create', 'update', 'delete', 'activate', 'deactivate']),
-  productIds: z.array(z.string().uuid()).min(1, 'At least one product ID is required'),
+  productIds: databaseIdArraySchema.min(1, 'At least one product ID is required'),
   data: z.record(z.string(), z.any()).optional(),
   validateFirst: z.boolean().default(true),
   continueOnError: z.boolean().default(false),

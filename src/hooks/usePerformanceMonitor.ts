@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Performance Monitoring Hook
  * Enhanced to detect and prevent infinite loops and performance violations
  */
@@ -10,7 +10,16 @@ interface PerformanceViolation {
   duration: number;
   timestamp: number;
   component?: string;
-  details?: any;
+  details?: {
+    renderCount?: number;
+    rendersPerSecond?: number;
+    effectName?: string;
+    rapidExecutions?: number;
+    pattern?: string;
+    handlerName?: string;
+    violationType?: string;
+    [key: string]: unknown;
+  };
 }
 
 interface PerformanceMetrics {

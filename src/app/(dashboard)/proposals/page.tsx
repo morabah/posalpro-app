@@ -8,9 +8,30 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { DocumentTextIcon, PlusIcon, FolderOpenIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, DocumentTextIcon, FolderOpenIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+
+/**
+ * Type definitions for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
+interface ProposalTrackingMetadata {
+  actionId?: string;
+  destination?: string;
+  proposalId?: string;
+  section?: string;
+  [key: string]: unknown;
+}
+
+interface QuickAction {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  href: string;
+  color: string;
+}
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -26,7 +47,7 @@ export default function ProposalsPage() {
   const [sessionStartTime] = useState(Date.now());
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: ProposalTrackingMetadata = {}) => {
       console.log('Proposals Analytics:', {
         action,
         metadata,
@@ -40,7 +61,7 @@ export default function ProposalsPage() {
     [sessionStartTime]
   );
 
-  const quickActions = [
+  const quickActions: QuickAction[] = [
     {
       id: 'create-proposal',
       title: 'Create New Proposal',
@@ -68,7 +89,7 @@ export default function ProposalsPage() {
   ];
 
   const handleQuickAction = useCallback(
-    (action: any) => {
+    (action: QuickAction) => {
       trackAction('quick_action_clicked', {
         actionId: action.id,
         destination: action.href,

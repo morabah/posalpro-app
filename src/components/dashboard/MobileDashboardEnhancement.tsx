@@ -19,6 +19,9 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useMobileDetection } from '@/hooks/useMobileDetection';
 import { UserType } from '@/types';
+import { Customer } from '@/types/entities/customer';
+import { Product } from '@/types/entities/product';
+import { Proposal } from '@/types/entities/proposal';
 import {
   AdjustmentsHorizontalIcon,
   BoltIcon,
@@ -27,13 +30,14 @@ import {
   DeviceTabletIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
+import { Content } from '@prisma/client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-interface DashboardData {
-  proposals: any[];
-  customers: any[];
-  products: any[];
-  content: any[];
+interface MobileDashboardData {
+  proposals: Proposal[];
+  customers: Customer[];
+  products: Product[];
+  content: Content[];
   metrics: {
     activeProposals: number;
     pendingTasks: number;
@@ -69,7 +73,7 @@ interface MobileDashboardEnhancementProps {
   };
   loading?: boolean;
   error?: string | null;
-  data: DashboardData;
+  data: MobileDashboardData;
   proposals: ProposalItem[];
   priorityItems: PriorityItem[];
   onQuickAction?: (action: string) => void;
@@ -301,7 +305,7 @@ export function MobileDashboardEnhancement({
 
       return nextMode;
     });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   /**

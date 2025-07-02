@@ -15,6 +15,18 @@
 import { useResponsive } from '@/hooks/useResponsive';
 import { useCallback, useEffect, useRef } from 'react';
 
+/**
+ * Type definitions for better type safety
+ * Following CORE_REQUIREMENTS.md TypeScript compliance standards
+ */
+interface AnalyticsData {
+  userId?: string;
+  componentName?: string;
+  action?: string;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 interface MobileOptimizationConfig {
   enableReducedAnalytics?: boolean;
   debounceDelay?: number;
@@ -26,7 +38,7 @@ interface MobileOptimizationResult {
   isMobileOptimized: boolean;
   debouncedCallback: (callback: () => void, delay?: number) => void;
   throttledCallback: (callback: () => void, delay?: number) => void;
-  optimizedAnalyticsTrack: (event: string, data?: any) => void;
+  optimizedAnalyticsTrack: (event: string, data?: AnalyticsData) => void;
   memoryPressureWarning: boolean;
 }
 
@@ -99,7 +111,7 @@ export function useMobileOptimization(
 
   // ✅ MOBILE OPTIMIZATION: Reduced analytics tracking for mobile performance
   const optimizedAnalyticsTrack = useCallback(
-    (event: string, data?: any) => {
+    (event: string, data?: AnalyticsData) => {
       if (!enableReducedAnalytics || !isMobileOptimized) {
         // Full analytics for desktop
         console.log('Analytics:', event, data);
@@ -133,14 +145,16 @@ export function useMobileOptimization(
 
     const checkMemoryPressure = () => {
       if ('memory' in performance) {
-        const memInfo = (performance as any).memory;
+        // Type assertion for memory API
+        const memInfo = (performance as Performance & { memory?: { usedJSHeapSize: number } })
+          .memory;
         if (memInfo && memInfo.usedJSHeapSize > maxMemoryUsage) {
           memoryPressureWarning.current = true;
           console.warn('Memory pressure detected on mobile device');
 
           // Trigger garbage collection if available
           if ('gc' in window) {
-            (window as any).gc();
+            (window as Window & { gc?: () => void }).gc?.();
           }
         } else {
           memoryPressureWarning.current = false;

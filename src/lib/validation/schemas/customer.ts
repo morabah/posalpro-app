@@ -7,6 +7,13 @@
 
 import { z } from 'zod';
 import {
+  databaseIdArraySchema,
+  databaseIdSchema,
+  optionalDatabaseIdSchema,
+  optionalUserIdSchema,
+  userIdSchema,
+} from './common';
+import {
   addressSchema,
   baseEntitySchema,
   emailSchema,
@@ -76,8 +83,8 @@ export const companySizeSchema = z.enum([
  * Customer contact validation schema
  */
 export const customerContactSchema = z.object({
-  id: z.string().uuid(),
-  customerId: z.string().uuid(),
+  id: databaseIdSchema,
+  customerId: databaseIdSchema,
   firstName: validationUtils.stringWithLength(1, 50, 'First name'),
   lastName: validationUtils.stringWithLength(1, 50, 'Last name'),
   jobTitle: z.string().max(100, 'Job title must be less than 100 characters').optional(),
@@ -110,7 +117,7 @@ export const customerContactSchema = z.object({
  * Customer health metrics validation schema
  */
 export const customerHealthMetricsSchema = z.object({
-  customerId: z.string().uuid(),
+  customerId: databaseIdSchema,
   healthScore: z.number().min(0).max(100),
   engagementScore: z.number().min(0).max(100),
   satisfactionScore: z.number().min(0).max(100),
@@ -135,7 +142,7 @@ export const customerHealthMetricsSchema = z.object({
  * Customer business metrics validation schema
  */
 export const customerBusinessMetricsSchema = z.object({
-  customerId: z.string().uuid(),
+  customerId: databaseIdSchema,
   annualRevenue: z.number().min(0).optional(),
   employeeCount: z.number().int().min(1).optional(),
   marketCap: z.number().min(0).optional(),
@@ -158,8 +165,8 @@ export const customerBusinessMetricsSchema = z.object({
  * Customer opportunity validation schema
  */
 export const customerOpportunitySchema = z.object({
-  id: z.string().uuid(),
-  customerId: z.string().uuid(),
+  id: databaseIdSchema,
+  customerId: databaseIdSchema,
   title: validationUtils.stringWithLength(1, 200, 'Opportunity title'),
   description: z.string().max(2000, 'Description must be less than 2000 characters').optional(),
   value: z.number().min(0),
@@ -174,8 +181,8 @@ export const customerOpportunitySchema = z.object({
     'closed_lost',
   ]),
   expectedCloseDate: z.date(),
-  products: z.array(z.string().uuid()).optional(),
-  assignedTo: z.string().uuid(),
+  products: databaseIdArraySchema.optional(),
+  assignedTo: userIdSchema,
   source: z.enum(['inbound', 'outbound', 'referral', 'existing_customer', 'partner']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
   tags: z.array(z.string()).optional(),
@@ -187,9 +194,9 @@ export const customerOpportunitySchema = z.object({
  * Customer interaction validation schema
  */
 export const customerInteractionSchema = z.object({
-  id: z.string().uuid(),
-  customerId: z.string().uuid(),
-  contactId: z.string().uuid().optional(),
+  id: databaseIdSchema,
+  customerId: databaseIdSchema,
+  contactId: optionalDatabaseIdSchema,
   type: z.enum([
     'meeting',
     'call',
@@ -208,18 +215,18 @@ export const customerInteractionSchema = z.object({
   duration: z.number().int().min(0).optional(), // in minutes
   outcome: z.enum(['positive', 'neutral', 'negative', 'follow_up_required']).optional(),
   nextSteps: z.string().max(1000, 'Next steps must be less than 1000 characters').optional(),
-  participants: z.array(z.string().uuid()).optional(),
+  participants: databaseIdArraySchema.optional(),
   attachments: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
-  recordedBy: z.string().uuid(),
+  recordedBy: userIdSchema,
 });
 
 /**
  * Customer analytics validation schema (supporting H4 hypothesis)
  */
 export const customerAnalyticsSchema = z.object({
-  customerId: z.string().uuid(),
+  customerId: databaseIdSchema,
   // H4 Cross-Department Coordination Metrics
   coordinationEvents: z.number().int().min(0),
   departmentInteractions: z.record(z.string(), z.number()),
@@ -251,7 +258,7 @@ export const customerAnalyticsSchema = z.object({
  * Customer segmentation validation schema
  */
 export const customerSegmentationSchema = z.object({
-  customerId: z.string().uuid(),
+  customerId: databaseIdSchema,
   primarySegment: z.enum([
     'strategic',
     'key_account',
@@ -314,9 +321,9 @@ export const customerSchema = baseEntitySchema.extend({
   totalRevenue: z.number().min(0).default(0),
 
   // Relationship Management
-  accountManager: z.string().uuid().optional(),
-  salesRep: z.string().uuid().optional(),
-  technicalContact: z.string().uuid().optional(),
+  accountManager: optionalUserIdSchema,
+  salesRep: optionalUserIdSchema,
+  technicalContact: optionalUserIdSchema,
 
   // Preferences and Configuration
   preferredContactMethod: z.enum(['email', 'phone', 'in_person', 'portal']).default('email'),
@@ -399,7 +406,7 @@ export const createCustomerSchema = customerSchema.omit({
  * Customer update validation schema
  */
 export const updateCustomerSchema = customerSchema.partial().extend({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
 });
 
 /**
@@ -412,7 +419,7 @@ export const customerSearchSchema = z.object({
   status: z.array(customerStatusSchema).optional(),
   companySize: z.array(companySizeSchema).optional(),
   engagementLevel: z.array(engagementLevelSchema).optional(),
-  accountManager: z.string().uuid().optional(),
+  accountManager: optionalUserIdSchema,
   healthScoreMin: z.number().min(0).max(100).optional(),
   healthScoreMax: z.number().min(0).max(100).optional(),
   revenueMin: z.number().min(0).optional(),
@@ -443,7 +450,7 @@ export const customerSearchSchema = z.object({
  */
 export const customerBulkOperationSchema = z.object({
   operation: z.enum(['update', 'delete', 'activate', 'deactivate', 'segment', 'tag']),
-  customerIds: z.array(z.string().uuid()).min(1, 'At least one customer ID is required'),
+  customerIds: databaseIdArraySchema.min(1, 'At least one customer ID is required'),
   data: z.record(z.string(), z.any()).optional(),
   validateFirst: z.boolean().default(true),
   continueOnError: z.boolean().default(false),
@@ -453,10 +460,10 @@ export const customerBulkOperationSchema = z.object({
  * Customer coordination validation schema (supporting H4 hypothesis)
  */
 export const customerCoordinationSchema = z.object({
-  customerId: z.string().uuid(),
+  customerId: databaseIdSchema,
   departments: z.array(z.string()).min(1, 'At least one department is required'),
   coordinationType: z.enum(['proposal', 'support', 'project', 'review', 'planning']),
-  participants: z.array(z.string().uuid()),
+  participants: databaseIdArraySchema,
   coordinationDate: z.date(),
   outcome: z.enum(['successful', 'partial', 'failed', 'pending']).optional(),
   efficiency: z.number().min(0).max(100).optional(),
