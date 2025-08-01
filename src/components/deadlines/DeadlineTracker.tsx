@@ -103,7 +103,7 @@ const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({
 
 // Select component placeholder - using native select for now
 const Select: React.FC<{
-  options: { value: string; label: string }[];
+  options: Array<{ value: string; label: string }>;
   value?: string;
   onChange?: (value: string) => void;
   placeholder?: string;

@@ -9,7 +9,7 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -126,7 +126,7 @@ export default function ContentSearchPage() {
 
   // Standardized error handling
   const errorHandlingService = ErrorHandlingService.getInstance();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Mock content data
   const allContent: ContentItem[] = [
@@ -216,7 +216,7 @@ export default function ContentSearchPage() {
 
   const trackAction = useCallback(
     (action: string, metadata: ContentTrackingMetadata = {}) => {
-      analytics.track('content_search_action', {
+      analytics('content_search_action', {
         action,
         metadata: {
           ...metadata,
@@ -225,8 +225,7 @@ export default function ContentSearchPage() {
           hypothesis: 'H1',
           sessionDuration: Date.now() - sessionStartTime,
         },
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [sessionStartTime, analytics]
   );
@@ -359,12 +358,12 @@ export default function ContentSearchPage() {
 
       if (filterType === 'type' || filterType === 'category' || filterType === 'tags') {
         // Handle array filters
-        const array = newFilters[filterType] as string[];
-        const stringValue = value as string;
+        const array = newFilters[filterType];
+        const stringValue = value;
         if (array.includes(stringValue)) {
-          (newFilters[filterType] as string[]) = array.filter(item => item !== stringValue);
+          (newFilters[filterType]) = array.filter(item => item !== stringValue);
         } else {
-          (newFilters[filterType] as string[]) = [...array, stringValue];
+          (newFilters[filterType]) = [...array, stringValue];
         }
       } else {
         // Handle non-array filters with proper typing
@@ -575,7 +574,7 @@ export default function ContentSearchPage() {
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Date Range</h4>
                   <select
                     value={selectedFilters.dateRange}
-                    onChange={e => handleFilterChange('dateRange', e.target.value as FilterValue)}
+                    onChange={e => handleFilterChange('dateRange', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Time</option>
@@ -591,7 +590,7 @@ export default function ContentSearchPage() {
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Sort By</h4>
                   <select
                     value={selectedFilters.sortBy}
-                    onChange={e => handleFilterChange('sortBy', e.target.value as FilterValue)}
+                    onChange={e => handleFilterChange('sortBy', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
                   >
                     <option value="relevance">Relevance</option>
@@ -601,7 +600,7 @@ export default function ContentSearchPage() {
                   </select>
                   <select
                     value={selectedFilters.sortOrder}
-                    onChange={e => handleFilterChange('sortOrder', e.target.value as FilterValue)}
+                    onChange={e => handleFilterChange('sortOrder', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="desc">Descending</option>

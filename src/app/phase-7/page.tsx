@@ -6,7 +6,7 @@
  * Based on H7 hypothesis validation and PROMPT_H7_DEADLINE_MANAGEMENT.md
  */
 
-import { useAuth } from '@/components/providers/AuthProvider';
+import { useAuth } from '@/hooks/auth/useAuth';
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';

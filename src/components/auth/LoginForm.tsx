@@ -128,17 +128,10 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
   const password = watch('password');
   const allValues = watch();
 
-  // Debug register function
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'test') {
-      const emailRegister = register('email');
-      const passwordRegister = register('password');
-      console.log('=== REGISTER DEBUG ===');
-      console.log('emailRegister:', emailRegister);
-      console.log('passwordRegister:', passwordRegister);
-      console.log('=== END REGISTER DEBUG ===');
-    }
-  }, [register]);
+  const lastAnalyticsTime = useRef(0);
+
+  // ✅ PERFORMANCE FIX: Removed debug logging to reduce console clutter
+  // Debug logging was causing excessive console output in development
 
   // ✅ PERFORMANCE FIX: Throttled debug logging for development (only when explicitly needed)
   const lastDebugTime = useRef(0);

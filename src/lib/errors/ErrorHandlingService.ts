@@ -332,7 +332,7 @@ export class ErrorHandlingService {
 
     // Use user-friendly message if available
     if (standardError.metadata?.userFriendlyMessage) {
-      return standardError.metadata.userFriendlyMessage as string;
+      return standardError.metadata.userFriendlyMessage;
     }
 
     // Default messages based on error category

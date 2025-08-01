@@ -1,6 +1,7 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["fullTextIndex", "fullTextSearch"]
 }
 
 datasource db {
@@ -41,6 +42,9 @@ model User {
   validationRules          ValidationRule[]
   assignedProposals        Proposal[]                  @relation("ProposalAssignees")
 
+  @@index([name])
+  @@index([department])
+  @@index([status])
   @@map("users")
 }
 
@@ -512,6 +516,8 @@ model Customer {
   @@index([status, tier])
   @@index([industry])
   @@index([cloudId])
+  @@index([name])
+  @@index([email])
   @@map("customers")
 }
 
@@ -650,9 +656,12 @@ model Product {
   proposalProducts  ProposalProduct[]
   validationRules   ValidationRule[]
 
-  @@index([isActive, category])
+  @@index([isActive, createdAt(sort: Desc)])
+  @@index([isActive, price])
   @@index([sku])
-  @@index([isActive, category], map: "idx_products_active_category")
+  @@index([category], type: Gin)
+  @@index([tags], type: Gin)
+
   @@map("products")
 }
 
@@ -819,6 +828,8 @@ model ApprovalWorkflow {
   creator            User                @relation(fields: [createdBy], references: [id])
   stages             WorkflowStage[]
 
+  @@index([name])
+  @@index([description])
   @@index([entityType, isActive])
   @@map("approval_workflows")
 }

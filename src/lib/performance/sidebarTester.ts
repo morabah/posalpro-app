@@ -173,7 +173,7 @@ export class SidebarTester {
 
     const errors: string[] = [];
     const warnings: string[] = [];
-    let passed = true;
+    const passed = true;
     let totalAccessTests = 0;
 
     try {
@@ -223,7 +223,7 @@ export class SidebarTester {
 
     const errors: string[] = [];
     const warnings: string[] = [];
-    let passed = true;
+    const passed = true;
     let expandCollapseCount = 0;
 
     try {
@@ -406,7 +406,7 @@ export class SidebarTester {
 
     const errors: string[] = [];
     const warnings: string[] = [];
-    let passed = true;
+    const passed = true;
 
     try {
       // Test expanded groups state

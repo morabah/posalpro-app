@@ -12,7 +12,7 @@
 'use client';
 
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import {
@@ -85,7 +85,7 @@ export default function DatabaseSyncPanel({
   onConflictDetected,
 }: DatabaseSyncPanelProps) {
   const { data: session, status: sessionStatus } = useSession();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const apiClient = useApiClient();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -135,13 +135,12 @@ export default function DatabaseSyncPanel({
         const startTime = Date.now();
 
         // Track database status check analytics
-        analytics.track('database_status_check_started', {
+        analytics('database_status_check_started', {
           component: 'DatabaseSyncPanel',
           databaseType: type,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
 
         // Use centralized API client instead of direct fetch
         const response = await apiClient.post<{
@@ -169,15 +168,14 @@ export default function DatabaseSyncPanel({
         }
 
         // Track successful status check
-        analytics.track('database_status_check_success', {
+        analytics('database_status_check_success', {
           component: 'DatabaseSyncPanel',
           databaseType: type,
-          status: health,
-          latency,
+          latency: latency,
+          health: health,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
 
         return status;
       } catch (error) {
@@ -210,15 +208,14 @@ export default function DatabaseSyncPanel({
         }
 
         // Track error analytics
-        analytics.track('database_status_check_error', {
+        analytics('database_status_check_error', {
           component: 'DatabaseSyncPanel',
           databaseType: type,
           error: standardError.message,
           errorCode: standardError.code,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
 
         return status;
       }
@@ -250,13 +247,12 @@ export default function DatabaseSyncPanel({
         const toastId = toast.loading(`Starting ${direction} synchronization...`);
 
         // Track sync start analytics
-        analytics.track('database_sync_started', {
+        analytics('database_sync_started', {
           component: 'DatabaseSyncPanel',
-          direction,
+          direction: direction,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
 
         // Use centralized API client instead of direct fetch
         const result = await apiClient.post<{
@@ -334,16 +330,15 @@ export default function DatabaseSyncPanel({
         }
 
         // Track successful sync
-        analytics.track('database_sync_success', {
+        analytics('database_sync_success', {
           component: 'DatabaseSyncPanel',
-          direction,
+          direction: direction,
+          duration: duration,
           itemsSynced: syncData.itemsSynced,
           conflicts: syncData.conflicts?.length || 0,
-          duration,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
 
         if (onSyncComplete) {
           onSyncComplete(new Date(), syncRecord);
@@ -388,15 +383,14 @@ export default function DatabaseSyncPanel({
         toast.error(`Sync failed: ${errorMessage}`);
 
         // Track error analytics
-        analytics.track('database_sync_error', {
+        analytics('database_sync_error', {
           component: 'DatabaseSyncPanel',
-          direction,
+          direction: direction,
           error: standardError.message,
           errorCode: standardError.code,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       } finally {
         setIsSyncing(false);
       }

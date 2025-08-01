@@ -14,7 +14,7 @@
 'use client';
 
 import { useAdvancedPerformanceOptimization } from '@/hooks/useAdvancedPerformanceOptimization';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorHandlingService } from '@/lib/errors';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -100,7 +100,7 @@ export function MobileResponsivenessEnhancer({
   const [isOptimized, setIsOptimized] = useState(false);
 
   // Hooks
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { isMobile, isTablet, screenWidth, screenHeight } = useResponsive();
   const { metrics: performanceData, isOptimizing } = useAdvancedPerformanceOptimization({
     enableMobileOptimization: true,
@@ -134,20 +134,18 @@ export function MobileResponsivenessEnhancer({
    */
   const collectViewportMetrics = useCallback((): ViewportMetrics => {
     const screen = window.screen;
-    const viewport = {
+    const viewport: ViewportMetrics = {
       width: window.innerWidth,
       height: window.innerHeight,
       devicePixelRatio: window.devicePixelRatio || 1,
-      orientation: (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait') as
-        | 'portrait'
-        | 'landscape',
+      orientation: (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait') as 'portrait' | 'landscape',
       availableWidth: screen.availWidth || window.innerWidth,
       availableHeight: screen.availHeight || window.innerHeight,
       colorDepth: screen.colorDepth || 24,
       pixelDepth: screen.pixelDepth || 24,
     };
 
-    analytics.track('mobile_viewport_metrics_collected', {
+    analytics('mobile_viewport_metrics_collected', {
       userStories: COMPONENT_MAPPING.userStories,
       hypotheses: COMPONENT_MAPPING.hypotheses,
       measurementData: {
@@ -159,7 +157,7 @@ export function MobileResponsivenessEnhancer({
     });
 
     return viewport;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   /**
@@ -256,7 +254,7 @@ export function MobileResponsivenessEnhancer({
         viewportMetrics.devicePixelRatio.toString()
       );
 
-      analytics.track('viewport_optimization_applied', {
+      analytics('viewport_optimization_applied', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         measurementData: {
@@ -392,7 +390,7 @@ export function MobileResponsivenessEnhancer({
       }
     }
 
-    analytics.track('progressive_enhancement_applied', {
+    analytics('progressive_enhancement_applied', {
       userStories: COMPONENT_MAPPING.userStories,
       hypotheses: COMPONENT_MAPPING.hypotheses,
       measurementData: {
@@ -447,7 +445,7 @@ export function MobileResponsivenessEnhancer({
 
       const enhancementDuration = Date.now() - enhancementStartTime.current;
 
-      analytics.track('mobile_enhancement_completed', {
+      analytics('mobile_enhancement_completed', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         measurementData: {

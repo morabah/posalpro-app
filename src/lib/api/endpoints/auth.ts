@@ -94,13 +94,13 @@ export const authApi = {
   // Session Management
   async getSessions(): Promise<
     ApiResponse<
-      {
+      Array<{
         id: string;
         device: string;
         location: string;
         lastActivity: string;
         current: boolean;
-      }[]
+      }>
     >
   > {
     return apiClient.get('/auth/sessions');

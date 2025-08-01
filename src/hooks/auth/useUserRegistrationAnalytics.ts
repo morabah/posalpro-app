@@ -4,7 +4,7 @@
  * Progressive disclosure and onboarding analytics
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback } from 'react';
 
 interface UserRegistrationMetrics {
@@ -58,39 +58,37 @@ interface OnboardingData {
 }
 
 export const useUserRegistrationAnalytics = () => {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const trackRegistrationFlow = useCallback(
     (metrics: Partial<UserRegistrationMetrics>) => {
-      analytics.track('user_registration_performance', {
+      analytics('user_registration_performance', {
         ...metrics,
-        timestamp: Date.now(),
         component: 'UserRegistrationScreen',
         userStory: 'US-2.3',
         hypothesis: 'H4',
         testCase: 'TC-H4-002',
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackRegistrationStep = useCallback(
     (data: RegistrationStepData) => {
-      analytics.track('registration_step_completion', {
+      analytics('registration_step_completion', {
         step: data.step,
         completionTime: data.completionTime,
         errors: data.errors,
         aiSuggestionsUsed: data.aiSuggestionsUsed,
         dataCompleted: data.dataCompleted,
-        timestamp: Date.now(),
         component: 'RegistrationForm',
         userStory: 'US-2.3',
         hypothesis: 'H4',
-      });
+      }, 'medium');
 
       // Progressive disclosure analytics
       if (data.step === 'role_assignment') {
-        analytics.track('hypothesis_validation', {
+        analytics('hypothesis_validation', {
           hypothesis: 'H4',
           component: 'RoleAssignment',
           action: 'CONFIGURE_CROSS_DEPARTMENT_ACCESS',
@@ -102,8 +100,7 @@ export const useUserRegistrationAnalytics = () => {
           targetValue: 120, // Target: 2 minutes or less
           actualValue: data.completionTime,
           performanceImprovement: Math.max(0, ((120 - data.completionTime) / 120) * 100),
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
     },
     [analytics]
@@ -111,50 +108,47 @@ export const useUserRegistrationAnalytics = () => {
 
   const trackRoleAssignment = useCallback(
     (data: RoleAssignmentData) => {
-      analytics.track('role_assignment', {
+      analytics('role_assignment', {
         userId: data.userId,
         roles: data.roles,
         teamCount: data.teamCount,
         permissionOverrides: data.permissionOverrides,
         aiRecommendationsAccepted: data.aiRecommendationsAccepted,
-        timestamp: Date.now(),
         component: 'RoleAssignmentForm',
         userStory: 'US-2.3',
         acceptanceCriteria: ['AC-2.3.1'],
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackAISuggestion = useCallback(
     (suggestionType: string, accepted: boolean, accuracy: number) => {
-      analytics.track('ai_registration_suggestion', {
+      analytics('ai_registration_suggestion', {
         suggestionType,
         accepted,
         accuracy,
-        timestamp: Date.now(),
         component: 'AIAssistedCompletion',
         userStory: 'Platform Foundation',
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackOnboardingSuccess = useCallback(
     (data: OnboardingData) => {
-      analytics.track('onboarding_success', {
+      analytics('onboarding_success', {
         userId: data.userId,
         completionRate: data.completionRate,
         timeToFirstLogin: data.timeToFirstLogin,
         stepsCompleted: data.stepsCompleted,
         dropoffPoint: data.dropoffPoint,
-        timestamp: Date.now(),
         component: 'UserOnboarding',
         userStory: 'Platform Foundation',
-      });
+      }, 'medium');
 
       // Hypothesis validation for cross-department coordination setup
-      analytics.track('hypothesis_validation', {
+      analytics('hypothesis_validation', {
         hypothesis: 'H4',
         component: 'UserOnboarding',
         action: 'COMPLETE_REGISTRATION',
@@ -166,61 +160,56 @@ export const useUserRegistrationAnalytics = () => {
         targetValue: 80, // Target: 80% completion rate
         actualValue: data.completionRate,
         performanceImprovement: Math.max(0, data.completionRate - 50), // Baseline 50%
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackFormValidation = useCallback(
     (field: string, error: string, step: string) => {
-      analytics.track('registration_form_validation', {
+      analytics('registration_form_validation', {
         field,
         error,
         step,
-        timestamp: Date.now(),
         component: 'RegistrationValidation',
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackNotificationPreferences = useCallback(
     (preferences: Record<string, boolean>, aiRecommendations: number) => {
-      analytics.track('notification_preferences_setup', {
+      analytics('notification_preferences_setup', {
         preferences,
         aiRecommendations,
-        timestamp: Date.now(),
         component: 'NotificationPreferences',
         userStory: 'Platform Foundation',
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackPageProgression = useCallback(
     (fromStep: string, toStep: string, duration: number) => {
-      analytics.track('registration_page_progression', {
+      analytics('registration_page_progression', {
         fromStep,
         toStep,
         duration,
-        timestamp: Date.now(),
         component: 'RegistrationNavigation',
         userStory: 'US-2.3',
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackAccessibilityUsage = useCallback(
     (features: string[], assistiveTech: string[]) => {
-      analytics.track('accessibility_configuration', {
+      analytics('accessibility_configuration', {
         features,
         assistiveTech,
-        timestamp: Date.now(),
         component: 'AccessibilitySetup',
         userStory: 'Platform Foundation',
-      });
+      }, 'medium');
     },
     [analytics]
   );

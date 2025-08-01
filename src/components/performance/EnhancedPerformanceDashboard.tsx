@@ -9,12 +9,11 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import usePerformanceOptimization from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { useApiCache } from '@/lib/performance/ApiResponseCache';
 import { useDatabaseOptimizer } from '@/lib/performance/DatabaseQueryOptimizer';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -55,7 +54,7 @@ export default function EnhancedPerformanceDashboard({
   refreshInterval = 30000,
   userRole = 'developer',
 }: EnhancedPerformanceDashboardProps) {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { throwError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -79,11 +78,7 @@ export default function EnhancedPerformanceDashboard({
   const {
     getMetrics: getDatabaseMetrics,
     getConnectionPoolStats,
-    generatePerformanceReport: generateDbReport,
   } = useDatabaseOptimizer();
-
-  // API caching
-  const { getMetrics: getApiMetrics } = useApiCache();
 
   // Dashboard state
   const [selectedView, setSelectedView] = useState<
@@ -92,7 +87,8 @@ export default function EnhancedPerformanceDashboard({
   const [realTimeEnabled, setRealTimeEnabled] = useState(enableRealTimeUpdates);
   const [metricsData, setMetricsData] = useState({
     database: null as any,
-    api: null as any,
+    // Removed api property as part of custom caching removal
+    // api: null as any,
     connectionPool: null as any,
   });
 
@@ -107,27 +103,29 @@ export default function EnhancedPerformanceDashboard({
     const databaseScore = metricsData.database
       ? Math.max(0, 100 - metricsData.database.averageExecutionTime / 10)
       : 0;
-    const apiScore = metricsData.api ? metricsData.api.cacheHitRate * 100 : 0;
+    // Removed apiScore calculation as part of custom caching removal
+    // const apiScore = metricsData.api ? metricsData.api.cacheHitRate * 100 : 0;
+    const apiScore = 0;
     const memoryScore = Math.max(0, 100 - webVitalsMetrics.memoryMetrics.memoryUsagePercentage);
 
     return (
       webVitalsScore * webVitalsWeight +
       databaseScore * databaseWeight +
-      apiScore * apiWeight +
+      // Removed apiScore from calculation as part of custom caching removal
+      // apiScore * apiWeight +
       memoryScore * memoryWeight
     );
   }, [optimizationScore, metricsData, webVitalsMetrics]);
 
   useEffect(() => {
     // Track dashboard access
-    analytics.track('enhanced_performance_dashboard_accessed', {
+    analytics('enhanced_performance_dashboard_accessed', {
       userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
       hypotheses: ['H8', 'H11', 'H12', 'H13'],
       userRole,
       showAdvancedMetrics,
       enableRealTimeUpdates,
-      timestamp: Date.now(),
-    });
+    }, 'medium');
 
     // Initial metrics collection
     collectAllMetrics();
@@ -145,16 +143,16 @@ export default function EnhancedPerformanceDashboard({
 
   const collectAllMetrics = async () => {
     try {
-      const [dbMetrics, apiMetrics, poolStats] = await Promise.all([
+      const [dbMetrics, poolStats] = await Promise.all([
         getDatabaseMetrics(),
-        getApiMetrics(),
         getConnectionPoolStats(),
       ]);
 
       setMetricsData({
         database: dbMetrics,
-        api: apiMetrics,
         connectionPool: poolStats,
+        // Removed api property as part of custom caching removal
+        // api: null,
       });
 
       await collectMetrics();
@@ -179,13 +177,12 @@ export default function EnhancedPerformanceDashboard({
     try {
       await triggerOptimization();
 
-      analytics.track('comprehensive_optimization_triggered', {
+      analytics('comprehensive_optimization_triggered', {
         userStories: ['US-6.1', 'US-6.2'],
         hypotheses: ['H8', 'H11', 'H12', 'H13'],
         currentScore: overallPerformanceScore,
         userRole,
-        timestamp: Date.now(),
-      });
+      }, 'high');
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error as Error,
@@ -206,14 +203,13 @@ export default function EnhancedPerformanceDashboard({
 
   const generateComprehensiveReport = async () => {
     try {
-      const report = await generateDbReport();
+      // Generate performance report using built-in mechanisms
+      // Removed custom generateDbReport usage to comply with core requirements
 
       const comprehensiveReport = {
-        ...report,
         webVitals: webVitalsMetrics,
-        apiMetrics: metricsData.api,
         overallScore: overallPerformanceScore,
-        recommendations: [...recommendations, ...(report.recommendations || [])],
+        recommendations: [...recommendations],
         timestamp: new Date().toISOString(),
         userRole,
         componentMapping: COMPONENT_MAPPING,
@@ -232,14 +228,13 @@ export default function EnhancedPerformanceDashboard({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      analytics.track('performance_report_generated', {
+      analytics('performance_report_generated', {
         userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
         hypotheses: ['H8', 'H11', 'H12', 'H13'],
         reportSize: JSON.stringify(comprehensiveReport).length,
         overallScore: overallPerformanceScore,
         userRole,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error as Error,
@@ -365,7 +360,8 @@ export default function EnhancedPerformanceDashboard({
             </div>
           </div>
 
-          {/* API Cache Hit Rate */}
+          {/* API Cache Hit Rate - Removed as part of custom caching removal */}
+          {/*
           <div className="p-4 border border-gray-200 rounded-lg">
             <div className="text-sm font-medium text-gray-600">API Cache Hit Rate</div>
             <div className="text-2xl font-bold mt-1 text-green-600">
@@ -375,6 +371,7 @@ export default function EnhancedPerformanceDashboard({
               Requests: {metricsData.api?.totalRequests || 0}
             </div>
           </div>
+          */}
 
           {/* Memory Usage */}
           <div className="p-4 border border-gray-200 rounded-lg">
@@ -548,79 +545,16 @@ export default function EnhancedPerformanceDashboard({
           </div>
         )}
 
-        {selectedView === 'api' && metricsData.api && (
-          <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900">API Performance & Caching</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="p-4 border border-gray-200 rounded-lg">
-                <div className="text-sm font-medium text-gray-600">Cache Hit Rate</div>
-                <div className="text-2xl font-bold mt-1 text-green-600">
-                  {formatPercent(metricsData.api.cacheHitRate)}
-                </div>
-              </div>
-
-              <div className="p-4 border border-gray-200 rounded-lg">
-                <div className="text-sm font-medium text-gray-600">Network Requests</div>
-                <div className="text-2xl font-bold mt-1 text-blue-600">
-                  {metricsData.api.networkRequests}
-                </div>
-              </div>
-
-              <div className="p-4 border border-gray-200 rounded-lg">
-                <div className="text-sm font-medium text-gray-600">Cached Responses</div>
-                <div className="text-2xl font-bold mt-1 text-green-600">
-                  {metricsData.api.cachedResponses}
-                </div>
-              </div>
-
-              <div className="p-4 border border-gray-200 rounded-lg">
-                <div className="text-sm font-medium text-gray-600">Bandwidth Saved</div>
-                <div className="text-2xl font-bold mt-1 text-purple-600">
-                  {formatBytes(metricsData.api.bandwidthSaved)}
-                </div>
-              </div>
+        {/* Development Mode Indicator */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="px-6 py-3 bg-blue-50 border-t border-blue-200">
+            <div className="text-xs text-blue-700">
+              <strong>Enhanced Development Mode:</strong> Comprehensive performance monitoring active.
+              User Role: {userRole} | Real-time Updates: {realTimeEnabled ? 'Enabled' : 'Disabled'}
             </div>
-
-            {/* Top API Endpoints */}
-            {metricsData.api.topEndpoints && metricsData.api.topEndpoints.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Top API Endpoints</h4>
-                <div className="space-y-2">
-                  {metricsData.api.topEndpoints.slice(0, 5).map((endpoint: any, index: number) => (
-                    <div key={index} className="p-3 border border-gray-200 rounded">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <span className="text-sm font-medium text-gray-900">
-                            {endpoint.method} {endpoint.endpoint}
-                          </span>
-                          <div className="text-xs text-gray-500">
-                            {endpoint.requestCount} requests •{' '}
-                            {formatMs(endpoint.averageResponseTime)} avg
-                          </div>
-                        </div>
-                        <span className="text-sm font-medium text-green-600">
-                          {formatPercent(endpoint.cacheHitRate)} cached
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
-
-      {/* Development Mode Indicator */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="px-6 py-3 bg-blue-50 border-t border-blue-200">
-          <div className="text-xs text-blue-700">
-            <strong>Enhanced Development Mode:</strong> Comprehensive performance monitoring active.
-            User Role: {userRole} | Real-time Updates: {realTimeEnabled ? 'Enabled' : 'Disabled'}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

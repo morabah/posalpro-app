@@ -253,7 +253,7 @@ export interface AvatarGroupProps {
   /**
    * Avatar configurations
    */
-  avatars: (AvatarProps & { id: string })[];
+  avatars: Array<AvatarProps & { id: string }>;
 
   /**
    * Maximum number of avatars to show

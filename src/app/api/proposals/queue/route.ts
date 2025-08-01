@@ -4,9 +4,14 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,8 +24,8 @@ export async function GET(request: NextRequest) {
           code: ErrorCodes.AUTH.UNAUTHORIZED,
           metadata: {
             component: 'ProposalsQueueRoute',
-            operation: 'getProposalsQueue'
-          }
+            operation: 'getProposalsQueue',
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -209,7 +214,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     // Return standardized error response
     return createApiErrorResponse(
       new StandardError({
@@ -218,8 +223,8 @@ export async function GET(request: NextRequest) {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ProposalsQueueRoute',
-          operation: 'getProposalsQueue'
-        }
+          operation: 'getProposalsQueue',
+        },
       }),
       'Internal server error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,

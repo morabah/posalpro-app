@@ -1,0 +1,285 @@
+{
+  "timestamp": "2025-07-31T07:15:02.535Z",
+  "testSuite": "Real-World Performance Tests",
+  "results": {
+    "duplicateApiCalls": {
+      "passed": false,
+      "details": {
+        "error": "Navigation timeout of 30000 ms exceeded"
+      }
+    },
+    "validationDashboardCrash": {
+      "passed": true,
+      "details": []
+    },
+    "navigationAnalyticsThrottling": {
+      "passed": true,
+      "details": {
+        "eventsDetected": 0,
+        "expectedMax": 2,
+        "testDuration": 55,
+        "events": []
+      }
+    },
+    "authErrorRecovery": {
+      "passed": true,
+      "details": {
+        "authErrors": 0,
+        "circuitBreakerActivations": 0,
+        "uncontrolledErrors": false,
+        "logs": {
+          "authErrors": [],
+          "circuitBreakerLogs": []
+        }
+      }
+    },
+    "overallPerformance": {
+      "passed": false,
+      "metrics": {}
+    },
+    "pageSpecificIssues": {
+      "passed": true,
+      "details": {
+        "/dashboard": {
+          "name": "Dashboard",
+          "path": "/dashboard",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 3318,
+          "status": "loaded"
+        },
+        "/proposals/manage": {
+          "name": "Proposals Management",
+          "path": "/proposals/manage",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/proposals/create": {
+          "name": "Create Proposal",
+          "path": "/proposals/create",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/content/search": {
+          "name": "Content Search",
+          "path": "/content/search",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/content": {
+          "name": "Content Library",
+          "path": "/content",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/products": {
+          "name": "Product Catalog",
+          "path": "/products",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/products/create": {
+          "name": "Create Product",
+          "path": "/products/create",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/products/selection": {
+          "name": "Product Selection",
+          "path": "/products/selection",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/products/relationships": {
+          "name": "Product Relationships",
+          "path": "/products/relationships",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/products/management": {
+          "name": "Product Management",
+          "path": "/products/management",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/sme/contributions": {
+          "name": "SME Contributions",
+          "path": "/sme/contributions",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/sme/assignments": {
+          "name": "SME Assignments",
+          "path": "/sme/assignments",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/validation": {
+          "name": "Validation Dashboard",
+          "path": "/validation",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/validation/rules": {
+          "name": "Validation Rules",
+          "path": "/validation/rules",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/workflows/approval": {
+          "name": "Approval Workflows",
+          "path": "/workflows/approval",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/workflows/templates": {
+          "name": "Workflow Templates",
+          "path": "/workflows/templates",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/coordination": {
+          "name": "Coordination Hub",
+          "path": "/coordination",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/rfp/parser": {
+          "name": "RFP Parser",
+          "path": "/rfp/parser",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/rfp/analysis": {
+          "name": "RFP Analysis",
+          "path": "/rfp/analysis",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/analytics": {
+          "name": "Analytics Dashboard",
+          "path": "/analytics",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/analytics/real-time": {
+          "name": "Real-Time Analytics",
+          "path": "/analytics/real-time",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/customers": {
+          "name": "Customers List",
+          "path": "/customers",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/customers/create": {
+          "name": "Create Customer",
+          "path": "/customers/create",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/admin": {
+          "name": "Admin Panel",
+          "path": "/admin",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        },
+        "/about": {
+          "name": "About Page",
+          "path": "/about",
+          "crashes": [],
+          "apiCalls": [],
+          "performanceViolations": [],
+          "loadTime": 0,
+          "status": "failed"
+        }
+      }
+    }
+  },
+  "summary": {
+    "totalTests": 6,
+    "passed": 4,
+    "failed": 2
+  },
+  "errorAnalysis": {
+    "criticalErrors": 0,
+    "highErrors": 0,
+    "otherErrors": 0,
+    "totalErrors": 0,
+    "criticalIssues": {},
+    "highIssues": {},
+    "recommendations": []
+  }
+}

@@ -4,7 +4,7 @@
  * Hypothesis validation and performance tracking
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback } from 'react';
 
 interface LoginMetrics {
@@ -50,18 +50,17 @@ interface SecurityEventData {
 }
 
 export const useLoginAnalytics = () => {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const trackLoginPerformance = useCallback(
     (metrics: Partial<LoginMetrics>) => {
-      analytics.track('login_performance', {
+      analytics('login_performance', {
         ...metrics,
-        timestamp: Date.now(),
         component: 'LoginScreen',
         userStory: 'US-2.3',
         hypothesis: 'H4',
         testCase: 'TC-H4-002',
-      });
+      }, 'medium');
     },
     [analytics]
   );
@@ -70,22 +69,21 @@ export const useLoginAnalytics = () => {
     (data: AuthenticationAttemptData) => {
       const emailHash = btoa(data.email).substring(0, 8); // Privacy-safe hash
 
-      analytics.track('authentication_attempt', {
+      analytics('authentication_attempt', {
         emailHash,
         role: data.role,
         success: data.success,
         duration: data.duration,
         errorType: data.errorType,
         securityFlags: data.securityFlags,
-        timestamp: Date.now(),
         component: 'LoginForm',
         userStory: 'US-2.3',
         hypothesis: 'H4',
-      });
+      }, 'high');
 
       // Hypothesis validation tracking
       if (data.success) {
-        analytics.track('hypothesis_validation', {
+        analytics('hypothesis_validation', {
           hypothesis: 'H4',
           component: 'LoginScreen',
           action: 'SUCCESSFUL_LOGIN',
@@ -97,8 +95,7 @@ export const useLoginAnalytics = () => {
           targetValue: 100, // 100% successful logins
           actualValue: 100,
           userRole: data.role,
-          timestamp: Date.now(),
-        });
+        }, 'high');
       }
     },
     [analytics]
@@ -106,71 +103,66 @@ export const useLoginAnalytics = () => {
 
   const trackSecurityEvent = useCallback(
     (data: SecurityEventData) => {
-      analytics.track('login_security_event', {
+      analytics('login_security_event', {
         eventType: data.eventType,
         severity: data.severity,
         outcome: data.outcome,
         metadata: data.metadata,
-        timestamp: Date.now(),
         component: 'LoginSecurity',
         userStory: 'US-2.3',
-      });
+      }, 'high');
     },
     [analytics]
   );
 
   const trackRoleSelection = useCallback(
     (selectedRole: string, availableRoles: string[], selectionTime: number) => {
-      analytics.track('role_selection', {
+      analytics('role_selection', {
         selectedRole,
         availableRoles,
         selectionTime,
-        timestamp: Date.now(),
         component: 'RoleSelector',
         userStory: 'US-2.3',
         acceptanceCriteria: ['AC-2.3.1'],
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackPermissionApplication = useCallback(
     (userId: string, role: string, permissionsApplied: string[]) => {
-      analytics.track('permission_application', {
+      analytics('permission_application', {
         userId,
         role,
         permissionsApplied,
-        timestamp: Date.now(),
         component: 'PermissionManager',
         userStory: 'US-2.3',
         acceptanceCriteria: ['AC-2.3.1'],
-      });
+      }, 'medium');
     },
     [analytics]
   );
 
   const trackFormInteraction = useCallback(
     (field: string, action: string, errorType?: string) => {
-      analytics.track('login_form_interaction', {
+      analytics('login_form_interaction', {
         field,
         action,
         errorType,
-        timestamp: Date.now(),
         component: 'LoginForm',
-      });
+      }, 'low');
     },
     [analytics]
   );
 
   const trackPageLoad = useCallback(
     (loadTime: number, renderTime: number) => {
-      analytics.track('login_page_performance', {
+      analytics('login_page_performance', {
         loadTime,
         renderTime,
-        timestamp: Date.now(),
         component: 'LoginScreen',
         userStory: 'US-2.3',
-      });
+      }, 'medium');
     },
     [analytics]
   );

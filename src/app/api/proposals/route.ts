@@ -470,14 +470,29 @@ export async function GET(request: NextRequest) {
         });
 
         try {
-          proposals = await prisma.proposal.findMany({
-            where: cursorWhere,
-            select: proposalSelect,
-            take: query.limit + 1, // Get one extra to check if there's a next page
-            orderBy: {
-              [query.sortBy]: query.sortOrder,
-            },
-          });
+          // Fix: Use either select or include, not both
+          if (query.includeCustomer) {
+            proposals = await prisma.proposal.findMany({
+              where: cursorWhere,
+              select: {
+                ...proposalSelect,
+                customer: true,
+              },
+              take: query.limit + 1, // Get one extra to check if there's a next page
+              orderBy: {
+                [query.sortBy]: query.sortOrder,
+              },
+            });
+          } else {
+            proposals = await prisma.proposal.findMany({
+              where: cursorWhere,
+              select: proposalSelect,
+              take: query.limit + 1, // Get one extra to check if there's a next page
+              orderBy: {
+                [query.sortBy]: query.sortOrder,
+              },
+            });
+          }
           console.log('[ProposalsAPI-DIAG] Query succeeded with', proposals.length, 'results');
         } catch (dbError) {
           console.error(
@@ -508,17 +523,20 @@ export async function GET(request: NextRequest) {
         let total = 0;
 
         try {
-          const [proposalResults, totalCount] = await Promise.all([
+          const [totalCount, proposalResults] = await prisma.$transaction([
+            prisma.proposal.count({ where }),
             prisma.proposal.findMany({
               where,
-              select: proposalSelect,
+              select: {
+                ...proposalSelect,
+                customer: query.includeCustomer,
+              },
               skip,
               take: query.limit,
               orderBy: {
                 [query.sortBy]: query.sortOrder,
               },
             }),
-            prisma.proposal.count({ where }),
           ]);
 
           proposals = proposalResults;

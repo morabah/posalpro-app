@@ -168,8 +168,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       };
     }
 
-    // Fetch proposals and total count
-    const [proposals, total] = await Promise.all([
+    // Optimized transaction for proposals data and count
+    const [proposals, total] = await prisma.$transaction([
       prisma.proposal.findMany({
         where,
         select: proposalSelect,
@@ -179,7 +179,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         skip,
         take: validatedQuery.limit,
       }),
-      prisma.proposal.count({ where }),
+      prisma.proposal.count({ where })
     ]);
 
     // Calculate statistics if requested

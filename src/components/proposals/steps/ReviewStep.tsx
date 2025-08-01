@@ -58,12 +58,12 @@ interface ProposalInsights {
   complexity: 'low' | 'medium' | 'high';
   winProbability: number;
   estimatedEffort: number;
-  similarProposals: {
+  similarProposals: Array<{
     id: string;
     title: string;
     winRate: number;
     similarity: number;
-  }[];
+  }>;
   keyDifferentiators: string[];
   suggestedFocusAreas: string[];
   riskFactors: string[];

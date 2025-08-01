@@ -78,7 +78,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       stageExecution: true,
     };
 
-    const [executions, total] = await Promise.all([
+    const [executions, total] = await prisma.$transaction([
       prisma.approvalExecution.findMany({
         where,
         include: includeOptions,
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         skip,
         take: validatedQuery.limit,
       }),
-      prisma.approvalExecution.count({ where }),
+      prisma.approvalExecution.count({ where })
     ]);
 
     const transformedExecutions = executions.map(execution => {

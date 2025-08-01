@@ -12,21 +12,14 @@ export async function GET(request: NextRequest) {
 
     const startTime = Date.now();
     
-    // Single optimized query for all dashboard stats
-    const [
-      proposalStats,
-      customerCount,
-      totalRevenue
-    ] = await Promise.all([
+    // Optimized single transaction for all dashboard stats
+    const [proposalStats, customerCount] = await prisma.$transaction([
       prisma.proposal.aggregate({
         _count: { id: true },
         _avg: { value: true, completionRate: true },
-      _sum: { value: true }
-      }),
-      prisma.customer.count(),
-      prisma.proposal.aggregate({
         _sum: { value: true }
-      })
+      }),
+      prisma.customer.count()
     ]);
 
     const responseTime = Date.now() - startTime;

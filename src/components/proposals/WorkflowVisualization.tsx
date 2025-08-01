@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
-// import { useAnalytics } from '@/hooks/analytics/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   ArrowRightIcon,
   BoltIcon,
@@ -91,12 +91,7 @@ export function WorkflowVisualization({
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'timeline' | 'graph' | 'gantt'>('timeline');
   const [showOptimizations, setShowOptimizations] = useState(false);
-  // const analytics = useAnalytics();
-  const analytics = {
-    track: (event: string, data: any) => {
-      console.log(`Analytics: ${event}`, data);
-    },
-  };
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // AC-4.1.2: Critical path calculation and visualization
   const criticalPathAnalysis = useMemo(() => {
@@ -202,7 +197,7 @@ export function WorkflowVisualization({
     onTimelineUpdate(timelineMetrics);
 
     // Track analytics for H7 hypothesis
-    analytics.track('workflow_timeline_analysis', {
+    analytics('workflow_timeline_analysis', {
       workflowId,
       proposalId,
       onTimeCompletionLikelihood: timelineMetrics.onTimeCompletionLikelihood,
@@ -210,7 +205,9 @@ export function WorkflowVisualization({
       criticalPathProgress: criticalPathAnalysis.progress,
       bottleneckCount: timelineMetrics.bottleneckStages.length,
       parallelSavings: timelineMetrics.parallelSavings,
-      timestamp: Date.now(),
+      hypothesis: 'H7',
+      userStory: 'US-4.1',
+      acceptanceCriteria: ['AC-4.1.2', 'AC-4.1.3'],
     });
   }, [
     timelineMetrics,

@@ -10,6 +10,8 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
+import { ApiResponse } from '@/types/api';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   ArrowLeftIcon,
   BookOpenIcon,
@@ -160,297 +162,144 @@ export default function SMEContributionInterface() {
   const router = useRouter();
   const apiClient = useApiClient();
 
-  const [assignment, setAssignment] = useState<SMEAssignment | null>(null);
-  const [content, setContent] = useState('');
-  const [wordCount, setWordCount] = useState(0);
-  const [lastSaved, setLastSaved] = useState(new Date());
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [autosaveStatus, setAutosaveStatus] = useState('Saved');
-  const sessionStartTime = useRef(Date.now());
-
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [metrics, setMetrics] = useState<SMEContributionMetrics | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Analytics tracking refs
-  const editingStartTime = useRef<number | null>(null);
-  const activeEditingTime = useRef(0);
-  const aiDraftUsed = useRef(false);
-  const templateUsed = useRef(false);
-
-  // Auto-save functionality
-  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
-
-  // ✅ SIMPLIFIED: Use apiClient pattern like customer selection
   const [assignmentData, setAssignmentData] = useState<SMEAssignment | null>(null);
   const [templatesData, setTemplatesData] = useState<ContributionTemplate[]>([]);
   const [resourcesData, setResourcesData] = useState<ContributionResource[]>([]);
   const [versionsData, setVersionsData] = useState<VersionHistory[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [content, setContent] = useState('');
+  const [wordCount, setWordCount] = useState(0);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('editor');
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [autosaveStatus, setAutosaveStatus] = useState('Saved');
 
-  // ✅ SIMPLIFIED: Fetch all data on component mount (like customer selection)
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const sessionStartTime = useRef(Date.now());
+  const editingStartTime = useRef<number | null>(null);
+  const activeEditingTime = useRef(0);
+  const dataFetchedRef = useRef(false);
+  const aiDraftUsed = useRef(false);
+  const templateUsed = useRef(false);
+
+  const { trackOptimized: trackAction } = useOptimizedAnalytics();
+
   useEffect(() => {
     const fetchData = async () => {
+      if (dataFetchedRef.current) return;
+      dataFetchedRef.current = true;
       setIsLoading(true);
-      setFetchError(null);
       try {
         console.log('[SMEContributions] 🚀 Fetching SME data via apiClient...');
+        const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] = await Promise.all([
+          apiClient.get<ApiResponse<SMEAssignment>>('/sme/assignment'),
+          apiClient.get<ApiResponse<ContributionTemplate[]>>('/sme/templates'),
+          apiClient.get<ApiResponse<ContributionResource[]>>('/sme/resources'),
+          apiClient.get<ApiResponse<VersionHistory[]>>('/sme/versions'),
+        ]);
 
-        // Fetch all data in parallel using apiClient like customer selection
-        const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] =
-          await Promise.all([
-            apiClient.get<any>('sme/assignment'),
-            apiClient.get<any>('sme/templates'),
-            apiClient.get<any>('sme/resources'),
-            apiClient.get<any>('sme/versions'),
-          ]);
+        if (assignmentResponse.success && assignmentResponse.data) {
+          const assignment = {
+            ...assignmentResponse.data,
+            assignedAt: new Date(assignmentResponse.data.assignedAt),
+            dueDate: new Date(assignmentResponse.data.dueDate),
+            content: {
+              ...assignmentResponse.data.content,
+              lastSaved: new Date(assignmentResponse.data.content.lastSaved),
+            }
+          };
+          setAssignmentData(assignment);
+          setContent(assignment.content.draft);
+          setWordCount(assignment.content.wordCount);
+          setLastSaved(assignment.content.lastSaved);
+        } else {
+          throw new Error(assignmentResponse.error || 'Failed to fetch assignment data');
+        }
 
-        console.log('[SMEContributions] ✅ Assignment response:', assignmentResponse);
-        console.log('[SMEContributions] ✅ Templates response:', templatesResponse);
+        if (templatesResponse.success && templatesResponse.data) {
+          setTemplatesData(templatesResponse.data);
+        }
 
-        // Handle response structure like customer selection
-        const assignment =
-          assignmentResponse.success && assignmentResponse.data ? assignmentResponse.data : null;
+        if (resourcesResponse.success && resourcesResponse.data) {
+          setResourcesData(resourcesResponse.data);
+        }
 
-        const templates =
-          templatesResponse.success && templatesResponse.data
-            ? Array.isArray(templatesResponse.data)
-              ? templatesResponse.data
-              : []
-            : [];
+        if (versionsResponse.success && versionsResponse.data) {
+          setVersionsData(versionsResponse.data.map((v: VersionHistory) => ({...v, savedAt: new Date(v.savedAt)})));
+        }
 
-        const resources =
-          resourcesResponse.success && resourcesResponse.data
-            ? Array.isArray(resourcesResponse.data)
-              ? resourcesResponse.data
-              : []
-            : [];
-
-        const versions =
-          versionsResponse.success && versionsResponse.data
-            ? Array.isArray(versionsResponse.data)
-              ? versionsResponse.data
-              : []
-            : [];
-
-        console.log('[SMEContributions] ✅ Setting data:', {
-          assignmentLoaded: !!assignment,
-          templatesCount: templates.length,
-          resourcesCount: resources.length,
-          versionsCount: versions.length,
-        });
-
-        setAssignmentData(assignment);
-        setTemplatesData(templates);
-        setResourcesData(resources);
-        setVersionsData(versions);
       } catch (error) {
         console.error('[SMEContributions] ❌ Error fetching SME data:', error);
-        setAssignmentData(null);
-        setTemplatesData([]);
-        setResourcesData([]);
-        setVersionsData([]);
-
-        // Error handling like customer selection
-        if (error instanceof Error) {
-          if (error.message.includes('401')) {
-            setFetchError('Please log in to access SME assignment data.');
-          } else if (error.message.includes('404')) {
-            setFetchError('SME service is temporarily unavailable.');
-          } else if (error.message.includes('500')) {
-            setFetchError('Server error. Please try again in a few moments.');
-          } else {
-            setFetchError(
-              'Unable to load SME assignment data. Please check your connection and try again.'
-            );
-          }
-        } else {
-          setFetchError('An unexpected error occurred. Please try again.');
-        }
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+        setFetchError(errorMessage);
+        trackAction('sme_data_load_failed', { error: errorMessage }, 'high');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, []); // Simple dependency like customer selection
+  }, [apiClient, trackAction]);
+  
+  const handleAutoSave = useCallback(async () => {
+    if (!hasUnsavedChanges) return;
 
-  // Process assignment data when it loads
-  useEffect(() => {
-    if (assignmentData) {
-      // Convert date strings to Date objects if needed
-      const processedAssignment = {
-        ...assignmentData,
-        assignedAt:
-          assignmentData.assignedAt instanceof Date
-            ? assignmentData.assignedAt
-            : new Date(assignmentData.assignedAt),
-        dueDate:
-          assignmentData.dueDate instanceof Date
-            ? assignmentData.dueDate
-            : new Date(assignmentData.dueDate),
-        content: {
-          ...assignmentData.content,
-          lastSaved:
-            assignmentData.content.lastSaved instanceof Date
-              ? assignmentData.content.lastSaved
-              : new Date(assignmentData.content.lastSaved),
-        },
-      };
+    setAutosaveStatus('Saving...');
+    try {
+      const response = await apiClient.post<ApiResponse<VersionHistory>>('/sme/autosave', {
+        assignmentId: assignmentData?.id,
+        content,
+        wordCount,
+      });
 
-      setAssignment(processedAssignment);
-      setContent(processedAssignment.content.draft);
-      setWordCount(processedAssignment.content.wordCount);
-      setLastSaved(processedAssignment.content.lastSaved);
+      if (response.success && response.data) {
+        const versionData = response.data as VersionHistory;
+        setVersionsData(prev => [...prev, { ...versionData, savedAt: new Date(versionData.savedAt) }]);
+        setHasUnsavedChanges(false);
+        setLastSaved(new Date());
+        setAutosaveStatus('Saved');
+        toast.success('Draft auto-saved successfully!');
+        trackAction('autosave_success', {
+          wordCount,
+          version: (versionsData?.length || 0) + 1,
+        }, 'low');
+      } else {
+        throw new Error(response.error || 'Autosave failed');
+      }
+    } catch (error) {
+      setAutosaveStatus('Error saving');
+      toast.error('Failed to auto-save draft.');
+      trackAction('autosave_failed', { error: (error as Error).message }, 'high');
     }
-  }, [assignmentData]);
+  }, [assignmentData, content, wordCount, hasUnsavedChanges, versionsData, apiClient, trackAction]);
 
-  // Process other data when it loads
-  useEffect(() => {
-    if (versionsData) {
-      // Convert date strings to Date objects for versions data
-      const processedVersions = versionsData.map((version: any) => ({
-        ...version,
-        savedAt: version.savedAt instanceof Date ? version.savedAt : new Date(version.savedAt),
-      }));
-      // Store processed versions if needed for display
-    }
-  }, [versionsData]);
-
-  const handleAutoSave = useCallback((contentToSave: string) => {
-    console.log('Auto-saving content...');
-    setLastSaved(new Date());
-    setHasUnsavedChanges(false);
-
-    // Track editing time
-    if (editingStartTime.current) {
-      activeEditingTime.current += Date.now() - editingStartTime.current;
+  const handleContentChange = useCallback((newContent: string) => {
+    if (editingStartTime.current === null) {
       editingStartTime.current = Date.now();
     }
+    setContent(newContent);
+    setWordCount(newContent.trim().split(/\s+/).filter(Boolean).length);
+    setHasUnsavedChanges(true);
+    setAutosaveStatus('Unsaved changes');
 
-    // Note: Analytics tracking is handled separately to avoid circular dependency
-    console.log('SME Contribution Analytics:', {
-      action: 'content_auto_saved',
-      metadata: {
-        wordCount: contentToSave.trim().split(/\s+/).length,
-        activeEditingTime: activeEditingTime.current,
-      },
-      timestamp: Date.now(),
-    });
-  }, []);
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(handleAutoSave, 30000); // 30s
+  }, [handleAutoSave]);
 
-  const handleContentChange = useCallback(
-    (newContent: string) => {
-      if (!editingStartTime.current) {
-        editingStartTime.current = Date.now();
-      }
+  const handleGenerateDraft = useCallback(() => {
+    if (!assignmentData) return;
 
-      setContent(newContent);
-      setWordCount(newContent.trim().split(/\s+/).length);
-      setHasUnsavedChanges(true);
-      setAutosaveStatus('Unsaved changes');
-
-      // Clear existing timer and set new one
-      if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current);
-      }
-
-      autoSaveTimer.current = setTimeout(() => {
-        // Use requestIdleCallback for better performance if available
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(() => handleAutoSave(newContent));
-        } else {
-          handleAutoSave(newContent);
-        }
-      }, 30000); // Auto-save every 30 seconds
-    },
-    [handleAutoSave]
-  );
-
-  // Analytics tracking
-  const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      if (!assignment) return;
-      console.log('SME Contribution Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        assignmentId: assignment.id,
-        proposalId: assignment.proposalId,
-        sessionDuration: Date.now() - sessionStartTime.current,
-        activeEditingTime: activeEditingTime.current,
-      });
-    },
-    [assignment]
-  );
-
-  // Generate AI draft
-  const handleGenerateDraft = useCallback(async () => {
     setIsGeneratingDraft(true);
     aiDraftUsed.current = true;
+    trackAction('ai_draft_requested', { currentWordCount: wordCount }, 'medium');
 
-    trackAction('ai_draft_requested', {
-      sectionType: assignment?.sectionType,
-      requirements: assignment?.requirements.length,
-    });
-
-    // Optimized AI generation with chunked processing to avoid performance violations
-    const generateAIDraft = () => {
-      const aiGeneratedContent = `# ${assignment?.proposalTitle} - AI Generated Draft
-
-## Executive Summary
-
-Based on the requirements for ${
-        assignment?.customer
-      }, this technical specification outlines a comprehensive solution addressing the following key areas:
-
-${assignment?.requirements.map((req, index) => `${index + 1}. ${req}`).join('\n')}
-
-## Proposed Solution Architecture
-
-### Core Components
-
-The solution leverages industry-leading technologies to ensure robust, scalable, and secure implementation:
-
-- **Primary Infrastructure**: Enterprise-grade hardware and software components
-- **Security Framework**: Multi-layered security approach with compliance adherence
-- **Integration Layer**: Seamless integration with existing systems and workflows
-- **Monitoring and Management**: Comprehensive visibility and control capabilities
-
-### Implementation Approach
-
-The implementation will follow a phased approach to minimize disruption and ensure successful deployment:
-
-**Phase 1: Assessment and Planning** (Weeks 1-2)
-- Current state analysis
-- Requirements validation
-- Detailed planning and design
-
-**Phase 2: Infrastructure Preparation** (Weeks 3-4)
-- Hardware procurement and staging
-- Network configuration and testing
-- Security baseline establishment
-
-**Phase 3: Solution Deployment** (Weeks 5-6)
-- System installation and configuration
-- Integration testing and validation
-- User training and documentation
-
-### Compliance and Security Considerations
-
-This solution addresses the following compliance requirements:
-- ISO 27001 information security management
-- SOC 2 Type II operational controls
-- Industry-specific regulatory requirements
-
-## Next Steps
-
-Please review this initial draft and provide feedback for refinement. The technical team is available for clarification on any aspects of the proposed solution.`;
+    setTimeout(() => {
+      const aiGeneratedContent = `## AI-Generated Draft for ${assignmentData.proposalTitle}\n\nBased on the requirements for the **${assignmentData.sectionType}** section, here is a starting point:\n\n### Key Considerations\n\n*   **Scalability:** The proposed architecture is designed to handle a 10x increase in user load without significant performance degradation.\n*   **Security:** All data transmission is encrypted using TLS 1.3, and data at rest is protected by AES-256 encryption.\n*   **Compliance:** The solution adheres to relevant industry standards, including SOC 2 and ISO 27001.`;
 
       setContent(aiGeneratedContent);
       setWordCount(aiGeneratedContent.trim().split(/\s+/).length);
@@ -459,83 +308,47 @@ Please review this initial draft and provide feedback for refinement. The techni
 
       trackAction('ai_draft_generated', {
         wordCount: aiGeneratedContent.trim().split(/\s+/).length,
-        generationTime: 50, // Optimized generation time
-      });
-    };
+        generationTime: 50,
+      }, 'medium');
+    }, 1000);
+  }, [assignmentData, wordCount, trackAction]);
 
-    // Use requestAnimationFrame for better performance instead of setTimeout
-    const animationFrame = requestAnimationFrame(() => {
-      // Small delay to show loading state, then generate
-      setTimeout(generateAIDraft, 50);
-    });
+  const handleApplyTemplate = useCallback((templateId: string) => {
+    const template = templatesData.find(t => t.id === templateId);
+    if (!template) return;
 
-    // Cleanup function
-    return () => {
-      cancelAnimationFrame(animationFrame);
-    };
-  }, [assignment, trackAction]);
+    templateUsed.current = true;
+    setSelectedTemplate(templateId);
 
-  // Apply template
-  const handleApplyTemplate = useCallback(
-    (templateId: string) => {
-      const template = templatesData?.find(t => t.id === templateId);
-      if (!template) return;
+    const templateContent = template.sections
+      .map(section => `## ${section.title}\n\n${section.placeholder}\n\n`)
+      .join('');
 
-      templateUsed.current = true;
-      setSelectedTemplate(templateId);
+    setContent(templateContent);
+    setWordCount(templateContent.trim().split(/\s+/).length);
+    setHasUnsavedChanges(true);
 
-      // Generate template content
-      const templateContent = template.sections
-        .map(section => `## ${section.title}\n\n${section.placeholder}\n\n`)
-        .join('');
+    trackAction('template_applied', {
+      templateId,
+      templateType: template.type,
+    }, 'medium');
+    setShowTemplates(false);
+  }, [templatesData, trackAction]);
 
-      setContent(templateContent);
-      setWordCount(templateContent.trim().split(/\s+/).length);
-      setHasUnsavedChanges(true);
-
-      trackAction('template_applied', {
-        templateId,
-        templateType: template.type,
-        estimatedTime: template.estimatedTime,
-      });
-    },
-    [templatesData, trackAction]
-  );
-
-  // Save draft
-  const handleSaveDraft = useCallback(() => {
-    setLastSaved(new Date());
-    setHasUnsavedChanges(false);
-
-    if (editingStartTime.current) {
-      activeEditingTime.current += Date.now() - editingStartTime.current;
-      editingStartTime.current = null;
-    }
-
-    trackAction('draft_saved_manually', {
-      wordCount,
-      activeEditingTime: activeEditingTime.current,
-    });
-  }, [wordCount, trackAction]);
-
-  // Submit contribution
   const handleSubmit = useCallback(() => {
-    trackAction('Submit Contribution', {
-      wordCount,
-      versionCount: versionsData?.length || 0,
-      templateUsed: selectedTemplate !== '',
-    });
-    // In a real app, this would submit the content to the backend.
+    trackAction('contribution_submitted', {
+      finalWordCount: wordCount,
+      versionCount: (versionsData?.length || 0) + 1,
+      templateUsed: !!selectedTemplate,
+    }, 'high');
     toast.success('Contribution submitted successfully!');
     router.push('/dashboard/sme/assignments');
-  }, [assignment, wordCount, versionsData?.length, selectedTemplate, trackAction, router]);
+  }, [wordCount, versionsData, selectedTemplate, trackAction, router]);
 
-  // Format time remaining
   const timeRemainingText = useMemo(() => {
-    if (!assignment) return 'N/A';
-
+    if (!assignmentData) return 'N/A';
     const now = new Date();
-    const due = new Date(assignment.dueDate);
+    const due = new Date(assignmentData.dueDate);
     const diffMs = due.getTime() - now.getTime();
 
     if (diffMs <= 0) return 'Overdue';
@@ -547,25 +360,23 @@ Please review this initial draft and provide feedback for refinement. The techni
     if (days > 0) return `${days}d ${hours}h ${minutes}m remaining`;
     if (hours > 0) return `${hours}h ${minutes}m remaining`;
     return `${minutes}m remaining`;
-  }, [assignment]);
+  }, [assignmentData]);
 
-  // Filter resources by search
   const filteredResources = useMemo(() => {
-    if (!searchQuery || !resourcesData) return resourcesData || [];
-    return resourcesData.filter(
-      resource =>
-        resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        resource.description.toLowerCase().includes(searchQuery.toLowerCase())
+    if (!searchQuery) return resourcesData;
+    return resourcesData.filter(resource =>
+      resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      resource.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [resourcesData, searchQuery]);
+  }, [searchQuery, resourcesData]);
 
   useEffect(() => {
-    if (assignment) {
+    if (assignmentData) {
       trackAction('sme_contribution_session_started', {
-        assignmentId: assignment.id,
-        sectionType: assignment.sectionType,
-        dueIn: assignment.dueDate.getTime() - Date.now(),
-      });
+        assignmentId: assignmentData.id,
+        sectionType: assignmentData.sectionType,
+        dueIn: assignmentData.dueDate.getTime() - Date.now(),
+      }, 'medium');
     }
 
     return () => {
@@ -573,500 +384,250 @@ Please review this initial draft and provide feedback for refinement. The techni
         clearTimeout(autoSaveTimer.current);
       }
     };
-  }, [assignment, trackAction]);
+  }, [assignmentData, trackAction]);
 
-  if (isLoading)
-    return (
-      <div className="flex items-center justify-center h-screen">
-        Loading SME contribution portal...
-      </div>
-    );
-  if (fetchError)
-    return (
-      <div className="flex items-center justify-center h-screen text-red-500">
-        Error: {fetchError}
-      </div>
-    );
-  if (!assignment)
-    return <div className="flex items-center justify-center h-screen">No assignment found.</div>;
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+
+  if (fetchError) {
+    return <div className="flex justify-center items-center h-screen text-red-500">Error: {fetchError}</div>;
+  }
+
+  if (!assignmentData) {
+    return <div className="flex justify-center items-center h-screen">No assignment data found.</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <header className="bg-white shadow-sm rounded-lg p-6 mb-8">
+          <div className="flex justify-between items-center">
             <div>
-              <div className="flex items-center space-x-2 mb-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => router.push('/dashboard')}
-                  className="flex items-center"
-                >
-                  <ArrowLeftIcon className="w-4 h-4 mr-2" />
-                  Back to Assignments
-                </Button>
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900">{assignment.proposalTitle}</h1>
-              <p className="text-gray-600">
-                {assignment.customer} • Due: {assignment.dueDate.toLocaleDateString()} •{' '}
-                {timeRemainingText}
+              <Button
+                variant="secondary"
+                onClick={() => router.push('/dashboard/sme')}
+                className="flex items-center mb-4"
+              >
+                <ArrowLeftIcon className="w-4 h-4 mr-2" />
+                Back to Assignments
+              </Button>
+              <h1 className="text-3xl font-bold text-gray-900">{assignmentData.proposalTitle}</h1>
+              <p className="text-gray-600 mt-1">
+                {assignmentData.customer} &bull; Due: {new Date(assignmentData.dueDate).toLocaleDateString()} &bull; {timeRemainingText}
               </p>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-right text-sm text-gray-600">
-                <div>Assigned by: {assignment.assignedBy}</div>
-                <div>Last saved: {lastSaved.toLocaleTimeString()}</div>
-                {hasUnsavedChanges && <div className="text-amber-600">Unsaved changes</div>}
+              <div className="text-right text-sm">
+                <div className="text-gray-600">{autosaveStatus}</div>
+                {lastSaved && <div className="text-gray-500">Last saved: {new Date(lastSaved).toLocaleTimeString()}</div>}
               </div>
-              <Button variant="secondary" onClick={handleSaveDraft} disabled={!hasUnsavedChanges}>
-                Save Draft
-              </Button>
               <Button variant="primary" onClick={handleSubmit} className="flex items-center">
                 Submit Contribution
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+        </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Assignment Context */}
-        <Card className="mb-8">
-          <div className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Panel: Editor and Tabs */}
+          <div className="lg:col-span-2">
+            <Card>
+              <div className="border-b border-gray-200">
+                <nav className="flex space-x-8 px-6">
+                  {[
+                    { id: 'editor', label: 'Editor', icon: DocumentTextIcon },
+                    { id: 'resources', label: 'Resources', icon: BookOpenIcon },
+                    { id: 'history', label: 'History', icon: ClockIcon },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        trackAction('tab_changed', { tab: tab.id }, 'low');
+                      }}
+                      className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === tab.id
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <tab.icon className="w-5 h-5 mr-2" />
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              <div className="p-6">
+                {/* Editor Tab */}
+                {activeTab === 'editor' && (
+                  <div className="space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="secondary"
+                          onClick={handleGenerateDraft}
+                          disabled={isGeneratingDraft}
+                          className="flex items-center"
+                        >
+                          <SparklesIcon className="w-4 h-4 mr-2" />
+                          {isGeneratingDraft ? 'Generating...' : 'Generate AI Draft'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => setShowTemplates(!showTemplates)}
+                          className="flex items-center"
+                        >
+                          <DocumentDuplicateIcon className="w-4 h-4 mr-2" />
+                          Use Template
+                        </Button>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {wordCount} words
+                      </div>
+                    </div>
+
+                    {showTemplates && (
+                      <Card className="border-blue-200">
+                        <div className="p-6">
+                          <h4 className="text-lg font-medium text-gray-900 mb-4">Choose a Template</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {templatesData?.map(template => (
+                              <div
+                                key={template.id}
+                                className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 cursor-pointer"
+                                onClick={() => handleApplyTemplate(template.id)}
+                              >
+                                <h5 className="font-medium text-gray-900">{template.title}</h5>
+                                <p className="text-sm text-gray-600 mt-1">{template.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </Card>
+                    )}
+
+                    <textarea
+                      value={content}
+                      onChange={e => handleContentChange(e.target.value)}
+                      placeholder="Begin writing your technical contribution here..."
+                      className="w-full h-96 p-4 border border-gray-300 rounded-lg resize-none focus:ring-blue-500 focus:border-blue-500"
+                      style={{ minHeight: '500px' }}
+                    />
+                  </div>
+                )}
+
+                {/* Resources Tab */}
+                {activeTab === 'resources' && (
+                  <div className="space-y-6">
+                    <div className="relative">
+                      <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="text"
+                        placeholder="Search resources..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+
+                    <div className="space-y-4">
+                      {filteredResources.map(resource => (
+                        <Card key={resource.id} className="hover:shadow-md transition-shadow">
+                          <div className="p-4 flex items-center justify-between">
+                            <div>
+                              <h4 className="font-medium text-gray-900">{resource.title}</h4>
+                              <p className="text-sm text-gray-600">{resource.description}</p>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                trackAction('resource_accessed', {
+                                  resourceId: resource.id,
+                                  resourceType: resource.type,
+                                }, 'low');
+                                window.open(resource.url, '_blank');
+                              }}
+                              className="flex items-center ml-4"
+                            >
+                              <EyeIcon className="w-4 h-4 mr-1" />
+                              View
+                            </Button>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* History Tab */}
+                {activeTab === 'history' && (
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      {versionsData.length > 0 ? (
+                        versionsData.map(version => (
+                          <Card key={version.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => {
+                            setContent(version.content);
+                            setWordCount(version.wordCount);
+                            trackAction('version_restored', { versionId: version.id, versionNumber: version.version }, 'medium');
+                          }}>
+                            <div className="flex items-center justify-between">
+                              <p className="font-medium">Version {version.version} {version.autoSaved ? '(Auto-saved)' : ''}</p>
+                              <p className="text-sm text-gray-500">{new Date(version.savedAt).toLocaleString()}</p>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">{version.changesSummary}</p>
+                          </Card>
+                        ))
+                      ) : (
+                        <p className="text-center text-gray-500 py-8">No version history available.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Right Panel: Context and Guidelines */}
+          <div className="space-y-8">
+            <Card>
+              <div className="p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Section Requirements</h3>
                 <ul className="space-y-2">
-                  {assignment.requirements.map((requirement, index) => (
-                    <li key={index} className="flex items-start">
+                  {assignmentData.requirements.map((req, i) => (
+                    <li key={i} className="flex items-start">
                       <span className="flex-shrink-0 w-2 h-2 bg-blue-600 rounded-full mt-2 mr-3"></span>
-                      <span className="text-gray-700">{requirement}</span>
+                      <span className="text-gray-700">{req}</span>
                     </li>
                   ))}
                 </ul>
               </div>
-              <div className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="flex items-center mb-2">
-                    <span className="text-2xl mr-2">💰</span>
-                    <span className="text-sm font-medium text-gray-700">Proposal Value</span>
-                  </div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    ${assignment.context.proposalValue.toLocaleString()}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center">
-                    <div className="text-sm text-gray-600">Industry</div>
-                    <div className="font-medium">{assignment.context.industry}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-gray-600">Priority</div>
-                    <div
-                      className={`font-medium capitalize ${
-                        assignment.context.priority === 'critical'
-                          ? 'text-red-600'
-                          : assignment.context.priority === 'high'
-                            ? 'text-orange-600'
-                            : assignment.context.priority === 'medium'
-                              ? 'text-yellow-600'
-                              : 'text-green-600'
-                      }`}
-                    >
-                      {assignment.context.priority}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Tabbed Navigation */}
-        <Card className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
-              {[
-                { id: 'dashboard', label: 'Dashboard', icon: CogIcon },
-                { id: 'editor', label: 'Editor', icon: DocumentTextIcon },
-                { id: 'resources', label: 'Resources', icon: BookOpenIcon },
-                { id: 'history', label: 'History', icon: ClockIcon },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <tab.icon className="w-5 h-5 mr-2" />
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <div className="p-6">
-            {/* Dashboard Tab */}
-            {activeTab === 'dashboard' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <div className="flex items-center">
-                      <DocumentTextIcon className="w-8 h-8 text-blue-600" />
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-600">Word Count</p>
-                        <p className="text-2xl font-bold text-gray-900">{wordCount}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <div className="flex items-center">
-                      <ClockIcon className="w-8 h-8 text-green-600" />
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-600">Progress</p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {Math.min(100, Math.round((wordCount / 500) * 100))}%
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-purple-50 rounded-lg">
-                    <div className="flex items-center">
-                      <UserIcon className="w-8 h-8 text-purple-600" />
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-600">Version</p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {assignment.content.version}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-orange-50 rounded-lg">
-                    <div className="flex items-center">
-                      <SparklesIcon className="w-8 h-8 text-orange-600" />
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-600">AI Assist</p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {aiDraftUsed.current ? 'Used' : 'Available'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-4">
-                      Contribution Guidelines
-                    </h4>
-                    <div className="space-y-3 text-sm text-gray-600">
-                      <div className="flex items-start">
-                        <span className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full mt-2 mr-3"></span>
-                        <span>
-                          Use clear, technical language appropriate for enterprise stakeholders
-                        </span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full mt-2 mr-3"></span>
-                        <span>
-                          Include specific product names, versions, and technical specifications
-                        </span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full mt-2 mr-3"></span>
-                        <span>Reference industry standards and compliance requirements</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full mt-2 mr-3"></span>
-                        <span>Provide implementation timelines with realistic milestones</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-4">Quality Checklist</h4>
-                    <div className="space-y-3">
-                      {[
-                        { label: 'All requirements addressed', checked: wordCount > 200 },
-                        {
-                          label: 'Technical specifications included',
-                          checked: content.includes('specification'),
-                        },
-                        {
-                          label: 'Compliance standards referenced',
-                          checked: content.includes('ISO') || content.includes('SOC'),
-                        },
-                        {
-                          label: 'Implementation timeline provided',
-                          checked: content.includes('Phase') || content.includes('Week'),
-                        },
-                      ].map((item, index) => (
-                        <div key={index} className="flex items-center">
-                          <div
-                            className={`w-5 h-5 rounded mr-3 flex items-center justify-center ${
-                              item.checked
-                                ? 'bg-green-100 text-green-600'
-                                : 'bg-gray-100 text-gray-400'
-                            }`}
-                          >
-                            {item.checked ? '✓' : '○'}
-                          </div>
-                          <span className={item.checked ? 'text-gray-900' : 'text-gray-500'}>
-                            {item.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Editor Tab */}
-            {activeTab === 'editor' && (
-              <div className="space-y-6">
-                {/* Editor Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="secondary"
-                      onClick={handleGenerateDraft}
-                      disabled={isGeneratingDraft}
-                      className="flex items-center"
-                    >
-                      <SparklesIcon className="w-4 h-4 mr-2" />
-                      {isGeneratingDraft ? 'Generating...' : 'Generate AI Draft'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowTemplates(!showTemplates)}
-                      className="flex items-center"
-                    >
-                      <DocumentDuplicateIcon className="w-4 h-4 mr-2" />
-                      Use Template
-                    </Button>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {wordCount} words • Last saved: {lastSaved.toLocaleTimeString()}
-                  </div>
-                </div>
-
-                {/* Template Selection */}
-                {showTemplates && (
-                  <Card className="border-blue-200">
-                    <div className="p-6">
-                      <h4 className="text-lg font-medium text-gray-900 mb-4">Choose a Template</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {templatesData?.map(template => (
-                          <div
-                            key={template.id}
-                            className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 cursor-pointer"
-                            onClick={() => handleApplyTemplate(template.id)}
-                          >
-                            <h5 className="font-medium text-gray-900">{template.title}</h5>
-                            <p className="text-sm text-gray-600 mt-1">{template.description}</p>
-                            <div className="flex items-center justify-between mt-3">
-                              <span className="text-xs text-gray-500">
-                                {template.estimatedTime} min
-                              </span>
-                              <span
-                                className={`text-xs px-2 py-1 rounded ${
-                                  template.difficulty === 'beginner'
-                                    ? 'bg-green-100 text-green-800'
-                                    : template.difficulty === 'intermediate'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : 'bg-red-100 text-red-800'
-                                }`}
-                              >
-                                {template.difficulty}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {/* Content Editor */}
-                <div className="border border-gray-300 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-300">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Content Editor</span>
-                      <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <span>{wordCount} words</span>
-                        <span>•</span>
-                        <span>Version {assignment.content.version}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <textarea
-                    value={content}
-                    onChange={e => handleContentChange(e.target.value)}
-                    placeholder="Begin writing your technical contribution here. Use the AI assistance or templates above to get started..."
-                    className="w-full h-96 p-4 border-0 resize-none focus:ring-0 focus:outline-none"
-                    style={{ minHeight: '400px' }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Resources Tab */}
-            {activeTab === 'resources' && (
-              <div className="space-y-6">
-                {/* Search Resources */}
-                <div className="relative">
-                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search resources, specifications, and documentation..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-
-                {/* Resources List */}
+            </Card>
+            <Card>
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Context</h3>
                 <div className="space-y-4">
-                  {filteredResources.map(resource => (
-                    <Card
-                      key={resource.id}
-                      className="hover:shadow-md transition-shadow duration-200"
-                    >
-                      <div className="p-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h4 className="text-lg font-medium text-gray-900">
-                                {resource.title}
-                              </h4>
-                              <span
-                                className={`px-2 py-1 text-xs rounded-full ${
-                                  resource.type === 'document'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : resource.type === 'specification'
-                                      ? 'bg-green-100 text-green-800'
-                                      : resource.type === 'example'
-                                        ? 'bg-purple-100 text-purple-800'
-                                        : 'bg-orange-100 text-orange-800'
-                                }`}
-                              >
-                                {resource.type}
-                              </span>
-                              <div className="flex items-center">
-                                <span className="text-sm text-gray-500 mr-1">Relevance:</span>
-                                <div className="w-16 bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-blue-600 h-2 rounded-full"
-                                    style={{ width: `${resource.relevanceScore}%` }}
-                                  ></div>
-                                </div>
-                                <span className="text-sm text-gray-500 ml-1">
-                                  {resource.relevanceScore}%
-                                </span>
-                              </div>
-                            </div>
-                            <p className="text-gray-600 mb-4">{resource.description}</p>
-                          </div>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              trackAction('resource_accessed', {
-                                resourceId: resource.id,
-                                resourceType: resource.type,
-                                relevanceScore: resource.relevanceScore,
-                              });
-                              // Open resource in new tab
-                              window.open(resource.url, '_blank');
-                            }}
-                            className="flex items-center ml-4"
-                          >
-                            <EyeIcon className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-
-                {filteredResources.length === 0 && (
-                  <div className="text-center py-12">
-                    <BookOpenIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No resources found</h3>
-                    <p className="text-gray-600">
-                      {searchQuery
-                        ? 'Try adjusting your search terms.'
-                        : 'No resources available for this assignment.'}
-                    </p>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-gray-600">Proposal Value</span>
+                    <span className="font-bold text-lg text-green-600">${assignmentData.context.proposalValue.toLocaleString()}</span>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* History Tab */}
-            {activeTab === 'history' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-gray-900">Version History</h3>
-                  <span className="text-sm text-gray-600">
-                    {versionsData?.length || 0} versions
-                  </span>
-                </div>
-
-                <div className="space-y-4">
-                  {versionsData?.map(version => (
-                    <Card
-                      key={version.id}
-                      className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => {
-                        setContent(version.content);
-                        setWordCount(version.wordCount);
-                        trackAction('version_restored', {
-                          versionId: version.id,
-                          versionNumber: version.version,
-                        });
-                      }}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium text-gray-900">
-                            Version {version.version}
-                          </span>
-                          {version.autoSaved && (
-                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                              Auto-saved
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-sm text-gray-500">
-                          {version.savedAt.toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{version.changesSummary}</p>
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>{version.wordCount} words</span>
-                        <span>Click to restore</span>
-                      </div>
-                    </Card>
-                  )) || (
-                    <div className="text-center py-8 text-gray-500">
-                      No version history available
-                    </div>
-                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-gray-600">Industry</span>
+                    <span className="text-gray-800">{assignmentData.context.industry}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-gray-600">Priority</span>
+                    <span className="font-bold capitalize">{assignmentData.context.priority}</span>
+                  </div>
                 </div>
               </div>
-            )}
+            </Card>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

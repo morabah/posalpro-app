@@ -7,7 +7,7 @@
 'use client';
 
 import { Card } from '@/components/ui/Card';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   BoltIcon,
   ChartBarIcon,
@@ -41,7 +41,7 @@ interface QuickAction {
 }
 
 const QuickActions = memo(() => {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const quickActions: QuickAction[] = [
     {
@@ -113,15 +113,14 @@ const QuickActions = memo(() => {
   };
 
   const handleActionClick = (action: QuickAction) => {
-    analytics.track('quick_action_clicked', {
+    analytics('quick_action_clicked', {
       component: 'QuickActions',
       actionId: action.id,
       actionTitle: action.title,
       category: action.category,
       userStories: COMPONENT_MAPPING.userStories,
       hypotheses: COMPONENT_MAPPING.hypotheses,
-      timestamp: Date.now(),
-    });
+    }, 'medium');
   };
 
   const groupedActions = quickActions.reduce(

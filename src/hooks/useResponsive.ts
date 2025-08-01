@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useEffect, useRef, useState } from 'react';
 
 export interface ResponsiveState {
@@ -58,7 +58,7 @@ export function useResponsive(): ResponsiveState {
     };
   });
 
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Performance optimization refs
   const previousStateRef = useRef<ResponsiveState>(state);
@@ -104,7 +104,7 @@ export function useResponsive(): ResponsiveState {
             lastAnalyticsTrackRef.current = now;
 
             // ✅ MOBILE OPTIMIZATION: Simplified analytics payload
-            analytics.track('responsive_breakpoint_change', {
+            analytics('responsive_breakpoint_change', {
               fromBreakpoint: previousState.isMobile
                 ? 'mobile'
                 : previousState.isTablet
@@ -113,8 +113,7 @@ export function useResponsive(): ResponsiveState {
               toBreakpoint: newState.isMobile ? 'mobile' : newState.isTablet ? 'tablet' : 'desktop',
               screenWidth: width,
               screenHeight: height,
-              timestamp: now,
-            });
+            }, 'low');
           }
         }
       } catch (error) {

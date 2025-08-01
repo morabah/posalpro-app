@@ -16,7 +16,7 @@ import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import { Textarea } from '@/components/ui/Textarea';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { usePerformanceOptimization } from '@/hooks/usePerformanceOptimization';
 import { ErrorHandlingService } from '@/lib/errors';
@@ -116,7 +116,7 @@ export function CommunicationCenter({
   // Initialize services
   const errorHandlingService = ErrorHandlingService.getInstance();
   const { handleAsyncError } = useErrorHandler();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { collectMetrics } = usePerformanceOptimization();
 
   // State management
@@ -141,16 +141,16 @@ export function CommunicationCenter({
   const trackCommunicationMetrics = useCallback(
     (action: string, metadata?: Record<string, any>) => {
       try {
-        analytics.track('communication_center_interaction', {
+        analytics('communication_center_interaction', {
+          component: 'CommunicationCenter',
+          action: 'filter_applied',
+          filterType: activeFilter,
           proposalId,
-          action,
-          userId: currentUserId,
           userStory: 'US-2.2',
           acceptanceCriteria: ['AC-2.2.3'],
           hypothesis: 'H4',
           targetReduction: 0.4, // 40% coordination effort reduction
           timestamp: Date.now(),
-          component: 'CommunicationCenter',
           ...metadata,
         });
       } catch (error) {

@@ -6,7 +6,7 @@ import { logger } from '@/utils/logger';
  * Specialized analytics tracking for dashboard interactions with stability improvements
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback, useMemo, useRef } from 'react';
 
 interface DashboardAnalyticsParams {
@@ -34,21 +34,20 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     paramsRef.current.sessionId = sessionId;
   }
 
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics, page: analyticsPage } = useOptimizedAnalytics();
 
   // Create stable analytics functions using useMemo and useCallback
   const trackEvent = useCallback(
     (eventName: string, properties: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics.track(eventName, {
+        analytics(eventName, {
           ...properties,
           component: 'dashboard',
           userId: params.userId,
           userRole: params.userRole,
           sessionId: params.sessionId,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       } catch (error) {
         logger.warn('⚠️ Dashboard analytics tracking failed:', error);
         // Gracefully degrade - don't throw errors that could break the UI
@@ -61,7 +60,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     (page: string, properties: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics.page(page, {
+        analyticsPage(page, {
           ...properties,
           component: 'dashboard',
           userId: params.userId,
@@ -79,7 +78,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     (element: string, action: string, properties: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics.track('dashboard_interaction', {
+        analytics('dashboard_interaction', {
           ...properties,
           element,
           action,
@@ -87,7 +86,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
           userId: params.userId,
           userRole: params.userRole,
           sessionId: params.sessionId,
-        });
+        }, 'low');
       } catch (error) {
         logger.warn('⚠️ Dashboard interaction tracking failed:', error);
       }
@@ -99,7 +98,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     (error: Error | string, context: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics.track('dashboard_error', {
+        analytics('dashboard_error', {
           ...context,
           error: typeof error === 'string' ? error : error.message,
           stack: typeof error === 'object' ? error.stack : undefined,
@@ -107,7 +106,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
           userId: params.userId,
           userRole: params.userRole,
           sessionId: params.sessionId,
-        });
+        }, 'high');
       } catch (analyticsError) {
         logger.warn('⚠️ Dashboard error tracking failed:', analyticsError);
       }

@@ -21,6 +21,15 @@ class Logger {
   private log(level: LogLevel, message: string, data?: unknown): void {
     if (!this.shouldLog(level)) return;
 
+    // Validate that the level is a valid console method
+    const validLevels: LogLevel[] = ['error', 'warn', 'info', 'debug'];
+    if (!validLevels.includes(level)) {
+      // Fallback to console.log for invalid levels
+      console.log(`[LOGGER ERROR] Invalid log level: ${level}`);
+      console.log(`[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}`, data);
+      return;
+    }
+
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
 

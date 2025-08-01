@@ -6,11 +6,13 @@
  * Component Traceability Matrix: US-6.1, US-6.3, US-4.1 | H8, H11, H12
  */
 
+import React from 'react';
 import { PrismaClient } from '@prisma/client';
 import { ErrorHandlingService } from '../errors';
 import { ErrorCodes } from '../errors/ErrorCodes';
 import { logger } from '../logger';
-import { AdvancedCacheManager } from '../performance/AdvancedCacheManager';
+
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 
 // Types for optimization service
 export interface QueryOptimizationConfig {
@@ -69,7 +71,6 @@ const COMPONENT_MAPPING = {
 export class DatabaseOptimizationService {
   private static instance: DatabaseOptimizationService;
   private errorHandlingService: ErrorHandlingService;
-  private cacheManager: AdvancedCacheManager;
   private prisma: PrismaClient;
   private analytics: any;
 
@@ -89,7 +90,6 @@ export class DatabaseOptimizationService {
 
   private constructor(prisma: PrismaClient, config?: Partial<QueryOptimizationConfig>) {
     this.errorHandlingService = ErrorHandlingService.getInstance();
-    this.cacheManager = AdvancedCacheManager.getInstance();
     this.prisma = prisma;
 
     if (config) {
@@ -112,7 +112,7 @@ export class DatabaseOptimizationService {
   /**
    * Initialize analytics integration
    */
-  initializeAnalytics(analytics: any): void {
+  initializeAnalytics(analytics: (event: string, properties: Record<string, any>, priority: 'high' | 'medium' | 'low') => void): void {
     this.analytics = analytics;
   }
 
@@ -193,7 +193,7 @@ export class DatabaseOptimizationService {
 
       // Analytics tracking
       if (this.analytics) {
-        this.analytics.track('database_query_optimized', {
+        this.analytics('database_query_optimized', {
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
           queryKey,
@@ -201,8 +201,7 @@ export class DatabaseOptimizationService {
           optimizations,
           cacheHit: false,
           recordCount: Array.isArray(result) ? result.length : 1,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
 
       logger.info('Database query optimized successfully', {
@@ -323,23 +322,8 @@ export class DatabaseOptimizationService {
    * Get cached query result
    */
   private async getCachedQuery<T>(queryKey: string): Promise<T | null> {
-    try {
-      const cacheKey = 'db_opt:' + queryKey;
-      return await this.cacheManager.get<T>(cacheKey);
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error as Error,
-        'Failed to retrieve cached query',
-        ErrorCodes.SYSTEM.CACHE_OPERATION_FAILED,
-        {
-          component: 'DatabaseOptimizationService',
-          operation: 'getCachedQuery',
-          queryKey,
-          userFriendlyMessage: 'Query cache retrieval failed. Proceeding with fresh query.',
-        }
-      );
-      return null;
-    }
+    // Caching is handled by Prisma and apiClient built-in caching
+    return null;
   }
 
   /**
@@ -351,30 +335,7 @@ export class DatabaseOptimizationService {
     cacheTTL: number,
     tags: string[]
   ): Promise<void> {
-    try {
-      const cacheKey = 'db_opt:' + queryKey;
-      await this.cacheManager.set(cacheKey, result, {
-        ttl: cacheTTL,
-        tags: ['database', 'optimization', ...tags],
-        metadata: {
-          queryKey,
-          recordCount: Array.isArray(result) ? result.length : 1,
-          timestamp: Date.now(),
-        },
-      });
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error as Error,
-        'Failed to cache query result',
-        ErrorCodes.SYSTEM.CACHE_OPERATION_FAILED,
-        {
-          component: 'DatabaseOptimizationService',
-          operation: 'cacheQueryResult',
-          queryKey,
-          userFriendlyMessage: 'Query result caching failed. Performance may be impacted.',
-        }
-      );
-    }
+    return;
   }
 
   /**
@@ -425,15 +386,14 @@ export class DatabaseOptimizationService {
 
     // Analytics tracking for slow queries
     if (this.analytics) {
-      this.analytics.track('slow_query_detected', {
+      this.analytics('slow_query_detected', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         queryKey,
         executionTime,
         threshold: this.config.slowQueryThreshold,
         suggestions,
-        timestamp: Date.now(),
-      });
+      }, 'high');
     }
   }
 
@@ -520,7 +480,12 @@ export function useDatabaseOptimization(
   prisma: PrismaClient,
   config?: Partial<QueryOptimizationConfig>
 ) {
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const service = DatabaseOptimizationService.getInstance(prisma, config);
+  
+  React.useEffect(() => {
+    service.initializeAnalytics(analytics);
+  }, [service, analytics]);
 
   return {
     optimizeQuery: service.optimizeQuery.bind(service),

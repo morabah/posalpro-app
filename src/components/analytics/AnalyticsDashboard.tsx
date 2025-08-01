@@ -1,6 +1,6 @@
 /**
  * PosalPro MVP2 - Analytics Dashboard Component
- * Real-time hypothesis tracking and performance visualization
+ * Enhanced with React Query for caching and performance optimization
  * Component Traceability: US-5.1, US-5.2, H1, H4, H7, H8
  */
 
@@ -12,11 +12,10 @@ import { PerformanceMetrics } from '@/components/analytics/PerformanceMetrics';
 import { UserStoryProgress } from '@/components/analytics/UserStoryProgress';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
-import { useApiClient } from '@/hooks/useApiClient';
-import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { useAnalyticsDashboard, useHypothesisTracking } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ArrowPathIcon, ChartBarIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 /**
  * Component Traceability Matrix:
@@ -27,83 +26,6 @@ import { useEffect, useState } from 'react';
  * - Test Cases: TC-H1-001, TC-H4-001, TC-H7-001, TC-H8-001
  */
 
-// Define proper types for analytics data instead of any
-interface PerformanceData {
-  metrics: Array<{
-    name: string;
-    value: number;
-    change: number;
-    trend: 'up' | 'down' | 'neutral';
-  }>;
-  charts: Array<{
-    id: string;
-    type: 'line' | 'bar' | 'pie';
-    data: Array<{ label: string; value: number }>;
-  }>;
-}
-
-interface ComponentData {
-  components: Array<{
-    name: string;
-    usageCount: number;
-    performanceScore: number;
-    userStories: string[];
-    hypotheses: string[];
-  }>;
-  traceabilityMatrix: Record<
-    string,
-    {
-      userStories: string[];
-      acceptanceCriteria: string[];
-      methods: string[];
-      hypotheses: string[];
-      testCases: string[];
-    }
-  >;
-}
-
-interface RecentActivityData {
-  activities: Array<{
-    id: string;
-    type: 'hypothesis' | 'user_story' | 'component' | 'metric';
-    description: string;
-    timestamp: Date;
-    metadata: Record<string, string | number>;
-  }>;
-}
-
-interface AnalyticsDashboardData {
-  overview: {
-    healthScore: number;
-    timeRange: string;
-    lastUpdated: string;
-  };
-  hypothesis: {
-    totalEvents: number;
-    avgImprovement: number;
-    successRate: number;
-    hypothesisBreakdown: Array<{
-      hypothesis: string;
-      _count: { _all: number };
-      _avg: { performanceImprovement: number };
-    }>;
-  };
-  userStories: {
-    totalStories: number;
-    completedStories: number;
-    inProgress: number;
-    avgCompletionRate: number;
-    completionPercentage: number;
-    storiesWithFailures: number;
-  };
-  performance: PerformanceData;
-  components: ComponentData;
-  recentActivity: RecentActivityData;
-}
-
-// Define proper time range type
-type TimeRange = '7d' | '30d' | '90d' | 'all';
-
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
   userStories: ['US-10.1', 'US-10.2'],
@@ -113,87 +35,62 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H10-001', 'TC-H10-002'],
 };
 
+// Skeleton components for loading states
+const DashboardSkeleton = () => (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {[...Array(4)].map((_, i) => (
+        <Card key={i} className="animate-pulse">
+          <div className="p-6">
+            <div className="h-8 bg-gray-200 rounded mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded"></div>
+          </div>
+        </Card>
+      ))}
+    </div>
+    <Card className="animate-pulse">
+      <div className="p-6">
+        <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+        <div className="space-y-3">
+          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+          <div className="h-4 bg-gray-200 rounded w-4/6"></div>
+        </div>
+      </div>
+    </Card>
+  </div>
+);
+
 export const AnalyticsDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'hypothesis' | 'metrics' | 'stories' | 'components'
   >('overview');
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
-  const [dashboardData, setDashboardData] = useState<AnalyticsDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const analytics = useAnalytics();
-  const apiClient = useApiClient();
-  const errorHandlingService = ErrorHandlingService.getInstance();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
-  // Fetch dashboard data
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Use React Query hooks for data fetching with caching
+  const {
+    data: dashboardData,
+    isLoading: isDashboardLoading,
+    error: dashboardError,
+    refetch: refetchDashboard,
+    isFetching: isDashboardFetching,
+  } = useAnalyticsDashboard({ timeRange });
 
-      // Track analytics fetch attempt
-      analytics.track('analytics_dashboard_fetch_started', {
-        component: 'AnalyticsDashboard',
-        timeRange,
-        timestamp: Date.now(),
-      });
+  const {
+    data: hypothesisData,
+    isLoading: isHypothesisLoading,
+    error: hypothesisError,
+    refetch: refetchHypothesis,
+  } = useHypothesisTracking({ timeRange });
 
-      // Use centralized API client instead of direct fetch
-      const result = await apiClient.get<{
-        success: boolean;
-        data?: AnalyticsDashboardData;
-        error?: string;
-      }>(`/api/analytics/dashboard?timeRange=${timeRange}`);
-
-      if (result.success && result.data) {
-        setDashboardData(result.data);
-
-        // Track successful fetch
-        analytics.track('analytics_dashboard_fetch_success', {
-          component: 'AnalyticsDashboard',
-          timeRange,
-          healthScore: result.data.overview.healthScore,
-          timestamp: Date.now(),
-        });
-      } else {
-        throw new Error(result.error || 'Unknown error');
-      }
-    } catch (error) {
-      // Use standardized error handling
-      const standardError = errorHandlingService.processError(
-        error,
-        'Failed to fetch analytics dashboard data',
-        ErrorCodes.DATA.FETCH_FAILED,
-        {
-          component: 'AnalyticsDashboard',
-          operation: 'fetchDashboardData',
-          timeRange,
-        }
-      );
-
-      const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
-      setError(userMessage);
-
-      // Track error analytics
-      analytics.track('analytics_dashboard_fetch_error', {
-        component: 'AnalyticsDashboard',
-        error: standardError.message,
-        errorCode: standardError.code,
-        timeRange,
-        timestamp: Date.now(),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Replace the trackAnalyticsEvent function with proper typing
+  // Track analytics events
   const trackAnalyticsEvent = (
     action: string,
     metadata: Record<string, string | number | boolean> = {}
   ) => {
-    analytics.track(`analytics_${action}`, {
+    analytics(`analytics_${action}`, {
       ...metadata,
       hypothesis: 'H10',
       testCase: 'TC-H10-001',
@@ -205,7 +102,8 @@ export const AnalyticsDashboard: React.FC = () => {
   // Handle refresh
   const handleRefresh = () => {
     trackAnalyticsEvent('refresh_dashboard');
-    fetchDashboardData();
+    refetchDashboard();
+    refetchHypothesis();
   };
 
   // Handle export
@@ -215,45 +113,19 @@ export const AnalyticsDashboard: React.FC = () => {
     console.log('Exporting analytics report...');
   };
 
-  // Load data on mount and when time range changes
-  useEffect(() => {
-    fetchDashboardData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
+  const isLoading = isDashboardLoading || isHypothesisLoading;
+  const hasError = dashboardError || hypothesisError;
 
-  // Track page view
-  useEffect(() => {
-    trackAnalyticsEvent('dashboard_viewed');
-  }, []);
-
-  if (loading) {
+  // Error state
+  if (hasError && !dashboardData) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <div className="p-6">
-                <div className="h-8 bg-gray-200 rounded mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="border-red-200 bg-red-50">
-        <div className="p-6 text-center">
-          <div className="text-red-600 mb-4">
-            <ChartBarIcon className="w-12 h-12 mx-auto" />
-          </div>
-          <h3 className="text-lg font-medium text-red-800 mb-2">Analytics Unavailable</h3>
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={handleRefresh} variant="secondary" className="text-red-700">
-            <ArrowPathIcon className="w-4 h-4 mr-2" />
+      <Card className="p-6">
+        <div className="text-center">
+          <div className="text-red-600 mb-2">Failed to load analytics data</div>
+          <p className="text-gray-600 mb-4">
+            {dashboardError?.message || hypothesisError?.message || 'Unknown error occurred'}
+          </p>
+          <Button onClick={handleRefresh} variant="outline" size="sm">
             Retry
           </Button>
         </div>
@@ -261,153 +133,221 @@ export const AnalyticsDashboard: React.FC = () => {
     );
   }
 
-  if (!dashboardData) {
-    return (
-      <Card>
-        <div className="p-6 text-center">
-          <p className="text-gray-600">No analytics data available</p>
-        </div>
-      </Card>
-    );
+  // Loading state
+  if (isLoading && !dashboardData) {
+    return <DashboardSkeleton />;
   }
-
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: ChartBarIcon },
-    { id: 'hypothesis', label: 'Hypotheses', icon: ChartBarIcon },
-    { id: 'metrics', label: 'Performance', icon: ChartBarIcon },
-    { id: 'stories', label: 'User Stories', icon: ChartBarIcon },
-    { id: 'components', label: 'Components', icon: ChartBarIcon },
-  ] as const;
 
   return (
     <div className="space-y-6">
-      {/* Controls */}
-      <Card>
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-lg font-medium text-gray-900">Analytics Overview</h2>
-              <span className="text-sm text-gray-500">
-                Health Score: {dashboardData.overview.healthScore}%
-              </span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <select
-                value={timeRange}
-                onChange={e => setTimeRange(e.target.value as TimeRange)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-                <option value="90d">Last 90 days</option>
-                <option value="all">All time</option>
-              </select>
-              <Button onClick={handleRefresh} variant="secondary">
-                <ArrowPathIcon className="w-4 h-4 mr-2" />
-                Refresh
-              </Button>
-              <Button onClick={handleExport}>
-                <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-            </div>
-          </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h2>
+          <p className="text-gray-600">
+            Real-time performance tracking and hypothesis validation
+            {isDashboardFetching && ' (Updating...)'}
+          </p>
         </div>
-      </Card>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-blue-600">
-              {dashboardData.hypothesis.totalEvents}
-            </div>
-            <div className="text-sm text-gray-600 mt-1">Total Events</div>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-green-600">
-              {Math.round(dashboardData.hypothesis.avgImprovement)}%
-            </div>
-            <div className="text-sm text-gray-600 mt-1">Avg Improvement</div>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-purple-600">
-              {Math.round(dashboardData.hypothesis.successRate)}%
-            </div>
-            <div className="text-sm text-gray-600 mt-1">Success Rate</div>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-orange-600">
-              {dashboardData.userStories.completedStories}/{dashboardData.userStories.totalStories}
-            </div>
-            <div className="text-sm text-gray-600 mt-1">User Stories</div>
-          </div>
-        </Card>
+        
+        <div className="flex items-center space-x-3">
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value as any)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+            disabled={isLoading}
+          >
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="all">All time</option>
+          </select>
+          
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            size="sm"
+            disabled={isLoading}
+            className="flex items-center"
+          >
+            <ArrowPathIcon className={`h-4 w-4 mr-2 ${isDashboardFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          
+          <Button
+            onClick={handleExport}
+            variant="outline"
+            size="sm"
+            disabled={isLoading}
+            className="flex items-center"
+          >
+            <DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </div>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Overview Cards */}
+      {dashboardData && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card>
+            <div className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <ChartBarIcon className="h-8 w-8 text-blue-600" />
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-500">Health Score</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {dashboardData.overview.healthScore}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <ChartBarIcon className="h-8 w-8 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-500">Total Events</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {dashboardData.hypothesis.totalEvents.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <ChartBarIcon className="h-8 w-8 text-orange-600" />
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-500">Avg Improvement</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {dashboardData.hypothesis.avgImprovement}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <ChartBarIcon className="h-8 w-8 text-purple-600" />
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-500">Success Rate</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {dashboardData.hypothesis.successRate}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Navigation Tabs */}
       <Card>
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8 px-6">
-            {tabs.map(tab => (
+          <nav className="-mb-px flex space-x-8 p-6">
+            {[
+              { id: 'overview', label: 'Overview' },
+              { id: 'hypothesis', label: 'Hypothesis Tracking' },
+              { id: 'metrics', label: 'Performance Metrics' },
+              { id: 'stories', label: 'User Stories' },
+              { id: 'components', label: 'Component Traceability' },
+            ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => {
-                  setActiveTab(tab.id);
-                  trackAnalyticsEvent('tab_change', { tab: tab.id });
+                  setActiveTab(tab.id as any);
+                  trackAnalyticsEvent('tab_changed', { tab: tab.id });
                 }}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
+                disabled={isLoading}
               >
-                <tab.icon className="w-4 h-4 mr-2" />
                 {tab.label}
               </button>
             ))}
           </nav>
         </div>
 
-        {/* Tab Content */}
         <div className="p-6">
-          {activeTab === 'overview' && (
+          {/* Tab Content */}
+          {activeTab === 'overview' && dashboardData && (
             <HypothesisOverview data={dashboardData.hypothesis} timeRange={timeRange} />
           )}
+          
           {activeTab === 'hypothesis' && (
             <div className="space-y-4">
               <h3 className="text-lg font-medium text-gray-900">Hypothesis Breakdown</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {dashboardData.hypothesis.hypothesisBreakdown.map(item => (
-                  <Card key={item.hypothesis}>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-900">{item.hypothesis}</span>
-                        <span className="text-sm text-gray-500">{item._count._all} events</span>
+              
+              {isHypothesisLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[...Array(6)].map((_, i) => (
+                    <Card key={i} className="animate-pulse">
+                      <div className="p-4">
+                        <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                        <div className="h-4 bg-gray-200 rounded mb-4"></div>
+                        <div className="h-8 bg-gray-200 rounded"></div>
                       </div>
-                      <div className="text-2xl font-bold text-blue-600">
-                        {Math.round(item._avg.performanceImprovement || 0)}%
+                    </Card>
+                  ))}
+                </div>
+              ) : hypothesisData ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {hypothesisData.map(item => (
+                    <Card key={item.id}>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-gray-900">{item.hypothesis}</span>
+                          <span className="text-sm text-gray-500">{item.eventsCount} events</span>
+                        </div>
+                        <div className="text-2xl font-bold text-blue-600">
+                          {item.currentValue}%
+                        </div>
+                        <div className="text-sm text-gray-600">{item.name}</div>
+                        <div className={`mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          item.status === 'excellent' ? 'bg-green-100 text-green-800' :
+                          item.status === 'good' ? 'bg-blue-100 text-blue-800' :
+                          item.status === 'needs-improvement' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {item.status.replace('-', ' ')}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-600">Avg Improvement</div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No hypothesis data available</div>
+              )}
             </div>
           )}
-          {activeTab === 'metrics' && (
+
+          {activeTab === 'metrics' && dashboardData && (
             <PerformanceMetrics data={dashboardData.performance} timeRange={timeRange} />
           )}
-          {activeTab === 'stories' && (
+          
+          {activeTab === 'stories' && dashboardData && (
             <UserStoryProgress data={dashboardData.userStories} timeRange={timeRange} />
           )}
-          {activeTab === 'components' && (
+          
+          {activeTab === 'components' && dashboardData && (
             <ComponentTraceability data={dashboardData.components} timeRange={timeRange} />
           )}
         </div>

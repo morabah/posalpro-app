@@ -1,382 +1,177 @@
 /**
  * PosalPro MVP2 - Customer List Component
- * Displays paginated list of customers with search and filtering
- * Based on CUSTOMER_PROFILE_SCREEN.md wireframe specifications
- * Component Traceability Matrix: US-2.3, US-6.4, H4, H12
+ * Enhanced with React Query for caching and performance optimization
+ * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
 'use client';
 
-import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { Input } from '@/components/ui/Input';
-import { useAnalytics } from '@/hooks/useAnalytics';
-import { useApiClient } from '@/hooks/useApiClient';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { Customer, useCustomers } from '@/hooks/useCustomers';
+import { debounce } from '@/lib/utils';
 import {
   BuildingOfficeIcon,
-  EnvelopeIcon,
+  CurrencyDollarIcon,
   EyeIcon,
-  MagnifyingGlassIcon,
   PencilIcon,
-  UserIcon,
+  TagIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
-import { debounce } from 'lodash';
-import Link from 'next/link';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
-// Component Traceability Matrix
+/**
+ * Component Traceability Matrix:
+ * - User Stories: US-4.1 (Customer Management), US-4.2 (Customer Relationships)
+ * - Acceptance Criteria: AC-4.1.1, AC-4.1.2, AC-4.2.1, AC-4.2.2
+ * - Hypotheses: H4 (Cross-Department Coordination), H6 (Requirement Extraction)
+ * - Methods: fetchCustomers(), searchCustomers(), handleCustomerView()
+ * - Test Cases: TC-H4-006, TC-H6-002
+ */
+
 const COMPONENT_MAPPING = {
-  userStories: ['US-2.3', 'US-6.4'],
-  acceptanceCriteria: ['AC-2.3.1', 'AC-2.3.2', 'AC-6.4.1'],
-  methods: ['fetchCustomers()', 'searchCustomers()', 'trackCustomerViewed()'],
-  hypotheses: ['H4', 'H12'],
-  testCases: ['TC-H4-002', 'TC-H12-001'],
+  userStories: ['US-4.1', 'US-4.2'],
+  acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.2', 'AC-4.2.1', 'AC-4.2.2'],
+  methods: ['fetchCustomers()', 'searchCustomers()', 'handleCustomerView()'],
+  hypotheses: ['H4', 'H6'],
+  testCases: ['TC-H4-006', 'TC-H6-002'],
 };
 
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  industry?: string;
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum' | 'enterprise';
-  status: 'active' | 'inactive' | 'prospect';
-  revenue?: number;
-  lastContact?: string;
-  createdAt: string;
-}
-
-interface CustomerListResponse {
-  customers: Customer[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
-
-interface CustomerCardProps {
-  customer: Customer;
-  onView: (id: string) => void;
-  onEdit: (id: string) => void;
-}
-
-const CustomerCard = memo(({ customer, onView, onEdit }: CustomerCardProps) => {
-  const getTierColor = (tier: string) => {
-    const colors = {
-      bronze: 'bg-orange-100 text-orange-800',
-      silver: 'bg-gray-100 text-gray-800',
-      gold: 'bg-yellow-100 text-yellow-800',
-      platinum: 'bg-purple-100 text-purple-800',
-      enterprise: 'bg-blue-100 text-blue-800',
-    };
-    return colors[tier as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getStatusColor = (status: string) => {
-    const colors = {
-      active: 'bg-green-100 text-green-800',
-      inactive: 'bg-red-100 text-red-800',
-      prospect: 'bg-blue-100 text-blue-800',
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  return (
-    <Card className="p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-blue-50 rounded-lg">
-            <UserIcon className="h-6 w-6 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{customer.name}</h3>
-            <div className="flex items-center space-x-2 mt-1">
-              <Badge className={getTierColor(customer.tier)}>
-                {customer.tier.charAt(0).toUpperCase() + customer.tier.slice(1)}
-              </Badge>
-              <Badge className={getStatusColor(customer.status)}>
-                {customer.status.charAt(0).toUpperCase() + customer.status.slice(1)}
-              </Badge>
+// Skeleton component for loading state
+const CustomerSkeleton = memo(() => (
+  <div className="animate-pulse">
+    <Card className="h-48">
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
+            <div>
+              <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-16"></div>
             </div>
           </div>
+          <div className="h-6 w-16 bg-gray-200 rounded"></div>
         </div>
-        <div className="flex space-x-2">
-          <Button size="sm" variant="ghost" onClick={() => onView(customer.id)} className="p-2">
-            <EyeIcon className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => onEdit(customer.id)} className="p-2">
-            <PencilIcon className="h-4 w-4" />
-          </Button>
+        <div className="space-y-3">
+          <div className="h-3 bg-gray-200 rounded"></div>
+          <div className="h-3 bg-gray-200 rounded w-5/6"></div>
         </div>
-      </div>
-
-      <div className="space-y-2 text-sm text-gray-600">
-        {customer.email && (
-          <div className="flex items-center space-x-2">
-            <EnvelopeIcon className="h-4 w-4" />
-            <span>{customer.email}</span>
+        <div className="flex justify-between items-center mt-6">
+          <div className="h-8 bg-gray-200 rounded w-20"></div>
+          <div className="flex space-x-2">
+            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+            <div className="h-8 w-8 bg-gray-200 rounded"></div>
           </div>
-        )}
-
-        {customer.industry && (
-          <div className="flex items-center space-x-2">
-            <BuildingOfficeIcon className="h-4 w-4" />
-            <span>{customer.industry}</span>
-          </div>
-        )}
-
-        {customer.revenue && (
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
-            <span className="text-gray-600">Annual Revenue:</span>
-            <span className="font-semibold text-gray-900">{formatCurrency(customer.revenue)}</span>
-          </div>
-        )}
+        </div>
       </div>
     </Card>
-  );
-});
-CustomerCard.displayName = 'CustomerCard';
-
-const CustomerListSkeleton = memo(() => (
-  <div className="space-y-4">
-    {[...Array(6)].map((_, i) => (
-      <Card key={i} className="p-6">
-        <div className="animate-pulse">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="h-10 w-10 bg-gray-200 rounded-lg"></div>
-            <div className="flex-1">
-              <div className="h-5 bg-gray-200 rounded w-1/3 mb-2"></div>
-              <div className="flex space-x-2">
-                <div className="h-4 bg-gray-200 rounded w-16"></div>
-                <div className="h-4 bg-gray-200 rounded w-16"></div>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          </div>
-        </div>
-      </Card>
-    ))}
   </div>
 ));
-CustomerListSkeleton.displayName = 'CustomerListSkeleton';
 
 const CustomerList = memo(() => {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [tierFilter, setTierFilter] = useState<string>('');
 
-  const apiClient = useApiClient();
-  const analytics = useAnalytics();
-  const errorHandlingService = ErrorHandlingService.getInstance();
-
-  const fetchCustomers = useCallback(
-    async (page = 1, search = '') => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Track analytics event
-        analytics.track('customer_list_fetch_started', {
-          component: 'CustomerList',
-          page: page.toString(),
-          search: search.length > 0,
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
-
-        // Use mock data for demonstration (since API might not be available)
-        const mockCustomers: Customer[] = [
-          {
-            id: '1',
-            name: 'Acme Corporation',
-            email: 'contact@acme.com',
-            industry: 'Manufacturing',
-            tier: 'platinum',
-            status: 'active',
-            revenue: 2500000,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: '2',
-            name: 'Tech Solutions Inc',
-            email: 'info@techsolutions.com',
-            industry: 'Technology',
-            tier: 'gold',
-            status: 'active',
-            revenue: 1200000,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: '3',
-            name: 'Global Services Ltd',
-            email: 'hello@globalservices.com',
-            industry: 'Services',
-            tier: 'silver',
-            status: 'prospect',
-            revenue: 800000,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: '4',
-            name: 'Innovation Labs',
-            email: 'contact@innovationlabs.com',
-            industry: 'Research',
-            tier: 'enterprise',
-            status: 'active',
-            revenue: 5000000,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: '5',
-            name: 'StartupCo',
-            email: 'team@startupco.com',
-            industry: 'Technology',
-            tier: 'bronze',
-            status: 'prospect',
-            revenue: 150000,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: '6',
-            name: 'Enterprise Corp',
-            email: 'business@enterprise.com',
-            industry: 'Finance',
-            tier: 'platinum',
-            status: 'active',
-            revenue: 3200000,
-            createdAt: new Date().toISOString(),
-          },
-        ];
-
-        // Filter based on search if provided
-        let filteredCustomers = mockCustomers;
-        if (search) {
-          filteredCustomers = mockCustomers.filter(
-            customer =>
-              customer.name.toLowerCase().includes(search.toLowerCase()) ||
-              customer.email.toLowerCase().includes(search.toLowerCase()) ||
-              customer.industry?.toLowerCase().includes(search.toLowerCase())
-          );
-        }
-
-        // Simulate pagination
-        const itemsPerPage = 12;
-        const startIndex = (page - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
-
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        setCustomers(paginatedCustomers);
-        setTotal(filteredCustomers.length);
-        setTotalPages(Math.ceil(filteredCustomers.length / itemsPerPage));
-        setCurrentPage(page);
-
-        // Track successful fetch
-        analytics.track('customer_list_fetch_success', {
-          component: 'CustomerList',
-          customerCount: paginatedCustomers.length,
-          total: filteredCustomers.length,
-          timestamp: Date.now(),
-        });
-      } catch (error) {
-        console.warn('[CustomerList] Error fetching customers:', error);
-        setError('Failed to load customers');
-
-        // Track error
-        analytics.track('customer_list_fetch_error', {
-          component: 'CustomerList',
-          error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: Date.now(),
-        });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [apiClient, analytics]
-  );
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Debounced search function
-  const debouncedSearch = useCallback(
+  const debouncedSearchFunction = useCallback(
     debounce((term: string) => {
-      setCurrentPage(1);
-      fetchCustomers(1, term);
+      setDebouncedSearch(term);
+      setCurrentPage(1); // Reset to first page when searching
     }, 500),
-    [fetchCustomers]
+    []
   );
 
-  useEffect(() => {
-    fetchCustomers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
+  // Use React Query hook for data fetching with caching
+  const { data, isLoading, error, refetch, isFetching, isError } = useCustomers({
+    page: currentPage,
+    limit: 12,
+    search: debouncedSearch || undefined,
+    status: statusFilter || undefined,
+    tier: tierFilter || undefined,
+    sortBy: 'updatedAt',
+    sortOrder: 'desc',
+  });
 
-  useEffect(() => {
-    if (searchTerm !== '') {
-      debouncedSearch(searchTerm);
-    } else {
-      fetchCustomers(1, '');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm]); // ✅ CRITICAL FIX: Only include searchTerm to prevent infinite loops
+  // Track analytics when component loads
+  const handleAnalyticsTrack = useCallback((eventName: string, metadata: any = {}) => {
+    analytics(eventName, {
+      component: 'CustomerList',
+      userStories: COMPONENT_MAPPING.userStories,
+      hypotheses: COMPONENT_MAPPING.hypotheses,
+      ...metadata,
+    });
+  }, []); // ✅ PERFORMANCE FIX: Remove unstable analytics dependency
+
+  // Handle search input change
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchTerm(value);
+      debouncedSearchFunction(value);
+
+      if (value.length > 0) {
+        handleAnalyticsTrack('customer_search_initiated', { searchTerm: value });
+      }
+    },
+    [debouncedSearchFunction, handleAnalyticsTrack]
+  );
 
   const handleView = useCallback(
     (customerId: string) => {
-      analytics.track('customer_view_clicked', {
-        component: 'CustomerList',
-        customerId,
-        timestamp: Date.now(),
-      });
-      // Navigate to customer detail page
+      handleAnalyticsTrack('customer_view_clicked', { customerId });
       window.location.href = `/customers/${customerId}`;
     },
-    [analytics]
+    [handleAnalyticsTrack]
   );
 
   const handleEdit = useCallback(
     (customerId: string) => {
-      analytics.track('customer_edit_clicked', {
-        component: 'CustomerList',
-        customerId,
-        timestamp: Date.now(),
-      });
-      // Navigate to customer edit page
+      handleAnalyticsTrack('customer_edit_clicked', { customerId });
       window.location.href = `/customers/${customerId}/edit`;
     },
-    [analytics]
+    [handleAnalyticsTrack]
   );
 
   const handlePageChange = useCallback(
     (page: number) => {
       setCurrentPage(page);
-      fetchCustomers(page, searchTerm);
+      handleAnalyticsTrack('customer_pagination_clicked', { page });
     },
-    [fetchCustomers, searchTerm]
+    [handleAnalyticsTrack]
   );
 
-  if (error && customers.length === 0) {
+  const handleStatusFilterChange = useCallback(
+    (status: string) => {
+      setStatusFilter(status);
+      setCurrentPage(1);
+      handleAnalyticsTrack('customer_status_filter_changed', { status });
+    },
+    [handleAnalyticsTrack]
+  );
+
+  const handleTierFilterChange = useCallback(
+    (tier: string) => {
+      setTierFilter(tier);
+      setCurrentPage(1);
+      handleAnalyticsTrack('customer_tier_filter_changed', { tier });
+    },
+    [handleAnalyticsTrack]
+  );
+
+  // Handle error state
+  if (isError && !data?.customers?.length) {
     return (
       <Card className="p-6">
         <div className="text-center">
           <p className="text-red-600 mb-2">Failed to load customers</p>
-          <Button onClick={() => fetchCustomers()} variant="outline" size="sm">
+          <p className="text-gray-600 mb-4">{error?.message || 'Unknown error occurred'}</p>
+          <Button onClick={() => refetch()} variant="outline" size="sm">
             Retry
           </Button>
         </div>
@@ -384,89 +179,319 @@ const CustomerList = memo(() => {
     );
   }
 
+  const customers = data?.customers || [];
+  const pagination = data?.pagination;
+
+  const getTierBadgeColor = (tier: string) => {
+    const colors = {
+      VIP: 'bg-purple-100 text-purple-800',
+      ENTERPRISE: 'bg-blue-100 text-blue-800',
+      PREMIUM: 'bg-green-100 text-green-800',
+      STANDARD: 'bg-gray-100 text-gray-800',
+    };
+    return colors[tier as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    const colors = {
+      ACTIVE: 'bg-green-100 text-green-800',
+      PROSPECT: 'bg-blue-100 text-blue-800',
+      INACTIVE: 'bg-gray-100 text-gray-800',
+      CHURNED: 'bg-red-100 text-red-800',
+    };
+    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
+  const formatRevenue = (revenue?: number) => {
+    if (!revenue) return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(revenue);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header with Search */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Customers</h2>
-          <p className="text-gray-600 text-sm">
-            {total} customer{total !== 1 ? 's' : ''} total
-          </p>
-        </div>
+      {/* Search and Filter Section */}
+      <Card className="p-6">
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex-1 max-w-md">
+            <label htmlFor="search" className="sr-only">
+              Search customers
+            </label>
+            <div className="relative">
+              <input
+                id="search"
+                type="text"
+                placeholder="Search customers..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isLoading}
+              />
+              {isFetching && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                </div>
+              )}
+            </div>
+          </div>
 
-        <div className="relative w-full sm:w-80">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Search customers..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
+          <div className="flex items-center space-x-4">
+            {/* Status Filter */}
+            <div>
+              <label htmlFor="status-filter" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="status-filter"
+                value={statusFilter}
+                onChange={e => handleStatusFilterChange(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isLoading}
+              >
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="PROSPECT">Prospect</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="CHURNED">Churned</option>
+              </select>
+            </div>
 
-      {/* Customer List */}
-      {loading ? (
-        <CustomerListSkeleton />
-      ) : customers.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {customers.map(customer => (
-            <CustomerCard
-              key={customer.id}
-              customer={customer}
-              onView={handleView}
-              onEdit={handleEdit}
-            />
+            {/* Tier Filter */}
+            <div>
+              <label htmlFor="tier-filter" className="sr-only">
+                Filter by tier
+              </label>
+              <select
+                id="tier-filter"
+                value={tierFilter}
+                onChange={e => handleTierFilterChange(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isLoading}
+              >
+                <option value="">All Tiers</option>
+                <option value="VIP">VIP</option>
+                <option value="ENTERPRISE">Enterprise</option>
+                <option value="PREMIUM">Premium</option>
+                <option value="STANDARD">Standard</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            {pagination && (
+              <span>
+                {pagination.total} total customers
+                {(debouncedSearch || statusFilter || tierFilter) && ` (filtered)`}
+              </span>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <CustomerSkeleton key={i} />
           ))}
         </div>
-      ) : (
+      )}
+
+      {/* Customers Grid */}
+      {!isLoading && customers.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {customers.map((customer: Customer) => (
+            <Card key={customer.id} className="hover:shadow-lg transition-shadow duration-200">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0">
+                      <BuildingOfficeIcon className="h-10 w-10 text-gray-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg font-medium text-gray-900 truncate">
+                        {customer.name}
+                      </h3>
+                      <p className="text-sm text-gray-500 truncate">
+                        {customer.email || 'No email'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col space-y-1">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTierBadgeColor(customer.tier)}`}
+                    >
+                      {customer.tier}
+                    </span>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(customer.status)}`}
+                    >
+                      {customer.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  {customer.industry && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Industry:</span>
+                      <span className="text-gray-900">{customer.industry}</span>
+                    </div>
+                  )}
+
+                  {customer.revenue && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500 flex items-center">
+                        <CurrencyDollarIcon className="w-4 h-4 mr-1" />
+                        Revenue:
+                      </span>
+                      <span className="font-semibold text-gray-900">
+                        {formatRevenue(customer.revenue)}
+                      </span>
+                    </div>
+                  )}
+
+                  {(customer.proposalsCount !== undefined ||
+                    customer.contactsCount !== undefined) && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500 flex items-center">
+                        <UserGroupIcon className="w-4 h-4 mr-1" />
+                        Activity:
+                      </span>
+                      <span className="text-gray-700">Activity tracked</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tags */}
+                {customer.tags && customer.tags.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex flex-wrap gap-1">
+                      {customer.tags.slice(0, 2).map((tag, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700"
+                        >
+                          <TagIcon className="w-3 h-3 mr-1" />
+                          {tag}
+                        </span>
+                      ))}
+                      {customer.tags.length > 2 && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-50 text-gray-700">
+                          +{customer.tags.length - 2} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    onClick={() => handleView(customer.id)}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center"
+                  >
+                    <EyeIcon className="w-4 h-4 mr-1" />
+                    View
+                  </Button>
+                  <Button
+                    onClick={() => handleEdit(customer.id)}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center"
+                  >
+                    <PencilIcon className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && customers.length === 0 && (
         <Card className="p-12">
           <div className="text-center">
-            <UserIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No customers found</h3>
+            <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+              <BuildingOfficeIcon className="h-12 w-12" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {debouncedSearch || statusFilter || tierFilter
+                ? 'No customers found'
+                : 'No customers available'}
+            </h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm
-                ? `No customers match "${searchTerm}"`
-                : 'Get started by adding your first customer'}
+              {debouncedSearch || statusFilter || tierFilter
+                ? 'No customers match your current filters'
+                : 'There are no customers to display.'}
             </p>
-            <Link href="/customers/create">
-              <Button>Add Customer</Button>
-            </Link>
+            {(debouncedSearch || statusFilter || tierFilter) && (
+              <Button
+                onClick={() => {
+                  setSearchTerm('');
+                  setDebouncedSearch('');
+                  setStatusFilter('');
+                  setTierFilter('');
+                }}
+                variant="outline"
+                size="sm"
+              >
+                Clear Filters
+              </Button>
+            )}
           </div>
         </Card>
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-          >
-            Previous
-          </Button>
+      {pagination && pagination.totalPages && pagination.totalPages > 1 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
+              {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}{' '}
+              customers
+            </div>
 
-          <span className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
-          </span>
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+                variant="outline"
+                size="sm"
+              >
+                Previous
+              </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-          >
-            Next
-          </Button>
-        </div>
+              <span className="text-sm text-gray-600">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+
+              <Button
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={pagination.page >= (pagination.totalPages || 1)}
+                variant="outline"
+                size="sm"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </Card>
       )}
     </div>
   );
 });
+
 CustomerList.displayName = 'CustomerList';
 
 export default CustomerList;

@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -190,7 +190,7 @@ export function MobileTouchGestures({
   });
 
   const [gestureConfig] = useState<GestureConfig>({ ...DEFAULT_CONFIG, ...config });
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   // Utility Functions
@@ -338,14 +338,14 @@ export function MobileTouchGestures({
               };
 
               // Track long press analytics (H9: Mobile User Experience)
-              analytics.track('mobile_long_press_detected', {
+              analytics('mobile_long_press_detected', {
                 duration: longPressEvent.duration,
                 position: longPressEvent.point,
                 hypothesis: 'H9',
                 testCase: 'TC-H9-005',
                 componentMapping: COMPONENT_MAPPING,
                 ...trackingContext,
-              });
+              }, 'medium');
 
               onLongPress?.(longPressEvent);
             }
@@ -401,7 +401,7 @@ export function MobileTouchGestures({
           const pinchEvent = detectPinch(touches);
           if (pinchEvent) {
             // Track pinch analytics (H9: Mobile User Experience)
-            analytics.track('mobile_pinch_detected', {
+            analytics('mobile_pinch_detected', {
               type: pinchEvent.type,
               scale: pinchEvent.scale,
               velocity: pinchEvent.velocity,
@@ -409,7 +409,7 @@ export function MobileTouchGestures({
               testCase: 'TC-H9-006',
               componentMapping: COMPONENT_MAPPING,
               ...trackingContext,
-            });
+            }, 'medium');
 
             onPinch(pinchEvent);
           }
@@ -463,7 +463,7 @@ export function MobileTouchGestures({
           );
           if (swipeEvent) {
             // Track swipe analytics (H9: Mobile User Experience)
-            analytics.track('mobile_swipe_detected', {
+            analytics('mobile_swipe_detected', {
               direction: swipeEvent.direction,
               distance: swipeEvent.distance,
               velocity: swipeEvent.velocity,
@@ -472,7 +472,7 @@ export function MobileTouchGestures({
               testCase: 'TC-H9-005',
               componentMapping: COMPONENT_MAPPING,
               ...trackingContext,
-            });
+            }, 'medium');
 
             onSwipe(swipeEvent);
           }
@@ -501,14 +501,14 @@ export function MobileTouchGestures({
 
             if (isDoubleTap && onDoubleTap) {
               // Track double tap analytics (H9: Mobile User Experience)
-              analytics.track('mobile_double_tap_detected', {
+              analytics('mobile_double_tap_detected', {
                 position: tapEvent.point,
                 timeBetweenTaps: tapEvent.timestamp - touchState.current.lastTap!.timestamp,
                 hypothesis: 'H9',
                 testCase: 'TC-H9-006',
                 componentMapping: COMPONENT_MAPPING,
                 ...trackingContext,
-              });
+              }, 'medium');
 
               onDoubleTap({ ...tapEvent, tapCount: 2 });
               touchState.current.lastTap = null;
@@ -517,12 +517,12 @@ export function MobileTouchGestures({
               setTimeout(() => {
                 if (touchState.current.lastTap?.timestamp === tapEvent.timestamp) {
                   // Track single tap analytics (H9: Mobile User Experience)
-                  analytics.track('mobile_tap_detected', {
+                  analytics('mobile_tap_detected', {
                     position: tapEvent.point,
                     hypothesis: 'H9',
                     componentMapping: COMPONENT_MAPPING,
                     ...trackingContext,
-                  });
+                  }, 'low');
 
                   onTap(tapEvent);
                 }

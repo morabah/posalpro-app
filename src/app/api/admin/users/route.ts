@@ -88,7 +88,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch users with their roles and permissions
-    const [users, totalCount] = await Promise.all([
+    const [totalCount, users] = await prisma.$transaction([
+      prisma.user.count({ where }),
       prisma.user.findMany({
         where,
         skip,
@@ -112,7 +113,6 @@ export async function GET(request: NextRequest) {
           createdAt: 'desc',
         },
       }),
-      prisma.user.count({ where }),
     ]);
 
     // Transform data to match admin interface format

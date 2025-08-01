@@ -1,365 +1,143 @@
 /**
  * PosalPro MVP2 - Product List Component
- * Displays paginated list of products with search and filtering
- * Based on PRODUCT_MANAGEMENT_SCREEN.md wireframe specifications
- * Component Traceability Matrix: US-5.1, US-5.2, H11, H12
+ * Enhanced with React Query for caching and performance optimization
+ * Component Traceability: US-3.1, US-3.2, H3, H4
  */
 
 'use client';
 
-import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { Input } from '@/components/ui/Input';
-import { useAnalytics } from '@/hooks/useAnalytics';
-import { useApiClient } from '@/hooks/useApiClient';
-import {
-  CubeIcon,
-  EyeIcon,
-  MagnifyingGlassIcon,
-  PencilIcon,
-  TagIcon,
-} from '@heroicons/react/24/outline';
-import { debounce } from 'lodash';
-import Link from 'next/link';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { Product, useProducts } from '@/hooks/useProducts';
+import { debounce } from '@/lib/utils';
+import { EyeIcon, PencilIcon, TagIcon } from '@heroicons/react/24/outline';
+import { memo, useCallback, useState } from 'react';
 
-// Component Traceability Matrix
+/**
+ * Component Traceability Matrix:
+ * - User Stories: US-3.1 (Product Management), US-3.2 (Product Selection)
+ * - Acceptance Criteria: AC-3.1.1, AC-3.1.2, AC-3.2.1, AC-3.2.2
+ * - Hypotheses: H3 (SME Contribution Efficiency), H4 (Cross-Department Coordination)
+ * - Methods: fetchProducts(), searchProducts(), handleProductView()
+ * - Test Cases: TC-H3-002, TC-H4-004
+ */
+
 const COMPONENT_MAPPING = {
-  userStories: ['US-5.1', 'US-5.2'],
-  acceptanceCriteria: ['AC-5.1.1', 'AC-5.2.1'],
-  methods: ['fetchProducts()', 'searchProducts()', 'trackProductViewed()'],
-  hypotheses: ['H11', 'H12'],
-  testCases: ['TC-H11-001', 'TC-H12-001'],
+  userStories: ['US-3.1', 'US-3.2'],
+  acceptanceCriteria: ['AC-3.1.1', 'AC-3.1.2', 'AC-3.2.1', 'AC-3.2.2'],
+  methods: ['fetchProducts()', 'searchProducts()', 'handleProductView()'],
+  hypotheses: ['H3', 'H4'],
+  testCases: ['TC-H3-002', 'TC-H4-004'],
 };
 
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  price: number;
-  status: 'active' | 'inactive' | 'draft';
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ProductCardProps {
-  product: Product;
-  onView: (id: string) => void;
-  onEdit: (id: string) => void;
-}
-
-const ProductCard = memo(({ product, onView, onEdit }: ProductCardProps) => {
-  const getStatusColor = (status: string) => {
-    const colors = {
-      active: 'bg-green-100 text-green-800',
-      inactive: 'bg-red-100 text-red-800',
-      draft: 'bg-gray-100 text-gray-800',
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  return (
-    <Card className="p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-blue-50 rounded-lg">
-            <CubeIcon className="h-6 w-6 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
-            <div className="flex items-center space-x-2 mt-1">
-              <Badge className={getStatusColor(product.status)}>
-                {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
-              </Badge>
-              <span className="text-sm text-gray-600">{product.category}</span>
-            </div>
-          </div>
+// Skeleton component for loading state
+const ProductSkeleton = memo(() => (
+  <div className="animate-pulse">
+    <Card className="h-64">
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          <div className="h-6 w-16 bg-gray-200 rounded"></div>
         </div>
-        <div className="flex space-x-2">
-          <Button size="sm" variant="ghost" onClick={() => onView(product.id)} className="p-2">
-            <EyeIcon className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => onEdit(product.id)} className="p-2">
-            <PencilIcon className="h-4 w-4" />
-          </Button>
+        <div className="space-y-3">
+          <div className="h-3 bg-gray-200 rounded"></div>
+          <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+          <div className="h-3 bg-gray-200 rounded w-4/6"></div>
         </div>
-      </div>
-
-      <div className="space-y-3">
-        <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
-
-        <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold text-gray-900">
-            {formatCurrency(product.price)}
-          </span>
-          {product.tags.length > 0 && (
-            <div className="flex items-center space-x-1">
-              <TagIcon className="h-4 w-4 text-gray-400" />
-              <span className="text-xs text-gray-500">
-                {product.tags.slice(0, 2).join(', ')}
-                {product.tags.length > 2 && ` +${product.tags.length - 2}`}
-              </span>
-            </div>
-          )}
+        <div className="flex justify-between items-center mt-6">
+          <div className="h-8 bg-gray-200 rounded w-24"></div>
+          <div className="flex space-x-2">
+            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+          </div>
         </div>
       </div>
     </Card>
-  );
-});
-ProductCard.displayName = 'ProductCard';
-
-const ProductListSkeleton = memo(() => (
-  <div className="space-y-4">
-    {[...Array(6)].map((_, i) => (
-      <Card key={i} className="p-6">
-        <div className="animate-pulse">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="h-10 w-10 bg-gray-200 rounded-lg"></div>
-            <div className="flex-1">
-              <div className="h-5 bg-gray-200 rounded w-1/3 mb-2"></div>
-              <div className="flex space-x-2">
-                <div className="h-4 bg-gray-200 rounded w-16"></div>
-                <div className="h-4 bg-gray-200 rounded w-20"></div>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="h-4 bg-gray-200 rounded w-full"></div>
-            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            <div className="flex justify-between">
-              <div className="h-6 bg-gray-200 rounded w-20"></div>
-              <div className="h-4 bg-gray-200 rounded w-24"></div>
-            </div>
-          </div>
-        </div>
-      </Card>
-    ))}
   </div>
 ));
-ProductListSkeleton.displayName = 'ProductListSkeleton';
 
 const ProductList = memo(() => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const apiClient = useApiClient();
-  const analytics = useAnalytics();
-
-  const fetchProducts = useCallback(
-    async (page = 1, search = '') => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Track analytics event
-        analytics.track('product_list_fetch_started', {
-          component: 'ProductList',
-          page: page.toString(),
-          search: search.length > 0,
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
-
-        // Mock data for demonstration
-        const mockProducts: Product[] = [
-          {
-            id: '1',
-            name: 'Enterprise Software License',
-            description:
-              'Comprehensive enterprise software solution with full support and maintenance',
-            category: 'Software',
-            price: 50000,
-            status: 'active',
-            tags: ['enterprise', 'software', 'license'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: '2',
-            name: 'Cloud Infrastructure Setup',
-            description: 'Complete cloud infrastructure deployment and configuration service',
-            category: 'Services',
-            price: 25000,
-            status: 'active',
-            tags: ['cloud', 'infrastructure', 'setup'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: '3',
-            name: 'Security Audit Package',
-            description: 'Comprehensive security assessment and vulnerability testing',
-            category: 'Security',
-            price: 15000,
-            status: 'active',
-            tags: ['security', 'audit', 'testing'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: '4',
-            name: 'Data Analytics Platform',
-            description: 'Advanced data analytics and business intelligence platform',
-            category: 'Analytics',
-            price: 75000,
-            status: 'draft',
-            tags: ['analytics', 'data', 'intelligence'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: '5',
-            name: 'Mobile App Development',
-            description: 'Custom mobile application development for iOS and Android',
-            category: 'Development',
-            price: 35000,
-            status: 'active',
-            tags: ['mobile', 'app', 'development'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: '6',
-            name: 'Training Program',
-            description: 'Comprehensive training program for software implementation',
-            category: 'Training',
-            price: 8000,
-            status: 'inactive',
-            tags: ['training', 'education', 'implementation'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ];
-
-        // Filter based on search if provided
-        let filteredProducts = mockProducts;
-        if (search) {
-          filteredProducts = mockProducts.filter(
-            product =>
-              product.name.toLowerCase().includes(search.toLowerCase()) ||
-              product.description.toLowerCase().includes(search.toLowerCase()) ||
-              product.category.toLowerCase().includes(search.toLowerCase()) ||
-              product.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()))
-          );
-        }
-
-        // Simulate pagination
-        const itemsPerPage = 12;
-        const startIndex = (page - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
-
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        setProducts(paginatedProducts);
-        setTotal(filteredProducts.length);
-        setTotalPages(Math.ceil(filteredProducts.length / itemsPerPage));
-        setCurrentPage(page);
-
-        // Track successful fetch
-        analytics.track('product_list_fetch_success', {
-          component: 'ProductList',
-          productCount: paginatedProducts.length,
-          total: filteredProducts.length,
-          timestamp: Date.now(),
-        });
-      } catch (error) {
-        console.warn('[ProductList] Error fetching products:', error);
-        setError('Failed to load products');
-
-        // Track error
-        analytics.track('product_list_fetch_error', {
-          component: 'ProductList',
-          error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: Date.now(),
-        });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [apiClient, analytics]
-  );
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Debounced search function
-  const debouncedSearch = useCallback(
+  const debouncedSearchFunction = useCallback(
     debounce((term: string) => {
-      setCurrentPage(1);
-      fetchProducts(1, term);
+      setDebouncedSearch(term);
+      setCurrentPage(1); // Reset to first page when searching
     }, 500),
-    [fetchProducts]
+    []
   );
 
-  useEffect(() => {
-    fetchProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
+  // Use React Query hook for data fetching with caching
+  const { data, isLoading, error, refetch, isFetching, isError } = useProducts({
+    page: currentPage,
+    limit: 12,
+    search: debouncedSearch || undefined,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+  });
 
-  useEffect(() => {
-    if (searchTerm !== '') {
-      debouncedSearch(searchTerm);
-    } else {
-      fetchProducts(1, '');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm]); // ✅ CRITICAL FIX: Only include searchTerm to prevent infinite loops
+  // Track analytics when component loads
+  const handleAnalyticsTrack = useCallback((eventName: string, metadata: any = {}) => {
+    analytics(eventName, {
+      component: 'ProductList',
+      userStories: COMPONENT_MAPPING.userStories,
+      hypotheses: COMPONENT_MAPPING.hypotheses,
+      ...metadata,
+    });
+  }, []); // ✅ PERFORMANCE FIX: Remove unstable analytics dependency
+
+  // Handle search input change
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchTerm(value);
+      debouncedSearchFunction(value);
+
+      if (value.length > 0) {
+        handleAnalyticsTrack('product_search_initiated', { searchTerm: value });
+      }
+    },
+    [debouncedSearchFunction, handleAnalyticsTrack]
+  );
 
   const handleView = useCallback(
     (productId: string) => {
-      analytics.track('product_view_clicked', {
-        component: 'ProductList',
-        productId,
-        timestamp: Date.now(),
-      });
+      handleAnalyticsTrack('product_view_clicked', { productId });
       window.location.href = `/products/${productId}`;
     },
-    [analytics]
+    [handleAnalyticsTrack]
   );
 
   const handleEdit = useCallback(
     (productId: string) => {
-      analytics.track('product_edit_clicked', {
-        component: 'ProductList',
-        productId,
-        timestamp: Date.now(),
-      });
+      handleAnalyticsTrack('product_edit_clicked', { productId });
       window.location.href = `/products/${productId}/edit`;
     },
-    [analytics]
+    [handleAnalyticsTrack]
   );
 
   const handlePageChange = useCallback(
     (page: number) => {
       setCurrentPage(page);
-      fetchProducts(page, searchTerm);
+      handleAnalyticsTrack('product_pagination_clicked', { page });
     },
-    [fetchProducts, searchTerm]
+    [handleAnalyticsTrack]
   );
 
-  if (error && products.length === 0) {
+  // Handle error state
+  if (isError && !data?.products?.length) {
     return (
       <Card className="p-6">
         <div className="text-center">
           <p className="text-red-600 mb-2">Failed to load products</p>
-          <Button onClick={() => fetchProducts()} variant="outline" size="sm">
+          <p className="text-gray-600 mb-4">{error?.message || 'Unknown error occurred'}</p>
+          <Button onClick={() => refetch()} variant="outline" size="sm">
             Retry
           </Button>
         </div>
@@ -367,89 +145,218 @@ const ProductList = memo(() => {
     );
   }
 
+  const products = data?.products || [];
+  const pagination = data?.pagination;
+
   return (
     <div className="space-y-6">
-      {/* Header with Search */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Products</h2>
-          <p className="text-gray-600 text-sm">
-            {total} product{total !== 1 ? 's' : ''} total
-          </p>
-        </div>
+      {/* Search and Filter Section */}
+      <Card className="p-6">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex-1 max-w-md">
+            <label htmlFor="search" className="sr-only">
+              Search products
+            </label>
+            <div className="relative">
+              <input
+                id="search"
+                type="text"
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isLoading}
+              />
+              {isFetching && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                </div>
+              )}
+            </div>
+          </div>
 
-        <div className="relative w-full sm:w-80">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            {pagination && (
+              <span>
+                {pagination.total} total products
+                {debouncedSearch && ` (filtered)`}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Product List */}
-      {loading ? (
-        <ProductListSkeleton />
-      ) : products.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map(product => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onView={handleView}
-              onEdit={handleEdit}
-            />
+      {/* Loading State */}
+      {isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <ProductSkeleton key={i} />
           ))}
         </div>
-      ) : (
+      )}
+
+      {/* Products Grid */}
+      {!isLoading && products.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {products.map((product: Product) => (
+            <Card key={product.id} className="hover:shadow-lg transition-shadow duration-200">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="text-lg font-medium text-gray-900 line-clamp-2">{product.name}</h3>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      product.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {product.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                  {product.description || 'No description available'}
+                </p>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">SKU:</span>
+                    <span className="font-mono text-gray-900">{product.sku}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Price:</span>
+                    <span className="font-semibold text-gray-900">
+                      {product.currency} {product.price.toLocaleString()}
+                    </span>
+                  </div>
+                  {product.usage && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Usage:</span>
+                      <span className="text-gray-700">
+                        {product.usage.proposalsCount} proposals
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tags */}
+                {product.tags && product.tags.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex flex-wrap gap-1">
+                      {product.tags.slice(0, 3).map((tag, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700"
+                        >
+                          <TagIcon className="w-3 h-3 mr-1" />
+                          {tag}
+                        </span>
+                      ))}
+                      {product.tags.length > 3 && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-50 text-gray-700">
+                          +{product.tags.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    onClick={() => handleView(product.id)}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center"
+                  >
+                    <EyeIcon className="w-4 h-4 mr-1" />
+                    View
+                  </Button>
+                  <Button
+                    onClick={() => handleEdit(product.id)}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center"
+                  >
+                    <PencilIcon className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && products.length === 0 && (
         <Card className="p-12">
           <div className="text-center">
-            <CubeIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+            <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+              <TagIcon className="h-12 w-12" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {debouncedSearch ? 'No products found' : 'No products available'}
+            </h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm
-                ? `No products match "${searchTerm}"`
-                : 'Get started by adding your first product'}
+              {debouncedSearch
+                ? `No products match your search for "${debouncedSearch}"`
+                : 'There are no products to display.'}
             </p>
-            <Link href="/products/create">
-              <Button>Add Product</Button>
-            </Link>
+            {debouncedSearch && (
+              <Button
+                onClick={() => {
+                  setSearchTerm('');
+                  setDebouncedSearch('');
+                }}
+                variant="outline"
+                size="sm"
+              >
+                Clear Search
+              </Button>
+            )}
           </div>
         </Card>
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-          >
-            Previous
-          </Button>
+      {pagination && pagination.totalPages && pagination.totalPages > 1 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
+              {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}{' '}
+              products
+            </div>
 
-          <span className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
-          </span>
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+                variant="outline"
+                size="sm"
+              >
+                Previous
+              </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-          >
-            Next
-          </Button>
-        </div>
+              <span className="text-sm text-gray-600">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+
+              <Button
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={pagination.page >= pagination.totalPages}
+                variant="outline"
+                size="sm"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </Card>
       )}
     </div>
   );
 });
+
 ProductList.displayName = 'ProductList';
 
 export default ProductList;

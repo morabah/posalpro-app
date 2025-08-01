@@ -15,7 +15,7 @@
 
 import ModernDashboard from '@/components/dashboard/ModernDashboard';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useMobileDetection } from '@/hooks/useMobileDetection';
 import { UserType } from '@/types';
@@ -132,7 +132,7 @@ export function MobileDashboardEnhancement({
   );
 
   // Hooks
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   /**
@@ -210,7 +210,7 @@ export function MobileDashboardEnhancement({
     if (!deviceInfo) return;
 
     try {
-      analytics.track('mobile_dashboard_view', {
+      analytics('mobile_dashboard_view', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: ['H9', 'H11'],
         measurementData: {
@@ -224,8 +224,7 @@ export function MobileDashboardEnhancement({
           touchTargetSize: adaptiveLayoutConfig?.touchTargetSize,
         },
         componentMapping: COMPONENT_MAPPING,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     } catch (error) {
       handleAsyncError(error as Error, 'Failed to track mobile dashboard usage', {
         context: 'MobileDashboardEnhancement.trackMobileDashboardUsage',
@@ -257,7 +256,7 @@ export function MobileDashboardEnhancement({
         }
 
         // Track mobile action
-        analytics.track('mobile_dashboard_action', {
+        analytics('mobile_dashboard_action', {
           userStories: ['US-8.1'],
           hypotheses: ['H9'],
           measurementData: {
@@ -266,7 +265,7 @@ export function MobileDashboardEnhancement({
             touchEnabled,
           },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
 
         // Execute original action
         onQuickAction?.(action);
@@ -287,12 +286,12 @@ export function MobileDashboardEnhancement({
    */
   const toggleLayoutMode = useCallback(() => {
     setMobileLayoutMode(prev => {
-      const modes: (typeof prev)[] = ['auto', 'compact', 'detailed'];
+      const modes: Array<typeof prev> = ['auto', 'compact', 'detailed'];
       const currentIndex = modes.indexOf(prev);
       const nextMode = modes[(currentIndex + 1) % modes.length];
 
       // Track layout mode change
-      analytics.track('mobile_layout_mode_change', {
+      analytics('mobile_layout_mode_change', {
         userStories: ['US-8.1'],
         hypotheses: ['H9'],
         measurementData: {
@@ -301,7 +300,7 @@ export function MobileDashboardEnhancement({
           deviceType: deviceInfo?.deviceType,
         },
         componentMapping: COMPONENT_MAPPING,
-      });
+      }, 'low');
 
       return nextMode;
     });
@@ -313,12 +312,12 @@ export function MobileDashboardEnhancement({
    */
   const togglePerformanceMode = useCallback(() => {
     setPerformanceMode(prev => {
-      const modes: (typeof prev)[] = ['auto', 'performance', 'quality'];
+      const modes: Array<typeof prev> = ['auto', 'performance', 'quality'];
       const currentIndex = modes.indexOf(prev);
       const nextMode = modes[(currentIndex + 1) % modes.length];
 
       // Track performance mode change
-      analytics.track('mobile_performance_mode_change', {
+      analytics('mobile_performance_mode_change', {
         userStories: ['US-8.3'],
         hypotheses: ['H11'],
         measurementData: {
@@ -327,7 +326,7 @@ export function MobileDashboardEnhancement({
           deviceType: deviceInfo?.deviceType,
         },
         componentMapping: COMPONENT_MAPPING,
-      });
+      }, 'low');
 
       return nextMode;
     });

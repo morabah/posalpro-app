@@ -172,7 +172,7 @@ export default function ApprovalWorkflowDashboard() {
         setError(null);
 
         // Use apiClient instead of direct fetch
-        const data = (await apiClient.get('approvals')) as WorkflowApproval[];
+        const data = await apiClient.get<WorkflowApproval[]>('approvals');
         setApprovals(data);
 
         // Track successful load with Component Traceability Matrix

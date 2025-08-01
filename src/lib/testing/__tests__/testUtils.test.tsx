@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from '@jest/globals';
 import '@testing-library/jest-dom';
-import { DatabaseTestUtils, mockSession, renderWithProviders } from '../testUtils';
+import { mockSession, renderWithProviders, mockUser, mockAnalytics, mockApiClient } from '../testUtils';
 
 // Simple test component
 const TestComponent = () => {
@@ -22,22 +22,31 @@ describe('Testing Utilities', () => {
     expect(mockSession).toHaveProperty('user');
     expect(mockSession.user).toHaveProperty('id');
     expect(mockSession.user).toHaveProperty('email');
-    expect(mockSession.user.role).toBe('Administrator');
+    expect(mockSession.user.roles).toContain('User');
   });
 
-  it('DatabaseTestUtils creates mock user', () => {
-    const user = DatabaseTestUtils.createMockUser();
-    expect(user).toHaveProperty('id');
-    expect(user).toHaveProperty('name');
-    expect(user).toHaveProperty('email');
-    expect(user.role).toBe('Administrator');
+  it('mockUser has correct structure', () => {
+    expect(mockUser).toHaveProperty('id');
+    expect(mockUser).toHaveProperty('name');
+    expect(mockUser).toHaveProperty('email');
+    expect(mockUser).toHaveProperty('department');
+    expect(mockUser).toHaveProperty('roles');
+    expect(mockUser).toHaveProperty('permissions');
   });
 
-  it('DatabaseTestUtils creates mock proposal', () => {
-    const proposal = DatabaseTestUtils.createMockProposal();
-    expect(proposal).toHaveProperty('id');
-    expect(proposal).toHaveProperty('name');
-    expect(proposal).toHaveProperty('status');
-    expect(proposal.status).toBe('Draft');
+  it('mockAnalytics has required methods', () => {
+    expect(mockAnalytics).toHaveProperty('track');
+    expect(mockAnalytics).toHaveProperty('identify');
+    expect(mockAnalytics).toHaveProperty('page');
+    expect(mockAnalytics).toHaveProperty('reset');
+    expect(typeof mockAnalytics.track).toBe('function');
+  });
+
+  it('mockApiClient has required methods', () => {
+    expect(mockApiClient).toHaveProperty('get');
+    expect(mockApiClient).toHaveProperty('post');
+    expect(mockApiClient).toHaveProperty('put');
+    expect(mockApiClient).toHaveProperty('delete');
+    expect(typeof mockApiClient.get).toBe('function');
   });
 });

@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
       });
 
       const result = processCursorResults(
-        userResults as unknown as { id: string }[],
+        userResults as unknown as Array<{ id: string }>,
         validatedQuery.limit,
         validatedQuery.sortBy
       );
@@ -186,7 +186,8 @@ export async function GET(request: NextRequest) {
       const page = validatedQuery.page || 1;
       const skip = (page - 1) * validatedQuery.limit;
 
-      const [userResults, total] = await Promise.all([
+      const [total, userResults] = await prisma.$transaction([
+        prisma.user.count({ where: baseWhere }),
         prisma.user.findMany({
           where: baseWhere,
           select: userSelect,
@@ -194,7 +195,6 @@ export async function GET(request: NextRequest) {
           take: validatedQuery.limit,
           orderBy: { [validatedQuery.sortBy]: validatedQuery.sortOrder },
         }),
-        prisma.user.count({ where: baseWhere }),
       ]);
 
       users = userResults;

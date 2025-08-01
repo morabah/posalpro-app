@@ -149,15 +149,12 @@ export async function GET(request: NextRequest) {
         where.id = { gt: query.cursor };
       }
 
+      // ✅ PERFORMANCE FIX: Remove expensive proposal counting for cursor pagination
       const results = await prisma.customer.findMany({
         where: where as any, // Prisma compatibility
         take: query.limit + 1,
         orderBy: { [query.sortBy]: query.sortOrder },
-        include: {
-          _count: {
-            select: { proposals: true },
-          },
-        },
+        // Removed expensive _count aggregation for faster queries
       });
 
       const hasMore = results.length > query.limit;
@@ -173,19 +170,14 @@ export async function GET(request: NextRequest) {
     } else {
       const skip = (query.page - 1) * query.limit;
 
-      const [results, total] = await Promise.all([
+      const [total, results] = await prisma.$transaction([
+        prisma.customer.count({ where: where as any }),
         prisma.customer.findMany({
           where: where as any, // Prisma compatibility
           skip,
           take: query.limit,
           orderBy: { [query.sortBy]: query.sortOrder },
-          include: {
-            _count: {
-              select: { proposals: true },
-            },
-          },
         }),
-        prisma.customer.count({ where: where as any }),
       ]);
 
       customers = results as Customer[];

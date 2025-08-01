@@ -230,7 +230,8 @@ export async function GET(request: NextRequest) {
       const skip = (query.page - 1) * query.limit;
 
       // Execute query with pagination
-      const [rawContent, total] = await Promise.all([
+      const [total, rawContent] = await prisma.$transaction([
+        prisma.content.count({ where }),
         prisma.content.findMany({
           where,
           select: {
@@ -250,7 +251,6 @@ export async function GET(request: NextRequest) {
             [query.sortBy]: query.sortOrder,
           },
         }),
-        prisma.content.count({ where }),
       ]);
 
       // Transform database content to match frontend interface

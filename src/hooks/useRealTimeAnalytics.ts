@@ -5,12 +5,12 @@
 
 "use client";
 
-import { useAnalytics } from "@/hooks/useAnalytics";
+import { useOptimizedAnalytics } from "@/hooks/useOptimizedAnalytics";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
 import { useCallback, useState } from "react";
 
 export function useRealTimeAnalytics() {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
   
   const [isLoading, setIsLoading] = useState(false);
@@ -19,11 +19,10 @@ export function useRealTimeAnalytics() {
   const trackRealTimeEvent = useCallback(
     async (eventType: string, data: Record<string, any>) => {
       try {
-        analytics.track("real_time_analytics_event", {
+        analytics("real_time_analytics_event", {
           ...data,
           eventType,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       } catch (error) {
         await handleAsyncError(error as Error, "Failed to track event", {
           context: "useRealTimeAnalytics",

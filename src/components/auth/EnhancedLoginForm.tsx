@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { cn } from '@/lib/utils';
@@ -107,7 +107,7 @@ export function EnhancedLoginForm({
 }: EnhancedLoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -200,15 +200,14 @@ export function EnhancedLoginForm({
         setAuthError(userMessage);
 
         // Track authentication failure for analytics
-        analytics.track('authentication_failure', {
+        analytics('authentication_failure', {
           error: standardError.code,
           duration: Date.now() - startTime,
           email: email.substring(0, 3) + '***',
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
           componentMapping: COMPONENT_MAPPING,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
 
         onError?.(userMessage);
         return { message: userMessage };
@@ -251,14 +250,13 @@ export function EnhancedLoginForm({
 
     try {
       // Track login attempt
-      analytics.track('authentication_attempt', {
+      analytics('authentication_attempt', {
         email: data.email.substring(0, 3) + '***',
         hasRole: !!data.role,
         rememberMe: data.rememberMe,
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         componentMapping: COMPONENT_MAPPING,
-        timestamp: authStartTime,
       });
 
       // Perform authentication
@@ -301,7 +299,7 @@ export function EnhancedLoginForm({
         timeToFirstSuccessfulLogin: authDuration,
       };
 
-      analytics.track('authentication_success', {
+      analytics('authentication_success', {
         email: data.email.substring(0, 3) + '***',
         roles,
         duration: authDuration,
@@ -310,16 +308,14 @@ export function EnhancedLoginForm({
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         componentMapping: COMPONENT_MAPPING,
-        timestamp: Date.now(),
       });
 
       // Track role-based redirection
-      analytics.track('role_based_redirection', {
+      analytics('role_based_redirection', {
         selectedRole: data.role,
         userRoles: roles,
         redirectPath,
         componentMapping: COMPONENT_MAPPING,
-        timestamp: Date.now(),
       });
 
       onSuccess?.(session.user);
@@ -337,11 +333,10 @@ export function EnhancedLoginForm({
     setShowPassword(prev => !prev);
 
     // Track user interaction for UX analytics
-    analytics.track('password_visibility_toggle', {
+    analytics('password_visibility_toggle', {
       visible: !showPassword,
       componentMapping: COMPONENT_MAPPING,
-      timestamp: Date.now(),
-    });
+    }, 'medium');
 
     // Maintain focus on password field
     setTimeout(() => {

@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { AlertCircle, ChevronDown, ChevronRight, Clock, MoreVertical } from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
@@ -118,7 +118,7 @@ export function EnhancedMobileCard({
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const lastTap = useRef<number>(0);
 
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   // Handle swipe gestures for actions
@@ -128,7 +128,7 @@ export function EnhancedMobileCard({
         if (swipeActions.length === 0) return;
 
         // Track swipe gesture analytics (H9: Mobile User Experience)
-        analytics.track('mobile_card_swipe', {
+        analytics('mobile_card_swipe', {
           direction,
           cardTitle: title,
           actionsAvailable: swipeActions.length,
@@ -136,7 +136,7 @@ export function EnhancedMobileCard({
           testCase: 'TC-H9-003',
           componentMapping: COMPONENT_MAPPING,
           ...trackingContext,
-        });
+        }, 'medium');
 
         // Show swipe actions
         setShowActions(true);
@@ -165,13 +165,13 @@ export function EnhancedMobileCard({
       // Double tap detection (within 300ms)
       if (timeDiff < 300 && onDoubleTap) {
         // Track double tap analytics (H9: Mobile User Experience)
-        analytics.track('mobile_card_double_tap', {
+        analytics('mobile_card_double_tap', {
           cardTitle: title,
           hypothesis: 'H9',
           testCase: 'TC-H9-004',
           componentMapping: COMPONENT_MAPPING,
           ...trackingContext,
-        });
+        }, 'medium');
 
         onDoubleTap();
         return;
@@ -180,13 +180,13 @@ export function EnhancedMobileCard({
       // Single tap
       if (onTap) {
         // Track single tap analytics (H9: Mobile User Experience)
-        analytics.track('mobile_card_tap', {
+        analytics('mobile_card_tap', {
           cardTitle: title,
           isExpanded,
           hypothesis: 'H9',
           componentMapping: COMPONENT_MAPPING,
           ...trackingContext,
-        });
+        }, 'low');
 
         onTap();
       }
@@ -207,12 +207,12 @@ export function EnhancedMobileCard({
       longPressTimer.current = setTimeout(() => {
         try {
           // Track long press analytics (H9: Mobile User Experience)
-          analytics.track('mobile_card_long_press', {
+          analytics('mobile_card_long_press', {
             cardTitle: title,
             hypothesis: 'H9',
             componentMapping: COMPONENT_MAPPING,
             ...trackingContext,
-          });
+          }, 'medium');
 
           onLongPress();
         } catch (error) {
@@ -242,13 +242,13 @@ export function EnhancedMobileCard({
         const newState = !prev;
 
         // Track expansion analytics (H9: Mobile User Experience)
-        analytics.track('mobile_card_expansion_toggle', {
+        analytics('mobile_card_expansion_toggle', {
           action: newState ? 'expand' : 'collapse',
           cardTitle: title,
           hypothesis: 'H9',
           componentMapping: COMPONENT_MAPPING,
           ...trackingContext,
-        });
+        }, 'low');
 
         return newState;
       });

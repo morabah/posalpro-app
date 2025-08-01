@@ -10,7 +10,7 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -117,7 +117,7 @@ interface CustomerProfileClientProps {
 
 export function CustomerProfileClient({ customerId }: CustomerProfileClientProps) {
   const router = useRouter();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   // State management
@@ -132,7 +132,7 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
   // Analytics tracking
   const trackAction = useCallback(
     (action: string, metadata: any = {}) => {
-      analytics.track('customer_profile_action', {
+      analytics('customer_profile_action', {
         action,
         metadata: {
           ...metadata,
@@ -142,8 +142,7 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
           hypothesis: 'H4',
           sessionDuration: Date.now() - sessionStartTime,
         },
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [customerId, sessionStartTime, analytics]
   );

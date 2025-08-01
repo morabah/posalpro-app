@@ -57,13 +57,13 @@ export interface UserApiData {
   id: string;
   email: string;
   name?: string;
-  roles: {
+  roles: Array<{
     id: string;
     role: {
       name: string;
       permissions: string[];
     };
-  }[];
+  }>;
   lastLoginAt?: string;
   isActive: boolean;
   createdAt: string;
@@ -227,11 +227,11 @@ export interface DatabaseSyncResult {
   status: 'success' | 'error' | 'warning';
   message: string;
   recordsProcessed?: number;
-  differences?: {
+  differences?: Array<{
     field: string;
     localValue: unknown;
     cloudValue: unknown;
-  }[];
+  }>;
 }
 
 // Admin and System Types
@@ -305,10 +305,10 @@ export interface BatchOperation<T = Record<string, unknown>> {
 
 export interface BatchResult<T = Record<string, unknown>> {
   successful: T[];
-  failed: {
+  failed: Array<{
     data: T;
     error: ApiError;
-  }[];
+  }>;
   summary: {
     total: number;
     successful: number;

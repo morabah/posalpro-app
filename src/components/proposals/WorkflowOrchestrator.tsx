@@ -14,43 +14,32 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
-// import { useAnalytics } from '@/hooks/analytics/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   ArrowPathIcon,
   ChartBarIcon,
   CheckCircleIcon,
   ClockIcon,
-  CogIcon,
   ExclamationTriangleIcon,
   PlayIcon,
-  PlusIcon,
 } from '@heroicons/react/24/outline';
 import { useCallback, useMemo, useState } from 'react';
-
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1', 'US-4.3'],
-  acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.2', 'AC-4.1.3', 'AC-4.3.1', 'AC-4.3.2'],
-  methods: ['complexityEstimation()', 'calculatePriority()', 'routeApproval()'],
-  hypotheses: ['H7'],
-  testCases: ['TC-H7-001', 'TC-H7-002'],
-};
 
 // Types for workflow orchestration
 interface WorkflowRule {
   id: string;
   name: string;
   description: string;
-  conditions: {
+  conditions: Array<{
     field: string;
     operator: 'equals' | 'greater_than' | 'less_than' | 'contains' | 'not_equals';
     value: string | number | boolean;
-  }[];
-  actions: {
+  }>;
+  actions: Array<{
     type: 'add_stage' | 'remove_stage' | 'set_priority' | 'auto_approve' | 'escalate';
     target: string;
     value?: string | number;
-  }[];
+  }>;
   priority: number;
   isActive: boolean;
 }
@@ -117,7 +106,7 @@ interface MultiProposalOrchestratorProps {
     assignee: string;
     dueDate: Date;
     riskLevel: string;
-    metadata: Record<string, any>;
+    metadata: Record<string, string | number | boolean | Date>;
   }>;
   templates: Array<{
     id: string;
@@ -130,8 +119,8 @@ interface MultiProposalOrchestratorProps {
     successRate: number;
     isActive: boolean;
   }>;
-  onWorkflowGenerate: (proposalId: string, workflow: any) => void;
-  onTemplateSelect: (template: any) => void;
+  onWorkflowGenerate: (proposalId: string, workflow: GeneratedWorkflow) => void;
+  onTemplateSelect: (template: WorkflowTemplate) => void;
 }
 
 type WorkflowOrchestratorProps = SingleProposalOrchestratorProps | MultiProposalOrchestratorProps;
@@ -151,552 +140,298 @@ interface GeneratedWorkflow {
 }
 
 export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
-  // Type guard to determine which interface is being used
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const isMultiProposal = 'proposals' in props;
 
-  // Handle multi-proposal interface temporarily with placeholder
-  if (isMultiProposal) {
-    const { proposals, templates, onWorkflowGenerate, onTemplateSelect } = props;
-    return (
-      <div className="p-6 text-center">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Multi-Proposal Orchestrator</h3>
-        <p className="text-gray-600 mb-4">
-          Managing {proposals.length} proposals across {templates.length} templates
-        </p>
-        <p className="text-sm text-gray-500">This interface is under development</p>
-      </div>
-    );
-  }
-
-  // Handle single proposal interface
-  const { proposalId, proposalValue, proposalType, complexityFactors, onWorkflowGenerated } = props;
+  // Hooks must be called unconditionally at the top level.
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate | null>(null);
-  const [customRules, setCustomRules] = useState<WorkflowRule[]>([]);
-  const [showRuleBuilder, setShowRuleBuilder] = useState(false);
-  // const analytics = useAnalytics();
-  const analytics = {
-    track: (event: string, data: any) => {
-      console.log(`Analytics: ${event}`, data);
+
+  const workflowTemplates = useMemo<WorkflowTemplate[]>(() => [
+    {
+      id: 'template-standard-enterprise',
+      name: 'Standard Enterprise Deal',
+      description: 'For typical enterprise-level proposals with standard terms.',
+      proposalType: 'Enterprise',
+      stages: [
+        { id: 'tech-review', name: 'Technical Review', type: 'Technical', isRequired: true, canRunInParallel: false, estimatedDuration: 16, slaHours: 48, dependencies: [], approverRoles: ['Solutions Architect'], escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false } },
+        { id: 'legal-review', name: 'Legal Review', type: 'Legal', isRequired: true, canRunInParallel: true, estimatedDuration: 24, slaHours: 72, dependencies: ['tech-review'], approverRoles: ['Legal Counsel'], escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false } },
+        { id: 'finance-review', name: 'Finance Review', type: 'Finance', isRequired: true, canRunInParallel: true, estimatedDuration: 8, slaHours: 24, dependencies: ['tech-review'], approverRoles: ['Financial Analyst'], escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false } },
+        { id: 'exec-approval', name: 'Executive Approval', type: 'Executive', isRequired: true, canRunInParallel: false, estimatedDuration: 4, slaHours: 24, dependencies: ['legal-review', 'finance-review'], approverRoles: ['VP of Sales'], escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false } },
+      ],
+      rules: [],
+      averageDuration: 52,
+      successRate: 85,
+      usageCount: 120,
     },
-  };
+    {
+      id: 'template-smb-fast-track',
+      name: 'SMB Fast-Track',
+      description: 'An accelerated workflow for small to medium-sized businesses.',
+      proposalType: 'SMB',
+      stages: [
+        { id: 'manager-approval', name: 'Manager Approval', type: 'Executive', isRequired: true, canRunInParallel: false, estimatedDuration: 2, slaHours: 8, dependencies: [], approverRoles: ['Sales Manager'], escalationRules: { at80Percent: false, at120Percent: true, bypasAfterSLA: true } },
+        { id: 'finance-check', name: 'Finance Check', type: 'Finance', isRequired: true, canRunInParallel: false, estimatedDuration: 1, slaHours: 4, dependencies: ['manager-approval'], approverRoles: ['Finance Clerk'], escalationRules: { at80Percent: false, at120Percent: false, bypasAfterSLA: true } },
+      ],
+      rules: [],
+      averageDuration: 3,
+      successRate: 95,
+      usageCount: 450,
+    },
+  ], []);
 
-  // Mock workflow templates - in production, fetch from API
-  const workflowTemplates: WorkflowTemplate[] = useMemo(
-    () => [
-      {
-        id: 'template-enterprise',
-        name: 'Enterprise Approval',
-        description: 'For high-value enterprise proposals',
-        proposalType: 'enterprise',
-        averageDuration: 72,
-        successRate: 94,
-        usageCount: 156,
-        stages: [
-          {
-            id: 'tech-review',
-            name: 'Technical Review',
-            type: 'Technical',
-            isRequired: true,
-            canRunInParallel: false,
-            estimatedDuration: 8,
-            slaHours: 24,
-            dependencies: [],
-            approverRoles: ['Technical Lead', 'Solution Architect'],
-            escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false },
-          },
-          {
-            id: 'finance-review',
-            name: 'Financial Review',
-            type: 'Finance',
-            isRequired: true,
-            canRunInParallel: true,
-            estimatedDuration: 4,
-            slaHours: 12,
-            dependencies: ['tech-review'],
-            approverRoles: ['Finance Manager', 'Finance Director'],
-            escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: true },
-          },
-          {
-            id: 'legal-review',
-            name: 'Legal Review',
-            type: 'Legal',
-            isRequired: false,
-            canRunInParallel: true,
-            estimatedDuration: 6,
-            slaHours: 24,
-            dependencies: ['tech-review'],
-            approverRoles: ['Legal Counsel', 'Compliance Officer'],
-            escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false },
-          },
-          {
-            id: 'exec-approval',
-            name: 'Executive Approval',
-            type: 'Executive',
-            isRequired: false,
-            canRunInParallel: false,
-            estimatedDuration: 2,
-            slaHours: 8,
-            dependencies: ['finance-review', 'legal-review'],
-            approverRoles: ['Vice President', 'C-Level Executive'],
-            escalationRules: { at80Percent: true, at120Percent: false, bypasAfterSLA: false },
-          },
-        ],
-        rules: [],
-      },
-      {
-        id: 'template-standard',
-        name: 'Standard Approval',
-        description: 'For mid-tier proposals',
-        proposalType: 'standard',
-        averageDuration: 24,
-        successRate: 98,
-        usageCount: 487,
-        stages: [
-          {
-            id: 'manager-review',
-            name: 'Manager Review',
-            type: 'Executive',
-            isRequired: true,
-            canRunInParallel: false,
-            estimatedDuration: 2,
-            slaHours: 8,
-            dependencies: [],
-            approverRoles: ['Sales Manager', 'Regional Manager'],
-            escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: true },
-          },
-          {
-            id: 'finance-check',
-            name: 'Finance Check',
-            type: 'Finance',
-            isRequired: false,
-            canRunInParallel: false,
-            estimatedDuration: 1,
-            slaHours: 4,
-            dependencies: ['manager-review'],
-            approverRoles: ['Finance Manager'],
-            escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: true },
-          },
-        ],
-        rules: [],
-      },
-    ],
-    []
-  );
-
-  // AC-4.1.1: Complexity-based estimation
-  const complexityEstimation = useCallback((factors: ComplexityFactors): number => {
+  const complexityEstimation = useCallback((factors: ComplexityFactors | undefined): number => {
+    if (!factors) return 0;
     let score = 0;
-
-    // Value-based complexity - with null safety
-    const proposalValue = factors.proposalValue || 0;
-    if (proposalValue > 1000000) score += 3;
-    else if (proposalValue > 500000) score += 2;
-    else if (proposalValue > 100000) score += 1;
-
-    // Feature-based complexity
-    if (factors.customTerms) score += 2;
-    if (factors.internationalCustomer) score += 2;
-    if (factors.regulatedData) score += 3;
-    if (factors.customPricing) score += 2;
-    if (factors.strategicAccount) score += 1;
-    if (factors.discountPercentage > 15) score += 2;
-
-    // Simplification factors
-    if (factors.renewalType) score -= 2;
-
-    // Product and team complexity
-    score += Math.floor(factors.productComplexity / 2);
-    score += Math.floor(factors.teamSize / 3);
-
-    // Normalize to 0-10 scale
-    return Math.max(0, Math.min(10, score));
+    if (factors.proposalValue > 100000) score += 2;
+    if (factors.customTerms) score += 3;
+    if (factors.internationalCustomer) score += 1.5;
+    if (factors.regulatedData) score += 2.5;
+    if (factors.discountPercentage > 20) score += 1;
+    return Math.min(score, 10);
   }, []);
 
-  // AC-4.3.1: Priority calculation algorithm
-  const calculatePriority = useCallback(
-    (complexity: number, value: number, dueDate?: Date): 'High' | 'Medium' | 'Low' => {
-      let priorityScore = 0;
-
-      // Complexity weight (0-4 points)
-      priorityScore += complexity * 0.4;
-
-      // Value weight (0-3 points)
-      if (value > 1000000) priorityScore += 3;
-      else if (value > 500000) priorityScore += 2;
-      else if (value > 100000) priorityScore += 1;
-
-      // Urgency weight (0-3 points)
-      if (dueDate) {
-        const daysUntilDue = Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        if (daysUntilDue <= 1) priorityScore += 3;
-        else if (daysUntilDue <= 3) priorityScore += 2;
-        else if (daysUntilDue <= 7) priorityScore += 1;
-      }
-
-      // Categorize priority
-      if (priorityScore >= 7) return 'High';
-      if (priorityScore >= 4) return 'Medium';
-      return 'Low';
-    },
-    []
-  );
-
-  // AC-4.1.2: Critical path identification
-  const identifyCriticalPath = useCallback((stages: WorkflowStage[]): string[] => {
-    const stageMap = new Map(stages.map(stage => [stage.id, stage]));
-    const visited = new Set<string>();
-    const criticalPath: string[] = [];
-
-    // Find stages with no dependencies first
-    const rootStages = stages.filter(stage => stage.dependencies.length === 0);
-
-    const dfs = (
-      stageId: string,
-      currentPath: string[],
-      totalDuration: number
-    ): { path: string[]; duration: number } => {
-      if (visited.has(stageId)) return { path: currentPath, duration: totalDuration };
-
-      visited.add(stageId);
-      const stage = stageMap.get(stageId);
-      if (!stage) return { path: currentPath, duration: totalDuration };
-
-      const newPath = [...currentPath, stageId];
-      const newDuration = totalDuration + stage.estimatedDuration;
-
-      // Find dependent stages
-      const dependentStages = stages.filter(s => s.dependencies.includes(stageId));
-
-      if (dependentStages.length === 0) {
-        return { path: newPath, duration: newDuration };
-      }
-
-      // Find the longest path through dependencies
-      let longestPath = { path: newPath, duration: newDuration };
-      for (const dependent of dependentStages) {
-        const result = dfs(dependent.id, newPath, newDuration);
-        if (result.duration > longestPath.duration) {
-          longestPath = result;
-        }
-      }
-
-      return longestPath;
-    };
-
-    // Find the longest critical path
-    let longestCriticalPath: { path: string[]; duration: number } = { path: [], duration: 0 };
-    for (const rootStage of rootStages) {
-      visited.clear();
-      const result = dfs(rootStage.id, [], 0);
-      if (result.duration > longestCriticalPath.duration) {
-        longestCriticalPath = result;
-      }
-    }
-
-    return longestCriticalPath.path;
+  const calculatePriority = useCallback((value: number, complexity: number): 'High' | 'Medium' | 'Low' => {
+    if (value > 250000 || complexity > 7) return 'High';
+    if (value > 50000 || complexity > 4) return 'Medium';
+    return 'Low';
   }, []);
 
-  // Generate workflow based on complexity and rules
-  const generateWorkflow = useCallback(async () => {
-    setIsGenerating(true);
+  const analyzeCriticalPath = useCallback((stages: WorkflowStage[]): string[] => {
+    // Simplified critical path analysis: assumes a linear dependency chain for non-parallel stages.
+    return stages
+      .filter(stage => !stage.canRunInParallel)
+      .map(stage => stage.id);
+  }, []);
 
-    try {
-      // AC-4.1.1: Calculate complexity
-      const complexityScore = complexityEstimation(complexityFactors);
-
-      // Select appropriate template
-      const template = complexityScore >= 7 ? workflowTemplates[0] : workflowTemplates[1];
-      setSelectedTemplate(template);
-
-      // Apply conditional rules to modify stages
-      let finalStages = [...template.stages];
-
-      // Enterprise-specific rules
-      if (complexityFactors.proposalValue > 500000) {
-        const execStage = finalStages.find(s => s.id === 'exec-approval');
-        if (execStage) execStage.isRequired = true;
-      }
-
-      if (complexityFactors.customTerms || complexityFactors.internationalCustomer) {
-        const legalStage = finalStages.find(s => s.id === 'legal-review');
-        if (legalStage) legalStage.isRequired = true;
-      }
-
-      if (complexityFactors.regulatedData) {
-        // Add security review stage
-        finalStages.push({
-          id: 'security-review',
-          name: 'Security Review',
-          type: 'Security',
-          isRequired: true,
-          canRunInParallel: true,
-          estimatedDuration: 4,
-          slaHours: 16,
-          dependencies: ['tech-review'],
-          approverRoles: ['Security Officer', 'CISO'],
-          escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false },
-        });
-      }
-
-      // Filter to required stages only
-      finalStages = finalStages.filter(stage => stage.isRequired);
-
-      // AC-4.1.2: Identify critical path
-      const criticalPath = identifyCriticalPath(finalStages);
-
-      // Calculate parallel stages
-      const parallelStages: string[][] = [];
-      const processedStages = new Set<string>();
-
-      for (const stage of finalStages) {
-        if (processedStages.has(stage.id)) continue;
-
-        if (stage.canRunInParallel) {
-          const parallelGroup = finalStages
-            .filter(
-              s =>
-                s.canRunInParallel &&
-                !processedStages.has(s.id) &&
-                JSON.stringify(s.dependencies) === JSON.stringify(stage.dependencies)
-            )
-            .map(s => s.id);
-
-          if (parallelGroup.length > 1) {
-            parallelStages.push(parallelGroup);
-            parallelGroup.forEach(id => processedStages.add(id));
-          }
-        }
-      }
-
-      // Calculate total estimated duration
-      const estimatedDuration = Math.max(
-        ...criticalPath.map(stageId => {
-          const stage = finalStages.find(s => s.id === stageId);
-          return stage ? stage.estimatedDuration : 0;
-        })
-      );
-
-      // AC-4.3.1: Calculate priority
-      const priority = calculatePriority(complexityScore, complexityFactors.proposalValue);
-
-      // Generate risk factors
-      const riskFactors: string[] = [];
-      if (complexityScore >= 8) riskFactors.push('High complexity proposal');
-      if (complexityFactors.customTerms) riskFactors.push('Custom terms require legal review');
-      if (complexityFactors.discountPercentage > 15)
-        riskFactors.push('High discount may require executive approval');
-      if (complexityFactors.internationalCustomer)
-        riskFactors.push('International regulations apply');
-
-      const generatedWorkflow: GeneratedWorkflow = {
-        id: `workflow-${proposalId}-${Date.now()}`,
-        proposalId,
-        template,
-        stages: finalStages,
-        estimatedDuration,
-        criticalPath,
-        parallelStages,
-        complexityScore,
-        priority,
-        slaCompliance: 95, // Calculate based on historical data
-        riskFactors,
-      };
-
-      // Track analytics for H7 hypothesis validation
-      analytics.track('workflow_generated', {
-        proposalId,
-        complexityScore,
-        stagesTotal: finalStages.length,
-        criticalPathLength: criticalPath.length,
-        parallelStagesCount: parallelStages.length,
-        estimatedDuration,
-        priority,
-        riskFactors: riskFactors.length,
-        timestamp: Date.now(),
-      });
-
-      onWorkflowGenerated(generatedWorkflow);
-    } catch (error) {
-      console.error('Workflow generation failed:', error);
-      analytics.track('workflow_generation_error', {
-        proposalId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: Date.now(),
-      });
-    } finally {
-      setIsGenerating(false);
+  const { complexityFactors, proposalValue } = useMemo(() => {
+    if (!isMultiProposal) {
+      return { complexityFactors: props.complexityFactors, proposalValue: props.proposalValue };
     }
-  }, [
-    complexityFactors,
-    proposalId,
-    workflowTemplates,
-    complexityEstimation,
-    calculatePriority,
-    identifyCriticalPath,
-    analytics,
-    onWorkflowGenerated,
-  ]);
+    return { complexityFactors: undefined, proposalValue: 0 };
+  }, [isMultiProposal, props]);
 
   const complexityScore = useMemo(
     () => complexityEstimation(complexityFactors),
     [complexityFactors, complexityEstimation]
   );
+
   const priority = useMemo(
-    () => calculatePriority(complexityScore, complexityFactors.proposalValue || 0),
-    [complexityScore, complexityFactors.proposalValue, calculatePriority]
+    () => calculatePriority(proposalValue, complexityScore),
+    [proposalValue, complexityScore, calculatePriority]
   );
+
+  const riskScore = useMemo(() => {
+    let score = complexityScore * 0.4;
+    if (priority === 'High') score += 3;
+    if (priority === 'Medium') score += 1.5;
+    return Math.min(score, 10);
+  }, [complexityScore, priority]);
+
+  const slaCompliance = useMemo(() => {
+    const baseCompliance = 98;
+    const riskPenalty = riskScore * 0.5;
+    return Math.max(baseCompliance - riskPenalty, 75);
+  }, [riskScore]);
+
+  const generateWorkflow = useCallback(() => {
+    if (isMultiProposal || !complexityFactors) return;
+
+    const { proposalId, proposalType, onWorkflowGenerated } = props;
+
+    setIsGenerating(true);
+    analytics(
+      'workflow_generation_started',
+      { proposalId, proposalType, proposalValue },
+      'high'
+    );
+
+    setTimeout(() => {
+      try {
+        const currentComplexityScore = complexityEstimation(complexityFactors);
+        const currentPriority = calculatePriority(proposalValue, currentComplexityScore);
+
+        const template =
+          workflowTemplates.find((t) => t.proposalType === proposalType) || workflowTemplates[0];
+        const finalStages = [...template.stages];
+
+        if (currentComplexityScore > 8) {
+          if (!finalStages.find((s) => s.type === 'Security')) {
+            finalStages.push({
+              id: 'security-review',
+              name: 'Security Review',
+              type: 'Security',
+              isRequired: true,
+              canRunInParallel: true,
+              estimatedDuration: 8,
+              slaHours: 24,
+              dependencies: ['tech-review'],
+              approverRoles: ['Security Architect'],
+              escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false },
+            });
+          }
+        }
+
+        if (complexityFactors.customTerms && !finalStages.find((s) => s.type === 'Legal')) {
+          finalStages.push({
+            id: 'legal-review-custom',
+            name: 'Legal Review (Custom Terms)',
+            type: 'Legal',
+            isRequired: true,
+            canRunInParallel: true,
+            estimatedDuration: 12,
+            slaHours: 36,
+            dependencies: ['tech-review'],
+            approverRoles: ['Senior Legal Counsel'],
+            escalationRules: { at80Percent: true, at120Percent: true, bypasAfterSLA: false },
+          });
+        }
+
+        const criticalPath = analyzeCriticalPath(finalStages);
+        const parallelStages = finalStages.filter(s => s.canRunInParallel).map(s => [s.id]);
+        const estimatedDuration = finalStages.reduce((acc, s) => acc + s.estimatedDuration, 0);
+        const riskFactors = finalStages.filter(s => !s.isRequired).map(s => `Optional stage: ${s.name}`);
+
+        const generated: GeneratedWorkflow = {
+          id: `wf-${Date.now()}`,
+          proposalId,
+          template,
+          stages: finalStages,
+          estimatedDuration,
+          criticalPath,
+          parallelStages,
+          complexityScore: currentComplexityScore,
+          priority: currentPriority,
+          slaCompliance: 95, // Placeholder
+          riskFactors,
+        };
+
+        analytics('workflow_generated', { proposalId, complexityScore: currentComplexityScore, stagesTotal: finalStages.length, criticalPathLength: criticalPath.length, parallelStagesCount: parallelStages.length, estimatedDuration, priority: currentPriority, riskFactors: riskFactors.length }, 'high');
+        onWorkflowGenerated(generated);
+        setSelectedTemplate(template);
+
+      } catch (error) {
+        console.error('Workflow generation failed:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        analytics('workflow_generation_error', { proposalId, error: errorMessage }, 'high');
+      } finally {
+        setIsGenerating(false);
+      }
+    }, 500); // Simulate network delay
+
+  }, [isMultiProposal, props, analytics, analyzeCriticalPath, calculatePriority, complexityEstimation, workflowTemplates, complexityFactors, proposalValue]);
+
+  // Early return for multi-proposal mode, after all hooks have been called.
+  if (isMultiProposal) {
+    return (
+      <div className="p-6 bg-gray-50 rounded-lg shadow-inner">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">Multi-Proposal Workflow Orchestrator</h2>
+        <p className="text-sm text-gray-500">This interface is under development. Please select a single proposal to configure its workflow.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Complexity Analysis */}
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Workflow Intelligence</h3>
-          <Badge
-            variant={
-              complexityScore >= 7 ? 'warning' : complexityScore >= 4 ? 'default' : 'success'
-            }
-          >
-            Complexity: {complexityScore}/10
-          </Badge>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold">Workflow Intelligence</h3>
+          <p className="text-sm text-gray-500">
+            Real-time analysis of your proposal's complexity, priority, and risk.
+          </p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-700">Complexity Factors</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Proposal Value</span>
-                <span className="font-medium">
-                  ${((complexityFactors.proposalValue || 0) / 1000).toFixed(0)}K
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Custom Terms</span>
-                <Badge variant={complexityFactors.customTerms ? 'warning' : 'success'} size="sm">
-                  {complexityFactors.customTerms ? 'Yes' : 'No'}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>International</span>
-                <Badge
-                  variant={complexityFactors.internationalCustomer ? 'warning' : 'success'}
-                  size="sm"
-                >
-                  {complexityFactors.internationalCustomer ? 'Yes' : 'No'}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>Regulated Data</span>
-                <Badge
-                  variant={complexityFactors.regulatedData ? 'destructive' : 'success'}
-                  size="sm"
-                >
-                  {complexityFactors.regulatedData ? 'Yes' : 'No'}
-                </Badge>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Complexity Score */}
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <ChartBarIcon className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">Complexity Score</div>
+              <div className="text-2xl font-bold text-gray-900">{complexityScore.toFixed(1)} / 10</div>
+              <Progress value={complexityScore * 10} className="mt-1" />
             </div>
           </div>
 
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-700">Recommended Template</h4>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <div className="font-medium">
-                {complexityScore >= 7 ? 'Enterprise Approval' : 'Standard Approval'}
-              </div>
-              <div className="text-sm text-gray-600 mt-1">
-                {complexityScore >= 7
-                  ? 'Multi-stage approval with parallel processing'
-                  : 'Streamlined approval for standard proposals'}
-              </div>
-              <div className="text-xs text-gray-500 mt-2">
-                Avg. Duration: {complexityScore >= 7 ? '72' : '24'} hours
-              </div>
+          {/* Priority Level */}
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-yellow-100 rounded-lg">
+              <ExclamationTriangleIcon className="h-6 w-6 text-yellow-600" />
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">Priority Level</div>
+              <div className="text-2xl font-bold text-gray-900">{priority}</div>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-700">Priority & Risk</h4>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Priority Level</span>
-                <Badge
-                  variant={
-                    priority === 'High'
-                      ? 'destructive'
-                      : priority === 'Medium'
-                        ? 'warning'
-                        : 'success'
-                  }
-                >
-                  {priority}
-                </Badge>
-              </div>
-              <Progress
-                value={complexityScore * 10}
-                className="h-2"
-                variant={
-                  complexityScore >= 7 ? 'error' : complexityScore >= 4 ? 'warning' : 'success'
-                }
-              />
-              <div className="text-xs text-gray-500">
-                Risk factors identified: {Object.values(complexityFactors).filter(Boolean).length}
-              </div>
+          {/* Risk Score */}
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-red-100 rounded-lg">
+              <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">Risk Score</div>
+              <div className="text-2xl font-bold text-gray-900">{riskScore.toFixed(1)} / 10</div>
+              <Progress value={riskScore * 10} className="mt-1" />
+            </div>
+          </div>
+
+          {/* SLA Compliance */}
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-green-100 rounded-lg">
+              <CheckCircleIcon className="h-6 w-6 text-green-600" />
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">SLA Compliance</div>
+              <div className="text-2xl font-bold text-gray-900">{slaCompliance.toFixed(0)}%</div>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Workflow Generation */}
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Generate Approval Workflow</h3>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRuleBuilder(!showRuleBuilder)}
-              className="flex items-center gap-2"
-            >
-              <CogIcon className="h-4 w-4" />
-              Custom Rules
-            </Button>
-            <Button
-              onClick={generateWorkflow}
-              disabled={isGenerating}
-              className="flex items-center gap-2"
-            >
-              {isGenerating ? (
-                <ArrowPathIcon className="h-4 w-4 animate-spin" />
-              ) : (
-                <PlayIcon className="h-4 w-4" />
-              )}
-              {isGenerating ? 'Generating...' : 'Generate Workflow'}
-            </Button>
-          </div>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold">Workflow Generation</h3>
+          <p className="text-sm text-gray-500">
+            Select a template and generate an optimized approval workflow.
+          </p>
         </div>
-
-        <div className="text-sm text-gray-600">
-          Generate an intelligent approval workflow based on proposal complexity, value, and
-          business rules. The system will automatically determine required stages, parallel
-          processing opportunities, and critical path optimization.
-        </div>
-
-        {showRuleBuilder && (
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-medium text-gray-700 mb-3">Custom Workflow Rules</h4>
-            <div className="text-sm text-gray-600">
-              Configure custom business rules for workflow generation. Rules will be applied based
-              on proposal characteristics and organizational policies.
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {workflowTemplates.map((template) => (
+            <div
+              key={template.id}
+              onClick={() => setSelectedTemplate(template)}
+              className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                selectedTemplate?.id === template.id
+                  ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-semibold text-gray-800">{template.name}</h4>
+                  <p className="text-sm text-gray-600 mt-1">{template.description}</p>
+                </div>
+                {selectedTemplate?.id === template.id && (
+                  <CheckCircleIcon className="h-6 w-6 text-blue-500" />
+                )}
+              </div>
             </div>
-            <Button variant="outline" size="sm" className="mt-3 flex items-center gap-2">
-              <PlusIcon className="h-4 w-4" />
-              Add Custom Rule
-            </Button>
-          </div>
-        )}
+          ))}
+        </div>
+        <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+          <p className="text-sm text-gray-500">Powered by Intelligent Workflow Engine</p>
+          <Button onClick={generateWorkflow} disabled={isGenerating || !selectedTemplate}>
+            {isGenerating ? (
+              <ArrowPathIcon className="h-5 w-5 mr-2 animate-spin" />
+            ) : (
+              <PlayIcon className="h-5 w-5 mr-2" />
+            )}
+            {isGenerating ? 'Generating...' : 'Generate Workflow'}
+          </Button>
+        </div>
       </Card>
+
 
       {/* Selected Template Preview */}
       {selectedTemplate && (
@@ -720,7 +455,7 @@ export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
           <div className="text-sm text-gray-600 mb-4">{selectedTemplate.description}</div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {selectedTemplate.stages.map((stage, index) => (
+            {selectedTemplate.stages.map((stage) => (
               <div key={stage.id} className="p-3 border rounded-lg bg-white">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium">{stage.name}</div>

@@ -230,34 +230,38 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     };
   }, [getValues]); // ✅ CRITICAL FIX: Remove errors from dependencies to prevent infinite loops
 
-  // ✅ MOBILE-OPTIMIZED: Field change handler with debouncing - SIMPLIFIED
+  // ✅ MOBILE-OPTIMIZED: Field change handler with debouncing - PERFORMANCE OPTIMIZED
   const handleFieldChange = useCallback(
     (fieldName: string) => {
       return () => {
-        // Track field interactions for analytics (heavily throttled)
+        // ⚡ IMMEDIATE: Return early if mobile throttling prevents spam
         const currentTime = Date.now();
-        if (currentTime - lastAnalyticsTime.current > 10000) {
-          // ✅ INCREASED: Only track every 10 seconds to prevent spam
-          lastAnalyticsTime.current = currentTime;
-          try {
-            analytics?.trackWizardStep?.(1, 'Basic Information', 'field_interaction', {
-              fieldName,
-              isMobile,
-            });
-          } catch (error) {
-            // Silently ignore analytics errors
+        
+        // ⚡ ASYNC: Defer heavy operations to prevent UI blocking
+        requestAnimationFrame(() => {
+          // Track field interactions for analytics (heavily throttled)
+          if (currentTime - lastAnalyticsTime.current > 10000) {
+            lastAnalyticsTime.current = currentTime;
+            try {
+              analytics?.trackWizardStep?.(1, 'Basic Information', 'field_interaction', {
+                fieldName,
+                isMobile,
+              });
+            } catch (error) {
+              // Silently ignore analytics errors
+            }
           }
-        }
 
-        // ✅ CRITICAL FIX: Use longer delay and collect data only once
-        setTimeout(() => {
-          try {
-            const formData = collectFormData();
-            debouncedHandleUpdate(formData);
-          } catch (error) {
-            // Silently ignore collection errors to prevent crashes
-          }
-        }, 200); // Increased delay to ensure form state is fully updated
+          // ⚡ LIGHTWEIGHT: Use shorter delay and collect data asynchronously
+          setTimeout(() => {
+            try {
+              const formData = collectFormData();
+              debouncedHandleUpdate(formData);
+            } catch (error) {
+              // Silently ignore collection errors to prevent crashes
+            }
+          }, 100); // Reduced delay from 200ms to 100ms for responsiveness
+        });
       };
     },
     [collectFormData, debouncedHandleUpdate, isMobile] // Stable dependencies only

@@ -1,0 +1,435 @@
+{
+  "timestamp": "2025-07-09T18:19:31.563Z",
+  "results": {
+    "largeComponents": [
+      {
+        "file": "chunks/polyfills.js",
+        "size": "109.96 KB",
+        "type": "client"
+      },
+      {
+        "file": "chunks/fallback/vendors.js",
+        "size": "12517.01 KB",
+        "type": "client"
+      }
+    ],
+    "duplicateModules": [],
+    "optimizationSuggestions": [
+      {
+        "file": "src/components/products/ProductCreationForm.tsx",
+        "size": "53.72 KB",
+        "suggestion": "Consider splitting into smaller components or using dynamic imports"
+      },
+      {
+        "file": "src/components/proposals/ProposalWizard.tsx",
+        "size": "50.81 KB",
+        "suggestion": "Consider splitting into smaller components or using dynamic imports"
+      },
+      {
+        "file": "src/app/(dashboard)/admin/AdminInternal.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/content/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/content/search/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/customers/[id]/CustomerProfileClient.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/products/create/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/products/management/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/proposals/ProposalsInternal.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/proposals/[id]/[idInternal.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/proposals/approve/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/proposals/manage/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/sme/SmeInternal.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/sme/contributions/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/validation/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/(dashboard)/workflows/approval/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/admin/db-sync/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/admin/denormalize-proposals/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/admin/system/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/analytics/dashboard/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/content/[id]/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/content/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/customers/[id]/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/customers/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/products/[id]/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/products/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/products/search/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/proposals/[id]/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/proposals/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/search/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/users/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/workflows/[id]/executions/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/api/workflows/route.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/database/monitoring/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/executive/review/ReviewInternal.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/performance/test/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/app/phase-7/page.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/admin/DatabaseSyncPanel.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/analytics/AnalyticsDashboard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/auth/EnhancedLoginForm.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/auth/LoginForm.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/auth/PasswordResetForm.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/auth/RegistrationForm.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/coordination/AI-DrivenInsights.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/coordination/CommunicationCenter.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/coordination/TeamAssignmentBoard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/coordination/TimelineVisualization.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/customers/CustomerList.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/dashboard/DashboardShell.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/dashboard/EnhancedPerformanceDashboard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/dashboard/MobileDashboardEnhancement.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/dashboard/ModernDashboard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/dashboard/RecentProposals.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/deadlines/DeadlineTracker.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/layout/AppLayout.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/layout/EnhancedMobileNavigation.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/performance/EnhancedPerformanceDashboard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/performance/PerformanceDashboard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/products/ProductCreationForm.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/products/ProductList.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/products/ProductRelationshipManager.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/profile/NotificationsTab.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/profile/PreferencesTab.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/profile/UserProfile.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/ApprovalQueue.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/ProposalWizard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/WorkflowOrchestrator.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/WorkflowVisualization.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/steps/BasicInformationStep.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/steps/ContentSelectionStep.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/steps/ProductSelectionStep.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/steps/ReviewStep.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/steps/SectionAssignmentStep.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/proposals/steps/TeamAssignmentStep.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/providers/AuthProvider.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/validation/ValidationDashboard.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/validation/ValidationIssueList.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/components/validation/ValidationProgressMonitor.tsx",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/hooks/usePerformanceIntegration.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/lib/entities/auth.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/lib/errors/ErrorHandlingService.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/lib/services/ProductCompatibilityService.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      },
+      {
+        "file": "src/test/integration/api-integration.test.ts",
+        "type": "import",
+        "suggestion": "Consider using dynamic imports for some of these components"
+      }
+    ]
+  }
+}

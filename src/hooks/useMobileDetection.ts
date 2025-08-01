@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -73,7 +73,7 @@ export const useMobileDetection = () => {
     useState<NavigationOptimization | null>(null);
 
   const { handleAsyncError } = useErrorHandler();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   /**
    * Advanced Device Detection
@@ -230,7 +230,7 @@ export const useMobileDetection = () => {
         };
 
         // Analytics tracking for navigation optimization
-        analytics.track('navigation_optimization_applied', {
+        analytics('navigation_optimization_applied', {
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: ['H9', 'H10'],
           measurementData: {
@@ -240,7 +240,7 @@ export const useMobileDetection = () => {
             gesturesEnabled: optimization.useSwipeGestures,
           },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
 
         return optimization;
       } catch (error) {
@@ -272,7 +272,7 @@ export const useMobileDetection = () => {
     (device: MobileDeviceInfo) => {
       try {
         // Track comprehensive device analytics (H11: Mobile Performance)
-        analytics.track('mobile_device_metrics', {
+        analytics('mobile_device_metrics', {
           userStories: ['US-8.1', 'US-8.3'],
           hypotheses: ['H11'],
           measurementData: {
@@ -297,8 +297,7 @@ export const useMobileDetection = () => {
             hasSafeArea: device.accessibility.hasSafeArea,
           },
           componentMapping: COMPONENT_MAPPING,
-          timestamp: Date.now(),
-        });
+        }, 'low');
       } catch (error) {
         handleAsyncError(error as Error, 'Failed to track device metrics', {
           context: 'useMobileDetection.trackDeviceMetrics',
@@ -324,7 +323,7 @@ export const useMobileDetection = () => {
       setNavigationOptimization(updatedOptimization);
 
       // Track screen change events
-      analytics.track('mobile_screen_change', {
+      analytics('mobile_screen_change', {
         userStories: ['US-8.1'],
         hypotheses: ['H9'],
         measurementData: {
@@ -333,7 +332,7 @@ export const useMobileDetection = () => {
           newHeight: updatedDevice.screenSize.height,
         },
         componentMapping: COMPONENT_MAPPING,
-      });
+      }, 'low');
     } catch (error) {
       handleAsyncError(error as Error, 'Failed to handle screen change', {
         context: 'useMobileDetection.handleScreenChange',

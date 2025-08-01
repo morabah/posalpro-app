@@ -181,14 +181,14 @@ export const ProposalOverview: React.FC<WidgetProps> = ({
 
     const { metrics, userRole } = proposalData;
 
-    type StatItem = {
+    interface StatItem {
       title: string;
       value: string | number;
       change: number;
       trend: 'up' | 'down' | 'stable';
       icon: React.ReactNode;
       color: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
-    };
+    }
 
     const baseStats: StatItem[] = [
       {

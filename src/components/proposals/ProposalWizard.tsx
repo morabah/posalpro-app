@@ -14,7 +14,7 @@
  * - GPU acceleration for smooth interactions
  */
 
-import { useAuth } from '@/components/providers/AuthProvider';
+import { useAuth } from '@/hooks/auth/useAuth';
 import { useErrorHandler } from '@/components/providers/ErrorBoundary';
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';

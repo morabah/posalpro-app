@@ -66,7 +66,7 @@ enum SystemHealth {
 }
 
 // Add after existing imports
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -233,7 +233,7 @@ export default function AdminSystem() {
   } = useSystemMetrics();
 
   // Add error handling and analytics
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Error handling with user feedback
@@ -258,11 +258,11 @@ export default function AdminSystem() {
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       toast.error(userMessage);
 
-      analytics.track('admin_operation_error', {
+      analytics('admin_operation_error', {
         operation,
         error: standardError.message,
         context,
-      });
+      }, 'high');
     },
     [errorHandlingService, analytics]
   );
@@ -327,10 +327,10 @@ export default function AdminSystem() {
       await refetchUsers();
 
       toast.success('User updated successfully');
-      analytics.track('admin_edit_user_success', {
+      analytics('admin_edit_user_success', {
         userId: editingUser.id,
         updatedFields: Object.keys(editUserData),
-      });
+      }, 'medium');
 
       setIsEditUserModalOpen(false);
       setEditingUser(null);
@@ -368,10 +368,10 @@ export default function AdminSystem() {
       });
       setIsEditUserModalOpen(true);
 
-      analytics.track('admin_edit_user_started', {
+      analytics('admin_edit_user_started', {
         userId: user.id,
         userRole: user.role,
-      });
+      }, 'low');
     },
     [analytics]
   );
@@ -381,9 +381,9 @@ export default function AdminSystem() {
     setEditingUser(null);
     setEditUserData({} as SystemUserEditData);
 
-    analytics.track('admin_edit_user_cancelled', {
+    analytics('admin_edit_user_cancelled', {
       userId: editingUser?.id,
-    });
+    }, 'low');
   }, [analytics, editingUser]);
 
   /**

@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Authentication check
-    session = (await getServerSession(authOptions)) as AuthenticatedSession | null;
+    session = (await getServerSession(authOptions));
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -286,8 +286,8 @@ async function performEnhancedSearch(
       ...contentResults.map((item: any) => ({
         ...item,
         entityType: 'content',
-        metadata: (item as any).metadata || null,
-        tags: (item as any).tags || null,
+        metadata: (item).metadata || null,
+        tags: (item).tags || null,
       }))
     );
     totalCount += contentResults.length;
@@ -299,8 +299,8 @@ async function performEnhancedSearch(
       ...proposalResults.map((item: any) => ({
         ...item,
         entityType: 'proposal',
-        metadata: (item as any).metadata || null,
-        tags: (item as any).tags || null,
+        metadata: (item).metadata || null,
+        tags: (item).tags || null,
       }))
     );
     totalCount += proposalResults.length;
@@ -312,8 +312,8 @@ async function performEnhancedSearch(
       ...productResults.map((item: any) => ({
         ...item,
         entityType: 'product',
-        metadata: (item as any).metadata || null,
-        tags: (item as any).tags || null,
+        metadata: (item).metadata || null,
+        tags: (item).tags || null,
       }))
     );
     totalCount += productResults.length;
@@ -325,8 +325,8 @@ async function performEnhancedSearch(
       ...customerResults.map((item: any) => ({
         ...item,
         entityType: 'customer',
-        metadata: (item as any).metadata || null,
-        tags: (item as any).tags || null,
+        metadata: (item).metadata || null,
+        tags: (item).tags || null,
       }))
     );
     totalCount += customerResults.length;
@@ -338,8 +338,8 @@ async function performEnhancedSearch(
       ...userResults.map((item: any) => ({
         ...item,
         entityType: 'user',
-        metadata: (item as any).metadata || null,
-        tags: (item as any).tags || null,
+        metadata: (item).metadata || null,
+        tags: (item).tags || null,
       }))
     );
     totalCount += userResults.length;
@@ -708,8 +708,8 @@ function sortByField(results: SearchResult[], field: string, order: 'asc' | 'des
 
     // Handle missing values for title/name
     if (field === 'title') {
-      valueA = (a.title || a.name || '') as string;
-      valueB = (b.title || b.name || '') as string;
+      valueA = (a.title || a.name || '');
+      valueB = (b.title || b.name || '');
     }
 
     if (valueA < valueB) return order === 'asc' ? -1 : 1;

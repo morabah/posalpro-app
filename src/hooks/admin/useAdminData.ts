@@ -10,9 +10,9 @@
  * - Standardized patterns for infrastructure quality (H8)
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -50,7 +50,7 @@ interface SystemRole {
   permissionsList: string[];
   lastModified: Date;
   parent?: { id: string; name: string; level: number };
-  children?: { id: string; name: string; level: number }[];
+  children?: Array<{ id: string; name: string; level: number }>;
   performanceExpectations?: Record<string, number>;
   activeUsers: Array<{
     id: string;
@@ -159,7 +159,7 @@ export function useUsers(
 ) {
   // Infrastructure setup - MIGRATED from direct fetch
   const apiClient = useApiClient();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError, clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -189,12 +189,16 @@ export function useUsers(
       if (department) params.append('department', department);
 
       // Analytics tracking - MIGRATED
-      analytics.track('admin_users_fetch_started', {
-        component: 'useUsers',
-        hypothesis: 'H8',
-        userStory: 'US-8.1',
-        parameters: { page, limit, search, role, status, department },
-      });
+      analytics(
+        'admin_users_fetch_started',
+        {
+          component: 'useUsers',
+          hypothesis: 'H8',
+          userStory: 'US-8.1',
+          parameters: { page, limit, search, role, status, department },
+        },
+        'low'
+      );
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
       const data = await apiClient.get<{
@@ -207,13 +211,19 @@ export function useUsers(
       setError(null);
 
       // Success analytics - MIGRATED
-      analytics.track('admin_users_fetch_success', {
-        component: 'useUsers',
-        hypothesis: 'H8',
-        userStory: 'US-8.1',
-        resultCount: data.users.length,
-        totalPages: data.pagination.totalPages,
-      });
+      analytics(
+        'admin_users_fetch_success',
+        {
+          component: 'useUsers',
+          hypothesis: 'H8',
+          userStory: 'US-8.1',
+          userData: {
+            count: data.users.length,
+            page: data.pagination.page,
+          },
+        },
+        'low'
+      );
     } catch (err) {
       // ✅ MIGRATED: Manual error handling → ErrorHandlingService (corrected signature)
       const standardError = errorHandlingService.processError(
@@ -237,13 +247,16 @@ export function useUsers(
       setError(userMessage);
 
       // Error analytics - MIGRATED
-      analytics.track('admin_users_fetch_error', {
-        component: 'useUsers',
-        hypothesis: 'H8',
-        userStory: 'US-8.1',
-        errorCode: standardError.code,
-        errorMessage: standardError.message,
-      });
+      analytics(
+        'admin_users_fetch_error',
+        {
+          component: 'useUsers',
+          hypothesis: 'H8',
+          userStory: 'US-8.1',
+          errorCode: standardError.code,
+        },
+        'high'
+      );
     } finally {
       setLoading(false);
     }
@@ -262,26 +275,31 @@ export function useUsers(
       department: string;
     }) => {
       try {
-        analytics.track('admin_user_create_started', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          userRole: userData.role,
-          department: userData.department,
-        });
+        analytics(
+          'admin_user_create_started',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+          },
+          'low'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
         const result = await apiClient.post<{ id: string }>('admin/users', userData);
 
         await fetchUsers();
 
-        analytics.track('admin_user_create_success', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          userId: result.id,
-          userRole: userData.role,
-        });
+        analytics(
+          'admin_user_create_success',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+            userId: result.id,
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -298,13 +316,16 @@ export function useUsers(
           }
         );
 
-        analytics.track('admin_user_create_error', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          errorCode: standardError.code,
-          userRole: userData.role,
-        });
+        analytics(
+          'admin_user_create_error',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+            errorCode: standardError.code,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -322,25 +343,32 @@ export function useUsers(
       }
     ) => {
       try {
-        analytics.track('admin_user_update_started', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          userId: id,
-          updateFields: Object.keys(userData),
-        });
+        analytics(
+          'admin_user_update_started',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+          },
+          'medium'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient
         const result = await apiClient.put('admin/users', { id, ...userData });
 
         await fetchUsers();
 
-        analytics.track('admin_user_update_success', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          userId: id,
-        });
+        analytics(
+          'admin_user_update_success',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+            userId: id,
+            updateFields: Object.keys(userData),
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -358,13 +386,17 @@ export function useUsers(
           }
         );
 
-        analytics.track('admin_user_update_error', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          errorCode: standardError.code,
-          userId: id,
-        });
+        analytics(
+          'admin_user_update_error',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+            errorCode: standardError.code,
+            userId: id,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -375,24 +407,31 @@ export function useUsers(
   const deleteUser = useCallback(
     async (id: string) => {
       try {
-        analytics.track('admin_user_delete_started', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          userId: id,
-        });
+        analytics(
+          'admin_user_delete_started',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+          },
+          'medium'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient
         const result = await apiClient.delete(`admin/users?id=${id}`);
 
         await fetchUsers();
 
-        analytics.track('admin_user_delete_success', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          userId: id,
-        });
+        analytics(
+          'admin_user_delete_success',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+            userId: id,
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -409,13 +448,17 @@ export function useUsers(
           }
         );
 
-        analytics.track('admin_user_delete_error', {
-          component: 'useUsers',
-          hypothesis: 'H8',
-          userStory: 'US-8.1',
-          errorCode: standardError.code,
-          userId: id,
-        });
+        analytics(
+          'admin_user_delete_error',
+          {
+            component: 'useUsers',
+            hypothesis: 'H8',
+            userStory: 'US-8.1',
+            errorCode: standardError.code,
+            userId: id,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -443,7 +486,7 @@ export function useRoles(
   accessLevel?: string
 ) {
   const apiClient = useApiClient();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError, clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -470,12 +513,15 @@ export function useRoles(
       if (search) params.append('search', search);
       if (accessLevel) params.append('accessLevel', accessLevel);
 
-      analytics.track('admin_roles_fetch_started', {
-        component: 'useRoles',
-        hypothesis: 'H8',
-        userStory: 'US-8.2',
-        parameters: { page, limit, search, accessLevel },
-      });
+      analytics(
+        'admin_roles_fetch_started',
+        {
+          component: 'useRoles',
+          hypothesis: 'H8',
+          userStory: 'US-8.2',
+        },
+        'low'
+      );
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
       const data = await apiClient.get<{
@@ -487,12 +533,19 @@ export function useRoles(
       setPagination(data.pagination);
       setError(null);
 
-      analytics.track('admin_roles_fetch_success', {
-        component: 'useRoles',
-        hypothesis: 'H8',
-        userStory: 'US-8.2',
-        resultCount: data.roles.length,
-      });
+      analytics(
+        'admin_roles_fetch_success',
+        {
+          component: 'useRoles',
+          hypothesis: 'H8',
+          userStory: 'US-8.2',
+          roleData: {
+            count: data.roles.length,
+            page: data.pagination.page,
+          },
+        },
+        'low'
+      );
     } catch (err) {
       // ✅ MIGRATED: Manual error handling → ErrorHandlingService (corrected signature)
       const standardError = errorHandlingService.processError(
@@ -513,12 +566,16 @@ export function useRoles(
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setError(userMessage);
 
-      analytics.track('admin_roles_fetch_error', {
-        component: 'useRoles',
-        hypothesis: 'H8',
-        userStory: 'US-8.2',
-        errorCode: standardError.code,
-      });
+      analytics(
+        'admin_roles_fetch_error',
+        {
+          component: 'useRoles',
+          hypothesis: 'H8',
+          userStory: 'US-8.2',
+          errorCode: standardError.code,
+        },
+        'high'
+      );
     } finally {
       setLoading(false);
     }
@@ -538,25 +595,31 @@ export function useRoles(
       performanceExpectations?: Record<string, number>;
     }) => {
       try {
-        analytics.track('admin_role_create_started', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          roleName: roleData.name,
-          roleLevel: roleData.level,
-        });
+        analytics(
+          'admin_role_create_started',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+          },
+          'low'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
         const result = await apiClient.post<{ id: string }>('admin/roles', roleData);
         await fetchRoles();
 
-        analytics.track('admin_role_create_success', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          roleId: result.id,
-          roleName: roleData.name,
-        });
+        analytics(
+          'admin_role_create_success',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            roleId: result.id,
+            roleName: roleData.name,
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -573,13 +636,17 @@ export function useRoles(
           }
         );
 
-        analytics.track('admin_role_create_error', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          errorCode: standardError.code,
-          roleName: roleData.name,
-        });
+        analytics(
+          'admin_role_create_error',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            errorCode: standardError.code,
+            roleName: roleData.name,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -600,24 +667,31 @@ export function useRoles(
       }
     ) => {
       try {
-        analytics.track('admin_role_update_started', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          roleId: id,
-          updateFields: Object.keys(roleData),
-        });
+        analytics(
+          'admin_role_update_started',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+          },
+          'medium'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient
         const result = await apiClient.put('admin/roles', { id, ...roleData });
         await fetchRoles();
 
-        analytics.track('admin_role_update_success', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          roleId: id,
-        });
+        analytics(
+          'admin_role_update_success',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            roleId: id,
+            updateFields: Object.keys(roleData),
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -635,13 +709,17 @@ export function useRoles(
           }
         );
 
-        analytics.track('admin_role_update_error', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          errorCode: standardError.code,
-          roleId: id,
-        });
+        analytics(
+          'admin_role_update_error',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            errorCode: standardError.code,
+            roleId: id,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -652,23 +730,30 @@ export function useRoles(
   const deleteRole = useCallback(
     async (id: string) => {
       try {
-        analytics.track('admin_role_delete_started', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          roleId: id,
-        });
+        analytics(
+          'admin_role_delete_started',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+          },
+          'medium'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient
         const result = await apiClient.delete(`admin/roles?id=${id}`);
         await fetchRoles();
 
-        analytics.track('admin_role_delete_success', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          roleId: id,
-        });
+        analytics(
+          'admin_role_delete_success',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            roleId: id,
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -685,13 +770,17 @@ export function useRoles(
           }
         );
 
-        analytics.track('admin_role_delete_error', {
-          component: 'useRoles',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          errorCode: standardError.code,
-          roleId: id,
-        });
+        analytics(
+          'admin_role_delete_error',
+          {
+            component: 'useRoles',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            errorCode: standardError.code,
+            roleId: id,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -721,7 +810,7 @@ export function usePermissions(
   scope?: 'ALL' | 'TEAM' | 'OWN'
 ) {
   const apiClient = useApiClient();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError, clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -759,12 +848,15 @@ export function usePermissions(
       if (action) params.append('action', action);
       if (scope) params.append('scope', scope);
 
-      analytics.track('admin_permissions_fetch_started', {
-        component: 'usePermissions',
-        hypothesis: 'H8',
-        userStory: 'US-8.2',
-        parameters: { page, limit, search, resource, action, scope },
-      });
+      analytics(
+        'admin_permissions_fetch_started',
+        {
+          component: 'usePermissions',
+          hypothesis: 'H8',
+          userStory: 'US-8.2',
+        },
+        'low'
+      );
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
       const data = await apiClient.get<{
@@ -778,12 +870,19 @@ export function usePermissions(
       setFilters(data.filters);
       setError(null);
 
-      analytics.track('admin_permissions_fetch_success', {
-        component: 'usePermissions',
-        hypothesis: 'H8',
-        userStory: 'US-8.2',
-        resultCount: data.permissions.length,
-      });
+      analytics(
+        'admin_permissions_fetch_success',
+        {
+          component: 'usePermissions',
+          hypothesis: 'H8',
+          userStory: 'US-8.2',
+          permissionData: {
+            count: data.permissions.length,
+            page: data.pagination.page,
+          },
+        },
+        'low'
+      );
     } catch (err) {
       // ✅ MIGRATED: Manual error handling → ErrorHandlingService (corrected signature)
       const standardError = errorHandlingService.processError(
@@ -806,12 +905,16 @@ export function usePermissions(
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setError(userMessage);
 
-      analytics.track('admin_permissions_fetch_error', {
-        component: 'usePermissions',
-        hypothesis: 'H8',
-        userStory: 'US-8.2',
-        errorCode: standardError.code,
-      });
+      analytics(
+        'admin_permissions_fetch_error',
+        {
+          component: 'usePermissions',
+          hypothesis: 'H8',
+          userStory: 'US-8.2',
+          errorCode: standardError.code,
+        },
+        'high'
+      );
     } finally {
       setLoading(false);
     }
@@ -840,25 +943,31 @@ export function usePermissions(
       constraints?: Record<string, any>;
     }) => {
       try {
-        analytics.track('admin_permission_create_started', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          resource: permissionData.resource,
-          action: permissionData.action,
-        });
+        analytics(
+          'admin_permission_create_started',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+          },
+          'medium'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
         const result = await apiClient.post<{ id: string }>('admin/permissions', permissionData);
         await fetchPermissions();
 
-        analytics.track('admin_permission_create_success', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          permissionId: result.id,
-          resource: permissionData.resource,
-        });
+        analytics(
+          'admin_permission_create_success',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            permissionId: result.id,
+            resource: permissionData.resource,
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -875,13 +984,17 @@ export function usePermissions(
           }
         );
 
-        analytics.track('admin_permission_create_error', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          errorCode: standardError.code,
-          resource: permissionData.resource,
-        });
+        analytics(
+          'admin_permission_create_error',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            errorCode: standardError.code,
+            resource: permissionData.resource,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -900,24 +1013,30 @@ export function usePermissions(
       }
     ) => {
       try {
-        analytics.track('admin_permission_update_started', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          permissionId: id,
-          updateFields: Object.keys(permissionData),
-        });
+        analytics(
+          'admin_permission_update_started',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+          },
+          'medium'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient
         const result = await apiClient.put('admin/permissions', { id, ...permissionData });
         await fetchPermissions();
 
-        analytics.track('admin_permission_update_success', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          permissionId: id,
-        });
+        analytics(
+          'admin_permission_update_success',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            permissionId: id,
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -935,13 +1054,17 @@ export function usePermissions(
           }
         );
 
-        analytics.track('admin_permission_update_error', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          errorCode: standardError.code,
-          permissionId: id,
-        });
+        analytics(
+          'admin_permission_update_error',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            errorCode: standardError.code,
+            permissionId: id,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -952,23 +1075,31 @@ export function usePermissions(
   const deletePermission = useCallback(
     async (id: string) => {
       try {
-        analytics.track('admin_permission_delete_started', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          permissionId: id,
-        });
+        analytics(
+          'admin_permission_delete_started',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            permissionId: id,
+          },
+          'medium'
+        );
 
         // ✅ MIGRATED: Direct fetch → useApiClient
         const result = await apiClient.delete(`admin/permissions?id=${id}`);
         await fetchPermissions();
 
-        analytics.track('admin_permission_delete_success', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          permissionId: id,
-        });
+        analytics(
+          'admin_permission_delete_success',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            permissionId: id,
+          },
+          'medium'
+        );
 
         return result;
       } catch (err) {
@@ -985,13 +1116,17 @@ export function usePermissions(
           }
         );
 
-        analytics.track('admin_permission_delete_error', {
-          component: 'usePermissions',
-          hypothesis: 'H8',
-          userStory: 'US-8.2',
-          errorCode: standardError.code,
-          permissionId: id,
-        });
+        analytics(
+          'admin_permission_delete_error',
+          {
+            component: 'usePermissions',
+            hypothesis: 'H8',
+            userStory: 'US-8.2',
+            errorCode: standardError.code,
+            permissionId: id,
+          },
+          'high'
+        );
 
         throw standardError;
       }
@@ -1015,7 +1150,7 @@ export function usePermissions(
 // ✅ MIGRATED: Hook for system metrics
 export function useSystemMetrics() {
   const apiClient = useApiClient();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError, clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -1028,11 +1163,15 @@ export function useSystemMetrics() {
       setLoading(true);
       clearError();
 
-      analytics.track('admin_metrics_fetch_started', {
-        component: 'useSystemMetrics',
-        hypothesis: 'H8',
-        userStory: 'US-8.1',
-      });
+      analytics(
+        'admin_metrics_fetch_started',
+        {
+          component: 'useSystemMetrics',
+          hypothesis: 'H8',
+          userStory: 'US-8.1',
+        },
+        'low'
+      );
 
       // ✅ MIGRATED: Direct fetch → useApiClient with type assertion
       const data = await apiClient.get<SystemMetrics>('admin/metrics');
@@ -1040,16 +1179,20 @@ export function useSystemMetrics() {
       setMetrics(data);
       setError(null);
 
-      analytics.track('admin_metrics_fetch_success', {
-        component: 'useSystemMetrics',
-        hypothesis: 'H8',
-        userStory: 'US-8.1',
-        metricsData: {
-          activeUsers: data.activeUsers,
-          totalUsers: data.totalUsers,
-          responseTime: data.responseTime,
+      analytics(
+        'admin_metrics_fetch_success',
+        {
+          component: 'useSystemMetrics',
+          hypothesis: 'H8',
+          userStory: 'US-8.1',
+          metricsData: {
+            activeUsers: data.activeUsers,
+            totalUsers: data.totalUsers,
+            responseTime: data.responseTime,
+          },
         },
-      });
+        'low'
+      );
     } catch (err) {
       // ✅ MIGRATED: Manual error handling → ErrorHandlingService (corrected signature)
       const standardError = errorHandlingService.processError(
@@ -1066,12 +1209,16 @@ export function useSystemMetrics() {
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       setError(userMessage);
 
-      analytics.track('admin_metrics_fetch_error', {
-        component: 'useSystemMetrics',
-        hypothesis: 'H8',
-        userStory: 'US-8.1',
-        errorCode: standardError.code,
-      });
+      analytics(
+        'admin_metrics_fetch_error',
+        {
+          component: 'useSystemMetrics',
+          hypothesis: 'H8',
+          userStory: 'US-8.1',
+          errorCode: standardError.code,
+        },
+        'high'
+      );
     } finally {
       setLoading(false);
     }

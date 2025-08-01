@@ -47,6 +47,30 @@ import React from 'react';
 // afterEach(() => server.resetHandlers());
 // afterAll(() => server.close());
 
+// Mock next-auth to prevent ES module transformation errors
+jest.mock('next-auth', () => ({
+  getServerSession: jest.fn(() => Promise.resolve({
+    user: {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      name: 'Test User',
+      role: 'USER'
+    }
+  }))
+}));
+
+jest.mock('next-auth/providers/credentials', () => jest.fn(() => ({
+  id: 'credentials',
+  name: 'Credentials',
+  type: 'credentials',
+  credentials: {},
+  authorize: jest.fn(() => Promise.resolve({
+    id: 'test-user-id',
+    email: 'test@example.com',
+    name: 'Test User'
+  }))
+})));
+
 // Mock Next.js modules
 jest.mock('next/router', () => ({
   useRouter: () => ({
@@ -309,7 +333,13 @@ global.fetch = jest.fn(() =>
 // Mock Next.js Request/Response for API route testing
 global.Request = class MockRequest {
   constructor(url, options = {}) {
-    this.url = url;
+    // Use Object.defineProperty to handle read-only url property
+    Object.defineProperty(this, 'url', {
+      value: url,
+      writable: false,
+      enumerable: true,
+      configurable: false
+    });
     this.method = options.method || 'GET';
     this.headers = new Headers(options.headers || {});
     this.body = options.body || null;
@@ -341,6 +371,41 @@ global.Response = class MockResponse {
     return typeof this.body === 'string' ? this.body : JSON.stringify(this.body);
   }
 };
+
+// Mock NextResponse for Next.js API routes
+jest.mock('next/server', () => {
+  class MockNextResponse extends global.Response {
+    constructor(body, init = {}) {
+      super(body, init);
+    }
+
+    static json(data, init = {}) {
+      const response = new MockNextResponse(JSON.stringify(data), {
+        status: init.status || 200,
+        statusText: init.statusText || 'OK',
+        headers: {
+          'Content-Type': 'application/json',
+          ...init.headers
+        }
+      });
+      return response;
+    }
+
+    static redirect(url, status = 302) {
+      return new MockNextResponse(null, {
+        status,
+        headers: { Location: url }
+      });
+    }
+  }
+
+  return {
+    NextResponse: MockNextResponse,
+    NextRequest: jest.fn().mockImplementation((url, options = {}) => {
+      return new global.Request(url, options);
+    })
+  };
+});
 
 // Mock File and FileReader for upload tests
 global.File = jest.fn().mockImplementation((content, filename, options = {}) => ({

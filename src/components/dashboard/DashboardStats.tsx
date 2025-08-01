@@ -8,7 +8,7 @@
 'use client';
 
 import { Card } from '@/components/ui/Card';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
@@ -112,7 +112,7 @@ const DashboardStats = memo(() => {
   const [error, setError] = useState<string | null>(null);
 
   const apiClient = useApiClient();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   useEffect(() => {
@@ -122,12 +122,11 @@ const DashboardStats = memo(() => {
         setError(null);
 
         // Track analytics event
-        analytics.track('dashboard_stats_fetch_started', {
+        analytics('dashboard_stats_fetch_started', {
           component: 'DashboardStats',
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'low');
 
         // Use mock data for demonstration (since API might not be available)
         const mockStats: DashboardStatsData = {
@@ -150,21 +149,19 @@ const DashboardStats = memo(() => {
         setStats(mockStats);
 
         // Track successful fetch
-        analytics.track('dashboard_stats_fetch_success', {
+        analytics('dashboard_stats_fetch_success', {
           component: 'DashboardStats',
           statsCount: Object.keys(mockStats).length,
-          timestamp: Date.now(),
-        });
+        }, 'low');
       } catch (error) {
         console.warn('[DashboardStats] Error fetching stats:', error);
         setError('Failed to load dashboard statistics');
 
         // Track error
-        analytics.track('dashboard_stats_fetch_error', {
+        analytics('dashboard_stats_fetch_error', {
           component: 'DashboardStats',
           error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       } finally {
         setLoading(false);
       }

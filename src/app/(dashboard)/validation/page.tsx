@@ -12,15 +12,15 @@
 
 'use client';
 
-import { useAuth } from '@/components/providers/AuthProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useAuth } from '@/hooks/auth/useAuth';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   ChartBarIcon,
   CheckCircleIcon,
@@ -92,6 +92,18 @@ interface ValidationMetrics {
   lastUpdated: Date;
 }
 
+// API Response interfaces for proper typing
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+interface ValidationExportResponse {
+  downloadUrl: string;
+}
+
 interface ValidationRule {
   id: string;
   name: string;
@@ -105,7 +117,7 @@ interface ValidationRule {
 export default function ValidationDashboardPage() {
   const { user } = useAuth();
   const apiClient = useApiClient();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   // State management
@@ -120,13 +132,16 @@ export default function ValidationDashboardPage() {
 
   // Track component mount for H8 hypothesis
   useEffect(() => {
-    analytics.track('validation_dashboard_loaded', {
-      timestamp: Date.now(),
-      userStory: 'US-3.1',
-      hypothesis: 'H8',
-      component: 'ValidationDashboard',
-      ...COMPONENT_MAPPING,
-    });
+    analytics(
+      'validation_dashboard_loaded',
+      {
+        userStory: 'US-3.1',
+        hypothesis: 'H8',
+        component: 'ValidationDashboard',
+        ...COMPONENT_MAPPING,
+      },
+      'high'
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
@@ -136,36 +151,39 @@ export default function ValidationDashboardPage() {
       setLoading(true);
 
       // Fetch validation metrics - ensure no duplicate /api in URL
-      const metricsResponse = await apiClient.get<ValidationMetrics>('/validation/metrics');
-      if (metricsResponse && typeof metricsResponse === 'object') {
-        setValidationMetrics(metricsResponse as ValidationMetrics);
+      const metricsResponse = await apiClient.get<ApiResponse<ValidationMetrics>>('/validation/metrics');
+      if (metricsResponse?.success && metricsResponse.data) {
+        setValidationMetrics(metricsResponse.data);
       }
 
       // Fetch validation issues
-      const issuesResponse = await apiClient.get<ValidationIssue[]>('/validation/issues');
-      if (Array.isArray(issuesResponse)) {
-        setValidationIssues(issuesResponse);
+      const issuesResponse = await apiClient.get<ApiResponse<ValidationIssue[]>>('/validation/issues');
+      if (issuesResponse?.success && issuesResponse.data) {
+        setValidationIssues(issuesResponse.data);
       }
 
       // Fetch validation rules
-      const rulesResponse = await apiClient.get<ValidationRule[]>('/validation/rules');
-      if (Array.isArray(rulesResponse)) {
-        setValidationRules(rulesResponse);
+      const rulesResponse = await apiClient.get<ApiResponse<ValidationRule[]>>('/validation/rules');
+      if (rulesResponse?.success && rulesResponse.data) {
+        setValidationRules(rulesResponse.data);
       }
 
       // Track successful load
-      analytics.track('validation_data_loaded', {
-        timestamp: Date.now(),
-        userStory: 'US-3.1',
-        hypothesis: 'H8',
-        component: 'ValidationDashboard',
-        metricsCount: metricsResponse ? Object.keys(metricsResponse).length : 0,
-        issuesCount: Array.isArray(issuesResponse) ? issuesResponse.length : 0,
-        rulesCount: Array.isArray(rulesResponse) ? rulesResponse.length : 0,
-        ...COMPONENT_MAPPING,
-      });
+      analytics(
+        'validation_data_loaded',
+        {
+          userStory: 'US-3.1',
+          hypothesis: 'H8',
+          component: 'ValidationDashboard',
+          metricsCount: metricsResponse?.data ? Object.keys(metricsResponse.data).length : 0,
+          issuesCount: issuesResponse?.data ? issuesResponse.data.length : 0,
+          rulesCount: rulesResponse?.data ? rulesResponse.data.length : 0,
+          ...COMPONENT_MAPPING,
+        },
+        'high'
+      );
     } catch (error) {
-      await handleAsyncError(error as Error, 'Failed to load validation data', {
+      handleAsyncError(error as Error, 'Failed to load validation data', {
         context: 'ValidationDashboard',
         userStory: 'US-3.1',
         hypothesis: 'H8',
@@ -174,17 +192,20 @@ export default function ValidationDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiClient, analytics, handleAsyncError, COMPONENT_MAPPING]);
+  }, [apiClient, analytics, handleAsyncError]);
 
   // Create refreshValidationData function for the refresh button
   const refreshValidationData = useCallback(async () => {
-    analytics.track('validation_data_refresh_requested', {
-      timestamp: Date.now(),
-      userStory: 'US-3.1',
-      hypothesis: 'H8',
-      component: 'ValidationDashboard',
-      ...COMPONENT_MAPPING,
-    });
+    analytics(
+      'validation_data_refresh_requested',
+      {
+        userStory: 'US-3.1',
+        hypothesis: 'H8',
+        component: 'ValidationDashboard',
+        ...COMPONENT_MAPPING,
+      },
+      'medium'
+    );
 
     await loadValidationData();
   }, [loadValidationData, analytics, COMPONENT_MAPPING]);
@@ -201,10 +222,10 @@ export default function ValidationDashboardPage() {
       const startTime = Date.now();
 
       try {
-        const response = (await apiClient.post(`/validation/issues/${issueId}/resolve`, {
+        const response = await apiClient.post<ApiResponse>(`/validation/issues/${issueId}/resolve`, {
           status: 'resolved',
           resolution,
-        })) as { success?: boolean; data?: any; message?: string };
+        });
 
         if (response?.success) {
           // Update local state
@@ -216,24 +237,23 @@ export default function ValidationDashboardPage() {
 
           // Track fix success for H8 hypothesis (AC-3.1.3)
           const resolutionTime = Date.now() - startTime;
-          analytics.track('validation_issue_resolved', {
-            issueId,
-            resolutionTime,
-            userStory: 'US-3.1',
-            hypothesis: 'H8',
-            acceptanceCriteria: ['AC-3.1.2'],
-            testCase: 'TC-H8-001',
-            timestamp: Date.now(),
-          });
+          analytics(
+            'validation_issue_resolved',
+            {
+              issueId,
+              resolutionTime,
+              userStory: 'US-3.1',
+              hypothesis: 'H8',
+              acceptanceCriteria: ['AC-3.1.2'],
+              testCase: 'TC-H8-001',
+            },
+            'medium'
+          );
 
           // Refresh metrics after resolution
-          const metricsResponse = (await apiClient.get('/validation/metrics')) as {
-            success?: boolean;
-            data?: ValidationMetrics;
-            message?: string;
-          };
+          const metricsResponse = await apiClient.get<ApiResponse<ValidationMetrics>>('/validation/metrics');
           if (metricsResponse?.success && metricsResponse.data) {
-            setValidationMetrics(metricsResponse as ValidationMetrics);
+            setValidationMetrics(metricsResponse.data);
           }
         }
       } catch (error) {
@@ -247,21 +267,24 @@ export default function ValidationDashboardPage() {
   const handleExportReport = useCallback(
     async (format: 'pdf' | 'csv') => {
       try {
-        analytics.track('validation_report_export_started', {
-          format,
-          userStory: 'US-3.3',
-          hypothesis: 'H8',
-          acceptanceCriteria: ['AC-3.3.3'],
-          timestamp: Date.now(),
-        });
+        analytics(
+          'validation_report_export_started',
+          {
+            format,
+            userStory: 'US-3.3',
+            hypothesis: 'H8',
+            acceptanceCriteria: ['AC-3.3.3'],
+          },
+          'medium'
+        );
 
-        const response = (await apiClient.post('/validation/export', {
+        const response = await apiClient.post<ApiResponse<ValidationExportResponse>>('/validation/export', {
           format,
           timeFilter,
           includeMetrics: true,
           includeIssues: true,
           includeRules: true,
-        })) as { success?: boolean; data?: { downloadUrl?: string }; message?: string };
+        });
 
         if (response?.success && response.data?.downloadUrl) {
           // Trigger download
@@ -270,13 +293,16 @@ export default function ValidationDashboardPage() {
           link.download = `validation-report-${new Date().toISOString().split('T')[0]}.${format}`;
           link.click();
 
-          analytics.track('validation_report_exported', {
-            format,
-            userStory: 'US-3.3',
-            hypothesis: 'H8',
-            testCase: 'TC-H8-003',
-            timestamp: Date.now(),
-          });
+          analytics(
+            'validation_report_exported',
+            {
+              format,
+              userStory: 'US-3.3',
+              hypothesis: 'H8',
+              testCase: 'TC-H8-003',
+            },
+            'medium'
+          );
         }
       } catch (error) {
         handleAsyncError(error, 'Failed to export validation report');
@@ -390,24 +416,25 @@ export default function ValidationDashboardPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* H8 Hypothesis Progress Card */}
+        {/* H8 Hypothesis Progress - CRITICAL FIX: Add null check */}
         {h8Progress && (
           <Card className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
                 H8 Hypothesis: Technical Configuration Validation
               </h3>
-              <Badge variant={h8Progress.isOnTrack ? 'success' : 'warning'}>
-                {h8Progress.isOnTrack ? 'On Track' : 'Needs Attention'}
+              <Badge variant={h8Progress?.isOnTrack ? 'success' : 'warning'}>
+                {h8Progress?.isOnTrack ? 'On Track' : 'Needs Attention'}
               </Badge>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <p className="text-sm text-gray-600 mb-2">Error Reduction Progress</p>
                 <div className="flex items-center space-x-3">
-                  <Progress value={h8Progress.progressPercentage} className="flex-1" />
+                  <Progress value={h8Progress?.progressPercentage ?? 0} className="flex-1" />
                   <span className="text-sm font-medium text-gray-900">
-                    {h8Progress.currentReduction.toFixed(1)}% / {h8Progress.errorReductionTarget}%
+                    {h8Progress?.currentReduction?.toFixed?.(1) ?? '0.0'}% /{' '}
+                    {h8Progress?.errorReductionTarget ?? 50}%
                   </span>
                 </div>
               </div>
@@ -416,7 +443,7 @@ export default function ValidationDashboardPage() {
                 <div className="flex items-center space-x-2">
                   <ClockIcon className="h-5 w-5 text-blue-500" />
                   <span className="text-lg font-semibold text-gray-900">
-                    {h8Progress.validationSpeedImprovement.toFixed(1)}%
+                    {h8Progress?.validationSpeedImprovement?.toFixed?.(1) ?? '0.0'}%
                   </span>
                   <span className="text-sm text-gray-500">faster</span>
                 </div>
@@ -491,7 +518,7 @@ export default function ValidationDashboardPage() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500">Fix Acceptance Rate</p>
                   <p className="text-2xl font-semibold text-gray-900">
-                    {validationMetrics.fixAcceptanceRate.toFixed(1)}%
+                    {validationMetrics?.fixAcceptanceRate?.toFixed?.(1) ?? '0.0'}%
                   </p>
                 </div>
               </div>
@@ -651,7 +678,7 @@ export default function ValidationDashboardPage() {
                         <div className="flex items-center text-sm text-gray-500 space-x-4">
                           <span>Last Run: {new Date(rule.lastRun).toLocaleDateString()}</span>
                           <span>Issues Detected: {rule.detectedIssues}</span>
-                          <span>Performance: {rule.performance.toFixed(1)}%</span>
+                          <span>Performance: {rule.performance?.toFixed?.(1) ?? '0.0'}%</span>
                         </div>
                       </div>
                       <div className="ml-4">

@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -75,13 +75,13 @@ export function MobileEnhancedLayout({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Services
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Enhanced mobile access tracking with Component Traceability Matrix
   useEffect(() => {
     if (isMobile) {
-      analytics.track('mobile_layout_access', {
+      analytics('mobile_layout_access', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         deviceType: 'mobile',
@@ -139,7 +139,7 @@ export function MobileEnhancedLayout({
       if (deltaX > 0) {
         // Swipe left - open mobile menu
         setIsMobileMenuOpen(true);
-        analytics.track('mobile_gesture_menu_open', {
+        analytics('mobile_gesture_menu_open', {
           gestureType: 'swipe_left',
           userStories: ['US-8.1'],
           hypotheses: ['H9'],
@@ -151,7 +151,7 @@ export function MobileEnhancedLayout({
         } else if (showBackButton && onBackClick) {
           onBackClick();
         }
-        analytics.track('mobile_gesture_navigation', {
+        analytics('mobile_gesture_navigation', {
           gestureType: 'swipe_right',
           action: isMobileMenuOpen ? 'close_menu' : 'navigate_back',
           userStories: ['US-8.1'],
@@ -172,7 +172,7 @@ export function MobileEnhancedLayout({
       }, 100);
     }
 
-    analytics.track('mobile_search_toggle', {
+    analytics('mobile_search_toggle', {
       expanded: !isSearchExpanded,
       userStories: ['US-8.1'],
       hypotheses: ['H9'],

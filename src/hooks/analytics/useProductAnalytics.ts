@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+/**
  * Product Analytics Hook
  *
  * Component Traceability Matrix:
@@ -8,8 +8,7 @@ import { logger } from '@/utils/logger';/**
  */
 
 import { useCallback } from 'react';
-// TODO: Implement when base analytics hook is available
-// import { useAnalytics } from './useAnalytics';
+import { useOptimizedAnalytics } from '../useOptimizedAnalytics';
 
 interface ProductCreationMetrics {
   productData: any;
@@ -49,28 +48,35 @@ interface CategorizationEfficiencyMetrics {
 }
 
 export function useProductAnalytics() {
-  // TODO: Replace with actual analytics implementation when base hook is available
-  // const { trackEvent, trackPerformance, trackHypothesis } = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+  
+  // Create wrapper functions for different event types with appropriate priorities
+  const trackEvent = useCallback((event: string, data: Record<string, any>) => {
+    // Determine priority based on event type
+    const priority: 'high' | 'medium' | 'low' = 
+      event.includes('error') || event.includes('critical') ? 'high' : 
+      event.includes('performance') || event.includes('validation') ? 'medium' : 'low';
+    
+    analytics(event, data, priority);
+  }, [analytics]);
 
-  // Placeholder implementations
-  const trackEvent = useCallback((event: string, data: any) => {
-    logger.info('Analytics Event: ' + event, data);
-  }, []);
+  const trackPerformance = useCallback((metric: string, value: number, data: Record<string, any>) => {
+    const performanceData = {
+      ...data,
+      value,
+    };
+    analytics(`performance_${metric}`, performanceData, 'medium');
+  }, [analytics]);
 
-  const trackPerformance = useCallback((metric: string, value: number, data: any) => {
-    logger.info('Performance Metric: ' + metric + ' Value: ' + value, data);
-  }, []);
-
-  const trackHypothesis = useCallback((hypothesis: string, data: any) => {
-    logger.info('Hypothesis Validation: ' + hypothesis, data);
-  }, []);
+  const trackHypothesis = useCallback((hypothesis: string, data: Record<string, any>) => {
+    analytics(`hypothesis_${hypothesis}`, data, 'medium');
+  }, [analytics]);
 
   const trackProductCreation = useCallback(
     (metrics: ProductCreationMetrics) => {
       // Track product creation performance for H8 validation
       trackEvent('product_creation', {
         ...metrics,
-        timestamp: Date.now(),
         eventType: 'product_management',
       });
 
@@ -97,7 +103,6 @@ export function useProductAnalytics() {
       // Track AI description generation for H8 validation
       trackEvent('ai_description_generation', {
         ...metrics,
-        timestamp: Date.now(),
         eventType: 'ai_assistance',
       });
 
@@ -126,7 +131,6 @@ export function useProductAnalytics() {
       trackEvent('product_validation', {
         ...metrics,
         errorReductionRate,
-        timestamp: Date.now(),
         eventType: 'validation',
       });
 
@@ -151,7 +155,6 @@ export function useProductAnalytics() {
       // Track categorization efficiency for H1 validation
       trackEvent('product_categorization', {
         ...metrics,
-        timestamp: Date.now(),
         eventType: 'content_discovery',
       });
 
@@ -182,7 +185,6 @@ export function useProductAnalytics() {
         productId,
         usageType,
         duration,
-        timestamp: Date.now(),
         eventType: 'product_analytics',
       });
     },
@@ -195,7 +197,6 @@ export function useProductAnalytics() {
         searchQuery,
         resultsCount,
         searchTime,
-        timestamp: Date.now(),
         eventType: 'content_discovery',
       });
 

@@ -109,7 +109,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
   const activeTab = isControlled ? controlledActiveTab : internalActiveTab;
 
   // Refs for keyboard navigation
-  const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabsRef = useRef<Array<HTMLButtonElement | null>>([]);
   const tabListRef = useRef<HTMLDivElement>(null);
 
   // Handle tab change

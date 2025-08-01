@@ -18,7 +18,7 @@ import { WorkflowVisualization } from '@/components/proposals/WorkflowVisualizat
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-// import { useAnalytics } from '@/hooks/analytics/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   AdjustmentsHorizontalIcon,
   ChartBarIcon,
@@ -94,7 +94,7 @@ export default function ApprovalWorkflowPage() {
   >('queue');
   const [selectedTask, setSelectedTask] = useState<ApprovalTask | null>(null);
   const [workflowRules, setWorkflowRules] = useState<WorkflowRule[]>([]);
-  // const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Mock data for demonstration
   const mockTasks: ApprovalTask[] = useMemo(
@@ -183,35 +183,28 @@ export default function ApprovalWorkflowPage() {
     (tab: string) => {
       setActiveTab(tab as any);
 
-      console.log('approval_workflow_tab_changed', {
+      analytics('approval_workflow_tab_changed', {
         tab,
         previousTab: activeTab,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
-    [activeTab]
+    [activeTab, analytics]
   );
 
   const handleTaskSelect = useCallback((task: ApprovalTask) => {
     setSelectedTask(task);
     setActiveTab('decision');
 
-    console.log('approval_task_selected', {
+    analytics('approval_task_selected', {
       taskId: task.id,
       taskType: task.type,
       priority: task.priority,
-      timestamp: Date.now(),
-    });
-  }, []);
+    }, 'high');
+  }, [analytics]);
 
   const handleTaskAction = useCallback((taskId: string, action: string, data?: any) => {
-    console.log('Task action:', { taskId, action, data });
-
-    console.log('Analytics: approval_task_action', {
-      taskId,
-      action,
-      timestamp: Date.now(),
-    });
+    // Disabled console.log analytics to prevent Fast Refresh rebuilds
+    // TODO: migrate to optimized analytics hook
   }, []);
 
   const handleRuleSave = useCallback((rule: WorkflowRule) => {

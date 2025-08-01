@@ -14,7 +14,7 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -124,7 +124,7 @@ export function EnhancedPerformanceDashboard({
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Analytics and error handling
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Error handling
@@ -148,12 +148,12 @@ export function EnhancedPerformanceDashboard({
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       toast.error(userMessage);
 
-      analytics.track('performance_dashboard_error', {
+      analytics('performance_dashboard_error', {
         operation,
         error: standardError.message,
         context,
         userId,
-      });
+      }, 'high');
     },
     [errorHandlingService, analytics, userId]
   );
@@ -283,12 +283,12 @@ export function EnhancedPerformanceDashboard({
       setInsights(mockInsights);
       setSystemHealth(mockSystemHealth);
 
-      analytics.track('performance_dashboard_loaded', {
+      analytics('performance_dashboard_loaded', {
         metricsCount: mockMetrics.length,
         insightsCount: mockInsights.length,
         timeRange,
         userId,
-      });
+      }, 'medium');
     } catch (error) {
       handleError(error, 'data_fetch', { timeRange });
     } finally {

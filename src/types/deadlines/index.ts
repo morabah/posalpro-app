@@ -194,7 +194,7 @@ export interface NotificationRule {
     onProgressChange?: number; // percentage threshold
   };
   recipients: string[]; // user IDs
-  channels: ('email' | 'push' | 'in_app')[];
+  channels: Array<'email' | 'push' | 'in_app'>;
   template: string;
   isActive: boolean;
 }
@@ -385,11 +385,11 @@ export interface TeamMemberWorkload {
   currentDeadlines: Deadline[];
   upcomingDeadlines: Deadline[];
   workloadScore: number; // 0-100
-  availabilityWindows: {
+  availabilityWindows: Array<{
     start: Date;
     end: Date;
     capacity: number; // hours
-  }[];
+  }>;
   skillMatch: Record<string, number>; // skill -> proficiency (0-100)
   historicalPerformance: {
     avgCompletionTime: number;

@@ -13,7 +13,7 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-// import { useAnalytics } from '@/hooks/analytics/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   AdjustmentsHorizontalIcon,
   BeakerIcon,
@@ -128,7 +128,7 @@ interface RuleTemplate {
   name: string;
   description: string;
   category: string;
-  rules: Partial<WorkflowRule>[];
+  rules: Array<Partial<WorkflowRule>>;
   useCase: string;
   popularity: number;
 }
@@ -172,12 +172,7 @@ export function WorkflowRuleBuilder({
   const [testResults, setTestResults] = useState<RuleTestResult[]>([]);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  // const analytics = useAnalytics();
-  const analytics = {
-    track: (event: string, data: any) => {
-      console.log(`Analytics: ${event}`, data);
-    },
-  };
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Mock templates for demonstration
   const MOCK_TEMPLATES: RuleTemplate[] = useMemo(
@@ -363,11 +358,10 @@ export function WorkflowRuleBuilder({
 
   // Track rule builder analytics for H7 hypothesis validation
   useEffect(() => {
-    analytics.track('rule_builder_viewed', {
+    analytics('rule_builder_viewed', {
       totalRules: rules.length,
       activeRules: rules.filter(r => r.isActive).length,
       ruleCategories: [...new Set(rules.map(r => r.category))],
-      timestamp: Date.now(),
     });
   }, [rules, analytics]);
 
@@ -438,13 +432,13 @@ export function WorkflowRuleBuilder({
     onRuleSave(completeRule);
 
     // Track rule creation/update analytics
-    analytics.track('workflow_rule_saved', {
+    analytics('workflow_rule_saved', {
       ruleId: completeRule.id,
       category: completeRule.category,
       conditionCount: completeRule.conditions.length,
       actionCount: completeRule.actions.length,
       complexity: validation.complexity,
-      timestamp: Date.now(),
+      performance: validation.performance,
     });
 
     setShowRuleForm(false);
@@ -459,11 +453,10 @@ export function WorkflowRuleBuilder({
         setTestResults(prev => [result, ...prev.slice(0, 9)]); // Keep last 10 results
 
         // Track rule testing analytics
-        analytics.track('workflow_rule_tested', {
+        analytics('workflow_rule_tested', {
           ruleId: rule.id,
           testPassed: result.passed,
           executionTime: result.executionTime,
-          timestamp: Date.now(),
         });
       } catch (error) {
         console.error('Rule test failed:', error);
@@ -476,12 +469,11 @@ export function WorkflowRuleBuilder({
     (template: RuleTemplate) => {
       onTemplateApply(template);
 
-      // Track template usage analytics
-      analytics.track('rule_template_applied', {
+      // Track component usage
+      analytics('rule_template_applied', {
         templateId: template.id,
         templateName: template.name,
         ruleCount: template.rules.length,
-        timestamp: Date.now(),
       });
     },
     [onTemplateApply, analytics]

@@ -113,7 +113,8 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    const [workflows, total] = await Promise.all([
+    const [total, workflows] = await prisma.$transaction([
+      prisma.approvalWorkflow.count({ where }),
       prisma.approvalWorkflow.findMany({
         where,
         include: workflowInclude,
@@ -123,7 +124,6 @@ export async function GET(request: NextRequest) {
         skip,
         take: validatedQuery.limit,
       }),
-      prisma.approvalWorkflow.count({ where }),
     ]);
 
     const transformedWorkflows = workflows.map(workflow => {

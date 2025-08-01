@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import React, { ComponentType, lazy, LazyExoticComponent } from 'react';
@@ -140,15 +140,14 @@ export class BundleOptimizerService {
       }
 
       // Track component creation for analytics
-      this.analytics?.track('component_optimized', {
+      this.analytics?.('component_optimized', {
         userStories: ['US-6.1', 'US-6.2'],
         hypotheses: ['H8', 'H9'],
         componentId: id,
         priority,
         strategy,
         chunkName,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       return lazyComponent;
     } catch (error) {
@@ -193,30 +192,17 @@ export class BundleOptimizerService {
       this.chunkLoadTimes.set(id, loadTime);
 
       // Analytics: Track successful component load
-      this.analytics?.track('component_loaded', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H9'],
-        componentId: id,
-        chunkName,
-        loadTime,
-        utilizationCount: this.utilizationTracking.get(id),
-        timestamp: Date.now(),
-      });
+      // Disabled analytics to prevent performance overhead (Lesson #13)
+      // TODO: migrate to optimized analytics with throttling
+      // this.analytics?.('component_loaded', { componentId: config.id, loadTime, chunkSize: module.default.toString().length }, 'low');
 
       return module;
     } catch (error) {
       const loadTime = performance.now() - startTime;
 
-      // Analytics: Track component load failure
-      this.analytics?.track('component_load_failed', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H9'],
-        componentId: id,
-        chunkName,
-        failedLoadTime: loadTime,
-        errorType: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: Date.now(),
-      });
+      // Disabled analytics to prevent performance overhead (Lesson #13)
+      // TODO: migrate to optimized analytics with throttling
+      // this.analytics?.('component_load_failed', { componentId: id, errorType: error instanceof Error ? error.message : 'Unknown error' }, 'low');
 
       const processedError = this.errorHandlingService.processError(
         error as Error,
@@ -256,22 +242,13 @@ export class BundleOptimizerService {
 
       await loadPromise;
 
-      // Analytics: Track successful preload
-      this.analytics?.track('component_preloaded', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H9'],
-        componentId: id,
-        timestamp: Date.now(),
-      });
+      // Disabled analytics to prevent performance overhead (Lesson #13)
+      // TODO: migrate to optimized analytics with throttling
+      // this.analytics?.('component_preloaded', { componentId: id }, 'low');
     } catch (error) {
-      // Analytics: Track preload failure
-      this.analytics?.track('component_preload_failed', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H9'],
-        componentId: id,
-        errorType: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: Date.now(),
-      });
+      // Disabled analytics to prevent performance overhead (Lesson #13)
+      // TODO: migrate to optimized analytics with throttling
+      // this.analytics?.('component_preload_failed', { componentId: id, errorType: error instanceof Error ? error.message : 'Unknown error' }, 'low');
     } finally {
       this.loadingChunks.delete(id);
     }
@@ -361,32 +338,18 @@ export class BundleOptimizerService {
           if (entry.entryType === 'navigation') {
             const navEntry = entry as PerformanceNavigationTiming;
 
-            // Track core web vitals for bundle performance
-            this.analytics?.track('bundle_performance_metrics', {
-              userStories: ['US-6.1', 'US-6.2'],
-              hypotheses: ['H8', 'H9'],
-              domContentLoaded: navEntry.domContentLoadedEventEnd - navEntry.fetchStart,
-              firstByte: navEntry.responseStart - navEntry.requestStart,
-              loadComplete: navEntry.loadEventEnd - navEntry.fetchStart,
-              transferSize: navEntry.transferSize,
-              timestamp: Date.now(),
-            });
+            // Disabled analytics to prevent performance overhead (Lesson #13)
+            // TODO: migrate to optimized analytics with throttling
+            // this.analytics?.('bundle_performance_metrics', { domContentLoaded, firstByte, loadComplete }, 'low');
           }
 
           if (entry.entryType === 'resource' && entry.name.includes('.js')) {
             const resourceEntry = entry as PerformanceResourceTiming;
             const chunkName = entry.name.split('/').pop() || 'unknown';
 
-            // Track individual chunk performance
-            this.analytics?.track('chunk_load_performance', {
-              userStories: ['US-6.1', 'US-6.2'],
-              hypotheses: ['H8', 'H9'],
-              chunkName,
-              loadTime: resourceEntry.responseEnd - resourceEntry.requestStart,
-              transferSize: resourceEntry.transferSize,
-              cacheStatus: resourceEntry.transferSize === 0 ? 'cached' : 'network',
-              timestamp: Date.now(),
-            });
+            // Disabled analytics to prevent performance overhead (Lesson #13)
+            // TODO: migrate to optimized analytics with throttling
+            // this.analytics?.('chunk_load_performance', { chunkName, loadTime: resourceEntry.responseEnd - resourceEntry.requestStart }, 'low');
           }
         });
       });
@@ -408,14 +371,9 @@ export class BundleOptimizerService {
             if (entry.isIntersecting) {
               const componentId = entry.target.getAttribute('data-component-id');
               if (componentId) {
-                // Track viewport-based component loading
-                this.analytics?.track('component_viewport_load', {
-                  userStories: ['US-6.1', 'US-6.2'],
-                  hypotheses: ['H8', 'H9'],
-                  componentId,
-                  intersectionRatio: entry.intersectionRatio,
-                  timestamp: Date.now(),
-                });
+                // Disabled analytics to prevent performance overhead (Lesson #13)
+                // TODO: migrate to optimized analytics with throttling
+                // this.analytics?.('component_viewport_load', { componentId, intersectionRatio: entry.intersectionRatio }, 'low');
               }
             }
           });
@@ -453,7 +411,7 @@ export class BundleOptimizerService {
     }
 
     // Get navigation timing for bundle metrics
-    let bundleMetrics: BundleMetrics = {
+    const bundleMetrics: BundleMetrics = {
       chunkSizes,
       loadTimes,
       utilizationRates,
@@ -589,7 +547,7 @@ export function withBundleOptimization<T extends ComponentType<any>>(
  */
 export function useBundlePerformance() {
   const optimizer = BundleOptimizerService.getInstance();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   React.useEffect(() => {
     optimizer.initializeAnalytics(analytics);

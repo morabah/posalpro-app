@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useMobileDetection } from '@/hooks/useMobileDetection';
 import {
@@ -154,7 +154,7 @@ export function EnhancedMobileNavigation({
 
   // Hooks
   const pathname = usePathname();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   // Filter navigation items based on user role and device
@@ -203,7 +203,7 @@ export function EnhancedMobileNavigation({
         gestureStartTime.current = Date.now();
 
         // Track gesture start for analytics
-        analytics.track('mobile_gesture_start', {
+        analytics('mobile_gesture_start', {
           userStories: ['US-8.4'],
           hypotheses: ['H9'],
           measurementData: {
@@ -212,7 +212,7 @@ export function EnhancedMobileNavigation({
             deviceType: deviceInfo?.deviceType,
           },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'low');
       } catch (error) {
         handleAsyncError(error as Error, 'Failed to handle touch start', {
           context: 'EnhancedMobileNavigation.handleTouchStart',
@@ -288,7 +288,7 @@ export function EnhancedMobileNavigation({
         }
 
         // Track successful gesture
-        analytics.track('mobile_gesture_completed', {
+        analytics('mobile_gesture_completed', {
           userStories: ['US-8.4'],
           hypotheses: ['H9'],
           measurementData: {
@@ -299,7 +299,7 @@ export function EnhancedMobileNavigation({
             success: true,
           },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'low');
       }
 
       // Reset gesture state
@@ -333,7 +333,7 @@ export function EnhancedMobileNavigation({
         const newState = !prev;
 
         // Track menu toggle with enhanced analytics
-        analytics.track('mobile_menu_toggle', {
+        analytics('mobile_menu_toggle', {
           userStories: ['US-8.1'],
           hypotheses: ['H9'],
           measurementData: {
@@ -343,7 +343,7 @@ export function EnhancedMobileNavigation({
             deviceType: deviceInfo?.deviceType,
           },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'low');
 
         return newState;
       });
@@ -371,7 +371,7 @@ export function EnhancedMobileNavigation({
         }
 
         // Track search toggle
-        analytics.track('mobile_search_toggle', {
+        analytics('mobile_search_toggle', {
           userStories: ['US-8.1'],
           hypotheses: ['H9'],
           measurementData: {
@@ -379,7 +379,7 @@ export function EnhancedMobileNavigation({
             currentPath: pathname,
           },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'low');
 
         return newState;
       });
@@ -395,7 +395,7 @@ export function EnhancedMobileNavigation({
     (item: NavigationItem) => {
       try {
         // Track navigation click with enhanced analytics
-        analytics.track('mobile_navigation_click', {
+        analytics('mobile_navigation_click', {
           userStories: ['US-8.1'],
           hypotheses: ['H9'],
           measurementData: {
@@ -407,7 +407,7 @@ export function EnhancedMobileNavigation({
             navigationType: getNavigationType(),
           },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
 
         // Close menu after navigation on mobile
         if (isMobile) {

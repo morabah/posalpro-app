@@ -4,12 +4,30 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 
 export const EmergencyAnalyticsController: React.FC = () => {
   const [violationCount, setViolationCount] = useState(0);
-  const { emergencyDisable } = useAnalytics();
+  const { trackOptimized } = useOptimizedAnalytics();
+
+  // Emergency disable function for analytics
+  const emergencyDisable = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      console.log('Analytics emergency disabled');
+      localStorage.setItem('analytics_disabled', 'true');
+      
+      // Also disable the optimized analytics by setting a flag
+      localStorage.setItem('optimized_analytics_disabled', 'true');
+      
+      // Track this critical event
+      trackOptimized('analytics_emergency_disabled', {
+        reason: 'performance_violations',
+        violationCount,
+        timestamp: Date.now(),
+      }, 'high');
+    }
+  }, [trackOptimized, violationCount]);
 
   useEffect(() => {
     let violationDetected = false;
@@ -39,7 +57,7 @@ export const EmergencyAnalyticsController: React.FC = () => {
     return () => {
       console.warn = originalWarn;
     };
-  }, [emergencyDisable]);
+  }, [trackOptimized, violationCount, emergencyDisable]);
 
   if (process.env.NODE_ENV !== 'development') {
     return null;

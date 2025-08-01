@@ -9,7 +9,7 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   CheckCircleIcon,
   ClockIcon,
@@ -43,7 +43,7 @@ interface Proposal {
 const RecentProposals = memo(() => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   useEffect(() => {
     const fetchProposals = async () => {
@@ -51,12 +51,11 @@ const RecentProposals = memo(() => {
         setLoading(true);
 
         // Track analytics event
-        analytics.track('recent_proposals_fetch_started', {
+        analytics('recent_proposals_fetch_started', {
           component: 'RecentProposals',
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          timestamp: Date.now(),
-        });
+        }, 'low');
 
         // Mock data for demonstration
         const mockProposals: Proposal[] = [
@@ -113,20 +112,18 @@ const RecentProposals = memo(() => {
         setProposals(mockProposals);
 
         // Track successful fetch
-        analytics.track('recent_proposals_fetch_success', {
+        analytics('recent_proposals_fetch_success', {
           component: 'RecentProposals',
           proposalCount: mockProposals.length,
-          timestamp: Date.now(),
-        });
+        }, 'low');
       } catch (error) {
         console.warn('[RecentProposals] Error fetching proposals:', error);
 
         // Track error
-        analytics.track('recent_proposals_fetch_error', {
+        analytics('recent_proposals_fetch_error', {
           component: 'RecentProposals',
           error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       } finally {
         setLoading(false);
       }
@@ -183,11 +180,10 @@ const RecentProposals = memo(() => {
   };
 
   const handleViewProposal = (proposalId: string) => {
-    analytics.track('recent_proposal_view_clicked', {
+    analytics('recent_proposal_view_clicked', {
       component: 'RecentProposals',
       proposalId,
-      timestamp: Date.now(),
-    });
+    }, 'medium');
   };
 
   if (loading) {

@@ -297,11 +297,10 @@ export const formAnalytics = {
     analytics?: any
   ) => {
     if (analytics) {
-      analytics.track('form_field_interaction', {
+      analytics('form_field_interaction', {
         field: fieldName,
         action,
-        timestamp: new Date().toISOString(),
-      });
+      }, 'low');
     }
   },
 
@@ -310,12 +309,11 @@ export const formAnalytics = {
    */
   trackFormSubmission: (formName: string, success: boolean, errors?: string[], analytics?: any) => {
     if (analytics) {
-      analytics.track('form_submission', {
+      analytics('form_submission', {
         form: formName,
         success,
         errors,
-        timestamp: new Date().toISOString(),
-      });
+      }, 'medium');
     }
   },
 
@@ -324,12 +322,11 @@ export const formAnalytics = {
    */
   trackValidationErrors: (formName: string, errors: Record<string, string>, analytics?: any) => {
     if (analytics) {
-      analytics.track('form_validation_errors', {
+      analytics('form_validation_errors', {
         form: formName,
         errorCount: Object.keys(errors).length,
         errorFields: Object.keys(errors),
-        timestamp: new Date().toISOString(),
-      });
+      }, 'medium');
     }
   },
 };

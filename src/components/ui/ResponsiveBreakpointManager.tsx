@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -152,7 +152,7 @@ export function ResponsiveBreakpointManager({
     connectionType: 'unknown',
   }));
 
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   // Utility Functions
@@ -260,7 +260,7 @@ export function ResponsiveBreakpointManager({
       setState(prevState => {
         // Track breakpoint changes if analytics enabled (H9: Mobile User Experience)
         if (trackAnalytics && prevState.currentBreakpoint !== newState.currentBreakpoint) {
-          analytics.track('responsive_breakpoint_change', {
+          analytics('responsive_breakpoint_change', {
             fromBreakpoint: prevState.currentBreakpoint,
             toBreakpoint: newState.currentBreakpoint,
             screenWidth: newState.screenWidth,
@@ -275,7 +275,7 @@ export function ResponsiveBreakpointManager({
 
         // Track orientation changes
         if (trackAnalytics && prevState.orientation !== newState.orientation) {
-          analytics.track('device_orientation_change', {
+          analytics('device_orientation_change', {
             fromOrientation: prevState.orientation,
             toOrientation: newState.orientation,
             screenWidth: newState.screenWidth,
@@ -405,7 +405,7 @@ export function ResponsiveBreakpointManager({
           setState(prev => ({ ...prev, [key]: e.matches }));
 
           if (trackAnalytics) {
-            analytics.track('user_preference_change', {
+            analytics('user_preference_change', {
               preference: key,
               value: e.matches,
               hypothesis: 'H9',

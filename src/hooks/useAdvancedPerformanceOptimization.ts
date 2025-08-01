@@ -11,7 +11,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import {
   EnhancedPerformanceMetrics,
@@ -123,7 +123,7 @@ export function useAdvancedPerformanceOptimization(
   } = options;
 
   // Hooks
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   // State
@@ -183,7 +183,7 @@ export function useAdvancedPerformanceOptimization(
       }
 
       // Track initialization
-      analytics.track('advanced_performance_optimization_initialized', {
+      analytics('advanced_performance_optimization_initialized', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         options: {
@@ -192,9 +192,8 @@ export function useAdvancedPerformanceOptimization(
           enablePredictiveOptimization,
           optimizationThreshold,
         },
-        timestamp: Date.now(),
         componentMapping: COMPONENT_MAPPING,
-      });
+      }, 'low');
     } catch (error) {
       handleAsyncError(error as Error, 'Failed to initialize performance monitoring', {
         context: 'useAdvancedPerformanceOptimization.initializeMonitoring',
@@ -232,15 +231,14 @@ export function useAdvancedPerformanceOptimization(
         const beforeScore = state.optimizationScore;
 
         // Track optimization start
-        analytics.track('performance_optimization_started', {
+        analytics('performance_optimization_started', {
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
           trigger,
           type,
           beforeScore,
-          timestamp: startTime,
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
 
         // Perform optimization based on type
         let optimizationResult: any = {};
@@ -315,7 +313,7 @@ export function useAdvancedPerformanceOptimization(
         }
 
         // Track optimization completion
-        analytics.track('performance_optimization_completed', {
+        analytics('performance_optimization_completed', {
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
           trigger,
@@ -325,9 +323,8 @@ export function useAdvancedPerformanceOptimization(
           improvement,
           duration,
           success: improvement > 0,
-          timestamp: endTime,
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
 
         return optimizationEvent;
       } catch (error) {
@@ -400,14 +397,13 @@ export function useAdvancedPerformanceOptimization(
         }));
 
         // Track insights generation
-        analytics.track('performance_insights_generated', {
+        analytics('performance_insights_generated', {
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
           insightsCount: insights.length,
           insightTypes: insights.map(i => i.type),
-          timestamp: Date.now(),
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'low');
       } catch (error) {
         setState(prev => ({ ...prev, isGeneratingInsights: false }));
         handleAsyncError(error as Error, 'Failed to generate performance insights', {
@@ -448,15 +444,14 @@ export function useAdvancedPerformanceOptimization(
       };
 
       // Track report generation
-      analytics.track('advanced_performance_report_generated', {
+      analytics('advanced_performance_report_generated', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         optimizationScore: state.optimizationScore,
         optimizationCount: state.optimizationHistory.length,
         insightsCount: state.insights.length,
-        timestamp: Date.now(),
         componentMapping: COMPONENT_MAPPING,
-      });
+      }, 'low');
 
       return enhancedReport;
     } catch (error) {
@@ -500,20 +495,38 @@ export function useAdvancedPerformanceOptimization(
     enhancedPerformanceService.stopMonitoring();
     setState(prev => ({ ...prev, isMonitoring: false }));
 
-    analytics.track('advanced_performance_monitoring_stopped', {
+    analytics('advanced_performance_monitoring_stopped', {
       userStories: COMPONENT_MAPPING.userStories,
-      timestamp: Date.now(),
-    });
+    }, 'low');
   }, [analytics]);
 
   // Initialize monitoring on mount
   useEffect(() => {
     initializeMonitoring();
 
+    // Return cleanup function that doesn't depend on stopMonitoring
     return () => {
-      stopMonitoring();
+      // Direct cleanup without calling stopMonitoring (which has setState)
+      if (monitoringIntervalRef.current) {
+        clearInterval(monitoringIntervalRef.current);
+        monitoringIntervalRef.current = null;
+      }
+
+      if (optimizationTimeoutRef.current) {
+        clearTimeout(optimizationTimeoutRef.current);
+        optimizationTimeoutRef.current = null;
+      }
+
+      if (insightsGenerationRef.current) {
+        clearTimeout(insightsGenerationRef.current);
+        insightsGenerationRef.current = null;
+      }
+
+      enhancedPerformanceService.stopMonitoring();
+      // 🚨 CRITICAL FIX: Don't call setState during cleanup to prevent infinite loops
+      // setState will be handled by component unmounting naturally
     };
-  }, [initializeMonitoring, stopMonitoring]);
+  }, [initializeMonitoring]); // 🚨 CRITICAL FIX: Removed stopMonitoring from dependencies
 
   // Helper functions for optimization types
   const optimizeBundlePerformance = async () => {

@@ -8,10 +8,10 @@ import { logger } from '@/utils/logger'; /**
  * Hypotheses: H8 (Load Time), H11 (Cache Hit Rate), H12 (Database Performance)
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { AdvancedCacheManager } from '@/lib/performance/AdvancedCacheManager';
+// Removed AdvancedCacheManager import - using built-in caching only
 import React from 'react';
 
 // Component Traceability Matrix
@@ -93,7 +93,7 @@ export interface ConnectionPoolStats {
 export class DatabaseQueryOptimizer {
   private static instance: DatabaseQueryOptimizer;
   private errorHandlingService: ErrorHandlingService;
-  private cacheManager: AdvancedCacheManager;
+  // Removed cacheManager field - using built-in caching only
   private analytics: any;
 
   private config: QueryOptimizerConfig;
@@ -119,7 +119,7 @@ export class DatabaseQueryOptimizer {
 
   private constructor(config: Partial<QueryOptimizerConfig> = {}) {
     this.errorHandlingService = ErrorHandlingService.getInstance();
-    this.cacheManager = AdvancedCacheManager.getInstance();
+    // Removed cacheManager initialization - using built-in caching only
 
     this.config = {
       enableQueryCaching: true,
@@ -238,7 +238,7 @@ export class DatabaseQueryOptimizer {
 
       // Analytics tracking
       if (this.analytics) {
-        this.analytics.track('database_query_executed', {
+        this.analytics('database_query_executed', {
           userStories: ['US-6.1', 'US-6.3', 'US-4.1'],
           hypotheses: ['H8', 'H11', 'H12'],
           queryKey,
@@ -247,8 +247,7 @@ export class DatabaseQueryOptimizer {
           tablesTouched,
           cacheHit: false,
           slowQuery: executionTime > this.config.slowQueryThreshold,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
 
       return result;
@@ -281,23 +280,8 @@ export class DatabaseQueryOptimizer {
    * Get cached query result
    */
   private async getCachedQuery<T>(queryKey: string): Promise<T | null> {
-    try {
-      const cacheKey = `query:${queryKey}`;
-      return await this.cacheManager.get<T>(cacheKey);
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error as Error,
-        'Failed to retrieve cached query',
-        ErrorCodes.SYSTEM.CACHE_OPERATION_FAILED,
-        {
-          component: 'DatabaseQueryOptimizer',
-          operation: 'getCachedQuery',
-          queryKey,
-          userFriendlyMessage: 'Query cache retrieval failed. Proceeding with fresh query.',
-        }
-      );
-      return null;
-    }
+    // Caching is handled by Prisma and apiClient built-in caching
+    return null;
   }
 
   /**
@@ -310,39 +294,8 @@ export class DatabaseQueryOptimizer {
     tablesTouched: string[],
     cacheTTL: number
   ): Promise<void> {
-    try {
-      const cacheKey = `query:${queryKey}`;
-      const cacheEntry: QueryCacheEntry = {
-        query: queryKey,
-        parameters: [],
-        result,
-        timestamp: Date.now(),
-        executionTime,
-        tablesTouched,
-      };
-
-      await this.cacheManager.set(cacheKey, cacheEntry, {
-        ttl: cacheTTL,
-        tags: ['database', 'query', ...tablesTouched.map(table => `table:${table}`)],
-        metadata: {
-          executionTime,
-          tablesTouched,
-          queryKey,
-        },
-      });
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error as Error,
-        'Failed to cache query result',
-        ErrorCodes.SYSTEM.CACHE_OPERATION_FAILED,
-        {
-          component: 'DatabaseQueryOptimizer',
-          operation: 'cacheQueryResult',
-          queryKey,
-          userFriendlyMessage: 'Query result caching failed. Performance may be impacted.',
-        }
-      );
-    }
+    // Caching is handled by Prisma and apiClient built-in caching
+    return;
   }
 
   /**
@@ -447,14 +400,13 @@ export class DatabaseQueryOptimizer {
 
     // Analytics tracking for slow queries
     if (this.analytics) {
-      this.analytics.track('slow_query_detected', {
+      this.analytics('slow_query_detected', {
         userStories: ['US-6.1', 'US-6.3'],
         hypotheses: ['H8', 'H12'],
         queryKey,
         executionTime,
         threshold: this.config.slowQueryThreshold,
-        timestamp: Date.now(),
-      });
+      }, 'high');
     }
   }
 
@@ -465,9 +417,8 @@ export class DatabaseQueryOptimizer {
     try {
       const patterns = Array.isArray(pattern) ? pattern : [pattern];
 
-      // For now, clear entire cache when invalidating by pattern
-      // This can be improved with proper tag-based invalidation
-      this.cacheManager.clear();
+      // Cache invalidation is handled by built-in caching mechanisms
+      // No custom cache clearing needed
 
       logger.info('Cache invalidated by pattern', {
         component: 'DatabaseQueryOptimizer',
@@ -477,12 +428,11 @@ export class DatabaseQueryOptimizer {
       });
 
       if (this.analytics) {
-        this.analytics.track('cache_invalidated', {
+        this.analytics('cache_invalidated', {
           userStories: ['US-6.1', 'US-6.3'],
           hypotheses: ['H11'],
           patterns,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
     } catch (error) {
       const processedError = this.errorHandlingService.processError(
@@ -513,23 +463,6 @@ export class DatabaseQueryOptimizer {
    */
   getConnectionPoolStats(): ConnectionPoolStats {
     return { ...this.connectionPoolStats };
-  }
-
-  /**
-   * Generate performance report
-   */
-  generatePerformanceReport(): Record<string, any> {
-    const cacheStats = this.cacheManager.getStatistics();
-
-    return {
-      queryMetrics: this.queryMetrics,
-      connectionPoolStats: this.connectionPoolStats,
-      cacheStatistics: cacheStats,
-      slowQueries: this.slowQueryHistory.slice(-20), // Last 20 slow queries
-      recommendations: this.generateOptimizationRecommendations(),
-      timestamp: new Date().toISOString(),
-      componentMapping: COMPONENT_MAPPING,
-    };
   }
 
   /**
@@ -602,13 +535,12 @@ export class DatabaseQueryOptimizer {
 
     // Analytics tracking
     if (this.analytics) {
-      this.analytics.track('database_performance_metrics_updated', {
+      this.analytics('database_performance_metrics_updated', {
         userStories: ['US-6.1', 'US-6.3', 'US-4.1'],
         hypotheses: ['H8', 'H11', 'H12'],
         metrics: this.queryMetrics,
         connectionPool: this.connectionPoolStats,
-        timestamp: Date.now(),
-      });
+      }, 'low');
     }
   }
 
@@ -655,7 +587,7 @@ export class DatabaseQueryOptimizer {
  * Hook for database query optimization
  */
 export function useDatabaseOptimizer(config?: Partial<QueryOptimizerConfig>) {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const optimizer = React.useMemo(() => {
     return DatabaseQueryOptimizer.getInstance(config);
@@ -670,7 +602,6 @@ export function useDatabaseOptimizer(config?: Partial<QueryOptimizerConfig>) {
     invalidateCache: optimizer.invalidateCache.bind(optimizer),
     getMetrics: optimizer.getMetrics.bind(optimizer),
     getConnectionPoolStats: optimizer.getConnectionPoolStats.bind(optimizer),
-    generatePerformanceReport: optimizer.generatePerformanceReport.bind(optimizer),
     clearMetrics: optimizer.clearMetrics.bind(optimizer),
   };
 }

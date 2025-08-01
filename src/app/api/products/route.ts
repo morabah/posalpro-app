@@ -5,7 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/db/prisma';
+import prisma, { Prisma } from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     const validatedQuery = ProductQuerySchema.parse(queryParams);
 
     // Build where clause for filtering
-    const where: any = {
+    const where: Prisma.ProductWhereInput = {
       isActive: validatedQuery.isActive !== undefined ? validatedQuery.isActive : true,
     };
 
@@ -95,24 +95,23 @@ export async function GET(request: NextRequest) {
         { name: { contains: validatedQuery.search, mode: 'insensitive' } },
         { description: { contains: validatedQuery.search, mode: 'insensitive' } },
         { sku: { contains: validatedQuery.search, mode: 'insensitive' } },
-        { tags: { has: validatedQuery.search } },
       ];
     }
 
     // Category filtering
     if (validatedQuery.category) {
       const categories = validatedQuery.category.split(',').map(c => c.trim());
-      where.category = {
-        hasAny: categories,
-      };
+      if (categories.length > 0) {
+        where.category = { hasSome: categories };
+      }
     }
 
     // Tags filtering
     if (validatedQuery.tags) {
       const tags = validatedQuery.tags.split(',').map(t => t.trim());
-      where.tags = {
-        hasAny: tags,
-      };
+      if (tags.length > 0) {
+        where.tags = { hasSome: tags };
+      }
     }
 
     // Price range filtering
@@ -128,85 +127,32 @@ export async function GET(request: NextRequest) {
       where.sku = { contains: validatedQuery.sku, mode: 'insensitive' };
     }
 
-    // Calculate pagination
-    const skip = (validatedQuery.page - 1) * validatedQuery.limit;
-
-    // Fetch products with related data
-    const [products, total] = await Promise.all([
+    // Fetch products and total count in a single transaction for efficiency
+    const [totalProducts, products] = await prisma.$transaction([
+      prisma.product.count({ where }),
       prisma.product.findMany({
         where,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          sku: true,
-          price: true,
-          currency: true,
-          category: true,
-          tags: true,
-          attributes: true,
-          images: true,
-          isActive: true,
-          version: true,
-          usageAnalytics: true,
-          userStoryMappings: true,
-          createdAt: true,
-          updatedAt: true,
-          _count: {
-            select: {
-              proposalProducts: true,
-              relationships: true,
-              relatedFrom: true,
-            },
-          },
-        },
+        skip: (validatedQuery.page - 1) * validatedQuery.limit,
+        take: validatedQuery.limit,
         orderBy: {
           [validatedQuery.sortBy]: validatedQuery.sortOrder,
         },
-        skip,
-        take: validatedQuery.limit,
       }),
-      prisma.product.count({ where }),
     ]);
 
-    // Transform products with usage statistics
-    const transformedProducts = products.map(product => ({
-      id: product.id,
-      name: product.name,
-      description: product.description,
-      sku: product.sku,
-      price: product.price,
-      currency: product.currency,
-      category: product.category,
-      tags: product.tags,
-      attributes: product.attributes,
-      images: product.images,
-      isActive: product.isActive,
-      version: product.version,
-      userStoryMappings: product.userStoryMappings,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-      usage: {
-        proposalsCount: product._count.proposalProducts,
-        relationshipsCount: product._count.relationships + product._count.relatedFrom,
-      },
-      analytics: product.usageAnalytics,
-    }));
-
-    // Track search analytics for hypothesis validation
     if (validatedQuery.search) {
-      await trackProductSearchEvent(session.user.id, validatedQuery.search, total);
+      await trackProductSearchEvent(session.user.id, validatedQuery.search, totalProducts);
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        products: transformedProducts,
+        products,
         pagination: {
           page: validatedQuery.page,
           limit: validatedQuery.limit,
-          total,
-          totalPages: Math.ceil(total / validatedQuery.limit),
+          total: totalProducts,
+          totalPages: Math.ceil(totalProducts / validatedQuery.limit),
         },
         filters: {
           search: validatedQuery.search,
@@ -232,13 +178,16 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'ProductsRoute',
             operation: 'getProducts',
-            validationErrors: error.errors,
+            queryParameters: queryParams,
           },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        { userFriendlyMessage: 'Please check your search parameters and try again.' }
+        {
+          userFriendlyMessage: 'There was an issue with your request. Please check the filters and try again.',
+          details: error.errors,
+        }
       );
     }
 
@@ -262,9 +211,13 @@ export async function GET(request: NextRequest) {
         500,
         {
           userFriendlyMessage:
-            'An error occurred while retrieving products. Please try again later.',
+            'An error occurred while fetching products. Please try again later.',
         }
       );
+    }
+
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(error);
     }
 
     return createApiErrorResponse(
@@ -277,12 +230,12 @@ export async function GET(request: NextRequest) {
           operation: 'getProducts',
         },
       }),
-      'Internal server error',
+      'Internal error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
       {
         userFriendlyMessage:
-          'An unexpected error occurred while retrieving products. Please try again later.',
+          'An unexpected error occurred while fetching products. Please try again later.',
       }
     );
   }

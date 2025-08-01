@@ -7,7 +7,7 @@
 
 import MobileResponsivenessEnhancer from '@/components/mobile/MobileResponsivenessEnhancer';
 import { useAdvancedPerformanceOptimization } from '@/hooks/useAdvancedPerformanceOptimization';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorHandlingService } from '@/lib/errors';
 import { useCallback, useEffect, useState } from 'react';
@@ -81,7 +81,7 @@ export default function MobilePerformanceDashboard() {
   const [lastOptimization, setLastOptimization] = useState<Date | null>(null);
 
   // Hooks
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { isMobile, isTablet, screenWidth, screenHeight } = useResponsive();
   const orientation = screenWidth > screenHeight ? 'landscape' : 'portrait';
   const {
@@ -105,7 +105,7 @@ export default function MobilePerformanceDashboard() {
       setMobileMetrics(metrics);
 
       // Track metrics in analytics
-      analytics.track('mobile_performance_metrics_updated', {
+      analytics('mobile_performance_metrics_updated', {
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         measurementData: {
@@ -115,7 +115,7 @@ export default function MobilePerformanceDashboard() {
           orientation,
         },
         componentMapping: COMPONENT_MAPPING,
-      });
+      }, 'low');
     },
     [analytics, isMobile, isTablet, screenWidth, screenHeight, orientation]
   );
@@ -133,23 +133,14 @@ export default function MobilePerformanceDashboard() {
       if (optimizationResult) {
         setLastOptimization(new Date());
 
-        analytics.track('mobile_optimization_triggered', {
+        analytics('mobile_optimization_triggered', {
+          optimizationType: 'mobile',
+          triggerMethod: 'manual',
+          performanceBefore: performanceData?.optimizationScore || 0,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
-          measurementData: {
-            trigger: 'manual',
-            optimizationType: 'mobile',
-            timestamp: new Date().toISOString(),
-            deviceContext: {
-              isMobile,
-              isTablet,
-              screenWidth,
-              screenHeight,
-              orientation,
-            },
-          },
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
       }
     } catch (error) {
       errorHandlingService.processError(error as Error, 'Mobile optimization trigger failed');
@@ -171,17 +162,11 @@ export default function MobilePerformanceDashboard() {
    * Initialize Dashboard Analytics
    */
   useEffect(() => {
-    analytics.track('mobile_performance_dashboard_loaded', {
+    analytics('mobile_performance_dashboard_loaded', {
       userStories: COMPONENT_MAPPING.userStories,
       hypotheses: COMPONENT_MAPPING.hypotheses,
-      measurementData: {
-        loadTime: Date.now(),
-        deviceType: isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop',
-        initialMetrics: mobileMetrics,
-      },
       componentMapping: COMPONENT_MAPPING,
-    });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, 'medium');
   }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   /**

@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 
 export interface NavigationPerformanceMetrics {
   navigationTime: number;
@@ -206,6 +207,7 @@ export class ComponentLoadTracker {
  */
 export function useComponentLoadTracking(componentName: string) {
   const tracker = useRef(ComponentLoadTracker.getInstance());
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   useEffect(() => {
     tracker.current.startLoad(componentName);
@@ -214,15 +216,12 @@ export function useComponentLoadTracking(componentName: string) {
       const loadTime = tracker.current.endLoad(componentName);
 
       // ✅ ANALYTICS: Track component performance
-      if (typeof window !== 'undefined' && (window as any).analytics) {
-        (window as any).analytics.track('component_load_performance', {
-          componentName,
-          loadTime,
-          timestamp: Date.now(),
-        });
-      }
+      analytics('component_load_performance', {
+        componentName,
+        loadTime,
+      }, 'low');
     };
-  }, [componentName]);
+  }, [componentName, analytics]);
 
   return {
     getLoadTime: () => tracker.current.getAverageLoadTime(componentName),

@@ -6,14 +6,14 @@
  * Based on PROMPT_H7_DEADLINE_MANAGEMENT.md specifications
  */
 
-import { useAuth } from '@/components/providers/AuthProvider';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useAuth } from '@/hooks/auth/useAuth';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   DeadlineManagementMetrics,
   DeadlinePerformanceData,
   H7_COMPONENT_MAPPING,
 } from '@/types/deadlines';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
 interface DeadlineTrackingSession {
   sessionId: string;
@@ -28,10 +28,9 @@ interface DeadlineTrackingSession {
 }
 
 export function useDeadlineManagementAnalytics() {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { user } = useAuth();
 
-  const [sessionStartTime] = useState(Date.now());
   const sessionData = useRef<DeadlineTrackingSession>({
     sessionId: `deadline-session-${Date.now()}`,
     startTime: Date.now(),
@@ -47,19 +46,18 @@ export function useDeadlineManagementAnalytics() {
   // Track overall deadline management performance (H7 validation)
   const trackDeadlinePerformance = useCallback(
     (metrics: DeadlineManagementMetrics) => {
-      analytics.track('deadline_management_performance', {
+      analytics('deadline_management_performance', {
         ...metrics,
-        timestamp: Date.now(),
         userId: user?.id,
-        userRole: user?.roles?.[0],
+        userRole: user?.roles[0],
         sessionId: sessionData.current.sessionId,
         userStories: H7_COMPONENT_MAPPING.userStories,
         hypotheses: H7_COMPONENT_MAPPING.hypotheses,
         componentTraceability: H7_COMPONENT_MAPPING,
-      });
+      }, 'medium');
 
       // H7 specific tracking: On-time completion improvement
-      analytics.track('hypothesis_validation_h7', {
+      analytics('hypothesis_validation_h7', {
         hypothesis: 'H7',
         metric: 'on_time_completion_improvement',
         onTimeCompletionRate: metrics.onTimeCompletionRate,
@@ -69,8 +67,7 @@ export function useDeadlineManagementAnalytics() {
         achieved: metrics.improvementPercentage >= 40,
         timelineAccuracy: metrics.timelineAccuracy,
         criticalPathEffectiveness: metrics.criticalPathEffectiveness,
-        timestamp: Date.now(),
-      });
+      }, 'high');
     },
     [analytics, user]
   );
@@ -89,14 +86,13 @@ export function useDeadlineManagementAnalytics() {
     }) => {
       sessionData.current.estimationsGenerated++;
 
-      analytics.track('timeline_estimation', {
+      analytics('timeline_estimation', {
         ...estimationData,
         userStory: 'US-4.1',
         acceptanceCriteria: ['AC-4.1.1'],
         method: 'complexityEstimation()',
         sessionInteractions: sessionData.current.interactions++,
-        timestamp: Date.now(),
-      });
+      }, 'low');
 
       // Track estimation method effectiveness
       if (estimationData.actualHours && estimationData.estimatedHours) {
@@ -108,15 +104,14 @@ export function useDeadlineManagementAnalytics() {
               100
         );
 
-        analytics.track('estimation_accuracy', {
+        analytics('estimation_accuracy', {
           deadlineId: estimationData.deadlineId,
           estimationType: estimationData.estimationType,
           accuracy,
           complexityLevel: estimationData.complexityLevel,
           userStory: 'US-4.1',
           acceptanceCriteria: ['AC-4.1.1'],
-          timestamp: Date.now(),
-        });
+        }, 'low');
       }
     },
     [analytics]
@@ -137,14 +132,13 @@ export function useDeadlineManagementAnalytics() {
     }) => {
       sessionData.current.criticalPathsCalculated++;
 
-      analytics.track('critical_path_analysis', {
+      analytics('critical_path_analysis', {
         ...criticalPathData,
         userStory: 'US-4.1',
         acceptanceCriteria: ['AC-4.1.2'],
         method: 'criticalPath()',
         sessionCalculations: sessionData.current.criticalPathsCalculated,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // Track prediction accuracy if actual bottlenecks are available
       if (criticalPathData.actualBottlenecks) {
@@ -153,7 +147,7 @@ export function useDeadlineManagementAnalytics() {
         const correctPredictions = [...actualSet].filter(b => predictedSet.has(b)).length;
         const accuracy = actualSet.size > 0 ? (correctPredictions / actualSet.size) * 100 : 0;
 
-        analytics.track('bottleneck_prediction_accuracy', {
+        analytics('bottleneck_prediction_accuracy', {
           deadlineId: criticalPathData.deadlineId,
           accuracy,
           predictedCount: criticalPathData.predictedBottlenecks.length,
@@ -161,8 +155,7 @@ export function useDeadlineManagementAnalytics() {
           correctPredictions,
           userStory: 'US-4.1',
           acceptanceCriteria: ['AC-4.1.2'],
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
     },
     [analytics]
@@ -179,25 +172,23 @@ export function useDeadlineManagementAnalytics() {
       userAgreed?: boolean;
       manualOverride?: string;
     }) => {
-      analytics.track('priority_calculation', {
+      analytics('priority_calculation', {
         ...priorityData,
         userStory: 'US-4.3',
         acceptanceCriteria: ['AC-4.3.1'],
         method: 'calculatePriority()',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // Track user agreement with priority suggestions
       if (priorityData.userAgreed !== undefined) {
-        analytics.track('priority_algorithm_effectiveness', {
+        analytics('priority_algorithm_effectiveness', {
           deadlineId: priorityData.deadlineId,
           algorithmType: priorityData.algorithmType,
           userAgreed: priorityData.userAgreed,
           overrideApplied: !!priorityData.manualOverride,
           userStory: 'US-4.3',
           acceptanceCriteria: ['AC-4.3.1'],
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
     },
     [analytics]
@@ -214,13 +205,12 @@ export function useDeadlineManagementAnalytics() {
       conflictsResolved: number;
       accuracy?: number;
     }) => {
-      analytics.track('dependency_mapping', {
+      analytics('dependency_mapping', {
         ...dependencyData,
         userStory: 'US-4.3',
         acceptanceCriteria: ['AC-4.3.2'],
         method: 'mapDependencies()',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics]
   );
@@ -236,13 +226,12 @@ export function useDeadlineManagementAnalytics() {
       estimatedCompletion?: Date;
       actualCompletion?: Date;
     }) => {
-      analytics.track('progress_tracking', {
+      analytics('progress_tracking', {
         ...progressData,
         userStory: 'US-4.3',
         acceptanceCriteria: ['AC-4.3.3'],
         method: 'trackProgress()',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // Track completion accuracy if both estimated and actual are available
       if (progressData.estimatedCompletion && progressData.actualCompletion) {
@@ -253,14 +242,13 @@ export function useDeadlineManagementAnalytics() {
           100 - Math.abs(actualTime - estimatedTime) / (24 * 60 * 60 * 1000)
         ); // days difference
 
-        analytics.track('completion_prediction_accuracy', {
+        analytics('completion_prediction_accuracy', {
           deadlineId: progressData.deadlineId,
           accuracy,
           daysEarlyOrLate: (actualTime - estimatedTime) / (24 * 60 * 60 * 1000),
           userStory: 'US-4.3',
           acceptanceCriteria: ['AC-4.3.3'],
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
     },
     [analytics]
@@ -279,7 +267,7 @@ export function useDeadlineManagementAnalytics() {
     }) => {
       sessionData.current.deadlinesCreated++;
 
-      analytics.track('deadline_creation', {
+      analytics('deadline_creation', {
         ...creationData,
         aiAcceptanceRate:
           creationData.aiSuggestionsTotal > 0
@@ -288,8 +276,7 @@ export function useDeadlineManagementAnalytics() {
         sessionDeadlinesCreated: sessionData.current.deadlinesCreated,
         userStory: 'US-4.1',
         method: 'createDeadline()',
-        timestamp: Date.now(),
-      });
+      }, 'high');
     },
     [analytics]
   );
@@ -299,23 +286,21 @@ export function useDeadlineManagementAnalytics() {
     (completionData: DeadlinePerformanceData) => {
       sessionData.current.deadlinesCompleted++;
 
-      analytics.track('deadline_completion', {
+      analytics('deadline_completion', {
         ...completionData,
         sessionDeadlinesCompleted: sessionData.current.deadlinesCompleted,
         userStory: completionData.onTime ? 'US-4.1' : 'US-4.3',
-        timestamp: Date.now(),
-      });
+      }, 'high');
 
       // Track H7 core metrics
-      analytics.track('h7_completion_metric', {
+      analytics('h7_completion_metric', {
         deadlineId: completionData.deadlineId,
         onTime: completionData.onTime,
         estimationAccuracy: completionData.estimationAccuracy,
         daysEarlyOrLate: completionData.daysEarlyOrLate,
         complexityActual: completionData.complexityActual,
         hypothesis: 'H7',
-        timestamp: Date.now(),
-      });
+      }, 'high');
     },
     [analytics]
   );
@@ -334,11 +319,10 @@ export function useDeadlineManagementAnalytics() {
         sessionData.current.notificationsEngaged++;
       }
 
-      analytics.track('notification_engagement', {
+      analytics('notification_engagement', {
         ...engagementData,
         sessionEngagements: sessionData.current.notificationsEngaged,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics]
   );
@@ -357,11 +341,10 @@ export function useDeadlineManagementAnalytics() {
     }) => {
       sessionData.current.escalationsTriggered++;
 
-      analytics.track('deadline_escalation', {
+      analytics('deadline_escalation', {
         ...escalationData,
         sessionEscalations: sessionData.current.escalationsTriggered,
-        timestamp: Date.now(),
-      });
+      }, 'high');
     },
     [analytics]
   );
@@ -378,10 +361,9 @@ export function useDeadlineManagementAnalytics() {
       burnoutRisk: number;
       recommendedActions: string[];
     }) => {
-      analytics.track('workload_management', {
+      analytics('workload_management', {
         ...workloadData,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics]
   );

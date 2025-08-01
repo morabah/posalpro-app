@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import usePerformanceOptimization from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -51,7 +51,7 @@ export default function PerformanceDashboard({
   enableAutoRefresh = true,
   refreshInterval = 30000,
 }: PerformanceDashboardProps) {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { throwError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -77,7 +77,7 @@ export default function PerformanceDashboard({
 
   useEffect(() => {
     // Track dashboard access for analytics
-    analytics.track('performance_dashboard_accessed', {
+    analytics('performance_dashboard_accessed', {
       userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
       hypotheses: ['H8', 'H9', 'H11'],
       showAdvancedMetrics,
@@ -95,7 +95,7 @@ export default function PerformanceDashboard({
     try {
       await triggerOptimization();
 
-      analytics.track('performance_optimization_triggered', {
+      analytics('performance_optimization_triggered', {
         userStories: ['US-6.1', 'US-6.2'],
         hypotheses: ['H8', 'H9', 'H11'],
         currentOptimizationScore: optimizationScore,

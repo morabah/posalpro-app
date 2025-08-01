@@ -5,7 +5,7 @@ import { logger } from '@/utils/logger'; /**
  */
 
 import { getApiBaseUrl, logApiConfiguration, validateApiConnection } from '@/lib/utils/apiUrl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface ApiClientConfig {
   baseUrl: string;
@@ -103,18 +103,39 @@ class ApiClientSingleton {
       };
 
       if (error instanceof Error) {
-        logger.error('API request error:', {
-          ...errorDetails,
-          errorMessage: error.message,
-          errorName: error.name,
-          stack: error.stack,
-        });
+        // Defensive coding: ensure we're passing valid parameters to logger
+        try {
+          logger.error('API request error:', {
+            ...errorDetails,
+            errorMessage: error.message,
+            errorName: error.name,
+            stack: error.stack,
+          });
+        } catch (loggerError) {
+          // Fallback to console if logger fails
+          console.error('API request error:', {
+            ...errorDetails,
+            errorMessage: error.message,
+            errorName: error.name,
+            stack: error.stack,
+          });
+        }
       } else {
-        logger.error('API request error (unknown type):', {
-          ...errorDetails,
-          error: String(error),
-          errorType: typeof error,
-        });
+        // Defensive coding: ensure we're passing valid parameters to logger
+        try {
+          logger.error('API request error (unknown type):', {
+            ...errorDetails,
+            error: String(error),
+            errorType: typeof error,
+          });
+        } catch (loggerError) {
+          // Fallback to console if logger fails
+          console.error('API request error (unknown type):', {
+            ...errorDetails,
+            error: String(error),
+            errorType: typeof error,
+          });
+        }
       }
       throw error;
     }
@@ -226,15 +247,18 @@ export function useApiClient(): UseApiClientReturn {
     }
   }, []);
 
-  return {
-    config,
-    makeRequest,
-    get,
-    post,
-    put,
-    delete: del,
-    validateConnection,
-  };
+  return useMemo(
+    () => ({
+      config,
+      makeRequest,
+      get,
+      post,
+      put,
+      delete: del,
+      validateConnection,
+    }),
+    [config, makeRequest, get, post, put, del, validateConnection]
+  );
 }
 
 /**

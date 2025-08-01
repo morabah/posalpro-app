@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import {
@@ -95,7 +95,7 @@ export default function DatabaseMonitoringPage() {
   const [activeTab, setActiveTab] = useState('comparisons');
 
   const { handleAsyncError } = useErrorHandler();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const apiClient = useApiClient();
 
   /**
@@ -113,14 +113,14 @@ export default function DatabaseMonitoringPage() {
         setLastUpdate(new Date());
 
         // Track analytics for hypothesis validation
-        analytics.track('database_metrics_monitored', {
+        analytics('database_metrics_monitored', {
           queryResponseTime: response.metrics.queryResponseTime,
           cacheHitRate: response.metrics.cacheHitRate,
           optimizationScore: response.metrics.optimizationScore,
           hypothesis: 'H8,H11,H12',
           component: 'DatabaseMonitoringPage',
           userStories: COMPONENT_MAPPING.userStories,
-        });
+        }, 'high');
       } else {
         throw new Error('Failed to fetch database metrics');
       }
@@ -144,13 +144,13 @@ export default function DatabaseMonitoringPage() {
         setTestResults(response);
 
         // Track test completion
-        analytics.track('database_performance_test_completed', {
+        analytics('database_performance_test_completed', {
           totalSuites: response.testSuites?.length || 0,
           overallScore: response.overallScore || 0,
           hypothesis: 'H8,H11,H12',
           component: 'DatabaseMonitoringPage',
           userStories: COMPONENT_MAPPING.userStories,
-        });
+        }, 'high');
       } else {
         throw new Error('Failed to run performance tests');
       }

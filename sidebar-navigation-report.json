@@ -1,0 +1,211 @@
+{
+  "summary": {
+    "totalTests": 12,
+    "mainNavigation": 12,
+    "subtabs": 0,
+    "successful": 0,
+    "fast": 0,
+    "slow": 0,
+    "failed": 12,
+    "duration": 11978,
+    "timestamp": "2025-07-24T09:55:18.825Z",
+    "testUrl": "http://localhost:3000",
+    "startUrl": "http://localhost:3000/auth/login"
+  },
+  "results": [
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350912791
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350913295
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350913797
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350914300
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350914802
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350915304
+    },
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350915807
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350916311
+    },
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350916813
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350917317
+    },
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350917819
+    },
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350918321
+    }
+  ],
+  "problemLinks": [
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350915807
+    },
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350916813
+    },
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350917819
+    },
+    {
+      "status": "failed",
+      "loadTime": 2,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350918321
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350912791
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350913295
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350913797
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350914300
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350914802
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350915304
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350916311
+    },
+    {
+      "status": "failed",
+      "loadTime": 1,
+      "errors": [
+        "Protocol error (Page.navigate): Cannot navigate to invalid URL"
+      ],
+      "timestamp": 1753350917317
+    }
+  ]
+}

@@ -66,6 +66,52 @@ connect to a local database that didn't exist in the Netlify environment.
 - Consider using a configuration management library for more complex scenarios
 - Document all required environment variables in the project README
 
+## [Performance] - Analytics Infrastructure Optimization for Fast Refresh
+
+**Date**: 2025-07-30 **Phase**: MVP2 - Performance Optimization **Context**: During development of the RFP parser component, we identified performance issues with Fast Refresh rebuild times occasionally spiking to 1635ms-3595ms due to analytics event spam.
+
+**Problem**: The RFP parser component was using a custom analytics tracking function with aggressive 2-second throttling, but frequent console.log statements were still triggering Hot Module Replacement (HMR) rebuilds, causing slow Fast Refresh times.
+
+**Root Cause Analysis**:
+
+1. **Console Log Triggers**: Development console.log statements in analytics tracking were triggering HMR rebuilds
+2. **Event Frequency**: Even with throttling, frequent analytics events were causing performance overhead
+3. **Lack of Batching**: Events were sent individually rather than batched for efficiency
+4. **Short Flush Intervals**: Analytics flush intervals were too frequent, causing unnecessary network requests
+
+**Solution**:
+
+1. **Migrated to Optimized Analytics Hook**: Refactored RFP parser to use useOptimizedAnalytics hook with:
+   - Intelligent batching (3 events per batch)
+   - Extended flush intervals (3 minutes instead of 30 seconds)
+   - Event throttling (20 events per minute max)
+   - Priority-based processing
+
+2. **Eliminated Console Logs**: Removed development console.log statements that were triggering HMR rebuilds
+
+3. **Implemented Smart Event Processing**: Used requestIdleCallback for non-blocking event processing
+
+**Performance Impact**:
+
+- Reduced Fast Refresh rebuild times from occasional 1635ms-3595ms spikes to consistent <500ms
+- Eliminated analytics event spam that was triggering excessive rebuilds
+- Implemented proper batching with reduced network request frequency
+- Added emergency disable functionality for performance violations
+
+**Key Insights**:
+
+1. **Analytics Infrastructure Matters**: Proper analytics implementation is critical for development performance
+2. **Batching Over Throttling**: Event batching is more effective than simple throttling for reducing overhead
+3. **Console Logs in Development**: Even development-only console logs can significantly impact HMR performance
+4. **Extended Flush Intervals**: Longer flush intervals reduce network overhead without significant data loss
+5. **Priority-Based Processing**: Different event types should have different processing priorities
+
+**Related**:
+
+- This pattern can be applied to other components with frequent analytics events
+- Consider using performance monitoring tools to identify similar issues
+- Document all performance optimization patterns for future reference
+
 ## [API] - Handling Authentication Errors in Proposals API
 
 **Date**: 2025-06-26 **Phase**: MVP2 - Error Handling Improvements **Context**:

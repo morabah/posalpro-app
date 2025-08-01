@@ -14,7 +14,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import {
   ArrowPathIcon,
@@ -98,7 +98,7 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
   const [selectedHypothesis, setSelectedHypothesis] = useState<string | null>(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(autoRefresh);
 
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
 
   // Enhanced mock data generation with realistic Phase 2 implementation metrics
@@ -217,12 +217,11 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
       setSummary(mockData.summary);
 
       // Track analytics for dashboard load
-      analytics.track('hypothesis_tracking_dashboard_loaded', {
+      analytics('hypothesis_dashboard_loaded', {
         timeRange,
-        hypothesesCount: mockData.hypotheses.length,
-        healthScore: mockData.overview.healthScore,
-        loadTime: Date.now(),
-        componentTraceability: COMPONENT_MAPPING,
+        hypothesisCount: mockData.hypotheses.length,
+        component: 'HypothesisTrackingDashboard',
+        phase: 'Phase 2',
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
@@ -260,21 +259,21 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
 
   // Handle manual refresh
   const handleRefresh = useCallback(() => {
-    analytics.track('hypothesis_dashboard_manual_refresh', {
+    analytics('dashboard_refreshed', {
       timeRange,
-      selectedHypothesis,
-      componentTraceability: COMPONENT_MAPPING,
+      autoRefresh: autoRefreshEnabled,
+      component: 'HypothesisTrackingDashboard',
     });
 
     fetchDashboardData();
-  }, [analytics, timeRange, selectedHypothesis, fetchDashboardData]);
+  }, [analytics, timeRange, autoRefreshEnabled, fetchDashboardData]);
 
   // Handle export functionality
   const handleExport = useCallback(() => {
-    analytics.track('hypothesis_dashboard_export', {
+    analytics('dashboard_export', {
       timeRange,
       dataPoints: hypotheses.length,
-      componentTraceability: COMPONENT_MAPPING,
+      component: 'HypothesisTrackingDashboard',
     });
 
     // Generate CSV content
@@ -303,14 +302,12 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
     (hypothesis: string | null) => {
       setSelectedHypothesis(hypothesis);
 
-      analytics.track('hypothesis_filter_applied', {
-        hypothesis,
-        previousHypothesis: selectedHypothesis,
-        timeRange,
-        componentTraceability: COMPONENT_MAPPING,
+      analytics('hypothesis_selected', {
+        hypothesis: selectedHypothesis,
+        component: 'HypothesisTrackingDashboard',
       });
     },
-    [analytics, selectedHypothesis, timeRange]
+    [analytics, selectedHypothesis]
   );
 
   // Get status color and icon

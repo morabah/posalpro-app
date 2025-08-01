@@ -15,7 +15,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -120,7 +120,7 @@ export function TeamAssignmentBoard({
   const [viewMode, setViewMode] = useState<'board' | 'matrix' | 'timeline'>('board');
 
   // Analytics and error handling
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Error handling
@@ -144,11 +144,13 @@ export function TeamAssignmentBoard({
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       toast.error(userMessage);
 
-      analytics.track('team_assignment_error', {
-        operation,
+      analytics('team_assignment_error', {
+        component: 'TeamAssignmentBoard',
+        operation: 'handleAssignTask',
         error: standardError.message,
-        context,
         proposalId,
+        sectionId: context?.sectionId,
+        memberId: context?.memberId,
       });
     },
     [errorHandlingService, analytics, proposalId]
@@ -194,10 +196,12 @@ export function TeamAssignmentBoard({
           .sort((a, b) => (b.suggestionScore || 0) - (a.suggestionScore || 0))
           .slice(0, 3); // Top 3 suggestions
 
-        analytics.track('smart_suggestions_generated', {
-          sectionId: section.id,
+        analytics('smart_suggestions_generated', {
+          component: 'TeamAssignmentBoard',
+          operation: 'generateSmartSuggestions',
           suggestionsCount: suggestions.length,
           proposalId,
+          sectionId: section.id,
         });
 
         return suggestions;
@@ -254,13 +258,15 @@ export function TeamAssignmentBoard({
 
         toast.success(`Assigned ${section.name} to ${member.name}`);
 
-        analytics.track('task_assigned', {
+        analytics('task_assigned', {
+          component: 'TeamAssignmentBoard',
+          operation: 'handleAssignTask',
+          proposalId,
           sectionId,
           memberId,
           memberName: member.name,
           sectionName: section.name,
           estimatedHours: section.estimatedHours,
-          proposalId,
         });
       } catch (error) {
         handleError(error, 'assign_task', { sectionId, memberId });
@@ -324,14 +330,13 @@ export function TeamAssignmentBoard({
 
   // Track component view
   useEffect(() => {
-    analytics.track('team_assignment_board_viewed', {
+    analytics('team_assignment_board_viewed', {
       proposalId,
       sectionsCount: sections.length,
       teamMembersCount: teamMembers.length,
       assignmentsCount: assignments.length,
-      viewMode,
     });
-  }, [analytics, proposalId, sections.length, teamMembers.length, assignments.length, viewMode]);
+  }, [analytics, proposalId, sections.length, teamMembers.length, assignments.length]);
 
   return (
     <div className={`space-y-6 ${className}`}>

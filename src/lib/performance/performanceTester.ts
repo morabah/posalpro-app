@@ -187,7 +187,7 @@ class PerformanceTester {
    * Run a comprehensive test suite on the ProposalWizard
    */
   async testProposalWizard(): Promise<PerformanceTestResult[]> {
-    const tests: { name: string; test: PerformanceTest }[] = [
+    const tests: Array<{ name: string; test: PerformanceTest }> = [
       {
         name: 'ProposalWizard_Initial_Load',
         test: {

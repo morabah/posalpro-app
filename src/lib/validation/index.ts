@@ -41,7 +41,7 @@ export const validateForm = <T>(
 ): {
   success: boolean;
   data?: T;
-  errors?: { field: string; message: string; code: string }[];
+  errors?: Array<{ field: string; message: string; code: string }>;
 } => {
   const result = schema.safeParse(data);
 

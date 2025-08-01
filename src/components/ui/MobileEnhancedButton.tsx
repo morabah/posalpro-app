@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useResponsive } from '@/hooks/useResponsive';
 import { cn } from '@/lib/utils';
@@ -94,7 +94,7 @@ export const MobileEnhancedButton = forwardRef<HTMLButtonElement, MobileEnhanced
     ref
   ) => {
     const { isMobile, isTablet, isDesktop } = useResponsive();
-    const analytics = useAnalytics();
+    const { trackOptimized: analytics } = useOptimizedAnalytics();
     const { handleAsyncError } = useErrorHandler();
 
     // ✅ WCAG 2.1 AA COMPLIANT: Minimum 44px touch targets
@@ -160,48 +160,58 @@ export const MobileEnhancedButton = forwardRef<HTMLButtonElement, MobileEnhanced
       }
     }, [enableHaptics, isMobile]);
 
-    // ✅ ANALYTICS: Enhanced click tracking
+    // ✅ PERFORMANCE OPTIMIZED: Lightweight click tracking
     const handleClick = useCallback(
       (event: React.MouseEvent<HTMLButtonElement>) => {
         try {
-          // Trigger haptic feedback
+          // ⚡ IMMEDIATE: Trigger haptic feedback first (non-blocking)
           triggerHapticFeedback();
 
-          // Analytics tracking
-          if (trackingId) {
-            analytics.track('mobile_button_interaction', {
-              ...COMPONENT_MAPPING,
-              buttonId: trackingId,
-              variant,
-              size,
-              deviceType: isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop',
-              touchEnabled: isMobile,
-              timestamp: Date.now(),
-            });
-          }
-
-          // Call original onClick handler
+          // ⚡ IMMEDIATE: Call original onClick handler FIRST
           onClick?.(event);
+
+          // ⚡ ASYNC: Defer analytics to prevent UI blocking
+          if (trackingId) {
+            // Use requestIdleCallback if available, otherwise setTimeout
+            const trackAnalytics = () => {
+              try {
+                analytics('mobile_button_interaction', {
+                  buttonId: trackingId,
+                  variant,
+                  size,
+                  deviceType: isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop',
+                }, 'low');
+              } catch (error) {
+                // Silent analytics failure to prevent UI impact
+                console.warn('Analytics tracking failed silently:', error);
+              }
+            };
+
+            // Use idle callback for better performance
+            if ('requestIdleCallback' in window) {
+              requestIdleCallback(trackAnalytics);
+            } else {
+              setTimeout(trackAnalytics, 0);
+            }
+          }
         } catch (error) {
-          handleAsyncError(error, 'Button click handler failed', {
-            component: 'MobileEnhancedButton',
-            trackingId,
-            variant,
-            size,
-          });
+          // Log error but don't block user interaction
+          console.error('Button click error:', error);
+          
+          // Still try to execute the original onClick if it wasn't called yet
+          if (!event.defaultPrevented) {
+            try {
+              onClick?.(event);
+            } catch (onClickError) {
+              handleAsyncError(onClickError, 'Button onClick handler failed', {
+                component: 'MobileEnhancedButton',
+                trackingId,
+              });
+            }
+          }
         }
       },
-      [
-        onClick,
-        triggerHapticFeedback,
-        analytics,
-        trackingId,
-        variant,
-        size,
-        isMobile,
-        isTablet,
-        handleAsyncError,
-      ]
+      [onClick, triggerHapticFeedback, analytics, trackingId, variant, size, isMobile, isTablet, handleAsyncError]
     );
 
     const currentSizeClass = sizeClasses[size];

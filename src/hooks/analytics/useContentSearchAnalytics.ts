@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { useAnalytics } from '../useAnalytics';
+import { useOptimizedAnalytics } from '../useOptimizedAnalytics';
 
 // Types for content search analytics
 export interface ContentSearchMetrics {
@@ -52,7 +52,7 @@ export interface ContentQualityMetrics {
 }
 
 export const useContentSearchAnalytics = () => {
-  const { track, identify, page } = useAnalytics();
+  const { trackOptimized: track, identify, page } = useOptimizedAnalytics();
 
   // Tracking state
   const [currentSearch, setCurrentSearch] = useState<ContentSearchMetrics | null>(null);
@@ -96,8 +96,7 @@ export const useContentSearchAnalytics = () => {
         filtersCount: searchMetrics.filtersUsed.length,
         userStory: 'US-1.1',
         hypothesis: 'H1',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       return searchId;
     },
@@ -127,8 +126,7 @@ export const useContentSearchAnalytics = () => {
         searchAccuracy,
         userStory: 'US-1.1',
         hypothesis: 'H1',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // Performance tracking for H1 hypothesis
       track('search_performance', {
@@ -139,8 +137,8 @@ export const useContentSearchAnalytics = () => {
         hypothesis: 'H1',
         targetTime: 2000, // Target <2 seconds for H1
         performanceScore:
-          timeToFirstResult <= 2000 ? 100 : Math.max(0, 100 - (timeToFirstResult - 2000) / 20),
-      });
+          timeToFirstResult < 2000 ? 100 : Math.max(0, 100 - (timeToFirstResult - 2000) / 100),
+      }, 'high');
     },
     [currentSearch, track]
   );
@@ -171,8 +169,7 @@ export const useContentSearchAnalytics = () => {
         userSatisfaction,
         userStory: 'US-1.1',
         hypothesis: 'H1',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // Update performance data for H1 hypothesis validation
       updatePerformanceMetrics(finalMetrics);
@@ -204,8 +201,7 @@ export const useContentSearchAnalytics = () => {
         userModified: userModifications,
         userStory: 'US-1.2',
         hypothesis: 'H1',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       return accuracy;
     },
@@ -228,8 +224,7 @@ export const useContentSearchAnalytics = () => {
           clickedContentId,
           userStory: 'US-1.2',
           hypothesis: 'H1',
-          timestamp: Date.now(),
-        });
+        }, 'low');
       }
     },
     [track]
@@ -242,22 +237,23 @@ export const useContentSearchAnalytics = () => {
       qualityScore: number,
       usageMetrics: {
         views: number;
-        uses: number;
+        shares: number;
+        timeSpent: number;
         clickThroughRate: number;
         popularityScore: number;
       }
     ) => {
-      track('content_quality_assessed', {
+      track('content_quality_tracked', {
         contentId,
         qualityScore,
         views: usageMetrics.views,
-        uses: usageMetrics.uses,
+        shares: usageMetrics.shares,
+        timeSpent: usageMetrics.timeSpent,
         clickThroughRate: usageMetrics.clickThroughRate * 100,
         popularityScore: usageMetrics.popularityScore,
         userStory: 'US-1.3',
         hypothesis: 'H1',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // Track quality improvement for H1 hypothesis
       if (qualityScore >= 75) {
@@ -266,8 +262,7 @@ export const useContentSearchAnalytics = () => {
           qualityScore,
           userStory: 'US-1.3',
           hypothesis: 'H1',
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
     },
     [track]
@@ -279,14 +274,13 @@ export const useContentSearchAnalytics = () => {
       proposalOutcome: 'won' | 'lost' | 'pending',
       contentUtilizationScore: number
     ) => {
-      track('content_win_rate_tracking', {
+      track('content_win_rate_tracked', {
         contentId,
         proposalOutcome,
         contentUtilizationScore,
         userStory: 'US-1.3',
         hypothesis: 'H1',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [track]
   );
@@ -384,8 +378,7 @@ export const useContentSearchAnalytics = () => {
         journeyStep,
         ...context,
         hypothesis: 'H1',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [track]
   );

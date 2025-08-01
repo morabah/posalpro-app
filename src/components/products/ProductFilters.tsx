@@ -8,7 +8,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   CheckCircleIcon,
   CurrencyDollarIcon,
@@ -43,7 +43,7 @@ interface ProductFiltersProps {
 }
 
 const ProductFilters = memo(({ onFiltersChange, initialFilters }: ProductFiltersProps) => {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const [filters, setFilters] = useState<FilterState>({
     categories: initialFilters?.categories || [],
@@ -98,12 +98,11 @@ const ProductFilters = memo(({ onFiltersChange, initialFilters }: ProductFilters
       onFiltersChange?.(updatedFilters);
 
       // Track filter usage
-      analytics.track('product_filters_applied', {
+      analytics('product_filters_applied', {
         component: 'ProductFilters',
         filters: updatedFilters,
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
-        timestamp: Date.now(),
       });
     },
     [filters, onFiltersChange, analytics]
@@ -156,10 +155,9 @@ const ProductFilters = memo(({ onFiltersChange, initialFilters }: ProductFilters
     setFilters(clearedFilters);
     onFiltersChange?.(clearedFilters);
 
-    analytics.track('product_filters_cleared', {
+    analytics('product_filters_cleared', {
       component: 'ProductFilters',
-      timestamp: Date.now(),
-    });
+    }, 'medium');
   }, [onFiltersChange, analytics]);
 
   const hasActiveFilters =

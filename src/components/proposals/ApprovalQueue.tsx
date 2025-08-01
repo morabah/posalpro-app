@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { apiClient } from '@/lib/api/client';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import {
@@ -122,7 +122,7 @@ export function ApprovalQueue({
   const [viewMode, setViewMode] = useState<'list' | 'board' | 'timeline'>('list');
 
   // Use centralized API client and error handling
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   useEffect(() => {
@@ -132,11 +132,14 @@ export function ApprovalQueue({
         setError(null);
 
         // Track analytics for fetch attempt
-        analytics.track('approval_queue_fetch_started', {
-          component: 'ApprovalQueue',
-          user: currentUser,
-          timestamp: Date.now(),
-        });
+        analytics(
+          'approval_queue_fetch_started',
+          {
+            component: 'ApprovalQueue',
+            user: currentUser,
+          },
+          'medium'
+        );
 
         // Use main apiClient instead of hook to prevent /api/api/ double endpoint
         const response = await apiClient.get('/proposals/queue');
@@ -152,12 +155,15 @@ export function ApprovalQueue({
         setQueueItems(processedItems);
 
         // Track successful fetch
-        analytics.track('approval_queue_fetch_success', {
-          component: 'ApprovalQueue',
-          itemCount: processedItems.length,
-          user: currentUser,
-          timestamp: Date.now(),
-        });
+        analytics(
+          'approval_queue_fetch_success',
+          {
+            component: 'ApprovalQueue',
+            itemsCount: processedItems.length,
+            user: currentUser,
+          },
+          'medium'
+        );
       } catch (error) {
         // Use standardized error handling
         const standardError = errorHandlingService.processError(
@@ -175,13 +181,16 @@ export function ApprovalQueue({
         setError(userMessage);
 
         // Track error analytics
-        analytics.track('approval_queue_fetch_error', {
-          component: 'ApprovalQueue',
-          error: standardError.message,
-          errorCode: standardError.code,
-          user: currentUser,
-          timestamp: Date.now(),
-        });
+        analytics(
+          'approval_queue_fetch_error',
+          {
+            component: 'ApprovalQueue',
+            error: standardError.message,
+            errorCode: standardError.code,
+            user: currentUser,
+          },
+          'high'
+        );
       } finally {
         setLoading(false);
       }
@@ -347,17 +356,20 @@ export function ApprovalQueue({
   useEffect(() => {
     onQueueOptimization(queueMetrics);
 
-    // Track analytics for H7 hypothesis
-    console.log('Analytics: approval_queue_metrics', {
-      totalItems: queueMetrics.totalItems,
-      overdueItems: queueMetrics.overdueItems,
-      slaComplianceRate: queueMetrics.slaComplianceRate,
-      productivityScore: queueMetrics.productivityScore,
-      bottleneckStages: queueMetrics.bottleneckStages.length,
-      escalationRate: queueMetrics.escalationRate,
-      timestamp: Date.now(),
-    });
-  }, [queueMetrics, onQueueOptimization]);
+    // Track analytics for H7 hypothesis using optimized analytics
+    analytics(
+      'approval_queue_metrics',
+      {
+        totalItems: queueMetrics.totalItems,
+        overdueItems: queueMetrics.overdueItems,
+        slaComplianceRate: queueMetrics.slaComplianceRate,
+        productivityScore: queueMetrics.productivityScore,
+        bottleneckStages: queueMetrics.bottleneckStages.length,
+        escalationRate: queueMetrics.escalationRate,
+      },
+      'medium'
+    );
+  }, [queueMetrics, onQueueOptimization, analytics]);
 
   const handleItemSelection = useCallback((itemId: string, selected: boolean) => {
     setSelectedItems(prev => {
@@ -377,15 +389,18 @@ export function ApprovalQueue({
       onBulkAction(action, selectedItemsArray);
 
       // Track bulk action analytics
-      console.log('Analytics: approval_queue_bulk_action', {
-        action,
-        itemCount: selectedItemsArray.length,
-        timestamp: Date.now(),
-      });
+      analytics(
+        'approval_queue_bulk_action',
+        {
+          action,
+          itemCount: selectedItemsArray.length,
+        },
+        'medium'
+      );
 
       setSelectedItems(new Set());
     },
-    [queueItems, selectedItems, onBulkAction]
+    [queueItems, selectedItems, onBulkAction, analytics]
   );
 
   const getPriorityColor = (priority: string) => {

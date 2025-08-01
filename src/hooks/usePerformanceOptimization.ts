@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -110,7 +110,7 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
   const OPTIMIZED_MEMORY_INTERVAL = 180000; // 3 minutes (was 1 minute)
   const DEBOUNCE_DELAY = 2000; // 2 second debounce
 
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
@@ -318,7 +318,7 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
     // Debounce metrics collection
     const debounceKey = 'collectMetrics';
     if (debouncedCallsRef.current.has(debounceKey)) {
-      clearTimeout(debouncedCallsRef.current.get(debounceKey)!);
+      clearTimeout(debouncedCallsRef.current.get(debounceKey));
     }
 
     const timer = setTimeout(() => {

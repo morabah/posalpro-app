@@ -7,7 +7,7 @@ import { logger } from '@/utils/logger';
  * Component Traceability: US-3.1, US-3.2, US-3.3, AC-3.1.1, AC-3.1.2, AC-3.2.1, AC-3.3.1
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ValidationEngine } from '@/lib/validation/ValidationEngine';
 import {
   ValidationCategory,
@@ -45,7 +45,7 @@ interface ValidationState {
 // Filter state for validation issues
 interface ValidationFilters {
   severity?: string[];
-  status?: ('open' | 'in_progress' | 'resolved' | 'deferred' | 'suppressed')[];
+  status?: Array<'open' | 'in_progress' | 'resolved' | 'deferred' | 'suppressed'>;
   category?: string[];
   proposalId?: string;
   search?: string;
@@ -78,7 +78,7 @@ export function useValidation() {
   });
 
   const [validationEngine] = useState(() => new ValidationEngine());
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Real-time validation function (US-3.1, AC-3.1.1)
   const validateConfiguration = async (request: ValidationRequest) => {
@@ -87,11 +87,10 @@ export function useValidation() {
       setState(prev => ({ ...prev, isValidating: true, error: null }));
 
       // Track validation start event for H8 hypothesis
-      analytics.track('validation_started', {
+      analytics('validation_started', {
         proposalId: request.proposalId,
         configurationSize: request.products.length,
-        timestamp: startTime,
-      });
+      }, 'medium');
 
       const validationSummary = await validationEngine.validateProductConfiguration(
         request.proposalId,
@@ -145,13 +144,13 @@ export function useValidation() {
       };
 
       // Track validation completion for H8 hypothesis
-      analytics.track('validation_completed', {
-        ...metrics,
+      analytics('validation_completed', {
         proposalId: request.proposalId,
-        issuesFound: result.issues.length,
-        timestamp: endTime,
-        success: true,
-      });
+        validationTime,
+        errorsDetected: result.issues.length,
+        criticalErrors: result.issues.filter(i => i.severity === 'critical').length,
+        fixSuggestionsGenerated: result.suggestions.length,
+      }, 'medium');
 
       setState(prev => ({
         ...prev,
@@ -170,11 +169,10 @@ export function useValidation() {
       const errorMessage = error instanceof Error ? error.message : 'Validation failed';
 
       // Track validation error for monitoring
-      analytics.track('validation_error', {
+      analytics('validation_error', {
         proposalId: request.proposalId,
         error: errorMessage,
-        timestamp: Date.now(),
-      });
+      }, 'high');
 
       setState(prev => ({
         ...prev,
@@ -193,11 +191,10 @@ export function useValidation() {
 
       try {
         // Track fix application attempt
-        analytics.track('fix_suggestion_applied', {
+        analytics('fix_suggestion_applied', {
           issueId,
           fixId,
-          timestamp: startTime,
-        });
+        }, 'medium');
 
         const success = await validationEngine.applyFix(issueId, fixId);
 
@@ -217,23 +214,22 @@ export function useValidation() {
           }));
 
           // Track successful fix for H8 hypothesis validation
-          analytics.track('fix_suggestion_success', {
+          analytics('fix_suggestion_success', {
             issueId,
             fixId,
             resolutionTime: Date.now() - startTime,
-            timestamp: Date.now(),
-          });
+          }, 'medium');
         }
 
         return success;
       } catch (error) {
-        analytics.track('fix_suggestion_error', {
+        analytics('fix_suggestion_error', {
           issueId,
           fixId,
           error: error instanceof Error ? error.message : 'Fix application failed',
-          timestamp: Date.now(),
-        });
+        }, 'high');
 
+        logger.error('Fix suggestion application failed:', error);
         return false;
       }
     },
@@ -317,10 +313,9 @@ export function useValidation() {
     };
 
     // Track dashboard view for analytics
-    analytics.track('validation_summary_viewed', {
+    analytics('validation_summary_viewed', {
       ...summary,
-      timestamp: Date.now(),
-    });
+    }, 'low');
 
     return summary;
   }, [state, analytics]);
@@ -330,11 +325,10 @@ export function useValidation() {
     async (issueIds: string[], fixType: string): Promise<{ success: number; failed: number }> => {
       const results = { success: 0, failed: 0 };
 
-      analytics.track('batch_fix_started', {
+      analytics('batch_fix_started', {
         issueCount: issueIds.length,
         fixType,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       for (const issueId of issueIds) {
         try {
@@ -351,11 +345,10 @@ export function useValidation() {
         }
       }
 
-      analytics.track('batch_fix_completed', {
+      analytics('batch_fix_completed', {
         ...results,
         fixType,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       return results;
     },
@@ -365,11 +358,10 @@ export function useValidation() {
   // Real-time validation monitoring (US-3.2, AC-3.2.1)
   const startRealTimeValidation = useCallback(
     (proposalId: string, interval: number = 30000) => {
-      analytics.track('realtime_validation_started', {
+      analytics('realtime_validation_started', {
         proposalId,
         interval,
-        timestamp: Date.now(),
-      });
+      }, 'low');
 
       const intervalId = setInterval(async () => {
         try {
@@ -391,10 +383,9 @@ export function useValidation() {
 
       return () => {
         clearInterval(intervalId);
-        analytics.track('realtime_validation_stopped', {
+        analytics('realtime_validation_stopped', {
           proposalId,
-          timestamp: Date.now(),
-        });
+        }, 'low');
       };
     },
     [state.isValidating, validateConfiguration, analytics]

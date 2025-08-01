@@ -25,7 +25,7 @@ export interface ValidationTestSuite<T = any> {
   schema: z.ZodSchema<T>;
   name: string;
   description: string;
-  testCases: ValidationTestCase<T>[];
+  testCases: Array<ValidationTestCase<T>>;
   hypothesis?: string;
   userStory?: string;
 }

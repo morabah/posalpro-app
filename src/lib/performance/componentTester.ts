@@ -374,7 +374,7 @@ export class ComponentTester {
 
     const errors: string[] = [];
     const warnings: string[] = [];
-    let passed = true;
+    const passed = true;
     let eventCount = 0;
 
     try {
@@ -432,7 +432,7 @@ export class ComponentTester {
 
     const errors: string[] = [];
     const warnings: string[] = [];
-    let passed = true;
+    const passed = true;
     let eventCount = 0;
 
     try {
@@ -516,7 +516,7 @@ export class ComponentTester {
 
     const errors: string[] = [];
     const warnings: string[] = [];
-    let passed = true;
+    const passed = true;
     let eventCount = 0;
 
     try {

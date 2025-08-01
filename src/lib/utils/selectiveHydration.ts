@@ -33,7 +33,7 @@ export function getPrismaSelect(
         select[field] = relationConfig;
       } else {
         select[field] = {
-          select: (relationConfig as string[]).reduce((acc, val) => ({ ...acc, [val]: true }), {}),
+          select: (relationConfig).reduce((acc, val) => ({ ...acc, [val]: true }), {}),
         };
       }
     }

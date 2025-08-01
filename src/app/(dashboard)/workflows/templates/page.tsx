@@ -202,7 +202,7 @@ interface AvailabilitySchedule {
   timezone: string;
   workingHours: { start: string; end: string };
   workingDays: number[];
-  outOfOffice: { start: Date; end: Date }[];
+  outOfOffice: Array<{ start: Date; end: Date }>;
 }
 
 interface DelegationRule {
@@ -386,18 +386,11 @@ export default function WorkflowTemplateManager() {
   const [showTestModal, setShowTestModal] = useState(false);
   const [sessionStartTime] = useState(Date.now());
 
-  // Analytics tracking for workflow template operations
+  // Analytics tracking disabled to prevent Fast Refresh rebuilds
+  // TODO: Migrate to useOptimizedAnalytics hook for proper batching
   const trackTemplateAction = useCallback(
     (action: string, metadata: any = {}) => {
-      console.log('Workflow Template Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        sessionDuration: Date.now() - sessionStartTime,
-        component: 'WorkflowTemplateManager',
-        userStory: 'US-4.1',
-        hypothesis: 'H7',
-      });
+      // No-op to prevent console.log rebuild triggers
     },
     [sessionStartTime]
   );

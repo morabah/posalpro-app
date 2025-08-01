@@ -143,11 +143,11 @@ export interface TimelineEstimate {
   totalDuration: number; // days
   complexity: 'low' | 'medium' | 'high';
   criticalPath: string[];
-  milestones: {
+  milestones: Array<{
     name: string;
     date: Date;
     dependencies: string[];
-  }[];
+  }>;
   riskFactors: string[];
   confidence: number; // percentage
 }
@@ -155,27 +155,27 @@ export interface TimelineEstimate {
 export interface ValidationResult {
   isValid: boolean;
   completeness: number; // percentage
-  issues: {
+  issues: Array<{
     severity: 'error' | 'warning' | 'info';
     message: string;
     field?: string;
     suggestions?: string[];
-  }[];
-  complianceChecks: {
+  }>;
+  complianceChecks: Array<{
     requirement: string;
     passed: boolean;
     details?: string;
-  }[];
+  }>;
 }
 
 export interface ProposalInsights {
   complexity: 'low' | 'medium' | 'high';
-  similarProposals: {
+  similarProposals: Array<{
     id: string;
     title: string;
     winRate: number;
     similarity: number;
-  }[];
+  }>;
   keyDifferentiators: string[];
   suggestedFocusAreas: string[];
   riskFactors: string[];
@@ -235,7 +235,7 @@ export interface ProposalWizardStep3Data {
 }
 
 export interface ProposalWizardStep4Data {
-  products: {
+  products: Array<{
     id: string;
     name: string;
     included: boolean;
@@ -246,7 +246,7 @@ export interface ProposalWizardStep4Data {
     configuration?: Record<string, any>;
     customizations?: string[];
     notes?: string;
-  }[];
+  }>;
   totalValue?: number;
   aiRecommendationsUsed?: number;
   searchHistory?: string[];
@@ -265,12 +265,12 @@ export interface ProposalWizardStep5Data {
 
 export interface ProposalWizardStep6Data {
   finalValidation: ValidationResult;
-  approvals: {
+  approvals: Array<{
     reviewer: string;
     approved: boolean;
     comments?: string;
     timestamp?: Date;
-  }[];
+  }>;
 }
 
 // Complete wizard data

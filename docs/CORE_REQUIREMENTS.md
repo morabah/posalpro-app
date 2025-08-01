@@ -227,3 +227,35 @@ userId: z.string().uuid(), // Breaks with CUID format
 - Cause: Format-centric validation vs business-logic validation
 - Fix: Use userIdSchema/databaseIdSchema helpers
 - Reference: [Lesson #19: CUID vs UUID Validation][memory:lesson19]]
+
+## 🗄️ **DATABASE TRANSACTION PATTERNS (CRITICAL)**
+
+**🔄 MANDATORY: Always use prisma.$transaction for related database queries**
+
+- Pattern: Consolidate related queries (findMany + count, multiple aggregations) into single atomic transactions
+- Never: Use Promise.all for related database operations
+- Reference: [Lesson #30: Database Performance Optimization][memory:lesson30]]
+
+**🔧 Database Transaction Best Practices:**
+
+```typescript
+// ✅ CORRECT: Single atomic transaction for related queries
+const [items, count] = await prisma.$transaction([
+  prisma.item.findMany({ where: { status: 'ACTIVE' } }),
+  prisma.item.count({ where: { status: 'ACTIVE' } })
+]);
+
+// ❌ FORBIDDEN: Separate queries creating inconsistency risks
+const [items, count] = await Promise.all([
+  prisma.item.findMany({ where: { status: 'ACTIVE' } }),
+  prisma.item.count({ where: { status: 'ACTIVE' } })
+]);
+```
+
+**📋 Implementation Requirements:**
+
+- All related database queries MUST use `prisma.$transaction`
+- Add indexes on frequently searched text fields
+- Eliminate redundant aggregation calls
+- Monitor database round-trips and connection pool usage
+- Follow Database-First Optimization philosophy from Lesson #20

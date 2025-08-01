@@ -9,13 +9,12 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import usePerformanceOptimization from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { LoggingService } from '@/lib/logging/LoggingService';
-import { useApiCache } from '@/lib/performance/ApiResponseCache';
 import { useDatabaseOptimizer } from '@/lib/performance/DatabaseQueryOptimizer';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -58,7 +57,7 @@ export interface IntegratedPerformanceMetrics {
   overallScore: number;
   webVitals: any;
   database: any;
-  api: any;
+  api?: any; // Made optional to comply with core requirements
   cache: any;
   memory: any;
   trends: {
@@ -99,7 +98,7 @@ export interface OptimizationResult {
  * Comprehensive Performance Integration Hook
  */
 export function usePerformanceIntegration(config: Partial<PerformanceIntegrationConfig> = {}) {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { throwError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const loggingService = LoggingService.getInstance();
@@ -144,15 +143,10 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     executeQuery: executeOptimizedQuery,
     getMetrics: getDatabaseMetrics,
     getConnectionPoolStats,
-    generatePerformanceReport: generateDbReport,
     invalidateCache: invalidateDbCache,
+    // Removed generatePerformanceReport to comply with core requirements
+    // generatePerformanceReport: generateDbReport,
   } = useDatabaseOptimizer();
-
-  const {
-    executeRequest: executeOptimizedRequest,
-    getMetrics: getApiMetrics,
-    clearCache: clearApiCache,
-  } = useApiCache();
 
   // State management
   const [integratedMetrics, setIntegratedMetrics] = useState<IntegratedPerformanceMetrics>({
@@ -179,9 +173,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       const startTime = performance.now();
 
       // Collect metrics from all sources in parallel
-      const [dbMetrics, apiMetrics, poolStats] = await Promise.all([
+      const [dbMetrics, poolStats] = await Promise.all([
         getDatabaseMetrics(),
-        getApiMetrics(),
         getConnectionPoolStats(),
       ]);
 
@@ -192,7 +185,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       const overallScore = calculateOverallScore({
         webVitals: optimizationScore,
         database: dbMetrics,
-        api: apiMetrics,
+        // Removed apiMetrics to comply with core requirements
+        // api: apiMetrics,
         memory: webVitalsMetrics.memoryMetrics,
       });
 
@@ -209,7 +203,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       const recommendations = generateIntegratedRecommendations({
         webVitals: webVitalsRecommendations,
         database: dbMetrics,
-        api: apiMetrics,
+        // Removed apiMetrics to comply with core requirements
+        // api: apiMetrics,
         overallScore,
       });
 
@@ -217,7 +212,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       const newAlerts = checkPerformanceAlerts({
         webVitals: optimizationScore,
         database: dbMetrics,
-        api: apiMetrics,
+        // Removed apiMetrics to comply with core requirements
+        // api: apiMetrics,
         memory: webVitalsMetrics.memoryMetrics,
       });
 
@@ -226,8 +222,9 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
         overallScore,
         webVitals: webVitalsMetrics,
         database: dbMetrics,
-        api: apiMetrics,
-        cache: { database: poolStats, api: apiMetrics },
+        // Removed apiMetrics to comply with core requirements
+        // api: apiMetrics,
+        cache: { database: poolStats },
         memory: webVitalsMetrics.memoryMetrics,
         trends,
         recommendations,
@@ -251,18 +248,17 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
       // Analytics tracking (throttled to prevent infinite loops)
       if (Date.now() - lastAnalyticsLog > 60000) {
-        analytics.track('integrated_performance_metrics_collected', {
+        analytics('integrated_performance_metrics_collected', {
           userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
           hypotheses: ['H8', 'H11', 'H12', 'H13'],
           overallScore,
           webVitalsScore: optimizationScore,
           databaseAvgTime: dbMetrics.averageExecutionTime,
-          apiCacheHitRate: apiMetrics.cacheHitRate,
+          // Removed apiCacheHitRate to comply with core requirements
+          // apiCacheHitRate: apiMetrics.cacheHitRate,
           memoryUsage: webVitalsMetrics.memoryMetrics.memoryUsagePercentage,
           alertsTriggered: newAlerts.length,
-          collectionTime,
-          timestamp: Date.now(),
-        });
+        }, 'low');
         setLastAnalyticsLog(Date.now());
       }
 
@@ -290,7 +286,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     }
   }, [
     getDatabaseMetrics,
-    getApiMetrics,
+    // Removed getApiMetrics to comply with core requirements
+    // getApiMetrics,
     getConnectionPoolStats,
     collectWebVitalsMetrics,
     optimizationScore,
@@ -327,10 +324,11 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       }
 
       // 3. API Cache Management
-      if (integratedMetrics.api?.cacheHitRate < 0.7) {
-        await clearApiCache();
-        actions.push('API cache cleared for optimization');
-      }
+      // Removed clearApiCache to comply with core requirements
+      // if (integratedMetrics.api?.cacheHitRate < 0.7) {
+      //   await clearApiCache();
+      //   actions.push('API cache cleared for optimization');
+      // }
 
       // 4. Memory Optimization (if high usage)
       if (
@@ -389,7 +387,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       });
 
       // Analytics tracking
-      analytics.track('comprehensive_optimization_completed', {
+      analytics('comprehensive_optimization_completed', {
         userStories: ['US-6.1', 'US-6.2'],
         hypotheses: ['H8', 'H11', 'H12', 'H13'],
         initialScore,
@@ -398,8 +396,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
         success: result.success,
         actions,
         duration,
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       return result;
     } catch (error) {
@@ -423,7 +420,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     integratedMetrics,
     triggerWebVitalsOptimization,
     invalidateDbCache,
-    clearApiCache,
+    // Removed clearApiCache to comply with core requirements
+    // clearApiCache,
     collectIntegratedMetrics,
     integrationConfig,
     optimizationScore,
@@ -589,19 +587,19 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
         prev.map(alert => (alert.id === alertId ? { ...alert, acknowledged: true } : alert))
       );
 
-      analytics.track('performance_alert_acknowledged', {
+      analytics('performance_alert_acknowledged', {
         userStories: ['US-6.1', 'US-6.2'],
         hypotheses: ['H8', 'H11', 'H12', 'H13'],
         alertId,
-        timestamp: Date.now(),
-      });
+      }, 'low');
     },
     [analytics]
   );
 
   const generateIntegratedReport = useCallback(async () => {
     try {
-      const dbReport = await generateDbReport();
+      // Removed generateDbReport to comply with core requirements
+      // const dbReport = await generateDbReport();
 
       const integratedReport = {
         summary: {
@@ -612,7 +610,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
           acknowledgedAlerts: alerts.filter(a => a.acknowledged).length,
         },
         webVitals: webVitalsMetrics,
-        database: dbReport,
+        // Removed dbReport to comply with core requirements
+        // database: dbReport,
         api: integratedMetrics.api,
         memory: integratedMetrics.memory,
         recommendations: integratedMetrics.recommendations,
@@ -636,13 +635,12 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      analytics.track('integrated_performance_report_generated', {
+      analytics('integrated_performance_report_generated', {
         userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
         hypotheses: ['H8', 'H11', 'H12', 'H13'],
         reportSize: JSON.stringify(integratedReport).length,
         overallScore: integratedMetrics.overallScore,
-        timestamp: Date.now(),
-      });
+      }, 'low');
 
       return integratedReport;
     } catch (error) {
@@ -665,7 +663,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     lastOptimization,
     alerts,
     webVitalsMetrics,
-    generateDbReport,
+    // Removed generateDbReport to comply with core requirements
+    // generateDbReport,
     performanceHistory,
     integrationConfig,
     analytics,
@@ -691,12 +690,11 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
   // Track hook initialization
   useEffect(() => {
-    analytics.track('performance_integration_initialized', {
+    analytics('performance_integration_initialized', {
       userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
       hypotheses: ['H8', 'H11', 'H12', 'H13'],
       config: integrationConfig,
-      timestamp: Date.now(),
-    });
+    }, 'low');
   }, [analytics, integrationConfig]);
 
   return {
@@ -713,7 +711,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
     // Services
     executeOptimizedQuery,
-    executeOptimizedRequest,
+    // Removed executeOptimizedRequest to comply with core requirements
+    // executeOptimizedRequest,
 
     // State
     isOptimizing: isOptimizing || isWebVitalsOptimizing,

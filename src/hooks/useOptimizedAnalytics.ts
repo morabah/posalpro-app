@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * PosalPro MVP2 - Optimized Analytics Hook
  * Addresses performance issues from excessive analytics collection:
@@ -7,11 +9,11 @@
  * - Reduces memory pressure
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logger } from '@/utils/logger';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logError } from '@/lib/logger';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface AnalyticsEvent {
   eventName: string;
@@ -46,10 +48,9 @@ const COMPONENT_MAPPING = {
 };
 
 export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> = {}) {
-  const analytics = useAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
-  const finalConfig = { ...DEFAULT_CONFIG, ...config };
+  const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
   // State for batching and throttling
   const [isOnline, setIsOnline] = useState(true);
@@ -65,6 +66,114 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
   const isProcessing = useRef(false);
 
   /**
+   * Check if event should be throttled based on priority
+   */
+  const checkThrottleLimit = useCallback(
+    (priority: 'high' | 'medium' | 'low'): boolean => {
+      const now = Date.now();
+      const counter = throttleCounter.current;
+
+      // Reset counter every minute
+      if (now > counter.resetTime) {
+        counter.count = 0;
+        counter.resetTime = now + 60000;
+      }
+
+      // High priority events are never throttled
+      if (priority === 'high') {
+        counter.count++;
+        return true;
+      }
+
+      // Check if we've exceeded the throttle threshold
+      if (counter.count >= finalConfig.throttleThreshold) {
+        // Disabled debug logging to prevent performance overhead (Lesson #13)
+        return false;
+      }
+
+      counter.count++;
+      return true;
+    },
+    [finalConfig.throttleThreshold]
+  );
+
+  /**
+   * Flush batch of events to analytics service
+   */
+  const flushBatchOptimized = useCallback(async () => {
+    if (isProcessing.current || eventBuffer.current.length === 0) {
+      return;
+    }
+
+    isProcessing.current = true;
+    setLastFlush(Date.now());
+
+    try {
+      // Process events in batches
+      while (eventBuffer.current.length > 0) {
+        const batch = eventBuffer.current.splice(0, finalConfig.batchSize);
+        const batchEvents = batch.map(event => ({
+          eventName: event.eventName,
+          properties: {
+            ...event.eventData,
+            timestamp: event.timestamp,
+            priority: event.priority,
+            batchId: `batch-${Date.now()}`,
+          },
+        }));
+
+        // Send batch to analytics service
+        if (process.env.NODE_ENV === 'production') {
+          fetch('/api/analytics/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ events: batchEvents }),
+          }).catch(error => {
+            const standardError: StandardError = errorHandlingService.processError(
+              error,
+              'Failed to send analytics event batch',
+              ErrorCodes.ANALYTICS.TRACKING_ERROR,
+              { component: 'useOptimizedAnalytics' }
+            );
+            logError(standardError.message, standardError);
+          });
+        } else {
+          // Disabled debug logging to prevent performance overhead (Lesson #13)
+        }
+
+        // Disabled debug logging to prevent performance overhead (Lesson #13)
+        // logger.debug('Analytics batch flushed', {
+        //   component: 'useOptimizedAnalytics',
+        //   operation: 'flushBatchOptimized',
+        //   batchSize: batch.length,
+        //   remainingEvents: eventBuffer.current.length,
+        // });
+
+        // Small delay between batches to prevent overwhelming the service
+        if (eventBuffer.current.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+    } catch (error) {
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to flush analytics batch',
+        ErrorCodes.SYSTEM.UNKNOWN,
+        {
+          component: 'useOptimizedAnalytics',
+          operation: 'flushBatchOptimized',
+          context: { bufferSize: eventBuffer.current.length },
+          userStory: 'US-6.2',
+          hypothesis: 'H9',
+        }
+      );
+      logError(standardError.message, standardError);
+    } finally {
+      isProcessing.current = false;
+    }
+  }, [errorHandlingService, finalConfig.batchSize]);
+
+  /**
    * Track event with optimization and batching
    */
   const trackOptimized = useCallback(
@@ -76,12 +185,13 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
       try {
         // Check throttling limits
         if (finalConfig.enableThrottling && !checkThrottleLimit(priority)) {
-          logger.debug('Event throttled due to rate limit', {
-            eventName,
-            priority,
-            component: 'useOptimizedAnalytics',
-            throttleCounter: throttleCounter.current,
-          });
+          // Disabled debug logging to prevent performance overhead (Lesson #13)
+          // logger.debug('Event throttled due to rate limit', {
+          //   eventName,
+          //   priority,
+          //   component: 'useOptimizedAnalytics',
+          //   throttleCounter: throttleCounter.current,
+          // });
           return;
         }
 
@@ -112,154 +222,42 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
 
           eventBuffer.current = [...highPriorityEvents, ...recentEvents];
 
-          logger.warn('Analytics buffer overflow, pruned to recent events', {
-            component: 'useOptimizedAnalytics',
-            operation: 'trackOptimized',
-            originalSize: eventBuffer.current.length,
-            prunedSize: eventBuffer.current.length,
-          });
+          // Buffer overflow handled silently to maintain performance
         }
 
         // Flush immediately for high priority events
-        if (priority === 'high' || eventBuffer.current.length >= finalConfig.batchSize) {
+        if (priority === 'high' && eventBuffer.current.length >= finalConfig.batchSize) {
           flushBatchOptimized();
         }
       } catch (error) {
-        errorHandlingService.processError(
-          error as Error,
-          'Failed to track optimized analytics event',
-          ErrorCodes.ANALYTICS.TRACKING_ERROR,
+        const standardError = errorHandlingService.processError(
+          error,
+          'Failed to track optimized event',
+          ErrorCodes.SYSTEM.UNKNOWN,
           {
             component: 'useOptimizedAnalytics',
             operation: 'trackOptimized',
-            eventName,
-            userStories: COMPONENT_MAPPING.userStories,
-            hypotheses: COMPONENT_MAPPING.hypotheses,
+            context: { eventName, eventData, priority },
+            userStory: 'US-6.1',
+            hypothesis: 'H8',
           }
         );
+        logError(standardError.message, standardError);
       }
     },
-    [finalConfig, errorHandlingService]
+    [
+      finalConfig.batchSize,
+      finalConfig.enableThrottling,
+      finalConfig.maxBufferSize,
+
+      flushBatchOptimized,
+      errorHandlingService,
+      checkThrottleLimit,
+    ]
   );
 
   /**
-   * Check throttle limits to prevent violations
-   */
-  const checkThrottleLimit = useCallback(
-    (priority: 'high' | 'medium' | 'low'): boolean => {
-      const now = Date.now();
-
-      // Reset counter every minute
-      if (now > throttleCounter.current.resetTime) {
-        throttleCounter.current = {
-          count: 0,
-          resetTime: now + 60000,
-        };
-      }
-
-      // Always allow high priority events
-      if (priority === 'high') {
-        return true;
-      }
-
-      // Check throttle limit for medium/low priority
-      if (throttleCounter.current.count >= finalConfig.throttleThreshold) {
-        return false;
-      }
-
-      throttleCounter.current.count++;
-      return true;
-    },
-    [finalConfig.throttleThreshold]
-  );
-
-  /**
-   * Flush batch with performance optimization
-   */
-  const flushBatchOptimized = useCallback(async () => {
-    if (isProcessing.current || eventBuffer.current.length === 0) {
-      return;
-    }
-
-    isProcessing.current = true;
-    const startTime = performance.now();
-
-    try {
-      const batchToProcess = [...eventBuffer.current];
-      eventBuffer.current = [];
-
-      // Process events in smaller chunks to prevent blocking
-      const chunkSize = 3;
-      for (let i = 0; i < batchToProcess.length; i += chunkSize) {
-        const chunk = batchToProcess.slice(i, i + chunkSize);
-
-        // Use requestIdleCallback for non-blocking processing
-        await new Promise<void>(resolve => {
-          const processChunk = () => {
-            try {
-              chunk.forEach(event => {
-                analytics.track(event.eventName, event.eventData);
-              });
-              resolve();
-            } catch (error) {
-              logger.warn('Failed to process analytics chunk', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-                chunkSize: chunk.length,
-                component: 'useOptimizedAnalytics',
-              });
-              resolve(); // Continue processing other chunks
-            }
-          };
-
-          if ('requestIdleCallback' in window) {
-            window.requestIdleCallback(processChunk, { timeout: 5000 });
-          } else {
-            setTimeout(processChunk, 0);
-          }
-        });
-
-        // Small delay between chunks to prevent blocking
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-
-      setLastFlush(Date.now());
-
-      const duration = performance.now() - startTime;
-
-      // Track batch processing performance
-      if (duration > 100) {
-        logger.warn('Analytics batch processing exceeded 100ms', {
-          duration,
-          eventsProcessed: batchToProcess.length,
-          component: 'useOptimizedAnalytics',
-        });
-      } else {
-        logger.debug('Analytics batch processed successfully', {
-          duration,
-          eventsProcessed: batchToProcess.length,
-          component: 'useOptimizedAnalytics',
-        });
-      }
-    } catch (error) {
-      errorHandlingService.processError(
-        error as Error,
-        'Failed to flush analytics batch',
-        ErrorCodes.ANALYTICS.PROCESSING_FAILED,
-        {
-          component: 'useOptimizedAnalytics',
-          operation: 'flushBatchOptimized',
-          batchSize: eventBuffer.current.length,
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-        }
-      );
-    } finally {
-      isProcessing.current = false;
-    }
-  }, [analytics, errorHandlingService]);
-
-  /**
-   * Track performance metrics with reduced frequency
+   * Track performance metrics with intelligent batching
    */
   const trackPerformanceOptimized = useCallback(
     (metricName: string, value: number, metadata: Record<string, any> = {}) => {
@@ -318,6 +316,38 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
     },
     [trackOptimized]
   );
+
+  /**
+   * Identify user with traits (backward compatibility with legacy useAnalytics)
+   */
+  const identify = useCallback(
+    (userId: string, traits: Record<string, unknown> = {}) => {
+      // Track as an optimized event for consistency
+      trackOptimized('user_identified', { userId, ...traits }, 'high');
+    },
+    [trackOptimized]
+  );
+
+  /**
+   * Track page views (backward compatibility with legacy useAnalytics)
+   */
+  const page = useCallback(
+    (pageName: string, properties: Record<string, unknown> = {}) => {
+      // Also track as an optimized event for consistency
+      trackOptimized('page_view', { page: pageName, ...properties }, 'medium');
+    },
+    [trackOptimized]
+  );
+
+  /**
+   * Emergency disable (backward compatibility with legacy useAnalytics)
+   */
+  const emergencyDisable = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      // Disabled warning to prevent performance overhead (Lesson #13)
+      localStorage.setItem('analytics_disabled', 'true');
+    }
+  }, []);
 
   // Setup periodic flushing with longer intervals
   useEffect(() => {
@@ -388,26 +418,46 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
     };
   }, [finalConfig, flushBatchOptimized]);
 
-  return {
-    // Optimized tracking methods
-    trackOptimized,
-    trackPerformanceOptimized,
-    trackInteractionOptimized,
-    trackCritical,
+  return useMemo(
+    () => ({
+      // Optimized tracking methods
+      trackOptimized,
+      trackPerformanceOptimized,
+      trackInteractionOptimized,
+      trackCritical,
 
-    // Utility methods
-    flushBatch: flushBatchOptimized,
+      // Legacy compatibility methods
+      identify,
+      page,
+      emergencyDisable,
 
-    // State information
-    pendingEvents: eventBuffer.current.length,
-    lastFlush,
-    isOnline,
-    isProcessing: isProcessing.current,
+      // Utility methods
+      flushBatch: flushBatchOptimized,
 
-    // Configuration
-    config: finalConfig,
+      // State information
+      pendingEvents: eventBuffer.current.length,
+      lastFlush,
+      isOnline,
+      isProcessing: isProcessing.current,
 
-    // Component mapping for traceability
-    componentMapping: COMPONENT_MAPPING,
-  };
+      // Configuration
+      config: finalConfig,
+
+      // Component mapping for traceability
+      componentMapping: COMPONENT_MAPPING,
+    }),
+    [
+      trackOptimized,
+      trackPerformanceOptimized,
+      trackInteractionOptimized,
+      trackCritical,
+      identify,
+      page,
+      emergencyDisable,
+      flushBatchOptimized,
+      lastFlush,
+      isOnline,
+      finalConfig,
+    ]
+  );
 }

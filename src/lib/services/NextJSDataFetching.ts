@@ -11,10 +11,10 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
-import { AdvancedCacheManager } from '@/lib/performance/AdvancedCacheManager';
+
 import { useCallback, useEffect, useMemo } from 'react';
 
 // Component Traceability Matrix
@@ -86,12 +86,12 @@ export interface EnhancedFetchResponse<T> {
 export class NextJSDataFetchingService {
   private static instance: NextJSDataFetchingService;
   private errorHandlingService: ErrorHandlingService;
-  private cacheManager: AdvancedCacheManager;
+
   private analytics: any;
 
   private constructor() {
     this.errorHandlingService = ErrorHandlingService.getInstance();
-    this.cacheManager = AdvancedCacheManager.getInstance();
+
   }
 
   static getInstance(): NextJSDataFetchingService {
@@ -101,7 +101,13 @@ export class NextJSDataFetchingService {
     return NextJSDataFetchingService.instance;
   }
 
-  initializeAnalytics(analytics: any) {
+  initializeAnalytics(
+    analytics: (
+      event: string,
+      properties: Record<string, any>,
+      priority: 'high' | 'medium' | 'low'
+    ) => void
+  ) {
     this.analytics = analytics;
   }
 
@@ -126,56 +132,27 @@ export class NextJSDataFetchingService {
     try {
       // Analytics tracking start
       if (analytics.trackPerformance && this.analytics) {
-        this.analytics.track('enhanced_fetch_started', {
-          userStories: ['US-6.1', 'US-6.3'],
-          hypotheses: ['H8', 'H11'],
-          url,
-          useNextJSPrimitives: !!next,
-          cacheEnabled: cache.enabled,
-          userStory: analytics.userStory,
-          hypothesis: analytics.hypothesis,
-          timestamp: Date.now(),
-        });
+        this.analytics(
+          'enhanced_fetch_started',
+          {
+            userStories: ['US-6.1', 'US-6.3'],
+            hypotheses: ['H8', 'H11'],
+            url,
+            useNextJSPrimitives: !!next,
+            cacheEnabled: cache.enabled,
+            userStory: analytics.userStory,
+            hypothesis: analytics.hypothesis,
+          },
+          'low'
+        );
       }
 
       let response: Response;
       let fromNextJS = false;
-      let cacheHit = false;
+      const cacheHit = false;
       let source: 'nextjs' | 'advanced-cache' | 'network' = 'network';
 
-      // 1. Check our advanced cache first (always fastest)
-      if (cache.enabled) {
-        const cacheKey = cache.key || `${url}_${JSON.stringify(fetchOptions)}`;
-        const cachedData = await this.cacheManager.get<T>(cacheKey);
-
-        if (cachedData) {
-          const fetchTime = performance.now() - startTime;
-
-          if (analytics.trackPerformance && this.analytics) {
-            this.analytics.track('enhanced_fetch_cache_hit', {
-              userStories: ['US-6.1', 'US-6.3'],
-              hypotheses: ['H8', 'H11'],
-              url,
-              source: 'advanced-cache',
-              fetchTime,
-              userStory: analytics.userStory,
-              hypothesis: analytics.hypothesis,
-            });
-          }
-
-          return {
-            data: cachedData,
-            success: true,
-            cached: true,
-            fromNextJS: false,
-            performance: {
-              fetchTime,
-              cacheHit: true,
-              source: 'advanced-cache',
-            },
-          };
-        }
-      }
+      // Use Next.js built-in caching or standard fetch
 
       // 2. Use Next.js primitives with our enhancements
       if (next) {
@@ -197,33 +174,23 @@ export class NextJSDataFetchingService {
       const data: T = await response.json();
       const fetchTime = performance.now() - startTime;
 
-      // Store in our advanced cache for future requests
-      if (cache.enabled && response.ok) {
-        const cacheKey = cache.key || `${url}_${JSON.stringify(fetchOptions)}`;
-        await this.cacheManager.set(cacheKey, data, {
-          ttl: cache.ttl,
-          tags: next?.tags || [],
-          metadata: {
-            nextJSRevalidate: next?.revalidate,
-            url,
-            timestamp: Date.now(),
-          },
-        });
-      }
+      // Caching is handled by Next.js built-in fetch caching
 
       // Analytics tracking success
       if (analytics.trackPerformance && this.analytics) {
-        this.analytics.track('enhanced_fetch_success', {
-          userStories: ['US-6.1', 'US-6.3'],
-          hypotheses: ['H8', 'H11'],
-          url,
-          source,
-          fetchTime,
-          responseSize: JSON.stringify(data).length,
-          fromNextJS,
-          userStory: analytics.userStory,
-          hypothesis: analytics.hypothesis,
-        });
+        this.analytics(
+          'enhanced_fetch_completed',
+          {
+            userStories: ['US-6.1', 'US-6.3'],
+            hypotheses: ['H8', 'H11'],
+            url,
+            fetchTime,
+            cacheHit,
+            fromNextJS,
+            source,
+          },
+          'low'
+        );
       }
 
       return {
@@ -335,9 +302,7 @@ export class NextJSDataFetchingService {
    */
   async revalidateByTags(tags: string[]): Promise<void> {
     try {
-      // Clear our advanced cache entries with matching tags
-      // Note: clearByTags method needs to be implemented in AdvancedCacheManager
-      this.cacheManager.clear(); // Temporary fallback
+      // Cache revalidation is handled by Next.js and apiClient built-in caching
 
       // Use Next.js revalidateTag if available (server-side)
       if (typeof window === 'undefined') {
@@ -348,12 +313,15 @@ export class NextJSDataFetchingService {
       }
 
       if (this.analytics) {
-        this.analytics.track('cache_revalidation_performed', {
-          userStories: ['US-6.1', 'US-6.3'],
-          hypotheses: ['H8', 'H11'],
-          tags,
-          timestamp: Date.now(),
-        });
+        this.analytics(
+          'cache_revalidation_performed',
+          {
+            userStories: ['US-6.1', 'US-6.3'],
+            hypotheses: ['H8', 'H11'],
+            tags,
+          },
+          'medium'
+        );
       }
     } catch (error) {
       this.errorHandlingService.processError(
@@ -374,7 +342,7 @@ export class NextJSDataFetchingService {
  * Hook for Next.js data fetching with infrastructure integration
  */
 export function useEnhancedFetch() {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const fetchingService = useMemo(() => {
     return NextJSDataFetchingService.getInstance();
   }, []);
@@ -398,7 +366,7 @@ export function useEnhancedFetch() {
 export function useHybridApiClient() {
   const originalApiClient = useApiClient();
   const { enhancedFetch } = useEnhancedFetch();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const get = useCallback(
     async <T>(

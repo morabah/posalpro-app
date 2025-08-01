@@ -8,7 +8,7 @@
 'use client';
 
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
@@ -155,24 +155,18 @@ export default function ModernDashboard({
 
   // Mobile responsive and analytics integration
   const { isMobile, isTablet, isDesktop, screenWidth } = useResponsive();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Track mobile dashboard access (H9: Mobile UX optimization)
   const handleMobileInteraction = (action: string, details?: any) => {
     try {
-      analytics.track('mobile_dashboard_interaction', {
+      analytics('mobile_dashboard_accessed', {
         userStories: COMPONENT_MAPPING.userStories,
-        acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
         hypotheses: COMPONENT_MAPPING.hypotheses,
-        testCases: COMPONENT_MAPPING.testCases,
-        action,
-        isMobile,
-        isTablet,
-        isDesktop,
+        deviceType: isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop',
         screenWidth,
-        details,
         timestamp: Date.now(),
       });
     } catch (error) {

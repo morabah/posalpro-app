@@ -108,12 +108,12 @@ export interface PerformanceMetrics {
   qualityScore: number;
   collaborationScore: number;
   efficiency: number;
-  trends: {
+  trends: Array<{
     metric: string;
     value: number;
     change: number;
     direction: 'up' | 'down' | 'stable';
-  }[];
+  }>;
 }
 
 export interface Notification {

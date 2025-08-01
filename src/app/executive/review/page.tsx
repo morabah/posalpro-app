@@ -10,7 +10,7 @@ import { useErrorHandler } from '@/components/providers/ErrorBoundary';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -166,7 +166,7 @@ export default function ExecutiveReviewPortal() {
   const apiClient = useApiClient();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const throwError = useErrorHandler();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const [proposals, setProposals] = useState<ExecutiveProposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -188,12 +188,11 @@ export default function ExecutiveReviewPortal() {
   // Track mobile access for hypothesis validation with improved analytics
   useEffect(() => {
     if (isMobile) {
-      analytics.track('executive_mobile_access', {
+      analytics('executive_mobile_access', {
         userStories: ['US-8.1'],
         hypotheses: ['H10'],
         deviceType: 'mobile',
         screenWidth,
-        timestamp: Date.now(),
         componentMapping: {
           userStories: ['US-8.1'],
           acceptanceCriteria: ['AC-8.1.1'],
@@ -201,7 +200,7 @@ export default function ExecutiveReviewPortal() {
           hypotheses: ['H10'],
           testCases: ['TC-H10-001'],
         },
-      });
+      }, 'medium');
     }
   }, [isMobile, analytics, screenWidth]);
 
@@ -221,27 +220,25 @@ export default function ExecutiveReviewPortal() {
 
         // Analytics: Track successful load time for hypothesis validation
         const loadTime = performance.now() - startTime;
-        analytics.track('executive_proposals_loaded', {
+        analytics('executive_proposals_loaded', {
           userStories: ['US-4.1', 'US-8.1'],
           hypotheses: ['H7', 'H10'],
           loadTime,
           proposalCount: data.length,
           isMobile,
           deviceType: isMobile ? 'mobile' : 'desktop',
-          timestamp: Date.now(),
-        });
+        }, 'high');
       } catch (err) {
         const userFriendlyMessage = errorHandlingService.getUserFriendlyMessage(err);
         setError(userFriendlyMessage);
 
         // Track error for analytics
-        analytics.track('executive_proposals_load_error', {
+        analytics('executive_proposals_load_error', {
           userStories: ['US-4.1', 'US-8.1'],
           hypotheses: ['H7', 'H10'],
           errorType: err instanceof Error ? err.message : 'Unknown error',
           isMobile,
-          timestamp: Date.now(),
-        });
+        }, 'high');
       } finally {
         setLoading(false);
       }
@@ -322,14 +319,13 @@ export default function ExecutiveReviewPortal() {
         const errorMessage = 'Please provide your digital signature before making a decision';
         setError(errorMessage);
 
-        analytics.track('executive_decision_validation_error', {
+        analytics('executive_decision_validation_error', {
           userStories: ['US-4.1', 'US-8.1'],
           hypotheses: ['H7', 'H10'],
           errorType: 'missing_signature',
           decisionType,
           isMobile,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
         return;
       }
 
@@ -354,7 +350,7 @@ export default function ExecutiveReviewPortal() {
         const decisionTime = Date.now() - decisionStartTime;
 
         // Enhanced analytics tracking for hypothesis validation
-        analytics.track('executive_decision_submitted', {
+        analytics('executive_decision_submitted', {
           userStories: ['US-4.1', 'US-8.1'],
           hypotheses: ['H7', 'H10'],
           decisionType,
@@ -372,8 +368,7 @@ export default function ExecutiveReviewPortal() {
           aiInsightsConsidered: selectedProposal.aiInsights.length,
           winProbability: selectedProposal.winProbability,
           strategicAlignment: selectedProposal.strategicAlignment,
-          timestamp: Date.now(),
-        });
+        }, 'high');
 
         setSelectedDecision(decisionType);
         setError(null);
@@ -403,7 +398,7 @@ export default function ExecutiveReviewPortal() {
         setError(userFriendlyMessage);
 
         // ✅ ENHANCED: Analytics tracking with Component Traceability Matrix
-        analytics.track('executive_decision_submission_error', {
+        analytics('executive_decision_submission_error', {
           userStories: COMPONENT_MAPPING.userStories,
           acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
           hypotheses: COMPONENT_MAPPING.hypotheses,
@@ -415,8 +410,7 @@ export default function ExecutiveReviewPortal() {
           proposalId: selectedProposal.id,
           isMobile,
           touchInteraction: !!touchStartTime,
-          timestamp: Date.now(),
-        });
+        }, 'high');
       } finally {
         setDecisionInProgress(false);
         setTouchStartTime(null);
@@ -442,7 +436,7 @@ export default function ExecutiveReviewPortal() {
 
       const proposal = proposals.find(p => p.id === proposalId);
       if (proposal) {
-        analytics.track('executive_proposal_selected', {
+        analytics('executive_proposal_selected', {
           userStories: ['US-4.1', 'US-8.1'],
           hypotheses: ['H7', 'H10'],
           proposalId,
@@ -451,8 +445,7 @@ export default function ExecutiveReviewPortal() {
           status: proposal.status,
           priority: proposal.priority,
           isMobile,
-          timestamp: Date.now(),
-        });
+        }, 'medium');
       }
     },
     [proposals, analytics, isMobile]

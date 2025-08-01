@@ -10,7 +10,7 @@
 'use client';
 
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import dynamic from 'next/dynamic';
 import React, { Suspense } from 'react';
 
@@ -62,17 +62,16 @@ const PerformanceDashboard = dynamic(
  * Optimized Proposal Creation Page
  */
 export default function ProposalCreatePage() {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   React.useEffect(() => {
     // Track page load with performance metrics
     const loadStartTime = performance.now();
 
-    analytics.track('proposal_create_page_loaded', {
+    analytics('proposal_create_page_loaded', {
       userStories: ['US-4.1', 'US-6.1', 'US-6.2'],
       hypotheses: ['H7', 'H8', 'H9'],
       loadStartTime,
-      timestamp: Date.now(),
       browserPerformance: {
         navigationTiming: performance.getEntriesByType('navigation')[0],
         memoryUsage: (performance as any).memory
@@ -83,7 +82,7 @@ export default function ProposalCreatePage() {
             }
           : null,
       }
-    });
+    }, 'high');
 
     // Preload critical components
     import('@/components/proposals/ProposalWizard');

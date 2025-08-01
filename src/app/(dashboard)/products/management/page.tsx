@@ -10,7 +10,7 @@ import { Breadcrumbs } from '@/components/layout';
 import { ProductCreationForm } from '@/components/products/ProductCreationForm';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   useCreateProduct,
   useDeleteProduct,
@@ -54,7 +54,7 @@ const COMPONENT_MAPPING = {
 
 export default function ProductManagementPage() {
   const { data: session } = useSession();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const [sessionStartTime] = useState(Date.now());
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
@@ -81,7 +81,7 @@ export default function ProductManagementPage() {
 
   const trackAction = useCallback(
     (action: string, metadata: any = {}) => {
-      analytics.track('product_management_action', {
+      analytics('product_management_action', {
         action,
         metadata: {
           ...metadata,
@@ -90,8 +90,7 @@ export default function ProductManagementPage() {
           hypothesis: 'H12',
           sessionDuration: Date.now() - sessionStartTime,
         },
-        timestamp: Date.now(),
-      });
+      }, 'low');
     },
     [sessionStartTime, analytics]
   );
@@ -203,9 +202,16 @@ export default function ProductManagementPage() {
   }, [trackAction]);
 
   const handleEditProduct = useCallback(
-    (product: Product) => {
+    (product: any) => {
+      // ✅ FIXED: Accept hook's Product type, convert as needed
       trackAction('edit_product_clicked', { productId: product.id });
-      setEditingProduct(product);
+      // Convert string dates to Date objects for entity compatibility
+      const entityProduct: Product = {
+        ...product,
+        createdAt: new Date(product.createdAt),
+        updatedAt: new Date(product.updatedAt),
+      };
+      setEditingProduct(entityProduct);
       setIsCreateFormOpen(true);
     },
     [trackAction]

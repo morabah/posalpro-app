@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Component Traceability Matrix
@@ -57,7 +57,7 @@ export interface OptimizedPerformanceMetrics {
  * - Minimal resource usage
  */
 export function useOptimizedPerformance() {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const [metrics, setMetrics] = useState<OptimizedPerformanceMetrics>({
     webVitals: { lcp: 0, fid: 0, cls: 0, fcp: 0, ttfb: 0 },
@@ -223,12 +223,11 @@ export function useOptimizedPerformance() {
       const now = Date.now();
       if (now - lastAnalyticsLog > 600000) {
         // 10 minutes
-        analytics.track('performance_analysis_completed', {
+        analytics('performance_analysis_completed', {
           ...COMPONENT_MAPPING,
           memoryUsage,
           score,
-          timestamp: now,
-        });
+        }, 'low');
         setLastAnalyticsLog(now);
       }
 

@@ -1,17 +1,14 @@
-import { Suspense } from 'react';
+import { ProductsListSkeleton } from '@/components/ui/LoadingStates';
 import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
 
 // Lazy load components for better performance
 const ProductList = dynamic(() => import('@/components/products/ProductList'), {
-  loading: () => <div className="animate-pulse space-y-4">
-    {[...Array(6)].map((_, i) => (
-      <div key={i} className="bg-gray-200 rounded-lg h-32"></div>
-    ))}
-  </div>
+  loading: () => <ProductsListSkeleton />,
 });
 
 const ProductFilters = dynamic(() => import('@/components/products/ProductFilters'), {
-  loading: () => <div className="animate-pulse bg-gray-200 rounded-lg h-48"></div>
+  loading: () => <div className="animate-pulse bg-gray-200 rounded-lg h-48"></div>,
 });
 
 export default function ProductsPage() {
@@ -29,11 +26,7 @@ export default function ProductsPage() {
         </div>
 
         <div className="lg:col-span-3">
-          <Suspense fallback={<div className="animate-pulse space-y-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-200 rounded-lg h-32"></div>
-            ))}
-          </div>}>
+          <Suspense fallback={<ProductsListSkeleton />}>
             <ProductList />
           </Suspense>
         </div>

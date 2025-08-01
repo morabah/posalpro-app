@@ -534,7 +534,7 @@ export class DatabasePerformanceTestService {
   ): Promise<PerformanceTestResult> {
     const times: number[] = [];
     let totalRecords = 0;
-    let optimizationsApplied: string[] = [];
+    const optimizationsApplied: string[] = [];
 
     console.log(`  Running ${testName} (${iterations} iterations)...`);
 

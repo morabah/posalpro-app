@@ -275,6 +275,7 @@ export class ProposalEntity {
       if (options.limit) queryParams.set('limit', String(options.limit));
       if (options.sortBy) queryParams.set('sortBy', options.sortBy);
       if (options.sortOrder) queryParams.set('sortOrder', options.sortOrder);
+      if (options.includeCustomer) queryParams.set('includeCustomer', String(options.includeCustomer));
 
       const response = await apiClient.get<ProposalsApiResponse>(
         `proposals?${queryParams.toString()}`
@@ -385,7 +386,7 @@ export class ProposalEntity {
    */
   async assignTeam(
     id: string,
-    assignments: Omit<TeamAssignment, 'id' | 'proposalId' | 'assignedAt'>[]
+    assignments: Array<Omit<TeamAssignment, 'id' | 'proposalId' | 'assignedAt'>>
   ): Promise<ApiResponse<TeamAssignment[]>> {
     try {
       const response = await apiClient.post<TeamAssignment[]>(`proposals/${id}/team`, {

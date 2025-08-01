@@ -83,8 +83,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch roles with user count, permissions, and hierarchy
-    const [roles, totalCount] = await Promise.all([
+    // Optimized transaction for roles data and count
+    const [roles, totalCount] = await prisma.$transaction([
       prisma.role.findMany({
         where,
         skip,
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
         },
         orderBy: [{ level: 'desc' }, { name: 'asc' }],
       }),
-      prisma.role.count({ where }),
+      prisma.role.count({ where })
     ]);
 
     // Transform data to match admin interface format

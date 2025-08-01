@@ -311,18 +311,11 @@ export default function ProductRelationshipsManagement() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [sessionStartTime] = useState(Date.now());
 
-  // Analytics tracking for new features
+  // Analytics tracking disabled to prevent Fast Refresh rebuilds
+  // TODO: Migrate to useOptimizedAnalytics hook for proper batching
   const trackRelationshipAction = useCallback(
     (action: string, metadata: any = {}) => {
-      console.log('Product Relationships Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        sessionDuration: Date.now() - sessionStartTime,
-        component: 'ProductRelationshipsManagement',
-        userStory: 'US-3.1',
-        hypothesis: 'H8',
-      });
+      // No-op to prevent console.log rebuild triggers
     },
     [sessionStartTime]
   );

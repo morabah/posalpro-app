@@ -10,6 +10,8 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   ArrowPathIcon,
   CalendarIcon,
@@ -26,15 +28,27 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ExtendedPaginatedResponse,
-  ProposalData,
-  proposalEntity,
-} from '../../../../lib/entities/proposal';
-import {
-  debugResponseStructure,
-  extractArrayFromResponse,
-} from '../../../../lib/utils/apiResponseHandler';
+import { ProposalData } from '../../../../lib/entities/proposal';
+
+// API Response interfaces
+interface ProposalApiResponse {
+  proposals: (ProposalData & { customer?: any })[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+  meta: {
+    paginationType: string;
+    sortBy: string;
+    sortOrder: string;
+    selectiveHydration: any;
+    responseTimeMs: number;
+  };
+}
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -68,7 +82,7 @@ enum ProposalPriority {
 interface Proposal {
   id: string;
   title: string;
-  client: string;
+  client: string; // This will hold the customer's name
   status: ProposalStatus;
   priority: ProposalPriority;
   dueDate: Date;
@@ -83,6 +97,7 @@ interface Proposal {
   tags: string[];
   description?: string;
   lastActivity?: string;
+  customer?: { id: string; name: string; email?: string }; // Optional customer object
 }
 
 // Filter state interface
@@ -98,6 +113,8 @@ interface FilterState {
 
 export default function ProposalManagementDashboard() {
   const router = useRouter();
+  const apiClient = useApiClient();
+  const { trackOptimized: trackAction } = useOptimizedAnalytics();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [filteredProposals, setFilteredProposals] = useState<Proposal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,107 +132,76 @@ export default function ProposalManagementDashboard() {
     sortOrder: 'desc',
   });
 
-  // Fetch proposals from API
-  useEffect(() => {
-    const fetchProposals = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+  const fetchProposals = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      console.log('✅ [PROPOSALS] Fetching proposals using apiClient...');
+      const response = await apiClient.get<ProposalApiResponse>(
+        '/proposals?page=1&limit=50&sortBy=createdAt&sortOrder=desc&includeCustomer=true'
+      );
 
-        console.log('Fetching proposals from API...');
-        const response = (await proposalEntity.query({
-          page: 1,
-          limit: 50, // Get more proposals to show
-          sortBy: 'createdAt',
-          sortOrder: 'desc',
-          includeCustomer: true, // Include customer data to resolve client names
-        })) as ExtendedPaginatedResponse<ProposalData>;
+      if (response.proposals && Array.isArray(response.proposals)) {
+        const proposalsData = response.proposals;
+        console.log('✅ [PROPOSALS] Sample proposal data:', proposalsData[0]);
 
-        debugResponseStructure(response, 'Proposals API Response');
+        const transformedProposals: Proposal[] = proposalsData.map(apiProposal => ({
+          id: apiProposal.id,
+          title: apiProposal.title,
+          client: apiProposal.customer?.name || 'Unknown Client',
+          status: mapApiStatusToUIStatus(apiProposal.status),
+          priority: mapApiPriorityToUIPriority(apiProposal.priority),
+          dueDate: new Date(apiProposal.deadline || Date.now()),
+          createdAt: new Date(apiProposal.createdAt),
+          updatedAt: new Date(apiProposal.updatedAt),
+          estimatedValue: apiProposal.estimatedValue || 0,
+          teamLead: apiProposal.createdBy || 'Unassigned',
+          assignedTeam: apiProposal.assignedTo || [],
+          progress: calculateProgress(apiProposal.status),
+          stage: getStageFromStatus(apiProposal.status),
+          riskLevel: calculateRiskLevel(apiProposal),
+          tags: apiProposal.tags || [],
+          description: apiProposal.description,
+          lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
+          customer: apiProposal.customer,
+        }));
 
-        if (response.success) {
-          // Use utility function to safely extract array from response
-          const proposalsData = extractArrayFromResponse(response, undefined, []);
+        setProposals(transformedProposals);
+        console.log(
+          '✅ [PROPOSALS] Successfully transformed proposals:',
+          transformedProposals.length
+        );
 
-          if (proposalsData.length > 0) {
-            console.log('Sample proposal data:', proposalsData[0]);
-            console.log(
-              '🔍 Customer data in first proposal:',
-              (proposalsData[0] as ProposalData & { customer?: any }).customer
-            );
-
-            // Transform API data to match the UI interface
-            const transformedProposals: Proposal[] = proposalsData.map(
-              (apiProposal: ProposalData & { customer?: any }) => ({
-                id: apiProposal.id,
-                title: apiProposal.title,
-                client: apiProposal.customer?.name || apiProposal.customerName || 'Unknown Client',
-                status: mapApiStatusToUIStatus(apiProposal.status),
-                priority: mapApiPriorityToUIPriority(apiProposal.priority),
-                dueDate: new Date(apiProposal.deadline || Date.now()),
-                createdAt: new Date(apiProposal.createdAt),
-                updatedAt: new Date(apiProposal.updatedAt),
-                estimatedValue: apiProposal.estimatedValue || 0,
-                teamLead: apiProposal.createdBy || 'Unassigned',
-                assignedTeam: apiProposal.assignedTo || [],
-                progress: calculateProgress(apiProposal.status),
-                stage: getStageFromStatus(apiProposal.status),
-                riskLevel: calculateRiskLevel(apiProposal),
-                tags: apiProposal.tags || [],
-                description: apiProposal.description,
-                lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
-              })
-            );
-
-            setProposals(transformedProposals);
-            console.log('Successfully transformed proposals:', transformedProposals.length);
-          } else {
-            console.warn('No proposals found in response');
-            setProposals([]);
-          }
-        } else {
-          console.warn('API response indicates failure:', response);
-
-          // Check for authentication error
-          if (response.authError) {
-            setError('Authentication required. Please sign in to view proposals.');
-            // Redirect to login after a short delay
-            setTimeout(() => {
-              router.push('/auth/signin?callbackUrl=/proposals/manage');
-            }, 3000);
-          } else {
-            setError(response.message || 'Failed to load proposals');
-          }
-
-          setProposals([]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch proposals:', error);
-
-        // Check if error is related to authentication
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        if (
-          errorMessage.includes('session') ||
-          errorMessage.includes('auth') ||
-          errorMessage.includes('sign in')
-        ) {
-          setError('Authentication required. Please sign in to view proposals.');
-          // Redirect to login after a short delay
-          setTimeout(() => {
-            router.push('/auth/signin?callbackUrl=/proposals/manage');
-          }, 3000);
-        } else {
-          setError('Failed to load proposals. Please try refreshing the page.');
-        }
-
+        // Track successful data load
+        trackAction(
+          'proposals_loaded',
+          {
+            count: transformedProposals.length,
+            responseTime: response.meta?.responseTimeMs || 0,
+          },
+          'medium'
+        );
+      } else {
+        const errorMsg = 'No proposals data received from API';
+        setError(errorMsg);
         setProposals([]);
-      } finally {
-        setIsLoading(false);
+        trackAction('proposals_load_failed', { error: errorMsg }, 'high');
       }
-    };
+    } catch (error) {
+      console.error('❌ [PROPOSALS] Failed to fetch proposals:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const fullErrorMsg = `Failed to load proposals: ${errorMessage}`;
+      setError(fullErrorMsg);
+      setProposals([]);
+      trackAction('proposals_load_error', { error: errorMessage }, 'high');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiClient, trackAction]);
 
+  useEffect(() => {
     fetchProposals();
-  }, [router]);
+  }, [fetchProposals]);
 
   // Helper functions for data transformation
   const mapApiStatusToUIStatus = (apiStatus: string): ProposalStatus => {
@@ -401,19 +387,7 @@ export default function ProposalManagementDashboard() {
     });
   }, []);
 
-  // Analytics tracking
-  const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      console.log('Proposal Management Analytics:', {
-        action,
-        metadata,
-        timestamp: Date.now(),
-        filters: filters,
-        proposalCount: filteredProposals.length,
-      });
-    },
-    [filters, filteredProposals.length]
-  );
+  // Analytics tracking is now handled by useOptimizedAnalytics
 
   // Status badge component
   const StatusBadge = ({ status }: { status: ProposalStatus }) => {
@@ -596,7 +570,7 @@ export default function ProposalManagementDashboard() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Value</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    ${(dashboardMetrics.totalValue / 1000000).toFixed(1)}M
+                    ${((dashboardMetrics?.totalValue ?? 0) / 1000000).toFixed(1)}M
                   </p>
                 </div>
               </div>
@@ -765,7 +739,10 @@ export default function ProposalManagementDashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <div className="flex items-center text-sm text-gray-600">
                       <CalendarIcon className="w-4 h-4 mr-2" />
-                      Due: {proposal.dueDate.toLocaleDateString()}
+                      Due:{' '}
+                      {proposal.dueDate instanceof Date
+                        ? proposal.dueDate.toLocaleDateString()
+                        : new Date(proposal.dueDate).toLocaleDateString()}
                     </div>
                     <div className="flex items-center text-sm text-gray-600">
                       <UserGroupIcon className="w-4 h-4 mr-2" />

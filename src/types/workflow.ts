@@ -123,7 +123,7 @@ export interface RuleTemplate {
   name: string;
   description: string;
   category: string;
-  rules: Partial<WorkflowRule>[];
+  rules: Array<Partial<WorkflowRule>>;
   useCase: string;
   popularity: number;
 }

@@ -6,8 +6,8 @@
  * Based on PROPOSAL_CREATION_SCREEN.md wireframe specifications
  */
 
-import { useAuth } from '@/components/providers/AuthProvider';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useAuth } from '@/hooks/auth/useAuth';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { WizardStepAnalytics } from '@/types/analytics';
 import { ProposalCreationMetrics } from '@/types/proposals';
 import { useCallback, useRef, useState } from 'react';
@@ -40,7 +40,7 @@ interface WizardStepMetrics {
 }
 
 export function useProposalCreationAnalytics() {
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { user } = useAuth();
 
   const [wizardStartTime] = useState(Date.now());
@@ -52,30 +52,28 @@ export function useProposalCreationAnalytics() {
     (metrics: ProposalCreationMetrics) => {
       const totalCreationTime = Date.now() - wizardStartTime;
 
-      analytics.track('proposal_creation_performance', {
+      analytics('proposal_creation_performance', {
         ...metrics,
         totalCreationTime,
-        timestamp: Date.now(),
         userId: user?.id,
         userRole: user?.roles?.[0],
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         componentTraceability: COMPONENT_MAPPING,
-      });
+      }, 'medium');
 
       // H7 specific tracking: Deadline Management efficiency
-      analytics.track('hypothesis_validation_h7', {
+      analytics('hypothesis_validation_h7', {
         hypothesis: 'H7',
         metric: 'deadline_management_efficiency',
         proposalCreationTime: totalCreationTime,
         complexityScore: metrics.complexityScore,
         estimatedTimeline: metrics.estimatedTimeline,
         target: 'improve_on_time_completion_by_40_percent',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // H4 specific tracking: Cross-Department Coordination
-      analytics.track('hypothesis_validation_h4', {
+      analytics('hypothesis_validation_h4', {
         hypothesis: 'H4',
         metric: 'coordination_effort_reduction',
         teamAssignmentTime: metrics.teamAssignmentTime,
@@ -83,8 +81,7 @@ export function useProposalCreationAnalytics() {
         aiSuggestionsAccepted: metrics.aiSuggestionsAccepted,
         manualAssignments: metrics.manualAssignments,
         target: 'reduce_coordination_effort_by_40_percent',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics, user, wizardStartTime]
   );
@@ -125,44 +122,101 @@ export function useProposalCreationAnalytics() {
           aiSuggestionsAccepted: 0,
           fieldInteractions: 0,
         };
-      } else if (action === 'complete' && currentStepRef.current) {
-        currentStepRef.current.endTime = now;
-        currentStepRef.current.duration = now - currentStepRef.current.startTime;
-        stepMetrics.current.push({ ...currentStepRef.current });
+      } else if (action === 'complete') {
+        if (currentStepRef.current) {
+          currentStepRef.current.endTime = now;
+          currentStepRef.current.duration = now - currentStepRef.current.startTime;
+          // Capture values before setting currentStepRef.current to null
+          const stepData = { ...currentStepRef.current };
+          stepMetrics.current.push(stepData);
+          currentStepRef.current = null;
 
-        analytics.track('wizard_step_completion', {
+          // Track step completion
+          analytics('proposal_wizard_step_completed', {
+            step,
+            stepName,
+            duration: stepData.duration,
+            errors: stepData.errors,
+            aiSuggestionsShown: stepData.aiSuggestionsShown,
+            aiSuggestionsAccepted: stepData.aiSuggestionsAccepted,
+            fieldInteractions: stepData.fieldInteractions,
+            userStory: 'US-4.1',
+          }, 'medium');
+        }
+      } else if (action === 'error') {
+        if (currentStepRef.current) {
+          currentStepRef.current.errors += 1;
+
+          // Track step error
+          analytics('proposal_wizard_step_error', {
+            step,
+            stepName,
+            errorType: metadata?.errorType || 'unknown',
+            errorMessage: 'Unknown error', // Using a default value since errorMessage isn't in the metadata type
+            userStory: 'US-4.1',
+          }, 'medium');
+        }
+      } else if (action === 'field_interaction') {
+        if (currentStepRef.current) {
+          currentStepRef.current.fieldInteractions += 1;
+        }
+      } else if (action === 'validation_error') {
+        if (currentStepRef.current) {
+          currentStepRef.current.errors += 1;
+
+          // Track validation error
+          analytics('proposal_wizard_validation_error', {
+            step,
+            stepName,
+            field: metadata?.fieldName || 'unknown', // Using fieldName instead of field
+            errorType: metadata?.errorType || 'unknown',
+            errorMessage: 'Unknown error', // Using a default value since errorMessage isn't in the metadata type
+            userStory: 'US-4.1',
+          }, 'medium');
+        }
+      } else if (action === 'customer_selected') {
+        // Track customer selection
+        analytics('proposal_wizard_customer_selected', {
           step,
           stepName,
-          duration: currentStepRef.current.duration,
-          errors: currentStepRef.current.errors,
-          aiInteractionRate:
-            currentStepRef.current.aiSuggestionsAccepted /
-            Math.max(currentStepRef.current.aiSuggestionsShown, 1),
-          fieldInteractions: currentStepRef.current.fieldInteractions,
-          userStory: step <= 2 ? 'US-4.1' : 'US-2.2',
-          timestamp: now,
-        });
-      } else if (action === 'error' && currentStepRef.current) {
-        currentStepRef.current.errors++;
-      } else if (action === 'field_interaction' && currentStepRef.current) {
-        currentStepRef.current.fieldInteractions++;
-      } else if (
-        action === 'customer_selected' ||
-        action === 'future_date_selected' ||
-        action === 'ai_suggestion_shown'
-      ) {
-        // Track specific user interactions for enhanced analytics
-        analytics.track(`wizard_${action}`, {
+          customerId: metadata?.customerId || 'unknown',
+          customerName: metadata?.customerName || 'unknown',
+          userStory: 'US-4.1',
+        }, 'medium');
+      } else if (action === 'future_date_selected') {
+        // Track future date selection
+        analytics('proposal_wizard_future_date_selected', {
           step,
           stepName,
-          metadata,
-          userStory: step <= 2 ? 'US-4.1' : 'US-2.2',
-          timestamp: now,
-        });
-      }
+          selectedDate: metadata?.selectedDate || 'unknown',
+          userStory: 'US-4.1',
+        }, 'medium');
+      } else if (action === 'ai_suggestion_shown') {
+        if (currentStepRef.current) {
+          currentStepRef.current.aiSuggestionsShown += 1;
 
-      if (metadata) {
-        Object.assign(currentStepRef.current || {}, metadata);
+          // Track AI suggestion shown
+          analytics('proposal_wizard_ai_suggestion_shown', {
+            step,
+            stepName,
+            suggestionType: 'unknown', // Using default value since suggestionType isn't in the metadata type
+            suggestionContent: 'unknown', // Using default value since suggestionContent isn't in the metadata type
+            userStory: 'US-4.1',
+          }, 'medium');
+        }
+      } else if (action === 'ai_suggestion_accepted') {
+        if (currentStepRef.current) {
+          currentStepRef.current.aiSuggestionsAccepted += 1;
+
+          // Track AI suggestion accepted
+          analytics('proposal_wizard_ai_suggestion_accepted', {
+            step,
+            stepName,
+            suggestionType: 'unknown', // Using default value since suggestionType isn't in the metadata type
+            suggestionContent: 'unknown', // Using default value since suggestionContent isn't in the metadata type
+            userStory: 'US-4.1',
+          }, 'medium');
+        }
       }
     },
     [analytics]
@@ -182,7 +236,7 @@ export function useProposalCreationAnalytics() {
         (assignmentData.acceptedSuggestions / assignmentData.totalSuggestions) * 100;
       const coordinationScore = assignmentData.expertiseMatching;
 
-      analytics.track('team_assignment_efficiency', {
+      analytics('team_assignment_efficiency', {
         ...assignmentData,
         efficiency,
         coordinationScore,
@@ -211,13 +265,12 @@ export function useProposalCreationAnalytics() {
       riskFactors: number;
       aiAssisted: boolean;
     }) => {
-      analytics.track('timeline_estimation', {
+      analytics('timeline_estimation', {
         ...estimationData,
         userStory: 'US-4.1',
         acceptanceCriteria: ['AC-4.1.1'],
         hypothesis: 'H7',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics]
   );
@@ -234,14 +287,13 @@ export function useProposalCreationAnalytics() {
       const efficiencyScore =
         (1 - coordinationData.conflictResolutionTime / coordinationData.setupTime) * 100;
 
-      analytics.track('coordination_efficiency', {
+      analytics('coordination_efficiency', {
         ...coordinationData,
         efficiencyScore,
         userStory: 'US-2.2',
         acceptanceCriteria: ['AC-2.2.3'],
         hypothesis: 'H4',
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics]
   );
@@ -256,13 +308,12 @@ export function useProposalCreationAnalytics() {
       relevanceAccuracy: number; // percentage
       timeSpent: number;
     }) => {
-      analytics.track('content_selection_efficiency', {
+      analytics('content_selection_efficiency', {
         ...contentData,
         selectionRate: (contentData.selectedItems / contentData.suggestedItems) * 100,
         userStory: 'US-1.2',
         acceptanceCriteria: ['AC-1.2.1'],
-        timestamp: Date.now(),
-      });
+      }, 'medium');
 
       // Update current step metrics
       if (currentStepRef.current && currentStepRef.current.step === 3) {
@@ -283,13 +334,12 @@ export function useProposalCreationAnalytics() {
       validationTime: number;
       autoFixesApplied: number;
     }) => {
-      analytics.track('proposal_validation', {
+      analytics('proposal_validation', {
         ...validationData,
         qualityScore: (validationData.completeness + validationData.complianceScore) / 2,
         userStory: 'US-3.1',
         acceptanceCriteria: ['AC-3.1.1'],
-        timestamp: Date.now(),
-      });
+      }, 'medium');
     },
     [analytics]
   );

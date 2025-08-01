@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useCallback, useEffect, useRef } from 'react';
 import { FieldValues, useForm, UseFormProps, UseFormReturn } from 'react-hook-form';
@@ -51,7 +51,7 @@ export function useMobileOptimizedForm<T extends FieldValues>({
   ...formConfig
 }: MobileOptimizedFormConfig<T>): MobileOptimizedFormReturn<T> {
   const { isMobile } = useResponsive();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Performance optimization refs
   const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -69,7 +69,7 @@ export function useMobileOptimizedForm<T extends FieldValues>({
   // ✅ PERFORMANCE FIX: Manual form data collection instead of watch()
   const collectFormData = useCallback((): T => {
     // Use form.getValues() to get all form values
-    return form.getValues() as T;
+    return form.getValues();
   }, [form]);
 
   // ✅ PERFORMANCE OPTIMIZATION: Debounced update function
@@ -105,7 +105,7 @@ export function useMobileOptimizedForm<T extends FieldValues>({
         if (shouldTrackAnalytics) {
           lastAnalyticsTrackRef.current = now;
 
-          analytics.track('mobile_form_field_interaction', {
+          analytics('mobile_form_field_interaction', {
             fieldName,
             componentName,
             fieldInteractions: fieldInteractionsRef.current,
@@ -114,8 +114,7 @@ export function useMobileOptimizedForm<T extends FieldValues>({
             hypotheses: COMPONENT_MAPPING.hypotheses,
             testCases: COMPONENT_MAPPING.testCases,
             performanceOptimized: true,
-            timestamp: now,
-          });
+          }, 'low');
         }
 
         // Collect and update form data with debouncing

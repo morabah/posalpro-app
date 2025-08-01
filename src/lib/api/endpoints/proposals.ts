@@ -139,7 +139,7 @@ export const proposalsApi = {
    */
   async assignTeam(
     id: string,
-    assignments: Omit<TeamAssignment, 'id' | 'proposalId' | 'assignedAt'>[]
+    assignments: Array<Omit<TeamAssignment, 'id' | 'proposalId' | 'assignedAt'>>
   ): Promise<ApiResponse<TeamAssignment[]>> {
     return apiClient.post<TeamAssignment[]>(`/proposals/${id}/team`, { assignments });
   },

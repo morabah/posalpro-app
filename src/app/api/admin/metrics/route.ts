@@ -32,16 +32,15 @@ export async function GET(request: NextRequest) {
     await prisma.user.findFirst();
     const dbResponseTime = Date.now() - startTime;
 
-    // Get user statistics
+    // Optimized transaction for admin metrics
     const [
       totalUsers,
       activeUsers,
       totalProposals,
       totalProducts,
       totalContent,
-      recentAuditLogs,
-      systemHealth,
-    ] = await Promise.all([
+      recentAuditLogs
+    ] = await prisma.$transaction([
       prisma.user.count(),
       prisma.user.count({
         where: {
@@ -65,9 +64,11 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-      }),
-      checkSystemHealth(dbResponseTime),
+      })
     ]);
+
+    // System health check (separate as it's not a database operation)
+    const systemHealth = await checkSystemHealth(dbResponseTime);
 
     // Get recent backup information (mock for now, would be real in production)
     const lastBackup = new Date(Date.now() - 24 * 60 * 60 * 1000); // 1 day ago

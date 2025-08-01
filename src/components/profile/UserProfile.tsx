@@ -15,7 +15,7 @@
  * - Performance optimization with form state management
  */
 
-import { useAuth } from '@/components/providers/AuthProvider';
+import { useAuth } from '@/hooks/auth/useAuth';
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';

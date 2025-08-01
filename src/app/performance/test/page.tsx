@@ -212,11 +212,9 @@ export default function PerformanceTestPage() {
     return allResults.reduce((sum, result) => sum + result.score, 0) / allResults.length;
   };
 
-  const getTestTypeResults = (): (
-    | PerformanceTestResult
+  const getTestTypeResults = (): Array<| PerformanceTestResult
     | SidebarTestResult
-    | ComponentTestResult
-  )[] => {
+    | ComponentTestResult> => {
     switch (activeTestType) {
       case 'performance':
         return performanceResults;

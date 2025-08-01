@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * Authentication Interceptor
  * Handles automatic token refresh and session management
  */

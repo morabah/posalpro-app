@@ -8,7 +8,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -82,7 +82,7 @@ export const AIDrivenInsights: React.FC<AIDrivenInsightsProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const { handleAsyncError } = useErrorHandler();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Generate AI insights based on current system data
   const generateInsights = useCallback(async () => {
@@ -217,11 +217,20 @@ export const AIDrivenInsights: React.FC<AIDrivenInsightsProps> = ({
       setMetrics(insightMetrics);
 
       // Track analytics
-      analytics.track('ai_insights_generated', {
+      analytics('ai_insights_generated', {
+        totalInsights: mockInsights.length,
+        actionableInsights: mockInsights.filter(i => i.actionable).length,
+        criticalWarnings: mockInsights.filter(i => i.type === 'warning' && i.impact === 'high')
+          .length,
+        averageConfidence: Math.round(
+          mockInsights.reduce((sum, insight) => sum + insight.confidence, 0) /
+            mockInsights.length
+        ),
+        topCategory: insightMetrics.topCategory,
         component: 'AIDrivenInsights',
-        insightCount: limitedInsights.length,
-        category: selectedCategory,
-        traceability: COMPONENT_MAPPING,
+        userStory: 'US-4.1',
+        acceptanceCriteria: ['AC-4.1.3'],
+        hypothesis: 'H4',
       });
     } catch (error) {
       const processedError = errorHandlingService.processError(
@@ -257,13 +266,15 @@ export const AIDrivenInsights: React.FC<AIDrivenInsightsProps> = ({
       const action = insight.suggestedActions?.[actionIndex];
       if (!action) return;
 
-      analytics.track('insight_action_taken', {
+      analytics('insight_action_taken', {
         insightId: insight.id,
         insightType: insight.type,
         actionIndex,
         action,
         component: 'AIDrivenInsights',
-        traceability: COMPONENT_MAPPING,
+        userStory: 'US-4.1',
+        acceptanceCriteria: ['AC-4.1.3'],
+        hypothesis: 'H4',
       });
 
       // In a real implementation, this would trigger actual system actions

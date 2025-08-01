@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import {
   Bell,
@@ -79,8 +79,8 @@ export function MobileNavigationMenus({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const pathname = usePathname();
-  const analytics = useAnalytics();
-  const { handleAsyncError, errorHandlingService } = useErrorHandler();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const { handleAsyncError } = useErrorHandler();
 
   // Filter navigation items based on user role
   const filteredNavItems = useMemo(() => {
@@ -107,14 +107,13 @@ export function MobileNavigationMenus({
         const newState = !prev;
 
         // Track mobile menu usage (H9: Mobile User Experience)
-        analytics.track('mobile_menu_toggle', {
+        analytics('mobile_menu_toggle', {
           action: newState ? 'open' : 'close',
           currentPath: pathname,
           userRole,
-          timestamp: Date.now(),
           hypothesis: 'H9',
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
 
         return newState;
       });
@@ -132,18 +131,16 @@ export function MobileNavigationMenus({
   const handleMobileNavigation = useCallback(
     (item: MobileNavItem) => {
       try {
-        // Track mobile navigation usage (H9: Mobile User Experience)
-        analytics.track('mobile_navigation_tap', {
+        // Track mobile navigation (H9: Mobile User Experience)
+        analytics('mobile_navigation', {
           itemId: item.id,
           itemLabel: item.label,
-          targetHref: item.href,
-          category: item.category,
+          destination: item.href,
+          currentPath: pathname,
           userRole,
-          fromPath: pathname,
           hypothesis: 'H9',
-          testCase: 'TC-H9-001',
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'medium');
 
         // Execute callback if provided
         onNavigate?.(item);
@@ -170,7 +167,7 @@ export function MobileNavigationMenus({
 
         if (query.length >= 2) {
           // Track mobile search usage (H9: Mobile User Experience)
-          analytics.track('mobile_search_query', {
+          analytics('mobile_search_query', {
             query: query.substring(0, 50), // Limit for privacy
             queryLength: query.length,
             userRole,
@@ -178,7 +175,7 @@ export function MobileNavigationMenus({
             hypothesis: 'H9',
             testCase: 'TC-H9-002',
             componentMapping: COMPONENT_MAPPING,
-          });
+          }, 'low');
         }
       } catch (error) {
         handleAsyncError(error, 'Failed to handle mobile search', {
@@ -208,14 +205,14 @@ export function MobileNavigationMenus({
           setSearchQuery('');
         }
 
-        // Track mobile search toggle (H9: Mobile User Experience)
-        analytics.track('mobile_search_toggle', {
+        // Track search interaction (H10: Search Performance)
+        analytics('mobile_search_interaction', {
           action: newState ? 'open' : 'close',
           currentPath: pathname,
           userRole,
-          hypothesis: 'H9',
+          hypothesis: 'H10',
           componentMapping: COMPONENT_MAPPING,
-        });
+        }, 'low');
 
         return newState;
       });

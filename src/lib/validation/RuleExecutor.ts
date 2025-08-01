@@ -102,7 +102,7 @@ export class RuleExecutor {
         if (actionResult.type === 'error' || actionResult.type === 'warning') {
           issues.push({
             id: `issue_${rule.id}_${Math.random().toString(36).substr(2, 9)}`,
-            type: actionResult.type as 'error' | 'warning',
+            type: actionResult.type,
             severity: rule.severity,
             category: rule.category as
               | 'compatibility'
@@ -132,7 +132,7 @@ export class RuleExecutor {
               {
                 id: `action_${Math.random().toString(36).substr(2, 9)}`,
                 type: 'configure' as ActionType,
-                target: (actionResult.data?.target || 'configuration') as ActionTarget,
+                target: (actionResult.data?.target || 'configuration'),
                 value: actionResult.data?.value,
                 description: actionResult.message,
                 automated: actionResult.automated || false,
@@ -140,7 +140,7 @@ export class RuleExecutor {
             ],
             issueId: `issue_${rule.id}_${Math.random().toString(36).substr(2, 9)}`,
             suggestion: actionResult.message,
-            priority: this.determineImpact(rule.severity) as 'high' | 'medium' | 'low',
+            priority: this.determineImpact(rule.severity),
             automated: actionResult.automated || false,
           });
         }
@@ -381,8 +381,8 @@ export class RuleExecutor {
   async executeActions(
     actions: RuleAction[],
     context: ValidationContext
-  ): Promise<Array<ActionResult>> {
-    const results: Array<ActionResult> = [];
+  ): Promise<ActionResult[]> {
+    const results: ActionResult[] = [];
 
     try {
       for (const action of actions) {
@@ -446,7 +446,7 @@ export class RuleExecutor {
     context: ValidationContext
   ): Promise<ActionResult> {
     return {
-      type: action.type as 'error' | 'warning' | 'fix' | 'suggest' | 'block',
+      type: action.type,
       message: action.message,
       data: action.data,
       automated: action.automated,

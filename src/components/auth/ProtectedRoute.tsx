@@ -6,7 +6,7 @@
  * Analytics integration for access tracking
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { AlertCircle, Loader2, Lock, Shield } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -44,18 +44,17 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const [accessLevel, setAccessLevel] = useState<AccessLevel>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAccess = () => {
       // Track access attempt
-      analytics.track('protected_route_access_attempt', {
+      analytics('protected_route_access_attempt', {
         requiredRoles,
         requiredPermissions,
         sessionStatus: status,
-        timestamp: Date.now(),
         component: 'ProtectedRoute',
         userStory: 'US-2.3',
       });
@@ -74,10 +73,9 @@ export function ProtectedRoute({
         setAccessLevel('unauthorized');
         setErrorMessage('Authentication required. Please sign in to access this page.');
 
-        analytics.track('access_denied', {
+        analytics('access_denied', {
           reason: 'unauthenticated',
           redirectTo: fallbackUrl,
-          timestamp: Date.now(),
           component: 'ProtectedRoute',
         });
 
@@ -105,11 +103,10 @@ export function ProtectedRoute({
             )}`
           );
 
-          analytics.track('access_denied', {
+          analytics('access_denied', {
             reason: 'insufficient_roles',
             userRoles,
             requiredRoles,
-            timestamp: Date.now(),
             component: 'ProtectedRoute',
             userStory: 'US-2.3',
           });
@@ -134,11 +131,10 @@ export function ProtectedRoute({
             )}`
           );
 
-          analytics.track('access_denied', {
+          analytics('access_denied', {
             reason: 'insufficient_permissions',
             userPermissions,
             requiredPermissions,
-            timestamp: Date.now(),
             component: 'ProtectedRoute',
             userStory: 'US-2.3',
           });
@@ -148,12 +144,11 @@ export function ProtectedRoute({
 
       // Access granted
       setAccessLevel('authorized');
-      analytics.track('access_granted', {
+      analytics('access_granted', {
         userRoles,
         userPermissions,
         requiredRoles,
         requiredPermissions,
-        timestamp: Date.now(),
         component: 'ProtectedRoute',
         userStory: 'US-2.3',
       });

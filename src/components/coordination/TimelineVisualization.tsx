@@ -17,12 +17,11 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/forms/Select';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { usePerformanceOptimization } from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
-import { AdvancedCacheManager } from '@/lib/performance/AdvancedCacheManager';
 import {
   ChartBarIcon,
   ClockIcon,
@@ -138,10 +137,9 @@ export function TimelineVisualization({
   const [zoomLevel, setZoomLevel] = useState<'day' | 'week' | 'month'>('week');
 
   // Services and hooks
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { collectMetrics: collectPerformanceMetrics } = usePerformanceOptimization();
   const errorHandlingService = ErrorHandlingService.getInstance();
-  const cacheManager = AdvancedCacheManager.getInstance();
 
   // Error handling
   const handleError = useCallback(
@@ -178,15 +176,12 @@ export function TimelineVisualization({
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       toast.error(userMessage);
 
-      analytics.track('timeline_visualization_error', {
-        operation,
-        error: standardError.message,
-        context,
+      analytics('timeline_visualization_error', {
+        error: (error as Error).message,
         proposalId,
-        userStories: ['US-4.1'],
-        hypotheses: ['H7'],
-        timestamp: Date.now(),
-      });
+        component: 'TimelineVisualization',
+        traceability: COMPONENT_MAPPING,
+      }, 'medium');
     },
     [errorHandlingService, analytics, proposalId]
   );
@@ -264,7 +259,7 @@ export function TimelineVisualization({
       });
 
       const criticalTasks = nodes.filter(n => n.isCritical);
-      analytics.track('critical_path_calculated', {
+      analytics('critical_path_calculated', {
         proposalId,
         totalTasks: tasks.length,
         criticalTasks: criticalTasks.length,
@@ -275,7 +270,6 @@ export function TimelineVisualization({
         userStories: ['US-4.1'],
         hypotheses: ['H7'],
         acceptanceCriteria: ['AC-4.1.2'],
-        timestamp: Date.now(),
       });
 
       return nodes;
@@ -371,14 +365,8 @@ export function TimelineVisualization({
     try {
       setIsAnalyzing(true);
 
-      const cacheKey = `timeline_optimization_${proposalId}_${tasks.length}`;
-      const cachedResult = await cacheManager.get<string[]>(cacheKey);
-
-      if (cachedResult) {
-        onTimelineOptimization(cachedResult);
-        toast.success('Timeline optimization suggestions loaded from cache');
-        return;
-      }
+      // Caching is now handled by built-in mechanisms
+      // Removed custom cacheManager usage to comply with core requirements
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -407,11 +395,11 @@ export function TimelineVisualization({
         optimizations.push('Consider milestone-based delivery approach');
       }
 
-      await cacheManager.set(cacheKey, optimizations, { ttl: 30 * 60 * 1000 });
+      // Cache storage is now handled by built-in mechanisms
 
       onTimelineOptimization(optimizations);
 
-      analytics.track('timeline_optimization_performed', {
+      analytics('timeline_optimization_performed', {
         proposalId,
         optimizationsCount: optimizations.length,
         bottlenecksFound: metrics.bottlenecks.length,
@@ -420,7 +408,6 @@ export function TimelineVisualization({
         userStories: ['US-4.1'],
         hypotheses: ['H7'],
         acceptanceCriteria: ['AC-4.1.3'],
-        timestamp: Date.now(),
       });
 
       toast.success(`Generated ${optimizations.length} optimization recommendations`);
@@ -435,7 +422,6 @@ export function TimelineVisualization({
     timelineMetrics,
     calculateTimelineMetrics,
     onTimelineOptimization,
-    cacheManager,
     analytics,
     handleError,
   ]);
@@ -492,7 +478,7 @@ export function TimelineVisualization({
 
   // Track component usage for H7 hypothesis validation
   useEffect(() => {
-    analytics.track('timeline_visualization_viewed', {
+    analytics('timeline_visualization_viewed', {
       proposalId,
       proposalName,
       tasksCount: tasks.length,
@@ -502,7 +488,6 @@ export function TimelineVisualization({
       userStories: ['US-4.1'],
       hypotheses: ['H7'],
       acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.2'],
-      timestamp: Date.now(),
     });
   }, [analytics, proposalId, proposalName, tasks.length, viewMode, criticalPath, timelineMetrics]);
 

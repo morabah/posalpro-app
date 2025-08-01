@@ -7,7 +7,7 @@ import { logger } from '@/utils/logger';
  * Component Traceability: US-3.1, US-3.2, US-3.3, AC-3.1.3, AC-3.2.4, AC-3.3.3
  */
 
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback, useEffect, useState } from 'react';
 
 // Component Traceability Matrix
@@ -98,7 +98,7 @@ export function useValidationAnalytics() {
   });
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Initialize baseline metrics from historical data
   useEffect(() => {
@@ -122,10 +122,9 @@ export function useValidationAnalytics() {
           baselineErrorRate: 100 - historicalBaseline.manualErrorDetectionRate,
         }));
 
-        analytics.track('validation_baseline_initialized', {
+        analytics('validation_baseline_initialized', {
           baseline: historicalBaseline,
-          timestamp: Date.now(),
-        });
+        }, 'low');
 
         setIsInitialized(true);
       } catch (error) {
@@ -163,7 +162,7 @@ export function useValidationAnalytics() {
       setCurrentMetrics(updatedMetrics);
 
       // Track the analytics event with enhanced context
-      analytics.track(`h8_${event.eventType}`, {
+      analytics(`h8_${event.eventType}`, {
         ...event,
         h8Progress: {
           errorReductionTarget: 50,
@@ -171,7 +170,7 @@ export function useValidationAnalytics() {
           progressPercentage: (updatedMetrics.errorReductionPercentage / 50) * 100,
         },
         performanceMetrics: updatedMetrics,
-      });
+      }, 'medium');
     },
     [currentMetrics] // ✅ FIXED: Removed analytics dependency to prevent infinite loop
   );
@@ -272,14 +271,13 @@ export function useValidationAnalytics() {
       trackValidationPerformance(event);
 
       // Track detailed fix analytics
-      analytics.track('validation_fix_attempt', {
+      analytics('validation_fix_attempt', {
         fixId,
         proposalId,
         success,
         fixTime,
         fixType,
-        timestamp: Date.now(),
-      });
+      }, 'high');
 
       return {
         success,
@@ -322,11 +320,10 @@ export function useValidationAnalytics() {
     };
 
     // Track report generation
-    analytics.track('h8_progress_report_generated', {
+    analytics('h8_progress_report_generated', {
       report,
       currentMetrics,
-      timestamp: Date.now(),
-    });
+    }, 'low');
 
     return report;
   }, [baseline, currentMetrics]); // Remove analytics dependency
@@ -364,11 +361,10 @@ export function useValidationAnalytics() {
         componentMapping: COMPONENT_MAPPING,
       };
 
-      analytics.track('validation_analytics_exported', {
+      analytics('validation_analytics_exported', {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        timestamp: Date.now(),
-      });
+      }, 'low');
 
       return data;
     },
