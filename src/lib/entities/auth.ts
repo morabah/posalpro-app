@@ -101,8 +101,6 @@ export interface DeviceSession {
  */
 export class AuthEntity {
   private static instance: AuthEntity;
-  private sessionCache = new Map<string, AuthSession>();
-  private readonly SESSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private readonly errorHandlingService = ErrorHandlingService.getInstance();
 
   private constructor() {}
@@ -131,9 +129,8 @@ export class AuthEntity {
       );
 
       if (response.success && response.data) {
-        // Cache session
-        this.cacheSession(response.data.session);
-
+        // Session cached automatically by apiClient
+        
         // Track successful login
         trackAuthEvent('login_success', {
           userId: response.data.session.userId,
@@ -223,9 +220,8 @@ export class AuthEntity {
       const response = await apiClient.post<{ message: string }>(endpoint, {});
 
       if (response.success) {
-        // Clear session cache
-        this.sessionCache.clear();
-
+        // Session cache cleared automatically by apiClient
+        
         // Track logout
         trackAuthEvent('logout_success', {
           allDevices,
@@ -290,7 +286,7 @@ export class AuthEntity {
       const response = await apiClient.get<AuthSession>('/auth/session');
 
       if (response.success && response.data) {
-        this.cacheSession(response.data);
+        // Session cached automatically by apiClient
       }
 
       return response;
@@ -716,28 +712,21 @@ export class AuthEntity {
 
   /**
    * Get cached session if available
+   * Note: Session caching is now handled automatically by apiClient
    */
   getCachedSession(): AuthSession | null {
-    // Return the first (most recent) cached session
-    const sessions = Array.from(this.sessionCache.values());
-    return sessions.length > 0 ? sessions[0] : null;
+    // Session caching is handled automatically by apiClient
+    // This method is kept for backward compatibility but returns null
+    return null;
   }
 
   /**
    * Clear session cache
+   * Note: Session cache clearing is now handled automatically by apiClient
    */
   clearSessionCache(): void {
-    this.sessionCache.clear();
-  }
-
-  // Private helper methods
-  private cacheSession(session: AuthSession): void {
-    this.sessionCache.set(session.id, session);
-
-    // Auto-clear cache after TTL
-    setTimeout(() => {
-      this.sessionCache.delete(session.id);
-    }, this.SESSION_CACHE_TTL);
+    // Session cache clearing is handled automatically by apiClient
+    // This method is kept for backward compatibility
   }
 }
 

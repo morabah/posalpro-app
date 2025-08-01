@@ -66,9 +66,7 @@ interface ApiUserResponse {
  */
 export class UserEntity {
   private static instance: UserEntity;
-  private cache = new Map<string, UserProfile>();
-  private cacheExpiry = new Map<string, number>();
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  // Removed custom caching - using apiClient built-in caching per CORE_REQUIREMENTS.md
 
   private constructor() {}
 
@@ -91,9 +89,7 @@ export class UserEntity {
       const response = await apiClient.post<UserProfile>('/users', validatedData);
 
       if (response.success && response.data) {
-        // Cache the new user
-        this.setCache(response.data.id, response.data);
-
+        // User created successfully - apiClient handles caching automatically
         // Track user creation event
         trackAuthEvent('user_created', {
           userId: response.data.id,
@@ -114,23 +110,8 @@ export class UserEntity {
    */
   async findById(id: string): Promise<ApiResponse<UserProfile | null>> {
     try {
-      // Check cache first
-      const cached = this.getFromCache(id);
-      if (cached) {
-        return {
-          data: cached,
-          success: true,
-          message: 'User retrieved from cache',
-        };
-      }
-
-      // Fetch from API
+      // Fetch from API - apiClient handles caching automatically
       const response = await apiClient.get<UserProfile>(`/users/${id}`);
-
-      if (response.success && response.data) {
-        this.setCache(id, response.data);
-      }
-
       return response;
     } catch (error) {
       logger.error(`Failed to find user ${id}:`, error);
@@ -152,7 +133,7 @@ export class UserEntity {
       );
 
       if (response.success && response.data) {
-        this.setCache(response.data.id, response.data);
+        // User updated successfully - apiClient handles caching automatically
       }
 
       return response;
@@ -178,8 +159,7 @@ export class UserEntity {
       const response = await apiClient.put<UserProfile>(`/users/${id}`, validatedData);
 
       if (response.success && response.data) {
-        // Update cache
-        this.setCache(id, response.data);
+        // User updated successfully - apiClient handles caching automatically
 
         // Track user update event
         trackAuthEvent('user_updated', {
@@ -203,10 +183,8 @@ export class UserEntity {
       const response = await apiClient.delete<{ message: string }>(`/users/${id}`);
 
       if (response.success) {
-        // Remove from cache
-        this.cache.delete(id);
-        this.cacheExpiry.delete(id);
-
+        // User deleted successfully - apiClient handles cache invalidation automatically
+        
         // Track user deletion event
         trackAuthEvent('user_deleted', { userId: id });
       }
@@ -228,14 +206,7 @@ export class UserEntity {
 
       const response = await usersApi.queryUsers(options);
 
-      // Cache results - Handle both mock and live API responses
-      if (response.success && response.data) {
-        // Check if response.data has users property (live API) or is array (mock API)
-        const users = Array.isArray(response.data) ? response.data : (response.data as any).users;
-        if (users && Array.isArray(users)) {
-          users.forEach((user: any) => this.setCache(user.id, user));
-        }
-      }
+      // Results cached automatically by apiClient
 
       // Transform response to expected format
       const users = Array.isArray(response.data)
@@ -344,7 +315,7 @@ export class UserEntity {
       const response = await apiClient.post<UserProfile>(`/users/${id}/activate`, {});
 
       if (response.success && response.data) {
-        this.setCache(id, response.data);
+        // User activated successfully - apiClient handles caching automatically
         trackAuthEvent('user_activated', { userId: id });
       }
 
@@ -363,7 +334,7 @@ export class UserEntity {
       const response = await apiClient.post<UserProfile>(`/users/${id}/deactivate`, {});
 
       if (response.success && response.data) {
-        this.setCache(id, response.data);
+        // User deactivated successfully - apiClient handles caching automatically
         trackAuthEvent('user_deactivated', { userId: id });
       }
 
@@ -374,34 +345,7 @@ export class UserEntity {
     }
   }
 
-  /**
-   * Clear user cache
-   */
-  clearCache(id?: string): void {
-    if (id) {
-      this.cache.delete(id);
-      this.cacheExpiry.delete(id);
-    } else {
-      this.cache.clear();
-      this.cacheExpiry.clear();
-    }
-  }
-
-  // Private cache methods
-  private getFromCache(id: string): UserProfile | null {
-    const expiry = this.cacheExpiry.get(id);
-    if (expiry && Date.now() > expiry) {
-      this.cache.delete(id);
-      this.cacheExpiry.delete(id);
-      return null;
-    }
-    return this.cache.get(id) || null;
-  }
-
-  private setCache(id: string, user: UserProfile): void {
-    this.cache.set(id, user);
-    this.cacheExpiry.set(id, Date.now() + this.CACHE_TTL);
-  }
+  // Cache methods removed - using apiClient built-in caching per CORE_REQUIREMENTS.md
 }
 
 // Export singleton instance

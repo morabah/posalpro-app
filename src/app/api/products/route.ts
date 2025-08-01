@@ -5,7 +5,8 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import prisma, { Prisma } from '@/lib/db/prisma';
+import prisma from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -178,7 +179,7 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'ProductsRoute',
             operation: 'getProducts',
-            queryParameters: queryParams,
+            queryParameters: Object.fromEntries(new URL(request.url).searchParams),
           },
         }),
         'Validation failed',

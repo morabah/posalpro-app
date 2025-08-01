@@ -442,7 +442,7 @@ export async function GET(request: NextRequest) {
       // 🚀 CURSOR-BASED PAGINATION: More efficient for large datasets
       const useCursorPagination = query.cursor !== undefined;
 
-      let proposals: Prisma.ProposalGetPayload<{ select: Prisma.ProposalSelect }>[];
+      let proposals: Array<Prisma.ProposalGetPayload<{ select: Prisma.ProposalSelect }>>;
       let pagination: {
         page?: number;
         limit: number;

@@ -32,7 +32,7 @@ import { ProposalData } from '../../../../lib/entities/proposal';
 
 // API Response interfaces
 interface ProposalApiResponse {
-  proposals: (ProposalData & { customer?: any })[];
+  proposals: Array<ProposalData & { customer?: any }>;
   pagination: {
     page: number;
     limit: number;

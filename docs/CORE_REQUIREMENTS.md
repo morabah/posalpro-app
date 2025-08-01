@@ -259,3 +259,32 @@ const [items, count] = await Promise.all([
 - Eliminate redundant aggregation calls
 - Monitor database round-trips and connection pool usage
 - Follow Database-First Optimization philosophy from Lesson #20
+
+## 🧹 **CODEBASE MAINTENANCE & CLEANUP (CRITICAL)**
+
+**🗑️ MANDATORY: Regular codebase cleanup to remove obsolete files and artifacts**
+
+- Pattern: Monthly review and removal of unnecessary files
+- Never: Accumulate backup files, logs, old reports, or obsolete scripts
+- Reference: [Lesson #31: Codebase Cleanup and Streamlining][memory:lesson31]]
+
+**🔧 Cleanup Best Practices:**
+
+```bash
+# ✅ CORRECT: Regular cleanup schedule
+# Monthly: Remove obsolete files, update documentation, archive old reports
+# Weekly: Clear temporary files and logs
+
+# ❌ FORBIDDEN: Neglecting codebase maintenance
+# Never: Allow accumulation of unnecessary files
+# Never: Keep outdated documentation in main branch
+```
+
+**📋 Implementation Requirements:**
+
+- Preserve essential documentation (`CORE_REQUIREMENTS.md`, `LESSONS_LEARNED.md`, etc.)
+- Maintain configuration files and package management files
+- Remove redundant artifacts (generated reports, temporary files, backup files)
+- Archive old but potentially useful documents to separate repositories
+- Use git tags and releases for milestone documentation instead of keeping files in main branch
+- Follow Documentation Lifecycle Management from Lesson #31

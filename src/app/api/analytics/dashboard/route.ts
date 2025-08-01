@@ -73,7 +73,8 @@ export async function GET(request: NextRequest) {
     // Calculate date range filter
     const dateFilter = getDateFilter(validatedQuery.timeRange);
 
-    // Collect all analytics data
+    // Collect all analytics data - using Promise.all for independent analytics queries
+    // Note: These are read-only analytics queries that don't require transaction atomicity
     const [
       hypothesisMetrics,
       userStoryMetrics,
@@ -169,7 +170,7 @@ async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | nul
       where.timestamp = { gte: dateFilter };
     }
 
-    const [totalEvents, avgImprovement, successfulEvents, hypothesisBreakdown] = await Promise.all([
+    const [totalEvents, avgImprovement, successfulEvents, hypothesisBreakdown] = await prisma.$transaction([
       prisma.hypothesisValidationEvent.count({ where }),
       prisma.hypothesisValidationEvent.aggregate({
         where,
@@ -184,6 +185,7 @@ async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | nul
       prisma.hypothesisValidationEvent.groupBy({
         by: ['hypothesis'],
         where,
+        orderBy: { hypothesis: 'asc' },
         _count: { _all: true },
         _avg: { performanceImprovement: true },
       }),

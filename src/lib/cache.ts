@@ -1,17 +1,19 @@
 /**
- * Cache Service - High-performance caching layer
- * Reduces database load and improves response times
+ * Cache Service - DEPRECATED
+ * 
+ * This custom caching system has been removed to comply with CORE_REQUIREMENTS.md
+ * All caching is now handled automatically by apiClient.
+ * 
+ * This file is kept for backward compatibility but exports no-op stubs.
+ * Use useApiClient pattern for all data fetching with built-in caching.
  */
 
+// Deprecated cache service - kept for backward compatibility
 class CacheService {
-  private cache: Map<string, { data: any; timestamp: number; ttl: number }>;
   private static instance: CacheService;
 
   constructor() {
-    this.cache = new Map();
-
-    // Clean expired entries every 5 minutes
-    setInterval(() => this.cleanup(), 5 * 60 * 1000);
+    console.warn('CacheService is deprecated. Use apiClient built-in caching instead.');
   }
 
   static getInstance(): CacheService {
@@ -21,62 +23,31 @@ class CacheService {
     return CacheService.instance;
   }
 
-  set(key: string, data: any, ttl: number = 300000): void { // 5 minutes default
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl
-    });
+  set(_key: string, _data: unknown, _ttl: number = 300000): void {
+    console.warn('CacheService.set is deprecated. Use apiClient built-in caching instead.');
   }
 
-  get(key: string): any | null {
-    const entry = this.cache.get(key);
-
-    if (!entry) {
-      return null;
-    }
-
-    if (Date.now() - entry.timestamp > entry.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.data;
+  get(_key: string): null {
+    console.warn('CacheService.get is deprecated. Use apiClient built-in caching instead.');
+    return null;
   }
 
-  delete(key: string): void {
-    this.cache.delete(key);
+  delete(_key: string): void {
+    console.warn('CacheService.delete is deprecated. Use apiClient built-in caching instead.');
   }
 
   clear(): void {
-    this.cache.clear();
+    console.warn('CacheService.clear is deprecated. Use apiClient built-in caching instead.');
   }
 
-  private cleanup(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
-      if (now - entry.timestamp > entry.ttl) {
-        this.cache.delete(key);
-      }
-    }
-  }
-
-  // Cache wrapper for async functions
   async cached<T>(
-    key: string,
+    _key: string,
     fn: () => Promise<T>,
-    ttl: number = 300000
+    _ttl: number = 300000
   ): Promise<T> {
-    const cached = this.get(key);
-    if (cached !== null) {
-      console.log(`📦 [CACHE] Hit for key: ${key}`);
-      return cached;
-    }
-
-    console.log(`🔄 [CACHE] Miss for key: ${key}, fetching...`);
-    const data = await fn();
-    this.set(key, data, ttl);
-    return data;
+    console.warn('CacheService.cached is deprecated. Use apiClient built-in caching instead.');
+    // Just execute the function without caching
+    return await fn();
   }
 }
 

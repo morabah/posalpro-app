@@ -430,7 +430,8 @@ export const useUser = (): UseUserState & UseUserActions => {
 
   // Utility Operations
   const clearCache = useCallback((id?: string) => {
-    userEntity.clearCache(id);
+    // Cache clearing is handled automatically by apiClient
+    // No manual cache management needed
   }, []);
 
   const refreshUser = useCallback(

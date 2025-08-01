@@ -258,7 +258,7 @@ export default function SMEContributionInterface() {
       });
 
       if (response.success && response.data) {
-        const versionData = response.data as VersionHistory;
+        const versionData = response.data;
         setVersionsData(prev => [...prev, { ...versionData, savedAt: new Date(versionData.savedAt) }]);
         setHasUnsavedChanges(false);
         setLastSaved(new Date());

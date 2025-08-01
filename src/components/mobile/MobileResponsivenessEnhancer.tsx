@@ -138,7 +138,7 @@ export function MobileResponsivenessEnhancer({
       width: window.innerWidth,
       height: window.innerHeight,
       devicePixelRatio: window.devicePixelRatio || 1,
-      orientation: (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait') as 'portrait' | 'landscape',
+      orientation: (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'),
       availableWidth: screen.availWidth || window.innerWidth,
       availableHeight: screen.availHeight || window.innerHeight,
       colorDepth: screen.colorDepth || 24,
