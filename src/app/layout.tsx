@@ -8,6 +8,7 @@ import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { SharedAnalyticsProvider } from '@/components/providers/SharedAnalyticsProvider';
+import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizationProvider';
 import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
 import '@/styles/globals.css';
 import { Metadata, Viewport } from 'next';
@@ -16,76 +17,48 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'PosalPro - AI-Powered Proposal Management',
-  description:
-    'Streamline your proposal process with AI-powered automation and collaboration tools.',
-  keywords: 'proposal management, AI automation, business proposals, collaboration tools',
-  authors: [{ name: 'PosalPro Team' }],
-  creator: 'PosalPro',
-  publisher: 'PosalPro',
-  formatDetection: {
-    email: false,
-    address: false,
-    telephone: false,
-  },
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
-  alternates: {
-    canonical: '/',
-  },
-  openGraph: {
-    title: 'PosalPro - AI-Powered Proposal Management',
-    description:
-      'Streamline your proposal process with AI-powered automation and collaboration tools.',
-    url: '/',
-    siteName: 'PosalPro',
-    locale: 'en_US',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'PosalPro - AI-Powered Proposal Management',
-    description:
-      'Streamline your proposal process with AI-powered automation and collaboration tools.',
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
+  title: 'PosalPro MVP2',
+  description: 'Advanced proposal management platform',
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#000000' },
-  ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en">
+      <head>
+        {/* ✅ CRITICAL: Add critical CSS to prevent CLS */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              /* ✅ CRITICAL: Prevent layout shifts */
+              * { box-sizing: border-box; }
+              body { font-display: swap; }
+              img { max-width: 100%; height: auto; }
+              .dynamic-content { min-height: 100px; min-width: 100px; }
+            `,
+          }}
+        />
+      </head>
       <body className={`${inter.className} h-full antialiased`}>
-        <WebVitalsProvider>
-          <SharedAnalyticsProvider>
-            <ClientLayoutWrapper>
-              <QueryProvider>
-                <ToastProvider position="top-right" maxToasts={5}>
-                  <AuthProvider>{children}</AuthProvider>
-                </ToastProvider>
-              </QueryProvider>
-            </ClientLayoutWrapper>
-          </SharedAnalyticsProvider>
-        </WebVitalsProvider>
+        <TTFBOptimizationProvider>
+          <WebVitalsProvider>
+            <SharedAnalyticsProvider>
+              <ClientLayoutWrapper>
+                <QueryProvider>
+                  <ToastProvider position="top-right" maxToasts={5}>
+                    <AuthProvider>{children}</AuthProvider>
+                  </ToastProvider>
+                </QueryProvider>
+              </ClientLayoutWrapper>
+            </SharedAnalyticsProvider>
+          </WebVitalsProvider>
+        </TTFBOptimizationProvider>
       </body>
     </html>
   );

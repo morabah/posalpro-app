@@ -78,8 +78,13 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
         let clsValue = 0;
         const clsObserver = new PerformanceObserver(list => {
           for (const entry of list.getEntries()) {
-            if (!(entry as any).hadRecentInput) {
-              clsValue += (entry as any).value;
+            // Type assertion for LayoutShiftEntry
+            const layoutShiftEntry = entry as PerformanceEntry & {
+              hadRecentInput?: boolean;
+              value?: number;
+            };
+            if (!layoutShiftEntry.hadRecentInput) {
+              clsValue += layoutShiftEntry.value || 0;
             }
           }
           updateMetrics({ CLS: clsValue });
@@ -93,8 +98,9 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
           observersRef.current.forEach(observer => {
             try {
               observer.disconnect();
-            } catch (error) {
+            } catch (err) {
               // Ignore cleanup errors
+              console.debug('Observer cleanup error:', err);
             }
           });
           observersRef.current = [];
@@ -106,16 +112,16 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
       const navigation = performance.getEntriesByType(
         'navigation'
       )[0] as PerformanceNavigationTiming;
-      if (navigation) {
-        const ttfb = navigation.responseStart - navigation.requestStart;
+      const ttfb = navigation.responseStart - navigation.requestStart;
+      if (!isNaN(ttfb)) {
         updateMetrics({ TTFB: ttfb });
         console.log('📊 TTFB measured:', ttfb, 'ms');
       }
-    } catch (error) {
+    } catch (err) {
       // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
       const errorHandlingService = ErrorHandlingService.getInstance();
       const standardError = errorHandlingService.processError(
-        error,
+        err,
         'Failed to measure Web Vitals',
         ErrorCodes.PERFORMANCE.METRICS_COLLECTION_FAILED,
         {
@@ -125,6 +131,7 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
       );
 
       // Log the error for debugging
+      console.debug('Web Vitals measurement error:', err);
       errorHandlingService.processError(standardError);
       isMeasuringRef.current = false;
     }
@@ -143,8 +150,9 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
       observersRef.current.forEach(observer => {
         try {
           observer.disconnect();
-        } catch (error) {
+        } catch (err) {
           // Ignore cleanup errors
+          console.debug('Observer cleanup error:', err);
         }
       });
       observersRef.current = [];
