@@ -17,7 +17,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { useAuth } from '@/hooks/auth/useAuth';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
@@ -115,7 +115,7 @@ interface ValidationRule {
 }
 
 export default function ValidationDashboardPage() {
-  const { user } = useAuth();
+  const { user } = useAuth() || {};
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();

@@ -5,10 +5,10 @@
  * Uses standardized error handling
  */
 
-import { logInfo, logWarn } from './logger';
-import { startMeasurement, endMeasurement } from './performance';
-import { getApiConfig, getAuthConfig, getCurrentEnvironment, Environment } from './env';
+import { Environment, getApiConfig, getAuthConfig, getCurrentEnvironment } from './env';
 import { ErrorCodes, StandardError, errorHandlingService } from './errors';
+import { logInfo, logWarn } from './logger';
+import { endMeasurement, startMeasurement } from './performance';
 
 // HTTP methods enum
 export enum HttpMethod {
@@ -94,9 +94,9 @@ export class ApiError extends StandardError {
         statusText,
         response,
         requestId,
-      }
+      },
     });
-    
+
     // Set ApiError specific properties
     this.name = 'ApiError';
     this.type = type;
@@ -115,10 +115,10 @@ export class ApiError extends StandardError {
       return (
         (this.status >= 500 && this.status !== 501) ||
         this.status === 408 || // Request Timeout
-        this.status === 429    // Too Many Requests
+        this.status === 429 // Too Many Requests
       );
     }
-    
+
     // Network errors and timeouts are retryable
     return (
       this.type === ApiErrorType.NETWORK ||
@@ -431,14 +431,14 @@ class ApiClient {
       // Use ErrorHandlingService to log the error with appropriate severity
       // The error is already a StandardError with proper error code and metadata
       errorHandlingService.processError(error);
-      
+
       // Also log warning for retryable errors
       if (error.isRetryable()) {
         logWarn('API request failed, may retry', {
           requestId: error.requestId,
           status: error.status,
           type: error.type,
-          code: error.code
+          code: error.code,
         });
       }
     }
@@ -819,3 +819,58 @@ export { apiClient };
 
 // Helper function for creating custom clients
 export const createApiClient = (config?: Partial<ApiClientConfig>) => new ApiClient(config);
+
+// API response caching for performance optimization
+const apiCache = new Map();
+const API_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+// Cache cleanup function to prevent memory leaks
+const cleanupCache = () => {
+  const now = Date.now();
+  for (const [key, value] of apiCache.entries()) {
+    if (now - value.timestamp > API_CACHE_TTL) {
+      apiCache.delete(key);
+    }
+  }
+};
+
+// Run cache cleanup every 5 minutes
+if (typeof window !== 'undefined') {
+  setInterval(cleanupCache, 5 * 60 * 1000);
+}
+
+export const makeRequest = async (endpoint: string, options: RequestInit = {}) => {
+  const cacheKey = `${endpoint}_${JSON.stringify(options)}`;
+  const cached = apiCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < API_CACHE_TTL) {
+    logInfo(`📦 [API Cache] Returning cached response for ${endpoint}`);
+    return cached.data;
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      ...options,
+      credentials: 'include', // Ensure cookies are sent
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Cache successful responses
+    apiCache.set(cacheKey, {
+      data,
+      timestamp: Date.now(),
+    });
+
+    return data;
+  } catch (error) {
+    logWarn(`❌ [API] Request failed for ${endpoint}`, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+};

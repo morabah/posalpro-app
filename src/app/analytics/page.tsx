@@ -76,6 +76,11 @@ function usePageLoadTime() {
 
 export default function AnalyticsPage() {
   const loadTime = usePageLoadTime();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -89,15 +94,20 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* ✅ PERFORMANCE: Lazy load main analytics dashboard */}
-      <Suspense fallback={<DashboardSkeleton />}>
-        <AnalyticsDashboardLazy />
-      </Suspense>
+      {/* ✅ PERFORMANCE: Only render analytics components on client-side */}
+      {isClient && (
+        <>
+          {/* ✅ PERFORMANCE: Lazy load main analytics dashboard */}
+          <Suspense fallback={<DashboardSkeleton />}>
+            <AnalyticsDashboardLazy />
+          </Suspense>
 
-      {/* ✅ PERFORMANCE: Lazy load hypothesis tracking */}
-      <Suspense fallback={<HypothesisSkeleton />}>
-        <HypothesisTrackingDashboardLazy />
-      </Suspense>
+          {/* ✅ PERFORMANCE: Lazy load hypothesis tracking */}
+          <Suspense fallback={<HypothesisSkeleton />}>
+            <HypothesisTrackingDashboardLazy />
+          </Suspense>
+        </>
+      )}
     </div>
   );
 }

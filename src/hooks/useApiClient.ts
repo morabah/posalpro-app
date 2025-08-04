@@ -41,7 +41,12 @@ class ApiClientSingleton {
     return ApiClientSingleton.instance;
   }
 
-  public async initialize(): Promise<void> {
+  public async initialize(force: boolean = false): Promise<void> {
+    if (force) {
+      this.isInitialized = false;
+      this.initPromise = null;
+    }
+
     if (this.isInitialized) {
       return;
     }
@@ -71,11 +76,13 @@ class ApiClientSingleton {
   public async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     await this.initialize();
 
+    await this.initialize();
     const baseUrl = this.getBaseUrl();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
     const url = `${baseUrl}/${cleanEndpoint}`;
 
     const defaultOptions: RequestInit = {
+      credentials: 'include', // Include cookies for authentication
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -87,6 +94,11 @@ class ApiClientSingleton {
       const response = await fetch(url, defaultOptions);
 
       if (!response.ok) {
+        console.warn('[useApiClient] API request failed:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+        });
         throw new Error(`API request failed: ${response.status} ${response.statusText}`);
       }
 
@@ -111,7 +123,7 @@ class ApiClientSingleton {
             errorName: error.name,
             stack: error.stack,
           });
-        } catch (loggerError) {
+        } catch {
           // Fallback to console if logger fails
           console.error('API request error:', {
             ...errorDetails,
@@ -128,7 +140,7 @@ class ApiClientSingleton {
             error: String(error),
             errorType: typeof error,
           });
-        } catch (loggerError) {
+        } catch {
           // Fallback to console if logger fails
           console.error('API request error (unknown type):', {
             ...errorDetails,
@@ -145,7 +157,7 @@ class ApiClientSingleton {
     try {
       await this.initialize();
       return await validateApiConnection();
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -164,27 +176,44 @@ export function useApiClient(): UseApiClientReturn {
     isConnected: false,
     isValidating: false,
   });
+  const [isClient, setIsClient] = useState(false);
+
+  // ✅ FIXED: Ensure client-side only execution
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Initialize API configuration
   useEffect(() => {
-    const baseUrl = getApiBaseUrl();
+    if (!isClient) return;
+
+    // ✅ NEW: Force singleton re-initialization on the client
+    // This ensures the baseUrl is correct from the client's perspective
+    apiClientSingleton.initialize(true); // Pass true to force re-initialization
+
+    const baseUrl = apiClientSingleton.getBaseUrl();
     setConfig(prev => ({
       ...prev,
       baseUrl,
     }));
 
-    // Log configuration in development (throttled at module level)
-    if (process.env.NODE_ENV === 'development') {
-      logApiConfiguration();
-    }
-  }, []);
+    // Logging is handled by the singleton now
+  }, [isClient]);
 
   // ✅ FIXED: Use singleton makeRequest to prevent multiple API client instances
   const makeRequest = useCallback(
     async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
+      // Ensure we're in browser environment
+      if (typeof window === 'undefined') {
+        throw new Error(`API client not available on server side for endpoint: ${endpoint}`);
+      }
+
+      // Force singleton initialization in browser context
+      await apiClientSingleton.initialize(true);
+
       return apiClientSingleton.makeRequest<T>(endpoint, options);
     },
-    [] // No dependencies needed - singleton handles all state
+    [] // Remove isClient dependency to avoid closure issues
   );
 
   // GET request
@@ -227,6 +256,8 @@ export function useApiClient(): UseApiClientReturn {
 
   // Validate API connection
   const validateConnection = useCallback(async (): Promise<boolean> => {
+    if (!isClient) return false;
+
     setConfig(prev => ({ ...prev, isValidating: true }));
 
     try {
@@ -237,7 +268,7 @@ export function useApiClient(): UseApiClientReturn {
         isValidating: false,
       }));
       return isConnected;
-    } catch (error) {
+    } catch {
       setConfig(prev => ({
         ...prev,
         isConnected: false,
@@ -245,7 +276,7 @@ export function useApiClient(): UseApiClientReturn {
       }));
       return false;
     }
-  }, []);
+  }, [isClient]);
 
   return useMemo(
     () => ({
@@ -274,8 +305,16 @@ export function useApiHealth() {
     lastCheck: null,
     error: null,
   });
+  const [isClient, setIsClient] = useState(false);
+
+  // ✅ FIXED: Ensure client-side only execution
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const checkHealth = useCallback(async () => {
+    if (!isClient) return;
+
     try {
       const isConnected = await validateApiConnection();
       setHealthStatus({
@@ -291,17 +330,19 @@ export function useApiHealth() {
         error: errorMessage,
       });
     }
-  }, []);
+  }, [isClient]);
 
   // Auto-check health on component mount and periodically in development
   useEffect(() => {
+    if (!isClient) return;
+
     checkHealth();
 
     if (process.env.NODE_ENV === 'development') {
       const interval = setInterval(checkHealth, 30000); // Check every 30 seconds
       return () => clearInterval(interval);
     }
-  }, [checkHealth]);
+  }, [checkHealth, isClient]);
 
   return {
     ...healthStatus,

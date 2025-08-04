@@ -328,6 +328,31 @@ kill_nextjs_processes() {
     sleep 2
 }
 
+# Function to clear Next.js cache and build artifacts
+clear_nextjs_cache() {
+    echo -e "${INFO} ${BLUE}Clearing Next.js cache and build artifacts...${NC}"
+    
+    # Remove .next directory if it exists
+    if [ -d ".next" ]; then
+        echo -e "  ${WARNING} ${YELLOW}Removing .next directory${NC}"
+        rm -rf .next
+    fi
+    
+    # Clear npm cache (optional, but helpful for persistent issues)
+    if command -v npm >/dev/null 2>&1; then
+        echo -e "  ${INFO} ${BLUE}Clearing npm cache${NC}"
+        npm cache clean --force --silent 2>/dev/null || true
+    fi
+    
+    # Clear any TypeScript build info
+    if [ -f "tsconfig.tsbuildinfo" ]; then
+        echo -e "  ${WARNING} ${YELLOW}Removing TypeScript build info${NC}"
+        rm -f tsconfig.tsbuildinfo
+    fi
+    
+    echo -e "  ${CHECK_MARK} ${GREEN}Cache cleared successfully${NC}"
+}
+
 # Function to find available port
 find_available_port() {
     local start_port=${1:-3000}
@@ -425,6 +450,9 @@ main() {
 
     # Kill existing processes
     kill_nextjs_processes
+
+    # Clear Next.js cache and build artifacts
+    clear_nextjs_cache
 
     # Clear common development ports
     for port in 3000 3001 3002 3003; do

@@ -10,23 +10,27 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
-import { ApiResponse } from '@/types/api';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ApiResponse } from '@/types/api';
 import {
   ArrowLeftIcon,
   BookOpenIcon,
   ClockIcon,
-  CogIcon,
   DocumentDuplicateIcon,
   DocumentTextIcon,
   EyeIcon,
   MagnifyingGlassIcon,
   SparklesIcon,
-  UserIcon,
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'react-hot-toast';
+// import { toast } from 'react-hot-toast'; // Removed as per edit hint
+
+// Simple toast function to replace react-hot-toast
+const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  console.log(`Toast (${type}):`, message);
+  // In a real implementation, this would show a toast notification
+};
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -196,12 +200,13 @@ export default function SMEContributionInterface() {
       setIsLoading(true);
       try {
         console.log('[SMEContributions] 🚀 Fetching SME data via apiClient...');
-        const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] = await Promise.all([
-          apiClient.get<ApiResponse<SMEAssignment>>('/sme/assignment'),
-          apiClient.get<ApiResponse<ContributionTemplate[]>>('/sme/templates'),
-          apiClient.get<ApiResponse<ContributionResource[]>>('/sme/resources'),
-          apiClient.get<ApiResponse<VersionHistory[]>>('/sme/versions'),
-        ]);
+        const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] =
+          await Promise.all([
+            apiClient.get<ApiResponse<SMEAssignment>>('/sme/assignment'),
+            apiClient.get<ApiResponse<ContributionTemplate[]>>('/sme/templates'),
+            apiClient.get<ApiResponse<ContributionResource[]>>('/sme/resources'),
+            apiClient.get<ApiResponse<VersionHistory[]>>('/sme/versions'),
+          ]);
 
         if (assignmentResponse.success && assignmentResponse.data) {
           const assignment = {
@@ -211,14 +216,18 @@ export default function SMEContributionInterface() {
             content: {
               ...assignmentResponse.data.content,
               lastSaved: new Date(assignmentResponse.data.content.lastSaved),
-            }
+            },
           };
           setAssignmentData(assignment);
           setContent(assignment.content.draft);
           setWordCount(assignment.content.wordCount);
           setLastSaved(assignment.content.lastSaved);
         } else {
-          throw new Error(assignmentResponse.error || 'Failed to fetch assignment data');
+          // Handle assignment fetch failure gracefully
+          const errorMessage = assignmentResponse.error || 'Failed to fetch assignment data';
+          console.warn('[SMEContributions] ⚠️ Assignment data not available:', errorMessage);
+          setFetchError(errorMessage);
+          trackAction('sme_assignment_load_failed', { error: errorMessage }, 'medium');
         }
 
         if (templatesResponse.success && templatesResponse.data) {
@@ -230,9 +239,13 @@ export default function SMEContributionInterface() {
         }
 
         if (versionsResponse.success && versionsResponse.data) {
-          setVersionsData(versionsResponse.data.map((v: VersionHistory) => ({...v, savedAt: new Date(v.savedAt)})));
+          setVersionsData(
+            versionsResponse.data.map((v: VersionHistory) => ({
+              ...v,
+              savedAt: new Date(v.savedAt),
+            }))
+          );
         }
-
       } catch (error) {
         console.error('[SMEContributions] ❌ Error fetching SME data:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
@@ -245,7 +258,7 @@ export default function SMEContributionInterface() {
 
     fetchData();
   }, [apiClient, trackAction]);
-  
+
   const handleAutoSave = useCallback(async () => {
     if (!hasUnsavedChanges) return;
 
@@ -259,37 +272,53 @@ export default function SMEContributionInterface() {
 
       if (response.success && response.data) {
         const versionData = response.data;
-        setVersionsData(prev => [...prev, { ...versionData, savedAt: new Date(versionData.savedAt) }]);
+        setVersionsData(prev => [
+          ...prev,
+          { ...versionData, savedAt: new Date(versionData.savedAt) },
+        ]);
         setHasUnsavedChanges(false);
         setLastSaved(new Date());
         setAutosaveStatus('Saved');
-        toast.success('Draft auto-saved successfully!');
-        trackAction('autosave_success', {
-          wordCount,
-          version: (versionsData?.length || 0) + 1,
-        }, 'low');
+        showToast('Draft auto-saved successfully!', 'success');
+        trackAction(
+          'autosave_success',
+          {
+            wordCount,
+            version: (versionsData?.length || 0) + 1,
+          },
+          'low'
+        );
       } else {
-        throw new Error(response.error || 'Autosave failed');
+        // Handle autosave failure gracefully
+        const errorMessage = response.error || 'Autosave failed';
+        console.warn('[SMEContributions] ⚠️ Autosave failed:', errorMessage);
+        setAutosaveStatus('Error saving');
+        showToast('Failed to auto-save draft.', 'error');
+        trackAction('autosave_failed', { error: errorMessage }, 'high');
+        return; // Exit early to prevent further processing
       }
     } catch (error) {
       setAutosaveStatus('Error saving');
-      toast.error('Failed to auto-save draft.');
+      showToast('Failed to auto-save draft.', 'error');
       trackAction('autosave_failed', { error: (error as Error).message }, 'high');
     }
   }, [assignmentData, content, wordCount, hasUnsavedChanges, versionsData, apiClient, trackAction]);
 
-  const handleContentChange = useCallback((newContent: string) => {
-    if (editingStartTime.current === null) {
-      editingStartTime.current = Date.now();
-    }
-    setContent(newContent);
-    setWordCount(newContent.trim().split(/\s+/).filter(Boolean).length);
-    setHasUnsavedChanges(true);
-    setAutosaveStatus('Unsaved changes');
+  const handleContentChange = useCallback(
+    (newContent: string) => {
+      if (editingStartTime.current === null) {
+        editingStartTime.current = Date.now();
+      }
+      setContent(newContent);
+      setWordCount(newContent.trim().split(/\s+/).filter(Boolean).length);
+      setHasUnsavedChanges(true);
+      setAutosaveStatus('Unsaved changes');
 
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(handleAutoSave, 30000); // 30s
-  }, [handleAutoSave]);
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = setTimeout(handleAutoSave, 30000); // 30s
+    },
+    [handleAutoSave]
+  );
 
   const handleGenerateDraft = useCallback(() => {
     if (!assignmentData) return;
@@ -306,42 +335,57 @@ export default function SMEContributionInterface() {
       setHasUnsavedChanges(true);
       setIsGeneratingDraft(false);
 
-      trackAction('ai_draft_generated', {
-        wordCount: aiGeneratedContent.trim().split(/\s+/).length,
-        generationTime: 50,
-      }, 'medium');
+      trackAction(
+        'ai_draft_generated',
+        {
+          wordCount: aiGeneratedContent.trim().split(/\s+/).length,
+          generationTime: 50,
+        },
+        'medium'
+      );
     }, 1000);
   }, [assignmentData, wordCount, trackAction]);
 
-  const handleApplyTemplate = useCallback((templateId: string) => {
-    const template = templatesData.find(t => t.id === templateId);
-    if (!template) return;
+  const handleApplyTemplate = useCallback(
+    (templateId: string) => {
+      const template = templatesData.find(t => t.id === templateId);
+      if (!template) return;
 
-    templateUsed.current = true;
-    setSelectedTemplate(templateId);
+      templateUsed.current = true;
+      setSelectedTemplate(templateId);
 
-    const templateContent = template.sections
-      .map(section => `## ${section.title}\n\n${section.placeholder}\n\n`)
-      .join('');
+      const templateContent = template.sections
+        .map(section => `## ${section.title}\n\n${section.placeholder}\n\n`)
+        .join('');
 
-    setContent(templateContent);
-    setWordCount(templateContent.trim().split(/\s+/).length);
-    setHasUnsavedChanges(true);
+      setContent(templateContent);
+      setWordCount(templateContent.trim().split(/\s+/).length);
+      setHasUnsavedChanges(true);
 
-    trackAction('template_applied', {
-      templateId,
-      templateType: template.type,
-    }, 'medium');
-    setShowTemplates(false);
-  }, [templatesData, trackAction]);
+      trackAction(
+        'template_applied',
+        {
+          templateId,
+          templateType: template.type,
+        },
+        'medium'
+      );
+      setShowTemplates(false);
+    },
+    [templatesData, trackAction]
+  );
 
   const handleSubmit = useCallback(() => {
-    trackAction('contribution_submitted', {
-      finalWordCount: wordCount,
-      versionCount: (versionsData?.length || 0) + 1,
-      templateUsed: !!selectedTemplate,
-    }, 'high');
-    toast.success('Contribution submitted successfully!');
+    trackAction(
+      'contribution_submitted',
+      {
+        finalWordCount: wordCount,
+        versionCount: (versionsData?.length || 0) + 1,
+        templateUsed: !!selectedTemplate,
+      },
+      'high'
+    );
+    showToast('Contribution submitted successfully!', 'success');
     router.push('/dashboard/sme/assignments');
   }, [wordCount, versionsData, selectedTemplate, trackAction, router]);
 
@@ -364,19 +408,24 @@ export default function SMEContributionInterface() {
 
   const filteredResources = useMemo(() => {
     if (!searchQuery) return resourcesData;
-    return resourcesData.filter(resource =>
-      resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      resource.description.toLowerCase().includes(searchQuery.toLowerCase())
+    return resourcesData.filter(
+      resource =>
+        resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        resource.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [searchQuery, resourcesData]);
 
   useEffect(() => {
     if (assignmentData) {
-      trackAction('sme_contribution_session_started', {
-        assignmentId: assignmentData.id,
-        sectionType: assignmentData.sectionType,
-        dueIn: assignmentData.dueDate.getTime() - Date.now(),
-      }, 'medium');
+      trackAction(
+        'sme_contribution_session_started',
+        {
+          assignmentId: assignmentData.id,
+          sectionType: assignmentData.sectionType,
+          dueIn: assignmentData.dueDate.getTime() - Date.now(),
+        },
+        'medium'
+      );
     }
 
     return () => {
@@ -391,11 +440,17 @@ export default function SMEContributionInterface() {
   }
 
   if (fetchError) {
-    return <div className="flex justify-center items-center h-screen text-red-500">Error: {fetchError}</div>;
+    return (
+      <div className="flex justify-center items-center h-screen text-red-500">
+        Error: {fetchError}
+      </div>
+    );
   }
 
   if (!assignmentData) {
-    return <div className="flex justify-center items-center h-screen">No assignment data found.</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">No assignment data found.</div>
+    );
   }
 
   return (
@@ -415,13 +470,18 @@ export default function SMEContributionInterface() {
               </Button>
               <h1 className="text-3xl font-bold text-gray-900">{assignmentData.proposalTitle}</h1>
               <p className="text-gray-600 mt-1">
-                {assignmentData.customer} &bull; Due: {new Date(assignmentData.dueDate).toLocaleDateString()} &bull; {timeRemainingText}
+                {assignmentData.customer} &bull; Due:{' '}
+                {new Date(assignmentData.dueDate).toLocaleDateString()} &bull; {timeRemainingText}
               </p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-right text-sm">
                 <div className="text-gray-600">{autosaveStatus}</div>
-                {lastSaved && <div className="text-gray-500">Last saved: {new Date(lastSaved).toLocaleTimeString()}</div>}
+                {lastSaved && (
+                  <div className="text-gray-500">
+                    Last saved: {new Date(lastSaved).toLocaleTimeString()}
+                  </div>
+                )}
               </div>
               <Button variant="primary" onClick={handleSubmit} className="flex items-center">
                 Submit Contribution
@@ -485,15 +545,15 @@ export default function SMEContributionInterface() {
                           Use Template
                         </Button>
                       </div>
-                      <div className="text-sm text-gray-600">
-                        {wordCount} words
-                      </div>
+                      <div className="text-sm text-gray-600">{wordCount} words</div>
                     </div>
 
                     {showTemplates && (
                       <Card className="border-blue-200">
                         <div className="p-6">
-                          <h4 className="text-lg font-medium text-gray-900 mb-4">Choose a Template</h4>
+                          <h4 className="text-lg font-medium text-gray-900 mb-4">
+                            Choose a Template
+                          </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {templatesData?.map(template => (
                               <div
@@ -546,10 +606,14 @@ export default function SMEContributionInterface() {
                               variant="secondary"
                               size="sm"
                               onClick={() => {
-                                trackAction('resource_accessed', {
-                                  resourceId: resource.id,
-                                  resourceType: resource.type,
-                                }, 'low');
+                                trackAction(
+                                  'resource_accessed',
+                                  {
+                                    resourceId: resource.id,
+                                    resourceType: resource.type,
+                                  },
+                                  'low'
+                                );
                                 window.open(resource.url, '_blank');
                               }}
                               className="flex items-center ml-4"
@@ -570,20 +634,34 @@ export default function SMEContributionInterface() {
                     <div className="space-y-4">
                       {versionsData.length > 0 ? (
                         versionsData.map(version => (
-                          <Card key={version.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => {
-                            setContent(version.content);
-                            setWordCount(version.wordCount);
-                            trackAction('version_restored', { versionId: version.id, versionNumber: version.version }, 'medium');
-                          }}>
+                          <Card
+                            key={version.id}
+                            className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => {
+                              setContent(version.content);
+                              setWordCount(version.wordCount);
+                              trackAction(
+                                'version_restored',
+                                { versionId: version.id, versionNumber: version.version },
+                                'medium'
+                              );
+                            }}
+                          >
                             <div className="flex items-center justify-between">
-                              <p className="font-medium">Version {version.version} {version.autoSaved ? '(Auto-saved)' : ''}</p>
-                              <p className="text-sm text-gray-500">{new Date(version.savedAt).toLocaleString()}</p>
+                              <p className="font-medium">
+                                Version {version.version} {version.autoSaved ? '(Auto-saved)' : ''}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {new Date(version.savedAt).toLocaleString()}
+                              </p>
                             </div>
                             <p className="text-sm text-gray-600 mt-1">{version.changesSummary}</p>
                           </Card>
                         ))
                       ) : (
-                        <p className="text-center text-gray-500 py-8">No version history available.</p>
+                        <p className="text-center text-gray-500 py-8">
+                          No version history available.
+                        </p>
                       )}
                     </div>
                   </div>
@@ -613,7 +691,9 @@ export default function SMEContributionInterface() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-600">Proposal Value</span>
-                    <span className="font-bold text-lg text-green-600">${assignmentData.context.proposalValue.toLocaleString()}</span>
+                    <span className="font-bold text-lg text-green-600">
+                      ${assignmentData.context.proposalValue.toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-600">Industry</span>

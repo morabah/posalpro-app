@@ -15,7 +15,7 @@
  * - Performance optimization with form state management
  */
 
-import { useAuth } from '@/hooks/auth/useAuth';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -118,7 +118,7 @@ interface UserProfileProps {
 
 export function UserProfile({ className = '' }: UserProfileProps) {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth() || {};
   const analytics = useUserProfileAnalytics();
 
   const [activeTab, setActiveTab] = useState<TabSection>('personal');

@@ -7,7 +7,7 @@
 'use client';
 
 import { AnalyticsStorageMonitor } from '@/components/common/AnalyticsStorageMonitor';
-import { useResponsive } from '@/hooks/useResponsive';
+import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { useEffect, useState } from 'react';
 import { AppFooter } from './AppFooter';
 import { AppHeader } from './AppHeader';
@@ -50,7 +50,8 @@ interface AppLayoutProps {
 export function AppLayout({ children, user }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // ✅ FIXED: Use centralized responsive hook
-  const { isMobile } = useResponsive();
+  const { state } = useResponsive();
+  const { isMobile } = state;
 
   // Handle responsive behavior - enhanced with centralized detection
   useEffect(() => {

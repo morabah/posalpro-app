@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -144,7 +144,7 @@ export default function ApprovalWorkflowDashboard() {
   const router = useRouter();
   const apiClient = useApiClient();
   const errorHandlingService = ErrorHandlingService.getInstance();
-  const analytics = useAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   const [approvals, setApprovals] = useState<WorkflowApproval[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,14 +176,14 @@ export default function ApprovalWorkflowDashboard() {
         setApprovals(data);
 
         // Track successful load with Component Traceability Matrix
-        analytics.track('approval_workflow_loaded', {
+        analytics('approval_workflow_loaded', {
           userStories: COMPONENT_MAPPING.userStories,
           acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
           hypotheses: COMPONENT_MAPPING.hypotheses,
           testCases: COMPONENT_MAPPING.testCases,
           approvalCount: data.length,
           timestamp: Date.now(),
-        });
+        }, 'medium');
       } catch (err) {
         // Use standardized error handling
         const standardError = errorHandlingService.processError(
@@ -205,7 +205,7 @@ export default function ApprovalWorkflowDashboard() {
         setError(userFriendlyMessage);
 
         // Track error analytics with Component Traceability Matrix
-        analytics.track('approval_workflow_load_error', {
+        analytics('approval_workflow_load_error', {
           userStories: COMPONENT_MAPPING.userStories,
           acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
           hypotheses: COMPONENT_MAPPING.hypotheses,
@@ -213,7 +213,7 @@ export default function ApprovalWorkflowDashboard() {
           errorType: standardError.code,
           errorMessage: standardError.message,
           timestamp: Date.now(),
-        });
+        }, 'high');
       } finally {
         setLoading(false);
       }

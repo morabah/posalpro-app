@@ -111,7 +111,7 @@ interface FilterState {
   sortOrder: 'asc' | 'desc';
 }
 
-export default function ProposalManagementDashboard() {
+function ProposalManagementDashboardContent() {
   const router = useRouter();
   const apiClient = useApiClient();
   const { trackOptimized: trackAction } = useOptimizedAnalytics();
@@ -133,17 +133,20 @@ export default function ProposalManagementDashboard() {
   });
 
   const fetchProposals = useCallback(async () => {
+    // ✅ FIXED: Don't fetch on server side
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      console.log('✅ [PROPOSALS] Fetching proposals using apiClient...');
       const response = await apiClient.get<ProposalApiResponse>(
         '/proposals?page=1&limit=50&sortBy=createdAt&sortOrder=desc&includeCustomer=true'
       );
 
       if (response.proposals && Array.isArray(response.proposals)) {
         const proposalsData = response.proposals;
-        console.log('✅ [PROPOSALS] Sample proposal data:', proposalsData[0]);
 
         const transformedProposals: Proposal[] = proposalsData.map(apiProposal => ({
           id: apiProposal.id,
@@ -167,10 +170,6 @@ export default function ProposalManagementDashboard() {
         }));
 
         setProposals(transformedProposals);
-        console.log(
-          '✅ [PROPOSALS] Successfully transformed proposals:',
-          transformedProposals.length
-        );
 
         // Track successful data load
         trackAction(
@@ -197,10 +196,13 @@ export default function ProposalManagementDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [apiClient, trackAction]);
+  }, [apiClient]); // ✅ PERFORMANCE: Removed trackAction to prevent re-renders
 
   useEffect(() => {
-    fetchProposals();
+    // ✅ FIXED: Only fetch on client side
+    if (typeof window !== 'undefined') {
+      fetchProposals();
+    }
   }, [fetchProposals]);
 
   // Helper functions for data transformation
@@ -820,4 +822,18 @@ export default function ProposalManagementDashboard() {
       </div>
     </div>
   );
+}
+
+export default function ProposalManagementDashboard() {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return null; // Or a loading spinner
+  }
+
+  return <ProposalManagementDashboardContent />;
 }

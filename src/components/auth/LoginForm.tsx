@@ -48,7 +48,7 @@ const AVAILABLE_ROLES = [
 
 // Role-based redirection map
 const ROLE_REDIRECTS: Record<string, string> = {
-  'System Administrator': '/admin/system',
+  'System Administrator': '/dashboard',
   'Proposal Manager': '/proposals/manage',
   'Technical SME': '/sme/contribution',
   'Presales Engineer': '/products/validation',
@@ -56,7 +56,7 @@ const ROLE_REDIRECTS: Record<string, string> = {
   'Technical Director': '/validation/dashboard',
   'Business Development Manager': '/customers/profile',
   'Proposal Specialist': '/proposals/create',
-  Administrator: '/admin/system',
+  Administrator: '/dashboard',
 };
 
 interface LoginFormProps {
@@ -165,7 +165,7 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
       window.addEventListener('load', handleLoad);
       return () => window.removeEventListener('load', handleLoad);
     }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   // Track form interactions

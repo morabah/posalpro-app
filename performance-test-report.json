@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-08-04T07:11:48.366Z",
+  "testDuration": 40637,
+  "webVitals": {
+    "TTFB": 2929.7000002861023,
+    "domContentLoaded": 0.09999990463256836,
+    "loadComplete": 0,
+    "memoryUsed": 111,
+    "memoryTotal": 153
+  },
+  "pageLoadTimes": {
+    "Login": 1286,
+    "Dashboard": 12873,
+    "Proposals Manage": 1819,
+    "Proposals Create": 1685
+  },
+  "memoryUsage": {
+    "Timestamp": 3474246.043952,
+    "Documents": 9,
+    "Frames": 5,
+    "JSEventListeners": 0,
+    "Nodes": 481,
+    "LayoutCount": 1,
+    "RecalcStyleCount": 7,
+    "LayoutDuration": 0.019927,
+    "RecalcStyleDuration": 0.005045,
+    "ScriptDuration": 0.006806,
+    "TaskDuration": 0.103355,
+    "JSHeapUsedSize": 25890304,
+    "JSHeapTotalSize": 33030144,
+    "usedJSHeapSize": 145,
+    "totalJSHeapSize": 150,
+    "jsHeapSizeLimit": 2144
+  },
+  "apiPerformance": {
+    "totalCalls": 26,
+    "averageResponseTime": 297.38461538461536,
+    "slowCalls": 5
+  },
+  "violations": {
+    "total": 0,
+    "details": []
+  },
+  "compliance": {
+    "webVitalsCompliant": false,
+    "apiPerformanceCompliant": false,
+    "memoryUsageCompliant": false,
+    "noViolations": true
+  }
+}

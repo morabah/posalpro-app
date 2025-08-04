@@ -1,32 +1,28 @@
+'use client';
+
 /**
  * PosalPro MVP2 - Login Page
- * Based on LOGIN_SCREEN.md wireframe specifications
+ * Optimized with direct imports for better performance
+ * Target: Reduce login page load time from 4798ms to <3000ms
  */
 
-import { LoginForm } from '@/components/auth/LoginForm';
-import { Metadata } from 'next';
+import { OptimizedLoginForm } from '@/components/auth/OptimizedLoginForm';
+import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
-export const metadata: Metadata = {
-  title: 'Sign In - PosalPro',
-  description: 'Sign in to your PosalPro account with role-based access',
-};
+// Metadata is handled by layout.tsx for Client Components
 
-interface LoginPageProps {
-  searchParams: Promise<{
-    callbackUrl?: string;
-    error?: string;
-    registered?: string;
-    verified?: string;
-  }>;
+function LoginPageContent() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams?.get('callbackUrl') || undefined;
+
+  return <OptimizedLoginForm callbackUrl={callbackUrl || undefined} />;
 }
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const params = await searchParams;
-
+export default function LoginPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <LoginForm callbackUrl={params.callbackUrl} />
+      <LoginPageContent />
     </Suspense>
   );
 }

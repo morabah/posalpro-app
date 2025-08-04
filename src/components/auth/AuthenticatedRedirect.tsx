@@ -22,7 +22,7 @@ export function AuthenticatedRedirect({
   redirectTo = '/dashboard',
   className = '',
 }: AuthenticatedRedirectProps) {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession() || {};
   const router = useRouter();
 
   useEffect(() => {

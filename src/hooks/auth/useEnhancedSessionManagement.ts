@@ -78,7 +78,7 @@ const DEFAULT_WARNING_CONFIG: SessionWarningConfig = {
 };
 
 export function useEnhancedSessionManagement(config: Partial<SessionWarningConfig> = {}) {
-  const { data: session, status, update } = useSession();
+  const { data: session, status, update } = useSession() || {};
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();

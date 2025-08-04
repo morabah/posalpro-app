@@ -27,19 +27,47 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useCallback, useState } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
+
+// Simple toast function to replace react-hot-toast
+const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+  console.log(`Toast (${type}):`, message);
+  // In a real implementation, this would show a toast notification
+};
 
 // Database hooks
 import { SystemUser, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
 
-// Role Manager Component
-import RoleManager from '@/components/admin/RoleManager';
-
 // Import date-fns with parseISO for string date handling
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns';
+import dynamic from 'next/dynamic';
 
-// Additional components - Fix default import
-import DatabaseSyncPanel from '@/components/admin/DatabaseSyncPanel';
+// Dynamic imports to reduce bundle size
+const RoleManager = dynamic(() => import('@/components/admin/RoleManager'), {
+  loading: () => (
+    <div className="animate-pulse bg-gray-200 h-64 rounded-lg p-4">
+      <div className="h-6 bg-gray-300 rounded mb-4 w-1/3"></div>
+      <div className="space-y-3">
+        <div className="h-4 bg-gray-300 rounded w-full"></div>
+        <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+        <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+      </div>
+    </div>
+  ),
+  ssr: false,
+});
+
+const DatabaseSyncPanel = dynamic(() => import('@/components/admin/DatabaseSyncPanel'), {
+  loading: () => (
+    <div className="animate-pulse bg-gray-200 h-48 rounded-lg p-4">
+      <div className="h-6 bg-gray-300 rounded mb-4 w-1/4"></div>
+      <div className="space-y-2">
+        <div className="h-3 bg-gray-300 rounded w-full"></div>
+        <div className="h-3 bg-gray-300 rounded w-2/3"></div>
+      </div>
+    </div>
+  ),
+  ssr: false,
+});
 
 // Type definitions for better type safety
 enum UserStatus {
@@ -256,20 +284,24 @@ export default function AdminSystem() {
       errorHandlingService.processError(standardError);
 
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
-      toast.error(userMessage);
+      showToast(userMessage, 'error');
 
-      analytics('admin_operation_error', {
-        operation,
-        error: standardError.message,
-        context,
-      }, 'high');
+      analytics(
+        'admin_operation_error',
+        {
+          operation,
+          error: standardError.message,
+          context,
+        },
+        'high'
+      );
     },
     [errorHandlingService, analytics]
   );
 
   // Success handling with user feedback
   const handleSuccess = useCallback((message: string) => {
-    toast.success(message);
+    showToast(message, 'success');
   }, []);
 
   /**
@@ -326,11 +358,15 @@ export default function AdminSystem() {
       // Force re-fetch to update data (in real implementation)
       await refetchUsers();
 
-      toast.success('User updated successfully');
-      analytics('admin_edit_user_success', {
-        userId: editingUser.id,
-        updatedFields: Object.keys(editUserData),
-      }, 'medium');
+      showToast('User updated successfully', 'success');
+      analytics(
+        'admin_edit_user_success',
+        {
+          userId: editingUser.id,
+          updatedFields: Object.keys(editUserData),
+        },
+        'medium'
+      );
 
       setIsEditUserModalOpen(false);
       setEditingUser(null);
@@ -368,10 +404,14 @@ export default function AdminSystem() {
       });
       setIsEditUserModalOpen(true);
 
-      analytics('admin_edit_user_started', {
-        userId: user.id,
-        userRole: user.role,
-      }, 'low');
+      analytics(
+        'admin_edit_user_started',
+        {
+          userId: user.id,
+          userRole: user.role,
+        },
+        'low'
+      );
     },
     [analytics]
   );
@@ -381,9 +421,13 @@ export default function AdminSystem() {
     setEditingUser(null);
     setEditUserData({} as SystemUserEditData);
 
-    analytics('admin_edit_user_cancelled', {
-      userId: editingUser?.id,
-    }, 'low');
+    analytics(
+      'admin_edit_user_cancelled',
+      {
+        userId: editingUser?.id,
+      },
+      'low'
+    );
   }, [analytics, editingUser]);
 
   /**
@@ -461,8 +505,6 @@ export default function AdminSystem() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Toaster position="top-right" />
-
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="px-4 sm:px-6 lg:px-8">
@@ -691,7 +733,7 @@ export default function AdminSystem() {
               <Button
                 onClick={() => {
                   // In a real implementation, this would open a user creation modal
-                  toast('User creation modal would open here');
+                  showToast('User creation modal would open here', 'info');
                 }}
                 className="flex items-center space-x-2"
               >

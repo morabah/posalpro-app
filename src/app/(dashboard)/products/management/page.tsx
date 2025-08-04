@@ -7,8 +7,17 @@
 'use client';
 
 import { Breadcrumbs } from '@/components/layout';
-import { ProductCreationForm } from '@/components/products/ProductCreationForm';
 import { Card } from '@/components/ui/Card';
+import dynamic from 'next/dynamic';
+
+// Dynamic imports to reduce bundle size
+const ProductCreationForm = dynamic(
+  () => import('@/components/products/ProductCreationForm').then(mod => ({ default: mod.ProductCreationForm })),
+  {
+    loading: () => <div className="animate-pulse bg-gray-200 h-96 rounded-lg" />,
+    ssr: false
+  }
+);
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
@@ -53,7 +62,7 @@ const COMPONENT_MAPPING = {
 };
 
 export default function ProductManagementPage() {
-  const { data: session } = useSession();
+  const { data: session } = useSession() || {};
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const [sessionStartTime] = useState(Date.now());

@@ -13,8 +13,7 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface ResponsiveState {
   isMobile: boolean;
@@ -22,6 +21,12 @@ export interface ResponsiveState {
   isDesktop: boolean;
   screenWidth: number;
   screenHeight: number;
+  orientation: 'portrait' | 'landscape';
+  pixelRatio: number;
+  isOnline: boolean;
+  prefersDarkMode: boolean;
+  prefersReducedMotion: boolean;
+  prefersHighContrast: boolean;
 }
 
 const BREAKPOINTS = {
@@ -44,85 +49,51 @@ const COMPONENT_MAPPING = {
 };
 
 export function useResponsive(): ResponsiveState {
-  const [state, setState] = useState<ResponsiveState>(() => {
-    // ✅ MOBILE OPTIMIZATION: Direct initialization without async operations
-    const width = typeof window !== 'undefined' ? window.innerWidth : 1920;
-    const height = typeof window !== 'undefined' ? window.innerHeight : 1080;
-
-    return {
-      isMobile: width < BREAKPOINTS.mobile,
-      isTablet: width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet,
-      isDesktop: width >= BREAKPOINTS.tablet,
-      screenWidth: width,
-      screenHeight: height,
-    };
+  const [state, setState] = useState<ResponsiveState>({
+    isMobile: false,
+    isTablet: false,
+    isDesktop: false,
+    screenWidth: 0,
+    screenHeight: 0,
+    orientation: 'portrait',
+    pixelRatio: 1,
+    isOnline: true,
+    prefersDarkMode: false,
+    prefersReducedMotion: false,
+    prefersHighContrast: false,
   });
 
-  const { trackOptimized: analytics } = useOptimizedAnalytics();
+  // ✅ MOBILE OPTIMIZATION: Simplified state update function
+  const updateState = useCallback(() => {
+    if (typeof window === 'undefined') return;
 
-  // Performance optimization refs
-  const previousStateRef = useRef<ResponsiveState>(state);
-  const lastAnalyticsTrackRef = useRef<number>(0);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const orientation = width > height ? 'landscape' : 'portrait';
+    const pixelRatio = window.devicePixelRatio || 1;
 
+    // ✅ MOBILE OPTIMIZATION: Simplified breakpoint logic
+    const isMobile = width < 768;
+    const isTablet = width >= 768 && width < 1024;
+    const isDesktop = width >= 1024;
+
+    setState({
+      isMobile,
+      isTablet,
+      isDesktop,
+      screenWidth: width,
+      screenHeight: height,
+      orientation,
+      pixelRatio,
+      isOnline: navigator.onLine,
+      prefersDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
+      prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      prefersHighContrast: window.matchMedia('(prefers-contrast: high)').matches,
+    });
+  }, []);
+
+  // ✅ MOBILE OPTIMIZATION: Initialize state on mount
   useEffect(() => {
-    const updateState = () => {
-      try {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        const previousState = previousStateRef.current;
-
-        // ✅ MOBILE OPTIMIZATION: Direct state calculation without caching overhead
-        const newState: ResponsiveState = {
-          isMobile: width < BREAKPOINTS.mobile,
-          isTablet: width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet,
-          isDesktop: width >= BREAKPOINTS.tablet,
-          screenWidth: width,
-          screenHeight: height,
-        };
-
-        // Only update if state actually changed (performance optimization)
-        const hasSignificantChange =
-          previousState.isMobile !== newState.isMobile ||
-          previousState.isTablet !== newState.isTablet ||
-          previousState.isDesktop !== newState.isDesktop ||
-          Math.abs(previousState.screenWidth - newState.screenWidth) > 50 ||
-          Math.abs(previousState.screenHeight - newState.screenHeight) > 50;
-
-        if (hasSignificantChange) {
-          setState(newState);
-          previousStateRef.current = newState;
-
-          // ✅ MOBILE OPTIMIZATION: Simplified analytics tracking with longer throttle
-          const now = Date.now();
-          const shouldTrackAnalytics =
-            now - lastAnalyticsTrackRef.current > 10000 && // 10 seconds minimum for mobile performance
-            (previousState.isMobile !== newState.isMobile ||
-              previousState.isTablet !== newState.isTablet ||
-              previousState.isDesktop !== newState.isDesktop);
-
-          if (shouldTrackAnalytics) {
-            lastAnalyticsTrackRef.current = now;
-
-            // ✅ MOBILE OPTIMIZATION: Simplified analytics payload
-            analytics('responsive_breakpoint_change', {
-              fromBreakpoint: previousState.isMobile
-                ? 'mobile'
-                : previousState.isTablet
-                  ? 'tablet'
-                  : 'desktop',
-              toBreakpoint: newState.isMobile ? 'mobile' : newState.isTablet ? 'tablet' : 'desktop',
-              screenWidth: width,
-              screenHeight: height,
-            }, 'low');
-          }
-        }
-      } catch (error) {
-        // ✅ MOBILE OPTIMIZATION: Simplified error handling without complex service calls
-        console.warn('Responsive state update failed:', error);
-      }
-    };
-
-    // Initial state update
     updateState();
 
     // ✅ MOBILE OPTIMIZATION: Simplified event listeners with mobile-optimized throttling
@@ -140,7 +111,7 @@ export function useResponsive(): ResponsiveState {
       window.removeEventListener('orientationchange', throttledUpdateState);
       clearTimeout(timeoutId);
     };
-  }, []); // ✅ EMPTY DEPENDENCY ARRAY - Prevents infinite loop bottleneck
+  }, []); // ✅ EMPTY DEPENDENCY ARRAY - Prevents infinite loop bottlenecks
 
   return state;
 }

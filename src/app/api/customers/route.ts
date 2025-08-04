@@ -107,6 +107,7 @@ interface CustomerPaginationResult {
  * GET /api/customers - Retrieve customers with filtering and pagination
  */
 export async function GET(request: NextRequest) {
+  const queryStartTime = Date.now();
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -119,7 +120,7 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where: CustomerWhereClause = {};
 
-    if (query.search) {
+    if (query.search && query.search.trim() !== '') {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
         { email: { contains: query.search, mode: 'insensitive' } },
@@ -170,13 +171,26 @@ export async function GET(request: NextRequest) {
     } else {
       const skip = (query.page - 1) * query.limit;
 
+      // Optimized transaction with reduced query complexity
       const [total, results] = await prisma.$transaction([
         prisma.customer.count({ where: where as any }),
         prisma.customer.findMany({
-          where: where as any, // Prisma compatibility
+          where: where as any,
           skip,
           take: query.limit,
           orderBy: { [query.sortBy]: query.sortOrder },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            industry: true,
+            tier: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            // Exclude heavy fields for better performance
+          },
         }),
       ]);
 

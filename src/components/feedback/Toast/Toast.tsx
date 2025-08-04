@@ -5,7 +5,6 @@
 
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangleIcon, CheckIcon, InfoIcon, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
@@ -90,14 +89,10 @@ export function Toast({ id, title, message, type, onClose, action }: ToastProps)
   }, [id]);
 
   return (
-    <AnimatePresence>
+    <>
       {isVisible && (
-        <motion.div
+        <div
           id={`toast-${id}`}
-          initial={{ opacity: 0, x: 300, scale: 0.95 }}
-          animate={{ opacity: 1, x: 0, scale: 1 }}
-          exit={{ opacity: 0, x: 300, scale: 0.95 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
           className={`
             w-full max-w-sm
             ${getBackgroundColor()}
@@ -110,6 +105,7 @@ export function Toast({ id, title, message, type, onClose, action }: ToastProps)
             focus:ring-2
             focus:ring-primary-500
             focus:ring-offset-2
+            animate-in slide-in-from-right-2 duration-200
           `}
           role="alert"
           aria-live="polite"
@@ -189,21 +185,19 @@ export function Toast({ id, title, message, type, onClose, action }: ToastProps)
           </div>
 
           {/* Progress bar for timed toasts */}
-          <motion.div
+          <div
             className={`
               absolute bottom-0 left-0 h-1 rounded-b-lg
               ${type === 'success' ? 'bg-green-400' : ''}
               ${type === 'error' ? 'bg-red-400' : ''}
               ${type === 'warning' ? 'bg-yellow-400' : ''}
               ${type === 'info' ? 'bg-blue-400' : ''}
+              animate-pulse
             `}
-            initial={{ width: '100%' }}
-            animate={{ width: '0%' }}
-            transition={{ duration: 4, ease: 'linear' }}
           />
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }
 

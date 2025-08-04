@@ -9,8 +9,8 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import usePerformanceOptimization from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -160,7 +160,7 @@ export default function PerformanceDashboard({
             className={`px-4 py-2 rounded-lg text-sm font-medium ${getOptimizationScoreColor(optimizationScore)}`}
           >
             <div className="text-center">
-              <div className="text-2xl font-bold">{optimizationScore.toFixed(0)}</div>
+              <div className="text-2xl font-bold">{(optimizationScore || 0).toFixed(0)}</div>
               <div className="text-xs opacity-75">Optimization Score</div>
             </div>
           </div>
@@ -272,7 +272,7 @@ export default function PerformanceDashboard({
                   Performance Recommendations
                 </h3>
                 <ul className="space-y-2">
-                  {recommendations.map((recommendation, index) => (
+                  {recommendations.map((recommendation: string, index: number) => (
                     <li key={index} className="text-sm text-yellow-700 flex items-start">
                       <span className="text-yellow-600 mr-2">•</span>
                       {recommendation}

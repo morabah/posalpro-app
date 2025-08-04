@@ -14,8 +14,8 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -66,7 +66,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 // Role-based redirection mapping from SITEMAP.md
 const ROLE_REDIRECTION_MAP: Record<string, string> = {
-  Administrator: '/admin/system',
+  Administrator: '/dashboard',
   'Proposal Manager': '/proposals/manage',
   'Bid Manager': '/proposals/manage',
   'Technical SME': '/sme/contribution',
@@ -200,14 +200,18 @@ export function EnhancedLoginForm({
         setAuthError(userMessage);
 
         // Track authentication failure for analytics
-        analytics('authentication_failure', {
-          error: standardError.code,
-          duration: Date.now() - startTime,
-          email: email.substring(0, 3) + '***',
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-          componentMapping: COMPONENT_MAPPING,
-        }, 'medium');
+        analytics(
+          'authentication_failure',
+          {
+            error: standardError.code,
+            duration: Date.now() - startTime,
+            email: email.substring(0, 3) + '***',
+            userStories: COMPONENT_MAPPING.userStories,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+            componentMapping: COMPONENT_MAPPING,
+          },
+          'medium'
+        );
 
         onError?.(userMessage);
         return { message: userMessage };
@@ -333,10 +337,14 @@ export function EnhancedLoginForm({
     setShowPassword(prev => !prev);
 
     // Track user interaction for UX analytics
-    analytics('password_visibility_toggle', {
-      visible: !showPassword,
-      componentMapping: COMPONENT_MAPPING,
-    }, 'medium');
+    analytics(
+      'password_visibility_toggle',
+      {
+        visible: !showPassword,
+        componentMapping: COMPONENT_MAPPING,
+      },
+      'medium'
+    );
 
     // Maintain focus on password field
     setTimeout(() => {

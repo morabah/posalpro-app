@@ -1,18 +1,7 @@
-import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
-
-// Lazy load components for better performance
-const DashboardStats = dynamic(() => import('@/components/dashboard/DashboardStats'), {
-  loading: () => <div className="animate-pulse bg-gray-200 rounded-lg h-32"></div>,
-});
-
-const RecentProposals = dynamic(() => import('@/components/dashboard/RecentProposals'), {
-  loading: () => <div className="animate-pulse bg-gray-200 rounded-lg h-64"></div>,
-});
-
-const QuickActions = dynamic(() => import('@/components/dashboard/QuickActions'), {
-  loading: () => <div className="animate-pulse bg-gray-200 rounded-lg h-48"></div>,
-});
+import DashboardStats from '@/components/dashboard/DashboardStats';
+import RecentProposals from '@/components/dashboard/RecentProposals';
+import QuickActions from '@/components/dashboard/QuickActions';
 
 export default function DashboardPage() {
   return (

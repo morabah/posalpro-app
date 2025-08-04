@@ -58,11 +58,11 @@ export interface Proposal {
   dueDate?: Date | null;
   submittedAt?: Date | null;
   approvedAt?: Date | null;
-  performanceData?: any | null;
-  userStoryTracking?: any | null;
+  performanceData?: Record<string, unknown> | null;
+  userStoryTracking?: Record<string, unknown> | null;
   riskScore?: number | null;
   tags: string[];
-  metadata?: any | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface ProposalSection {
@@ -73,8 +73,8 @@ export interface ProposalSection {
   order: number;
   type: SectionType;
   validationStatus: ValidationStatus;
-  analyticsData?: any | null;
-  metadata?: any | null;
+  analyticsData?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,8 +87,8 @@ export interface ProposalProduct {
   unitPrice: number;
   discount: number;
   total: number;
-  configuration?: any | null;
-  selectionAnalytics?: any | null;
+  configuration?: Record<string, unknown> | null;
+  selectionAnalytics?: Record<string, unknown> | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -151,7 +151,7 @@ export interface ProposalPerformanceMetrics {
 export interface UserStoryTracking {
   userStoryId: string;
   componentUsage: ComponentUsage[];
-  performanceData: Record<string, any>;
+  performanceData: Record<string, unknown>;
   criteriaStatus: Record<string, boolean>;
   testResults: TestResult[];
 }
@@ -205,7 +205,7 @@ export interface CreateProposalData {
   validUntil?: Date;
   dueDate?: Date;
   tags?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateProposalData {
@@ -219,7 +219,7 @@ export interface UpdateProposalData {
   validUntil?: Date;
   dueDate?: Date;
   tags?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateProposalSectionData {
@@ -227,7 +227,7 @@ export interface CreateProposalSectionData {
   content: string;
   order: number;
   type?: SectionType;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateProposalProductData {
@@ -235,7 +235,7 @@ export interface CreateProposalProductData {
   quantity: number;
   unitPrice: number;
   discount?: number;
-  configuration?: Record<string, any>;
+  configuration?: Record<string, unknown>;
 }
 
 // Query Types

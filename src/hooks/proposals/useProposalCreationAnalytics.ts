@@ -6,7 +6,7 @@
  * Based on PROPOSAL_CREATION_SCREEN.md wireframe specifications
  */
 
-import { useAuth } from '@/hooks/auth/useAuth';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { WizardStepAnalytics } from '@/types/analytics';
 import { ProposalCreationMetrics } from '@/types/proposals';
@@ -41,7 +41,7 @@ interface WizardStepMetrics {
 
 export function useProposalCreationAnalytics() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { user } = useAuth();
+  const { user } = useAuth() || {};
 
   const [wizardStartTime] = useState(Date.now());
   const stepMetrics = useRef<WizardStepMetrics[]>([]);

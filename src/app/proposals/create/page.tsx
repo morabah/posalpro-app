@@ -39,6 +39,7 @@ const ProposalWizard = dynamic(
   () =>
     import('@/components/proposals/ProposalWizard').then(mod => ({ default: mod.ProposalWizard })),
   {
+    ssr: false, // ✅ CRITICAL: Prevent SSR to avoid API client errors on server
     loading: () => (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">

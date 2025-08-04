@@ -4,14 +4,12 @@
  * PosalPro MVP2 - Authentication Context Provider
  * Extended NextAuth session provider with custom analytics and state management
  * Role-based access control and session monitoring
- * PERFORMANCE OPTIMIZED: Includes circuit breaker pattern for auth failures
  */
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorHandlingService } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { getAuthCircuitBreaker } from '@/lib/auth/authCircuitBreaker';
 import { SessionProvider, useSession } from 'next-auth/react';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
@@ -24,22 +22,7 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H4-001'],
 };
 
-interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  department: string;
-  roles: string[];
-  permissions: string[];
-}
-
-interface AuthProviderProps {
-  children: React.ReactNode;
-  session?: any;
-}
-
-// 🚨 FAST REFRESH FIX: Export context and state interface
-export interface AuthContextState {
+interface AuthContextState {
   // Session state
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -63,17 +46,39 @@ export interface AuthContextState {
   trackActivity: (activity: string, metadata?: Record<string, unknown>) => void;
 }
 
-// 🚨 FAST REFRESH FIX: Export context for external hook
-export const AuthContext = createContext<AuthContextState | null>(null);
+interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  department: string;
+  roles: string[];
+  permissions: string[];
+}
+
+interface AuthProviderProps {
+  children: React.ReactNode;
+  session?: any;
+}
+
+const AuthContext = createContext<AuthContextState | null>(null);
+
+// Export types for use in other components
+export { AuthContext };
+export type { AuthContextState, AuthUser };
 
 // Internal provider that uses NextAuth session
 function AuthContextProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status, update } = useSession();
-  const analytics = useOptimizedAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const apiClient = useApiClient();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
   const [sessionWarning, setSessionWarning] = useState<boolean>(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Extract user data from session
   const user: AuthUser | null = session?.user
@@ -134,49 +139,46 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     [hasRole]
   );
 
-  // Session management with circuit breaker protection
+  // Session management
   const refreshSession = useCallback(async (): Promise<void> => {
-    const circuitBreaker = getAuthCircuitBreaker();
-    
-    // Check if circuit breaker allows the attempt
-    if (!circuitBreaker.canAttempt()) {
-      const retryDelay = circuitBreaker.getRetryDelay();
-      console.warn(`🚫 [AuthProvider] Session refresh blocked by circuit breaker. Retry in ${Math.ceil(retryDelay / 1000)}s`);
-      return;
-    }
-
     try {
-      await circuitBreaker.execute(async () => {
-        await update();
-      });
-
-      analytics.trackOptimized('session_refresh', {
-        userId: user?.id,
-        component: 'AuthProvider',
-      });
-    } catch (error) {
-      console.error('Session refresh failed:', error);
-      
-      // Don't spam analytics with repeated failures
-      const circuitState = circuitBreaker.getState();
-      if (circuitState.failures <= 2) {
-        analytics.trackOptimized('session_refresh_error', {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          failureCount: circuitState.failures,
+      await update();
+      analytics(
+        'session_refresh',
+        {
+          userId: user?.id,
+          timestamp: Date.now(),
           component: 'AuthProvider',
-        });
-      }
+        },
+        'medium'
+      );
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
+      analytics(
+        'session_refresh_error',
+        {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: Date.now(),
+          component: 'AuthProvider',
+        },
+        'high'
+      );
     }
-  }, [update, user?.id, analytics]);
+  }, [update, user?.id]); // Remove analytics dependency
 
   const logout = useCallback(async (): Promise<void> => {
     try {
-      analytics.trackOptimized('user_logout', {
-        userId: user?.id,
-        sessionDuration: Date.now() - lastActivity,
-        component: 'AuthProvider',
-        userStory: 'US-2.3',
-      });
+      analytics(
+        'user_logout',
+        {
+          userId: user?.id,
+          sessionDuration: Date.now() - lastActivity,
+          timestamp: Date.now(),
+          component: 'AuthProvider',
+          userStory: 'US-2.3',
+        },
+        'medium'
+      );
 
       // Use centralized API client instead of direct fetch
       try {
@@ -205,11 +207,16 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       );
 
       console.error('Logout error:', standardError);
-      analytics.trackOptimized('logout_error', {
-        error: standardError.message,
-        errorCode: standardError.code,
-        component: 'AuthProvider',
-      }, 'medium');
+      analytics(
+        'logout_error',
+        {
+          error: standardError.message,
+          errorCode: standardError.code,
+          timestamp: Date.now(),
+          component: 'AuthProvider',
+        },
+        'high'
+      );
     }
   }, [user?.id, lastActivity, apiClient, errorHandlingService, analytics]);
 
@@ -219,13 +226,18 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       setLastActivity(now);
 
-      analytics.trackOptimized('user_activity', {
-        activity,
-        userId: user?.id,
-        userRoles: roles,
-        component: 'AuthProvider',
-        ...metadata,
-      }, 'medium');
+      analytics(
+        'user_activity',
+        {
+          activity,
+          userId: user?.id,
+          userRoles: roles,
+          timestamp: now,
+          metadata,
+          component: 'AuthProvider',
+        },
+        'low'
+      );
     },
     [user?.id, roles] // Remove analytics dependency
   );
@@ -267,25 +279,30 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
 
     // Only track if this is a new session (no previous tracking or more than 1 hour ago)
     if (!lastTrackedSession || currentSessionTime - parseInt(lastTrackedSession) > 60 * 60 * 1000) {
-      analytics.trackOptimized('session_start', {
-        userId: user.id,
-        userRoles: roles,
-        userDepartment: user.department,
-        component: 'AuthProvider',
-        userStory: 'US-2.3',
-      }, 'medium');
+      analytics(
+        'session_start',
+        {
+          userId: user.id,
+          userRoles: roles,
+          userDepartment: user.department,
+          timestamp: currentSessionTime,
+          component: 'AuthProvider',
+          userStory: 'US-2.3',
+        },
+        'medium'
+      );
 
       // Store the session tracking timestamp
       localStorage.setItem(sessionKey, currentSessionTime.toString());
     }
-  }, [isAuthenticated, user?.id, analytics, roles]); // Include all dependencies except user since we're using user?.id
+  }, [isAuthenticated, user?.id]); // Only depend on authentication and user ID
 
   // Track user activity on page interactions
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !isClient) return;
 
-    let lastActivityUpdate = 0;
-    const ACTIVITY_THROTTLE = 30000; // Throttle activity updates to once per 30 seconds
+    let lastActivityUpdate = Date.now();
+    const ACTIVITY_THROTTLE = 30000; // 30 seconds
 
     const handleActivity = () => {
       const now = Date.now();
@@ -297,31 +314,38 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       setSessionWarning(false);
     };
 
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    // ✅ MEMORY OPTIMIZATION: Reduced activity tracking events
+    const events = ['mousedown', 'keypress']; // Removed mousemove, scroll, touchstart
+
+    // Add event listeners
     events.forEach(event => {
       document.addEventListener(event, handleActivity, true);
     });
 
+    // Cleanup function to remove event listeners
     return () => {
       events.forEach(event => {
         document.removeEventListener(event, handleActivity, true);
       });
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isClient]);
 
   // Analytics tracking for authentication state changes - THROTTLED
   useEffect(() => {
     if (status === 'authenticated' && user) {
-      analytics.trackOptimized('identify', {
-        userId: user.id,
-        traits: {
+      // Note: useOptimizedAnalytics doesn't have identify method, using track instead
+      analytics(
+        'user_identify',
+        {
+          userId: user.id,
           email: user.email,
           name: user.name,
           department: user.department,
           roles: roles.join(','),
           permissions: permissions.length,
         },
-      });
+        'medium'
+      );
 
       // Only track state change once per session
       const stateChangeKey = `auth_state_tracked_${user.id}`;
@@ -329,23 +353,33 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       const currentTime = Date.now();
 
       if (!lastTrackedState || currentTime - parseInt(lastTrackedState) > 60 * 60 * 1000) {
-        analytics.trackOptimized('authentication_state_change', {
-          status: 'authenticated',
-          userId: user.id,
-          userRoles: roles,
-          component: 'AuthProvider',
-          userStory: 'US-2.3',
-        });
+        analytics(
+          'authentication_state_change',
+          {
+            status: 'authenticated',
+            userId: user.id,
+            userRoles: roles,
+            timestamp: currentTime,
+            component: 'AuthProvider',
+            userStory: 'US-2.3',
+          },
+          'medium'
+        );
 
         localStorage.setItem(stateChangeKey, currentTime.toString());
       }
     } else if (status === 'unauthenticated') {
-      analytics.trackOptimized('authentication_state_change', {
-        status: 'unauthenticated',
-        component: 'AuthProvider',
-      });
+      analytics(
+        'authentication_state_change',
+        {
+          status: 'unauthenticated',
+          timestamp: Date.now(),
+          component: 'AuthProvider',
+        },
+        'medium'
+      );
     }
-  }, [status, user?.id, analytics, roles, permissions]); // Include all dependencies except user since we're using user?.id
+  }, [status, user?.id]); // Only depend on status and user ID
 
   const contextValue: AuthContextState = {
     isAuthenticated,
@@ -429,5 +463,11 @@ export function AuthProvider({ children, session }: AuthProviderProps) {
   );
 }
 
-// 🚨 FAST REFRESH FIX: useAuth hook moved to separate file
-// Import from: '@/hooks/auth/useAuth'
+// Hook to use auth context
+export function useAuth(): AuthContextState {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

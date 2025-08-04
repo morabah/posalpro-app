@@ -34,20 +34,24 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     paramsRef.current.sessionId = sessionId;
   }
 
-  const { trackOptimized: analytics, page: analyticsPage } = useOptimizedAnalytics();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Create stable analytics functions using useMemo and useCallback
   const trackEvent = useCallback(
     (eventName: string, properties: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics(eventName, {
-          ...properties,
-          component: 'dashboard',
-          userId: params.userId,
-          userRole: params.userRole,
-          sessionId: params.sessionId,
-        }, 'medium');
+        analytics(
+          eventName,
+          {
+            ...properties,
+            component: 'dashboard',
+            userId: params.userId,
+            userRole: params.userRole,
+            sessionId: params.sessionId,
+          },
+          'medium'
+        );
       } catch (error) {
         logger.warn('⚠️ Dashboard analytics tracking failed:', error);
         // Gracefully degrade - don't throw errors that could break the UI
@@ -60,13 +64,18 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     (page: string, properties: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analyticsPage(page, {
-          ...properties,
-          component: 'dashboard',
-          userId: params.userId,
-          userRole: params.userRole,
-          sessionId: params.sessionId,
-        });
+        analytics(
+          'page_view',
+          {
+            page,
+            ...properties,
+            component: 'dashboard',
+            userId: params.userId,
+            userRole: params.userRole,
+            sessionId: params.sessionId,
+          },
+          'medium'
+        );
       } catch (error) {
         logger.warn('⚠️ Dashboard page view tracking failed:', error);
       }
@@ -78,15 +87,19 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     (element: string, action: string, properties: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics('dashboard_interaction', {
-          ...properties,
-          element,
-          action,
-          component: 'dashboard',
-          userId: params.userId,
-          userRole: params.userRole,
-          sessionId: params.sessionId,
-        }, 'low');
+        analytics(
+          'dashboard_interaction',
+          {
+            ...properties,
+            element,
+            action,
+            component: 'dashboard',
+            userId: params.userId,
+            userRole: params.userRole,
+            sessionId: params.sessionId,
+          },
+          'low'
+        );
       } catch (error) {
         logger.warn('⚠️ Dashboard interaction tracking failed:', error);
       }
@@ -98,15 +111,19 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
     (error: Error | string, context: Record<string, any> = {}) => {
       try {
         const params = paramsRef.current;
-        analytics('dashboard_error', {
-          ...context,
-          error: typeof error === 'string' ? error : error.message,
-          stack: typeof error === 'object' ? error.stack : undefined,
-          component: 'dashboard',
-          userId: params.userId,
-          userRole: params.userRole,
-          sessionId: params.sessionId,
-        }, 'high');
+        analytics(
+          'dashboard_error',
+          {
+            ...context,
+            error: typeof error === 'string' ? error : error.message,
+            stack: typeof error === 'object' ? error.stack : undefined,
+            component: 'dashboard',
+            userId: params.userId,
+            userRole: params.userRole,
+            sessionId: params.sessionId,
+          },
+          'high'
+        );
       } catch (analyticsError) {
         logger.warn('⚠️ Dashboard error tracking failed:', analyticsError);
       }

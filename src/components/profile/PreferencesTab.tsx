@@ -175,6 +175,8 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
       }>('/api/profile/preferences', data);
 
       if (!response.success) {
+        // Log error but let the catch block handle it
+        console.warn('[PreferencesTab] Preferences update failed:', response.error || 'Failed to update preferences');
         throw new Error(response.error || 'Failed to update preferences');
       }
 

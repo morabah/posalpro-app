@@ -1,0 +1,66 @@
+/**
+ * PosalPro MVP2 - Redis Health Check API
+ * Monitors Redis connection and performance
+ */
+
+import { checkRedisHealth, getCache, setCache } from '@/lib/redis';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  try {
+    const startTime = Date.now();
+
+    // Check Redis health
+    const isHealthy = await checkRedisHealth();
+
+    // Test cache operations
+    let cacheTestPassed = false;
+    let cacheTestTime = 0;
+
+    if (isHealthy) {
+      const cacheTestStart = Date.now();
+
+      // Test cache set/get operations
+      const testKey = 'health_test';
+      const testValue = { timestamp: Date.now(), test: true };
+
+      await setCache(testKey, testValue, 10); // 10 second TTL
+      const retrievedValue = await getCache(testKey);
+
+      cacheTestPassed = retrievedValue && retrievedValue.test === true;
+      cacheTestTime = Date.now() - cacheTestStart;
+    }
+
+    const totalTime = Date.now() - startTime;
+
+    const healthData = {
+      timestamp: new Date().toISOString(),
+      redis: {
+        connected: isHealthy,
+        cacheTest: {
+          passed: cacheTestPassed,
+          time: cacheTestTime,
+        },
+      },
+      performance: {
+        totalTime,
+        status: isHealthy && cacheTestPassed ? 'healthy' : 'unhealthy',
+      },
+    };
+
+    return NextResponse.json(healthData, {
+      status: isHealthy && cacheTestPassed ? 200 : 503,
+    });
+  } catch (error) {
+    console.error('Redis health check failed:', error);
+
+    return NextResponse.json(
+      {
+        timestamp: new Date().toISOString(),
+        error: 'Redis health check failed',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}

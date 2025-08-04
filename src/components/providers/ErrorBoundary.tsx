@@ -6,8 +6,6 @@
 
 'use client';
 
-import { Alert } from '@/components/ui/feedback/Alert';
-import { Button } from '@/components/ui/forms/Button';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryState {
@@ -15,6 +13,7 @@ interface ErrorBoundaryState {
   error: Error | null;
   errorInfo: ErrorInfo | null;
   errorId: string | null;
+  isClient: boolean;
 }
 
 interface ErrorBoundaryProps {
@@ -46,62 +45,84 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
       <div className="max-w-md w-full space-y-6">
         {/* Error Alert */}
-        <Alert variant="error" title="Something went wrong">
-          <div className="space-y-3">
-            <p className="text-sm text-red-700">
-              We apologize for the inconvenience. An unexpected error has occurred.
-            </p>
-
-            {errorId && <p className="text-xs text-red-600 font-mono">Error ID: {errorId}</p>}
-
-            {/* Development error details */}
-            {isDevelopment && error && (
-              <details className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                <summary className="text-sm font-medium text-red-800 cursor-pointer">
-                  Error Details (Development)
-                </summary>
-                <div className="mt-2 space-y-2">
-                  <div>
-                    <p className="text-xs font-medium text-red-700">Message:</p>
-                    <p className="text-xs text-red-600 font-mono">{error.message}</p>
-                  </div>
-
-                  {error.stack && (
-                    <div>
-                      <p className="text-xs font-medium text-red-700">Stack:</p>
-                      <pre className="text-xs text-red-600 font-mono whitespace-pre-wrap overflow-auto max-h-32">
-                        {error.stack}
-                      </pre>
-                    </div>
-                  )}
-
-                  {errorInfo?.componentStack && (
-                    <div>
-                      <p className="text-xs font-medium text-red-700">Component Stack:</p>
-                      <pre className="text-xs text-red-600 font-mono whitespace-pre-wrap overflow-auto max-h-32">
-                        {errorInfo.componentStack}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              </details>
-            )}
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Something went wrong</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>We apologize for the inconvenience. An unexpected error has occurred.</p>
+                {errorId && (
+                  <p className="text-xs text-red-600 font-mono mt-1">Error ID: {errorId}</p>
+                )}
+              </div>
+            </div>
           </div>
-        </Alert>
+        </div>
+
+        {/* Development error details */}
+        {isDevelopment && error && (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-medium text-neutral-600 hover:text-neutral-800">
+              Error Details (Development)
+            </summary>
+            <div className="mt-2 p-3 bg-neutral-100 rounded text-xs font-mono text-neutral-800 overflow-auto max-h-40">
+              <div className="font-semibold mb-2">Error Message:</div>
+              <div className="mb-3">{error.message}</div>
+              {error.stack && (
+                <>
+                  <div className="font-semibold mb-2">Stack Trace:</div>
+                  <pre className="whitespace-pre-wrap">{error.stack}</pre>
+                </>
+              )}
+              {errorInfo?.componentStack && (
+                <>
+                  <div className="font-semibold mb-2">Component Stack:</div>
+                  <pre className="whitespace-pre-wrap">{errorInfo.componentStack}</pre>
+                </>
+              )}
+            </div>
+          </details>
+        )}
 
         {/* Action Buttons */}
         <div className="flex flex-col space-y-3">
-          <Button onClick={resetError} variant="primary" fullWidth>
+          <button
+            onClick={resetError}
+            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
             Try Again
-          </Button>
+          </button>
 
-          <Button onClick={() => (window.location.href = '/')} variant="outline" fullWidth>
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.href = '/';
+              }
+            }}
+            className="flex-1 bg-neutral-600 text-white px-4 py-2 rounded-lg hover:bg-neutral-700 transition-colors font-medium"
+          >
             Go to Homepage
-          </Button>
+          </button>
 
-          <Button onClick={() => window.location.reload()} variant="ghost" fullWidth>
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
+            className="flex-1 bg-neutral-200 text-neutral-700 px-4 py-2 rounded-lg hover:bg-neutral-300 transition-colors font-medium"
+          >
             Reload Page
-          </Button>
+          </button>
         </div>
 
         {/* Help Text */}
@@ -110,7 +131,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
             If the problem persists, please{' '}
             <a
               href="mailto:support@posalpro.com"
-              className="text-primary-600 hover:text-primary-700 underline"
+              className="text-blue-600 hover:text-blue-700 underline"
             >
               contact support
             </a>
@@ -133,7 +154,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       error: null,
       errorInfo: null,
       errorId: null,
+      isClient: false,
     };
+  }
+
+  componentDidMount() {
+    // ✅ FIXED: Ensure client-side only execution
+    this.setState({ isClient: true });
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
@@ -155,7 +182,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.props.onError?.(error, errorInfo);
 
     // Report error to monitoring service
-    if (this.props.enableReporting !== false) {
+    if (this.props.enableReporting !== false && this.state.isClient) {
       this.reportError(error, errorInfo);
     }
 
@@ -182,8 +209,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         stack: error.stack,
         componentStack: errorInfo.componentStack,
         errorId: this.state.errorId,
-        url: window.location.href,
-        userAgent: navigator.userAgent,
+        url: typeof window !== 'undefined' ? window.location.href : 'server-side',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
         timestamp: new Date().toISOString(),
         userId: null, // Could get from auth store
       };
@@ -214,6 +241,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   };
 
   render() {
+    // ✅ FIXED: Don't render error boundary on server-side
+    if (typeof window === 'undefined') {
+      return this.props.children;
+    }
+
     if (this.state.hasError) {
       const FallbackComponent = this.props.fallback || DefaultErrorFallback;
 

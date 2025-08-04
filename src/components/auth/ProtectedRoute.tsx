@@ -42,7 +42,7 @@ export function ProtectedRoute({
   requireAuth = true,
   className = '',
 }: ProtectedRouteProps) {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession() || {};
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const [accessLevel, setAccessLevel] = useState<AccessLevel>('loading');
@@ -280,7 +280,7 @@ export function withProtectedRoute<P extends object>(
 
 // Utility hooks for checking access in components
 export function useRequireAuth() {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession() || {};
   const router = useRouter();
 
   useEffect(() => {
@@ -300,7 +300,7 @@ export function useRequireAuth() {
 }
 
 export function useHasRole(requiredRoles: string | string[]) {
-  const { data: session } = useSession();
+  const { data: session } = useSession() || {};
   const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
   const userRoles = session?.user?.roles || [];
 
@@ -308,7 +308,7 @@ export function useHasRole(requiredRoles: string | string[]) {
 }
 
 export function useHasPermission(requiredPermissions: string | string[]) {
-  const { data: session } = useSession();
+  const { data: session } = useSession() || {};
   const permissions = Array.isArray(requiredPermissions)
     ? requiredPermissions
     : [requiredPermissions];

@@ -8,11 +8,12 @@ import { setupApiMocks } from '@/test/mocks/api.mock';
 import { clearMockSession } from '@/test/mocks/session.mock';
 import { render, screen, waitFor } from '@/test/utils/test-utils';
 import { UserType } from '@/types';
+import { UserProfile } from '@/lib/entities/user';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
 // Mock LoginForm component (placeholder - would import actual component)
-const LoginForm = ({ onSuccess }: { onSuccess?: (user: any) => void }) => {
+const LoginForm = ({ onSuccess }: { onSuccess?: (user: UserProfile) => void }) => {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);

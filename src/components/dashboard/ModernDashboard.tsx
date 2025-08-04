@@ -8,9 +8,9 @@
 'use client';
 
 import { Button } from '@/components/ui/forms/Button';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
-import { useResponsive } from '@/hooks/useResponsive';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { Customer } from '@/types/entities/customer';
 import { Product } from '@/types/entities/product';
@@ -154,7 +154,8 @@ export default function ModernDashboard({
   const [expandedProposals, setExpandedProposals] = useState(false);
 
   // Mobile responsive and analytics integration
-  const { isMobile, isTablet, isDesktop, screenWidth } = useResponsive();
+  const { state } = useResponsive();
+  const { isMobile, isTablet, isDesktop, screenWidth } = state;
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();

@@ -23,6 +23,7 @@ import {
 } from '../../types/entities/proposal';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
+import { toPrismaJson } from '@/lib/utils/prismaUtils';
 
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
@@ -195,7 +196,7 @@ export class ProposalService {
           validUntil: data.validUntil, // Prisma validates Date
           dueDate: data.dueDate, // Prisma validates Date
           tags: data.tags || [],
-          metadata: data.metadata, // Prisma validates JSON
+          metadata: data.metadata ? toPrismaJson(data.metadata) : undefined,
         },
       });
     } catch (error) {
@@ -257,10 +258,13 @@ export class ProposalService {
 
   async updateProposal(data: UpdateProposalData): Promise<Proposal> {
     try {
-      const { id, ...updateData } = data;
+      const { id, metadata, ...updateData } = data;
       return await prisma.proposal.update({
         where: { id },
-        data: updateData,
+        data: {
+          ...updateData,
+          metadata: metadata ? toPrismaJson(metadata) : undefined,
+        },
       });
     } catch (error) {
       // Log the error using ErrorHandlingService
@@ -609,7 +613,7 @@ export class ProposalService {
           content: data.content,
           order: data.order,
           type: data.type || SectionType.TEXT,
-          metadata: data.metadata,
+          metadata: data.metadata ? toPrismaJson(data.metadata) : undefined,
         },
       });
     } catch (error) {
@@ -666,9 +670,13 @@ export class ProposalService {
     data: Partial<CreateProposalSectionData>
   ): Promise<ProposalSection> {
     try {
+      const { metadata, ...updateData } = data;
       return await prisma.proposalSection.update({
         where: { id },
-        data,
+        data: {
+          ...updateData,
+          metadata: metadata ? toPrismaJson(metadata) : undefined,
+        },
       });
     } catch (error) {
       // Log the error using ErrorHandlingService
@@ -848,7 +856,7 @@ export class ProposalService {
           unitPrice: data.unitPrice,
           discount: data.discount || 0,
           total,
-          configuration: data.configuration,
+          configuration: data.configuration ? toPrismaJson(data.configuration) : undefined,
         },
       });
     } catch (error) {
@@ -929,9 +937,13 @@ export class ProposalService {
         }
       }
 
+      const { configuration, ...restUpdateData } = updateData;
       return await prisma.proposalProduct.update({
         where: { id },
-        data: updateData,
+        data: {
+          ...restUpdateData,
+          configuration: configuration ? toPrismaJson(configuration) : undefined,
+        },
       });
     } catch (error) {
       // Log the error using ErrorHandlingService

@@ -52,7 +52,7 @@ export interface ContentQualityMetrics {
 }
 
 export const useContentSearchAnalytics = () => {
-  const { trackOptimized: track, identify, page } = useOptimizedAnalytics();
+  const { trackOptimized: track } = useOptimizedAnalytics();
 
   // Tracking state
   const [currentSearch, setCurrentSearch] = useState<ContentSearchMetrics | null>(null);
@@ -89,14 +89,18 @@ export const useContentSearchAnalytics = () => {
       setCurrentSearch(searchMetrics);
 
       // Track search initiation
-      track('content_search_initiated', {
-        searchId,
-        sessionId,
-        searchQuery: searchQuery.substring(0, 100), // Truncate for privacy
-        filtersCount: searchMetrics.filtersUsed.length,
-        userStory: 'US-1.1',
-        hypothesis: 'H1',
-      }, 'medium');
+      track(
+        'content_search_initiated',
+        {
+          searchId,
+          sessionId,
+          searchQuery: searchQuery.substring(0, 100), // Truncate for privacy
+          filtersCount: searchMetrics.filtersUsed.length,
+          userStory: 'US-1.1',
+          hypothesis: 'H1',
+        },
+        'medium'
+      );
 
       return searchId;
     },
@@ -119,26 +123,34 @@ export const useContentSearchAnalytics = () => {
       setCurrentSearch(updatedMetrics);
 
       // Track search results delivery
-      track('content_search_results', {
-        searchId,
-        timeToFirstResult,
-        resultsCount,
-        searchAccuracy,
-        userStory: 'US-1.1',
-        hypothesis: 'H1',
-      }, 'medium');
+      track(
+        'content_search_results',
+        {
+          searchId,
+          timeToFirstResult,
+          resultsCount,
+          searchAccuracy,
+          userStory: 'US-1.1',
+          hypothesis: 'H1',
+        },
+        'medium'
+      );
 
       // Performance tracking for H1 hypothesis
-      track('search_performance', {
-        searchId,
-        timeToFirstResult,
-        resultsCount,
-        searchAccuracy,
-        hypothesis: 'H1',
-        targetTime: 2000, // Target <2 seconds for H1
-        performanceScore:
-          timeToFirstResult < 2000 ? 100 : Math.max(0, 100 - (timeToFirstResult - 2000) / 100),
-      }, 'high');
+      track(
+        'search_performance',
+        {
+          searchId,
+          timeToFirstResult,
+          resultsCount,
+          searchAccuracy,
+          hypothesis: 'H1',
+          targetTime: 2000, // Target <2 seconds for H1
+          performanceScore:
+            timeToFirstResult < 2000 ? 100 : Math.max(0, 100 - (timeToFirstResult - 2000) / 100),
+        },
+        'high'
+      );
     },
     [currentSearch, track]
   );
@@ -161,15 +173,19 @@ export const useContentSearchAnalytics = () => {
       searchHistory.current.push(finalMetrics);
 
       // Track search completion
-      track('content_search_completed', {
-        searchId,
-        totalSearchTime: timeToSelection || Date.now() - currentSearch.searchStartTime,
-        resultSelected: !!selectedResultId,
-        selectedResultId,
-        userSatisfaction,
-        userStory: 'US-1.1',
-        hypothesis: 'H1',
-      }, 'medium');
+      track(
+        'content_search_completed',
+        {
+          searchId,
+          totalSearchTime: timeToSelection || Date.now() - currentSearch.searchStartTime,
+          resultSelected: !!selectedResultId,
+          selectedResultId,
+          userSatisfaction,
+          userStory: 'US-1.1',
+          hypothesis: 'H1',
+        },
+        'medium'
+      );
 
       // Update performance data for H1 hypothesis validation
       updatePerformanceMetrics(finalMetrics);
@@ -193,15 +209,19 @@ export const useContentSearchAnalytics = () => {
             suggestedCategories.length
           : 0;
 
-      track('ai_categorization_used', {
-        contentId,
-        suggestedCount: suggestedCategories.length,
-        acceptedCount: acceptedCategories.length,
-        accuracy: accuracy * 100,
-        userModified: userModifications,
-        userStory: 'US-1.2',
-        hypothesis: 'H1',
-      }, 'medium');
+      track(
+        'ai_categorization_used',
+        {
+          contentId,
+          suggestedCount: suggestedCategories.length,
+          acceptedCount: acceptedCategories.length,
+          accuracy: accuracy * 100,
+          userModified: userModifications,
+          userStory: 'US-1.2',
+          hypothesis: 'H1',
+        },
+        'medium'
+      );
 
       return accuracy;
     },
@@ -219,12 +239,16 @@ export const useContentSearchAnalytics = () => {
       });
 
       if (clickedContentId) {
-        track('related_content_clicked', {
-          sourceContentId: contentId,
-          clickedContentId,
-          userStory: 'US-1.2',
-          hypothesis: 'H1',
-        }, 'low');
+        track(
+          'related_content_clicked',
+          {
+            sourceContentId: contentId,
+            clickedContentId,
+            userStory: 'US-1.2',
+            hypothesis: 'H1',
+          },
+          'low'
+        );
       }
     },
     [track]
@@ -243,26 +267,34 @@ export const useContentSearchAnalytics = () => {
         popularityScore: number;
       }
     ) => {
-      track('content_quality_tracked', {
-        contentId,
-        qualityScore,
-        views: usageMetrics.views,
-        shares: usageMetrics.shares,
-        timeSpent: usageMetrics.timeSpent,
-        clickThroughRate: usageMetrics.clickThroughRate * 100,
-        popularityScore: usageMetrics.popularityScore,
-        userStory: 'US-1.3',
-        hypothesis: 'H1',
-      }, 'medium');
+      track(
+        'content_quality_tracked',
+        {
+          contentId,
+          qualityScore,
+          views: usageMetrics.views,
+          shares: usageMetrics.shares,
+          timeSpent: usageMetrics.timeSpent,
+          clickThroughRate: usageMetrics.clickThroughRate * 100,
+          popularityScore: usageMetrics.popularityScore,
+          userStory: 'US-1.3',
+          hypothesis: 'H1',
+        },
+        'medium'
+      );
 
       // Track quality improvement for H1 hypothesis
       if (qualityScore >= 75) {
-        track('high_quality_content_identified', {
-          contentId,
-          qualityScore,
-          userStory: 'US-1.3',
-          hypothesis: 'H1',
-        }, 'medium');
+        track(
+          'high_quality_content_identified',
+          {
+            contentId,
+            qualityScore,
+            userStory: 'US-1.3',
+            hypothesis: 'H1',
+          },
+          'medium'
+        );
       }
     },
     [track]
@@ -274,13 +306,17 @@ export const useContentSearchAnalytics = () => {
       proposalOutcome: 'won' | 'lost' | 'pending',
       contentUtilizationScore: number
     ) => {
-      track('content_win_rate_tracked', {
-        contentId,
-        proposalOutcome,
-        contentUtilizationScore,
-        userStory: 'US-1.3',
-        hypothesis: 'H1',
-      }, 'medium');
+      track(
+        'content_win_rate_tracked',
+        {
+          contentId,
+          proposalOutcome,
+          contentUtilizationScore,
+          userStory: 'US-1.3',
+          hypothesis: 'H1',
+        },
+        'medium'
+      );
     },
     [track]
   );
@@ -374,11 +410,15 @@ export const useContentSearchAnalytics = () => {
         | 'content_used',
       context: Record<string, any>
     ) => {
-      track('content_search_journey', {
-        journeyStep,
-        ...context,
-        hypothesis: 'H1',
-      }, 'medium');
+      track(
+        'content_search_journey',
+        {
+          journeyStep,
+          ...context,
+          hypothesis: 'H1',
+        },
+        'medium'
+      );
     },
     [track]
   );

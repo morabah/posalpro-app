@@ -8,10 +8,10 @@
 
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useApiClient } from '@/hooks/useApiClient';
-import { useResponsive } from '@/hooks/useResponsive';
 import { EnhancedProposalAnalytics } from '@/types/analytics';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -91,7 +91,8 @@ interface BasicInformationStepProps {
 
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
   // ✅ MOBILE OPTIMIZATION: Use centralized responsive detection
-  const { isMobile, isTablet } = useResponsive();
+  const { state } = useResponsive();
+  const { isMobile, isTablet } = state;
 
   // ✅ FIXED: Use proper API client instead of direct fetch
   const apiClient = useApiClient();
@@ -236,7 +237,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       return () => {
         // ⚡ IMMEDIATE: Return early if mobile throttling prevents spam
         const currentTime = Date.now();
-        
+
         // ⚡ ASYNC: Defer heavy operations to prevent UI blocking
         requestAnimationFrame(() => {
           // Track field interactions for analytics (heavily throttled)
@@ -270,21 +271,40 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   // Fetch customers on component mount
   useEffect(() => {
     const fetchCustomers = async () => {
-      setCustomersLoading(true);
-      setCustomersError(null);
       try {
-        // ✅ FIXED: Use apiClient instead of direct fetch to prevent /api/api/ URLs
-        const response = await apiClient.get<any>('customers');
+        setCustomersLoading(true);
+        setCustomersError(null);
 
-        // ✅ CRITICAL FIX: Remove debug logs to prevent console spam
-        // console.log('🔍 [DEBUG] Customers API response:', response);
+        console.log('🔍 [BasicInformationStep] Fetching customers...');
+        const response = await apiClient.get<{
+          success: boolean;
+          data?: { customers: Customer[] };
+          message?: string;
+        }>('/customers');
 
-        // ✅ FIXED: Proper response structure handling
-        if (response.success && response.data?.customers) {
-          const customerList = response.data.customers;
-          setCustomers(customerList);
+        console.log('🔍 [BasicInformationStep] Raw API response:', response);
+
+        // ✅ ENHANCED: Better response validation
+        if (response && typeof response === 'object') {
+          if (
+            response.success &&
+            response.data?.customers &&
+            Array.isArray(response.data.customers)
+          ) {
+            const customerList = response.data.customers;
+            console.log('✅ [BasicInformationStep] Loaded customers:', customerList.length);
+            setCustomers(customerList);
+          } else if (response.success === false) {
+            console.error('❌ [BasicInformationStep] API returned error:', response);
+            setCustomers([]);
+            setCustomersError(response.message || 'Unable to load customers. Please try again.');
+          } else {
+            console.error('❌ [BasicInformationStep] Invalid response structure:', response);
+            setCustomers([]);
+            setCustomersError('Unable to load customers. Please try again.');
+          }
         } else {
-          console.error('❌ [BasicInformationStep] Invalid response structure:', response);
+          console.error('❌ [BasicInformationStep] Empty or invalid response:', response);
           setCustomers([]);
           setCustomersError('Unable to load customers. Please try again.');
         }

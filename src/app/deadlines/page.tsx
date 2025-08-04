@@ -6,9 +6,26 @@
  * Based on PROMPT_H7_DEADLINE_MANAGEMENT.md specifications
  */
 
-import { DeadlineTracker } from '@/components/deadlines/DeadlineTracker';
 import { CreateDeadlineData, UpdateDeadlineData } from '@/types/deadlines';
+import dynamic from 'next/dynamic';
 import { useCallback } from 'react';
+
+// Dynamic import to reduce bundle size
+const DeadlineTracker = dynamic(
+  () => import('@/components/deadlines/DeadlineTracker').then(mod => ({ default: mod.DeadlineTracker })),
+  {
+    loading: () => (
+      <div className="bg-white rounded-xl shadow-lg border p-8">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    ),
+    ssr: false
+  }
+);
 
 export default function DeadlineManagementPage() {
   // Stable event handlers using useCallback

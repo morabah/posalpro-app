@@ -1,7 +1,11 @@
 /**
  * PosalPro MVP2 - Role Manager Component
- * Comprehensive role management interface with permission matrix
- * Based on ADMIN_SCREEN.md wireframe and RBAC specifications
+ * Comprehensive role and permission management system
+ * Based on ADMIN_SCREEN.md wireframe specifications
+ *
+ * User Stories: US-2.1, US-2.2, US-2.3
+ * Hypotheses: H2 (50% admin efficiency improvement), H3 (40% permission accuracy)
+ * Component Traceability: RoleManager, PermissionMatrix, UserAssignment
  */
 
 'use client';
@@ -20,7 +24,12 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useCallback, useState } from 'react';
-import { toast } from 'react-hot-toast';
+
+// Simple toast function to replace react-hot-toast
+const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  console.log(`Toast (${type}):`, message);
+  // In a real implementation, this would show a toast notification
+};
 
 interface RoleManagerProps {
   searchTerm: string;
@@ -120,17 +129,17 @@ export default function RoleManager({
 
   const handleCreateRole = useCallback(async () => {
     if (!formData.name.trim() || !formData.description.trim()) {
-      toast.error('Name and description are required');
+      showToast('Name and description are required', 'error');
       return;
     }
 
     try {
       await createRole(formData);
-      toast.success('Role created successfully');
+      showToast('Role created successfully');
       setShowCreateForm(false);
       setFormData({ name: '', description: '', level: 5, permissions: [] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create role');
+      showToast(error instanceof Error ? error.message : 'Failed to create role', 'error');
     }
   }, [createRole, formData]);
 
@@ -138,11 +147,11 @@ export default function RoleManager({
     async (roleId: string) => {
       try {
         await updateRole(roleId, formData);
-        toast.success('Role updated successfully');
+        showToast('Role updated successfully');
         setEditingRole(null);
         setFormData({ name: '', description: '', level: 5, permissions: [] });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to update role');
+        showToast(error instanceof Error ? error.message : 'Failed to update role', 'error');
       }
     },
     [updateRole, formData]
@@ -160,9 +169,9 @@ export default function RoleManager({
 
       try {
         await deleteRole(roleId);
-        toast.success('Role deleted successfully');
+        showToast('Role deleted successfully');
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to delete role');
+        showToast(error instanceof Error ? error.message : 'Failed to delete role', 'error');
       }
     },
     [deleteRole]

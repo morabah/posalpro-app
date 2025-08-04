@@ -14,12 +14,12 @@
  * - GPU acceleration for smooth interactions
  */
 
-import { useAuth } from '@/hooks/auth/useAuth';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useErrorHandler } from '@/components/providers/ErrorBoundary';
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
+import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
-import { useResponsive } from '@/hooks/useResponsive';
 import type { CreateProposalData } from '@/lib/entities/proposal';
 import { ProposalEntity } from '@/lib/entities/proposal';
 import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
@@ -209,11 +209,12 @@ export function ProposalWizard({
   const DEBUG_MODE = process.env.NODE_ENV === 'development' && false; // Disable for performance
   const DEBOUNCE_DELAY = 500; // Reduced from 1000ms for better responsiveness
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth() || {};
   const proposalEntity = ProposalEntity.getInstance();
 
   // Mobile-specific state
-  const { isMobile, isTablet, isDesktop, screenWidth } = useResponsive();
+  const { state } = useResponsive();
+  const { isMobile, isTablet, isDesktop, screenWidth } = state;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);

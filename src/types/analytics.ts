@@ -50,7 +50,7 @@ export interface TestExecutionResult extends BaseEntity {
   executed: boolean;
   passed: boolean;
   executionTime: number;
-  metrics: Record<string, any>;
+  metrics: Record<string, unknown>;
   errors: string[];
   timestamp: Date;
   environment: string;
@@ -274,10 +274,10 @@ export interface EnhancedProposalAnalytics {
       | 'ai_suggestion_shown',
     metadata?: WizardStepAnalytics['metadata']
   ) => void;
-  trackProposalCreation?: (metrics: any) => void; // 🔧 TEMPORARY: Match hook signature
-  trackContentSelection?: (contentData: any) => void; // 🔧 TEMPORARY: Match hook signature
+  trackProposalCreation?: (metrics: Record<string, unknown>) => void;
+  trackContentSelection?: (contentData: Record<string, unknown>) => void;
   trackProductSelection?: (productId: string, metadata?: Record<string, unknown>) => void;
-  trackTeamAssignment?: (assignmentData: any) => void; // 🔧 TEMPORARY: Match hook signature
+  trackTeamAssignment?: (assignmentData: Record<string, unknown>) => void;
   trackWorkflowStep?: (
     workflowId: string,
     step: string,

@@ -6,7 +6,7 @@
  * Based on H7 hypothesis validation and PROMPT_H7_DEADLINE_MANAGEMENT.md
  */
 
-import { useAuth } from '@/hooks/auth/useAuth';
+
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
@@ -155,7 +155,7 @@ const COMPONENT_STATUS = [
 ];
 
 export default function Phase7Page() {
-  const { user } = useAuth();
+
   const analytics = useDeadlineManagementAnalytics();
   const { handleAsyncError } = useErrorHandler();
 

@@ -6,7 +6,7 @@
  * Based on PROMPT_H7_DEADLINE_MANAGEMENT.md specifications
  */
 
-import { useAuth } from '@/hooks/auth/useAuth';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   DeadlineManagementMetrics,
@@ -29,7 +29,7 @@ interface DeadlineTrackingSession {
 
 export function useDeadlineManagementAnalytics() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { user } = useAuth();
+  const { user } = useAuth() || {};
 
   const sessionData = useRef<DeadlineTrackingSession>({
     sessionId: `deadline-session-${Date.now()}`,

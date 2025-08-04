@@ -131,6 +131,8 @@ export function useProduct(id: string): UseQueryResult<Product, Error> {
       }>(`products/${id}`);
 
       if (!response.success) {
+        // Log error but let React Query handle the error state
+        console.warn('[useProducts] Product fetch failed:', response.message || 'Failed to fetch product');
         throw new Error(response.message || 'Failed to fetch product');
       }
 
@@ -173,6 +175,8 @@ export function useProductSearch(
       }>(`products?${searchParams.toString()}`);
 
       if (!response.success) {
+        // Log error but let React Query handle the error state
+        console.warn('[useProducts] Product search failed:', response.message || 'Failed to search products');
         throw new Error(response.message || 'Failed to search products');
       }
 
@@ -204,6 +208,8 @@ export function useCreateProduct() {
       }>('products', data);
 
       if (!response.success) {
+        // Log error but let the mutation error handling manage it
+        console.warn('[useProducts] Product creation failed:', response.message || 'Failed to create product');
         throw new Error(response.message || 'Failed to create product');
       }
 
@@ -229,6 +235,8 @@ export function useUpdateProduct() {
       }>(`products/${id}`, updateData);
 
       if (!response.success) {
+        // Log error but let the mutation error handling manage it
+        console.warn('[useProducts] Product update failed:', response.message || 'Failed to update product');
         throw new Error(response.message || 'Failed to update product');
       }
 
@@ -252,6 +260,8 @@ export function useDeleteProduct() {
       }>(`products/${id}`);
 
       if (!response.success) {
+        // Log error but let the mutation error handling manage it
+        console.warn('[useProducts] Product deletion failed:', response.message || 'Failed to delete product');
         throw new Error(response.message || 'Failed to delete product');
       }
 

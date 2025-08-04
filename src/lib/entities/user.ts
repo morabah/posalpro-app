@@ -31,7 +31,7 @@ export interface UserActivityLog {
   userId: string;
   action: string;
   timestamp: Date;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -211,7 +211,9 @@ export class UserEntity {
       // Transform response to expected format
       const users = Array.isArray(response.data)
         ? response.data
-        : (response.data as any)?.users || [];
+        : (response.data && typeof response.data === 'object' && 'users' in response.data && Array.isArray((response.data as { users: unknown[] }).users))
+        ? (response.data as { users: UserProfile[] }).users
+        : [];
       const pagination = Array.isArray(response.data)
         ? {
             page: options.page || 1,
@@ -219,7 +221,9 @@ export class UserEntity {
             total: response.data.length,
             totalPages: Math.ceil(response.data.length / (options.limit || 10)),
           }
-        : (response.data as any)?.pagination || {
+        : (response.data && typeof response.data === 'object' && 'pagination' in response.data) 
+        ? (response.data as { pagination: unknown }).pagination 
+        : {
             page: options.page || 1,
             limit: options.limit || 10,
             total: 0,
@@ -230,7 +234,7 @@ export class UserEntity {
         success: response.success,
         data: {
           users,
-          pagination,
+          pagination: pagination as { page: number; limit: number; total: number; totalPages: number },
         },
         message: response.message || 'No users found',
       };

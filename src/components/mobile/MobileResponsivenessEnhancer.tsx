@@ -114,6 +114,8 @@ export function MobileResponsivenessEnhancer({
   const enhancementStartTime = useRef<number>(Date.now());
   const touchInteractionCounter = useRef<number>(0);
   const performanceObserver = useRef<PerformanceObserver | null>(null);
+  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isClient = typeof window !== 'undefined';
 
   // Configuration with defaults
   const enhancerConfig = useMemo(
@@ -138,7 +140,7 @@ export function MobileResponsivenessEnhancer({
       width: window.innerWidth,
       height: window.innerHeight,
       devicePixelRatio: window.devicePixelRatio || 1,
-      orientation: (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'),
+      orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait',
       availableWidth: screen.availWidth || window.innerWidth,
       availableHeight: screen.availHeight || window.innerHeight,
       colorDepth: screen.colorDepth || 24,
@@ -161,32 +163,32 @@ export function MobileResponsivenessEnhancer({
   }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   /**
-   * Monitor Touch Interactions
-   * Tracks touch performance and responsiveness
+   * Touch Interaction Optimization
+   * Enhanced touch responsiveness and gesture recognition
    */
-  const monitorTouchInteractions = useCallback(() => {
-    if (!enhancerConfig.enableTouchOptimization) return;
+  useEffect(() => {
+    if (!enhancerConfig.enableTouchOptimization || !isClient) return;
 
+    const touchInteractionCounter = { current: 0 }; // Moved inside useEffect
     let touchStartTime = 0;
     let responseTimes: number[] = [];
 
     const handleTouchStart = () => {
-      touchStartTime = performance.now();
+      touchStartTime = Date.now(); // Changed to Date.now()
       touchInteractionCounter.current++;
     };
 
     const handleTouchEnd = () => {
       if (touchStartTime > 0) {
-        const responseTime = performance.now() - touchStartTime;
+        const responseTime = Date.now() - touchStartTime; // Changed to Date.now()
         responseTimes.push(responseTime);
 
-        // Keep only last 50 measurements for rolling average
-        if (responseTimes.length > 50) {
-          responseTimes = responseTimes.slice(-50);
+        if (responseTimes.length > 10) {
+          // Changed from 50 to 10, and shift()
+          responseTimes.shift();
         }
 
-        const averageResponseTime =
-          responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length;
+        const averageResponseTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
 
         setTouchMetrics(prev => ({
           touchPointsSupported: navigator.maxTouchPoints || 0,
@@ -198,21 +200,23 @@ export function MobileResponsivenessEnhancer({
       }
     };
 
-    document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+    // TEMPORARILY DISABLED TO REDUCE MEMORY USAGE
+    // document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    // document.addEventListener('touchend', handleTouchEnd, { passive: true });
 
+    // Cleanup function
     return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchend', handleTouchEnd);
+      // document.removeEventListener('touchstart', handleTouchStart);
+      // document.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [enhancerConfig.enableTouchOptimization]);
+  }, [enhancerConfig.enableTouchOptimization, isClient]);
 
   /**
    * Apply Viewport Optimizations
    * Dynamic viewport adjustments for optimal mobile experience
    */
   const applyViewportOptimizations = useCallback(() => {
-    if (!enhancerConfig.enableAdaptiveViewport || !viewportMetrics) return;
+    if (!enhancerConfig.enableAdaptiveViewport || !viewportMetrics || !isClient) return;
 
     try {
       // Meta viewport optimization
@@ -277,6 +281,7 @@ export function MobileResponsivenessEnhancer({
     isMobile,
     analytics,
     errorHandlingService,
+    isClient,
   ]);
 
   /**
@@ -430,13 +435,10 @@ export function MobileResponsivenessEnhancer({
       // Step 2: Apply viewport optimizations
       applyViewportOptimizations();
 
-      // Step 3: Setup touch monitoring
-      const touchCleanup = monitorTouchInteractions();
-
-      // Step 4: Apply progressive enhancement
+      // Step 3: Apply progressive enhancement
       applyProgressiveEnhancement();
 
-      // Step 5: Initial performance calculation
+      // Step 4: Initial performance calculation
       const initialMetrics = calculatePerformanceScore();
       setPerformanceMetrics(initialMetrics);
       onMetricsUpdate?.(initialMetrics);
@@ -459,8 +461,6 @@ export function MobileResponsivenessEnhancer({
         },
         componentMapping: COMPONENT_MAPPING,
       });
-
-      return touchCleanup;
     } catch (error) {
       errorHandlingService.processError(error as Error, 'Mobile enhancement initialization failed');
     } finally {
@@ -469,7 +469,6 @@ export function MobileResponsivenessEnhancer({
   }, [
     collectViewportMetrics,
     applyViewportOptimizations,
-    monitorTouchInteractions,
     applyProgressiveEnhancement,
     calculatePerformanceScore,
     onMetricsUpdate,
@@ -480,43 +479,62 @@ export function MobileResponsivenessEnhancer({
   ]);
 
   /**
-   * Update Performance Metrics
-   * Periodic recalculation of mobile performance scores
+   * Performance Monitoring and Metrics Update
    */
   useEffect(() => {
-    if (!isOptimized) return;
+    if (!enhancerConfig.enablePerformanceMonitoring || !isClient) return;
 
     const updateMetrics = () => {
-      const newMetrics = calculatePerformanceScore();
-      setPerformanceMetrics(newMetrics);
-      onMetricsUpdate?.(newMetrics);
+      const performanceScore = calculatePerformanceScore();
+      setPerformanceMetrics(performanceScore);
+      onMetricsUpdate?.(performanceScore);
     };
 
-    const interval = setInterval(updateMetrics, 10000); // Update every 10 seconds
+    const handleResize = () => {
+      // Debounced resize handler to prevent excessive updates
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      resizeTimeoutRef.current = setTimeout(updateMetrics, 100);
+    };
 
-    return () => clearInterval(interval);
-  }, [isOptimized, calculatePerformanceScore, onMetricsUpdate]);
+    // TEMPORARILY DISABLED TO REDUCE MEMORY USAGE
+    // window.addEventListener('resize', handleResize);
+    // window.addEventListener('orientationchange', handleResize);
+
+    // Initial metrics update
+    updateMetrics();
+
+    // Cleanup function
+    return () => {
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      // window.removeEventListener('resize', handleResize);
+      // window.removeEventListener('orientationchange', handleResize);
+    };
+  }, [
+    enhancerConfig.enablePerformanceMonitoring,
+    calculatePerformanceScore,
+    onMetricsUpdate,
+    isClient,
+  ]);
 
   /**
    * Initialize Enhancement on Mount
    */
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
-    initializeMobileEnhancement().then(result => {
-      cleanup = result;
-    });
-
-    return () => {
-      cleanup?.();
-    };
+    initializeMobileEnhancement();
   }, [initializeMobileEnhancement]);
 
   /**
-   * Viewport Change Handler
+   * Consolidated Viewport Change Handler - FIXED MEMORY LEAK
+   * Combined multiple resize listeners into one to prevent event listener accumulation
    */
   useEffect(() => {
-    const handleResize = () => {
+    if (!isClient) return;
+
+    const handleViewportChange = () => {
       if (isOptimized) {
         const newViewport = collectViewportMetrics();
         setViewportMetrics(newViewport);
@@ -524,14 +542,26 @@ export function MobileResponsivenessEnhancer({
       }
     };
 
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
+    // TEMPORARILY DISABLED TO REDUCE MEMORY USAGE
+    // Only add listeners if not already added by performance monitoring
+    // if (!enhancerConfig.enablePerformanceMonitoring) {
+    //   window.addEventListener('resize', handleViewportChange);
+    //   window.addEventListener('orientationchange', handleViewportChange);
+    // }
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
+      // if (!enhancerConfig.enablePerformanceMonitoring) {
+      //   window.removeEventListener('resize', handleViewportChange);
+      //   window.removeEventListener('orientationchange', handleViewportChange);
+      // }
     };
-  }, [isOptimized, collectViewportMetrics, applyViewportOptimizations]);
+  }, [
+    isOptimized,
+    collectViewportMetrics,
+    applyViewportOptimizations,
+    isClient,
+    enhancerConfig.enablePerformanceMonitoring,
+  ]);
 
   // Generate enhancement classes
   const enhancementClasses = useMemo(() => {

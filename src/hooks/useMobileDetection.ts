@@ -13,8 +13,8 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback, useEffect, useState } from 'react';
 
 export interface MobileDeviceInfo {
@@ -230,17 +230,21 @@ export const useMobileDetection = () => {
         };
 
         // Analytics tracking for navigation optimization
-        analytics('navigation_optimization_applied', {
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: ['H9', 'H10'],
-          measurementData: {
-            deviceType: device.deviceType,
-            optimizationStrategy: optimization.menuType,
-            touchTargetSize: optimization.touchTargetSize,
-            gesturesEnabled: optimization.useSwipeGestures,
+        analytics(
+          'navigation_optimization_applied',
+          {
+            userStories: COMPONENT_MAPPING.userStories,
+            hypotheses: ['H9', 'H10'],
+            measurementData: {
+              deviceType: device.deviceType,
+              optimizationStrategy: optimization.menuType,
+              touchTargetSize: optimization.touchTargetSize,
+              gesturesEnabled: optimization.useSwipeGestures,
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'medium');
+          'medium'
+        );
 
         return optimization;
       } catch (error) {
@@ -272,32 +276,36 @@ export const useMobileDetection = () => {
     (device: MobileDeviceInfo) => {
       try {
         // Track comprehensive device analytics (H11: Mobile Performance)
-        analytics('mobile_device_metrics', {
-          userStories: ['US-8.1', 'US-8.3'],
-          hypotheses: ['H11'],
-          measurementData: {
-            deviceType: device.deviceType,
-            screenWidth: device.screenSize.width,
-            screenHeight: device.screenSize.height,
-            orientation: device.screenSize.orientation,
-            aspectRatio: device.screenSize.aspectRatio,
-            touchEnabled: device.touchEnabled,
-            touchPoints: device.capabilities.touchPoints,
-            pixelDensity: device.capabilities.pixelDensity,
-            platform: device.platform.isIOS
-              ? 'ios'
-              : device.platform.isAndroid
-                ? 'android'
-                : 'other',
-            browser: device.platform.browser,
-            vibrationSupport: device.capabilities.vibration,
-            webglSupport: device.capabilities.webgl,
-            prefersReducedMotion: device.accessibility.prefersReducedMotion,
-            prefersHighContrast: device.accessibility.prefersHighContrast,
-            hasSafeArea: device.accessibility.hasSafeArea,
+        analytics(
+          'mobile_device_metrics',
+          {
+            userStories: ['US-8.1', 'US-8.3'],
+            hypotheses: ['H11'],
+            measurementData: {
+              deviceType: device.deviceType,
+              screenWidth: device.screenSize.width,
+              screenHeight: device.screenSize.height,
+              orientation: device.screenSize.orientation,
+              aspectRatio: device.screenSize.aspectRatio,
+              touchEnabled: device.touchEnabled,
+              touchPoints: device.capabilities.touchPoints,
+              pixelDensity: device.capabilities.pixelDensity,
+              platform: device.platform.isIOS
+                ? 'ios'
+                : device.platform.isAndroid
+                  ? 'android'
+                  : 'other',
+              browser: device.platform.browser,
+              vibrationSupport: device.capabilities.vibration,
+              webglSupport: device.capabilities.webgl,
+              prefersReducedMotion: device.accessibility.prefersReducedMotion,
+              prefersHighContrast: device.accessibility.prefersHighContrast,
+              hasSafeArea: device.accessibility.hasSafeArea,
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'low');
+          'low'
+        );
       } catch (error) {
         handleAsyncError(error as Error, 'Failed to track device metrics', {
           context: 'useMobileDetection.trackDeviceMetrics',
@@ -323,16 +331,20 @@ export const useMobileDetection = () => {
       setNavigationOptimization(updatedOptimization);
 
       // Track screen change events
-      analytics('mobile_screen_change', {
-        userStories: ['US-8.1'],
-        hypotheses: ['H9'],
-        measurementData: {
-          newOrientation: updatedDevice.screenSize.orientation,
-          newWidth: updatedDevice.screenSize.width,
-          newHeight: updatedDevice.screenSize.height,
+      analytics(
+        'mobile_screen_change',
+        {
+          userStories: ['US-8.1'],
+          hypotheses: ['H9'],
+          measurementData: {
+            newOrientation: updatedDevice.screenSize.orientation,
+            newWidth: updatedDevice.screenSize.width,
+            newHeight: updatedDevice.screenSize.height,
+          },
+          componentMapping: COMPONENT_MAPPING,
         },
-        componentMapping: COMPONENT_MAPPING,
-      }, 'low');
+        'low'
+      );
     } catch (error) {
       handleAsyncError(error as Error, 'Failed to handle screen change', {
         context: 'useMobileDetection.handleScreenChange',
@@ -375,20 +387,21 @@ export const useMobileDetection = () => {
 
     initializeMobileDetection();
 
+    // TEMPORARILY DISABLED TO REDUCE MEMORY USAGE
     // Set up screen change listeners
-    const handleResize = () => handleScreenChange();
-    const handleOrientationChange = () => {
-      // Delay to allow screen dimensions to update
-      setTimeout(handleScreenChange, 100);
-    };
+    // const handleResize = () => handleScreenChange();
+    // const handleOrientationChange = () => {
+    //   // Delay to allow screen dimensions to update
+    //   setTimeout(handleScreenChange, 100);
+    // };
 
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleOrientationChange);
+    // window.addEventListener('resize', handleResize);
+    // window.addEventListener('orientationchange', handleOrientationChange);
 
     // Cleanup listeners
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleOrientationChange);
+      // window.removeEventListener('resize', handleResize);
+      // window.removeEventListener('orientationchange', handleOrientationChange);
     };
   }, []); // ✅ FIXED: Empty dependency array to prevent infinite initialization loops
 

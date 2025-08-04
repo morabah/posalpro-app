@@ -139,6 +139,8 @@ export function useCustomer(id: string): UseQueryResult<Customer, Error> {
       }>(`customers/${id}`);
 
       if (!response.success) {
+        // Log error but let React Query handle the error state
+        console.warn('[useCustomers] Customer fetch failed:', response.message || 'Failed to fetch customer');
         throw new Error(response.message || 'Failed to fetch customer');
       }
 

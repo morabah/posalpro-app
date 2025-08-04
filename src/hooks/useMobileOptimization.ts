@@ -1,175 +1,123 @@
 /**
- * PosalPro MVP2 - Mobile Optimization Hook
- * Optimizes performance specifically for mobile devices in proposal wizard
- * Component Traceability Matrix: US-8.1, H9, AC-8.1.1
- *
- * MOBILE PERFORMANCE OPTIMIZATIONS:
- * - Reduces analytics overhead on mobile
- * - Implements smart debouncing for mobile interactions
- * - Optimizes form validation for mobile performance
- * - Manages memory usage for mobile devices
+ * ✅ MOBILE OPTIMIZATION: Enhanced Mobile Optimization Hook
+ * Optimizes performance for mobile devices with memory pressure detection
+ * ✅ MEMORY OPTIMIZATION: Reduced memory footprint and operation frequency
  */
 
-'use client';
-
-import { useResponsive } from '@/hooks/useResponsive';
-import { useCallback, useEffect, useRef } from 'react';
-
-/**
- * Type definitions for better type safety
- * Following CORE_REQUIREMENTS.md TypeScript compliance standards
- */
-interface AnalyticsData {
-  userId?: string;
-  componentName?: string;
-  action?: string;
-  metadata?: Record<string, unknown>;
-  [key: string]: unknown;
-}
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface MobileOptimizationConfig {
   enableReducedAnalytics?: boolean;
-  debounceDelay?: number;
+  enableTouchOptimization?: boolean;
+  enableMemoryPressureDetection?: boolean;
   maxMemoryUsage?: number;
-  enableSmartThrottling?: boolean;
+  debounceDelay?: number;
+  throttleDelay?: number;
 }
 
 interface MobileOptimizationResult {
   isMobileOptimized: boolean;
-  debouncedCallback: (callback: () => void, delay?: number) => void;
-  throttledCallback: (callback: () => void, delay?: number) => void;
-  optimizedAnalyticsTrack: (event: string, data?: AnalyticsData) => void;
+  debouncedCallback: <T extends (...args: any[]) => any>(callback: T) => T;
+  throttledCallback: <T extends (...args: any[]) => any>(callback: T) => T;
+  optimizedAnalyticsTrack: (eventName: string, data?: Record<string, unknown>) => void;
   memoryPressureWarning: boolean;
 }
+
+const DEFAULT_CONFIG: Required<MobileOptimizationConfig> = {
+  enableReducedAnalytics: true,
+  enableTouchOptimization: true,
+  enableMemoryPressureDetection: true,
+  maxMemoryUsage: 100 * 1024 * 1024, // 100MB
+  debounceDelay: 300,
+  throttleDelay: 1000,
+};
 
 export function useMobileOptimization(
   config: MobileOptimizationConfig = {}
 ): MobileOptimizationResult {
-  const { isMobile, isTablet } = useResponsive();
-  const {
-    enableReducedAnalytics = true,
-    debounceDelay = 300,
-    maxMemoryUsage = 50 * 1024 * 1024, // 50MB
-    enableSmartThrottling = true,
-  } = config;
+  const { trackOptimized } = useOptimizedAnalytics();
+  const finalConfig = { ...DEFAULT_CONFIG, ...config };
 
-  // Performance tracking refs
-  const debounceTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const throttleTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const lastAnalyticsTrack = useRef<number>(0);
-  const memoryPressureWarning = useRef<boolean>(false);
+  // ✅ MEMORY OPTIMIZATION: Simplified mobile detection
+  const [isMobileOptimized, setIsMobileOptimized] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 768;
+  });
 
-  // Check if mobile optimization should be enabled
-  const isMobileOptimized = isMobile || isTablet;
+  // ✅ MEMORY OPTIMIZATION: Use refs to prevent memory leaks
+  const debounceTimeouts = useRef(new Map<string, NodeJS.Timeout>());
+  const throttleTimeouts = useRef(new Map<string, NodeJS.Timeout>());
+  const memoryPressureWarning = useRef(false);
 
-  // ✅ MOBILE OPTIMIZATION: Smart debouncing for mobile interactions
+  // ✅ MEMORY OPTIMIZATION: Simplified debounced callback
   const debouncedCallback = useCallback(
-    (callback: () => void, customDelay?: number) => {
-      const delay = customDelay || (isMobileOptimized ? debounceDelay * 1.5 : debounceDelay);
-      const key = callback.toString();
-
-      // Clear existing timeout
-      const existingTimeout = debounceTimeouts.current.get(key);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-
-      // Set new timeout
-      const timeoutId = setTimeout(() => {
-        callback();
-        debounceTimeouts.current.delete(key);
-      }, delay);
-
-      debounceTimeouts.current.set(key, timeoutId);
+    <T extends (...args: any[]) => any>(callback: T): T => {
+      return ((...args: any[]) => {
+        const key = callback.toString();
+        if (debounceTimeouts.current.has(key)) {
+          clearTimeout(debounceTimeouts.current.get(key)!);
+        }
+        const timeout = setTimeout(() => callback(...args), finalConfig.debounceDelay);
+        debounceTimeouts.current.set(key, timeout);
+      }) as T;
     },
-    [isMobileOptimized, debounceDelay]
+    [finalConfig.debounceDelay]
   );
 
-  // ✅ MOBILE OPTIMIZATION: Smart throttling for high-frequency events
+  // ✅ MEMORY OPTIMIZATION: Simplified throttled callback
   const throttledCallback = useCallback(
-    (callback: () => void, customDelay?: number) => {
-      if (!enableSmartThrottling) {
-        callback();
-        return;
-      }
-
-      const delay = customDelay || (isMobileOptimized ? 150 : 100);
-      const key = callback.toString();
-
-      if (!throttleTimeouts.current.has(key)) {
-        callback();
-
-        const timeoutId = setTimeout(() => {
-          throttleTimeouts.current.delete(key);
-        }, delay);
-
-        throttleTimeouts.current.set(key, timeoutId);
-      }
+    <T extends (...args: any[]) => any>(callback: T): T => {
+      return ((...args: any[]) => {
+        const key = callback.toString();
+        if (!throttleTimeouts.current.has(key)) {
+          callback(...args);
+          const timeout = setTimeout(() => {
+            throttleTimeouts.current.delete(key);
+          }, finalConfig.throttleDelay);
+          throttleTimeouts.current.set(key, timeout);
+        }
+      }) as T;
     },
-    [isMobileOptimized, enableSmartThrottling]
+    [finalConfig.throttleDelay]
   );
 
-  // ✅ MOBILE OPTIMIZATION: Reduced analytics tracking for mobile performance
+  // ✅ MEMORY OPTIMIZATION: Simplified analytics tracking
   const optimizedAnalyticsTrack = useCallback(
-    (event: string, data?: AnalyticsData) => {
-      if (!enableReducedAnalytics || !isMobileOptimized) {
-        // Full analytics for desktop
-        console.log('Analytics:', event, data);
-        return;
-      }
-
-      const now = Date.now();
-      const minInterval = 2000; // 2 seconds minimum between analytics calls on mobile
-
-      if (now - lastAnalyticsTrack.current > minInterval) {
-        lastAnalyticsTrack.current = now;
-
-        // Simplified analytics payload for mobile
-        const simplifiedData = {
-          event,
-          timestamp: now,
-          isMobile: isMobileOptimized,
-          // Only include essential data to reduce payload size
-          ...(data && typeof data === 'object' ? { essential: Object.keys(data).slice(0, 3) } : {}),
-        };
-
-        console.log('Mobile Analytics:', simplifiedData);
+    (eventName: string, data?: Record<string, unknown>) => {
+      if (finalConfig.enableReducedAnalytics && isMobileOptimized) {
+        trackOptimized(eventName, data, 'low');
       }
     },
-    [enableReducedAnalytics, isMobileOptimized]
+    [finalConfig.enableReducedAnalytics, isMobileOptimized, trackOptimized]
   );
 
-  // ✅ MOBILE OPTIMIZATION: Memory pressure detection
+  // ✅ MEMORY OPTIMIZATION: Simplified memory pressure detection
   useEffect(() => {
-    if (!isMobileOptimized) return;
+    if (!isMobileOptimized || !finalConfig.enableMemoryPressureDetection) return;
 
     const checkMemoryPressure = () => {
       if ('memory' in performance) {
-        // Type assertion for memory API
         const memInfo = (performance as Performance & { memory?: { usedJSHeapSize: number } })
           .memory;
+        const maxMemoryUsage = finalConfig.maxMemoryUsage ?? DEFAULT_CONFIG.maxMemoryUsage;
         if (memInfo && memInfo.usedJSHeapSize > maxMemoryUsage) {
           memoryPressureWarning.current = true;
           console.warn('Memory pressure detected on mobile device');
-
-          // Trigger garbage collection if available
-          if ('gc' in window) {
-            (window as Window & { gc?: () => void }).gc?.();
-          }
         } else {
           memoryPressureWarning.current = false;
         }
       }
     };
 
-    // Check memory pressure every 30 seconds on mobile
-    const interval = setInterval(checkMemoryPressure, 30000);
+    // ✅ MEMORY OPTIMIZATION: Reduced frequency of memory checks
+    const interval = setInterval(checkMemoryPressure, 60000); // Check every minute instead of 30 seconds
     checkMemoryPressure(); // Initial check
 
     return () => clearInterval(interval);
-  }, [isMobileOptimized, maxMemoryUsage]);
+  }, [isMobileOptimized, finalConfig.enableMemoryPressureDetection, finalConfig.maxMemoryUsage]);
 
-  // Cleanup timeouts on unmount
+  // ✅ MEMORY OPTIMIZATION: Simplified cleanup
   useEffect(() => {
     return () => {
       // Clear all debounce timeouts

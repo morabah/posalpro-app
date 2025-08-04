@@ -2,13 +2,23 @@
  * PosalPro MVP2 - Responsive Breakpoint Manager
  * Phase 2: Enhanced Component Library - Responsive Design Systems
  * Component Traceability Matrix: US-8.1, US-8.5, H9, H10
+ *
+ * ✅ MEMORY OPTIMIZATION: Reduced event listeners and improved performance
  */
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 // Breakpoint Definitions (Tailwind CSS based)
 export type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -98,16 +108,7 @@ interface ResponsiveState {
   connectionType: string;
 }
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-8.1', 'US-8.5', 'US-1.1', 'US-4.1'],
-  acceptanceCriteria: ['AC-8.1.4', 'AC-8.5.1', 'AC-8.5.2', 'AC-8.5.3'],
-  methods: ['detectBreakpoint()', 'handleResize()', 'trackResponsiveUsage()'],
-  hypotheses: ['H9', 'H10'],
-  testCases: ['TC-H9-007', 'TC-H9-008', 'TC-H10-004'],
-};
-
-// Context
+// Responsive Context Type
 interface ResponsiveContextType {
   state: ResponsiveState;
   config: BreakpointConfig[];
@@ -118,8 +119,7 @@ interface ResponsiveContextType {
   matchesMediaQuery: (query: string) => boolean;
 }
 
-const ResponsiveContext = createContext<ResponsiveContextType | null>(null);
-
+// Responsive Breakpoint Manager Props
 interface ResponsiveBreakpointManagerProps {
   children: React.ReactNode;
   debounceMs?: number;
@@ -128,185 +128,140 @@ interface ResponsiveBreakpointManagerProps {
   enableConnectionMonitoring?: boolean;
 }
 
-export function ResponsiveBreakpointManager({
+// ✅ MEMORY OPTIMIZATION: Memoized ResponsiveBreakpointManager
+export const ResponsiveBreakpointManager = React.memo(function ResponsiveBreakpointManager({
   children,
   debounceMs = 150,
   trackAnalytics = true,
   enableOfflineDetection = true,
   enableConnectionMonitoring = true,
 }: ResponsiveBreakpointManagerProps) {
-  const [state, setState] = useState<ResponsiveState>(() => ({
-    currentBreakpoint: 'xl',
-    screenWidth: 1920,
-    screenHeight: 1080,
-    isMobile: false,
-    isTablet: false,
-    isDesktop: true,
-    orientation: 'landscape',
-    pixelRatio: 1,
-    supportsTouch: false,
-    isOnline: true,
-    prefersDarkMode: false,
-    prefersReducedMotion: false,
-    prefersHighContrast: false,
-    connectionType: 'unknown',
-  }));
-
-  const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
+  const { trackOptimized } = useOptimizedAnalytics();
 
-  // Utility Functions
-  const detectBreakpoint = useCallback(
-    (width: number): Breakpoint => {
-      try {
-        for (let i = BREAKPOINT_CONFIGS.length - 1; i >= 0; i--) {
-          const config = BREAKPOINT_CONFIGS[i];
-          if (width >= config.minWidth) {
-            return config.name;
-          }
-        }
-        return 'xs';
-      } catch (error) {
-        handleAsyncError(error, 'Failed to detect breakpoint', {
-          component: 'ResponsiveBreakpointManager',
-          method: 'detectBreakpoint',
-          width,
-        });
-        return 'xl'; // Fallback
+  // ✅ MEMORY OPTIMIZATION: Use refs to prevent unnecessary re-renders
+  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaQueryListenersRef = useRef<
+    Array<{
+      mediaQueryList: MediaQueryList;
+      listener: (e: MediaQueryListEvent) => void;
+    }>
+  >([]);
+
+  // ✅ MEMORY OPTIMIZATION: Memoized breakpoint calculation
+  const getBreakpointForWidth = useCallback((width: number): Breakpoint => {
+    for (let i = BREAKPOINT_CONFIGS.length - 1; i >= 0; i--) {
+      const config = BREAKPOINT_CONFIGS[i];
+      if (width >= config.minWidth) {
+        return config.name;
       }
-    },
-    [handleAsyncError]
-  );
-
-  const getMediaQueries = useCallback(() => {
-    try {
-      if (typeof window === 'undefined') return {};
-
-      return {
-        prefersDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
-        prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-        prefersHighContrast: window.matchMedia('(prefers-contrast: high)').matches,
-        supportsTouch: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
-      };
-    } catch (error) {
-      handleAsyncError(error, 'Failed to get media queries', {
-        component: 'ResponsiveBreakpointManager',
-        method: 'getMediaQueries',
-      });
-      return {};
     }
-  }, [handleAsyncError]);
+    return 'xs';
+  }, []);
 
-  const getConnectionInfo = useCallback(() => {
-    try {
-      if (typeof navigator === 'undefined' || !enableConnectionMonitoring) {
-        return { connectionType: 'unknown' };
-      }
-
-      // Extended Navigator interface with connection properties
-      const extendedNavigator = navigator as Navigator & {
-        connection?: {
-          effectiveType?: string;
-        };
-        mozConnection?: {
-          effectiveType?: string;
-        };
-        webkitConnection?: {
-          effectiveType?: string;
-        };
-      };
-
-      const connection =
-        extendedNavigator.connection ||
-        extendedNavigator.mozConnection ||
-        extendedNavigator.webkitConnection;
-
+  // ✅ MEMORY OPTIMIZATION: Optimized initial state
+  const [state, setState] = useState<ResponsiveState>(() => {
+    if (typeof window === 'undefined') {
       return {
-        connectionType: connection?.effectiveType || 'unknown',
+        currentBreakpoint: 'lg',
+        screenWidth: 1024,
+        screenHeight: 768,
+        isMobile: false,
+        isTablet: false,
+        isDesktop: true,
+        orientation: 'landscape',
+        pixelRatio: 1,
+        supportsTouch: false,
+        isOnline: true,
+        prefersDarkMode: false,
+        prefersReducedMotion: false,
+        prefersHighContrast: false,
+        connectionType: 'unknown',
       };
-    } catch (error) {
-      return { connectionType: 'unknown' };
     }
-  }, [enableConnectionMonitoring]);
 
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const breakpoint = getBreakpointForWidth(width);
+    const config = BREAKPOINT_CONFIGS.find(b => b.name === breakpoint)!;
+
+    return {
+      currentBreakpoint: breakpoint,
+      screenWidth: width,
+      screenHeight: height,
+      isMobile: config.isMobile,
+      isTablet: config.isTablet,
+      isDesktop: config.isDesktop,
+      orientation: width > height ? 'landscape' : 'portrait',
+      pixelRatio: window.devicePixelRatio || 1,
+      supportsTouch: 'ontouchstart' in window,
+      isOnline: navigator.onLine,
+      prefersDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
+      prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      prefersHighContrast: window.matchMedia('(prefers-contrast: high)').matches,
+      connectionType: (navigator as any).connection?.effectiveType || 'unknown',
+    };
+  });
+
+  // ✅ MEMORY OPTIMIZATION: Optimized state update function
   const updateResponsiveState = useCallback(() => {
-    try {
-      if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const breakpoint = detectBreakpoint(width);
-      const breakpointConfig = BREAKPOINT_CONFIGS.find(config => config.name === breakpoint);
-      const mediaQueries = getMediaQueries();
-      const connectionInfo = getConnectionInfo();
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const breakpoint = getBreakpointForWidth(width);
+    const config = BREAKPOINT_CONFIGS.find(b => b.name === breakpoint)!;
 
-      const newState: ResponsiveState = {
+    setState(prev => {
+      // ✅ MEMORY OPTIMIZATION: Only update if values actually changed
+      if (
+        prev.currentBreakpoint === breakpoint &&
+        prev.screenWidth === width &&
+        prev.screenHeight === height &&
+        prev.isMobile === config.isMobile &&
+        prev.isTablet === config.isTablet &&
+        prev.isDesktop === config.isDesktop &&
+        prev.orientation === (width > height ? 'landscape' : 'portrait')
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
         currentBreakpoint: breakpoint,
         screenWidth: width,
         screenHeight: height,
-        isMobile: breakpointConfig?.isMobile || false,
-        isTablet: breakpointConfig?.isTablet || false,
-        isDesktop: breakpointConfig?.isDesktop || false,
+        isMobile: config.isMobile,
+        isTablet: config.isTablet,
+        isDesktop: config.isDesktop,
         orientation: width > height ? 'landscape' : 'portrait',
-        pixelRatio: window.devicePixelRatio || 1,
-        supportsTouch: mediaQueries.supportsTouch || false,
-        isOnline: enableOfflineDetection ? navigator.onLine : true,
-        prefersDarkMode: mediaQueries.prefersDarkMode || false,
-        prefersReducedMotion: mediaQueries.prefersReducedMotion || false,
-        prefersHighContrast: mediaQueries.prefersHighContrast || false,
-        connectionType: connectionInfo.connectionType,
       };
+    });
 
-      setState(prevState => {
-        // Track breakpoint changes if analytics enabled (H9: Mobile User Experience)
-        if (trackAnalytics && prevState.currentBreakpoint !== newState.currentBreakpoint) {
-          analytics('responsive_breakpoint_change', {
-            fromBreakpoint: prevState.currentBreakpoint,
-            toBreakpoint: newState.currentBreakpoint,
-            screenWidth: newState.screenWidth,
-            screenHeight: newState.screenHeight,
-            orientation: newState.orientation,
-            deviceType: newState.isMobile ? 'mobile' : newState.isTablet ? 'tablet' : 'desktop',
-            hypothesis: 'H9',
-            testCase: 'TC-H9-007',
-            componentMapping: COMPONENT_MAPPING,
-          });
-        }
-
-        // Track orientation changes
-        if (trackAnalytics && prevState.orientation !== newState.orientation) {
-          analytics('device_orientation_change', {
-            fromOrientation: prevState.orientation,
-            toOrientation: newState.orientation,
-            screenWidth: newState.screenWidth,
-            screenHeight: newState.screenHeight,
-            breakpoint: newState.currentBreakpoint,
-            hypothesis: 'H9',
-            testCase: 'TC-H9-008',
-            componentMapping: COMPONENT_MAPPING,
-          });
-        }
-
-        return newState;
-      });
-    } catch (error) {
-      handleAsyncError(error, 'Failed to update responsive state', {
-        component: 'ResponsiveBreakpointManager',
-        method: 'updateResponsiveState',
-      });
+    // ✅ MEMORY OPTIMIZATION: Reduced analytics tracking
+    if (trackAnalytics) {
+      trackOptimized(
+        'responsive_breakpoint_change',
+        {
+          breakpoint,
+          width,
+          height,
+          orientation: width > height ? 'landscape' : 'portrait',
+        },
+        'low'
+      ); // Lower priority to reduce overhead
     }
-  }, []); // ✅ FIXED: Empty dependency array to prevent infinite loop bottleneck
+  }, [getBreakpointForWidth, trackAnalytics, trackOptimized]);
 
-  // Debounced resize handler
-  const debouncedResize = useMemo(() => {
-    let timeoutId: NodeJS.Timeout;
-    return () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(updateResponsiveState, debounceMs);
-    };
+  // ✅ MEMORY OPTIMIZATION: Optimized debounced resize handler
+  const debouncedResize = useCallback(() => {
+    if (resizeTimeoutRef.current) {
+      clearTimeout(resizeTimeoutRef.current);
+    }
+    resizeTimeoutRef.current = setTimeout(updateResponsiveState, debounceMs);
   }, [updateResponsiveState, debounceMs]);
 
-  // Context helper functions
+  // ✅ MEMORY OPTIMIZATION: Memoized context helper functions
   const isBreakpoint = useCallback(
     (breakpoint: Breakpoint): boolean => {
       return state.currentBreakpoint === breakpoint;
@@ -357,13 +312,14 @@ export function ResponsiveBreakpointManager({
     [handleAsyncError]
   );
 
-  // Initialize and setup event listeners
+  // ✅ MEMORY OPTIMIZATION: Reduced event listeners
   useEffect(() => {
     updateResponsiveState();
 
-    // Event listeners
+    // Only add resize listener
     window.addEventListener('resize', debouncedResize);
 
+    // ✅ MEMORY OPTIMIZATION: Only add online/offline listeners if enabled
     if (enableOfflineDetection) {
       const handleOnline = () => setState(prev => ({ ...prev, isOnline: true }));
       const handleOffline = () => setState(prev => ({ ...prev, isOnline: false }));
@@ -375,22 +331,28 @@ export function ResponsiveBreakpointManager({
         window.removeEventListener('resize', debouncedResize);
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
+        if (resizeTimeoutRef.current) {
+          clearTimeout(resizeTimeoutRef.current);
+        }
       };
     }
 
     return () => {
       window.removeEventListener('resize', debouncedResize);
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
     };
   }, [debouncedResize, updateResponsiveState, enableOfflineDetection]);
 
-  // Media query listeners for preference changes
+  // ✅ MEMORY OPTIMIZATION: Reduced media query listeners
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // ✅ MEMORY OPTIMIZATION: Only essential media queries
     const mediaQueries = [
       { query: '(prefers-color-scheme: dark)', key: 'prefersDarkMode' },
       { query: '(prefers-reduced-motion: reduce)', key: 'prefersReducedMotion' },
-      { query: '(prefers-contrast: high)', key: 'prefersHighContrast' },
     ];
 
     const listeners: Array<{
@@ -402,16 +364,10 @@ export function ResponsiveBreakpointManager({
       try {
         const mediaQueryList = window.matchMedia(query);
         const listener = (e: MediaQueryListEvent) => {
-          setState(prev => ({ ...prev, [key]: e.matches }));
-
-          if (trackAnalytics) {
-            analytics('user_preference_change', {
-              preference: key,
-              value: e.matches,
-              hypothesis: 'H9',
-              componentMapping: COMPONENT_MAPPING,
-            });
-          }
+          setState(prev => ({
+            ...prev,
+            [key]: e.matches,
+          }));
         };
 
         mediaQueryList.addEventListener('change', listener);
@@ -419,43 +375,62 @@ export function ResponsiveBreakpointManager({
       } catch (error) {
         handleAsyncError(error, 'Failed to setup media query listener', {
           component: 'ResponsiveBreakpointManager',
+          method: 'mediaQueryListener',
           query,
-          key,
         });
       }
     });
 
+    // Store listeners for cleanup
+    mediaQueryListenersRef.current = listeners;
+
     return () => {
       listeners.forEach(({ mediaQueryList, listener }) => {
-        mediaQueryList.removeEventListener('change', listener);
+        try {
+          mediaQueryList.removeEventListener('change', listener);
+        } catch (error) {
+          // Ignore cleanup errors
+        }
       });
     };
-  }, [trackAnalytics, analytics, handleAsyncError]);
+  }, [handleAsyncError]);
 
-  // Context value
-  const contextValue: ResponsiveContextType = {
-    state,
-    config: BREAKPOINT_CONFIGS,
-    isBreakpoint,
-    isBreakpointOrLarger,
-    isBreakpointOrSmaller,
-    getBreakpointIndex,
-    matchesMediaQuery,
-  };
+  // ✅ MEMORY OPTIMIZATION: Memoized context value
+  const contextValue = useMemo<ResponsiveContextType>(
+    () => ({
+      state,
+      config: BREAKPOINT_CONFIGS,
+      isBreakpoint,
+      isBreakpointOrLarger,
+      isBreakpointOrSmaller,
+      getBreakpointIndex,
+      matchesMediaQuery,
+    }),
+    [
+      state,
+      isBreakpoint,
+      isBreakpointOrLarger,
+      isBreakpointOrSmaller,
+      getBreakpointIndex,
+      matchesMediaQuery,
+    ]
+  );
 
   return <ResponsiveContext.Provider value={contextValue}>{children}</ResponsiveContext.Provider>;
-}
+});
 
-// Hook for consuming responsive context
+// ✅ MEMORY OPTIMIZATION: Memoized context
+const ResponsiveContext = createContext<ResponsiveContextType | null>(null);
+
+// ✅ MEMORY OPTIMIZATION: Optimized hooks
 export function useResponsive(): ResponsiveContextType {
   const context = useContext(ResponsiveContext);
   if (!context) {
-    throw new Error('useResponsive must be used within a ResponsiveBreakpointManager');
+    throw new Error('useResponsive must be used within ResponsiveBreakpointManager');
   }
   return context;
 }
 
-// Convenience hooks
 export function useBreakpoint(): Breakpoint {
   const { state } = useResponsive();
   return state.currentBreakpoint;
@@ -497,5 +472,3 @@ export function useMediaQueries(): Pick<
     prefersHighContrast: state.prefersHighContrast,
   };
 }
-
-export default ResponsiveBreakpointManager;

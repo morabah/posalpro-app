@@ -112,10 +112,12 @@ export function ToastProvider({
 }: ToastProviderProps) {
   const [toasts, dispatch] = useReducer(toastReducer, []);
   const [isMounted, setIsMounted] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   // Ensure component only renders portal after hydration
   useEffect(() => {
     setIsMounted(true);
+    setIsClient(true);
   }, []);
 
   const generateId = useCallback(() => {
@@ -188,6 +190,8 @@ export function ToastProvider({
 
   // Auto-remove toasts after their duration
   useEffect(() => {
+    if (!isClient) return;
+
     const timers: NodeJS.Timeout[] = [];
 
     toasts.forEach(toast => {
@@ -202,11 +206,11 @@ export function ToastProvider({
     return () => {
       timers.forEach(timer => clearTimeout(timer));
     };
-  }, [toasts, removeToast]);
+  }, [toasts, removeToast, isClient]);
 
   // Listen for global error events - only after mount
   useEffect(() => {
-    if (!isMounted) return;
+    if (!isMounted || !isClient) return;
 
     const handleAppError = (event: CustomEvent) => {
       const { message, type, duration, action } = event.detail;
@@ -222,7 +226,7 @@ export function ToastProvider({
     return () => {
       window.removeEventListener('app:error', handleAppError as EventListener);
     };
-  }, [addToast, isMounted]);
+  }, [addToast, isMounted, isClient]);
 
   const contextValue: ToastContextType = {
     toasts,
@@ -259,6 +263,7 @@ export function ToastProvider({
     <ToastContext.Provider value={contextValue}>
       {children}
       {isMounted &&
+        isClient &&
         createPortal(
           <div
             className={`fixed z-50 ${getPositionClasses()} space-y-2`}

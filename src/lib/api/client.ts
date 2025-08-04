@@ -6,6 +6,7 @@
 import { logger } from '@/utils/logger'; // Environment-aware API base URL resolution
 import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
 import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
+import { requestDeduplicator } from '@/lib/utils/requestDeduplication';
 
 function getApiBaseUrl(): string {
   // Client-side: use current window location
@@ -272,7 +273,8 @@ class EnhancedApiClient {
           const contentType = response.headers.get('content-type');
           if (!contentType || !contentType.includes('application/json')) {
             logger.warn('[ApiClient] Non-JSON response received:', contentType);
-            throw new Error('Invalid response format');
+            logger.warn(`[ApiClient] Response status: ${response.status} ${response.statusText}`);
+            throw new Error(`Invalid response format: Expected JSON, got ${contentType || 'unknown'}`);
           }
 
           const data = await response.json();
@@ -324,11 +326,17 @@ class EnhancedApiClient {
     url: string,
     config?: Omit<EnhancedRequestConfig, 'method' | 'body'>
   ): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(url, {
-      ...config,
-      method: 'GET',
-      cache: { enabled: true, ...config?.cache },
-    });
+    // Use request deduplication for GET requests to prevent duplicate calls
+    const deduplicationKey = requestDeduplicator.generateKey('GET', url, config);
+    
+    return requestDeduplicator.deduplicate(
+      deduplicationKey,
+      () => this.makeRequest<T>(url, {
+        ...config,
+        method: 'GET',
+        cache: { enabled: true, ...config?.cache },
+      })
+    );
   }
 
   async post<TResponse, TBody = unknown>(
