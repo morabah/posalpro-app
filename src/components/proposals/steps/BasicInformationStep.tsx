@@ -12,6 +12,9 @@ import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { EnhancedProposalAnalytics } from '@/types/analytics';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -96,6 +99,10 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
 
   // ✅ FIXED: Use proper API client instead of direct fetch
   const apiClient = useApiClient();
+
+  // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+  const errorHandlingService = ErrorHandlingService.getInstance();
+  const { handleAsyncError } = useErrorHandler();
 
   // State management
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -295,39 +302,67 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
             console.log('✅ [BasicInformationStep] Loaded customers:', customerList.length);
             setCustomers(customerList);
           } else if (response.success === false) {
-            console.error('❌ [BasicInformationStep] API returned error:', response);
+            // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+            const standardError = errorHandlingService.processError(
+              new Error(`API returned error: ${response.message || 'Unknown error'}`),
+              'Unable to load customers. Please try again.',
+              ErrorCodes.API.RESPONSE_ERROR,
+              {
+                component: 'BasicInformationStep',
+                operation: 'fetchCustomers',
+                endpoint: '/customers',
+                response: response,
+              }
+            );
             setCustomers([]);
-            setCustomersError(response.message || 'Unable to load customers. Please try again.');
+            setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
           } else {
-            console.error('❌ [BasicInformationStep] Invalid response structure:', response);
+            // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+            const standardError = errorHandlingService.processError(
+              new Error('Invalid response structure'),
+              'Unable to load customers. Please try again.',
+              ErrorCodes.API.INVALID_RESPONSE,
+              {
+                component: 'BasicInformationStep',
+                operation: 'fetchCustomers',
+                endpoint: '/customers',
+                response: response,
+              }
+            );
             setCustomers([]);
-            setCustomersError('Unable to load customers. Please try again.');
+            setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
           }
         } else {
-          console.error('❌ [BasicInformationStep] Empty or invalid response:', response);
+          // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+          const standardError = errorHandlingService.processError(
+            new Error('Empty or invalid response'),
+            'Unable to load customers. Please try again.',
+            ErrorCodes.API.INVALID_RESPONSE,
+            {
+              component: 'BasicInformationStep',
+              operation: 'fetchCustomers',
+              endpoint: '/customers',
+              response: response,
+            }
+          );
           setCustomers([]);
-          setCustomersError('Unable to load customers. Please try again.');
+          setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
         }
       } catch (error) {
-        console.error('❌ [BasicInformationStep] Error fetching customers:', error);
-        setCustomers([]);
-
-        // ✅ ENHANCED: Better error handling with user-friendly messages
-        if (error instanceof Error) {
-          if (error.message.includes('401')) {
-            setCustomersError('Please log in to access customer data.');
-          } else if (error.message.includes('404')) {
-            setCustomersError('Customer service is temporarily unavailable.');
-          } else if (error.message.includes('500')) {
-            setCustomersError('Server error. Please try again in a few moments.');
-          } else {
-            setCustomersError(
-              'Unable to load customers. Please check your connection and try again.'
-            );
+        // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+        const standardError = errorHandlingService.processError(
+          error,
+          'Unable to load customers. Please try again.',
+          ErrorCodes.API.REQUEST_FAILED,
+          {
+            component: 'BasicInformationStep',
+            operation: 'fetchCustomers',
+            endpoint: '/customers',
           }
-        } else {
-          setCustomersError('An unexpected error occurred. Please try again.');
-        }
+        );
+
+        setCustomers([]);
+        setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
       } finally {
         setCustomersLoading(false);
       }

@@ -93,20 +93,7 @@ export function Toast({ id, title, message, type, onClose, action }: ToastProps)
       {isVisible && (
         <div
           id={`toast-${id}`}
-          className={`
-            w-full max-w-sm
-            ${getBackgroundColor()}
-            border
-            rounded-lg
-            shadow-lg
-            p-4
-            relative
-            focus:outline-none
-            focus:ring-2
-            focus:ring-primary-500
-            focus:ring-offset-2
-            animate-in slide-in-from-right-2 duration-200
-          `}
+          className={`w-full max-w-sm ${getBackgroundColor()} border rounded-lg shadow-lg p-4 relative focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 animate-in slide-in-from-right-2 duration-200`}
           role="alert"
           aria-live="polite"
           aria-atomic="true"
@@ -130,19 +117,13 @@ export function Toast({ id, title, message, type, onClose, action }: ToastProps)
                   <button
                     type="button"
                     onClick={action.onClick}
-                    className={`
-                      text-sm font-medium
-                      ${type === 'success' ? 'text-green-700 hover:text-green-600' : ''}
-                      ${type === 'error' ? 'text-red-700 hover:text-red-600' : ''}
-                      ${type === 'warning' ? 'text-yellow-700 hover:text-yellow-600' : ''}
-                      ${type === 'info' ? 'text-blue-700 hover:text-blue-600' : ''}
-                      underline
-                      focus:outline-none
-                      focus:ring-2
-                      focus:ring-primary-500
-                      focus:ring-offset-1
-                      rounded
-                    `}
+                    className={`text-sm font-medium ${
+                      type === 'success' ? 'text-green-700 hover:text-green-600' : ''
+                    } ${type === 'error' ? 'text-red-700 hover:text-red-600' : ''} ${
+                      type === 'warning' ? 'text-yellow-700 hover:text-yellow-600' : ''
+                    } ${
+                      type === 'info' ? 'text-blue-700 hover:text-blue-600' : ''
+                    } underline focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 rounded`}
                   >
                     {action.label}
                   </button>
@@ -155,28 +136,15 @@ export function Toast({ id, title, message, type, onClose, action }: ToastProps)
               <button
                 type="button"
                 onClick={handleClose}
-                className={`
-                  inline-flex
-                  rounded-md
-                  p-1.5
-                  ${
-                    type === 'success'
-                      ? 'text-green-400 hover:bg-green-100 focus:ring-green-600'
-                      : ''
-                  }
-                  ${type === 'error' ? 'text-red-400 hover:bg-red-100 focus:ring-red-600' : ''}
-                  ${
-                    type === 'warning'
-                      ? 'text-yellow-400 hover:bg-yellow-100 focus:ring-yellow-600'
-                      : ''
-                  }
-                  ${type === 'info' ? 'text-blue-400 hover:bg-blue-100 focus:ring-blue-600' : ''}
-                  focus:outline-none
-                  focus:ring-2
-                  focus:ring-offset-2
-                  transition-colors
-                  duration-200
-                `}
+                className={`inline-flex rounded-md p-1.5 ${
+                  type === 'success' ? 'text-green-400 hover:bg-green-100 focus:ring-green-600' : ''
+                } ${type === 'error' ? 'text-red-400 hover:bg-red-100 focus:ring-red-600' : ''} ${
+                  type === 'warning'
+                    ? 'text-yellow-400 hover:bg-yellow-100 focus:ring-yellow-600'
+                    : ''
+                } ${
+                  type === 'info' ? 'text-blue-400 hover:bg-blue-100 focus:ring-blue-600' : ''
+                } focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200`}
                 aria-label="Close notification"
               >
                 <X className="w-4 h-4" />

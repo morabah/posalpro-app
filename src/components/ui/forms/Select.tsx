@@ -127,29 +127,25 @@ export interface SelectProps {
  * Accessible Select component
  */
 export const Select = forwardRef<HTMLDivElement, SelectProps>(
-  (
-    {
-      options,
-      value,
-      onChange,
-      placeholder = 'Select an option...',
-      label,
-      helperText,
-      error,
-      size = 'md',
-      multiple = false,
-      searchable = false,
-      clearable = false,
-      loading = false,
-      className,
-      selectClassName,
-      labelClassName,
-      disabled,
-      id,
-      ...props
-    },
-    ref
-  ) => {
+  ({
+    options,
+    value,
+    onChange,
+    placeholder = 'Select an option',
+    label,
+    helperText,
+    error,
+    size = 'md',
+    multiple = false,
+    searchable = false,
+    clearable = false,
+    loading = false,
+    className,
+    selectClassName,
+    labelClassName,
+    disabled,
+    id,
+  }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [focusedIndex, setFocusedIndex] = useState(-1);

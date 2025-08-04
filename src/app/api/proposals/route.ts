@@ -12,6 +12,7 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { getCache, setCache } from '@/lib/redis';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
 import { Prisma, UserRole } from '@prisma/client';
@@ -93,15 +94,16 @@ const ProposalUpdateSchema = ProposalCreateSchema.partial().extend({
 const ProposalQuerySchema = z.object({
   // Cursor-based pagination (NEW - more efficient than offset)
   cursor: z.preprocess(val => (val === '' ? undefined : val), databaseIdSchema.nullish()), // ID of the last item from previous page
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(50).default(20), // REDUCED from 100 to 50 for memory optimization
 
   // Legacy offset pagination support (DEPRECATED but maintained for backward compatibility)
   page: z.coerce.number().int().positive().default(1),
 
-  // Selective Hydration (NEW - Performance Optimization)
-  fields: z.string().optional(), // Comma-separated list of fields to return
+  // 🚀 MEMORY OPTIMIZATION: Field selection to reduce data transfer
+  fields: z.string().optional(), // Selective hydration fields
 
-  // Filtering
+  // Search and filtering
+  search: z.string().optional(),
   status: z
     .enum([
       'DRAFT',
@@ -116,18 +118,24 @@ const ProposalQuerySchema = z.object({
     .optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   customerId: databaseIdSchema.optional(),
-  createdBy: userIdSchema.optional(),
-  search: z.string().max(100).optional(),
+  createdBy: databaseIdSchema.optional(),
 
   // Sorting
   sortBy: z
-    .enum(['title', 'createdAt', 'updatedAt', 'dueDate', 'value', 'priority'])
-    .default('updatedAt'),
+    .enum(['createdAt', 'updatedAt', 'title', 'priority', 'dueDate', 'value'])
+    .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 
-  // Includes (DEPRECATED - Use fields parameter instead)
-  includeCustomer: z.coerce.boolean().default(true),
+  // 🚀 MEMORY OPTIMIZATION: Reduced default includes
+  includeCustomer: z.coerce.boolean().default(false), // CHANGED from true to false
   includeProducts: z.coerce.boolean().default(false),
+  includeSections: z.coerce.boolean().default(false), // NEW: Control sections loading
+
+  // Date filtering for performance
+  createdAfter: z.string().datetime().optional(),
+  createdBefore: z.string().datetime().optional(),
+  dueAfter: z.string().datetime().optional(),
+  dueBefore: z.string().datetime().optional(),
 });
 
 // Helper function to check user permissions
@@ -430,6 +438,15 @@ export async function GET(request: NextRequest) {
       // 🚀 CURSOR-BASED PAGINATION: More efficient for large datasets
       const useCursorPagination = query.cursor !== undefined;
 
+      // 🚀 MEMORY OPTIMIZATION: Redis caching for expensive queries
+      const cacheKey = `proposals:${session.user.id}:${JSON.stringify(query)}`;
+      const cachedResult = await getCache(cacheKey);
+
+      if (cachedResult) {
+        console.log('[ProposalsAPI] Cache hit for query');
+        return NextResponse.json(cachedResult, { status: 200 });
+      }
+
       let proposals: Array<Prisma.ProposalGetPayload<{ select: Prisma.ProposalSelect }>>;
       let pagination: {
         page?: number;
@@ -559,7 +576,8 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      return NextResponse.json({
+      // 🚀 MEMORY OPTIMIZATION: Cache successful query results
+      const responseData = {
         proposals: enhancedProposals,
         pagination,
         // Metadata to help clients understand pagination type and performance
@@ -570,11 +588,25 @@ export async function GET(request: NextRequest) {
           selectiveHydration: optimizationMetrics,
           responseTimeMs: queryEndTime - queryStartTime,
         },
-      });
+      };
+
+      // Cache the result for 5 minutes to reduce database load
+      try {
+        await setCache(cacheKey, responseData, 300);
+        console.log('[ProposalsAPI] Cached query result');
+      } catch (cacheError) {
+        // Silent cache error to not impact performance
+        console.warn('[ProposalsAPI] Cache set failed:', cacheError);
+      }
+
+      return NextResponse.json(responseData);
     } catch (error) {
       // Log the error using ErrorHandlingService (reduced logging)
       if (process.env.NODE_ENV === 'development') {
-        console.error('[ProposalsAPI] Error:', error instanceof Error ? error.message : String(error));
+        console.error(
+          '[ProposalsAPI] Error:',
+          error instanceof Error ? error.message : String(error)
+        );
       }
 
       try {

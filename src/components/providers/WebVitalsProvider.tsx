@@ -1,5 +1,7 @@
 'use client';
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface WebVitalsMetrics {
@@ -110,7 +112,20 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
         console.log('📊 TTFB measured:', ttfb, 'ms');
       }
     } catch (error) {
-      console.warn('Failed to measure Web Vitals:', error);
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to measure Web Vitals',
+        ErrorCodes.PERFORMANCE.METRICS_COLLECTION_FAILED,
+        {
+          component: 'WebVitalsProvider',
+          operation: 'measureWebVitals',
+        }
+      );
+
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
       isMeasuringRef.current = false;
     }
   }, [updateMetrics]);

@@ -1,0 +1,147 @@
+{
+  "memory": {
+    "metrics": {
+      "usedJSHeapSize": 10000000,
+      "totalJSHeapSize": 10000000,
+      "jsHeapSizeLimit": 2330000000
+    },
+    "isAcceptable": true,
+    "target": 104857600,
+    "actual": 10000000
+  },
+  "performance": {
+    "loadTime": 0,
+    "domContentLoaded": 0.10000038146972656,
+    "firstPaint": 3892,
+    "firstContentfulPaint": 4108,
+    "isAcceptable": true
+  },
+  "api": {
+    "status": 200,
+    "responseTime": "1ms",
+    "data": {
+      "timestamp": "2025-08-04T12:52:47.597Z",
+      "server": {
+        "uptime": 264.496133875,
+        "memory": {
+          "rss": 702431232,
+          "heapTotal": 737853440,
+          "heapUsed": 654168576,
+          "external": 422957381,
+          "arrayBuffers": 417384671
+        },
+        "version": "v20.19.1"
+      },
+      "performance": {
+        "responseTime": 1,
+        "status": "healthy"
+      }
+    },
+    "isHealthy": true
+  },
+  "optimizations": {
+    "services": {
+      "MemoryOptimizationService": {
+        "exists": true,
+        "status": "AVAILABLE"
+      },
+      "ImageOptimizationService": {
+        "exists": true,
+        "status": "AVAILABLE"
+      },
+      "PerformanceOptimizationAPI": {
+        "exists": false,
+        "status": "MISSING"
+      }
+    },
+    "status": "TESTING",
+    "redis": {
+      "status": "CONNECTED",
+      "data": {
+        "status": "healthy",
+        "timestamp": "2025-08-04T12:52:55.646Z",
+        "uptime": 272.544453625,
+        "responseTime": 0
+      }
+    }
+  },
+  "summary": {
+    "timestamp": "2025-08-04T12:52:55.650Z",
+    "tests": {
+      "memory": true,
+      "performance": true,
+      "api": true,
+      "optimizations": false
+    },
+    "metrics": {
+      "memory": {
+        "metrics": {
+          "usedJSHeapSize": 10000000,
+          "totalJSHeapSize": 10000000,
+          "jsHeapSizeLimit": 2330000000
+        },
+        "isAcceptable": true,
+        "target": 104857600,
+        "actual": 10000000
+      },
+      "performance": {
+        "loadTime": 0,
+        "domContentLoaded": 0.10000038146972656,
+        "firstPaint": 3892,
+        "firstContentfulPaint": 4108,
+        "isAcceptable": true
+      },
+      "api": {
+        "status": 200,
+        "responseTime": "1ms",
+        "data": {
+          "timestamp": "2025-08-04T12:52:47.597Z",
+          "server": {
+            "uptime": 264.496133875,
+            "memory": {
+              "rss": 702431232,
+              "heapTotal": 737853440,
+              "heapUsed": 654168576,
+              "external": 422957381,
+              "arrayBuffers": 417384671
+            },
+            "version": "v20.19.1"
+          },
+          "performance": {
+            "responseTime": 1,
+            "status": "healthy"
+          }
+        },
+        "isHealthy": true
+      },
+      "optimizations": {
+        "services": {
+          "MemoryOptimizationService": {
+            "exists": true,
+            "status": "AVAILABLE"
+          },
+          "ImageOptimizationService": {
+            "exists": true,
+            "status": "AVAILABLE"
+          },
+          "PerformanceOptimizationAPI": {
+            "exists": false,
+            "status": "MISSING"
+          }
+        },
+        "status": "TESTING",
+        "redis": {
+          "status": "CONNECTED",
+          "data": {
+            "status": "healthy",
+            "timestamp": "2025-08-04T12:52:55.646Z",
+            "uptime": 272.544453625,
+            "responseTime": 0
+          }
+        }
+      }
+    },
+    "score": 75,
+    "status": "GOOD"
+  }
+}

@@ -343,3 +343,95 @@ git log --oneline -5       # Recent commits
 **Remember**: Each deployment increments the version automatically and creates a
 permanent record in git history. **CRITICAL**: Always verify database seeding
 and test API endpoints with real data after deployment!
+
+---
+
+## 🚨 CRITICAL NETLIFY CONFIGURATION
+
+### **❌ NEVER Do These:**
+
+1. **Never use `output: 'standalone'` in next.config.js**
+   - Breaks Netlify's serverless function architecture
+   - Causes API routes to return HTML instead of JSON
+   - Results in authentication failures
+
+2. **Never deploy without catch-all redirect**
+   - Missing `/* -> /index.html` redirect breaks App Router
+   - Causes 404 errors on all non-root routes
+   - Must be the LAST redirect rule in netlify.toml
+
+3. **Never reference non-existent pages in NextAuth config**
+   - Missing `/auth/error` page causes authentication failures
+   - Always implement all pages before deployment
+
+4. **Never deploy without testing API endpoints**
+   - API routes must return JSON, not HTML
+   - Test with `curl -H "Accept: application/json"` before deployment
+
+### **✅ REQUIRED netlify.toml Configuration**
+
+```toml
+[build]
+  command = "npx prisma migrate deploy && npx prisma generate && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20.15.1"
+  NEXT_USE_NETLIFY_EDGE = "true"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Set proper content type for API responses
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+
+# Optimize static files
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Functions are managed by @netlify/plugin-nextjs
+[functions]
+  included_files = ["schema.prisma"]
+
+# Development server
+[dev]
+  command = "npm run dev:smart"
+
+# Image optimization
+[[redirects]]
+  from = "/_next/image"
+  to = "/.netlify/images"
+  status = 200
+
+# Essential catch-all for Next.js App Router - MUST be last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+```
+
+### **✅ REQUIRED next.config.js Settings**
+
+```javascript
+const nextConfig = {
+  reactStrictMode: true,
+  images: {
+    domains: ['images.unsplash.com'],
+    unoptimized: process.env.NODE_ENV !== 'production',
+  },
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client'],
+  },
+  // CRITICAL: Never use 'standalone' output
+  // output: 'standalone', // ❌ NEVER ENABLE THIS
+};
+```
+
+**Live Application**: https://posalpro-mvp2.windsurf.build

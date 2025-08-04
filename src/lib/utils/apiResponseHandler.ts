@@ -10,12 +10,32 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 // Initialize error handling service
 const errorHandlingService = ErrorHandlingService.getInstance();
 
+// Type definitions for API responses
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+interface PaginatedResponse<T = unknown> {
+  data: T[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+interface ApiResponseWithPagination<T = unknown> extends ApiResponse<PaginatedResponse<T>> {}
+
 /**
  * Safely extracts an array from an API response with unknown structure
  * Handles multiple common response patterns defensively
  */
-export function extractArrayFromResponse<T = any>(
-  response: any,
+export function extractArrayFromResponse<T = unknown>(
+  response: ApiResponse<unknown>,
   arrayKey?: string,
   fallback: T[] = []
 ): T[] {
@@ -84,7 +104,7 @@ export function extractArrayFromResponse<T = any>(
     return fallback;
   }
 
-  const responseData = response.data;
+  const responseData = response.data as Record<string, unknown>;
 
   // Pattern 1: Direct array response
   if (Array.isArray(responseData)) {
@@ -222,12 +242,12 @@ export function extractArrayFromResponse<T = any>(
 /**
  * Type-safe wrapper for PaginatedResponse extraction
  */
-export function extractPaginatedArray<T = any>(
-  response: any,
+export function extractPaginatedArray<T = unknown>(
+  response: ApiResponseWithPagination<T>,
   fallback: T[] = []
-): { data: T[]; pagination?: any } {
+): { data: T[]; pagination?: PaginatedResponse<T>['pagination'] } {
   const data = extractArrayFromResponse<T>(response, undefined, fallback);
-  const pagination = response?.pagination || response?.data?.pagination;
+  const pagination = (response?.data as PaginatedResponse<T>)?.pagination;
 
   return {
     data,
@@ -239,7 +259,7 @@ export function extractPaginatedArray<T = any>(
  * Validates that a response has the expected structure
  */
 export function validateResponseStructure(
-  response: any,
+  response: ApiResponse<unknown>,
   requiredFields: string[] = ['success']
 ): boolean {
   if (!response || typeof response !== 'object') {
@@ -281,7 +301,10 @@ export function validateResponseStructure(
 /**
  * Logs response structure for debugging
  */
-export function debugResponseStructure(response: any, label = 'API Response'): void {
+export function debugResponseStructure(
+  response: ApiResponse<unknown>,
+  label = 'API Response'
+): void {
   errorHandlingService.processError(
     new Error(`Debug response structure: ${label}`),
     'Response structure debug analysis',

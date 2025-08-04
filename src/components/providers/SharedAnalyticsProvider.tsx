@@ -1,6 +1,8 @@
 'use client';
 
-import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 interface AnalyticsEvent {
@@ -141,13 +143,39 @@ export const SharedAnalyticsProvider = React.memo(function SharedAnalyticsProvid
             })
           );
         } catch (error) {
-          console.warn('Failed to track analytics event:', error);
+          // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+          const standardError = errorHandlingService.processError(
+            error,
+            'Failed to track analytics event',
+            ErrorCodes.ANALYTICS.TRACKING_FAILED,
+            {
+              component: 'SharedAnalyticsProvider',
+              operation: 'trackEvent',
+              eventName: event.eventName,
+            }
+          );
+
+          // Log the error for debugging
+          errorHandlingService.processError(standardError);
         }
       }
 
       setLastFlush(Date.now());
     } catch (error) {
-      console.error('Failed to flush analytics batch:', error);
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to flush analytics batch',
+        ErrorCodes.ANALYTICS.ANALYTICS_FAILED,
+        {
+          component: 'SharedAnalyticsProvider',
+          operation: 'flushBatch',
+          batchSize: eventBuffer.current.length,
+        }
+      );
+
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
     } finally {
       isProcessing.current = false;
     }

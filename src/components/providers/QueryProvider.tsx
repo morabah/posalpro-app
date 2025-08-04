@@ -11,6 +11,8 @@
  * - Performance monitoring
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useEffect, useState } from 'react';
@@ -52,7 +54,20 @@ export function QueryProvider({ children }: QueryProviderProps) {
             // Log mutation errors in development
             onError: error => {
               if (process.env.NODE_ENV === 'development') {
-                console.error('Mutation error:', error);
+                // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+                const errorHandlingService = ErrorHandlingService.getInstance();
+                const standardError = errorHandlingService.processError(
+                  error,
+                  'Mutation failed',
+                  ErrorCodes.API.REQUEST_FAILED,
+                  {
+                    component: 'QueryProvider',
+                    operation: 'mutation',
+                  }
+                );
+
+                // Log the error for debugging
+                errorHandlingService.processError(standardError);
               }
             },
           },

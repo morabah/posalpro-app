@@ -4,7 +4,7 @@
  * Target: Memory < 100MB, Event Listeners < 500
  */
 
-import MemoryOptimizationDashboard from '@/components/performance/MemoryOptimizationDashboard';
+import { MemoryOptimizationDashboard } from '@/components/performance/MemoryOptimizationDashboard';
 import { ErrorHandlingService } from '@/lib/errors';
 import { Metadata } from 'next';
 import { Suspense } from 'react';
@@ -46,11 +46,7 @@ function MemoryOptimizationPage() {
 
         {/* Memory Optimization Dashboard */}
         <div className="mb-8">
-          <MemoryOptimizationDashboard
-            showAdvancedMetrics={true}
-            enableAutoOptimization={true}
-            refreshInterval={30000}
-          />
+          <MemoryOptimizationDashboard />
         </div>
 
         {/* Performance Insights */}

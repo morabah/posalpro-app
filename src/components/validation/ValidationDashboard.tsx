@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/forms/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { useValidation } from '@/hooks/validation/useValidation';
 import { useValidationAnalytics } from '@/hooks/validation/useValidationAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ValidationIssue, ValidationRequest } from '@/types/validation';
 import {
   AdjustmentsHorizontalIcon,
@@ -103,7 +105,21 @@ export function ValidationDashboard({
     try {
       await validateConfiguration(request);
     } catch (error) {
-      console.error('Validation failed:', error);
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Validation failed. Please try again.',
+        ErrorCodes.BUSINESS.PROCESS_FAILED,
+        {
+          component: 'ValidationDashboard',
+          operation: 'handleStartValidation',
+          proposalId: selectedProposal,
+        }
+      );
+
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
     }
   }, [selectedProposal, validateConfiguration]);
 
@@ -151,7 +167,22 @@ export function ValidationDashboard({
           console.log('Deferring issues:', issueIds);
           break;
         default:
-          console.warn('Unknown batch operation:', operation);
+          // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+          const errorHandlingService = ErrorHandlingService.getInstance();
+          const standardError = errorHandlingService.processError(
+            new Error(`Unknown batch operation: ${operation}`),
+            'Unknown operation',
+            ErrorCodes.BUSINESS.INVALID_OPERATION,
+            {
+              component: 'ValidationDashboard',
+              operation: 'handleBatchOperation',
+              batchOperation: operation,
+              issueIds,
+            }
+          );
+
+          // Log the error for debugging
+          errorHandlingService.processError(standardError);
       }
     },
     [batchApplyFix]
@@ -188,7 +219,21 @@ export function ValidationDashboard({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Failed to export report:', error);
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to export report. Please try again.',
+        ErrorCodes.API.REQUEST_FAILED,
+        {
+          component: 'ValidationDashboard',
+          operation: 'handleExportReport',
+          proposalId: selectedProposal,
+        }
+      );
+
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
     }
   }, [
     exportAnalyticsData,

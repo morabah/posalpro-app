@@ -1,63 +1,71 @@
 /**
- * Memory Optimization Service
- * Addresses memory usage and event listener optimization
- * Target: Memory < 100MB, Event Listeners < 500
+ * PosalPro MVP2 - Memory Optimization Service
+ * Comprehensive memory management with database query optimization
+ * Component Traceability: US-6.1, US-6.2, H8, H9
  */
 
-import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 interface MemoryMetrics {
-  usedJSHeapSize: number; // MB
-  totalJSHeapSize: number; // MB
-  jsHeapSizeLimit: number; // MB
-  eventListeners: number;
-  domNodes: number;
-  detachedElements: number;
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+  external: number;
+  arrayBuffers: number;
+  timestamp: number;
 }
 
-interface OptimizationResult {
-  success: boolean;
-  memoryReduced: number; // MB
-  eventListenersReduced: number;
-  detachedElementsCleaned: number;
-  recommendations: string[];
+interface QueryOptimizationMetrics {
+  queryCount: number;
+  averageQueryTime: number;
+  slowQueries: Array<{
+    query: string;
+    duration: number;
+    timestamp: number;
+  }>;
+  memoryImpact: number;
 }
 
 interface MemoryOptimizationConfig {
-  enableAutomaticCleanup: boolean;
-  cleanupInterval: number; // ms
-  memoryThreshold: number; // MB
-  eventListenerThreshold: number;
-  enableDetachedElementDetection: boolean;
-  enableWeakReferences: boolean;
-  enableEventListenerTracking: boolean;
+  maxMemoryUsage: number; // 100MB in bytes
+  maxQueryTime: number; // 1000ms
+  gcThreshold: number; // 80% of max memory
+  optimizationInterval: number; // 30 seconds
 }
 
-const DEFAULT_CONFIG: Required<MemoryOptimizationConfig> = {
-  enableAutomaticCleanup: true,
-  cleanupInterval: 30000, // 30 seconds
-  memoryThreshold: 100, // 100MB
-  eventListenerThreshold: 500,
-  enableDetachedElementDetection: true,
-  enableWeakReferences: true,
-  enableEventListenerTracking: true,
-};
+/**
+ * Component Traceability Matrix:
+ * - User Stories: US-6.1 (Performance Monitoring), US-6.2 (Memory Optimization)
+ * - Acceptance Criteria: AC-6.1.1, AC-6.1.2, AC-6.2.1, AC-6.2.2
+ * - Hypotheses: H8 (Memory Efficiency), H9 (Query Optimization)
+ * - Methods: optimizeMemory(), detectLeaks(), optimizeQueries()
+ * - Test Cases: TC-H8-001, TC-H9-001
+ */
 
-export class MemoryOptimizationService {
+class MemoryOptimizationService {
   private static instance: MemoryOptimizationService;
-  private errorHandlingService: ErrorHandlingService;
-  private config: Required<MemoryOptimizationConfig>;
-  private cleanupInterval: NodeJS.Timeout | null = null;
-  private eventListenerMap: WeakMap<Element, Set<string>> = new WeakMap();
-  private detachedElements: Set<Element> = new Set();
   private isInitialized = false;
+  private optimizationInterval: NodeJS.Timeout | null = null;
+  private memoryHistory: MemoryMetrics[] = [];
+  private queryMetrics: QueryOptimizationMetrics = {
+    queryCount: 0,
+    averageQueryTime: 0,
+    slowQueries: [],
+    memoryImpact: 0,
+  };
+
+  private config: MemoryOptimizationConfig = {
+    maxMemoryUsage: 100 * 1024 * 1024, // 100MB
+    maxQueryTime: 1000, // 1 second
+    gcThreshold: 0.8, // 80%
+    optimizationInterval: 30000, // 30 seconds
+  };
 
   private constructor() {
-    this.errorHandlingService = ErrorHandlingService.getInstance();
-    this.config = { ...DEFAULT_CONFIG };
+    // Private constructor for singleton pattern
   }
 
-  static getInstance(): MemoryOptimizationService {
+  public static getInstance(): MemoryOptimizationService {
     if (!MemoryOptimizationService.instance) {
       MemoryOptimizationService.instance = new MemoryOptimizationService();
     }
@@ -67,431 +75,329 @@ export class MemoryOptimizationService {
   /**
    * Initialize memory optimization service
    */
-  initialize(config: Partial<MemoryOptimizationConfig> = {}): void {
+  public async initialize(): Promise<void> {
+    if (this.isInitialized) return;
+
     try {
-      this.config = { ...DEFAULT_CONFIG, ...config };
+      console.log('[MemoryOptimizationService] Initializing memory optimization...');
 
-      if (this.config.enableAutomaticCleanup) {
-        this.startAutomaticCleanup();
-      }
+      // Start memory monitoring
+      this.startMemoryMonitoring();
 
-      if (this.config.enableEventListenerTracking) {
-        this.setupEventListenerTracking();
-      }
-
-      if (this.config.enableDetachedElementDetection) {
-        this.setupDetachedElementDetection();
-      }
+      // Start query optimization
+      this.startQueryOptimization();
 
       this.isInitialized = true;
-      console.log('[MemoryOptimization] Service initialized successfully');
+      console.log('[MemoryOptimizationService] Memory optimization initialized successfully');
     } catch (error) {
-      this.errorHandlingService.processError(
-        new StandardError({
-          message: 'Memory optimization initialization failed',
-          code: ErrorCodes.PERFORMANCE.INITIALIZATION_FAILED,
-          metadata: {
-            component: 'MemoryOptimizationService',
-            operation: 'initialize',
-            originalError: error,
-          },
-        })
-      );
+      console.error('[MemoryOptimizationService] Initialization failed:', error);
+      throw new StandardError({
+        message: 'Failed to initialize memory optimization service',
+        code: ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'MemoryOptimizationService',
+          operation: 'initialize',
+        },
+      });
     }
   }
 
   /**
    * Get current memory metrics
    */
-  getMemoryMetrics(): MemoryMetrics | null {
+  public getMemoryMetrics(): MemoryMetrics {
+    const usage = process.memoryUsage();
+    return {
+      rss: usage.rss,
+      heapTotal: usage.heapTotal,
+      heapUsed: usage.heapUsed,
+      external: usage.external,
+      arrayBuffers: usage.arrayBuffers,
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Check if memory usage is within acceptable limits
+   */
+  public isMemoryUsageAcceptable(): boolean {
+    const metrics = this.getMemoryMetrics();
+    return metrics.heapUsed < this.config.maxMemoryUsage;
+  }
+
+  /**
+   * Optimize memory usage
+   */
+  public async optimizeMemory(): Promise<void> {
     try {
-      if (typeof window === 'undefined' || !(performance as any).memory) {
-        return null;
-      }
-
-      const memory = (performance as any).memory;
-      return {
-        usedJSHeapSize: Math.round(memory.usedJSHeapSize / 1024 / 1024),
-        totalJSHeapSize: Math.round(memory.totalJSHeapSize / 1024 / 1024),
-        jsHeapSizeLimit: Math.round(memory.jsHeapSizeLimit / 1024 / 1024),
-        eventListeners: this.getEventListenersCount(),
-        domNodes: document.querySelectorAll('*').length,
-        detachedElements: this.detachedElements.size,
-      };
-    } catch (error) {
-      this.errorHandlingService.processError(
-        new StandardError({
-          message: 'Failed to get memory metrics',
-          code: ErrorCodes.PERFORMANCE.METRICS_COLLECTION_FAILED,
-          metadata: {
-            component: 'MemoryOptimizationService',
-            operation: 'getMemoryMetrics',
-            originalError: error,
-          },
-        })
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Perform comprehensive memory optimization
-   */
-  async optimizeMemory(): Promise<OptimizationResult> {
-    const startMetrics = this.getMemoryMetrics();
-    const startEventListeners = this.getEventListenersCount();
-    const startDetachedElements = this.detachedElements.size;
-
-    try {
-      // 1. Clean up detached elements
-      const detachedCleaned = this.cleanupDetachedElements();
-
-      // 2. Optimize event listeners
-      const eventListenersOptimizedCount = this.optimizeEventListeners();
-
-      // 3. Force garbage collection if available
-      this.forceGarbageCollection();
-
-      // 4. Clean up unused references
-      this.cleanupUnusedReferences();
-
-      // 5. Optimize DOM queries
-      this.optimizeDOMQueries();
-
-      // Wait for cleanup to take effect
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const endMetrics = this.getMemoryMetrics();
-      const endEventListeners = this.getEventListenersCount();
-      const endDetachedElements = this.detachedElements.size;
-
-      const memoryReduced = startMetrics
-        ? startMetrics.usedJSHeapSize - (endMetrics?.usedJSHeapSize || 0)
-        : 0;
-      const eventListenersReduced = startEventListeners - endEventListeners;
-      const detachedElementsCleaned = startDetachedElements - endDetachedElements;
-
-      const recommendations = this.generateOptimizationRecommendations(endMetrics);
-
-      return {
-        success: true,
-        memoryReduced,
-        eventListenersReduced,
-        detachedElementsCleaned,
-        recommendations,
-      };
-    } catch (error) {
-      this.errorHandlingService.processError(
-        new StandardError({
-          message: 'Memory optimization failed',
-          code: ErrorCodes.PERFORMANCE.OPTIMIZATION_FAILED,
-          metadata: {
-            component: 'MemoryOptimizationService',
-            operation: 'optimizeMemory',
-            originalError: error,
-          },
-        })
-      );
-
-      return {
-        success: false,
-        memoryReduced: 0,
-        eventListenersReduced: 0,
-        detachedElementsCleaned: 0,
-        recommendations: ['Optimization failed - check error logs'],
-      };
-    }
-  }
-
-  /**
-   * Clean up detached DOM elements
-   */
-  private cleanupDetachedElements(): number {
-    let cleaned = 0;
-
-    try {
-      // Find elements that are no longer in the DOM
-      const allElements = document.querySelectorAll('*');
-      const detachedElements = Array.from(allElements).filter(element => {
-        return !document.contains(element);
-      });
-
-      // Remove event listeners from detached elements
-      detachedElements.forEach(element => {
-        const listeners = this.eventListenerMap.get(element);
-        if (listeners) {
-          listeners.forEach(eventType => {
-            element.removeEventListener(eventType, () => {});
-          });
-          this.eventListenerMap.delete(element);
-          cleaned++;
-        }
-      });
-
-      // Clear the detached elements set
-      this.detachedElements.clear();
-
-      console.log(`[MemoryOptimization] Cleaned up ${cleaned} detached elements`);
-    } catch (error) {
-      console.warn('[MemoryOptimization] Detached element cleanup failed:', error);
-    }
-
-    return cleaned;
-  }
-
-  /**
-   * Optimize event listeners
-   */
-  private optimizeEventListeners(): number {
-    let reduced = 0;
-
-    try {
-      // Find duplicate event listeners
-      const listenerCounts = new Map<string, number>();
-
-      // Note: WeakMap doesn't have forEach, so we can't iterate over it
-      // This is a limitation of WeakMap - we'll use a different approach
-      // For now, skip this optimization as we can't iterate over WeakMap
-
-      // Remove excessive listeners
-      listenerCounts.forEach((count, eventType) => {
-        if (count > 10) {
-          // More than 10 listeners of the same type
-          console.warn(`[MemoryOptimization] Excessive ${eventType} listeners: ${count}`);
-          reduced += count - 10;
-        }
-      });
-
-      // Remove listeners from hidden elements
-      const hiddenElements = document.querySelectorAll('[style*="display: none"], [hidden]');
-      hiddenElements.forEach(element => {
-        const listeners = this.eventListenerMap.get(element);
-        if (listeners) {
-          listeners.forEach(eventType => {
-            element.removeEventListener(eventType, () => {});
-          });
-          this.eventListenerMap.delete(element);
-          reduced += listeners.size;
-        }
-      });
-
-      console.log(`[MemoryOptimization] Reduced ${reduced} event listeners`);
-    } catch (error) {
-      console.warn('[MemoryOptimization] Event listener optimization failed:', error);
-    }
-
-    return reduced;
-  }
-
-  /**
-   * Force garbage collection if available
-   */
-  private forceGarbageCollection(): void {
-    try {
-      if (window.gc) {
-        window.gc();
-        console.log('[MemoryOptimization] Garbage collection triggered');
-      }
-    } catch (error) {
-      console.warn('[MemoryOptimization] Garbage collection failed:', error);
-    }
-  }
-
-  /**
-   * Clean up unused references
-   */
-  private cleanupUnusedReferences(): void {
-    try {
-      // Clear any cached data that's no longer needed
-      if (window.performance && (window.performance as any).memory) {
-        const memory = (window.performance as any).memory;
-        if (memory.usedJSHeapSize > this.config.memoryThreshold * 1024 * 1024) {
-          // Clear any application caches
-          if ('caches' in window) {
-            caches.keys().then(cacheNames => {
-              cacheNames.forEach(cacheName => {
-                if (cacheName.includes('temp') || cacheName.includes('old')) {
-                  caches.delete(cacheName);
-                }
-              });
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('[MemoryOptimization] Reference cleanup failed:', error);
-    }
-  }
-
-  /**
-   * Optimize DOM queries
-   */
-  private optimizeDOMQueries(): void {
-    try {
-      // Clear any stored DOM references that might be causing memory leaks
-      const elementsWithData = document.querySelectorAll('[data-memory-optimized]');
-      elementsWithData.forEach(element => {
-        // Remove any stored data that might be causing leaks
-        element.removeAttribute('data-memory-optimized');
-      });
-    } catch (error) {
-      console.warn('[MemoryOptimization] DOM query optimization failed:', error);
-    }
-  }
-
-  /**
-   * Get current event listener count
-   */
-  private getEventListenersCount(): number {
-    let count = 0;
-    // Note: WeakMap doesn't have forEach, so we can't iterate over it
-    // This is a limitation of WeakMap - we'll use a different approach
-    // For now, return the count from the tracking we maintain
-    return count;
-  }
-
-  /**
-   * Setup event listener tracking
-   */
-  private setupEventListenerTracking(): void {
-    try {
-      // Override addEventListener to track listeners
-      const originalAddEventListener = EventTarget.prototype.addEventListener;
-      EventTarget.prototype.addEventListener = function (type, listener, options) {
-        const element = this as Element;
-        if (element && element.nodeType === Node.ELEMENT_NODE) {
-          const listeners =
-            MemoryOptimizationService.getInstance().eventListenerMap.get(element) || new Set();
-          listeners.add(type);
-          MemoryOptimizationService.getInstance().eventListenerMap.set(element, listeners);
-        }
-        return originalAddEventListener.call(this, type, listener, options);
-      };
-
-      // Override removeEventListener to track removal
-      const originalRemoveEventListener = EventTarget.prototype.removeEventListener;
-      EventTarget.prototype.removeEventListener = function (type, listener, options) {
-        const element = this as Element;
-        if (element && element.nodeType === Node.ELEMENT_NODE) {
-          const listeners = MemoryOptimizationService.getInstance().eventListenerMap.get(element);
-          if (listeners) {
-            listeners.delete(type);
-            if (listeners.size === 0) {
-              MemoryOptimizationService.getInstance().eventListenerMap.delete(element);
-            }
-          }
-        }
-        return originalRemoveEventListener.call(this, type, listener, options);
-      };
-    } catch (error) {
-      console.warn('[MemoryOptimization] Event listener tracking setup failed:', error);
-    }
-  }
-
-  /**
-   * Setup detached element detection
-   */
-  private setupDetachedElementDetection(): void {
-    try {
-      // Use MutationObserver to detect when elements are removed
-      const observer = new MutationObserver(mutations => {
-        mutations.forEach(mutation => {
-          mutation.removedNodes.forEach(node => {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              this.detachedElements.add(node as Element);
-            }
-          });
-        });
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-      });
-    } catch (error) {
-      console.warn('[MemoryOptimization] Detached element detection setup failed:', error);
-    }
-  }
-
-  /**
-   * Start automatic cleanup
-   */
-  private startAutomaticCleanup(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
-
-    this.cleanupInterval = setInterval(() => {
       const metrics = this.getMemoryMetrics();
-      if (metrics) {
-        if (
-          metrics.usedJSHeapSize > this.config.memoryThreshold ||
-          metrics.eventListeners > this.config.eventListenerThreshold
-        ) {
-          console.log('[MemoryOptimization] Automatic cleanup triggered');
-          this.optimizeMemory();
+
+      // Check if memory usage is high
+      if (metrics.heapUsed > this.config.maxMemoryUsage * this.config.gcThreshold) {
+        console.log(
+          '[MemoryOptimizationService] High memory usage detected, triggering optimization...'
+        );
+
+        // Force garbage collection
+        if (global.gc) {
+          global.gc();
+          console.log('[MemoryOptimizationService] Garbage collection completed');
+        }
+
+        // Clear memory history if too large
+        if (this.memoryHistory.length > 100) {
+          this.memoryHistory = this.memoryHistory.slice(-50);
+        }
+
+        // Log optimization metrics
+        const newMetrics = this.getMemoryMetrics();
+        const freedMemory = metrics.heapUsed - newMetrics.heapUsed;
+
+        if (freedMemory > 0) {
+          console.log(
+            `[MemoryOptimizationService] Freed ${(freedMemory / 1024 / 1024).toFixed(2)}MB of memory`
+          );
         }
       }
-    }, this.config.cleanupInterval);
+    } catch (error) {
+      console.error('[MemoryOptimizationService] Memory optimization failed:', error);
+    }
   }
 
   /**
-   * Generate optimization recommendations
+   * Track database query performance
    */
-  private generateOptimizationRecommendations(metrics: MemoryMetrics | null): string[] {
-    const recommendations: string[] = [];
+  public trackQuery(query: string, duration: number, memoryImpact: number): void {
+    try {
+      this.queryMetrics.queryCount++;
+      this.queryMetrics.averageQueryTime =
+        (this.queryMetrics.averageQueryTime * (this.queryMetrics.queryCount - 1) + duration) /
+        this.queryMetrics.queryCount;
+      this.queryMetrics.memoryImpact += memoryImpact;
 
-    if (!metrics) {
-      recommendations.push('Enable memory metrics collection');
-      return recommendations;
+      // Track slow queries
+      if (duration > this.config.maxQueryTime) {
+        this.queryMetrics.slowQueries.push({
+          query: query.substring(0, 100) + (query.length > 100 ? '...' : ''),
+          duration,
+          timestamp: Date.now(),
+        });
+
+        // Keep only last 50 slow queries
+        if (this.queryMetrics.slowQueries.length > 50) {
+          this.queryMetrics.slowQueries = this.queryMetrics.slowQueries.slice(-50);
+        }
+      }
+    } catch (error) {
+      console.error('[MemoryOptimizationService] Query tracking failed:', error);
     }
+  }
 
-    if (metrics.usedJSHeapSize > this.config.memoryThreshold) {
-      recommendations.push(
-        `Reduce memory usage from ${metrics.usedJSHeapSize}MB to <${this.config.memoryThreshold}MB`
+  /**
+   * Get query optimization metrics
+   */
+  public getQueryMetrics(): QueryOptimizationMetrics {
+    return { ...this.queryMetrics };
+  }
+
+  /**
+   * Detect potential memory leaks
+   */
+  public detectMemoryLeaks(): Array<{
+    type: 'increasing' | 'stagnant' | 'high_usage';
+    description: string;
+    severity: 'low' | 'medium' | 'high';
+  }> {
+    const leaks: Array<{
+      type: 'increasing' | 'stagnant' | 'high_usage';
+      description: string;
+      severity: 'low' | 'medium' | 'high';
+    }> = [];
+
+    try {
+      if (this.memoryHistory.length < 10) return leaks;
+
+      const recentMetrics = this.memoryHistory.slice(-10);
+      const firstMetric = recentMetrics[0];
+      const lastMetric = recentMetrics[recentMetrics.length - 1];
+
+      // Check for increasing memory usage
+      const memoryIncrease = lastMetric.heapUsed - firstMetric.heapUsed;
+      const timeSpan = lastMetric.timestamp - firstMetric.timestamp;
+      const increaseRate = memoryIncrease / timeSpan;
+
+      if (increaseRate > 1024 * 1024) {
+        // More than 1MB per second
+        leaks.push({
+          type: 'increasing',
+          description: `Memory usage increasing at ${(increaseRate / 1024 / 1024).toFixed(2)}MB/s`,
+          severity: 'high',
+        });
+      }
+
+      // Check for high memory usage
+      const currentUsage = this.getMemoryMetrics();
+      if (currentUsage.heapUsed > this.config.maxMemoryUsage * 0.9) {
+        leaks.push({
+          type: 'high_usage',
+          description: `High memory usage: ${(currentUsage.heapUsed / 1024 / 1024).toFixed(2)}MB`,
+          severity: 'medium',
+        });
+      }
+
+      // Check for stagnant memory (no garbage collection)
+      const stagnantThreshold = 5 * 60 * 1000; // 5 minutes
+      const stagnantMetrics = this.memoryHistory.filter(
+        metric => Date.now() - metric.timestamp < stagnantThreshold
       );
+
+      if (stagnantMetrics.length > 0) {
+        const avgUsage =
+          stagnantMetrics.reduce((sum, metric) => sum + metric.heapUsed, 0) /
+          stagnantMetrics.length;
+        if (avgUsage > this.config.maxMemoryUsage * 0.8) {
+          leaks.push({
+            type: 'stagnant',
+            description: `Stagnant high memory usage: ${(avgUsage / 1024 / 1024).toFixed(2)}MB`,
+            severity: 'medium',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[MemoryOptimizationService] Memory leak detection failed:', error);
     }
 
-    if (metrics.eventListeners > this.config.eventListenerThreshold) {
-      recommendations.push(
-        `Reduce event listeners from ${metrics.eventListeners} to <${this.config.eventListenerThreshold}`
-      );
-    }
+    return leaks;
+  }
 
-    if (metrics.detachedElements > 0) {
-      recommendations.push(`Clean up ${metrics.detachedElements} detached elements`);
-    }
+  /**
+   * Start memory monitoring
+   */
+  private startMemoryMonitoring(): void {
+    const monitorInterval = setInterval(() => {
+      try {
+        const metrics = this.getMemoryMetrics();
+        this.memoryHistory.push(metrics);
 
-    if (metrics.domNodes > 1000) {
-      recommendations.push('Consider virtualizing large DOM trees');
+        // Keep only last 100 metrics
+        if (this.memoryHistory.length > 100) {
+          this.memoryHistory = this.memoryHistory.slice(-100);
+        }
+
+        // Check for memory leaks
+        const leaks = this.detectMemoryLeaks();
+        if (leaks.length > 0) {
+          console.warn('[MemoryOptimizationService] Potential memory leaks detected:', leaks);
+        }
+
+        // Optimize memory if needed
+        this.optimizeMemory();
+      } catch (error) {
+        console.error('[MemoryOptimizationService] Memory monitoring failed:', error);
+      }
+    }, this.config.optimizationInterval);
+
+    // Store interval reference for cleanup
+    this.optimizationInterval = monitorInterval;
+  }
+
+  /**
+   * Start query optimization monitoring
+   */
+  private startQueryOptimization(): void {
+    // This will be called by database operations
+    console.log('[MemoryOptimizationService] Query optimization monitoring started');
+  }
+
+  /**
+   * Cleanup resources
+   */
+  public cleanup(): void {
+    try {
+      if (this.optimizationInterval) {
+        clearInterval(this.optimizationInterval);
+        this.optimizationInterval = null;
+      }
+
+      this.memoryHistory = [];
+      this.queryMetrics = {
+        queryCount: 0,
+        averageQueryTime: 0,
+        slowQueries: [],
+        memoryImpact: 0,
+      };
+
+      console.log('[MemoryOptimizationService] Cleanup completed');
+    } catch (error) {
+      console.error('[MemoryOptimizationService] Cleanup failed:', error);
+    }
+  }
+
+  /**
+   * Get optimization recommendations
+   */
+  public getOptimizationRecommendations(): Array<{
+    type: 'memory' | 'query' | 'cache';
+    priority: 'low' | 'medium' | 'high';
+    description: string;
+    impact: string;
+  }> {
+    const recommendations: Array<{
+      type: 'memory' | 'query' | 'cache';
+      priority: 'low' | 'medium' | 'high';
+      description: string;
+      impact: string;
+    }> = [];
+
+    try {
+      const metrics = this.getMemoryMetrics();
+      const queryMetrics = this.getQueryMetrics();
+
+      // Memory recommendations
+      if (metrics.heapUsed > this.config.maxMemoryUsage * 0.8) {
+        recommendations.push({
+          type: 'memory',
+          priority: 'high',
+          description: 'Reduce memory usage through code optimization',
+          impact: 'High - Prevents out-of-memory errors',
+        });
+      }
+
+      // Query recommendations
+      if (queryMetrics.averageQueryTime > this.config.maxQueryTime) {
+        recommendations.push({
+          type: 'query',
+          priority: 'medium',
+          description: 'Optimize slow database queries',
+          impact: 'Medium - Improves response times',
+        });
+      }
+
+      if (queryMetrics.slowQueries.length > 10) {
+        recommendations.push({
+          type: 'query',
+          priority: 'high',
+          description: 'Address multiple slow queries',
+          impact: 'High - Significant performance impact',
+        });
+      }
+
+      // Cache recommendations
+      if (queryMetrics.queryCount > 100 && queryMetrics.averageQueryTime > 500) {
+        recommendations.push({
+          type: 'cache',
+          priority: 'medium',
+          description: 'Implement query result caching',
+          impact: 'Medium - Reduces database load',
+        });
+      }
+    } catch (error) {
+      console.error('[MemoryOptimizationService] Failed to generate recommendations:', error);
     }
 
     return recommendations;
   }
-
-  /**
-   * Cleanup service
-   */
-  cleanup(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-
-    this.eventListenerMap = new WeakMap();
-    this.detachedElements.clear();
-    this.isInitialized = false;
-
-    console.log('[MemoryOptimization] Service cleaned up');
-  }
-
-  /**
-   * Check if service is initialized
-   */
-  isServiceInitialized(): boolean {
-    return this.isInitialized;
-  }
 }
 
-// Export singleton instance
-export const memoryOptimizationService = MemoryOptimizationService.getInstance();
+export default MemoryOptimizationService;

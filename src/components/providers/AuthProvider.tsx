@@ -153,16 +153,20 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         'medium'
       );
     } catch (error) {
-      console.error('Failed to refresh session:', error);
-      analytics(
-        'session_refresh_error',
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to refresh session. Please log in again.',
+        ErrorCodes.AUTH.TOKEN_REFRESH_FAILED,
         {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: Date.now(),
           component: 'AuthProvider',
-        },
-        'high'
+          operation: 'refreshSession',
+          userId: user?.id,
+        }
       );
+
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
     }
   }, [update, user?.id]); // Remove analytics dependency
 
@@ -184,8 +188,17 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       try {
         await apiClient.post('auth/logout', {});
       } catch (logoutError) {
-        // Log but don't fail the logout process if API call fails
-        console.warn('Logout API call failed:', logoutError);
+        // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+        errorHandlingService.processError(
+          logoutError,
+          'Logout API call failed',
+          ErrorCodes.API.REQUEST_FAILED,
+          {
+            component: 'AuthProvider',
+            operation: 'logout',
+            userId: user?.id,
+          }
+        );
       }
 
       // Use NextAuth signOut
@@ -206,7 +219,8 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         }
       );
 
-      console.error('Logout error:', standardError);
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
       analytics(
         'logout_error',
         {

@@ -5,6 +5,8 @@
  * Simple logout functionality for authenticated users
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { LogOut } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { useState } from 'react';
@@ -23,7 +25,20 @@ export function LogoutButton({ className = '', variant = 'button', children }: L
     try {
       await signOut({ callbackUrl: '/auth/login' });
     } catch (error) {
-      console.error('Logout error:', error);
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Logout failed. Please try again.',
+        ErrorCodes.AUTH.LOGOUT_FAILED,
+        {
+          component: 'LogoutButton',
+          operation: 'logout',
+        }
+      );
+
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
       setIsLoggingOut(false);
     }
   };

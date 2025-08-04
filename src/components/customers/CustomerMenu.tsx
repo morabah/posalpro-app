@@ -1,6 +1,7 @@
 'use client';
 
 // Using basic button elements instead of custom components
+import { Customer } from '@/hooks/useCustomers';
 import { Plus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -10,7 +11,8 @@ export function CustomerMenu() {
   const [isCreationSidebarOpen, setIsCreationSidebarOpen] = useState(false);
   const router = useRouter();
 
-  const handleCustomerCreated = (customer: any) => {
+  // ✅ FIXED: Replace any type with proper Customer interface
+  const handleCustomerCreated = (customer: Customer) => {
     console.log('[CustomerMenu] Customer created:', customer);
     // Optionally navigate to customer page or refresh customer list
   };

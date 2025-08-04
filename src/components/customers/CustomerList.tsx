@@ -8,8 +8,8 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { Customer, useCustomers } from '@/hooks/useCustomers';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { debounce } from '@/lib/utils';
 import {
   BuildingOfficeIcon,
@@ -29,14 +29,6 @@ import { memo, useCallback, useState } from 'react';
  * - Methods: fetchCustomers(), searchCustomers(), handleCustomerView()
  * - Test Cases: TC-H4-006, TC-H6-002
  */
-
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1', 'US-4.2'],
-  acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.2', 'AC-4.2.1', 'AC-4.2.2'],
-  methods: ['fetchCustomers()', 'searchCustomers()', 'handleCustomerView()'],
-  hypotheses: ['H4', 'H6'],
-  testCases: ['TC-H4-006', 'TC-H6-002'],
-};
 
 // Skeleton component for loading state
 const CustomerSkeleton = memo(() => (
@@ -79,13 +71,13 @@ const CustomerList = memo(() => {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Debounced search function
-  const debouncedSearchFunction = useCallback(
-    debounce((term: string) => {
-      setDebouncedSearch(term);
+  const debouncedSearchFunction = useCallback((term: string) => {
+    const debouncedFn = debounce((searchTerm: string) => {
+      setDebouncedSearch(searchTerm);
       setCurrentPage(1); // Reset to first page when searching
-    }, 500),
-    []
-  );
+    }, 500);
+    debouncedFn(term);
+  }, []);
 
   // Use React Query hook for data fetching with caching
   const { data, isLoading, error, refetch, isFetching, isError } = useCustomers({
@@ -99,69 +91,51 @@ const CustomerList = memo(() => {
   });
 
   // Track analytics when component loads
-  const handleAnalyticsTrack = useCallback((eventName: string, metadata: any = {}) => {
-    analytics(eventName, {
-      component: 'CustomerList',
-      userStories: COMPONENT_MAPPING.userStories,
-      hypotheses: COMPONENT_MAPPING.hypotheses,
-      ...metadata,
-    });
-  }, []); // ✅ PERFORMANCE FIX: Remove unstable analytics dependency
+  const handleCustomerView = useCallback(
+    (customer: Customer) => {
+      analytics('customer_viewed', {
+        customerId: customer.id,
+        customerName: customer.name,
+        customerTier: customer.tier,
+        customerStatus: customer.status,
+      });
+    },
+    [analytics]
+  );
 
   // Handle search input change
   const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const value = event.target.value;
       setSearchTerm(value);
       debouncedSearchFunction(value);
-
-      if (value.length > 0) {
-        handleAnalyticsTrack('customer_search_initiated', { searchTerm: value });
-      }
     },
-    [debouncedSearchFunction, handleAnalyticsTrack]
+    [debouncedSearchFunction]
   );
 
-  const handleView = useCallback(
-    (customerId: string) => {
-      handleAnalyticsTrack('customer_view_clicked', { customerId });
-      window.location.href = `/customers/${customerId}`;
-    },
-    [handleAnalyticsTrack]
-  );
+  const handleStatusFilterChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    setStatusFilter(value);
+    setCurrentPage(1);
+  }, []);
 
-  const handleEdit = useCallback(
-    (customerId: string) => {
-      handleAnalyticsTrack('customer_edit_clicked', { customerId });
-      window.location.href = `/customers/${customerId}/edit`;
-    },
-    [handleAnalyticsTrack]
-  );
+  const handleTierFilterChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    setTierFilter(value);
+    setCurrentPage(1);
+  }, []);
 
   const handlePageChange = useCallback(
     (page: number) => {
       setCurrentPage(page);
-      handleAnalyticsTrack('customer_pagination_clicked', { page });
+      analytics('customer_list_page_changed', {
+        page,
+        searchTerm: debouncedSearch,
+        statusFilter,
+        tierFilter,
+      });
     },
-    [handleAnalyticsTrack]
-  );
-
-  const handleStatusFilterChange = useCallback(
-    (status: string) => {
-      setStatusFilter(status);
-      setCurrentPage(1);
-      handleAnalyticsTrack('customer_status_filter_changed', { status });
-    },
-    [handleAnalyticsTrack]
-  );
-
-  const handleTierFilterChange = useCallback(
-    (tier: string) => {
-      setTierFilter(tier);
-      setCurrentPage(1);
-      handleAnalyticsTrack('customer_tier_filter_changed', { tier });
-    },
-    [handleAnalyticsTrack]
+    [analytics, debouncedSearch, statusFilter, tierFilter]
   );
 
   // Handle error state
@@ -180,26 +154,33 @@ const CustomerList = memo(() => {
   }
 
   const customers = data?.customers || [];
-  const pagination = data?.pagination;
+  const totalPages = data?.pagination?.totalPages || 1;
+  const totalCustomers = data?.pagination?.total || 0;
 
   const getTierBadgeColor = (tier: string) => {
-    const colors = {
-      VIP: 'bg-purple-100 text-purple-800',
-      ENTERPRISE: 'bg-blue-100 text-blue-800',
-      PREMIUM: 'bg-green-100 text-green-800',
-      STANDARD: 'bg-gray-100 text-gray-800',
-    };
-    return colors[tier as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+    switch (tier.toLowerCase()) {
+      case 'premium':
+        return 'bg-purple-100 text-purple-800';
+      case 'enterprise':
+        return 'bg-blue-100 text-blue-800';
+      case 'standard':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
   };
 
   const getStatusBadgeColor = (status: string) => {
-    const colors = {
-      ACTIVE: 'bg-green-100 text-green-800',
-      PROSPECT: 'bg-blue-100 text-blue-800',
-      INACTIVE: 'bg-gray-100 text-gray-800',
-      CHURNED: 'bg-red-100 text-red-800',
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'inactive':
+        return 'bg-red-100 text-red-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
   };
 
   const formatRevenue = (revenue?: number) => {
@@ -216,200 +197,118 @@ const CustomerList = memo(() => {
     <div className="space-y-6">
       {/* Search and Filter Section */}
       <Card className="p-6">
-        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-          <div className="flex-1 max-w-md">
-            <label htmlFor="search" className="sr-only">
-              Search customers
-            </label>
-            <div className="relative">
-              <input
-                id="search"
-                type="text"
-                placeholder="Search customers..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isLoading}
-              />
-              {isFetching && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                </div>
-              )}
-            </div>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search customers..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
-
-          <div className="flex items-center space-x-4">
-            {/* Status Filter */}
-            <div>
-              <label htmlFor="status-filter" className="sr-only">
-                Filter by status
-              </label>
-              <select
-                id="status-filter"
-                value={statusFilter}
-                onChange={e => handleStatusFilterChange(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isLoading}
-              >
-                <option value="">All Statuses</option>
-                <option value="ACTIVE">Active</option>
-                <option value="PROSPECT">Prospect</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="CHURNED">Churned</option>
-              </select>
-            </div>
-
-            {/* Tier Filter */}
-            <div>
-              <label htmlFor="tier-filter" className="sr-only">
-                Filter by tier
-              </label>
-              <select
-                id="tier-filter"
-                value={tierFilter}
-                onChange={e => handleTierFilterChange(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isLoading}
-              >
-                <option value="">All Tiers</option>
-                <option value="VIP">VIP</option>
-                <option value="ENTERPRISE">Enterprise</option>
-                <option value="PREMIUM">Premium</option>
-                <option value="STANDARD">Standard</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            {pagination && (
-              <span>
-                {pagination.total} total customers
-                {(debouncedSearch || statusFilter || tierFilter) && ` (filtered)`}
-              </span>
-            )}
+          <div className="flex gap-2">
+            <select
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="pending">Pending</option>
+            </select>
+            <select
+              value={tierFilter}
+              onChange={handleTierFilterChange}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Tiers</option>
+              <option value="premium">Premium</option>
+              <option value="enterprise">Enterprise</option>
+              <option value="standard">Standard</option>
+            </select>
           </div>
         </div>
       </Card>
 
       {/* Loading State */}
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {[...Array(8)].map((_, i) => (
-            <CustomerSkeleton key={i} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <CustomerSkeleton key={index} />
           ))}
         </div>
       )}
 
       {/* Customers Grid */}
       {!isLoading && customers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {customers.map((customer: Customer) => (
-            <Card key={customer.id} className="hover:shadow-lg transition-shadow duration-200">
+            <Card key={customer.id} className="h-48 hover:shadow-lg transition-shadow">
               <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0">
-                      <BuildingOfficeIcon className="h-10 w-10 text-gray-400" />
+                    <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <BuildingOfficeIcon className="h-6 w-6 text-blue-600" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-lg font-medium text-gray-900 truncate">
-                        {customer.name}
-                      </h3>
-                      <p className="text-sm text-gray-500 truncate">
-                        {customer.email || 'No email'}
-                      </p>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{customer.name}</h3>
+                      <p className="text-sm text-gray-500">{customer.email}</p>
                     </div>
                   </div>
-
-                  <div className="flex flex-col space-y-1">
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(customer.status)}`}
+                  >
+                    {customer.status}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <CurrencyDollarIcon className="h-4 w-4 mr-2" />
+                    <span>{formatRevenue(customer.revenue)}</span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <UserGroupIcon className="h-4 w-4 mr-2" />
+                    <span>{customer.companySize || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <TagIcon className="h-4 w-4 mr-2" />
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTierBadgeColor(customer.tier)}`}
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${getTierBadgeColor(customer.tier)}`}
                     >
                       {customer.tier}
                     </span>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(customer.status)}`}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center mt-6">
+                  <span className="text-xs text-gray-500">
+                    Updated {new Date(customer.updatedAt).toLocaleDateString()}
+                  </span>
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCustomerView(customer)}
+                      className="p-1"
                     >
-                      {customer.status}
-                    </span>
+                      <EyeIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        // Handle edit customer
+                        analytics('customer_edit_clicked', {
+                          customerId: customer.id,
+                          customerName: customer.name,
+                        });
+                      }}
+                      className="p-1"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </Button>
                   </div>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  {customer.industry && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Industry:</span>
-                      <span className="text-gray-900">{customer.industry}</span>
-                    </div>
-                  )}
-
-                  {customer.revenue && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500 flex items-center">
-                        <CurrencyDollarIcon className="w-4 h-4 mr-1" />
-                        Revenue:
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        {formatRevenue(customer.revenue)}
-                      </span>
-                    </div>
-                  )}
-
-                  {(customer.proposalsCount !== undefined ||
-                    customer.contactsCount !== undefined) && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500 flex items-center">
-                        <UserGroupIcon className="w-4 h-4 mr-1" />
-                        Activity:
-                      </span>
-                      <span className="text-gray-700">Activity tracked</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Tags */}
-                {customer.tags && customer.tags.length > 0 && (
-                  <div className="mb-4">
-                    <div className="flex flex-wrap gap-1">
-                      {customer.tags.slice(0, 2).map((tag, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700"
-                        >
-                          <TagIcon className="w-3 h-3 mr-1" />
-                          {tag}
-                        </span>
-                      ))}
-                      {customer.tags.length > 2 && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-50 text-gray-700">
-                          +{customer.tags.length - 2} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    onClick={() => handleView(customer.id)}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center"
-                  >
-                    <EyeIcon className="w-4 h-4 mr-1" />
-                    View
-                  </Button>
-                  <Button
-                    onClick={() => handleEdit(customer.id)}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center"
-                  >
-                    <PencilIcon className="w-4 h-4 mr-1" />
-                    Edit
-                  </Button>
                 </div>
               </div>
             </Card>
@@ -453,41 +352,35 @@ const CustomerList = memo(() => {
       )}
 
       {/* Pagination */}
-      {pagination && pagination.totalPages && pagination.totalPages > 1 && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
-              {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}{' '}
-              customers
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Button
-                onClick={() => handlePageChange(pagination.page - 1)}
-                disabled={pagination.page <= 1}
-                variant="outline"
-                size="sm"
-              >
-                Previous
-              </Button>
-
-              <span className="text-sm text-gray-600">
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-
-              <Button
-                onClick={() => handlePageChange(pagination.page + 1)}
-                disabled={pagination.page >= (pagination.totalPages || 1)}
-                variant="outline"
-                size="sm"
-              >
-                Next
-              </Button>
-            </div>
+      {totalPages > 1 && (
+        <div className="flex justify-center">
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <span className="px-4 py-2 text-sm text-gray-600">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
           </div>
-        </Card>
+        </div>
       )}
+
+      {/* Results Summary */}
+      <div className="text-center text-sm text-gray-500">
+        Showing {customers.length} of {totalCustomers} customers
+        {isFetching && <span className="ml-2">(Refreshing...)</span>}
+      </div>
     </div>
   );
 });

@@ -1,6 +1,9 @@
 'use client';
 
+import { Customer } from '@/hooks/useCustomers';
 import { apiClient } from '@/lib/api/client';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Building, DollarSign, Globe, Loader2, Mail, MapPin, Save, Tag, X } from 'lucide-react';
 import { useState } from 'react';
@@ -26,7 +29,7 @@ type CustomerFormData = z.infer<typeof CustomerCreateSchema>;
 interface CustomerCreationSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (customer: any) => void;
+  onSuccess?: (customer: Customer) => void;
 }
 
 const INDUSTRY_OPTIONS = [
@@ -138,8 +141,12 @@ export function CustomerCreationSidebar({
 
         // Call success callback with customer data
         if (onSuccess) {
-          const customerData = (response as any).data?.data || (response as any).data;
-          onSuccess(customerData);
+          const responseData = response as { data: { data?: Customer } | Customer };
+          const customerData =
+            'data' in responseData.data ? responseData.data.data : responseData.data;
+          if (customerData) {
+            onSuccess(customerData as Customer);
+          }
         }
 
         // Close sidebar after a brief delay
@@ -151,10 +158,25 @@ export function CustomerCreationSidebar({
         throw new Error('Failed to create customer');
       }
     } catch (error) {
-      console.error('[CustomerCreationSidebar] Error creating customer:', error);
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to create customer. Please try again.',
+        ErrorCodes.BUSINESS.PROCESS_FAILED,
+        {
+          component: 'CustomerCreationSidebar',
+          operation: 'createCustomer',
+          customerData: data,
+        }
+      );
+
+      // Log the error for debugging
+      errorHandlingService.processError(standardError);
+
       setMessage({
         type: 'error',
-        text: 'Failed to create customer. Please try again.',
+        text: errorHandlingService.getUserFriendlyMessage(standardError),
       });
     } finally {
       setIsSubmitting(false);

@@ -11,7 +11,17 @@
 'use client';
 
 import { ApprovalQueue } from '@/components/proposals/ApprovalQueue';
-import { DecisionInterface, type DecisionContext, type ChecklistItem, type ProposalAttachment, type StageComment, type PolicyReference, type Collaborator, type DecisionHistory, type DecisionFormData } from '@/components/proposals/DecisionInterface';
+import {
+  DecisionInterface,
+  type ChecklistItem,
+  type Collaborator,
+  type DecisionContext,
+  type DecisionFormData,
+  type DecisionHistory,
+  type PolicyReference,
+  type ProposalAttachment,
+  type StageComment,
+} from '@/components/proposals/DecisionInterface';
 import { WorkflowOrchestrator } from '@/components/proposals/WorkflowOrchestrator';
 import { WorkflowRuleBuilder } from '@/components/proposals/WorkflowRuleBuilder';
 import { WorkflowVisualization } from '@/components/proposals/WorkflowVisualization';
@@ -183,24 +193,35 @@ export default function ApprovalWorkflowPage() {
     (tab: string) => {
       setActiveTab(tab as any);
 
-      analytics('approval_workflow_tab_changed', {
-        tab,
-        previousTab: activeTab,
-      }, 'medium');
+      analytics(
+        'approval_workflow_tab_changed',
+        {
+          tab,
+          previousTab: activeTab,
+        },
+        'medium'
+      );
     },
     [activeTab, analytics]
   );
 
-  const handleTaskSelect = useCallback((task: ApprovalTask) => {
-    setSelectedTask(task);
-    setActiveTab('decision');
+  const handleTaskSelect = useCallback(
+    (task: ApprovalTask) => {
+      setSelectedTask(task);
+      setActiveTab('decision');
 
-    analytics('approval_task_selected', {
-      taskId: task.id,
-      taskType: task.type,
-      priority: task.priority,
-    }, 'high');
-  }, [analytics]);
+      analytics(
+        'approval_task_selected',
+        {
+          taskId: task.id,
+          taskType: task.type,
+          priority: task.priority,
+        },
+        'high'
+      );
+    },
+    [analytics]
+  );
 
   const handleTaskAction = useCallback((taskId: string, action: string, data?: any) => {
     // Disabled console.log analytics to prevent Fast Refresh rebuilds
@@ -271,43 +292,52 @@ export default function ApprovalWorkflowPage() {
     });
   }, []);
 
-  const handleDecisionSubmit = useCallback((decision: DecisionFormData) => {
-    console.log('Decision submitted:', decision);
-    // TODO: Implement actual decision submission logic (US-4.2)
-    // Example: call an API, update state, etc.
-    // Track analytics for decision submission (H7)
-    console.log('Analytics: decision_submitted', {
-      decisionType: decision.decision,
-      proposalId: selectedTask?.proposalId, 
-      timestamp: Date.now(),
-    });
-  }, [selectedTask]);
+  const handleDecisionSubmit = useCallback(
+    (decision: DecisionFormData) => {
+      console.log('Decision submitted:', decision);
+      // TODO: Implement actual decision submission logic (US-4.2)
+      // Example: call an API, update state, etc.
+      // Track analytics for decision submission (H7)
+      console.log('Analytics: decision_submitted', {
+        decisionType: decision.decision,
+        proposalId: selectedTask?.proposalId,
+        timestamp: Date.now(),
+      });
+    },
+    [selectedTask]
+  );
 
-  const handleRequestCollaboration = useCallback((collaborators: string[]) => {
-    console.log('Collaboration requested with:', collaborators);
-    // TODO: Implement actual collaboration request logic (US-4.3)
-    // Example: send notifications, update task assignees
-    // Track analytics for collaboration request (H7)
-    console.log('Analytics: collaboration_requested', {
-      collaboratorCount: collaborators.length,
-      proposalId: selectedTask?.proposalId,
-      timestamp: Date.now(),
-    });
-  }, [selectedTask]);
+  const handleRequestCollaboration = useCallback(
+    (collaborators: string[]) => {
+      console.log('Collaboration requested with:', collaborators);
+      // TODO: Implement actual collaboration request logic (US-4.3)
+      // Example: send notifications, update task assignees
+      // Track analytics for collaboration request (H7)
+      console.log('Analytics: collaboration_requested', {
+        collaboratorCount: collaborators.length,
+        proposalId: selectedTask?.proposalId,
+        timestamp: Date.now(),
+      });
+    },
+    [selectedTask]
+  );
 
-  const handleUpdateChecklist = useCallback((itemId: string, completed: boolean, notes?: string) => {
-    console.log('Checklist item updated:', { itemId, completed, notes });
-    // TODO: Implement actual checklist update logic (US-4.1)
-    // Example: update task checklist state, persist changes
-    // Track analytics for checklist update (H7)
-    console.log('Analytics: checklist_item_updated', {
-      itemId,
-      completed,
-      hasNotes: !!notes,
-      proposalId: selectedTask?.proposalId,
-      timestamp: Date.now(),
-    });
-  }, [selectedTask]);
+  const handleUpdateChecklist = useCallback(
+    (itemId: string, completed: boolean, notes?: string) => {
+      console.log('Checklist item updated:', { itemId, completed, notes });
+      // TODO: Implement actual checklist update logic (US-4.1)
+      // Example: update task checklist state, persist changes
+      // Track analytics for checklist update (H7)
+      console.log('Analytics: checklist_item_updated', {
+        itemId,
+        completed,
+        hasNotes: !!notes,
+        proposalId: selectedTask?.proposalId,
+        timestamp: Date.now(),
+      });
+    },
+    [selectedTask]
+  );
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -559,7 +589,6 @@ export default function ApprovalWorkflowPage() {
         {activeTab === 'rules' && (
           <WorkflowRuleBuilder
             rules={workflowRules}
-            templates={[]}
             availableFields={availableFields}
             onRuleSave={handleRuleSave}
             onRuleDelete={handleRuleDelete}
@@ -568,100 +597,111 @@ export default function ApprovalWorkflowPage() {
           />
         )}
 
-        {activeTab === 'decision' && selectedTask && (() => {
-          const decisionContextData: DecisionContext = {
-            proposalId: selectedTask.proposalId,
-            proposalName: selectedTask.proposalTitle,
-            client: selectedTask.metadata?.clientName || 'N/A', // Example: get client from metadata or default
-            stageId: selectedTask.currentStage, // Assuming stageId is currentStage
-            stageName: selectedTask.currentStage, // Assuming stageName is currentStage
-            stageType: (() => {
-              switch (selectedTask.type) {
-                case 'technical_validation': return 'Technical';
-                case 'budget_approval': return 'Finance';
-                case 'executive_sign_off': return 'Executive';
-                case 'proposal_review': return 'Compliance'; // Example mapping
-                default: return 'Compliance'; // Default or throw error
-              }
-            })(),
-            assignee: selectedTask.assignee,
-            deadline: selectedTask.dueDate,
-            slaRemaining: selectedTask.slaCompliance, // Or calculate if needed
-            priority: (selectedTask.priority.charAt(0).toUpperCase() + selectedTask.priority.slice(1)) as DecisionContext['priority'],
-            proposalValue: selectedTask.businessValue,
-            riskLevel: (selectedTask.riskLevel.charAt(0).toUpperCase() + selectedTask.riskLevel.slice(1)) as DecisionContext['riskLevel'],
-            previousStageComments: (selectedTask.comments || []).map((comment: any, index: number) => ({
-              id: `comment-${index}-${selectedTask.id}`,
-              stageId: comment.stageId || selectedTask.currentStage, // attempt to get from comment or default
-              stageName: comment.stageName || selectedTask.currentStage, // attempt to get from comment or default
-              author: comment.author || 'Unknown',
-              content: comment.content || String(comment), // handle if comment is just a string
-              timestamp: comment.timestamp ? new Date(comment.timestamp) : new Date(),
-              type: comment.type || 'comment',
-              isResolved: comment.isResolved || false,
-            })) as StageComment[],
-            attachments: (selectedTask.attachments || []).map((att: any, index: number) => ({
-              id: `att-${index}-${selectedTask.id}`,
-              name: att.name || 'Attachment',
-              type: att.type || 'unknown',
-              size: att.size || 0,
-              uploadedBy: att.uploadedBy || 'System',
-              uploadedAt: att.uploadedAt ? new Date(att.uploadedAt) : new Date(),
-              url: att.url || '#',
-              category: att.category || 'general',
-            })) as ProposalAttachment[],
-            checklist: [
-              {
-                id: 'check-1',
-                description: 'Verify budget allocation and availability',
-                isRequired: true,
-                isCompleted: false,
-                category: 'financial',
-              },
-              {
-                id: 'check-2',
-                description: 'Confirm technical requirements can be met',
-                isRequired: true,
-                isCompleted: false,
-                category: 'technical',
-              },
-              {
-                id: 'check-3',
-                description: 'Ensure adherence to all legal standards',
-                isRequired: true,
-                isCompleted: false,
-                category: 'legal',
-              },
-              {
-                id: 'check-4',
-                description: 'Evaluate potential security risks and mitigations',
-                isRequired: false,
-                isCompleted: false,
-                category: 'security',
-              },
-              {
-                id: 'check-5',
-                description: 'Confirm all key stakeholders are in agreement',
-                isRequired: true,
-                isCompleted: false,
-                category: 'business',
-              },
-            ] as ChecklistItem[],
-            policies: [] as PolicyReference[], // Populate as needed
-            collaborators: [] as Collaborator[], // Populate as needed
-            history: [] as DecisionHistory[], // Populate from selectedTask.comments if applicable, or other source
-          };
+        {activeTab === 'decision' &&
+          selectedTask &&
+          (() => {
+            const decisionContextData: DecisionContext = {
+              proposalId: selectedTask.proposalId,
+              proposalName: selectedTask.proposalTitle,
+              client: selectedTask.metadata?.clientName || 'N/A', // Example: get client from metadata or default
+              stageId: selectedTask.currentStage, // Assuming stageId is currentStage
+              stageName: selectedTask.currentStage, // Assuming stageName is currentStage
+              stageType: (() => {
+                switch (selectedTask.type) {
+                  case 'technical_validation':
+                    return 'Technical';
+                  case 'budget_approval':
+                    return 'Finance';
+                  case 'executive_sign_off':
+                    return 'Executive';
+                  case 'proposal_review':
+                    return 'Compliance'; // Example mapping
+                  default:
+                    return 'Compliance'; // Default or throw error
+                }
+              })(),
+              assignee: selectedTask.assignee,
+              deadline: selectedTask.dueDate,
+              slaRemaining: selectedTask.slaCompliance, // Or calculate if needed
+              priority: (selectedTask.priority.charAt(0).toUpperCase() +
+                selectedTask.priority.slice(1)) as DecisionContext['priority'],
+              proposalValue: selectedTask.businessValue,
+              riskLevel: (selectedTask.riskLevel.charAt(0).toUpperCase() +
+                selectedTask.riskLevel.slice(1)) as DecisionContext['riskLevel'],
+              previousStageComments: (selectedTask.comments || []).map(
+                (comment: any, index: number) => ({
+                  id: `comment-${index}-${selectedTask.id}`,
+                  stageId: comment.stageId || selectedTask.currentStage, // attempt to get from comment or default
+                  stageName: comment.stageName || selectedTask.currentStage, // attempt to get from comment or default
+                  author: comment.author || 'Unknown',
+                  content: comment.content || String(comment), // handle if comment is just a string
+                  timestamp: comment.timestamp ? new Date(comment.timestamp) : new Date(),
+                  type: comment.type || 'comment',
+                  isResolved: comment.isResolved || false,
+                })
+              ) as StageComment[],
+              attachments: (selectedTask.attachments || []).map((att: any, index: number) => ({
+                id: `att-${index}-${selectedTask.id}`,
+                name: att.name || 'Attachment',
+                type: att.type || 'unknown',
+                size: att.size || 0,
+                uploadedBy: att.uploadedBy || 'System',
+                uploadedAt: att.uploadedAt ? new Date(att.uploadedAt) : new Date(),
+                url: att.url || '#',
+                category: att.category || 'general',
+              })) as ProposalAttachment[],
+              checklist: [
+                {
+                  id: 'check-1',
+                  description: 'Verify budget allocation and availability',
+                  isRequired: true,
+                  isCompleted: false,
+                  category: 'financial',
+                },
+                {
+                  id: 'check-2',
+                  description: 'Confirm technical requirements can be met',
+                  isRequired: true,
+                  isCompleted: false,
+                  category: 'technical',
+                },
+                {
+                  id: 'check-3',
+                  description: 'Ensure adherence to all legal standards',
+                  isRequired: true,
+                  isCompleted: false,
+                  category: 'legal',
+                },
+                {
+                  id: 'check-4',
+                  description: 'Evaluate potential security risks and mitigations',
+                  isRequired: false,
+                  isCompleted: false,
+                  category: 'security',
+                },
+                {
+                  id: 'check-5',
+                  description: 'Confirm all key stakeholders are in agreement',
+                  isRequired: true,
+                  isCompleted: false,
+                  category: 'business',
+                },
+              ] as ChecklistItem[],
+              policies: [] as PolicyReference[], // Populate as needed
+              collaborators: [] as Collaborator[], // Populate as needed
+              history: [] as DecisionHistory[], // Populate from selectedTask.comments if applicable, or other source
+            };
 
-          return (
-            <DecisionInterface
-              context={decisionContextData}
-              currentUser="current_user_id" // Replace with actual current user ID
-              onDecisionSubmit={handleDecisionSubmit}
-              onRequestCollaboration={handleRequestCollaboration}
-              onUpdateChecklist={handleUpdateChecklist}
-            />
-          );
-        })()}
+            return (
+              <DecisionInterface
+                context={decisionContextData}
+                currentUser="current_user_id" // Replace with actual current user ID
+                onDecisionSubmit={handleDecisionSubmit}
+                onRequestCollaboration={handleRequestCollaboration}
+                onUpdateChecklist={handleUpdateChecklist}
+              />
+            );
+          })()}
 
         {activeTab === 'decision' && !selectedTask && (
           <Card className="p-12 text-center">

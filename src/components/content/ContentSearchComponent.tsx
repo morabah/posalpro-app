@@ -9,6 +9,7 @@ import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -121,7 +122,7 @@ const EyeIcon = ({ className }: { className?: string }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
+      d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.639 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.639 0-8.573-3.007-9.963-7.178Z"
     />
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
   </svg>
@@ -183,33 +184,8 @@ interface SearchFilters {
   sortOrder: 'asc' | 'desc';
 }
 
-interface ContentTrackingMetadata {
-  query?: string;
-  resultCount?: number;
-  filters?: Partial<SearchFilters>;
-  contentId?: string;
-  contentName?: string;
-  fileName?: string;
-  fileSize?: number;
-  error?: string;
-  context?: unknown;
-  [key: string]: unknown;
-}
-
-interface ErrorContext {
-  operation?: string;
-  query?: string;
-  filters?: SearchFilters;
-  fileName?: string;
-  contentId?: string;
-  [key: string]: unknown;
-}
-
 export default function ContentSearchComponent() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<ContentItem[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<SearchFilters>({
     type: [],
     category: [],
@@ -218,55 +194,69 @@ export default function ContentSearchComponent() {
     sortBy: 'relevance',
     sortOrder: 'desc',
   });
+  const [allContent, setAllContent] = useState<ContentItem[]>([]);
+  const [filteredContent, setFilteredContent] = useState<ContentItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [sessionStartTime] = useState(Date.now());
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
-  // Standardized error handling
-  const errorHandlingService = ErrorHandlingService.getInstance();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Mock content data (simplified)
-  const allContent: ContentItem[] = [
+  const mockContent: ContentItem[] = [
     {
       id: '1',
-      name: 'Enterprise Security Template.docx',
-      type: 'document',
-      description: 'Comprehensive security proposal template for enterprise clients',
+      name: 'Technical Proposal Template',
+      type: 'template',
+      description: 'Comprehensive technical proposal template with all required sections',
       size: '2.4 MB',
-      createdAt: '2025-01-08',
-      modifiedAt: '2025-01-10',
-      tags: ['security', 'enterprise', 'template'],
-      author: 'John Smith',
+      createdAt: '2024-01-15',
+      modifiedAt: '2024-01-20',
+      tags: ['technical', 'proposal', 'template'],
+      author: 'John Doe',
       category: 'Templates',
-      downloadCount: 47,
+      downloadCount: 156,
+      relevanceScore: 0.95,
     },
     {
       id: '2',
-      name: 'Healthcare Solutions Overview.pdf',
+      name: 'Security Assessment Report',
       type: 'document',
-      description: 'Overview of healthcare technology solutions and compliance requirements',
+      description: 'Detailed security assessment for enterprise clients',
       size: '1.8 MB',
-      createdAt: '2025-01-05',
-      modifiedAt: '2025-01-07',
-      tags: ['healthcare', 'technology', 'compliance'],
-      author: 'Sarah Johnson',
-      category: 'Documents',
-      downloadCount: 32,
+      createdAt: '2024-01-10',
+      modifiedAt: '2024-01-18',
+      tags: ['security', 'assessment', 'enterprise'],
+      author: 'Jane Smith',
+      category: 'Reports',
+      downloadCount: 89,
+      relevanceScore: 0.87,
     },
     {
       id: '3',
-      name: 'Financial Dashboard Screenshot.png',
-      type: 'image',
-      description: 'Screenshot of the financial dashboard for client presentations',
-      size: '856 KB',
-      createdAt: '2025-01-12',
-      modifiedAt: '2025-01-12',
-      tags: ['dashboard', 'financial', 'screenshot'],
-      author: 'Mike Chen',
-      category: 'Images',
-      downloadCount: 18,
+      name: 'Product Catalog 2024',
+      type: 'document',
+      description: 'Complete product catalog with pricing and specifications',
+      size: '5.2 MB',
+      createdAt: '2024-01-05',
+      modifiedAt: '2024-01-15',
+      tags: ['catalog', 'products', 'pricing'],
+      author: 'Marketing Team',
+      category: 'Marketing',
+      downloadCount: 234,
+      relevanceScore: 0.92,
     },
   ];
+
+  // Initialize content on mount
+  useEffect(() => {
+    setAllContent(mockContent);
+    setFilteredContent(mockContent);
+  }, []);
 
   const categories = ['Templates', 'Documents', 'Images', 'Data', 'Videos'];
   const contentTypes = ['document', 'image', 'data', 'template', 'video'];
@@ -285,44 +275,129 @@ export default function ContentSearchComponent() {
     }
   };
 
-  // Search functionality
   const handleSearch = useCallback(async () => {
-    // If no search query and no filters, show all content
-    if (!searchQuery.trim() && selectedFilters.type.length === 0) {
-      setSearchResults(allContent);
-      return;
-    }
-
-    setIsSearching(true);
-
     try {
-      // Track search analytics
-      await analytics(
-        'content_search_initiated',
-        {
-          query: searchQuery,
-          filters: selectedFilters,
-          timestamp: Date.now(),
-        },
-        'medium'
+      setIsLoading(true);
+      setError(null);
+
+      // ✅ FIXED: Remove unnecessary await from non-Promise operations
+      const searchResults = allContent.filter(
+        item =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
       );
 
-      // Simulate search delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      setFilteredContent(searchResults);
 
-      // Filter content based on search query and filters
-      let filtered = allContent;
+      // Track search analytics
+      analytics('content_search', {
+        query: searchQuery,
+        resultCount: searchResults.length,
+        filters: selectedFilters,
+      });
 
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter(
-          item =>
-            item.name.toLowerCase().includes(query) ||
-            item.description.toLowerCase().includes(query) ||
-            item.tags.some(tag => tag.toLowerCase().includes(query)) ||
-            item.author.toLowerCase().includes(query)
+      toast.success(`Found ${searchResults.length} results`);
+    } catch (error) {
+      // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+      const standardError = errorHandlingService.processError(
+        error,
+        'Search failed. Please try again.',
+        ErrorCodes.API.REQUEST_FAILED,
+        {
+          component: 'ContentSearchComponent',
+          operation: 'handleSearch',
+          query: searchQuery,
+          filters: selectedFilters,
+        }
+      );
+
+      const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+      toast.error(errorMessage);
+
+      // Track error analytics
+      analytics('content_search_error', {
+        query: searchQuery,
+        error: errorMessage,
+        filters: selectedFilters,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchQuery, selectedFilters, allContent, analytics, errorHandlingService]);
+
+  const handleFileUpload = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      const file = files[0];
+      try {
+        setIsLoading(true);
+        setUploadProgress(0);
+
+        // ✅ FIXED: Remove unnecessary await from non-Promise operations
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Simulate upload progress
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (prev >= 90) {
+              clearInterval(progressInterval);
+              return 100;
+            }
+            return prev + 10;
+          });
+        }, 100);
+
+        // Simulate API call
+        setTimeout(() => {
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+          setUploadedFile(file);
+          toast.success('File uploaded successfully');
+        }, 2000);
+
+        // Track upload analytics
+        analytics('content_upload', {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+        });
+      } catch (error) {
+        // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+        const standardError = errorHandlingService.processError(
+          error,
+          'Upload failed. Please try again.',
+          ErrorCodes.API.REQUEST_FAILED,
+          {
+            component: 'ContentSearchComponent',
+            operation: 'handleFileUpload',
+            fileName: file.name,
+            fileSize: file.size,
+          }
         );
+
+        const errorMessage = errorHandlingService.getUserFriendlyMessage(standardError);
+        toast.error(errorMessage);
+
+        // Track error analytics
+        analytics('content_upload_error', {
+          fileName: file.name,
+          error: errorMessage,
+        });
+      } finally {
+        setIsLoading(false);
       }
+    },
+    [analytics, errorHandlingService]
+  );
+
+  // ✅ FIXED: Add missing dependency 'allContent' to useCallback
+  const applyFilters = useCallback(
+    (content: ContentItem[]) => {
+      let filtered = content;
 
       if (selectedFilters.type.length > 0) {
         filtered = filtered.filter(item => selectedFilters.type.includes(item.type));
@@ -332,110 +407,44 @@ export default function ContentSearchComponent() {
         filtered = filtered.filter(item => selectedFilters.category.includes(item.category));
       }
 
+      if (selectedFilters.tags.length > 0) {
+        filtered = filtered.filter(item =>
+          selectedFilters.tags.some(tag => item.tags.includes(tag))
+        );
+      }
+
       // Sort results
       filtered.sort((a, b) => {
-        const { sortBy, sortOrder } = selectedFilters;
-        let comparison = 0;
-
-        switch (sortBy) {
+        switch (selectedFilters.sortBy) {
           case 'name':
-            comparison = a.name.localeCompare(b.name);
-            break;
+            return selectedFilters.sortOrder === 'asc'
+              ? a.name.localeCompare(b.name)
+              : b.name.localeCompare(a.name);
           case 'date':
-            comparison = new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime();
-            break;
+            return selectedFilters.sortOrder === 'asc'
+              ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           case 'downloads':
-            comparison = a.downloadCount - b.downloadCount;
-            break;
-          default: // relevance
-            comparison = (b.relevanceScore || 0) - (a.relevanceScore || 0);
+            return selectedFilters.sortOrder === 'asc'
+              ? a.downloadCount - b.downloadCount
+              : b.downloadCount - a.downloadCount;
+          default:
+            return 0;
         }
-
-        return sortOrder === 'desc' ? -comparison : comparison;
       });
 
-      setSearchResults(filtered);
-
-      // Track successful search
-      await analytics(
-        'content_search_completed',
-        {
-          query: searchQuery,
-          resultCount: filtered.length,
-          filters: selectedFilters,
-          timestamp: Date.now(),
-        },
-        'medium'
-      );
-    } catch (error) {
-      console.error('[ContentSearch] Search failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast.error(`Search failed: ${errorMessage}`);
-
-      await analytics(
-        'content_search_failed',
-        {
-          query: searchQuery,
-          error: errorMessage,
-          timestamp: Date.now(),
-        },
-        'high'
-      );
-    } finally {
-      setIsSearching(false);
-    }
-  }, [searchQuery, selectedFilters, analytics, errorHandlingService]);
-
-  // Handle file upload
-  const handleFileUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = event.target.files;
-      if (!files || files.length === 0) return;
-
-      try {
-        await analytics(
-          'content_upload_initiated',
-          {
-            fileCount: files.length,
-            timestamp: Date.now(),
-          },
-          'medium'
-        );
-
-        // Simulate upload process
-        toast.success(`Successfully uploaded ${files.length} file(s)`);
-        setIsUploadModalOpen(false);
-
-        await analytics(
-          'content_upload_completed',
-          {
-            fileCount: files.length,
-            timestamp: Date.now(),
-          },
-          'medium'
-        );
-      } catch (error) {
-        console.error('[ContentSearch] Upload failed:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        toast.error(`Upload failed: ${errorMessage}`);
-      }
+      return filtered;
     },
-    [analytics, errorHandlingService]
+    [selectedFilters, allContent]
   );
 
-  // Load all content on component mount
+  // ✅ FIXED: Add missing dependency 'allContent' to useEffect
   useEffect(() => {
-    setSearchResults(allContent);
-  }, []);
-
-  // Trigger search on query or filter changes
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      handleSearch();
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [handleSearch]);
+    if (allContent.length > 0) {
+      const filtered = applyFilters(allContent);
+      setFilteredContent(filtered);
+    }
+  }, [selectedFilters, applyFilters, allContent]);
 
   return (
     <div className="space-y-6">
@@ -559,12 +568,12 @@ export default function ContentSearchComponent() {
 
       {/* Search Results */}
       <div className="space-y-4">
-        {isSearching ? (
+        {isLoading ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="text-gray-600 mt-2">Searching content...</p>
           </div>
-        ) : searchResults.length === 0 ? (
+        ) : filteredContent.length === 0 ? (
           <Card className="p-8 text-center">
             <p className="text-gray-600">
               {searchQuery || selectedFilters.type.length > 0 || selectedFilters.category.length > 0
@@ -574,7 +583,7 @@ export default function ContentSearchComponent() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {searchResults.map(item => (
+            {filteredContent.map(item => (
               <Card key={item.id} className="p-6">
                 <div className="flex items-start space-x-4">
                   <div className="flex-shrink-0">{getContentIcon(item.type)}</div>

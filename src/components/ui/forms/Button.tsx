@@ -9,12 +9,14 @@
 import React, { forwardRef } from 'react';
 
 // Inline clsx implementation to avoid webpack chunk loading issues
-function clsx(...inputs: (string | undefined | null | boolean | Record<string, boolean>)[]): string {
+function clsx(
+  ...inputs: Array<string | undefined | null | boolean | Record<string, boolean>>
+): string {
   const classes: string[] = [];
-  
+
   for (const input of inputs) {
     if (!input) continue;
-    
+
     if (typeof input === 'string') {
       classes.push(input);
     } else if (typeof input === 'object') {
@@ -23,7 +25,7 @@ function clsx(...inputs: (string | undefined | null | boolean | Record<string, b
       }
     }
   }
-  
+
   return classes.join(' ');
 }
 
@@ -36,7 +38,9 @@ function twMerge(classNames: string): string {
 }
 
 // Inline cn function to avoid import issues
-function cn(...inputs: (string | undefined | null | boolean | Record<string, boolean>)[]): string {
+function cn(
+  ...inputs: Array<string | undefined | null | boolean | Record<string, boolean>>
+): string {
   return twMerge(clsx(...inputs));
 }
 
