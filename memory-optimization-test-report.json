@@ -1,0 +1,40 @@
+{
+  "timestamp": "2025-08-04T18:47:15.978Z",
+  "testDuration": 8539,
+  "initialMetrics": {
+    "memoryUsage": 5,
+    "totalHeapSize": 8,
+    "heapSizeLimit": 2144,
+    "eventListeners": 0,
+    "detachedElements": 0,
+    "domNodes": 178,
+    "optimizationScore": 0
+  },
+  "postOptimizationMetrics": {
+    "memoryUsage": 5,
+    "totalHeapSize": 8,
+    "heapSizeLimit": 2144,
+    "eventListeners": 0,
+    "detachedElements": 0,
+    "domNodes": 178,
+    "optimizationScore": 0
+  },
+  "improvements": {
+    "memoryReduced": 0,
+    "eventListenersReduced": 0,
+    "detachedElementsCleaned": 0
+  },
+  "compliance": {
+    "memoryUsageCompliant": true,
+    "eventListenersCompliant": true,
+    "detachedElementsCompliant": true,
+    "optimizationScoreCompliant": false
+  },
+  "violations": [],
+  "errors": [
+    {
+      "message": "[useMemoryOptimization] Failed to update metrics: JSHandle@error",
+      "timestamp": 1754333229070
+    }
+  ]
+}

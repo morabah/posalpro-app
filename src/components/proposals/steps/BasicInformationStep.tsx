@@ -125,7 +125,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   }, [onUpdate]);
 
   // Utility functions
-  const formatDateForInput = (dateValue: any): string => {
+  const formatDateForInput = (dateValue: string | Date | null | undefined): string => {
     if (!dateValue) return '';
     if (dateValue instanceof Date) {
       return dateValue.toISOString().split('T')[0];
@@ -136,7 +136,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     return '';
   };
 
-  const parseDate = (dateValue: any): Date | null => {
+  const parseDate = (dateValue: string | Date | null | undefined): Date | null => {
     if (!dateValue) return null;
     if (dateValue instanceof Date) return dateValue;
     if (typeof dateValue === 'string') return new Date(dateValue);
@@ -175,9 +175,119 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     },
   });
 
-  // ✅ CRITICAL FIX: Remove the form reset useEffect that was causing infinite loops
-  // The form should only be initialized once with default values, not reset on every data change
-  // This prevents infinite loops between form updates and wizard data updates
+  // ✅ CRITICAL FIX: Prevent duplicate API calls with request deduplication
+  const isRequestInProgress = useRef(false);
+
+  // Fetch customers on component mount
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      // ✅ CRITICAL: Prevent duplicate requests
+      if (isRequestInProgress.current) {
+        console.log('🔍 [BasicInformationStep] Request already in progress, skipping...');
+        return;
+      }
+
+      // ✅ CRITICAL: Check if we already have customers loaded
+      if (customers.length > 0) {
+        console.log('🔍 [BasicInformationStep] Customers already loaded, skipping fetch...');
+        return;
+      }
+
+      try {
+        isRequestInProgress.current = true;
+        setCustomersLoading(true);
+        setCustomersError(null);
+
+        console.log('🔍 [BasicInformationStep] Fetching customers...');
+        const response = await apiClient.get<{
+          success: boolean;
+          data?: { customers: Customer[] };
+          message?: string;
+        }>('/customers');
+
+        console.log('🔍 [BasicInformationStep] Raw API response:', response);
+
+        // ✅ ENHANCED: Better response validation
+        if (response && typeof response === 'object') {
+          if (
+            response.success &&
+            response.data?.customers &&
+            Array.isArray(response.data.customers)
+          ) {
+            const customerList = response.data.customers;
+            console.log('✅ [BasicInformationStep] Loaded customers:', customerList.length);
+            setCustomers(customerList);
+          } else if (response.success === false) {
+            // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+            const standardError = errorHandlingService.processError(
+              new Error(`API returned error: ${response.message || 'Unknown error'}`),
+              'Unable to load customers. Please try again.',
+              ErrorCodes.API.RESPONSE_ERROR,
+              {
+                component: 'BasicInformationStep',
+                operation: 'fetchCustomers',
+                endpoint: '/customers',
+                response: response,
+              }
+            );
+            setCustomers([]);
+            setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
+          } else {
+            // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+            const standardError = errorHandlingService.processError(
+              new Error('Invalid response structure'),
+              'Unable to load customers. Please try again.',
+              ErrorCodes.API.INVALID_RESPONSE,
+              {
+                component: 'BasicInformationStep',
+                operation: 'fetchCustomers',
+                endpoint: '/customers',
+                response: response,
+              }
+            );
+            setCustomers([]);
+            setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
+          }
+        } else {
+          // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+          const standardError = errorHandlingService.processError(
+            new Error('Empty or invalid response'),
+            'Unable to load customers. Please try again.',
+            ErrorCodes.API.INVALID_RESPONSE,
+            {
+              component: 'BasicInformationStep',
+              operation: 'fetchCustomers',
+              endpoint: '/customers',
+              response: response,
+            }
+          );
+          setCustomers([]);
+          setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
+        }
+      } catch (error) {
+        // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
+        const standardError = errorHandlingService.processError(
+          error,
+          'Unable to load customers. Please try again.',
+          ErrorCodes.API.REQUEST_FAILED,
+          {
+            component: 'BasicInformationStep',
+            operation: 'fetchCustomers',
+            endpoint: '/customers',
+          }
+        );
+
+        setCustomers([]);
+        setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
+      } finally {
+        setCustomersLoading(false);
+        isRequestInProgress.current = false;
+      }
+    };
+
+    // ✅ CRITICAL FIX: Always fetch on mount, don't depend on customers length
+    fetchCustomers();
+  }, []); // ✅ CRITICAL: Empty dependency array for mount-only execution
 
   // ✅ PERFORMANCE OPTIMIZATION: Debounced update function - SIMPLIFIED
   const debouncedHandleUpdate = useCallback(
@@ -274,103 +384,6 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     },
     [collectFormData, debouncedHandleUpdate, isMobile] // Stable dependencies only
   );
-
-  // Fetch customers on component mount
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        setCustomersLoading(true);
-        setCustomersError(null);
-
-        console.log('🔍 [BasicInformationStep] Fetching customers...');
-        const response = await apiClient.get<{
-          success: boolean;
-          data?: { customers: Customer[] };
-          message?: string;
-        }>('/customers');
-
-        console.log('🔍 [BasicInformationStep] Raw API response:', response);
-
-        // ✅ ENHANCED: Better response validation
-        if (response && typeof response === 'object') {
-          if (
-            response.success &&
-            response.data?.customers &&
-            Array.isArray(response.data.customers)
-          ) {
-            const customerList = response.data.customers;
-            console.log('✅ [BasicInformationStep] Loaded customers:', customerList.length);
-            setCustomers(customerList);
-          } else if (response.success === false) {
-            // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
-            const standardError = errorHandlingService.processError(
-              new Error(`API returned error: ${response.message || 'Unknown error'}`),
-              'Unable to load customers. Please try again.',
-              ErrorCodes.API.RESPONSE_ERROR,
-              {
-                component: 'BasicInformationStep',
-                operation: 'fetchCustomers',
-                endpoint: '/customers',
-                response: response,
-              }
-            );
-            setCustomers([]);
-            setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
-          } else {
-            // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
-            const standardError = errorHandlingService.processError(
-              new Error('Invalid response structure'),
-              'Unable to load customers. Please try again.',
-              ErrorCodes.API.INVALID_RESPONSE,
-              {
-                component: 'BasicInformationStep',
-                operation: 'fetchCustomers',
-                endpoint: '/customers',
-                response: response,
-              }
-            );
-            setCustomers([]);
-            setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
-          }
-        } else {
-          // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
-          const standardError = errorHandlingService.processError(
-            new Error('Empty or invalid response'),
-            'Unable to load customers. Please try again.',
-            ErrorCodes.API.INVALID_RESPONSE,
-            {
-              component: 'BasicInformationStep',
-              operation: 'fetchCustomers',
-              endpoint: '/customers',
-              response: response,
-            }
-          );
-          setCustomers([]);
-          setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
-        }
-      } catch (error) {
-        // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
-        const standardError = errorHandlingService.processError(
-          error,
-          'Unable to load customers. Please try again.',
-          ErrorCodes.API.REQUEST_FAILED,
-          {
-            component: 'BasicInformationStep',
-            operation: 'fetchCustomers',
-            endpoint: '/customers',
-          }
-        );
-
-        setCustomers([]);
-        setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
-      } finally {
-        setCustomersLoading(false);
-      }
-    };
-
-    // ✅ CRITICAL FIX: Always fetch on mount, don't depend on customers length
-    fetchCustomers();
-  }, []); // ✅ CRITICAL: Empty dependency array for mount-only execution
 
   // ✅ SEPARATE EFFECT: Handle pre-selected customer when data changes
   useEffect(() => {

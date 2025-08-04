@@ -1,4 +1,5 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger';
+/**
  * PosalPro MVP2 - SME Assignment API Route
  * Returns SME assignment data for the contributions interface
  */
@@ -48,9 +49,21 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    return NextResponse.json(assignment);
+    // ✅ CRITICAL FIX: Return the correct response format
+    return NextResponse.json({
+      success: true,
+      data: assignment,
+      message: 'SME assignment retrieved successfully',
+    });
   } catch (error) {
     logger.error('SME Assignment API error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to retrieve SME assignment',
+      },
+      { status: 500 }
+    );
   }
 }

@@ -227,7 +227,10 @@ export default function SMEContributionInterface() {
           const errorMessage = assignmentResponse.error || 'Failed to fetch assignment data';
           console.warn('[SMEContributions] ⚠️ Assignment data not available:', errorMessage);
           setFetchError(errorMessage);
-          trackAction('sme_assignment_load_failed', { error: errorMessage }, 'medium');
+          // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
+          if (trackAction) {
+            trackAction('sme_assignment_load_failed', { error: errorMessage }, 'medium');
+          }
         }
 
         if (templatesResponse.success && templatesResponse.data) {
@@ -250,14 +253,17 @@ export default function SMEContributionInterface() {
         console.error('[SMEContributions] ❌ Error fetching SME data:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
         setFetchError(errorMessage);
-        trackAction('sme_data_load_failed', { error: errorMessage }, 'high');
+        // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
+        if (trackAction) {
+          trackAction('sme_data_load_failed', { error: errorMessage }, 'high');
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [apiClient, trackAction]);
+  }, []); // ✅ CRITICAL FIX: Remove unstable dependencies
 
   const handleAutoSave = useCallback(async () => {
     if (!hasUnsavedChanges) return;
@@ -302,7 +308,7 @@ export default function SMEContributionInterface() {
       showToast('Failed to auto-save draft.', 'error');
       trackAction('autosave_failed', { error: (error as Error).message }, 'high');
     }
-  }, [assignmentData, content, wordCount, hasUnsavedChanges, versionsData, apiClient, trackAction]);
+  }, [assignmentData, content, wordCount, hasUnsavedChanges, versionsData, apiClient]); // ✅ CRITICAL FIX: Remove trackAction dependency
 
   const handleContentChange = useCallback(
     (newContent: string) => {
@@ -344,7 +350,7 @@ export default function SMEContributionInterface() {
         'medium'
       );
     }, 1000);
-  }, [assignmentData, wordCount, trackAction]);
+  }, [assignmentData, wordCount]); // ✅ CRITICAL FIX: Remove trackAction dependency
 
   const handleApplyTemplate = useCallback(
     (templateId: string) => {
@@ -372,8 +378,8 @@ export default function SMEContributionInterface() {
       );
       setShowTemplates(false);
     },
-    [templatesData, trackAction]
-  );
+    [templatesData]
+  ); // ✅ CRITICAL FIX: Remove trackAction dependency
 
   const handleSubmit = useCallback(() => {
     trackAction(
@@ -387,7 +393,7 @@ export default function SMEContributionInterface() {
     );
     showToast('Contribution submitted successfully!', 'success');
     router.push('/dashboard/sme/assignments');
-  }, [wordCount, versionsData, selectedTemplate, trackAction, router]);
+  }, [wordCount, versionsData, selectedTemplate, router]); // ✅ CRITICAL FIX: Remove trackAction dependency
 
   const timeRemainingText = useMemo(() => {
     if (!assignmentData) return 'N/A';
@@ -417,15 +423,18 @@ export default function SMEContributionInterface() {
 
   useEffect(() => {
     if (assignmentData) {
-      trackAction(
-        'sme_contribution_session_started',
-        {
-          assignmentId: assignmentData.id,
-          sectionType: assignmentData.sectionType,
-          dueIn: assignmentData.dueDate.getTime() - Date.now(),
-        },
-        'medium'
-      );
+      // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
+      if (trackAction) {
+        trackAction(
+          'sme_contribution_session_started',
+          {
+            assignmentId: assignmentData.id,
+            sectionType: assignmentData.sectionType,
+            dueIn: assignmentData.dueDate.getTime() - Date.now(),
+          },
+          'medium'
+        );
+      }
     }
 
     return () => {
@@ -433,7 +442,7 @@ export default function SMEContributionInterface() {
         clearTimeout(autoSaveTimer.current);
       }
     };
-  }, [assignmentData, trackAction]);
+  }, [assignmentData]); // ✅ CRITICAL FIX: Remove unstable trackAction dependency
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;

@@ -1,0 +1,41 @@
+{
+  "summary": {
+    "totalViolations": 0,
+    "violationTypes": {},
+    "avgDuration": "0.0",
+    "performanceScore": "100.0"
+  },
+  "details": {
+    "violations": [],
+    "metrics": {
+      "Dashboard": {
+        "loadTime": 799,
+        "memoryUsage": 0,
+        "violationCount": 0
+      },
+      "Proposals": {
+        "loadTime": 723,
+        "memoryUsage": 0,
+        "violationCount": 0
+      },
+      "Customers": {
+        "loadTime": 733,
+        "memoryUsage": 0,
+        "violationCount": 0
+      },
+      "Products": {
+        "loadTime": 727,
+        "memoryUsage": 0,
+        "violationCount": 0
+      },
+      "Analytics": {
+        "loadTime": 778,
+        "memoryUsage": 0,
+        "violationCount": 0
+      }
+    },
+    "recommendations": [],
+    "score": 100
+  },
+  "recommendations": []
+}

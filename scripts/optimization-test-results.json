@@ -11,29 +11,29 @@
   },
   "performance": {
     "loadTime": 0,
-    "domContentLoaded": 0.10000038146972656,
-    "firstPaint": 3892,
-    "firstContentfulPaint": 4108,
+    "domContentLoaded": 0,
+    "firstPaint": 5012,
+    "firstContentfulPaint": 5012,
     "isAcceptable": true
   },
   "api": {
     "status": 200,
-    "responseTime": "1ms",
+    "responseTime": "0ms",
     "data": {
-      "timestamp": "2025-08-04T12:52:47.597Z",
+      "timestamp": "2025-08-04T17:54:47.528Z",
       "server": {
-        "uptime": 264.496133875,
+        "uptime": 52.885946833,
         "memory": {
-          "rss": 702431232,
-          "heapTotal": 737853440,
-          "heapUsed": 654168576,
-          "external": 422957381,
-          "arrayBuffers": 417384671
+          "rss": 250511360,
+          "heapTotal": 220725248,
+          "heapUsed": 184648048,
+          "external": 272897531,
+          "arrayBuffers": 268930280
         },
         "version": "v20.19.1"
       },
       "performance": {
-        "responseTime": 1,
+        "responseTime": 0,
         "status": "healthy"
       }
     },
@@ -59,14 +59,14 @@
       "status": "CONNECTED",
       "data": {
         "status": "healthy",
-        "timestamp": "2025-08-04T12:52:55.646Z",
-        "uptime": 272.544453625,
+        "timestamp": "2025-08-04T17:54:54.369Z",
+        "uptime": 59.727311792,
         "responseTime": 0
       }
     }
   },
   "summary": {
-    "timestamp": "2025-08-04T12:52:55.650Z",
+    "timestamp": "2025-08-04T17:54:54.373Z",
     "tests": {
       "memory": true,
       "performance": true,
@@ -86,29 +86,29 @@
       },
       "performance": {
         "loadTime": 0,
-        "domContentLoaded": 0.10000038146972656,
-        "firstPaint": 3892,
-        "firstContentfulPaint": 4108,
+        "domContentLoaded": 0,
+        "firstPaint": 5012,
+        "firstContentfulPaint": 5012,
         "isAcceptable": true
       },
       "api": {
         "status": 200,
-        "responseTime": "1ms",
+        "responseTime": "0ms",
         "data": {
-          "timestamp": "2025-08-04T12:52:47.597Z",
+          "timestamp": "2025-08-04T17:54:47.528Z",
           "server": {
-            "uptime": 264.496133875,
+            "uptime": 52.885946833,
             "memory": {
-              "rss": 702431232,
-              "heapTotal": 737853440,
-              "heapUsed": 654168576,
-              "external": 422957381,
-              "arrayBuffers": 417384671
+              "rss": 250511360,
+              "heapTotal": 220725248,
+              "heapUsed": 184648048,
+              "external": 272897531,
+              "arrayBuffers": 268930280
             },
             "version": "v20.19.1"
           },
           "performance": {
-            "responseTime": 1,
+            "responseTime": 0,
             "status": "healthy"
           }
         },
@@ -134,8 +134,8 @@
           "status": "CONNECTED",
           "data": {
             "status": "healthy",
-            "timestamp": "2025-08-04T12:52:55.646Z",
-            "uptime": 272.544453625,
+            "timestamp": "2025-08-04T17:54:54.369Z",
+            "uptime": 59.727311792,
             "responseTime": 0
           }
         }

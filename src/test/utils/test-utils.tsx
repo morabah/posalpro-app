@@ -12,6 +12,8 @@
 import { UserType } from '@/types';
 import { render, RenderOptions } from '@testing-library/react';
 import React, { ReactElement } from 'react';
+import { SessionProvider } from 'next-auth/react';
+import { AuthProvider } from '@/components/providers/AuthProvider';
 
 // Mock session data interface
 interface MockSession {
@@ -21,30 +23,30 @@ interface MockSession {
     email: string;
     role: UserType;
   } | null;
+  expires: string;
 }
 
 // Global mock session state
-let mockSession: MockSession = { user: null };
+let mockSession: MockSession | null = null;
 
 // Mock session management
-export const setMockSession = (session: MockSession) => {
+export const setMockSession = (session: MockSession | null) => {
   mockSession = session;
 };
 
 export const getMockSession = () => mockSession;
 
 export const clearMockSession = () => {
-  mockSession = { user: null };
-};
-
-// Mock AuthProvider
-const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <div data-testid="mock-auth-provider">{children}</div>;
+  mockSession = null;
 };
 
 // All providers wrapper
 const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <MockAuthProvider>{children}</MockAuthProvider>;
+  return (
+    <SessionProvider session={mockSession as any}>
+      <AuthProvider>{children}</AuthProvider>
+    </SessionProvider>
+  );
 };
 
 // Custom render function

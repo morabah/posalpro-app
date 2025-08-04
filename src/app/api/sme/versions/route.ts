@@ -1,57 +1,85 @@
-import { logger } from '@/utils/logger';/**
+/**
  * PosalPro MVP2 - SME Versions API Route
  * Returns version history for SME contributions
  */
 
 import { authOptions } from '@/lib/auth';
+import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Mock versions data
+const mockVersions = [
+  {
+    id: 'version-1',
+    assignmentId: 'sme-assignment-001',
+    version: 3,
+    content:
+      'This technical specification outlines the comprehensive cloud migration strategy for TechCorp Industries...',
+    wordCount: 156,
+    createdBy: 'sarah.johnson@posalpro.com',
+    createdAt: new Date('2024-12-19T14:30:00Z'),
+    changes: 'Updated technical specifications with cloud architecture details',
+    status: 'draft',
+  },
+  {
+    id: 'version-2',
+    assignmentId: 'sme-assignment-001',
+    version: 2,
+    content: 'This technical specification provides cloud migration strategy...',
+    wordCount: 142,
+    createdBy: 'sarah.johnson@posalpro.com',
+    createdAt: new Date('2024-12-18T11:15:00Z'),
+    changes: 'Added security compliance requirements',
+    status: 'draft',
+  },
+  {
+    id: 'version-3',
+    assignmentId: 'sme-assignment-001',
+    version: 1,
+    content: 'Technical specification for cloud migration...',
+    wordCount: 98,
+    createdBy: 'sarah.johnson@posalpro.com',
+    createdAt: new Date('2024-12-17T09:00:00Z'),
+    changes: 'Initial draft created',
+    status: 'draft',
+  },
+];
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized',
+          message: 'Authentication required',
+        },
+        { status: 401 }
+      );
     }
 
-    // Mock version history data
-    const versions = [
-      {
-        id: 'version-003',
-        version: 3,
-        content:
-          'This technical specification outlines the comprehensive cloud migration strategy for TechCorp Industries. The solution encompasses a multi-phase approach to migrating existing on-premises infrastructure to a hybrid cloud environment...',
-        savedAt: new Date('2024-12-19T14:30:00Z'),
-        wordCount: 156,
-        changesSummary: 'Added security compliance section and updated integration requirements',
-        autoSaved: false,
-      },
-      {
-        id: 'version-002',
-        version: 2,
-        content:
-          'This technical specification outlines the cloud migration strategy for TechCorp Industries. The solution includes infrastructure assessment and migration planning...',
-        savedAt: new Date('2024-12-19T12:15:00Z'),
-        wordCount: 98,
-        changesSummary: 'Expanded technical requirements and added performance benchmarks',
-        autoSaved: true,
-      },
-      {
-        id: 'version-001',
-        version: 1,
-        content:
-          'Initial draft for TechCorp Industries cloud migration technical specifications...',
-        savedAt: new Date('2024-12-19T10:00:00Z'),
-        wordCount: 45,
-        changesSummary: 'Initial draft created',
-        autoSaved: false,
-      },
-    ];
+    logger.info('SME versions retrieved', {
+      userId: session.user.id,
+      versionsCount: mockVersions.length,
+    });
 
-    return NextResponse.json(versions);
+    return NextResponse.json({
+      success: true,
+      data: mockVersions,
+      message: 'SME versions retrieved successfully',
+    });
   } catch (error) {
     logger.error('SME Versions API error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to retrieve SME versions',
+      },
+      { status: 500 }
+    );
   }
 }

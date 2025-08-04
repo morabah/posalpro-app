@@ -23,7 +23,10 @@ import React from 'react';
 
 // Mock page components for testing
 const LoginPage = () => React.createElement('div', {}, 'Login Page');
-const DashboardPage = () => React.createElement('div', {}, 'Dashboard Page');
+const TestLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+  React.createElement('main', null, children);
+const DashboardPage = () =>
+  React.createElement(TestLayout, { children: 'Dashboard Page' }, 'Dashboard Page');
 const ProposalCreatePage = () => React.createElement('div', {}, 'Proposal Create Page');
 
 // Mock routing
