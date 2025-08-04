@@ -33,14 +33,12 @@ interface QuickAction {
   color: string;
 }
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-3.1', 'US-3.2'],
-  acceptanceCriteria: ['AC-3.1.1', 'AC-3.2.1'],
-  methods: ['navigateToProposalSection()', 'trackProposalActions()'],
-  hypotheses: ['H3', 'H5'],
-  testCases: ['TC-H3-001', 'TC-H5-001'],
-};
+// Component Traceability Matrix - tracking user stories and acceptance criteria
+// US-3.1: Proposal overview dashboard, US-3.2: Quick action navigation
+// AC-3.1.1: Display proposal statistics, AC-3.2.1: Navigate to proposal sections
+// Methods: navigateToProposalSection(), trackProposalActions()
+// Hypotheses: H3 (dashboard efficiency), H5 (quick actions improve workflow)
+// Test Cases: TC-H3-001, TC-H5-001
 
 export default function ProposalsPage() {
   const router = useRouter();
@@ -67,7 +65,7 @@ export default function ProposalsPage() {
       title: 'Create New Proposal',
       description: 'Start a new proposal from scratch or template',
       icon: PlusIcon,
-      href: '/proposals/create',
+      href: '/dashboard/proposals/create',
       color: 'bg-blue-600 hover:bg-blue-700',
     },
     {

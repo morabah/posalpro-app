@@ -22,7 +22,7 @@
     "test:watch": "jest --watch",
     "test:ci": "jest --ci --coverage",
     "test:accessibility": "jest --testPathPattern=accessibility",
-    "test:performance": "node scripts/performance-validation.js",
+    "test:performance": "node scripts/test-optimizations.js",
     "test:real-world": "node scripts/run-real-world-tests.js",
     "test:comprehensive": "npm run test:critical-gaps && npm run test:api-routes && npm run test:integration && npm run test:real-world",
     "test:critical-gaps": "jest src/test/critical-gaps --coverage --verbose",
