@@ -8,6 +8,9 @@ import { z } from 'zod';
 
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { predictiveValidation } from '@/lib/validation/PredictiveValidation';
 import { validationEngine } from '@/lib/validation/ValidationEngine';
@@ -122,8 +125,24 @@ export function ProductRelationshipManager({
         predictions: predictions,
       });
     } catch (error) {
-      console.error('Validation error:', error);
-      setValidationResults({ error: 'Validation failed' });
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Validation error in product relationship manager',
+        ErrorCodes.VALIDATION.OPERATION_FAILED,
+        {
+          component: 'ProductRelationshipManager',
+          operation: 'validateRelationship',
+        }
+      );
+
+      logError('Validation error in product relationship manager', error, {
+        component: 'ProductRelationshipManager',
+        operation: 'validateRelationship',
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
     } finally {
       setIsValidating(false);
     }

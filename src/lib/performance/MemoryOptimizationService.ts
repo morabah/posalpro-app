@@ -4,7 +4,10 @@
  * Component Traceability: US-6.1, US-6.2, H8, H9
  */
 
-import { ErrorCodes, StandardError } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logError } from '@/lib/logger';
 
 interface MemoryMetrics {
   rss: number;
@@ -161,7 +164,26 @@ class MemoryOptimizationService {
         }
       }
     } catch (error) {
-      console.error('[MemoryOptimizationService] Memory optimization failed:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to optimize memory usage',
+        ErrorCodes.PERFORMANCE.OPTIMIZATION_FAILED,
+        {
+          component: 'MemoryOptimizationService',
+          operation: 'optimizeMemory',
+          memoryUsage: this.getMemoryMetrics(),
+        }
+      );
+
+      logError('Memory optimization error', error, {
+        component: 'MemoryOptimizationService',
+        operation: 'optimizeMemory',
+        memoryUsage: this.getMemoryMetrics(),
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
     }
   }
 

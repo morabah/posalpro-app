@@ -4,6 +4,10 @@
  * Provides real-time monitoring and alerts for performance regressions
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
+
 interface PerformanceMetric {
   name: string;
   value: number;
@@ -315,7 +319,26 @@ export class PerformanceMonitor {
       fidObserver.observe({ entryTypes: ['first-input'] });
       this.observers.push(fidObserver);
     } catch (error) {
-      console.warn('Failed to set up Web Vitals monitoring:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to collect performance metrics',
+        ErrorCodes.PERFORMANCE.METRICS_COLLECTION_FAILED,
+        {
+          component: 'PerformanceMonitor',
+          operation: 'collectMetrics',
+          metricType: 'web-vitals',
+        }
+      );
+
+      logError('Performance metrics collection error', error, {
+        component: 'PerformanceMonitor',
+        operation: 'collectMetrics',
+        metricType: 'web-vitals',
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
     }
   }
 

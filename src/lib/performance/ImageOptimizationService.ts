@@ -4,7 +4,10 @@
  * Component Traceability: US-6.1, US-6.2, H8
  */
 
-import { ErrorCodes, StandardError } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logError } from '@/lib/logger';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -79,7 +82,25 @@ class ImageOptimizationService {
       this.isInitialized = true;
       console.log('[ImageOptimizationService] Image optimization initialized successfully');
     } catch (error) {
-      console.error('[ImageOptimizationService] Initialization failed:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to initialize image optimization service',
+        ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
+        {
+          component: 'ImageOptimizationService',
+          operation: 'initialize',
+        }
+      );
+
+      logError('Image optimization service initialization failed', error, {
+        component: 'ImageOptimizationService',
+        operation: 'initialize',
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       throw new StandardError({
         message: 'Failed to initialize image optimization service',
         code: ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
@@ -134,14 +155,34 @@ class ImageOptimizationService {
         success: true,
       };
     } catch (error) {
-      console.error('[ImageOptimizationService] Image optimization failed:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to optimize image',
+        ErrorCodes.PERFORMANCE.OPTIMIZATION_FAILED,
+        {
+          component: 'ImageOptimizationService',
+          operation: 'optimizeImage',
+          imageUrl: imagePath,
+        }
+      );
+
+      logError('Image optimization error', error, {
+        component: 'ImageOptimizationService',
+        operation: 'optimizeImage',
+        imageUrl: imagePath,
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       return {
         originalSize: 0,
         optimizedSize: 0,
         compressionRatio: 0,
-        format: '',
+        format: path.extname(imagePath),
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: standardError.message,
       };
     }
   }
@@ -182,7 +223,26 @@ class ImageOptimizationService {
             errorCount++;
           }
         } catch (error) {
-          console.error(`[ImageOptimizationService] Failed to optimize ${imagePath}:`, error);
+          // ✅ ENHANCED: Use proper logger instead of console.error
+          const errorHandlingService = ErrorHandlingService.getInstance();
+          const standardError = errorHandlingService.processError(
+            error,
+            'Failed to optimize image during batch processing',
+            ErrorCodes.PERFORMANCE.OPTIMIZATION_FAILED,
+            {
+              component: 'ImageOptimizationService',
+              operation: 'compressAssets',
+              imagePath: imagePath,
+            }
+          );
+
+          logError('Image optimization error during batch processing', error, {
+            component: 'ImageOptimizationService',
+            operation: 'compressAssets',
+            imagePath: imagePath,
+            standardError: standardError.message,
+            errorCode: standardError.code,
+          });
           errorCount++;
         }
       }
@@ -200,7 +260,25 @@ class ImageOptimizationService {
         errorCount,
       };
     } catch (error) {
-      console.error('[ImageOptimizationService] Asset compression failed:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to compress static assets',
+        ErrorCodes.PERFORMANCE.OPTIMIZATION_FAILED,
+        {
+          component: 'ImageOptimizationService',
+          operation: 'compressAssets',
+        }
+      );
+
+      logError('Asset compression failed', error, {
+        component: 'ImageOptimizationService',
+        operation: 'compressAssets',
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       throw new StandardError({
         message: 'Failed to compress static assets',
         code: ErrorCodes.PERFORMANCE.OPTIMIZATION_FAILED,
@@ -312,7 +390,25 @@ class ImageOptimizationService {
         largeImages,
       };
     } catch (error) {
-      console.error('[ImageOptimizationService] Failed to get optimization stats:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to get optimization stats',
+        ErrorCodes.PERFORMANCE.METRICS_COLLECTION_FAILED,
+        {
+          component: 'ImageOptimizationService',
+          operation: 'getOptimizationStats',
+        }
+      );
+
+      logError('Failed to get optimization stats', error, {
+        component: 'ImageOptimizationService',
+        operation: 'getOptimizationStats',
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       return {
         totalImages: 0,
         totalSize: 0,

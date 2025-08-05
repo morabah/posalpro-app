@@ -28,6 +28,10 @@ import { CreateProductData } from '@/types/entities/product';
 // import { createProductSchema } from '@/lib/validation/schemas/product';
 // import { useProductAnalytics } from '@/hooks/analytics/useProductAnalytics';
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
+
 // Form validation schema based on DATA_MODEL.md Product interface
 const productCreationSchema = z.object({
   name: z
@@ -297,7 +301,27 @@ export function ProductCreationForm({
       //   hypothesis: 'H8'
       // });
     } catch (error) {
-      console.error('AI description generation failed:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'AI description generation failed',
+        ErrorCodes.AI.PROCESSING_FAILED,
+        {
+          component: 'ProductCreationForm',
+          operation: 'generateAIDescription',
+          productName: form.getValues('name'),
+        }
+      );
+
+      logError('AI description generation failed', error, {
+        component: 'ProductCreationForm',
+        operation: 'generateAIDescription',
+        productName: form.getValues('name'),
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       setValidationErrors(['Failed to generate AI description. Please try again.']);
     } finally {
       setAiDescriptionLoading(false);
@@ -310,10 +334,11 @@ export function ProductCreationForm({
       const startTime = Date.now();
       setIsSubmitting(true);
       setValidationErrors([]);
+      let productData: CreateProductData;
 
       try {
         // Convert form data to CreateProductData format
-        const productData: CreateProductData = {
+        productData = {
           name: data.name,
           description: data.description,
           sku: data.sku,
@@ -359,7 +384,27 @@ export function ProductCreationForm({
         // Close form on success
         onClose();
       } catch (error) {
-        console.error('Product creation failed:', error);
+        // ✅ ENHANCED: Use proper logger instead of console.error
+        const errorHandlingService = ErrorHandlingService.getInstance();
+        const standardError = errorHandlingService.processError(
+          error,
+          'Product creation failed',
+          ErrorCodes.DATA.CREATE_FAILED,
+          {
+            component: 'ProductCreationForm',
+            operation: 'createProduct',
+            productData: JSON.stringify(data),
+          }
+        );
+
+        logError('Product creation failed', error, {
+          component: 'ProductCreationForm',
+          operation: 'createProduct',
+          productData: JSON.stringify(data),
+          standardError: standardError.message,
+          errorCode: standardError.code,
+        });
+
         setValidationErrors([
           error instanceof Error ? error.message : 'Failed to create product. Please try again.',
         ]);
