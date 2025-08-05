@@ -136,8 +136,7 @@ const DashboardStats = memo(() => {
         );
 
         // Fetch real data from API
-        const response =
-          await apiClient.get<ApiResponse<DashboardStatsData>>('/api/dashboard/stats');
+        const response = await apiClient.get<ApiResponse<DashboardStatsData>>('dashboard/stats');
 
         if (response.success && response.data) {
           setStats(response.data);

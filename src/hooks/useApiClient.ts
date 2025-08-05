@@ -78,7 +78,13 @@ class ApiClientSingleton {
 
     await this.initialize();
     const baseUrl = this.getBaseUrl();
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+
+    // Fix: Remove /api prefix from endpoint if it exists to prevent double /api/api/
+    let cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+    if (cleanEndpoint.startsWith('api/')) {
+      cleanEndpoint = cleanEndpoint.slice(4); // Remove 'api/' prefix
+    }
+
     const url = `${baseUrl}/${cleanEndpoint}`;
 
     const defaultOptions: RequestInit = {

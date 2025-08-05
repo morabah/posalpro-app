@@ -84,7 +84,7 @@ const RecentProposals = memo(() => {
 
         // Fetch real data from API
         const response = await apiClient.get<ApiResponse<ProposalsResponse>>(
-          '/api/proposals?page=1&limit=5&sortBy=updatedAt&sortOrder=desc'
+          'proposals?page=1&limit=5&sortBy=updatedAt&sortOrder=desc'
         );
 
         if (response.success && response.data?.proposals) {
