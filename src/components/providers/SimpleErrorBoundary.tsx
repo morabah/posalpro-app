@@ -1,11 +1,15 @@
 /**
  * PosalPro MVP2 - Simple Error Boundary Component
- * Graceful error handling without complex dependencies
- * Complies with CORE_REQUIREMENTS.md - Simple patterns only
+ * Graceful error handling with standardized patterns
+ * Complies with CORE_REQUIREMENTS.md - Uses ErrorHandlingService and logger
  */
 
 'use client';
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logError } from '@/lib/logger';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryState {
@@ -97,10 +101,12 @@ const SimpleErrorFallback: React.FC<{ error: Error | null; resetError: () => voi
 };
 
 /**
- * Simple Error Boundary without complex dependencies
- * ✅ FOLLOWS CORE_REQUIREMENTS.md: Simple patterns, no over-engineering
+ * Simple Error Boundary with standardized error handling
+ * ✅ FOLLOWS CORE_REQUIREMENTS.md: Uses ErrorHandlingService and logger
  */
 export class SimpleErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  private errorHandlingService = ErrorHandlingService.getInstance();
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -123,37 +129,64 @@ export class SimpleErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Simple error logging without complex dependencies
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    // ✅ ENHANCED: Use standardized error handling and logging
+    const standardError = this.errorHandlingService.processError(
+      error,
+      'ErrorBoundary caught an error',
+      ErrorCodes.SYSTEM.UNKNOWN,
+      {
+        component: 'SimpleErrorBoundary',
+        operation: 'componentDidCatch',
+        componentStack: errorInfo.componentStack,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
+        url: typeof window !== 'undefined' ? window.location.href : 'server-side',
+      }
+    );
 
-    // Optional error reporting in production - only on client side
+    // ✅ ENHANCED: Use proper logger instead of console.error
+    logError('ErrorBoundary caught an error', error, {
+      component: 'SimpleErrorBoundary',
+      componentStack: errorInfo.componentStack,
+      standardError: standardError.message,
+      errorCode: standardError.code,
+    });
+
+    // ✅ ENHANCED: Optional error reporting with proper API client
     if (
       this.props.enableReporting &&
       process.env.NODE_ENV === 'production' &&
       this.state.isClient
     ) {
-      // Simple error reporting without external dependencies
-      try {
-        const errorData = {
-          message: error.message,
-          stack: error.stack,
-          componentStack: errorInfo.componentStack,
-          timestamp: new Date().toISOString(),
-          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
-          url: typeof window !== 'undefined' ? window.location.href : 'server-side',
-        };
+      this.reportError(standardError, errorInfo);
+    }
+  }
 
-        // Send to error reporting endpoint if available
-        fetch('/api/errors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(errorData),
-        }).catch(() => {
-          // Silently fail if error reporting is not available
-        });
-      } catch {
-        // Silently fail if error reporting fails
-      }
+  private async reportError(error: StandardError, errorInfo: ErrorInfo) {
+    try {
+      // ✅ FIXED: Proper dynamic import and usage
+      const { useApiClient } = await import('@/hooks/useApiClient');
+      const apiClient = useApiClient();
+
+      const errorData = {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
+        url: typeof window !== 'undefined' ? window.location.href : 'server-side',
+        metadata: error.metadata,
+      };
+
+      // ✅ ENHANCED: Use proper API client instead of fetch
+      await apiClient.post('errors/report', errorData);
+    } catch (reportingError) {
+      // ✅ ENHANCED: Log reporting failure with proper logger
+      logError('Failed to report error to server', reportingError, {
+        component: 'SimpleErrorBoundary',
+        operation: 'reportError',
+        originalError: error.message,
+      });
     }
   }
 
@@ -175,10 +208,27 @@ export class SimpleErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoun
 
 // Export hook for error handling in components
 export function useErrorHandler() {
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   return {
     handleError: (error: Error) => {
-      console.error('Component error:', error);
-      // Simple error handling without complex dependencies
+      // ✅ ENHANCED: Use standardized error handling
+      const standardError = errorHandlingService.processError(
+        error,
+        'Component error occurred',
+        ErrorCodes.SYSTEM.UNKNOWN,
+        {
+          component: 'useErrorHandler',
+          operation: 'handleError',
+        }
+      );
+
+      // ✅ ENHANCED: Use proper logger
+      logError('Component error', error, {
+        component: 'useErrorHandler',
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
     },
   };
 }
