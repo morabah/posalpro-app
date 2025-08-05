@@ -63,7 +63,7 @@ const profileSchema = z.object({
   title: z.string().optional(),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
-  department: z.string().min(1, 'Department is required'),
+  department: z.string().optional(),
   office: z.string().optional(),
   languages: z.array(z.string()).optional(),
   bio: z.string().max(500, 'Bio must be less than 500 characters').optional(),
@@ -174,8 +174,8 @@ export function UserProfile({ className = '' }: UserProfileProps) {
   // Calculate profile completeness
   const calculateCompleteness = useCallback(() => {
     const watchedFields = watch();
-    const requiredFields = ['firstName', 'lastName', 'title', 'email', 'department'];
-    const optionalFields = ['phone', 'office', 'bio'];
+    const requiredFields = ['firstName', 'lastName', 'email'];
+    const optionalFields = ['title', 'phone', 'office', 'bio', 'department'];
 
     const requiredComplete = requiredFields.filter(
       field => watchedFields[field as keyof ProfileFormData]

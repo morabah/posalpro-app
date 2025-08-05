@@ -16,7 +16,7 @@ const profileUpdateSchema = z.object({
   title: z.string().optional(),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
-  department: z.string().min(1, 'Department is required'),
+  department: z.string().optional(),
   office: z.string().optional(),
   languages: z.array(z.string()).optional(),
   bio: z.string().max(500, 'Bio must be less than 500 characters').optional(),
