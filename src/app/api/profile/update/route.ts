@@ -1,4 +1,11 @@
-import { logger } from '@/utils/logger';import { getServerSession } from 'next-auth';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
+import { logger } from '@/utils/logger';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -11,7 +18,6 @@ const profileUpdateSchema = z.object({
   phone: z.string().optional(),
   department: z.string().min(1, 'Department is required'),
   office: z.string().optional(),
-  languages: z.array(z.string()).optional(),
   bio: z.string().max(500, 'Bio must be less than 500 characters').optional(),
   profileImage: z.string().optional(),
   expertiseAreas: z.array(z.string()).optional(),
@@ -23,7 +29,21 @@ export async function PUT(request: NextRequest) {
     const session = await getServerSession();
 
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access to profile update',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProfileUpdateRoute',
+            operation: 'updateProfile',
+            userEmail: session?.user?.email || 'unknown',
+          },
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'Please log in to update your profile.' }
+      );
     }
 
     // Parse the request body
@@ -33,12 +53,24 @@ export async function PUT(request: NextRequest) {
     const validationResult = profileUpdateSchema.safeParse(body);
 
     if (!validationResult.success) {
-      return NextResponse.json(
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Profile update validation failed',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProfileUpdateRoute',
+            operation: 'updateProfile',
+            validationErrors: validationResult.error.errors,
+            userEmail: session.user.email,
+          },
+        }),
+        'Invalid profile data',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400,
         {
-          error: 'Invalid data',
+          userFriendlyMessage: 'Please check your profile information and try again.',
           details: validationResult.error.errors,
-        },
-        { status: 400 }
+        }
       );
     }
 
@@ -61,8 +93,26 @@ export async function PUT(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('Profile update error:', error);
+    // Use standardized error handling
+    errorHandlingService.processError(error);
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Internal server error during profile update',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProfileUpdateRoute',
+          operation: 'updateProfile',
+        },
+      }),
+      'Profile update failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500,
+      {
+        userFriendlyMessage:
+          'An error occurred while updating your profile. Please try again later.',
+      }
+    );
   }
 }
