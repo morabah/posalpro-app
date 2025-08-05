@@ -68,6 +68,19 @@ export async function PUT(request: NextRequest) {
         code: err.code,
       }));
 
+      // ENHANCED: Log each validation error individually for better debugging
+      console.log('🔍 DEBUG: Profile update validation errors:');
+      detailedErrors.forEach((error, index) => {
+        console.log(`  Error ${index + 1}:`, {
+          field: error.path,
+          message: error.message,
+          code: error.code,
+        });
+      });
+
+      console.log('🔍 DEBUG: Received data:', JSON.stringify(body, null, 2));
+      console.log('🔍 DEBUG: Expected schema keys:', Object.keys(profileUpdateSchema.shape));
+
       logger.error('Profile update validation failed:', {
         userEmail: session.user.email,
         validationErrors: detailedErrors,
