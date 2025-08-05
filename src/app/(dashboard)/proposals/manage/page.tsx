@@ -744,6 +744,10 @@ function ProposalManagementDashboardContent() {
                       >
                         <PencilIcon className="w-4 h-4" />
                       </Button>
+                      {/* Debug: Show proposal ID for testing */}
+                      <span className="text-xs text-gray-400 font-mono">
+                        ID: {proposal.id.slice(0, 8)}...
+                      </span>
                     </div>
                   </div>
 

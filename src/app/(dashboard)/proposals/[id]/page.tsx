@@ -86,6 +86,9 @@ export default function ProposalDetailPage() {
   const [proposal, setProposal] = useState<ProposalDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [availableProposals, setAvailableProposals] = useState<
+    Array<{ id: string; title: string }>
+  >([]);
 
   const proposalId = params?.id as string;
 
@@ -136,6 +139,24 @@ export default function ProposalDetailPage() {
           const errorMessage =
             err instanceof Error ? err.message : 'Failed to load proposal details';
           setError(errorMessage);
+
+          // Fetch available proposals to help user navigate
+          try {
+            const proposalsResponse = (await apiClient.get('proposals')) as any;
+            if (proposalsResponse.success && proposalsResponse.data?.proposals) {
+              setAvailableProposals(
+                proposalsResponse.data.proposals.slice(0, 5).map((p: any) => ({
+                  id: p.id,
+                  title: p.title,
+                }))
+              );
+            }
+          } catch (proposalsError) {
+            console.error(
+              '[ProposalDetailAPI] Error fetching available proposals:',
+              proposalsError
+            );
+          }
         }
 
         // Note: handleAsyncError removed to prevent infinite loops (CORE_REQUIREMENTS.md pattern)
@@ -224,16 +245,58 @@ export default function ProposalDetailPage() {
   if (error || !proposal) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-2xl">
           <XCircleIcon className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Not Found</h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-4">
             {error || 'The requested proposal could not be loaded.'}
           </p>
-          <Button onClick={handleBack} className="inline-flex items-center">
-            <ChevronLeftIcon className="h-4 w-4 mr-2" />
-            Back to Proposals
-          </Button>
+
+          {proposalId === '1' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <p className="text-blue-800 text-sm mb-2">
+                <strong>Tip:</strong> You're trying to access proposal ID "1", but our system uses
+                different ID formats. Here are some available proposals you can try:
+              </p>
+            </div>
+          )}
+
+          {availableProposals.length > 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Available Proposals:</h3>
+              <div className="space-y-2">
+                {availableProposals.map(proposal => (
+                  <div
+                    key={proposal.id}
+                    className="flex items-center justify-between p-2 bg-white rounded border"
+                  >
+                    <span className="text-sm text-gray-900 truncate">{proposal.title}</span>
+                    <Button
+                      size="sm"
+                      onClick={() => router.push(`/proposals/${proposal.id}`)}
+                      className="ml-2"
+                    >
+                      View
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-x-4">
+            <Button onClick={handleBack} className="inline-flex items-center">
+              <ChevronLeftIcon className="h-4 w-4 mr-2" />
+              Back to Proposals
+            </Button>
+            <Button
+              onClick={() => router.push('/proposals/manage')}
+              variant="outline"
+              className="inline-flex items-center"
+            >
+              View All Proposals
+            </Button>
+          </div>
         </div>
       </div>
     );
