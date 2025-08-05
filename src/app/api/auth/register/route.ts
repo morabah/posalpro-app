@@ -1,14 +1,21 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger';
+/**
  * PosalPro MVP2 - User Registration API Route
  * Based on USER_REGISTRATION_SCREEN.md wireframe
  * Role assignment and analytics integration
  */
 
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
+import { rateLimiter } from '@/lib/security';
 import { createUser } from '@/lib/services/userService';
+import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
-import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
 
 // Validation schema for registration
 const registerSchema = z.object({
@@ -37,37 +44,17 @@ const registerSchema = z.object({
 });
 
 // Rate limiting configuration (5 attempts per minute)
-const rateLimitMap = new Map();
-
-function rateLimit5PerMinute(ip: string): boolean {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const limit = 5;
-
-  if (!rateLimitMap.has(ip)) {
-    rateLimitMap.set(ip, []);
-  }
-
-  const requests = rateLimitMap.get(ip);
-
-  // Remove old requests outside the window
-  const validRequests = requests.filter((time: number) => now - time < windowMs);
-
-  if (validRequests.length >= limit) {
-    return false;
-  }
-
-  validRequests.push(now);
-  rateLimitMap.set(ip, validRequests);
-  return true;
-}
+// Uses established Redis-based infrastructure from src/lib/security.ts
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting
+    // Rate limiting using established Redis-based infrastructure
     const ip =
       request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-    if (!rateLimit5PerMinute(ip)) {
+
+    const isLimited = await rateLimiter.isLimited(ip, 5, 60 * 1000); // 5 attempts per minute
+    if (isLimited) {
+      const remainingAttempts = await rateLimiter.getRemainingAttempts(ip, 5);
       return createApiErrorResponse(
         new StandardError({
           message: 'Rate limit exceeded for registration attempts',
@@ -77,8 +64,9 @@ export async function POST(request: NextRequest) {
             operation: 'registerUser',
             ip,
             limit: 5,
-            windowMs: 60 * 1000
-          }
+            windowMs: 60 * 1000,
+            remainingAttempts,
+          },
         }),
         'Too many attempts',
         ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
@@ -137,7 +125,7 @@ export async function POST(request: NextRequest) {
         field: err.path.join('.'),
         message: err.message,
       }));
-      
+
       return createApiErrorResponse(
         new StandardError({
           message: 'Registration validation failed',
@@ -146,15 +134,15 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'RegisterRoute',
             operation: 'registerUser',
-            validationErrors: formattedErrors
-          }
+            validationErrors: formattedErrors,
+          },
         }),
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
-        { 
+        {
           userFriendlyMessage: 'Please check your registration information and try again.',
-          details: formattedErrors
+          details: formattedErrors,
         }
       );
     }
@@ -169,8 +157,8 @@ export async function POST(request: NextRequest) {
             cause: error,
             metadata: {
               component: 'RegisterRoute',
-              operation: 'registerUser'
-            }
+              operation: 'registerUser',
+            },
           }),
           'Email already exists',
           ErrorCodes.DATA.DUPLICATE_ENTRY,
@@ -179,9 +167,11 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    
+
     if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2') ? ErrorCodes.DATA.DATABASE_ERROR : ErrorCodes.DATA.NOT_FOUND;
+      const errorCode = error.code.startsWith('P2')
+        ? ErrorCodes.DATA.DATABASE_ERROR
+        : ErrorCodes.DATA.NOT_FOUND;
       return createApiErrorResponse(
         new StandardError({
           message: `Database error during user registration: ${getPrismaErrorMessage(error.code)}`,
@@ -190,8 +180,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             component: 'RegisterRoute',
             operation: 'registerUser',
-            prismaErrorCode: error.code
-          }
+            prismaErrorCode: error.code,
+          },
         }),
         'Database error',
         errorCode,
@@ -199,7 +189,7 @@ export async function POST(request: NextRequest) {
         { userFriendlyMessage: 'An error occurred during registration. Please try again later.' }
       );
     }
-    
+
     if (error instanceof StandardError) {
       return createApiErrorResponse(error);
     }
@@ -211,8 +201,8 @@ export async function POST(request: NextRequest) {
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'RegisterRoute',
-          operation: 'registerUser'
-        }
+          operation: 'registerUser',
+        },
       }),
       'Registration failed',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
