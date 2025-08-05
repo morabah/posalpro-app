@@ -9,6 +9,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 import { createApiErrorResponse, ErrorCodes, StandardError } from '@/lib/errors';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -33,12 +34,14 @@ function createApiResponse<T>(data: T, message: string, status = 200) {
  * GET /api/proposals/[id] - Get specific proposal
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let session;
+  let proposalId;
   try {
     // Await params
     const params = await context.params;
 
     // Validate authentication
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return createApiErrorResponse(
         new StandardError({
@@ -55,7 +58,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       );
     }
 
-    const proposalId = params.id;
+    proposalId = params.id;
 
     // Validate proposal ID format
     if (!proposalId || typeof proposalId !== 'string' || proposalId.trim().length === 0) {
@@ -222,25 +225,44 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       { status: 200 }
     );
   } catch (error) {
-    console.error('[ProposalDetailAPI] Error fetching proposal:', error);
+    // ✅ ENHANCED: Use proper logger instead of console.error
+    const standardError = errorHandlingService.processError(
+      error,
+      'Failed to fetch proposal details',
+      ErrorCodes.DATA.QUERY_FAILED,
+      {
+        component: 'ProposalDetailAPI',
+        operation: 'GET',
+        proposalId,
+        userId: session?.user?.id || 'unknown',
+      }
+    );
 
-    // Process error using standardized error handling
-    errorHandlingService.processError(error);
+    logError('Error fetching proposal', error, {
+      component: 'ProposalDetailAPI',
+      operation: 'GET',
+      proposalId,
+      userId: session?.user?.id || 'unknown',
+      standardError: standardError.message,
+      errorCode: standardError.code,
+    });
 
     return createApiErrorResponse(
       new StandardError({
-        message: 'Failed to retrieve proposal details',
+        message: 'Failed to retrieve proposal',
         code: ErrorCodes.DATA.QUERY_FAILED,
         cause: error instanceof Error ? error : undefined,
         metadata: {
           component: 'ProposalDetailAPI',
           operation: 'GET',
           proposalId: 'unknown',
+          userId: 'unknown',
         },
       }),
-      'Failed to retrieve proposal details',
+      'Failed to retrieve proposal',
       ErrorCodes.DATA.QUERY_FAILED,
-      500
+      500,
+      { userFriendlyMessage: 'Unable to load proposal details. Please try again later.' }
     );
   }
 }
@@ -249,12 +271,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  * PUT /api/proposals/[id] - Update specific proposal
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let session;
+  let proposalId;
   try {
     // Await params
     const params = await context.params;
 
     // Validate authentication
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return createApiErrorResponse(
         new StandardError({
@@ -271,7 +295,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       );
     }
 
-    const proposalId = params.id;
+    proposalId = params.id;
     const body = await request.json();
 
     // Validate proposal exists
@@ -314,9 +338,27 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       { status: 200 }
     );
   } catch (error) {
-    console.error('[ProposalDetailAPI] Error updating proposal:', error);
+    // ✅ ENHANCED: Use proper logger instead of console.error
+    const standardError = errorHandlingService.processError(
+      error,
+      'Failed to update proposal',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      {
+        component: 'ProposalDetailAPI',
+        operation: 'PUT',
+        proposalId: proposalId || 'unknown',
+        userId: session?.user?.id || 'unknown',
+      }
+    );
 
-    errorHandlingService.processError(error);
+    logError('Error updating proposal', error, {
+      component: 'ProposalDetailAPI',
+      operation: 'PUT',
+      proposalId: proposalId || 'unknown',
+      userId: session?.user?.id || 'unknown',
+      standardError: standardError.message,
+      errorCode: standardError.code,
+    });
 
     return createApiErrorResponse(
       new StandardError({
@@ -326,12 +368,14 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         metadata: {
           component: 'ProposalDetailAPI',
           operation: 'PUT',
-          proposalId: 'unknown',
+          proposalId: proposalId || 'unknown',
+          userId: session?.user?.id || 'unknown',
         },
       }),
       'Failed to update proposal',
       ErrorCodes.DATA.UPDATE_FAILED,
-      500
+      500,
+      { userFriendlyMessage: 'Unable to update proposal. Please try again later.' }
     );
   }
 }
@@ -340,12 +384,14 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
  * DELETE /api/proposals/[id] - Delete specific proposal
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let session;
+  let proposalId;
   try {
     // Await params
     const params = await context.params;
 
     // Validate authentication
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return createApiErrorResponse(
         new StandardError({
@@ -362,7 +408,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       );
     }
 
-    const proposalId = params.id;
+    proposalId = params.id;
 
     // Validate proposal exists
     const existingProposal = await prisma.proposal.findUnique({
@@ -400,9 +446,27 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       { status: 200 }
     );
   } catch (error) {
-    console.error('[ProposalDetailAPI] Error deleting proposal:', error);
+    // ✅ ENHANCED: Use proper logger instead of console.error
+    const standardError = errorHandlingService.processError(
+      error,
+      'Failed to delete proposal',
+      ErrorCodes.DATA.DELETE_FAILED,
+      {
+        component: 'ProposalDetailAPI',
+        operation: 'DELETE',
+        proposalId: proposalId || 'unknown',
+        userId: session?.user?.id || 'unknown',
+      }
+    );
 
-    errorHandlingService.processError(error);
+    logError('Error deleting proposal', error, {
+      component: 'ProposalDetailAPI',
+      operation: 'DELETE',
+      proposalId: proposalId || 'unknown',
+      userId: session?.user?.id || 'unknown',
+      standardError: standardError.message,
+      errorCode: standardError.code,
+    });
 
     return createApiErrorResponse(
       new StandardError({
@@ -412,12 +476,14 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
         metadata: {
           component: 'ProposalDetailAPI',
           operation: 'DELETE',
-          proposalId: 'unknown',
+          proposalId: proposalId || 'unknown',
+          userId: session?.user?.id || 'unknown',
         },
       }),
       'Failed to delete proposal',
       ErrorCodes.DATA.DELETE_FAILED,
-      500
+      500,
+      { userFriendlyMessage: 'Unable to delete proposal. Please try again later.' }
     );
   }
 }

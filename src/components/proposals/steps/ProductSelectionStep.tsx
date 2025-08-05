@@ -12,6 +12,9 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
 import { useResponsive } from '@/hooks/useResponsive';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { ProposalWizardStep4Data } from '@/lib/validation/schemas/proposal';
 import {
   CheckIcon,
@@ -658,7 +661,29 @@ export function ProductSelectionStep({
         processingTime: 2000,
       });
     } catch (error) {
-      console.error('AI recommendation error:', error);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to get AI recommendation',
+        ErrorCodes.AI.PROCESSING_FAILED,
+        {
+          component: 'ProductSelectionStep',
+          operation: 'getAIRecommendation',
+          proposalId: 'unknown', // Product selection step doesn't have proposal ID yet
+        }
+      );
+
+      logError('AI recommendation error', error, {
+        component: 'ProductSelectionStep',
+        operation: 'getAIRecommendation',
+        proposalId: 'unknown',
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
+      // Note: setError is not available in this context, using console.warn instead
+      console.warn('Failed to get AI recommendation. Please try again.');
     } finally {
       setIsLoadingRecommendations(false);
     }

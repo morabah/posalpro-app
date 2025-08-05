@@ -13,6 +13,9 @@ import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/forms/Select';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { UserType } from '@/types/enums';
 import { ExpertiseArea, ProposalWizardStep2Data } from '@/types/proposals';
 import { PlusIcon, SparklesIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
@@ -244,7 +247,27 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
           source: 'api_client',
         });
       } catch (error) {
-        console.error('[TeamAssignmentStep] ❌ Error fetching team data:', error);
+        // ✅ ENHANCED: Use proper logger instead of console.error
+        const errorHandlingService = ErrorHandlingService.getInstance();
+        const standardError = errorHandlingService.processError(
+          error,
+          'Failed to fetch team data',
+          ErrorCodes.DATA.QUERY_FAILED,
+          {
+            component: 'TeamAssignmentStep',
+            operation: 'fetchTeamData',
+            proposalId: 'unknown', // Team assignment step doesn't have proposal ID yet
+          }
+        );
+
+        logError('Error fetching team data', error, {
+          component: 'TeamAssignmentStep',
+          operation: 'fetchTeamData',
+          proposalId: 'unknown',
+          standardError: standardError.message,
+          errorCode: standardError.code,
+        });
+
         setTeamLeads([]);
         setSalesReps([]);
         setExecutives([]);
@@ -275,7 +298,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     };
 
     fetchTeamData();
-  }, []); // Simple dependency like customer selection
+  }, [apiClient, analytics]); // Simple dependency like customer selection
 
   // ✅ PERFORMANCE OPTIMIZATION: Cleanup on unmount
   useEffect(() => {

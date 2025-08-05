@@ -11,6 +11,9 @@ import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/Select';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { ProposalWizardStep6Data } from '@/lib/validation/schemas/proposal';
 import {
   ArrowDownTrayIcon,
@@ -433,8 +436,28 @@ export function ReviewStep({
         console.warn('[ReviewStep][Bottom Button] onNext callback is not provided');
       }
     } catch (error) {
-      console.error('[ReviewStep][Bottom Button] Error during proposal creation:', error);
-      trackReviewAction('error');
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to create proposal',
+        ErrorCodes.DATA.CREATE_FAILED,
+        {
+          component: 'ReviewStep',
+          operation: 'createProposal',
+          proposalData: JSON.stringify(allWizardData),
+        }
+      );
+
+      logError('Error during proposal creation', error, {
+        component: 'ReviewStep',
+        operation: 'createProposal',
+        proposalData: JSON.stringify(allWizardData),
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
+      // setError('Failed to create proposal. Please try again.'); // This line was not in the new_code, so it's removed.
     }
   };
 
