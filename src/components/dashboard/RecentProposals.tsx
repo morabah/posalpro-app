@@ -9,7 +9,12 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { StandardError } from '@/lib/errors/StandardError';
+import { ApiResponse } from '@/types/api';
 import {
   CheckCircleIcon,
   ClockIcon,
@@ -33,16 +38,32 @@ const COMPONENT_MAPPING = {
 interface Proposal {
   id: string;
   title: string;
-  status: 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected';
-  customer: string;
+  status: string;
+  customerName: string;
   value: number;
+  currency: string;
   dueDate: string;
   updatedAt: string;
+  createdAt: string;
+}
+
+interface ProposalsResponse {
+  proposals: Proposal[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
 }
 
 const RecentProposals = memo(() => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
+  const apiClient = useApiClient();
+  const { handleAsyncError } = useErrorHandler();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   useEffect(() => {
@@ -51,79 +72,68 @@ const RecentProposals = memo(() => {
         setLoading(true);
 
         // Track analytics event
-        analytics('recent_proposals_fetch_started', {
-          component: 'RecentProposals',
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-        }, 'low');
+        analytics(
+          'recent_proposals_fetch_started',
+          {
+            component: 'RecentProposals',
+            userStories: COMPONENT_MAPPING.userStories,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+          },
+          'low'
+        );
 
-        // Mock data for demonstration
-        const mockProposals: Proposal[] = [
-          {
-            id: '1',
-            title: 'Enterprise Software Solution',
-            status: 'under_review',
-            customer: 'Acme Corporation',
-            value: 250000,
-            dueDate: '2025-07-15',
-            updatedAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-          },
-          {
-            id: '2',
-            title: 'Cloud Migration Project',
-            status: 'approved',
-            customer: 'Tech Solutions Inc',
-            value: 180000,
-            dueDate: '2025-08-01',
-            updatedAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-          },
-          {
-            id: '3',
-            title: 'Security Audit Services',
-            status: 'submitted',
-            customer: 'Global Services Ltd',
-            value: 75000,
-            dueDate: '2025-07-30',
-            updatedAt: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
-          },
-          {
-            id: '4',
-            title: 'Digital Transformation',
-            status: 'draft',
-            customer: 'Innovation Labs',
-            value: 500000,
-            dueDate: '2025-09-15',
-            updatedAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-          },
-          {
-            id: '5',
-            title: 'Data Analytics Platform',
-            status: 'rejected',
-            customer: 'StartupCo',
-            value: 120000,
-            dueDate: '2025-07-10',
-            updatedAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-          },
-        ];
+        // Fetch real data from API
+        const response = await apiClient.get<ApiResponse<ProposalsResponse>>(
+          '/api/proposals?page=1&limit=5&sortBy=updatedAt&sortOrder=desc'
+        );
 
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 400));
+        if (response.success && response.data?.proposals) {
+          setProposals(response.data.proposals);
 
-        setProposals(mockProposals);
-
-        // Track successful fetch
-        analytics('recent_proposals_fetch_success', {
-          component: 'RecentProposals',
-          proposalCount: mockProposals.length,
-        }, 'low');
+          // Track successful fetch
+          analytics(
+            'recent_proposals_fetch_success',
+            {
+              component: 'RecentProposals',
+              proposalCount: response.data.proposals.length,
+            },
+            'low'
+          );
+        } else {
+          throw new StandardError({
+            message: 'Failed to fetch recent proposals',
+            code: ErrorCodes.DATA.QUERY_FAILED,
+            metadata: {
+              component: 'RecentProposals',
+              operation: 'GET',
+              response: response || 'No response',
+            },
+          });
+        }
       } catch (error) {
         console.warn('[RecentProposals] Error fetching proposals:', error);
 
+        handleAsyncError(
+          new StandardError({
+            message: 'Failed to load recent proposals',
+            code: ErrorCodes.DATA.QUERY_FAILED,
+            metadata: {
+              component: 'RecentProposals',
+              operation: 'GET',
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+          })
+        );
+
         // Track error
-        analytics('recent_proposals_fetch_error', {
-          component: 'RecentProposals',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        }, 'medium');
+        analytics(
+          'recent_proposals_fetch_error',
+          {
+            component: 'RecentProposals',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          'medium'
+        );
       } finally {
         setLoading(false);
       }
@@ -180,10 +190,14 @@ const RecentProposals = memo(() => {
   };
 
   const handleViewProposal = (proposalId: string) => {
-    analytics('recent_proposal_view_clicked', {
-      component: 'RecentProposals',
-      proposalId,
-    }, 'medium');
+    analytics(
+      'recent_proposal_view_clicked',
+      {
+        component: 'RecentProposals',
+        proposalId,
+      },
+      'medium'
+    );
   };
 
   if (loading) {
@@ -240,7 +254,7 @@ const RecentProposals = memo(() => {
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-gray-600">
-                  <span>{proposal.customer}</span>
+                  <span>{proposal.customerName}</span>
                   <span>{formatCurrency(proposal.value)}</span>
                 </div>
 

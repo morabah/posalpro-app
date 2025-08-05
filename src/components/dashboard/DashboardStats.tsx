@@ -8,9 +8,12 @@
 'use client';
 
 import { Card } from '@/components/ui/Card';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { StandardError } from '@/lib/errors/StandardError';
+import { ApiResponse } from '@/types/api';
 import {
   ArrowTrendingDownIcon,
   ArrowTrendingUpIcon,
@@ -112,8 +115,8 @@ const DashboardStats = memo(() => {
   const [error, setError] = useState<string | null>(null);
 
   const apiClient = useApiClient();
+  const { handleAsyncError } = useErrorHandler();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const errorHandlingService = ErrorHandlingService.getInstance();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -122,46 +125,68 @@ const DashboardStats = memo(() => {
         setError(null);
 
         // Track analytics event
-        analytics('dashboard_stats_fetch_started', {
-          component: 'DashboardStats',
-          userStories: COMPONENT_MAPPING.userStories,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-        }, 'low');
-
-        // Use mock data for demonstration (since API might not be available)
-        const mockStats: DashboardStatsData = {
-          totalProposals: 147,
-          activeProposals: 23,
-          totalCustomers: 89,
-          totalRevenue: 2450000,
-          completionRate: 87.5,
-          avgResponseTime: 2.3,
-          recentGrowth: {
-            proposals: 12,
-            customers: 8,
-            revenue: 15,
+        analytics(
+          'dashboard_stats_fetch_started',
+          {
+            component: 'DashboardStats',
+            userStories: COMPONENT_MAPPING.userStories,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
           },
-        };
+          'low'
+        );
 
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Fetch real data from API
+        const response =
+          await apiClient.get<ApiResponse<DashboardStatsData>>('/api/dashboard/stats');
 
-        setStats(mockStats);
+        if (response.success && response.data) {
+          setStats(response.data);
 
-        // Track successful fetch
-        analytics('dashboard_stats_fetch_success', {
-          component: 'DashboardStats',
-          statsCount: Object.keys(mockStats).length,
-        }, 'low');
+          // Track successful fetch
+          analytics(
+            'dashboard_stats_fetch_success',
+            {
+              component: 'DashboardStats',
+              statsCount: Object.keys(response.data).length,
+            },
+            'low'
+          );
+        } else {
+          throw new StandardError({
+            message: 'Failed to fetch dashboard statistics',
+            code: ErrorCodes.DATA.QUERY_FAILED,
+            metadata: {
+              component: 'DashboardStats',
+              operation: 'GET',
+              response: response || 'No response',
+            },
+          });
+        }
       } catch (error) {
         console.warn('[DashboardStats] Error fetching stats:', error);
         setError('Failed to load dashboard statistics');
 
+        handleAsyncError(
+          new StandardError({
+            message: 'Failed to load dashboard statistics',
+            code: ErrorCodes.DATA.QUERY_FAILED,
+            metadata: {
+              component: 'DashboardStats',
+              operation: 'GET',
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+          })
+        );
+
         // Track error
-        analytics('dashboard_stats_fetch_error', {
-          component: 'DashboardStats',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        }, 'medium');
+        analytics(
+          'dashboard_stats_fetch_error',
+          {
+            component: 'DashboardStats',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          'medium'
+        );
       } finally {
         setLoading(false);
       }
