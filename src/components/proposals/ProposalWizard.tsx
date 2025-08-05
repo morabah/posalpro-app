@@ -192,8 +192,13 @@ export function ProposalWizard({
   const errorHandlingService = ErrorHandlingService.getInstance();
   const { trackWizardStep, trackProposalCreation } = useProposalCreationAnalytics();
 
-  // ✅ FIXED: Remove unused variables
+  // ✅ FIXED: Move useApiClient to component level to follow Rules of Hooks
+  const apiClient = useApiClient();
+
+  // Component state management
   const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [wizardData, setWizardData] = useState<ProposalWizardData>({
     step1: {
       client: {
@@ -251,10 +256,7 @@ export function ProposalWizard({
     false, // Step 6
   ]);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [sessionRecovered, setSessionRecovered] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -445,7 +447,6 @@ export function ProposalWizard({
       console.log('[ProposalWizard] Creating proposal with data:', proposalData);
 
       // Make real API call to /api/proposals
-      const apiClient = useApiClient();
       const response = await apiClient.post<{
         success: boolean;
         data: { id: string; title: string; status: string };
