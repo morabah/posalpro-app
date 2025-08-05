@@ -20,7 +20,7 @@ const profileUpdateSchema = z.object({
   office: z.string().optional(),
   languages: z.array(z.string()).optional(),
   bio: z.string().max(500, 'Bio must be less than 500 characters').optional(),
-  profileImage: z.string().optional(),
+  profileImage: z.string().nullable().optional(), // Accept null values
   expertiseAreas: z.array(z.string()).optional(),
 });
 
