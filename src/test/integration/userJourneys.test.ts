@@ -62,14 +62,14 @@ interface JourneyStep {
   startTime: number;
   endTime?: number;
   success: boolean;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 class UserJourneyTracker {
   private steps: JourneyStep[] = [];
   private currentStep: JourneyStep | null = null;
 
-  startStep(name: string, data?: Record<string, any>) {
+  startStep(name: string, data?: Record<string, unknown>) {
     if (this.currentStep) {
       this.endStep(false); // End previous step if not completed
     }
@@ -82,7 +82,7 @@ class UserJourneyTracker {
     };
   }
 
-  endStep(success: boolean, data?: Record<string, any>) {
+  endStep(success: boolean, data?: Record<string, unknown>) {
     if (this.currentStep) {
       this.currentStep.endTime = Date.now();
       this.currentStep.success = success;

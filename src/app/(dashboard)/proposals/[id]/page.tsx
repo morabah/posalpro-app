@@ -1,5 +1,6 @@
 'use client';
 
+import { CommunicationCenter } from '@/components/coordination/CommunicationCenter';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
@@ -8,12 +9,9 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
 import {
-  CalendarIcon,
   CheckCircleIcon,
   ChevronLeftIcon,
   ClockIcon,
-  CurrencyDollarIcon,
-  DocumentTextIcon,
   PencilIcon,
   UserIcon,
   XCircleIcon,
@@ -389,125 +387,9 @@ export default function ProposalDetailPage() {
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Key Details */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Key Details</h2>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <CalendarIcon className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Due Date</p>
-                    <p className="text-sm text-gray-900">
-                      {formatDate(proposal.dueDate)}
-                      {proposal.isOverdue && (
-                        <span className="ml-2 text-red-600 font-medium">(Overdue)</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                {proposal.daysUntilDeadline !== null && (
-                  <div className="flex items-center space-x-3">
-                    <ClockIcon className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Time Remaining</p>
-                      <p className="text-sm text-gray-900">
-                        {proposal.daysUntilDeadline > 0
-                          ? `${proposal.daysUntilDeadline} days`
-                          : 'Overdue'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center space-x-3">
-                  <CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Value</p>
-                    <p className="text-sm text-gray-900 font-semibold">
-                      {formatCurrency(proposal.value, proposal.currency)}
-                    </p>
-                  </div>
-                </div>
-
-                {proposal.validUntil && (
-                  <div className="flex items-center space-x-3">
-                    <DocumentTextIcon className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Valid Until</p>
-                      <p className="text-sm text-gray-900">{formatDate(proposal.validUntil)}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Customer Information */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Customer</h2>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Name</p>
-                  <p className="text-sm text-gray-900">{proposal.customerName}</p>
-                </div>
-
-                {proposal.customerIndustry && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Industry</p>
-                    <p className="text-sm text-gray-900">{proposal.customerIndustry}</p>
-                  </div>
-                )}
-
-                {proposal.customerTier && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Tier</p>
-                    <Badge variant="outline" className="text-xs">
-                      {proposal.customerTier}
-                    </Badge>
-                  </div>
-                )}
-
-                {proposal.customerEmail && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Email</p>
-                    <p className="text-sm text-gray-900">{proposal.customerEmail}</p>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Timeline */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Timeline</h2>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Created</p>
-                  <p className="text-sm text-gray-900">{formatDate(proposal.createdAt)}</p>
-                  <p className="text-xs text-gray-500">by {proposal.createdBy}</p>
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Last Updated</p>
-                  <p className="text-sm text-gray-900">{formatDate(proposal.updatedAt)}</p>
-                </div>
-
-                {proposal.submittedAt && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Submitted</p>
-                    <p className="text-sm text-gray-900">{formatDate(proposal.submittedAt)}</p>
-                  </div>
-                )}
-
-                {proposal.approvedAt && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Approved</p>
-                    <p className="text-sm text-gray-900">{formatDate(proposal.approvedAt)}</p>
-                  </div>
-                )}
-              </div>
-            </Card>
+          {/* Communication Center Sidebar */}
+          <div className="lg:col-span-1">
+            <CommunicationCenter proposalId={proposalId} currentUserId="current-user-id" />
           </div>
         </div>
       </div>

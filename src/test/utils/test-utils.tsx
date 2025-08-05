@@ -9,11 +9,12 @@
  * - Assertion helpers for hypothesis validation
  */
 
+import { AuthProvider } from '@/components/providers/AuthProvider';
 import { UserType } from '@/types';
 import { render, RenderOptions } from '@testing-library/react';
-import React, { ReactElement } from 'react';
+import userEvent from '@testing-library/user-event';
 import { SessionProvider } from 'next-auth/react';
-import { AuthProvider } from '@/components/providers/AuthProvider';
+import React, { ReactElement } from 'react';
 
 // Mock session data interface
 interface MockSession {
@@ -68,7 +69,7 @@ export const createMockUser = (overrides: Partial<MockSession['user']> = {}) => 
   ...overrides,
 });
 
-export const createMockProposal = (overrides: any = {}) => ({
+export const createMockProposal = (overrides: Record<string, unknown> = {}) => ({
   id: 'proposal-123',
   title: 'Test Proposal',
   clientName: 'Test Client',
@@ -79,7 +80,10 @@ export const createMockProposal = (overrides: any = {}) => ({
 });
 
 // Analytics testing helpers
-export const mockAnalyticsEvent = (eventName: string, properties: any = {}) => ({
+export const mockAnalyticsEvent = (
+  eventName: string,
+  properties: Record<string, unknown> = {}
+) => ({
   event: eventName,
   properties: {
     timestamp: Date.now(),
@@ -88,15 +92,15 @@ export const mockAnalyticsEvent = (eventName: string, properties: any = {}) => (
 });
 
 // Wait for analytics to be called
-export const waitForAnalytics = async (mockFn: any, eventName: string, timeout = 1000) => {
+export const waitForAnalytics = async (mockFn: jest.Mock, eventName: string, timeout = 1000) => {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeout) {
     const calls = mockFn.mock.calls;
-    const hasEvent = calls.some((call: any) => call[0] === eventName);
+    const hasEvent = calls.some((call: unknown[]) => call[0] === eventName);
 
     if (hasEvent) {
-      return calls.find((call: any) => call[0] === eventName);
+      return calls.find((call: unknown[]) => call[0] === eventName);
     }
 
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -148,7 +152,7 @@ export class TestErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Test Error Boundary caught an error:', error, errorInfo);
   }
 
@@ -173,7 +177,7 @@ export const renderWithErrorBoundary = (ui: ReactElement, options?: RenderOption
 
 // Mock implementations
 export const createMockComponent = (name: string) => {
-  const MockComponent = (props: any) => (
+  const MockComponent = (props: Record<string, unknown>) => (
     <div data-testid={`mock-${name.toLowerCase()}`} {...props}>
       Mock {name}
     </div>
@@ -205,7 +209,10 @@ export const mockLocalStorage = () => {
 };
 
 // API mocking helpers
-export const mockApiResponse = (data: any, options: { delay?: number; success?: boolean } = {}) => {
+export const mockApiResponse = (
+  data: unknown,
+  options: { delay?: number; success?: boolean } = {}
+) => {
   const { delay = 0, success = true } = options;
 
   return new Promise((resolve, reject) => {
@@ -224,7 +231,10 @@ export const mockApiResponse = (data: any, options: { delay?: number; success?: 
 };
 
 // Form testing helpers
-export const fillForm = async (user: any, formData: Record<string, string>) => {
+export const fillForm = async (
+  user: ReturnType<typeof userEvent.setup>,
+  formData: Record<string, string>
+) => {
   for (const [field, value] of Object.entries(formData)) {
     const input = document.querySelector(`[name="${field}"]`) as HTMLInputElement;
     if (input) {
@@ -275,7 +285,7 @@ export interface JourneyStep {
   name: string;
   duration: number;
   success: boolean;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 export const createJourneyValidator = () => {
