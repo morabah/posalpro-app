@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/forms/Button';
 import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
-import type { CreateProposalData } from '@/lib/entities/proposal';
 import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
 import { Priority } from '@/types/enums';
 import { ExpertiseArea, ProposalPriority, ProposalWizardData } from '@/types/proposals';
@@ -393,53 +392,37 @@ export function ProposalWizard({
         wizardData.step1.details.description?.trim() ||
         `${wizardData.step1.details.title} for ${wizardData.step1.client.name} - A comprehensive consulting proposal designed to meet client requirements and deliver exceptional value through our proven methodologies and expertise.`;
 
-      const proposalData: CreateProposalData = {
-        metadata: {
-          title: wizardData.step1.details.title,
-          description: smartDescription,
-          customerId: wizardData.step1.client.id,
-          customerName: wizardData.step1.client.name,
-          customerContact: {
-            name: wizardData.step1.client.contactPerson || 'Unknown Contact',
-            email: wizardData.step1.client.contactEmail || '',
-            phone: wizardData.step1.client.contactPhone || '',
-          },
-          projectType: 'consulting' as const, // Default project type
-          estimatedValue: wizardData.step1.details.estimatedValue || 0,
-          currency: 'USD',
-          deadline: ensureFutureDate(wizardData.step1.details.dueDate),
-          priority: convertPriorityToEntity(wizardData.step1.details.priority),
-          tags: [],
-        },
-        // Optional team assignments and RFP document with defensive programming
-        teamAssignments: wizardData.step2?.teamLead
-          ? [
-              {
-                userId: wizardData.step2.teamLead,
-                userName: user?.name || 'Unknown User',
-                role: 'lead' as const,
-                responsibilities: ['Lead proposal development'],
-                assignedAt: new Date(),
-                assignedBy: user?.id || 'unknown',
-                status: 'assigned' as const,
-              },
-              // Add sales representative if different from team lead
-              ...(wizardData.step2.salesRepresentative &&
-              wizardData.step2.salesRepresentative !== wizardData.step2.teamLead
-                ? [
-                    {
-                      userId: wizardData.step2.salesRepresentative,
-                      userName: 'Sales Representative',
-                      role: 'contributor' as const,
-                      responsibilities: ['Sales coordination'],
-                      assignedAt: new Date(),
-                      assignedBy: user?.id || 'unknown',
-                      status: 'assigned' as const,
-                    },
-                  ]
-                : []),
-            ]
+      // ✅ FIXED: Transform data to match API schema exactly
+      const proposalData = {
+        title: wizardData.step1.details.title,
+        description: smartDescription,
+        customerId: wizardData.step1.client.id,
+        priority: wizardData.step1.details.priority || 'MEDIUM',
+        dueDate: wizardData.step1.details.dueDate
+          ? new Date(wizardData.step1.details.dueDate).toISOString()
           : undefined,
+        value: wizardData.step1.details.estimatedValue || 0,
+        currency: 'USD',
+        // Add products if available
+        ...(wizardData.step4?.products &&
+          wizardData.step4.products.length > 0 && {
+            products: wizardData.step4.products.map(product => ({
+              productId: product.id,
+              quantity: product.quantity || 1,
+              unitPrice: product.unitPrice || 0,
+              discount: 0, // Default discount
+            })),
+          }),
+        // Add sections if available
+        ...(wizardData.step5?.sections &&
+          wizardData.step5.sections.length > 0 && {
+            sections: wizardData.step5.sections.map((section, index) => ({
+              title: section.title || `Section ${index + 1}`,
+              content: section.content || '',
+              type: 'TEXT' as const,
+              order: index + 1,
+            })),
+          }),
       };
 
       // Create the proposal using the entity
