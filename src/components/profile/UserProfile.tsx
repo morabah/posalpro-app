@@ -120,6 +120,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth() || {};
   const analytics = useUserProfileAnalytics();
+  const apiClient = useApiClient();
 
   const [activeTab, setActiveTab] = useState<TabSection>('personal');
   const [isEditing, setIsEditing] = useState(false);
@@ -210,8 +211,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
     setIsLoading(true);
     setError(null);
 
-    // Initialize API client and error handling service
-    const apiClient = useApiClient();
+    // Initialize error handling service
     const errorHandlingService = ErrorHandlingService.getInstance();
 
     try {
@@ -780,6 +780,5 @@ function PersonalTab({
     </div>
   );
 }
-
 
 export default UserProfile;
