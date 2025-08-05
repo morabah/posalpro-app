@@ -217,15 +217,27 @@ export function UserProfile({ className = '' }: UserProfileProps) {
     const errorHandlingService = ErrorHandlingService.getInstance();
 
     try {
+      // DEBUG: Log what data is being sent
+      const requestData = {
+        ...data,
+        expertiseAreas, // Include from state since it's not in form data
+        profileImage,
+      };
+
+      console.log('🔍 DEBUG: Profile update request data:', {
+        formData: data,
+        requestData: requestData,
+        dataKeys: Object.keys(requestData),
+        expertiseAreas: requestData.expertiseAreas,
+        profileImage: requestData.profileImage,
+      });
+
       // Use centralized API client instead of direct fetch
       const result = await apiClient.put<{
         success: boolean;
         data?: any;
         error?: string;
-      }>('/api/profile/update', {
-        ...data,
-        profileImage,
-      });
+      }>('/api/profile/update', requestData);
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to update profile');
