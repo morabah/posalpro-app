@@ -345,16 +345,16 @@ export function ProposalWizard({
       }
 
       // Validate customer ID is present and valid (handle both UUID and string/number IDs)
-      const customerId = wizardData.step1?.client?.id;
+      const customerIdFromStep1 = wizardData.step1?.client?.id;
       const customerName = wizardData.step1?.client?.name?.trim();
 
-      if (!customerId || !customerName) {
+      if (!customerIdFromStep1 || !customerName) {
         validationErrors.push('Valid customer selection is required');
       } else {
         // Ensure customer ID is valid (UUID, number, or non-empty string)
         const isValidId =
-          (typeof customerId === 'string' && customerId.length > 0 && customerId !== 'undefined') ||
-          (typeof customerId === 'number' && customerId > 0);
+          (typeof customerIdFromStep1 === 'string' && customerIdFromStep1.length > 0 && customerIdFromStep1 !== 'undefined') ||
+          (typeof customerIdFromStep1 === 'number' && customerIdFromStep1 > 0);
 
         if (!isValidId) {
           validationErrors.push('Valid customer selection is required');
@@ -393,15 +393,44 @@ export function ProposalWizard({
         `${wizardData.step1.details.title} for ${wizardData.step1.client.name} - A comprehensive consulting proposal designed to meet client requirements and deliver exceptional value through our proven methodologies and expertise.`;
 
       // ✅ FIXED: Transform data to match API schema exactly
+      const customerId = wizardData.step1.client.id;
+      
+      // ✅ CRITICAL DEBUG: Log customer ID details
+      console.log('[ProposalWizard] Customer ID validation:', {
+        customerId,
+        customerIdType: typeof customerId,
+        customerIdLength: customerId?.length,
+        customerName: wizardData.step1.client.name,
+        isValidString: typeof customerId === 'string' && customerId.length > 0,
+        step1Data: wizardData.step1
+      });
+      
+      // ✅ ENHANCED VALIDATION: Ensure customer ID is valid before proceeding
+      if (!customerId || typeof customerId !== 'string' || customerId.trim().length === 0) {
+        throw new StandardError({
+          message: 'Please select a valid customer before creating the proposal.',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProposalWizard',
+            operation: 'handleCreateProposal',
+            customerId,
+            customerIdType: typeof customerId,
+            step1Data: wizardData.step1,
+          },
+        });
+      }
+      
       const proposalData = {
         title: wizardData.step1.details.title,
         description: smartDescription,
-        customerId: wizardData.step1.client.id,
+        customerId: customerId.trim(),
         priority: wizardData.step1.details.priority || 'MEDIUM',
         dueDate: wizardData.step1.details.dueDate
           ? new Date(wizardData.step1.details.dueDate).toISOString()
           : undefined,
-        value: wizardData.step1.details.estimatedValue || 0,
+        ...(wizardData.step1.details.estimatedValue && wizardData.step1.details.estimatedValue > 0 && {
+          value: wizardData.step1.details.estimatedValue,
+        }),
         currency: 'USD',
         // Add products if available
         ...(wizardData.step4?.products &&
@@ -1121,7 +1150,7 @@ export function ProposalWizard({
   // ✅ PERFORMANCE: Optimized step validation function with useCallback
   const isCurrentStepValid = useCallback(() => {
     switch (currentStep) {
-      case 1: // Basic Information
+      case 1: { // Basic Information
         // ✅ CRITICAL FIX: Optimized validation with early returns
         const client = wizardData.step1?.client;
         const details = wizardData.step1?.details;
@@ -1138,6 +1167,7 @@ export function ProposalWizard({
         if (description && description.length < 10) return false;
 
         return true;
+      }
 
       case 2: // Team Assignment
         return true; // Optional step
@@ -1198,7 +1228,7 @@ export function ProposalWizard({
 
   // ✅ PERFORMANCE: Optimized step data update with debouncing
   const updateStepData = useCallback(
-    debounce((step: number, data: any) => {
+    debounce((step: number, data: Record<string, unknown>) => {
       setWizardData(prev => ({
         ...prev,
         [`step${step}`]: {
@@ -1216,7 +1246,7 @@ export function ProposalWizard({
       const errors: string[] = [];
 
       switch (step) {
-        case 1: // Basic Information
+        case 1: { // Basic Information
           if (!wizardData.step1?.details?.title?.trim()) {
             errors.push('Proposal title is required');
           }
@@ -1243,6 +1273,7 @@ export function ProposalWizard({
             errors.push('Description must be at least 10 characters long');
           }
           break;
+        }
 
         case 2: // Team Assignment
           if (!wizardData.step2?.teamLead) {
@@ -1377,7 +1408,7 @@ export function ProposalWizard({
 
   const createStepUpdateHandler = useCallback(
     (stepNumber: number) => {
-      return (stepData: any) => {
+      return (stepData: Record<string, unknown>) => {
         // ✅ CRITICAL FIX: Use debounced update to prevent excessive re-renders
         debouncedWizardUpdate(stepNumber, stepData);
       };

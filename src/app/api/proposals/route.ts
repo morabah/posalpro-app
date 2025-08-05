@@ -851,7 +851,44 @@ export async function POST(request: NextRequest) {
     // Parse and validate request body
     const body = await request.json();
 
-    const validatedData = ProposalCreateSchema.parse(body);
+    console.log('[ProposalsRoute] Received request body:', JSON.stringify(body, null, 2));
+
+    let validatedData: z.infer<typeof ProposalCreateSchema>;
+    try {
+      validatedData = ProposalCreateSchema.parse(body);
+    } catch (validationError) {
+      console.error('[ProposalsRoute] Validation error:', validationError);
+      
+      if (validationError instanceof z.ZodError) {
+        const errorDetails = validationError.errors.map(err => ({
+          field: err.path.join('.'),
+          message: err.message,
+          received: 'received' in err ? err.received : 'unknown'
+        }));
+        
+        return createApiErrorResponse(
+          new StandardError({
+            message: `Validation failed: ${errorDetails.map(e => `${e.field}: ${e.message}`).join(', ')}`,
+            code: ErrorCodes.VALIDATION.INVALID_INPUT,
+            metadata: {
+              component: 'ProposalsRoute',
+              operation: 'createProposal',
+              validationErrors: errorDetails,
+              requestBody: body,
+            },
+          }),
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400,
+          {
+            userFriendlyMessage: `Please check the following fields: ${errorDetails.map(e => e.field).join(', ')}`,
+            validationErrors: errorDetails
+          }
+        );
+      }
+      
+      throw validationError;
+    }
 
     // Verify customer exists
     const customer = await prisma.customer.findUnique({
