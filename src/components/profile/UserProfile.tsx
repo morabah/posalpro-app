@@ -60,7 +60,7 @@ const COMPONENT_MAPPING = {
 const profileSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
-  title: z.string().min(1, 'Title is required'),
+  title: z.string().optional(),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
   department: z.string().min(1, 'Department is required'),

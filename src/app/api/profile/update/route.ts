@@ -13,7 +13,7 @@ import { z } from 'zod';
 const profileUpdateSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
-  title: z.string().min(1, 'Title is required'),
+  title: z.string().optional(),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
   department: z.string().min(1, 'Department is required'),
@@ -61,11 +61,16 @@ export async function PUT(request: NextRequest) {
     const validationResult = profileUpdateSchema.safeParse(body);
 
     if (!validationResult.success) {
-      // DEBUG: Log validation errors
+      // DEBUG: Log validation errors in detail
       logger.error('Profile update validation failed:', {
         userEmail: session.user.email,
-        validationErrors: validationResult.error.errors,
+        validationErrors: validationResult.error.errors.map(err => ({
+          path: err.path.join('.'),
+          message: err.message,
+          code: err.code,
+        })),
         receivedData: body,
+        expectedSchema: Object.keys(profileUpdateSchema.shape),
       });
 
       return createApiErrorResponse(
