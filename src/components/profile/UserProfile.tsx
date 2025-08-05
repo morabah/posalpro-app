@@ -68,6 +68,7 @@ const profileSchema = z.object({
   languages: z.array(z.string()).optional(),
   bio: z.string().max(500, 'Bio must be less than 500 characters').optional(),
   profileImage: z.string().optional(),
+  expertiseAreas: z.array(z.string()).optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -150,6 +151,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
       languages: ['English'],
       bio: '',
       profileImage: '',
+      expertiseAreas: [],
     },
   });
 
@@ -222,7 +224,6 @@ export function UserProfile({ className = '' }: UserProfileProps) {
         error?: string;
       }>('/api/profile/update', {
         ...data,
-        expertiseAreas,
         profileImage,
       });
 
@@ -277,6 +278,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
       : [...expertiseAreas, area];
 
     setExpertiseAreas(newAreas);
+    setValue('expertiseAreas', newAreas); // Update form data
 
     analytics.trackExpertiseUpdate({
       expertiseArea: area,
