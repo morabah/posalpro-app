@@ -1,87 +1,75 @@
 /**
  * PosalPro MVP2 - Security Utilities
  * CSRF protection, rate limiting, and input validation
+ * Updated to use Redis storage for scalability
  */
 
 import crypto from 'crypto';
 import { NextRequest } from 'next/server';
 import validator from 'validator';
+import { CSRFStorage, RateLimitStorage, SecurityStorageFactory } from './security/storage';
 
-// CSRF Token Management
+// CSRF Token Management with Redis Storage
 class CSRFProtection {
-  private static tokens = new Map<string, { token: string; expires: number }>();
+  private static storage: CSRFStorage = SecurityStorageFactory.createCSRFStorage();
 
-  static generateToken(sessionId: string): string {
+  static async generateToken(sessionId: string): Promise<string> {
     const token = crypto.randomBytes(32).toString('hex');
     const expires = Date.now() + 60 * 60 * 1000; // 1 hour
 
-    this.tokens.set(sessionId, { token, expires });
+    await this.storage.setToken(sessionId, token, expires);
     return token;
   }
 
-  static validateToken(sessionId: string, token: string): boolean {
-    const stored = this.tokens.get(sessionId);
-    if (!stored) return false;
-
-    if (Date.now() > stored.expires) {
-      this.tokens.delete(sessionId);
-      return false;
-    }
-
-    return stored.token === token;
+  static async validateToken(sessionId: string, token: string): Promise<boolean> {
+    return await this.storage.validateToken(sessionId, token);
   }
 
-  static cleanupExpired(): void {
-    const now = Date.now();
-    for (const [sessionId, data] of this.tokens.entries()) {
-      if (now > data.expires) {
-        this.tokens.delete(sessionId);
-      }
-    }
+  static async cleanupExpired(): Promise<void> {
+    await this.storage.cleanupExpired();
   }
 }
 
-// Rate Limiting
+// Rate Limiting with Redis Storage
 class RateLimiter {
-  private static limits = new Map<string, { count: number; resetTime: number }>();
+  private static storage: RateLimitStorage = SecurityStorageFactory.createRateLimitStorage();
 
-  static isLimited(identifier: string, maxAttempts: number, windowMs: number): boolean {
+  static async isLimited(
+    identifier: string,
+    maxAttempts: number,
+    windowMs: number
+  ): Promise<boolean> {
     const now = Date.now();
-    const record = this.limits.get(identifier);
+    const record = await this.storage.getAttempts(identifier);
 
     if (!record) {
-      this.limits.set(identifier, { count: 1, resetTime: now + windowMs });
+      await this.storage.setAttempts(identifier, 1, now + windowMs);
       return false;
     }
 
     if (now > record.resetTime) {
-      this.limits.set(identifier, { count: 1, resetTime: now + windowMs });
+      await this.storage.setAttempts(identifier, 1, now + windowMs);
       return false;
     }
 
     if (record.count < maxAttempts) {
-      record.count++;
+      await this.storage.incrementAttempts(identifier);
       return false;
     }
 
     return true;
   }
 
-  static getRemainingAttempts(identifier: string, maxAttempts: number): number {
-    const record = this.limits.get(identifier);
-    if (!record || Date.now() > record.resetTime) {
+  static async getRemainingAttempts(identifier: string, maxAttempts: number): Promise<number> {
+    const record = await this.storage.getAttempts(identifier);
+    if (!record) {
       return maxAttempts;
     }
     return Math.max(0, maxAttempts - record.count);
   }
 
-  static cleanup(): void {
-    const now = Date.now();
-    for (const [identifier, data] of this.limits.entries()) {
-      if (now > data.resetTime) {
-        this.limits.delete(identifier);
-      }
-    }
+  static async cleanup(): Promise<void> {
+    await this.storage.cleanup();
   }
 }
 
@@ -251,11 +239,12 @@ export function analyzeRequest(request: NextRequest): {
 export const csrf = CSRFProtection;
 export const rateLimiter = RateLimiter;
 
-// Auto-cleanup (run periodically)
+// Auto-cleanup (run periodically) - Note: Redis handles TTL automatically
 setInterval(
   () => {
-    CSRFProtection.cleanupExpired();
-    RateLimiter.cleanup();
+    // Redis automatically handles cleanup via TTL
+    // This interval is kept for compatibility but does minimal work
+    console.log('Security cleanup: Redis TTL handles expiration automatically');
   },
   5 * 60 * 1000
 ); // Every 5 minutes
