@@ -711,7 +711,13 @@ function ProposalManagementDashboardContent() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900 hover:text-blue-600 cursor-pointer">
+                        <h3
+                          className="text-lg font-semibold text-gray-900 hover:text-blue-600 cursor-pointer"
+                          onClick={() => {
+                            trackAction('view_proposal', { proposalId: proposal.id });
+                            router.push(`/proposals/${proposal.id}`);
+                          }}
+                        >
                           {proposal.title}
                         </h3>
                         <StatusBadge status={proposal.status} />
@@ -724,7 +730,10 @@ function ProposalManagementDashboardContent() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => trackAction('view_proposal', { proposalId: proposal.id })}
+                        onClick={() => {
+                          trackAction('view_proposal', { proposalId: proposal.id });
+                          router.push(`/proposals/${proposal.id}`);
+                        }}
                       >
                         <EyeIcon className="w-4 h-4" />
                       </Button>
