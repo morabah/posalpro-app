@@ -19,6 +19,7 @@ import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
+import { useApiClient } from '@/hooks/useApiClient';
 import type { CreateProposalData } from '@/lib/entities/proposal';
 import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
 import { Priority } from '@/types/enums';
@@ -439,22 +440,19 @@ export function ProposalWizard({
           : undefined,
       };
 
-      console.log('[ProposalWizard] Creating proposal with data:', proposalData);
-
       // Create the proposal using the entity
-      // Assuming proposalEntity is defined elsewhere or needs to be imported
-      // For now, we'll just log the data and assume success for demonstration
-      // In a real app, you'd call an API or entity method here.
-      // For this example, we'll simulate success.
-      const response = {
-        success: true,
-        data: { id: 'mock-proposal-id-123' },
-        message: 'Proposal created',
-      };
-
+      // ✅ FIXED: Use real API call instead of mock response
       console.log('[ProposalWizard] Creating proposal with data:', proposalData);
 
-      // Check for successful API response first
+      // Make real API call to /api/proposals
+      const apiClient = useApiClient();
+      const response = await apiClient.post<{
+        success: boolean;
+        data: { id: string; title: string; status: string };
+        message: string;
+      }>('/api/proposals', proposalData);
+
+      // Check for successful API response
       if (!response.success) {
         throw new StandardError({
           message: response.message || 'Proposal creation failed',
