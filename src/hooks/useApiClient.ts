@@ -75,8 +75,6 @@ class ApiClientSingleton {
 
   public async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     await this.initialize();
-
-    await this.initialize();
     const baseUrl = this.getBaseUrl();
 
     // Fix: Remove /api prefix from endpoint if it exists to prevent double /api/api/
