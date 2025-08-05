@@ -61,16 +61,20 @@ export async function PUT(request: NextRequest) {
     const validationResult = profileUpdateSchema.safeParse(body);
 
     if (!validationResult.success) {
-      // DEBUG: Log validation errors in detail
+      // DEBUG: Log validation errors in detail with full error information
+      const detailedErrors = validationResult.error.errors.map(err => ({
+        path: err.path.join('.'),
+        message: err.message,
+        code: err.code,
+      }));
+
       logger.error('Profile update validation failed:', {
         userEmail: session.user.email,
-        validationErrors: validationResult.error.errors.map(err => ({
-          path: err.path.join('.'),
-          message: err.message,
-          code: err.code,
-        })),
-        receivedData: body,
+        validationErrors: detailedErrors,
+        receivedData: JSON.stringify(body, null, 2),
         expectedSchema: Object.keys(profileUpdateSchema.shape),
+        validationErrorCount: validationResult.error.errors.length,
+        firstError: detailedErrors[0],
       });
 
       return createApiErrorResponse(
@@ -80,7 +84,7 @@ export async function PUT(request: NextRequest) {
           metadata: {
             component: 'ProfileUpdateRoute',
             operation: 'updateProfile',
-            validationErrors: validationResult.error.errors,
+            validationErrors: detailedErrors,
             userEmail: session.user.email,
           },
         }),
@@ -89,7 +93,7 @@ export async function PUT(request: NextRequest) {
         400,
         {
           userFriendlyMessage: 'Please check your profile information and try again.',
-          details: validationResult.error.errors,
+          details: detailedErrors,
         }
       );
     }
