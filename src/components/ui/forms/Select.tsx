@@ -127,30 +127,32 @@ export interface SelectProps {
  * Accessible Select component
  */
 export const Select = forwardRef<HTMLDivElement, SelectProps>(
-  ({
-    options,
-    value,
-    onChange,
-    placeholder = 'Select an option',
-    label,
-    helperText,
-    error,
-    size = 'md',
-    multiple = false,
-    searchable = false,
-    clearable = false,
-    loading = false,
-    className,
-    selectClassName,
-    labelClassName,
-    disabled,
-    id,
-  }) => {
+  (
+    {
+      options,
+      value,
+      onChange,
+      placeholder = 'Select an option',
+      label,
+      helperText,
+      error,
+      size = 'md',
+      multiple = false,
+      searchable = false,
+      clearable = false,
+      loading = false,
+      className,
+      selectClassName,
+      labelClassName,
+      disabled,
+      id,
+    },
+    ref
+  ) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [focusedIndex, setFocusedIndex] = useState(-1);
 
-    const selectRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Generate unique ID if not provided
@@ -310,7 +312,7 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(
         )}
 
         {/* Select Container */}
-        <div ref={selectRef} className={cn('relative cursor-pointer', selectClassName)}>
+        <div ref={ref} className={cn('relative cursor-pointer', selectClassName)}>
           {/* Trigger */}
           <div
             role="combobox"
