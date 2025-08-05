@@ -18,6 +18,7 @@ const profileUpdateSchema = z.object({
   phone: z.string().optional(),
   department: z.string().min(1, 'Department is required'),
   office: z.string().optional(),
+  languages: z.array(z.string()).optional(),
   bio: z.string().max(500, 'Bio must be less than 500 characters').optional(),
   profileImage: z.string().optional(),
   expertiseAreas: z.array(z.string()).optional(),
@@ -49,10 +50,24 @@ export async function PUT(request: NextRequest) {
     // Parse the request body
     const body = await request.json();
 
+    // DEBUG: Log the received data
+    logger.info('Profile update request received:', {
+      userEmail: session.user.email,
+      receivedData: body,
+      dataKeys: Object.keys(body),
+    });
+
     // Validate the data
     const validationResult = profileUpdateSchema.safeParse(body);
 
     if (!validationResult.success) {
+      // DEBUG: Log validation errors
+      logger.error('Profile update validation failed:', {
+        userEmail: session.user.email,
+        validationErrors: validationResult.error.errors,
+        receivedData: body,
+      });
+
       return createApiErrorResponse(
         new StandardError({
           message: 'Profile update validation failed',
