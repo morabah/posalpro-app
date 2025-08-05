@@ -12,6 +12,7 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { logError } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
@@ -183,7 +184,28 @@ async function checkUserPermissions(
       });
       console.log(`[ProposalsAPI-DIAG] Found ${userRoles.length} user roles`);
     } catch (roleQueryError) {
-      console.error('[ProposalsAPI-DIAG] Error querying user roles:', roleQueryError);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const standardError = errorHandlingService.processError(
+        roleQueryError,
+        'Failed to query user roles',
+        ErrorCodes.AUTH.PERMISSION_DENIED,
+        {
+          component: 'ProposalsAPI',
+          operation: 'checkUserPermissions',
+          userId,
+          action,
+          scope,
+        }
+      );
+
+      logError('Error querying user roles', roleQueryError, {
+        component: 'ProposalsAPI',
+        operation: 'checkUserPermissions',
+        userId,
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       // PRODUCTION FIX: Return true instead of false to prevent blocking access
       return true;
     }
@@ -232,7 +254,28 @@ async function checkUserPermissions(
         }
       );
     } catch (permissionCheckError) {
-      console.error('[ProposalsAPI-DIAG] Error checking permissions:', permissionCheckError);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const standardError = errorHandlingService.processError(
+        permissionCheckError,
+        'Failed to check user permissions',
+        ErrorCodes.AUTH.PERMISSION_DENIED,
+        {
+          component: 'ProposalsAPI',
+          operation: 'checkUserPermissions',
+          userId,
+          action,
+          scope,
+        }
+      );
+
+      logError('Error checking permissions', permissionCheckError, {
+        component: 'ProposalsAPI',
+        operation: 'checkUserPermissions',
+        userId,
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       // PRODUCTION FIX: Return true instead of false to prevent blocking access
       return true;
     }
@@ -353,7 +396,26 @@ export async function GET(request: NextRequest) {
       query = ProposalQuerySchema.parse(queryParams);
       console.log('[ProposalsAPI] Parsed query:', query);
     } catch (parseError) {
-      console.error('[ProposalsAPI] Query validation error:', parseError);
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const standardError = errorHandlingService.processError(
+        parseError,
+        'Proposal query validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        {
+          component: 'ProposalsAPI',
+          operation: 'GET',
+          query: url.searchParams.toString(),
+        }
+      );
+
+      logError('Proposal query validation error', parseError, {
+        component: 'ProposalsAPI',
+        operation: 'GET',
+        query: url.searchParams.toString(),
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
+
       throw parseError;
     }
 
@@ -601,22 +663,35 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(responseData);
     } catch (error) {
-      // Log the error using ErrorHandlingService (reduced logging)
-      if (process.env.NODE_ENV === 'development') {
-        console.error(
-          '[ProposalsAPI] Error:',
-          error instanceof Error ? error.message : String(error)
-        );
-      }
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to retrieve proposals',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'ProposalsAPI',
+          operation: 'GET',
+          query: url.searchParams.toString(),
+        }
+      );
 
-      try {
-        errorHandlingService.processError(error);
-      } catch (logError) {
-        // Silent error handling failure
-      }
+      logError('ProposalsAPI database query failed', error, {
+        component: 'ProposalsAPI',
+        operation: 'GET',
+        query: url.searchParams.toString(),
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
 
       if (isPrismaError(error)) {
-        console.error('[ProposalsAPI-DIAG] Prisma error meta:', JSON.stringify(error.meta || {}));
+        logError('ProposalsAPI Prisma error details', error, {
+          component: 'ProposalsAPI',
+          operation: 'GET',
+          query: url.searchParams.toString(),
+          prismaMeta: JSON.stringify(error.meta || {}),
+          standardError: standardError.message,
+          errorCode: standardError.code,
+        });
         return createApiErrorResponse(
           new StandardError({
             message: 'Database error while retrieving proposals',

@@ -1,9 +1,6 @@
-import { logger } from '@/utils/logger'; /**
- * React Hook for Dynamic API Client
- * Uses dynamic URL resolution to prevent port conflicts in development
- * ✅ ENHANCED: Singleton pattern to prevent multiple instances and infinite loops
- */
-
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { getApiBaseUrl, logApiConfiguration, validateApiConnection } from '@/lib/utils/apiUrl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -29,9 +26,11 @@ class ApiClientSingleton {
   private baseUrl: string;
   private isInitialized: boolean = false;
   private initPromise: Promise<void> | null = null;
+  private errorHandlingService: ErrorHandlingService;
 
   private constructor() {
     this.baseUrl = '';
+    this.errorHandlingService = ErrorHandlingService.getInstance();
   }
 
   public static getInstance(): ApiClientSingleton {
@@ -109,51 +108,29 @@ class ApiClientSingleton {
       const data = (await response.json()) as T;
       return data;
     } catch (error) {
-      // ✅ ENHANCED: Better error logging with more context
-      const errorDetails = {
-        url,
+      // ✅ ENHANCED: Use proper logger instead of console.error
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'API request failed',
+        ErrorCodes.API.NETWORK_ERROR,
+        {
+          component: 'useApiClient',
+          operation: 'makeRequest',
+          endpoint,
+          method: options.method || 'GET',
+        }
+      );
+
+      logError('API request error', error, {
+        component: 'useApiClient',
+        operation: 'makeRequest',
         endpoint,
         method: options.method || 'GET',
-        timestamp: new Date().toISOString(),
-        singleton: true, // Mark as singleton request
-      };
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
 
-      if (error instanceof Error) {
-        // Defensive coding: ensure we're passing valid parameters to logger
-        try {
-          logger.error('API request error:', {
-            ...errorDetails,
-            errorMessage: error.message,
-            errorName: error.name,
-            stack: error.stack,
-          });
-        } catch {
-          // Fallback to console if logger fails
-          console.error('API request error:', {
-            ...errorDetails,
-            errorMessage: error.message,
-            errorName: error.name,
-            stack: error.stack,
-          });
-        }
-      } else {
-        // Defensive coding: ensure we're passing valid parameters to logger
-        try {
-          logger.error('API request error (unknown type):', {
-            ...errorDetails,
-            error: String(error),
-            errorType: typeof error,
-          });
-        } catch {
-          // Fallback to console if logger fails
-          console.error('API request error (unknown type):', {
-            ...errorDetails,
-            error: String(error),
-            errorType: typeof error,
-          });
-        }
-      }
-      throw error;
+      throw standardError;
     }
   }
 

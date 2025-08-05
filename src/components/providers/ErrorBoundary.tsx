@@ -1,11 +1,15 @@
 /**
- * PosalPro MVP2 - Error Boundary Component
- * Graceful error handling with user-friendly fallback UI
- * Includes error reporting and recovery mechanisms
+ * PosalPro MVP2 - Enhanced Error Boundary Component
+ * Comprehensive error handling with standardized patterns
+ * Complies with CORE_REQUIREMENTS.md - Uses ErrorHandlingService and logger
  */
 
 'use client';
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logError } from '@/lib/logger';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryState {
@@ -39,12 +43,10 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   resetError,
   errorId,
 }) => {
-  const isDevelopment = process.env.NODE_ENV === 'development';
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
       <div className="max-w-md w-full space-y-6">
-        {/* Error Alert */}
+        {/* Error Display */}
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -59,17 +61,38 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Something went wrong</h3>
               <div className="mt-2 text-sm text-red-700">
-                <p>We apologize for the inconvenience. An unexpected error has occurred.</p>
-                {errorId && (
-                  <p className="text-xs text-red-600 font-mono mt-1">Error ID: {errorId}</p>
-                )}
+                <p>
+                  We encountered an unexpected error. Please try refreshing the page or contact
+                  support if the problem persists.
+                </p>
+                {errorId && <p className="mt-1 text-xs text-red-600">Error ID: {errorId}</p>}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Development error details */}
-        {isDevelopment && error && (
+        {/* Action Buttons */}
+        <div className="flex space-x-3">
+          <button
+            onClick={resetError}
+            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Try Again
+          </button>
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
+            className="flex-1 bg-neutral-600 text-white px-4 py-2 rounded-lg hover:bg-neutral-700 transition-colors font-medium"
+          >
+            Refresh Page
+          </button>
+        </div>
+
+        {/* Development Error Details */}
+        {process.env.NODE_ENV === 'development' && error && (
           <details className="mt-4">
             <summary className="cursor-pointer text-sm font-medium text-neutral-600 hover:text-neutral-800">
               Error Details (Development)
@@ -83,70 +106,27 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
                   <pre className="whitespace-pre-wrap">{error.stack}</pre>
                 </>
               )}
-              {errorInfo?.componentStack && (
+              {errorInfo && (
                 <>
-                  <div className="font-semibold mb-2">Component Stack:</div>
+                  <div className="font-semibold mb-2 mt-3">Component Stack:</div>
                   <pre className="whitespace-pre-wrap">{errorInfo.componentStack}</pre>
                 </>
               )}
             </div>
           </details>
         )}
-
-        {/* Action Buttons */}
-        <div className="flex flex-col space-y-3">
-          <button
-            onClick={resetError}
-            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            Try Again
-          </button>
-
-          <button
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.location.href = '/';
-              }
-            }}
-            className="flex-1 bg-neutral-600 text-white px-4 py-2 rounded-lg hover:bg-neutral-700 transition-colors font-medium"
-          >
-            Go to Homepage
-          </button>
-
-          <button
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.location.reload();
-              }
-            }}
-            className="flex-1 bg-neutral-200 text-neutral-700 px-4 py-2 rounded-lg hover:bg-neutral-300 transition-colors font-medium"
-          >
-            Reload Page
-          </button>
-        </div>
-
-        {/* Help Text */}
-        <div className="text-center">
-          <p className="text-sm text-neutral-600">
-            If the problem persists, please{' '}
-            <a
-              href="mailto:support@posalpro.com"
-              className="text-blue-600 hover:text-blue-700 underline"
-            >
-              contact support
-            </a>
-            {errorId && ` and include error ID: ${errorId}`}
-          </p>
-        </div>
       </div>
     </div>
   );
 };
 
 /**
- * Error Boundary Class Component
+ * Enhanced Error Boundary with standardized error handling
+ * ✅ FOLLOWS CORE_REQUIREMENTS.md: Uses ErrorHandlingService and logger
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  private errorHandlingService = ErrorHandlingService.getInstance();
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -164,69 +144,100 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    // Generate unique error ID
-    const errorId = `ERR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
     return {
       hasError: true,
       error,
-      errorId,
+      errorId: `error_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Store error info in state
-    this.setState({ errorInfo });
+    // ✅ ENHANCED: Use standardized error handling and logging
+    const standardError = this.errorHandlingService.processError(
+      error,
+      'ErrorBoundary caught an error',
+      ErrorCodes.SYSTEM.UNKNOWN,
+      {
+        component: 'ErrorBoundary',
+        operation: 'componentDidCatch',
+        componentStack: errorInfo.componentStack,
+        errorId: this.state.errorId,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
+        url: typeof window !== 'undefined' ? window.location.href : 'server-side',
+      }
+    );
+
+    // ✅ ENHANCED: Use proper logger instead of console.error
+    logError('ErrorBoundary caught an error', error, {
+      component: 'ErrorBoundary',
+      componentStack: errorInfo.componentStack,
+      standardError: standardError.message,
+      errorCode: standardError.code,
+      errorId: this.state.errorId,
+    });
 
     // Call custom error handler if provided
     this.props.onError?.(error, errorInfo);
 
-    // Report error to monitoring service
+    // ✅ ENHANCED: Optional error reporting with proper API client
     if (this.props.enableReporting !== false && this.state.isClient) {
-      this.reportError(error, errorInfo);
+      this.reportError(standardError, errorInfo);
     }
 
-    // Log error in development
+    // ✅ ENHANCED: Development logging with proper structure
     if (process.env.NODE_ENV === 'development') {
-      console.group('🚨 Error Boundary Caught Error');
-      console.error('Error:', error);
-      console.error('Error Info:', errorInfo);
-      console.error('Component Stack:', errorInfo.componentStack);
-      console.groupEnd();
+      logError('ErrorBoundary Development Details', error, {
+        component: 'ErrorBoundary',
+        operation: 'componentDidCatch',
+        componentStack: errorInfo.componentStack,
+        errorId: this.state.errorId,
+        standardError: standardError.message,
+        errorCode: standardError.code,
+      });
     }
   }
 
   /**
-   * Report error to monitoring service
+   * ✅ ENHANCED: Report error with proper API client and structured logging
    */
-  private reportError = (error: Error, errorInfo: ErrorInfo) => {
+  private async reportError(error: StandardError, errorInfo: ErrorInfo) {
     try {
-      // In a real application, send to error tracking service
-      // Example: Sentry, LogRocket, Bugsnag, etc.
+      // ✅ ENHANCED: Use proper API client instead of mock reporting
+      const { useApiClient } = await import('@/hooks/useApiClient');
+      const apiClient = useApiClient();
 
       const errorReport = {
         message: error.message,
+        code: error.code,
         stack: error.stack,
         componentStack: errorInfo.componentStack,
         errorId: this.state.errorId,
         url: typeof window !== 'undefined' ? window.location.href : 'server-side',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
         timestamp: new Date().toISOString(),
-        userId: null, // Could get from auth store
+        metadata: error.metadata,
       };
 
-      // Mock error reporting (replace with actual service)
-      console.log('Error reported:', errorReport);
+      // ✅ ENHANCED: Use proper API client instead of console.log
+      await apiClient.post('errors/report', errorReport);
 
-      // Example implementation:
-      // errorTrackingService.captureException(error, {
-      //   tags: { errorId: this.state.errorId },
-      //   extra: errorReport,
-      // });
+      // ✅ ENHANCED: Log successful error reporting
+      logError('Error reported successfully', error, {
+        component: 'ErrorBoundary',
+        operation: 'reportError',
+        errorId: this.state.errorId,
+        reported: true,
+      });
     } catch (reportingError) {
-      console.error('Failed to report error:', reportingError);
+      // ✅ ENHANCED: Log reporting failure with proper logger
+      logError('Failed to report error to server', reportingError, {
+        component: 'ErrorBoundary',
+        operation: 'reportError',
+        originalError: error.message,
+        errorId: this.state.errorId,
+      });
     }
-  };
+  }
 
   /**
    * Reset error state
@@ -302,5 +313,4 @@ export function withErrorBoundary<P extends object>(
   return WithErrorBoundaryComponent;
 }
 
-// Export types for external use
 export type { ErrorBoundaryProps, ErrorFallbackProps };

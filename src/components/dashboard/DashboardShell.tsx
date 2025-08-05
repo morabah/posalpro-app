@@ -10,6 +10,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useDashboardAnalytics } from '@/hooks/dashboard/useDashboardAnalytics';
 import type { DashboardWidget, WidgetProps } from '@/lib/dashboard/types';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { UserType } from '@/types';
 import {
   AdjustmentsHorizontalIcon,
@@ -119,6 +122,8 @@ class WidgetErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback: React.ReactNode },
   { hasError: boolean }
 > {
+  private errorHandlingService = ErrorHandlingService.getInstance();
+
   constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
@@ -129,7 +134,28 @@ class WidgetErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Widget Error:', error, errorInfo);
+    // ✅ ENHANCED: Use standardized error handling and logging
+    const standardError = this.errorHandlingService.processError(
+      error,
+      'Widget Error Boundary caught an error',
+      ErrorCodes.SYSTEM.UNKNOWN,
+      {
+        component: 'WidgetErrorBoundary',
+        operation: 'componentDidCatch',
+        componentStack: errorInfo.componentStack,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
+        url: typeof window !== 'undefined' ? window.location.href : 'server-side',
+      }
+    );
+
+    // ✅ ENHANCED: Use proper logger instead of console.error
+    logError('Widget Error Boundary caught an error', error, {
+      component: 'WidgetErrorBoundary',
+      componentStack: errorInfo.componentStack,
+      standardError: standardError.message,
+      errorCode: standardError.code,
+    });
+
     // In test environments, re-throw the error to allow tests to catch it
     if (process.env.NODE_ENV === 'test') {
       throw error;
@@ -255,7 +281,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       window.addEventListener('load', handleLoad);
       return () => window.removeEventListener('load', handleLoad);
     }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
 
   // Handle widget visibility toggle

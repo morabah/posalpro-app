@@ -1,13 +1,15 @@
 import { authOptions } from '@/lib/auth';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { StandardError } from '@/lib/errors/StandardError';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
+  let session;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
 
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -114,16 +116,25 @@ export async function GET(request: NextRequest) {
       message: 'Dashboard statistics retrieved successfully',
     });
   } catch (error) {
-    console.error('[DashboardStatsAPI] Error:', error);
-
-    const standardError = new StandardError({
-      message: 'Failed to retrieve dashboard statistics',
-      code: ErrorCodes.DATA.QUERY_FAILED,
-      metadata: {
+    // ✅ ENHANCED: Use proper ErrorHandlingService singleton
+    const errorHandlingService = ErrorHandlingService.getInstance();
+    const standardError = errorHandlingService.processError(
+      error,
+      'Failed to fetch dashboard statistics',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
         component: 'DashboardStatsAPI',
         operation: 'GET',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
+        userId: session?.user?.id || 'unknown',
+      }
+    );
+
+    logError('DashboardStatsAPI error', error, {
+      component: 'DashboardStatsAPI',
+      operation: 'GET',
+      userId: session?.user?.id || 'unknown',
+      standardError: standardError.message,
+      errorCode: standardError.code,
     });
 
     return NextResponse.json(
