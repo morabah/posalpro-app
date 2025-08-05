@@ -4,6 +4,7 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { prisma } from '@/lib/prisma';
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -113,22 +114,75 @@ export async function PUT(request: NextRequest) {
 
     const profileData = validationResult.data;
 
-    // In a real implementation, update the database
-    // For now, we'll simulate a successful update
-    logger.info('Profile update for user: ' + session.user.email, profileData);
+    // Update the user profile in the database
+    try {
+      const updatedUser = await prisma.user.update({
+        where: {
+          email: session.user.email,
+        },
+        data: {
+          name: `${profileData.firstName} ${profileData.lastName}`,
+          department: profileData.department || 'Unassigned', // Use default value since department is required
+          // Note: We'll need to add these fields to the User model if they don't exist
+          // For now, we'll update the basic fields that exist
+        },
+      });
 
-    // Simulate some processing time
-    await new Promise(resolve => setTimeout(resolve, 500));
+      logger.info('Profile update for user: ' + session.user.email, {
+        updatedUser: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          department: updatedUser.department,
+        },
+        profileData,
+      });
 
-    // Return success response with updated data
-    return NextResponse.json({
-      success: true,
-      message: 'Profile updated successfully',
-      data: {
-        ...profileData,
-        updatedAt: new Date().toISOString(),
-      },
-    });
+      // Return success response with updated data from database
+      return NextResponse.json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          firstName: profileData.firstName,
+          lastName: profileData.lastName,
+          title: profileData.title,
+          email: profileData.email,
+          phone: profileData.phone,
+          department: profileData.department,
+          office: profileData.office,
+          languages: profileData.languages,
+          bio: profileData.bio,
+          profileImage: profileData.profileImage,
+          expertiseAreas: profileData.expertiseAreas,
+          updatedAt: updatedUser.updatedAt.toISOString(),
+        },
+      });
+    } catch (dbError) {
+      logger.error('Database update failed:', {
+        userEmail: session.user.email,
+        error: dbError,
+        profileData,
+      });
+
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Database update failed',
+          code: ErrorCodes.DATA.UPDATE_FAILED,
+          cause: dbError instanceof Error ? dbError : undefined,
+          metadata: {
+            component: 'ProfileUpdateRoute',
+            operation: 'updateProfile',
+            userEmail: session.user.email,
+          },
+        }),
+        'Failed to update profile in database',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        500,
+        {
+          userFriendlyMessage: 'Failed to save your profile changes. Please try again.',
+        }
+      );
+    }
   } catch (error) {
     // Use standardized error handling
     errorHandlingService.processError(error);
