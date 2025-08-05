@@ -255,6 +255,25 @@ export function UserProfile({ className = '' }: UserProfileProps) {
 
       analytics.trackProfileCompletion(calculateCompleteness(), [], []);
 
+      // Update form with new data from server response
+      if (result.data) {
+        reset({
+          firstName: result.data.firstName || data.firstName,
+          lastName: result.data.lastName || data.lastName,
+          title: result.data.title || data.title,
+          email: result.data.email || data.email,
+          phone: result.data.phone || data.phone,
+          department: result.data.department || data.department,
+          office: result.data.office || data.office,
+          languages: result.data.languages || data.languages,
+          bio: result.data.bio || data.bio,
+          expertiseAreas: result.data.expertiseAreas || expertiseAreas,
+        });
+      } else {
+        // Fallback to current form data if no server response
+        reset(data);
+      }
+
       setIsEditing(false);
       setError(null);
     } catch (error) {

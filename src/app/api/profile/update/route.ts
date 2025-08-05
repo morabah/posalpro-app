@@ -120,7 +120,7 @@ export async function PUT(request: NextRequest) {
     // Simulate some processing time
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Return success response
+    // Return success response with updated data
     return NextResponse.json({
       success: true,
       message: 'Profile updated successfully',
