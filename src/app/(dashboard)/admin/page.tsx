@@ -35,7 +35,7 @@ const showToast = (message: string, type: 'success' | 'error' | 'info' = 'succes
 };
 
 // Database hooks
-import { SystemUser, useSystemMetrics, useUsers } from '@/hooks/admin/useAdminData';
+import { SystemUser, useSystemMetrics, useUsers } from '@/hooks/admin';
 
 // Import date-fns with parseISO for string date handling
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns';

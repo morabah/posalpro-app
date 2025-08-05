@@ -9,7 +9,7 @@
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
-import { SystemUser, useUsers } from '@/hooks/admin/useAdminData';
+import { SystemUser, useUsers } from '@/hooks/admin';
 import { useDeadlineManagementAnalytics } from '@/hooks/deadlines/useDeadlineManagementAnalytics';
 import {
   ComplexityLevel,

@@ -12,7 +12,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { usePermissions, useRoles } from '@/hooks/admin/useAdminData';
+import { usePermissions, useRoles } from '@/hooks/admin';
 import {
   CheckIcon,
   ChevronDownIcon,

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
-import { SystemUser, useUsers } from '@/hooks/admin/useAdminData';
+import { SystemUser, useUsers } from '@/hooks/admin';
 import { useResponsive } from '@/hooks/useResponsive';
 import { debounce } from '@/lib/utils';
 import { ProposalWizardStep5Data } from '@/lib/validation/schemas/proposal';
