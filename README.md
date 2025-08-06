@@ -1,85 +1,85 @@
-# PosalPro MVP2 - Enterprise Proposal Management Platform
+# PosalPro MVP2
 
-## 🎯 Project Overview
+> Enterprise-grade proposal management platform with AI-powered coordination and
+> systematic learning capture.
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-99%25-blue.svg)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
+[![Production](https://img.shields.io/badge/Production-Ready-green.svg)](https://posalpro-mvp2.windsurf.build)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+## 🎯 Overview
 
 PosalPro MVP2 is a comprehensive, AI-powered proposal management platform
 designed to solve critical business challenges in proposal creation, team
 coordination, and client relationship management. Built with enterprise-grade
 architecture and systematic learning capture.
 
-**Production Status**: ✅ Production-ready with 99% TypeScript compliance (4
-minor errors in test files) **Live Demo**: https://posalpro-mvp2.windsurf.build
-**Documentation**: Comprehensive guides in `/docs/` directory
+**🚀 Live Demo**:
+[https://posalpro-mvp2.windsurf.build](https://posalpro-mvp2.windsurf.build)
+**📚 Documentation**: Comprehensive guides in `/docs/` directory **🏗️
+Architecture**: Next.js 15 + TypeScript + Prisma + Redis **🔒 Security**:
+NextAuth.js with RBAC + Rate Limiting **📊 Analytics**: Real-time performance
+monitoring
 
 ---
 
-## 🚀 Technology Stack (Actual Implementation)
+## 🛠️ Tech Stack
 
-### **Frontend Framework**
+### **Core Framework**
 
-- **Next.js 15** (App Router) - Core framework with server-side rendering
-- **TypeScript** - 100% type safety with strict mode enforcement
-- **React 18.3.1** - Component architecture with hooks and context
-- **Tailwind CSS** - Utility-first styling with custom design system
+- **[Next.js 15](https://nextjs.org/)** - App Router with server-side rendering
+- **[TypeScript](https://www.typescriptlang.org/)** - 99% type safety with
+  strict mode
+- **[React 18.3.1](https://react.dev/)** - Component architecture with hooks
+- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first styling system
 
-### **Authentication & Security**
+### **Backend & Database**
 
-- **NextAuth.js 4.24.11** - Role-based access control (RBAC) with custom
-  providers
-- **bcryptjs 3.0.2** - Password hashing and security
-- **jose 6.0.11** - JWT token management
-- **express-rate-limit 7.5.0** - API rate limiting and protection
+- **[Prisma 5.7.0](https://www.prisma.io/)** - Type-safe database ORM with 44+
+  tables
+- **[PostgreSQL](https://www.postgresql.org/)** - Primary database with
+  optimized indexes
+- **[Redis 5.7.0](https://redis.io/)** - Caching and session management
+- **[NextAuth.js 4.24.11](https://next-auth.js.org/)** - Authentication with
+  RBAC
 
-### **Database & ORM**
+### **Form & Validation**
 
-- **Prisma 5.7.0** - Type-safe database queries with 44+ tables
-- **PostgreSQL** - Primary database with optimized indexes
-- **Redis 5.7.0** - Caching and session management
-- **ioredis 5.7.0** - Redis client for performance optimization
+- **[React Hook Form 7.57.0](https://react-hook-form.com/)** - Form state
+  management
+- **[Zod](https://zod.dev/)** - Runtime validation with TypeScript integration
+- **[@hookform/resolvers 3.10.0](https://github.com/react-hook-form/resolvers)** -
+  Form validation
 
-### **Form Handling & Validation**
+### **UI & Design System**
 
-- **React Hook Form 7.57.0** - Form state management
-- **Zod** - Runtime validation with TypeScript integration
-- **@hookform/resolvers 3.10.0** - Form validation resolvers
-
-### **UI Components & Design**
-
-- **Radix UI** - Accessible component primitives (Dialog, Dropdown, Tabs, Toast)
-- **Headless UI 2.2.4** - Unstyled, accessible UI components
-- **Heroicons 2.0.18** - Icon system
-- **Framer Motion 12.15.0** - Animation library
-- **Sonner 2.0.5** - Toast notifications
+- **[Radix UI](https://www.radix-ui.com/)** - Accessible component primitives
+- **[Headless UI 2.2.4](https://headlessui.com/)** - Unstyled, accessible
+  components
+- **[Framer Motion 12.15.0](https://www.framer.com/motion/)** - Animation
+  library
+- **[Sonner 2.0.5](https://sonner.emilkowal.ski/)** - Toast notifications
 
 ### **Performance & Analytics**
 
-- **@tanstack/react-query 5.80.5** - Data fetching and caching
-- **@vercel/analytics 1.5.0** - Performance monitoring
-- **React Virtualized 9.22.6** - Large list optimization
-- **React Intersection Observer 9.16.0** - Lazy loading
-
-### **File Handling & Upload**
-
-- **React Dropzone 14.3.8** - File upload with drag-and-drop
-- **Nodemailer 6.10.1** - Email functionality
-
-### **Development Tools**
-
-- **ESLint** - Code quality enforcement
-- **Prettier** - Code formatting
-- **Autoprefixer 10.4.21** - CSS vendor prefixing
-- **PostCSS 8.4.32** - CSS processing
+- **[@tanstack/react-query 5.80.5](https://tanstack.com/query)** - Data fetching
+  and caching
+- **[@vercel/analytics 1.5.0](https://vercel.com/analytics)** - Performance
+  monitoring
+- **[React Virtualized 9.22.6](https://github.com/bvaughn/react-virtualized)** -
+  Large list optimization
 
 ---
 
-## 🏗️ Architecture & Development Patterns
+## 🏗️ Architecture
 
-### **Critical Implementation Requirements**
+### **Core Patterns**
 
-#### **1. Data Fetching Pattern (MANDATORY)**
+#### **Data Fetching**
 
 ```typescript
-// ✅ CORRECT: Always use useApiClient pattern
+// ✅ Always use useApiClient pattern
 const apiClient = useApiClient();
 
 useEffect(() => {
@@ -100,59 +100,11 @@ useEffect(() => {
 }, []); // Empty dependency array for mount-only execution
 ```
 
-**🚫 FORBIDDEN**: Custom caching systems, direct fetch() calls, complex loading
-states
-
-#### **2. Date Handling Pattern (CRITICAL)**
+#### **Error Handling**
 
 ```typescript
-// ✅ CORRECT: Consistent date processing across the application
-const parseDate = (
-  dateValue: string | Date | null | undefined
-): Date | null => {
-  if (!dateValue) return null;
-  if (dateValue instanceof Date) return dateValue;
-  if (typeof dateValue === 'string') {
-    // Handle ISO strings
-    if (dateValue.includes('T')) {
-      return new Date(dateValue);
-    }
-    // Handle date strings with UTC-based creation
-    const [year, month, day] = dateValue.split('-').map(Number);
-    if (year && month && day) {
-      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-    }
-    return new Date(dateValue);
-  }
-  return null;
-};
-
-// ✅ CORRECT: Consistent date format for form inputs
-const formatDateForInput = (date: Date | string | null): string => {
-  if (!date) return '';
-  if (date instanceof Date) {
-    return date.toISOString().split('T')[0];
-  }
-  if (typeof date === 'string') {
-    return date.includes('T') ? date.split('T')[0] : date;
-  }
-  return '';
-};
-```
-
-**Requirements**: UTC-based date creation, consistent format handling, proper
-validation
-
-#### **3. Error Handling Pattern (MANDATORY)**
-
-```typescript
-// ✅ CORRECT: Use standardized ErrorHandlingService
-import {
-  ErrorHandlingService,
-  StandardError,
-  ErrorCodes,
-  useErrorHandler,
-} from '@/lib/errors';
+// ✅ Use standardized ErrorHandlingService
+import { ErrorHandlingService, useErrorHandler } from '@/lib/errors';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 const { handleAsyncError } = useErrorHandler();
@@ -167,39 +119,33 @@ try {
 }
 ```
 
-#### **4. TypeScript Compliance (CRITICAL)**
-
-- **Verify**: `npm run type-check` → 0 errors before any commit
-- **Use**: Explicit interfaces, strict typing, no `any` types
-- **Standard**: Follow DEVELOPMENT_STANDARDS.md patterns
-
-#### **5. Mobile Touch Interactions (CRITICAL)**
+#### **Date Processing**
 
 ```typescript
-// ✅ CORRECT: Touch event conflict prevention
-const handleTouchStart = (e: TouchEvent) => {
-  const target = e.target as HTMLElement;
-  if (
-    target.tagName === 'INPUT' ||
-    target.tagName === 'SELECT' ||
-    target.tagName === 'TEXTAREA'
-  ) {
-    return; // Skip gesture handling for form elements
+// ✅ UTC-based date creation for consistency
+const parseDate = (dateValue: string | Date | null): Date | null => {
+  if (!dateValue) return null;
+  if (dateValue instanceof Date) return dateValue;
+  if (typeof dateValue === 'string') {
+    if (dateValue.includes('T')) return new Date(dateValue);
+    const [year, month, day] = dateValue.split('-').map(Number);
+    if (year && month && day) {
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    }
+    return new Date(dateValue);
   }
-  // Handle touch gesture
+  return null;
 };
 ```
 
-**Requirements**: 44px+ minimum touch targets, WCAG 2.1 AA compliance
+### **Performance Optimization**
 
-### **Performance Optimization Patterns**
-
-#### **Analytics Throttling Pattern**
+#### **Analytics Throttling**
 
 ```typescript
-// ✅ CORRECT: Prevent analytics spam
+// ✅ Prevent analytics spam
 const lastAnalyticsTime = useRef<number>(0);
-const ANALYTICS_THROTTLE_INTERVAL = 2000; // 2 seconds
+const ANALYTICS_THROTTLE_INTERVAL = 2000;
 
 const trackThrottledEvent = useCallback(
   eventData => {
@@ -213,32 +159,9 @@ const trackThrottledEvent = useCallback(
 );
 ```
 
-#### **Infinite Loop Prevention Pattern**
-
-```typescript
-// ✅ CORRECT: Proper loading state management
-const [hasLoaded, setHasLoaded] = useState(false);
-
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      // ... fetch logic
-    } finally {
-      setLoading(false);
-      setHasLoaded(true); // Prevent re-fetching
-    }
-  };
-
-  if (dataId && !hasLoaded) {
-    fetchData();
-  }
-}, [dataId]); // Clean dependencies only
-```
-
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Quick Start
 
 ### **Prerequisites**
 
@@ -246,66 +169,43 @@ useEffect(() => {
 - npm 10.0.0+
 - Git
 
-### **Installation & Setup**
+### **Installation**
 
-1. **Clone Repository**
+```bash
+# Clone repository
+git clone <repository-url>
+cd posalpro-app
 
-   ```bash
-   git clone <repository-url>
-   cd posalpro-app
-   ```
+# Install dependencies
+npm install --legacy-peer-deps
 
-2. **Install Dependencies**
+# Set up environment
+cp .env.example .env.local
+# Configure your environment variables
 
-   ```bash
-   npm install --legacy-peer-deps
-   ```
+# Set up database
+npm run db:generate
+npm run db:push
+npm run db:seed
 
-3. **Environment Configuration**
+# Start development server
+npm run dev:smart
+```
 
-   ```bash
-   cp .env.example .env.local
-   # Configure database, authentication, and API keys
-   ```
-
-4. **Database Setup**
-
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   npx prisma db seed
-   ```
-
-5. **Start Development Server**
-
-   ```bash
-   npm run dev:smart
-   ```
-
-6. **Open Application** Navigate to
-   [http://localhost:3000](http://localhost:3000)
+**Open**: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 📋 Development Workflow
-
-### **Pre-Implementation Checklist**
-
-- [ ] `npm run type-check` → 0 errors
-- [ ] `npm run audit:duplicates` → no conflicts
-- [ ] Existing pattern search completed
-- [ ] ErrorHandlingService imports ready
-- [ ] useApiClient pattern planned (for data fetching)
-- [ ] Wireframe reference identified
-- [ ] Component Traceability Matrix planned
-- [ ] Performance optimization strategy defined
+## 🛠️ Development
 
 ### **Quality Gates**
 
-1. **Development Gate**: TypeScript type checking (`npm run type-check`)
-2. **Feature Gate**: Code quality validation (`npm run quality:check`)
-3. **Commit Gate**: Pre-commit validation (`npm run pre-commit`)
-4. **Release Gate**: Build validation (`npm run build`)
+```bash
+npm run type-check         # TypeScript validation
+npm run quality:check      # Full quality validation
+npm run pre-commit         # Pre-commit validation
+npm run build              # Production build
+```
 
 ### **Available Scripts**
 
@@ -316,21 +216,20 @@ npm run build              # Production build
 npm run type-check         # TypeScript validation
 npm run lint               # ESLint checking
 
-# Performance & Testing
-npm run performance:monitor    # Performance monitoring
-npm run memory:optimization    # Memory optimization tests
-npm run test:authenticated     # Authenticated testing
-npm run test:comprehensive     # Comprehensive test suite
+# Testing
+npm run test:comprehensive # Comprehensive test suite
+npm run test:authenticated # Authenticated testing
+npm run performance:monitor # Performance monitoring
 
 # Database
 npm run db:generate        # Generate Prisma client
 npm run db:push            # Push schema to database
-npm run db:seed            # Seed database with initial data
+npm run db:seed            # Seed database
 
 # Deployment
 npm run deploy:alpha       # Alpha deployment
 npm run deploy:beta        # Beta deployment
-npm run deploy:patch       # Production bug fixes
+npm run deploy:patch       # Production fixes
 ```
 
 ---
@@ -498,18 +397,18 @@ npm run deployment:info # Check deployment status
 
 ---
 
-## 🤝 Contributing Guidelines
+## 🤝 Contributing
 
 ### **Before Contributing**
 
-1. Read **CORE_REQUIREMENTS.md** thoroughly
-2. Review **LESSONS_LEARNED.md** for relevant patterns
+1. Read **[CORE_REQUIREMENTS.md](docs/CORE_REQUIREMENTS.md)** thoroughly
+2. Review **[LESSONS_LEARNED.md](docs/LESSONS_LEARNED.md)** for patterns
 3. Check existing implementations in `/src/lib/services/`
 4. Run `npm run audit:duplicates` to avoid conflicts
 5. Follow established patterns from similar components
 6. Ensure TypeScript compliance with `npm run type-check`
 
-### **Code Review Requirements**
+### **Code Review Checklist**
 
 - [ ] TypeScript compliance (0 errors)
 - [ ] Error handling using ErrorHandlingService
@@ -520,14 +419,14 @@ npm run deployment:info # Check deployment status
 - [ ] Documentation updated
 - [ ] Date processing follows UTC-based patterns
 
-### **Critical Development Patterns**
+### **Development Patterns**
 
 - **Data Fetching**: Always use useApiClient pattern for consistent API calls
 - **Error Handling**: Implement standardized ErrorHandlingService across
   components
 - **Database Operations**: Use prisma.$transaction for related queries
 - **Performance**: Apply analytics throttling and infinite loop prevention
-- **Type Safety**: Maintain 100% TypeScript compliance with strict typing
+- **Type Safety**: Maintain 99% TypeScript compliance with strict typing
 - **Date Processing**: Use UTC-based date creation for consistency
 - **Mobile Optimization**: Implement touch-friendly interactions with 44px+
   targets
@@ -536,12 +435,26 @@ npm run deployment:info # Check deployment status
 
 ---
 
-## 📞 Support & Resources
+## 📚 Documentation
 
+- **[CORE_REQUIREMENTS.md](docs/CORE_REQUIREMENTS.md)** - Non-negotiable
+  development standards
+- **[LESSONS_LEARNED.md](docs/LESSONS_LEARNED.md)** - Systematic knowledge
+  capture (34+ lessons)
+- **[PROJECT_REFERENCE.md](docs/PROJECT_REFERENCE.md)** - Central navigation hub
+- **[DEVELOPMENT_STANDARDS.md](docs/DEVELOPMENT_STANDARDS.md)** - Code quality
+  and architecture patterns
+- **[PERFORMANCE_OPTIMIZATION_GUIDE.md](docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)** -
+  Performance best practices
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/morabah/posalpro-app/issues)
+  for bug reports and feature requests
+- **Discussions**:
+  [GitHub Discussions](https://github.com/morabah/posalpro-app/discussions) for
+  questions and ideas
 - **Documentation**: Comprehensive guides in `/docs/` directory
-- **Issues**: GitHub Issues for bug reports and feature requests
-- **Discussions**: GitHub Discussions for questions and ideas
-- **Lessons Learned**: Systematic knowledge capture in LESSONS_LEARNED.md
 
 ---
 
