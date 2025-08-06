@@ -106,43 +106,42 @@ states
 #### **2. Date Handling Pattern (CRITICAL)**
 
 ```typescript
-// ✅ CORRECT: UTC-based date creation for API submission
+// ✅ CORRECT: Consistent date processing across the application
 const parseDate = (
   dateValue: string | Date | null | undefined
 ): Date | null => {
   if (!dateValue) return null;
   if (dateValue instanceof Date) return dateValue;
   if (typeof dateValue === 'string') {
-    // If it's already an ISO string, parse it directly
+    // Handle ISO strings
     if (dateValue.includes('T')) {
       return new Date(dateValue);
     }
-    // If it's a date string like "2025-12-31", create a proper date
-    // Use UTC to avoid timezone issues
+    // Handle date strings with UTC-based creation
     const [year, month, day] = dateValue.split('-').map(Number);
     if (year && month && day) {
-      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)); // ✅ UTC-based
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
     }
-    // Fallback to regular parsing
     return new Date(dateValue);
   }
   return null;
 };
 
-// ✅ CORRECT: HTML date input format for automated tests
-const TEST_PROPOSAL_DATA = {
-  step1: {
-    dueDate: '2025-12-31', // YYYY-MM-DD format for date input
-  },
+// ✅ CORRECT: Consistent date format for form inputs
+const formatDateForInput = (date: Date | string | null): string => {
+  if (!date) return '';
+  if (date instanceof Date) {
+    return date.toISOString().split('T')[0];
+  }
+  if (typeof date === 'string') {
+    return date.includes('T') ? date.split('T')[0] : date;
+  }
+  return '';
 };
-
-// ❌ FORBIDDEN: Local timezone date creation
-const date = new Date(year, month - 1, day, 0, 0, 0, 0); // ❌ Local timezone
-return date.toISOString(); // ❌ Creates timezone offset issues
 ```
 
-**🚫 FORBIDDEN**: Local timezone date creation, ISO datetime strings in test
-data
+**Requirements**: UTC-based date creation, consistent format handling, proper
+validation
 
 #### **3. Error Handling Pattern (MANDATORY)**
 
@@ -321,7 +320,6 @@ npm run lint               # ESLint checking
 npm run performance:monitor    # Performance monitoring
 npm run memory:optimization    # Memory optimization tests
 npm run test:authenticated     # Authenticated testing
-npm run test:proposal-wizard   # Proposal wizard testing
 
 # Deployment
 npm run deploy:alpha       # Alpha deployment
@@ -383,16 +381,25 @@ const [items, count] = await Promise.all([
 
 ```typescript
 // ✅ CORRECT: Multi-layer date processing pipeline
-// 1. HTML Input: YYYY-MM-DD format from input[type="date"]
+// 1. Form Input: Consistent date format handling
 // 2. Form Processing: formatDateForInput() and parseDate() functions
-// 3. Wizard Processing: UTC-based date conversion in handleCreateProposal()
-// 4. API Submission: Proper ISO datetime strings for Prisma validation
+// 3. Data Processing: UTC-based date conversion for API submission
+// 4. API Validation: Proper ISO datetime strings for database storage
 
-// ✅ CORRECT: UTC-based date creation
+// ✅ CORRECT: UTC-based date creation for consistency
 const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 
-// ❌ FORBIDDEN: Local timezone date creation
-const date = new Date(year, month - 1, day, 0, 0, 0, 0); // Creates timezone issues
+// ✅ CORRECT: Consistent date format handling
+const formatDateForInput = (date: Date | string | null): string => {
+  if (!date) return '';
+  if (date instanceof Date) {
+    return date.toISOString().split('T')[0];
+  }
+  if (typeof date === 'string') {
+    return date.includes('T') ? date.split('T')[0] : date;
+  }
+  return '';
+};
 ```
 
 ### **Component Traceability Matrix**
@@ -422,9 +429,9 @@ const COMPONENT_MAPPING = {
 ### **Critical Reference Documents**
 
 - **CORE_REQUIREMENTS.md** - Non-negotiable development standards
-- **LESSONS_LEARNED.md** - Systematic knowledge capture (34+ lessons)
+- **LESSONS_LEARNED.md** - Systematic knowledge capture and patterns
 - **PROJECT_REFERENCE.md** - Central navigation hub
-- **DEVELOPMENT_STANDARDS.md** - Code quality and patterns
+- **DEVELOPMENT_STANDARDS.md** - Code quality and architecture patterns
 
 ### **Wireframe Integration**
 
@@ -469,6 +476,7 @@ npm run deployment:info # Check deployment status
 3. Check existing implementations in `/src/lib/services/`
 4. Run `npm run audit:duplicates` to avoid conflicts
 5. Follow established patterns from similar components
+6. Ensure TypeScript compliance with `npm run type-check`
 
 ### **Code Review Requirements**
 
@@ -479,16 +487,21 @@ npm run deployment:info # Check deployment status
 - [ ] Performance optimization applied
 - [ ] Component Traceability Matrix implemented
 - [ ] Documentation updated
+- [ ] Date processing follows UTC-based patterns
 
-### **Critical Lessons to Remember**
+### **Critical Development Patterns**
 
-- **Lesson #12**: Always use useApiClient for data fetching (never custom
-  caching)
-- **Lesson #13**: Implement analytics throttling and infinite loop prevention
-- **Lesson #19**: Use database-agnostic ID validation (CUID vs UUID)
-- **Lesson #30**: Use prisma.$transaction for related database queries
-- **Lesson #33**: Date Input Handling in Automated Tests (YYYY-MM-DD format)
-- **Lesson #34**: Date Processing Pipeline Standards (UTC-based creation)
+- **Data Fetching**: Always use useApiClient pattern for consistent API calls
+- **Error Handling**: Implement standardized ErrorHandlingService across
+  components
+- **Database Operations**: Use prisma.$transaction for related queries
+- **Performance**: Apply analytics throttling and infinite loop prevention
+- **Type Safety**: Maintain 100% TypeScript compliance with strict typing
+- **Date Processing**: Use UTC-based date creation for consistency
+- **Mobile Optimization**: Implement touch-friendly interactions with 44px+
+  targets
+- **Component Architecture**: Follow established patterns from similar
+  components
 
 ---
 
