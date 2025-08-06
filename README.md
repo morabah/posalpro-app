@@ -103,7 +103,48 @@ useEffect(() => {
 **🚫 FORBIDDEN**: Custom caching systems, direct fetch() calls, complex loading
 states
 
-#### **2. Error Handling Pattern (MANDATORY)**
+#### **2. Date Handling Pattern (CRITICAL)**
+
+```typescript
+// ✅ CORRECT: UTC-based date creation for API submission
+const parseDate = (
+  dateValue: string | Date | null | undefined
+): Date | null => {
+  if (!dateValue) return null;
+  if (dateValue instanceof Date) return dateValue;
+  if (typeof dateValue === 'string') {
+    // If it's already an ISO string, parse it directly
+    if (dateValue.includes('T')) {
+      return new Date(dateValue);
+    }
+    // If it's a date string like "2025-12-31", create a proper date
+    // Use UTC to avoid timezone issues
+    const [year, month, day] = dateValue.split('-').map(Number);
+    if (year && month && day) {
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)); // ✅ UTC-based
+    }
+    // Fallback to regular parsing
+    return new Date(dateValue);
+  }
+  return null;
+};
+
+// ✅ CORRECT: HTML date input format for automated tests
+const TEST_PROPOSAL_DATA = {
+  step1: {
+    dueDate: '2025-12-31', // YYYY-MM-DD format for date input
+  },
+};
+
+// ❌ FORBIDDEN: Local timezone date creation
+const date = new Date(year, month - 1, day, 0, 0, 0, 0); // ❌ Local timezone
+return date.toISOString(); // ❌ Creates timezone offset issues
+```
+
+**🚫 FORBIDDEN**: Local timezone date creation, ISO datetime strings in test
+data
+
+#### **3. Error Handling Pattern (MANDATORY)**
 
 ```typescript
 // ✅ CORRECT: Use standardized ErrorHandlingService
@@ -127,13 +168,13 @@ try {
 }
 ```
 
-#### **3. TypeScript Compliance (CRITICAL)**
+#### **4. TypeScript Compliance (CRITICAL)**
 
 - **Verify**: `npm run type-check` → 0 errors before any commit
 - **Use**: Explicit interfaces, strict typing, no `any` types
 - **Standard**: Follow DEVELOPMENT_STANDARDS.md patterns
 
-#### **4. Mobile Touch Interactions (CRITICAL)**
+#### **5. Mobile Touch Interactions (CRITICAL)**
 
 ```typescript
 // ✅ CORRECT: Touch event conflict prevention
@@ -280,6 +321,7 @@ npm run lint               # ESLint checking
 npm run performance:monitor    # Performance monitoring
 npm run memory:optimization    # Memory optimization tests
 npm run test:authenticated     # Authenticated testing
+npm run test:proposal-wizard   # Proposal wizard testing
 
 # Deployment
 npm run deploy:alpha       # Alpha deployment
@@ -337,6 +379,22 @@ const [items, count] = await Promise.all([
 ]);
 ```
 
+### **Date Processing Pipeline Patterns**
+
+```typescript
+// ✅ CORRECT: Multi-layer date processing pipeline
+// 1. HTML Input: YYYY-MM-DD format from input[type="date"]
+// 2. Form Processing: formatDateForInput() and parseDate() functions
+// 3. Wizard Processing: UTC-based date conversion in handleCreateProposal()
+// 4. API Submission: Proper ISO datetime strings for Prisma validation
+
+// ✅ CORRECT: UTC-based date creation
+const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+
+// ❌ FORBIDDEN: Local timezone date creation
+const date = new Date(year, month - 1, day, 0, 0, 0, 0); // Creates timezone issues
+```
+
 ### **Component Traceability Matrix**
 
 ```typescript
@@ -364,7 +422,7 @@ const COMPONENT_MAPPING = {
 ### **Critical Reference Documents**
 
 - **CORE_REQUIREMENTS.md** - Non-negotiable development standards
-- **LESSONS_LEARNED.md** - Systematic knowledge capture (19+ lessons)
+- **LESSONS_LEARNED.md** - Systematic knowledge capture (34+ lessons)
 - **PROJECT_REFERENCE.md** - Central navigation hub
 - **DEVELOPMENT_STANDARDS.md** - Code quality and patterns
 
@@ -429,6 +487,8 @@ npm run deployment:info # Check deployment status
 - **Lesson #13**: Implement analytics throttling and infinite loop prevention
 - **Lesson #19**: Use database-agnostic ID validation (CUID vs UUID)
 - **Lesson #30**: Use prisma.$transaction for related database queries
+- **Lesson #33**: Date Input Handling in Automated Tests (YYYY-MM-DD format)
+- **Lesson #34**: Date Processing Pipeline Standards (UTC-based creation)
 
 ---
 
