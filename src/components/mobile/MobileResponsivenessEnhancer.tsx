@@ -171,7 +171,7 @@ export function MobileResponsivenessEnhancer({
 
     const touchInteractionCounter = { current: 0 }; // Moved inside useEffect
     let touchStartTime = 0;
-    let responseTimes: number[] = [];
+    const responseTimes: number[] = [];
 
     const handleTouchStart = () => {
       touchStartTime = Date.now(); // Changed to Date.now()

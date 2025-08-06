@@ -4,11 +4,11 @@
  * Supports H2 (User Experience) and H6 (Security) hypothesis validation
  */
 
+import { UserProfile } from '@/lib/entities/user';
 import { setupApiMocks } from '@/test/mocks/api.mock';
 import { clearMockSession } from '@/test/mocks/session.mock';
 import { render, screen, waitFor } from '@/test/utils/test-utils';
 import { UserType } from '@/types';
-import { UserProfile } from '@/lib/entities/user';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 

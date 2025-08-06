@@ -28,10 +28,10 @@ jest.mock('react', () => ({
 
 // Mock API client
 const mockApiClient = {
-  post: jest.fn() as jest.Mock,
-  get: jest.fn() as jest.Mock,
-  put: jest.fn() as jest.Mock,
-  delete: jest.fn() as jest.Mock,
+  post: jest.fn(),
+  get: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
 };
 
 jest.mock('@/hooks/useApiClient', () => ({
@@ -415,7 +415,7 @@ describe('ProposalWizard Validation Tests', () => {
         message: 'Proposal created successfully',
       };
 
-      (mockApiClient.post as jest.Mock).mockResolvedValue(mockResponse);
+      (mockApiClient.post as any).mockResolvedValue(mockResponse);
 
       const testData = {
         title: 'Test Proposal',
@@ -436,7 +436,7 @@ describe('ProposalWizard Validation Tests', () => {
 
     it('should handle API errors correctly', async () => {
       const mockError = new Error('API Error');
-      (mockApiClient.post as jest.Mock).mockRejectedValue(mockError);
+      (mockApiClient.post as any).mockRejectedValue(mockError);
 
       try {
         await mockApiClient.post('/api/proposals', {});
@@ -456,7 +456,7 @@ describe('ProposalWizard Validation Tests', () => {
         ],
       };
 
-      (mockApiClient.post as jest.Mock).mockResolvedValue(mockValidationError);
+      (mockApiClient.post as any).mockResolvedValue(mockValidationError);
 
       const response = (await mockApiClient.post('/api/proposals', {})) as any;
 

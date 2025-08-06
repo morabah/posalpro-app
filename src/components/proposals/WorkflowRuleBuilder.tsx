@@ -920,7 +920,7 @@ export function WorkflowRuleBuilder({
                               })
                             }
                             className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            disabled={index === selectedRule.conditions!.length - 1}
+                            disabled={index === selectedRule.conditions.length - 1}
                           >
                             <option value="AND">AND</option>
                             <option value="OR">OR</option>

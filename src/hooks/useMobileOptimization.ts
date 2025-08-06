@@ -56,7 +56,7 @@ export function useMobileOptimization(
       return ((...args: any[]) => {
         const key = callback.toString();
         if (debounceTimeouts.current.has(key)) {
-          clearTimeout(debounceTimeouts.current.get(key)!);
+          clearTimeout(debounceTimeouts.current.get(key));
         }
         const timeout = setTimeout(() => callback(...args), finalConfig.debounceDelay);
         debounceTimeouts.current.set(key, timeout);
