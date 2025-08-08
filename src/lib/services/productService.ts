@@ -868,7 +868,7 @@ export class ProductService {
         return {
           id: stat.productId,
           name: product?.name || 'Unknown',
-          usage: (stat._count as any)?.productId || 0,
+          usage: (stat._count as { productId: number }).productId || 0,
         };
       });
 

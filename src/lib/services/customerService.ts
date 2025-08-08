@@ -743,19 +743,23 @@ export class CustomerService {
         }),
       ]);
 
+      type StatusGroup = { status: CustomerStatus; _count: { status: number } };
+      const statusGroups = statusCounts as unknown as StatusGroup[];
       const byStatus = Object.values(CustomerStatus).reduce(
         (acc, status) => {
-          const count = statusCounts.find(s => s.status === status)?._count as any;
-          acc[status] = count?.status || 0;
+          const group = statusGroups.find(s => s.status === status);
+          acc[status] = group?._count.status ?? 0;
           return acc;
         },
         {} as Record<CustomerStatus, number>
       );
 
+      type TierGroup = { tier: CustomerTier; _count: { tier: number } };
+      const tierGroups = tierCounts as unknown as TierGroup[];
       const byTier = Object.values(CustomerTier).reduce(
         (acc, tier) => {
-          const count = tierCounts.find(t => t.tier === tier)?._count as any;
-          acc[tier] = count?.tier || 0;
+          const group = tierGroups.find(t => t.tier === tier);
+          acc[tier] = group?._count.tier ?? 0;
           return acc;
         },
         {} as Record<CustomerTier, number>
