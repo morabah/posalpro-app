@@ -73,6 +73,112 @@ useEffect(() => {
 - Multiple useEffect dependencies causing re-fetches
 - Any pattern that takes >1 second to load data
 
+## 🔐 **AUTH & SESSION MANAGEMENT (MANDATORY UPDATES)**
+
+**✅ Unified Auth Context Usage**
+
+- Always import `useAuth` from `@/components/providers/AuthProvider`.
+- Never import from `@/hooks/auth/useAuth` (deprecated). This prevents duplicate
+  `/api/auth/session` fetches and stabilizes dashboard components like
+  `RecentProposals`.
+
+**⚙️ Session Provider Configuration**
+
+- Configure `SessionProvider` with `refetchOnWindowFocus=false` and
+  `refetchInterval=600` (10 minutes) to avoid chatty session polling.
+- Remove any `<link rel="preload" href="/api/auth/session">` or other eager
+  session preloads.
+
+**🧪 Dev-Only Session Burst Smoothing**
+
+- Implement an ultra-short TTL (≈2s) throttle around session building inside
+  `callbacks.session` in development only.
+- Must not change production behavior. Use in-memory cache; key includes user
+  identifier. This mechanism is strictly forbidden in production builds and must
+  be gated by `NODE_ENV === 'development'` (or an explicit feature flag).
+
+**🧰 Service Worker (Dev Smoothing Only)**
+
+- Short-lived SW caching for `/api/auth/providers` and `/api/auth/session` (dev
+  only) to reduce cold spikes during rapid navigation/tests. Must be disabled
+  for production builds.
+
+**🧰 Redis Usage Policy**
+
+- Disable Redis in development to avoid startup/connect delays; use in-memory
+  fallback with conservative timeouts (e.g., `connectTimeout=3000ms`).
+
+## 🧠 **WIZARD & MEMORY OPTIMIZATION (MANDATORY)**
+
+**🎯 ProposalWizard Memory Target**
+
+- Create page should target <200MB used JS heap in development after first
+  paint.
+- Production guideline: typical pages <120MB; heavy workflows (e.g., wizard)
+  <180MB after first interaction. Validate with automated scripts.
+
+**🏗️ State Management Rules**
+
+- Use step-local state for non-shared values; avoid top-level generic buckets
+  for `stepData`, `validationErrors`, `stepProgress`.
+- Lazy initialize wizard steps (only step 1 fully initialized on mount; steps
+  2–6 created on demand).
+- Disable periodic memory monitoring for the wizard unless debugging (set
+  cleanup interval to 0 by default).
+- Gate memory logs behind `NEXT_PUBLIC_ENABLE_MEMORY_LOGS === 'true'`.
+- Fix intervals with `clearInterval` when using `setInterval`.
+
+**📥 Deferred Data Fetching (Forms)**
+
+- Defer heavy list fetches until user intent (e.g., `onFocus` of customer
+  select) and request small pages by default (e.g., `limit=10`, `sort=name`).
+- Do not use mock data in UI paths; always fetch from database via
+  `useApiClient`.
+
+## 🗃️ **API & DATABASE PERFORMANCE (MANDATORY)**
+
+**🔎 Selective Hydration**
+
+- Default selects must use minimal, lightweight columns when no `fields` param
+  is provided (see `getPrismaSelect`).
+- Avoid fetching full relations by default. Opt-in via explicit query params.
+- Maintain a documented per-entity minimal field whitelist for default selects.
+  Any relation expansion must be explicitly requested via query parameters.
+
+**📄 Pagination Without COUNT(\*)**
+
+- Use `limit + 1` pattern to infer `hasMore` instead of `COUNT(*)` for offset
+  pagination on large tables.
+
+**🔐 Authentication Query Optimization**
+
+- Lower bcrypt salt rounds in development to 6 (production remains strong, e.g.,
+  12).
+- Avoid `prisma.$transaction` for single reads in auth flows.
+- Make `updateLastLogin` non-blocking (fire-and-forget) in the authorize flow.
+- Add lightweight in-memory caching for session/provider discovery endpoints.
+- Production security policy: enforce secure cookies (`__Secure-` names,
+  `secure: true`, `sameSite: 'lax'|'strict'`) and bcrypt cost >= 12. Add CI
+  assertions to ensure production envs use hardened settings.
+
+## 🧪 **PERFORMANCE TESTING & DEV-MODE SKEW**
+
+**🔥 Warm-Up Requirement**
+
+- Performance scripts must warm key routes (`/`, `/auth/login`, `/dashboard`,
+  `/proposals/manage`, `/proposals/create`) before measurements to avoid dev
+  compile-time skew.
+- Official benchmarking must also be validated on a production build profile
+  (`next build && next start`) to confirm prod-representative metrics.
+
+**🧭 Robust Element Detection**
+
+- Test selectors should prefer `data-testid`, with fallbacks to semantic
+  headings when necessary. Ensure components like `RecentProposals` expose
+  `data-testid` consistently.
+- All critical cards/widgets and wizard steps must expose `data-testid`
+  attributes.
+
 ## 📱 **MOBILE TOUCH INTERACTIONS (CRITICAL)**
 
 **🎯 Touch Event Conflict Prevention: Mandatory for touch + form components**
@@ -92,10 +198,19 @@ useEffect(() => {
 
 **🚀 Optimization: Use existing performance infrastructure**
 
-- Data Fetching: useApiClient pattern (MANDATORY - see above)
-- Database: DatabaseQueryOptimizer for all queries
-- Bundle: Lazy loading with BundleOptimizer
-- Caching: Only use built-in apiClient caching (no custom solutions)
+- Data Fetching (Client): useApiClient pattern (MANDATORY - see above). Do not
+  introduce custom client-side caches beyond apiClient’s built-ins.
+- Data Access (Server/API routes/RSC): use direct data access (Prisma/fetch)
+  with the same validation and error-handling standards.
+- Database: DatabaseQueryOptimizer for all queries.
+- Bundle: Lazy loading with BundleOptimizer.
+- Caching:
+  - Client: Only use built-in apiClient caching (no custom client caches or
+    localStorage caches).
+  - Server/API routes: Allowed to use targeted in-memory caches with short TTLs
+    and explicit invalidation where appropriate (e.g., dashboard stats,
+    proposals list, auth providers/session in dev). Never cache sensitive data
+    improperly.
 
 ## ♿ **ACCESSIBILITY & UI STANDARDS**
 
@@ -233,11 +348,13 @@ userId: z.string().uuid(), // Breaks with CUID format
 
 ## 🗄️ **DATABASE TRANSACTION PATTERNS (CRITICAL)**
 
-**🔄 MANDATORY: Always use prisma.$transaction for related database queries**
+**🔄 Database Transaction Guidance**
 
-- Pattern: Consolidate related queries (findMany + count, multiple aggregations)
-  into single atomic transactions
-- Never: Use Promise.all for related database operations
+- Use `prisma.$transaction` for logically related multi-statement sequences
+  (e.g., findMany + count, multiple aggregations) that must be consistent.
+- Avoid transactions for single reads where they add latency without consistency
+  benefits.
+- Never use `Promise.all` for related writes; use a single transaction instead.
 - Reference: [Lesson #30: Database Performance Optimization][memory:lesson30]]
 
 ## 🔐 **SECURITY STATE STORAGE PATTERNS (CRITICAL)**
@@ -335,3 +452,106 @@ artifacts**
 - Use git tags and releases for milestone documentation instead of keeping files
   in main branch
 - Follow Documentation Lifecycle Management from Lesson #31
+
+## 🔐 **AUTHENTICATION INFRASTRUCTURE VALIDATION (CRITICAL)**
+
+**🚨 MANDATORY: Database Migration & Schema Validation for Authentication**
+
+- Pattern: Always validate migration status and schema sync before
+  authentication changes
+- Command: `npx prisma migrate status` must show "Database schema is up to
+  date!"
+- Never: Deploy with failed migrations or orphaned migration directories
+- Reference: [Lesson #21: Authentication Failure - Database Migration
+  Issues][memory:lesson21]]
+
+**⚡ Critical Authentication Health Checks:**
+
+```bash
+# ✅ MANDATORY: Pre-deployment authentication validation
+npx prisma migrate status                # Must show: "Database schema is up to date!"
+npx prisma generate                      # Regenerate client after schema changes
+npm run auth:health-check                # Test authentication flow with known credentials
+```
+
+**🔧 Authentication Database Patterns:**
+
+```typescript
+// ✅ CORRECT: Defensive authentication queries (separate user and roles)
+async function getUserByEmail(email: string) {
+  try {
+    // Step 1: Get user without complex relations
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        // ... other basic fields
+      },
+    });
+
+    if (!user) return null;
+
+    // Step 2: Get roles separately to avoid relation issues
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId: user.id, isActive: true },
+      select: { role: { select: { name: true } } },
+    });
+
+    return { ...user, roles: userRoles };
+  } catch (error) {
+    // Proper error handling with specific error context
+  }
+}
+
+// ❌ FORBIDDEN: Complex nested relation queries in authentication
+const user = await prisma.user.findUnique({
+  where: { email },
+  select: {
+    roles: { select: { role: { select: { name: true } } } }, // Vulnerable to schema drift
+  },
+});
+```
+
+**🚨 Critical Warning Signs (IMMEDIATE INVESTIGATION REQUIRED):**
+
+- "Failed to retrieve user by email" errors during authentication
+- Authentication working in API endpoints but failing in auth flow
+- Migration status showing failed or missing migrations
+- Schema validation errors during Prisma operations
+- 500 errors during authentication attempts
+
+**📋 Authentication Deployment Checklist:**
+
+- [ ] `npx prisma migrate status` shows "Database schema is up to date!"
+- [ ] No failed migrations in migration history
+- [ ] Test authentication with valid credentials (admin@posalpro.com)
+- [ ] Health endpoint includes database migration status
+- [ ] Prisma client generation completed successfully
+- [ ] No orphaned migration directories in `prisma/migrations/`
+
+**🔧 Migration Repair Commands:**
+
+```bash
+# Fix failed migrations
+npx prisma migrate resolve --applied <MIGRATION_NAME>
+
+# Remove orphaned migration directories
+rm -rf prisma/migrations/<EMPTY_MIGRATION_DIRECTORY>
+
+# Synchronize schema with database
+npx prisma db pull
+npx prisma generate
+
+# Validate final state
+npx prisma migrate status
+```
+
+**⚠️ Authentication Function Requirements:**
+
+- Use separate queries instead of complex nested relations
+- Implement comprehensive error handling with specific error messages
+- Add retry logic for transient database connection issues
+- Monitor authentication success rates in production
+- Never use complex Prisma relations in authentication-critical paths
