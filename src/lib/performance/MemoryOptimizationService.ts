@@ -113,7 +113,7 @@ class MemoryOptimizationService {
     // Check if we're in a browser environment
     if (typeof window !== 'undefined') {
       // Use browser Performance Memory API if available
-      const memory = (performance as any).memory;
+       const memory = (performance as unknown as { memory?: { totalJSHeapSize?: number; usedJSHeapSize?: number } }).memory;
       if (memory) {
         return {
           rss: 0, // Not available in browser

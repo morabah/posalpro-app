@@ -72,7 +72,7 @@ interface AuthUserRecord {
   email: string;
   name: string;
   department: string;
-  status: any;
+  status: 'ACTIVE' | 'INACTIVE' | 'PENDING' | string;
   password: string;
   createdAt: Date;
   updatedAt: Date;
