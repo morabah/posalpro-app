@@ -614,7 +614,7 @@ async function measureWebVitals(page) {
 async function measurePageLoadPerformance(page) {
   const pages = [
     { name: 'Login', url: `${BASE_URL}/auth/login` },
-    { name: 'Dashboard', url: `${BASE_URL}/admin/system` },
+    { name: 'Dashboard', url: `${BASE_URL}/dashboard` },
     { name: 'Proposals Manage', url: `${BASE_URL}/proposals/manage` },
     { name: 'Proposals Create', url: `${BASE_URL}/proposals/create` },
   ];
