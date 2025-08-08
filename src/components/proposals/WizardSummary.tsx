@@ -12,7 +12,7 @@ import {
   ShoppingCartIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
-import React, { useEffect, useState } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 
 interface WizardSummaryProps {
   wizardData: any;
@@ -38,7 +38,7 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
   analyticsData,
   crossStepValidation,
   assignedTo = [], // ✅ ADDED: Use existing resolved data
-}): JSX.Element | null => {
+}): ReactNode => {
   const apiClient = useApiClient();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
