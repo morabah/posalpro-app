@@ -15,14 +15,13 @@
  */
 
 import { logger } from '@/utils/logger';
-import { NextAuthOptions } from 'next-auth';
-import { JWT } from 'next-auth/jwt';
+import { NextAuthOptions, type Session } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { comparePassword } from './auth/passwordUtils';
 import { getUserByEmail, updateLastLogin } from './services/userService';
 
 // Session cache for performance optimization
-const sessionCache = new Map<string, { session: any; timestamp: number }>();
+const sessionCache = new Map<string, { session: Session; timestamp: number }>();
 const SESSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Extend NextAuth types to include our custom fields

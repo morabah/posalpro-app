@@ -13,14 +13,14 @@
 export function getPrismaSelect(
   entityType: keyof typeof FIELD_CONFIGS,
   requestedFields?: string[]
-): Record<string, any> {
+): Record<string, unknown> {
   const config = FIELD_CONFIGS[entityType];
   if (!config) {
     // Fallback for unknown entity types
     return { id: true };
   }
 
-  const select: Record<string, any> = {};
+  const select: Record<string, unknown> = {};
 
   const fieldsToSelect = requestedFields?.length
     ? requestedFields
@@ -37,7 +37,13 @@ export function getPrismaSelect(
         select[field] = relationConfig;
       } else {
         select[field] = {
-          select: (relationConfig).reduce((acc, val) => ({ ...acc, [val]: true }), {}),
+          select: (relationConfig as string[]).reduce<Record<string, boolean>>(
+            (acc, val) => {
+              acc[val] = true;
+              return acc;
+            },
+            {}
+          ),
         };
       }
     }
@@ -49,7 +55,7 @@ export function getPrismaSelect(
 // A more flexible type for what a relation configuration can be.
 // It can be a simple array of strings for basic field selection,
 // or a full Prisma-style select object for complex queries.
-type RelationValue = string[] | { select: any };
+type RelationValue = string[] | { select: unknown };
 
 /**
  * Field configuration for different entity types
@@ -316,7 +322,7 @@ const FIELD_CONFIGS: Record<string, FieldConfig> = {
  * @param entityType - The type of the entity.
  * @returns A Prisma select object.
  */
-export function parseFields(url: URL, entityType: keyof typeof FIELD_CONFIGS): Record<string, any> {
+export function parseFields(url: URL, entityType: keyof typeof FIELD_CONFIGS): Record<string, unknown> {
   const fields = url.searchParams.get('fields');
   if (!fields) {
     return getPrismaSelect(entityType);

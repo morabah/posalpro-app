@@ -27,7 +27,7 @@ const CACHE_CONFIG = {
 // Initialize Redis connection
 let isConnected = false;
 // In-memory cache fallback when Redis is disabled/unavailable
-const memoryCache = new Map<string, { value: any; expiresAt: number }>();
+const memoryCache = new Map<string, { value: unknown; expiresAt: number }>();
 
 export async function initializeRedis() {
   if (!USE_REDIS) {
@@ -68,7 +68,7 @@ export async function ensureRedisConnection() {
 }
 
 // Cache operations
-export async function getCache(key: string): Promise<any> {
+export async function getCache<T = unknown>(key: string): Promise<T | null> {
   try {
     await ensureRedisConnection();
 
@@ -79,11 +79,11 @@ export async function getCache(key: string): Promise<any> {
         memoryCache.delete(key);
         return null;
       }
-      return entry.value;
+      return entry.value as T;
     }
 
     const value = await redisClient.get(key);
-    return value ? JSON.parse(value) : null;
+    return value ? (JSON.parse(value) as T) : null;
   } catch (error) {
     console.warn('⚠️  Cache get error:', error instanceof Error ? error.message : String(error));
     return null;
@@ -92,7 +92,7 @@ export async function getCache(key: string): Promise<any> {
 
 export async function setCache(
   key: string,
-  value: any,
+  value: unknown,
   ttl: number = CACHE_CONFIG.SESSION_TTL
 ): Promise<void> {
   try {
@@ -136,11 +136,11 @@ export async function clearCache(pattern: string): Promise<void> {
 }
 
 // Session cache operations
-export async function getSessionCache(userId: string): Promise<any> {
-  return getCache(`session:${userId}`);
+export async function getSessionCache<T = unknown>(userId: string): Promise<T | null> {
+  return getCache<T>(`session:${userId}`);
 }
 
-export async function setSessionCache(userId: string, session: any): Promise<void> {
+export async function setSessionCache(userId: string, session: unknown): Promise<void> {
   await setCache(`session:${userId}`, session, CACHE_CONFIG.SESSION_TTL);
 }
 
@@ -149,20 +149,20 @@ export async function deleteSessionCache(userId: string): Promise<void> {
 }
 
 // Providers cache operations
-export async function getProvidersCache(): Promise<any> {
-  return getCache('providers');
+export async function getProvidersCache<T = unknown>(): Promise<T | null> {
+  return getCache<T>('providers');
 }
 
-export async function setProvidersCache(providers: any): Promise<void> {
+export async function setProvidersCache(providers: unknown): Promise<void> {
   await setCache('providers', providers, CACHE_CONFIG.PROVIDERS_TTL);
 }
 
 // User cache operations
-export async function getUserCache(email: string): Promise<any> {
-  return getCache(`user:${email}`);
+export async function getUserCache<T = unknown>(email: string): Promise<T | null> {
+  return getCache<T>(`user:${email}`);
 }
 
-export async function setUserCache(email: string, user: any): Promise<void> {
+export async function setUserCache(email: string, user: unknown): Promise<void> {
   await setCache(`user:${email}`, user, CACHE_CONFIG.USER_TTL);
 }
 
@@ -171,11 +171,11 @@ export async function deleteUserCache(email: string): Promise<void> {
 }
 
 // Auth cache operations
-export async function getAuthCache(key: string): Promise<any> {
-  return getCache(`auth:${key}`);
+export async function getAuthCache<T = unknown>(key: string): Promise<T | null> {
+  return getCache<T>(`auth:${key}`);
 }
 
-export async function setAuthCache(key: string, data: any): Promise<void> {
+export async function setAuthCache(key: string, data: unknown): Promise<void> {
   await setCache(`auth:${key}`, data, CACHE_CONFIG.AUTH_TTL);
 }
 
