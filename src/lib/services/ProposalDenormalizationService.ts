@@ -220,7 +220,15 @@ export class ProposalDenormalizationService {
    * Calculate proposal completion rate based on available data
    * This is a basic implementation that can be enhanced with business rules
    */
-  private calculateCompletionRate(proposal: any): number {
+  private calculateCompletionRate(proposal: {
+    title?: string | null;
+    description?: string | null;
+    products?: Array<unknown> | null;
+    sections?: Array<unknown> | null;
+    dueDate?: Date | null;
+    value?: number | null;
+    status?: string | null;
+  }): number {
     let completionScore = 0;
     let totalChecks = 0;
 
