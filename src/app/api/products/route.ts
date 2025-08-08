@@ -17,6 +17,7 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 
 /**
  * Component Traceability Matrix:
@@ -60,6 +61,7 @@ const ProductCreateSchema = z.object({
  * GET /api/products - List products with advanced filtering
  */
 export async function GET(request: NextRequest) {
+  const start = Date.now();
   try {
     // Authentication check
     const session = await getServerSession(authOptions);
@@ -145,6 +147,8 @@ export async function GET(request: NextRequest) {
       await trackProductSearchEvent(session.user.id, validatedQuery.search, totalProducts);
     }
 
+    const duration = Date.now() - start;
+    recordLatency(duration);
     return NextResponse.json({
       success: true,
       data: {
@@ -171,6 +175,7 @@ export async function GET(request: NextRequest) {
     errorHandlingService.processError(error);
 
     if (error instanceof z.ZodError) {
+      recordError(ErrorCodes.VALIDATION.INVALID_INPUT);
       return createApiErrorResponse(
         new StandardError({
           message: 'Validation failed for product query parameters',
@@ -196,6 +201,7 @@ export async function GET(request: NextRequest) {
       const errorCode = error.code.startsWith('P2')
         ? ErrorCodes.DATA.DATABASE_ERROR
         : ErrorCodes.DATA.NOT_FOUND;
+      recordError(ErrorCodes.DATA.DATABASE_ERROR);
       return createApiErrorResponse(
         new StandardError({
           message: `Database error when fetching products: ${getPrismaErrorMessage(error.code)}`,
@@ -221,6 +227,9 @@ export async function GET(request: NextRequest) {
       return createApiErrorResponse(error);
     }
 
+    recordError(ErrorCodes.SYSTEM.INTERNAL_ERROR);
+    const duration = Date.now() - start;
+    recordLatency(duration);
     return createApiErrorResponse(
       new StandardError({
         message: 'Failed to fetch products',

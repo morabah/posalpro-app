@@ -1,15 +1,14 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
 /** @type {import('next').NextConfig} */
-const nextConfig = {
+const baseConfig = {
   // ✅ CRITICAL: LCP optimization configuration
   // Following Lesson #30: Performance Optimization - Bundle Splitting
   experimental: {
     optimizePackageImports: ['@prisma/client', 'next-auth', 'lucide-react', 'react', 'react-dom'],
-    // ✅ CRITICAL: Bundle optimization for LCP improvement
-    optimizeCss: true,
-    // ✅ CRITICAL: Phase 6 - Aggressive memory optimization
-    optimizeServerReact: true,
-    serverMinification: true,
-    swcMinify: true,
     webVitalsAttribution: ['CLS', 'LCP', 'FCP', 'FID', 'TTFB'],
   },
 
@@ -25,18 +24,12 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
 
-  // ✅ CRITICAL: Optimize TypeScript compilation
-  typescript: {
-    ignoreBuildErrors: true, // Temporarily ignore build errors
-  },
+  // Keep strict checks; do not ignore errors during builds
+  typescript: { ignoreBuildErrors: false },
+  // Allow analyzer builds to bypass ESLint so bundle reports can be generated
+  eslint: { ignoreDuringBuilds: process.env.ANALYZE === 'true' },
 
-  // ✅ CRITICAL: Optimize ESLint
-  eslint: {
-    ignoreDuringBuilds: true, // Temporarily ignore ESLint errors
-  },
-
-  // ✅ CRITICAL: Performance optimization for LCP
-  output: 'standalone',
+  // Do not use standalone to preserve Netlify/edge compatibility per deployment guide
   poweredByHeader: false,
   compress: true,
   generateEtags: false,
@@ -131,29 +124,14 @@ const nextConfig = {
             reuseExistingChunk: true,
             enforce: true,
           },
-          // ✅ CRITICAL: Utils chunk for utility functions
-          utils: {
-            test: /[\\/]lib[\\/]utils[\\/]/,
-            name: 'utils',
-            chunks: 'all',
-            priority: 7,
-            enforce: true,
-          },
-          // ✅ CRITICAL: Hooks chunk for custom hooks
-          hooks: {
-            test: /[\\/]hooks[\\/]/,
-            name: 'hooks',
-            chunks: 'all',
-            priority: 7,
-            enforce: true,
-          },
+          // Smaller custom groups can be handled by default splitting
         },
       };
 
       // ✅ CRITICAL: Memory optimization settings
       config.optimization = {
         ...config.optimization,
-        sideEffects: false,
+        sideEffects: true,
         usedExports: true,
         concatenateModules: true,
         minimize: true,
@@ -218,4 +196,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withBundleAnalyzer(baseConfig);

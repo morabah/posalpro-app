@@ -8,6 +8,10 @@
 
 import React, { ComponentType, lazy, Suspense } from 'react';
 
+export type MemoryOptimizedComponent<T extends ComponentType<any>> = ComponentType<React.ComponentProps<T>> & {
+  dispose?: () => void;
+};
+
 /**
  * Create an optimized dynamic import with loading state
  */
@@ -45,7 +49,7 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
     loadingComponent?: ComponentType;
     maxMemoryUsage?: number; // MB threshold for forced cleanup
   } = {}
-): ComponentType<React.ComponentProps<T>> {
+): MemoryOptimizedComponent<T> {
   const { unloadDelay = 15000, loadingComponent, maxMemoryUsage = 100 } = options;
   let componentCache: T | null = null;
   let unloadTimer: ReturnType<typeof setTimeout> | null = null;
@@ -91,13 +95,25 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
       </div>
     ));
 
-  return function MemoryOptimizedComponent(props: React.ComponentProps<T>) {
+  function MemoryOptimizedComponentImpl(props: React.ComponentProps<T>) {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <LazyComponent {...props} />
       </Suspense>
     );
+  }
+
+  // Expose a dispose method to aggressively free caches on demand
+  const componentWithDispose = MemoryOptimizedComponentImpl as MemoryOptimizedComponent<T>;
+  componentWithDispose.dispose = () => {
+    componentCache = null;
+    if (unloadTimer) {
+      clearTimeout(unloadTimer);
+      unloadTimer = null;
+    }
   };
+
+  return componentWithDispose;
 }
 
 /**

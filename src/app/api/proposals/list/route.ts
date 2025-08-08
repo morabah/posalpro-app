@@ -4,12 +4,14 @@ import { StandardError } from '@/lib/errors/StandardError';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 
 // Small in-memory cache for dashboard list to prevent repeated hits
 const proposalsListCache = new Map<string, { data: any; ts: number }>();
   const PROPOSALS_LIST_TTL_MS = process.env.NODE_ENV === 'development' ? 5000 : 60 * 1000; // shorter TTL in dev to reflect changes
 
 export async function GET(request: NextRequest) {
+  const start = performance.now();
   try {
     const session = await getServerSession(authOptions);
 
@@ -50,6 +52,8 @@ export async function GET(request: NextRequest) {
     // Update cache (non-blocking best-effort)
     proposalsListCache.set(cacheKey, { data: proposals, ts: Date.now() });
 
+    const duration = Math.round(performance.now() - start);
+    recordLatency(duration);
     return NextResponse.json({
       success: true,
       data: proposals,
@@ -68,6 +72,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    recordError(standardError.code);
+    const duration = Math.round(performance.now() - start);
+    recordLatency(duration);
     return NextResponse.json(
       {
         success: false,

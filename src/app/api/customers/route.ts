@@ -19,6 +19,7 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 
 // ✅ CRITICAL: Performance optimization - Customer cache
 const customerCache = new Map<string, { data: any; timestamp: number }>();
@@ -284,6 +285,8 @@ export async function GET(request: NextRequest) {
     const queryTime = Date.now() - queryStartTime;
     console.log(`📊 [Customer API] Query completed in ${queryTime}ms`);
 
+    const duration = Date.now() - queryStartTime;
+    recordLatency(duration);
     return NextResponse.json(response, {
       headers: {
         'Cache-Control': 'public, max-age=300',
@@ -293,6 +296,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Customer API] Error:', error);
+    recordError(ErrorCodes.SYSTEM.INTERNAL_ERROR);
+    const duration = Date.now() - queryStartTime;
+    recordLatency(duration);
     return createApiErrorResponse(error);
   }
 }

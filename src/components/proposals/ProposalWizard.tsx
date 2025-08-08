@@ -33,29 +33,40 @@ import {
 import { debounce } from 'lodash';
 import { useRouter } from 'next/navigation';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createMemoryOptimizedImport, dynamicImportTracker } from '@/lib/utils/dynamicImportOptimizer';
 
 // ✅ CRITICAL: Memory optimization hook
 
 // 🚀 MOBILE OPTIMIZATION: Lazy load heavy components with memory optimization
+// Define lightweight loading spinner BEFORE dynamic imports to avoid TS init order errors
+const MobileLoadingSpinner = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    <span className="ml-3 text-sm text-gray-600">Loading...</span>
+  </div>
+);
 const BasicInformationStep = lazy(() =>
   import('./steps/BasicInformationStep').then(module => ({ default: module.BasicInformationStep }))
 );
-const TeamAssignmentStep = lazy(() =>
-  import('./steps/TeamAssignmentStep').then(module => ({ default: module.TeamAssignmentStep }))
+const TeamAssignmentStep = createMemoryOptimizedImport(
+  () => import('./steps/TeamAssignmentStep').then(module => ({ default: module.TeamAssignmentStep })),
+  { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
-const ContentSelectionStep = lazy(() =>
-  import('./steps/ContentSelectionStep').then(module => ({ default: module.ContentSelectionStep }))
+const ContentSelectionStep = createMemoryOptimizedImport(
+  () => import('./steps/ContentSelectionStep').then(module => ({ default: module.ContentSelectionStep })),
+  { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
-const ProductSelectionStep = lazy(() =>
-  import('./steps/ProductSelectionStep').then(module => ({ default: module.ProductSelectionStep }))
+const ProductSelectionStep = createMemoryOptimizedImport(
+  () => import('./steps/ProductSelectionStep').then(module => ({ default: module.ProductSelectionStep })),
+  { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
-const SectionAssignmentStep = lazy(() =>
-  import('./steps/SectionAssignmentStep').then(module => ({
-    default: module.SectionAssignmentStep,
-  }))
+const SectionAssignmentStep = createMemoryOptimizedImport(
+  () => import('./steps/SectionAssignmentStep').then(module => ({ default: module.SectionAssignmentStep })),
+  { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
-const ReviewStep = lazy(() =>
-  import('./steps/ReviewStep').then(module => ({ default: module.ReviewStep }))
+const ReviewStep = createMemoryOptimizedImport(
+  () => import('./steps/ReviewStep').then(module => ({ default: module.ReviewStep })),
+  { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
 
 // Mobile-enhanced Card component with GPU acceleration
@@ -71,13 +82,7 @@ const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({
   </div>
 );
 
-// 🚀 MOBILE OPTIMIZATION: Simplified loading component
-const MobileLoadingSpinner = () => (
-  <div className="flex items-center justify-center p-8">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    <span className="ml-3 text-sm text-gray-600">Loading...</span>
-  </div>
-);
+// (spinner defined above to ensure availability in dynamic import helpers)
 
 // Component Traceability Matrix - Enhanced with mobile user stories
 const COMPONENT_MAPPING = {
@@ -101,24 +106,34 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H7-001', 'TC-H4-001', 'TC-H9-001', 'TC-H10-001'],
 };
 
-const WIZARD_STEPS = [
-  { number: 1, title: 'Basic Info', shortTitle: 'Info', component: BasicInformationStep },
-  { number: 2, title: 'Team Assignment', shortTitle: 'Team', component: TeamAssignmentStep },
-  { number: 3, title: 'Content Selection', shortTitle: 'Content', component: ContentSelectionStep },
-  {
-    number: 4,
-    title: 'Product Selection',
-    shortTitle: 'Products',
-    component: ProductSelectionStep,
-  },
-  {
-    number: 5,
-    title: 'Section Assignment',
-    shortTitle: 'Sections',
-    component: SectionAssignmentStep,
-  },
-  { number: 6, title: 'Review & Finalize', shortTitle: 'Review', component: ReviewStep },
-];
+// Lightweight step metadata without component references to reduce retained memory
+const STEP_META = [
+  { number: 1, title: 'Basic Info', shortTitle: 'Info' },
+  { number: 2, title: 'Team Assignment', shortTitle: 'Team' },
+  { number: 3, title: 'Content Selection', shortTitle: 'Content' },
+  { number: 4, title: 'Product Selection', shortTitle: 'Products' },
+  { number: 5, title: 'Section Assignment', shortTitle: 'Sections' },
+  { number: 6, title: 'Review & Finalize', shortTitle: 'Review' },
+] as const;
+
+const getStepComponent = (stepNumber: number): React.ComponentType<any> => {
+  switch (stepNumber) {
+    case 1:
+      return BasicInformationStep as unknown as React.ComponentType<any>;
+    case 2:
+      return TeamAssignmentStep as unknown as React.ComponentType<any>;
+    case 3:
+      return ContentSelectionStep as unknown as React.ComponentType<any>;
+    case 4:
+      return ProductSelectionStep as unknown as React.ComponentType<any>;
+    case 5:
+      return SectionAssignmentStep as unknown as React.ComponentType<any>;
+    case 6:
+      return ReviewStep as unknown as React.ComponentType<any>;
+    default:
+      return BasicInformationStep as unknown as React.ComponentType<any>;
+  }
+};
 
 // Session storage keys
 const WIZARD_SESSION_KEY = 'proposal-wizard-session';
@@ -272,6 +287,37 @@ export function ProposalWizard({
     });
   }, []);
 
+  // Proactively dispose previous heavy step component cache to reduce heap usage on step change
+  const goToStep = useCallback(
+    (stepNumber: number) => {
+      setCurrentStep(prev => {
+        try {
+          if (prev !== stepNumber) {
+            switch (prev) {
+              case 2:
+                (TeamAssignmentStep as any).dispose?.();
+                break;
+              case 3:
+                (ContentSelectionStep as any).dispose?.();
+                break;
+              case 4:
+                (ProductSelectionStep as any).dispose?.();
+                break;
+              case 5:
+                (SectionAssignmentStep as any).dispose?.();
+                break;
+              case 6:
+                (ReviewStep as any).dispose?.();
+                break;
+            }
+          }
+        } catch {}
+        return stepNumber;
+      });
+    },
+    []
+  );
+
   // ✅ FIXED: Add missing dependencies to useEffect
   useEffect(() => {
     // ✅ CRITICAL: Memory observation on mount (no error processing)
@@ -289,6 +335,20 @@ export function ProposalWizard({
       optimizeComponentMemory('ProposalWizard');
     }
   }, [getMemoryUsageMB, optimizeComponentMemory]);
+
+  // Dispose all lazy-loaded components and clear dynamic import tracker on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        (TeamAssignmentStep as any).dispose?.();
+        (ContentSelectionStep as any).dispose?.();
+        (ProductSelectionStep as any).dispose?.();
+        (SectionAssignmentStep as any).dispose?.();
+        (ReviewStep as any).dispose?.();
+        dynamicImportTracker.forceCleanup();
+      } catch {}
+    };
+  }, []);
 
   // ✅ NEW: Load existing proposal data when in edit mode
   useEffect(() => {
@@ -843,14 +903,29 @@ export function ProposalWizard({
   }, [wizardData, user, onComplete, trackProposalCreation, router, errorHandlingService]);
 
   const handleNext = useCallback(() => {
-    console.log(
-      '[handleNext] Called with currentStep:',
-      currentStep,
-      'totalSteps:',
-      WIZARD_STEPS.length
-    );
+    console.log('[handleNext] Called with currentStep:', currentStep, 'totalSteps:', STEP_META.length);
 
-    if (currentStep < WIZARD_STEPS.length) {
+    if (currentStep < STEP_META.length) {
+      // Dispose current step heavy component cache before moving on
+      try {
+        switch (currentStep) {
+          case 2:
+            (TeamAssignmentStep as any).dispose?.();
+            break;
+          case 3:
+            (ContentSelectionStep as any).dispose?.();
+            break;
+          case 4:
+            (ProductSelectionStep as any).dispose?.();
+            break;
+          case 5:
+            (SectionAssignmentStep as any).dispose?.();
+            break;
+          case 6:
+            (ReviewStep as any).dispose?.();
+            break;
+        }
+      } catch {}
       // Lazy-initialize next step's data on first navigation in
       const nextStep = currentStep + 1;
       setWizardData(prev => {
@@ -907,17 +982,12 @@ export function ProposalWizard({
       });
       console.log('[handleNext] Moving to next step:', currentStep + 1);
       setCurrentStep(currentStep + 1);
-    } else if (currentStep === WIZARD_STEPS.length) {
+    } else if (currentStep === STEP_META.length) {
       // Handle final step - create proposal
       console.log('[ProposalWizard] 🎯 Final step reached, calling handleCreateProposal');
       handleCreateProposal();
     } else {
-      console.log(
-        '[handleNext] Unexpected state - currentStep:',
-        currentStep,
-        'totalSteps:',
-        WIZARD_STEPS.length
-      );
+      console.log('[handleNext] Unexpected state - currentStep:', currentStep, 'totalSteps:', STEP_META.length);
     }
   }, [currentStep, handleCreateProposal]);
 
@@ -969,34 +1039,7 @@ export function ProposalWizard({
     }
   }, [initialData]);
 
-  // 🚀 MOBILE OPTIMIZATION: Simplified analytics tracking
-  useEffect(() => {
-    if (isMobile) {
-      // Throttled analytics for mobile performance
-      const timeoutId = setTimeout(() => {
-        trackProposalCreation({
-          proposalId: 'mobile_wizard_access',
-          creationTime: Date.now(),
-          complexityScore: 0,
-          estimatedTimeline: 0,
-          teamAssignmentTime: 0,
-          coordinationSetupTime: 0,
-          teamSize: 0,
-          aiSuggestionsAccepted: 0,
-          manualAssignments: 0,
-          assignmentAccuracy: 0,
-          contentSuggestionsUsed: 0,
-          validationIssuesFound: 0,
-          wizardCompletionRate: 0,
-          stepCompletionTimes: [],
-          userStory: ['US-4.1'],
-          hypotheses: ['H7', 'H4'],
-        });
-      }, 1000); // 1 second delay for mobile performance
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isMobile, trackProposalCreation]);
+  // 🚀 MOBILE OPTIMIZATION: Remove non-critical mount analytics to reduce allocations
 
   // 🔧 DEBOUNCED STATE UPDATES: Prevent excessive re-renders with improved logic
   const debouncedUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1197,7 +1240,7 @@ export function ProposalWizard({
     const isLeftSwipe = distance > 50;
     const isRightSwipe = distance < -50;
 
-    if (isLeftSwipe && currentStep < WIZARD_STEPS.length) {
+    if (isLeftSwipe && currentStep < STEP_META.length) {
       // Swipe left to go to next step
       handleNext();
     }
@@ -1226,13 +1269,9 @@ export function ProposalWizard({
           </button>
 
           <div className="flex-1 text-center">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Step {currentStep} of {WIZARD_STEPS.length}
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900">Step {currentStep} of {STEP_META.length}</h2>
             <p className="text-sm text-gray-600">
-              {isMobile
-                ? WIZARD_STEPS[currentStep - 1].shortTitle
-                : WIZARD_STEPS[currentStep - 1].title}
+              {isMobile ? STEP_META[currentStep - 1].shortTitle : STEP_META[currentStep - 1].title}
             </p>
           </div>
 
@@ -1243,14 +1282,14 @@ export function ProposalWizard({
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
             className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${(currentStep / WIZARD_STEPS.length) * 100}%` }}
+            style={{ width: `${(currentStep / STEP_META.length) * 100}%` }}
           />
         </div>
 
         {/* Mobile step menu */}
         {isMobileMenuOpen && (
           <div className="mt-3 space-y-2">
-            {WIZARD_STEPS.map(step => (
+            {STEP_META.map(step => (
               <button
                 key={step.number}
                 onClick={() => {
@@ -1277,7 +1316,7 @@ export function ProposalWizard({
   // Desktop step stepper (existing component simplified)
   const DesktopStepStepper = () => (
     <div className="hidden sm:flex items-center justify-between mb-8">
-      {WIZARD_STEPS.map((step, index) => (
+      {STEP_META.map((step, index) => (
         <div key={step.number} className="flex items-center">
           <div
             className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
@@ -1299,7 +1338,7 @@ export function ProposalWizard({
               {step.title}
             </p>
           </div>
-          {index < WIZARD_STEPS.length - 1 && (
+          {index < STEP_META.length - 1 && (
             <div
               className={`w-16 h-0.5 ml-4 ${
                 currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
@@ -1344,7 +1383,7 @@ export function ProposalWizard({
   const NavigationButtons = () => {
     // Add debugging to understand button state
     const isDisabled = loading || !isCurrentStepValid();
-    const isFinalStep = currentStep === WIZARD_STEPS.length;
+  const isFinalStep = currentStep === STEP_META.length;
 
     // Debug logs removed for performance
 
@@ -1462,7 +1501,7 @@ export function ProposalWizard({
 
     // ✅ CRITICAL: Memory optimization on step change
     const currentMemoryUsage = getMemoryUsageMB();
-    if (currentMemoryUsage > 100) {
+    if (currentMemoryUsage > 160) {
       console.log(
         `🧹 [Memory Optimization] High memory usage (${currentMemoryUsage.toFixed(1)}MB) before step change, optimizing...`
       );
@@ -1470,28 +1509,9 @@ export function ProposalWizard({
     }
 
     // ✅ PERFORMANCE: Batch state updates
-    if (currentStep < WIZARD_STEPS.length) {
+    if (currentStep < STEP_META.length) {
       setCurrentStep(prev => prev + 1);
-
-      // Track step progression with optimized analytics
-      trackProposalCreation({
-        proposalId: 'mobile_wizard_access',
-        creationTime: Date.now(),
-        complexityScore: 0,
-        estimatedTimeline: 0,
-        teamAssignmentTime: 0,
-        coordinationSetupTime: 0,
-        teamSize: 0,
-        aiSuggestionsAccepted: 0,
-        manualAssignments: 0,
-        assignmentAccuracy: 0,
-        contentSuggestionsUsed: 0,
-        validationIssuesFound: 0,
-        wizardCompletionRate: 0,
-        stepCompletionTimes: [],
-        userStory: ['US-3.1', 'US-4.1'],
-        hypotheses: ['H7', 'H3'],
-      });
+      // Removed non-essential step analytics on dev to reduce allocations
     }
   }, [
     currentStep,
@@ -1595,54 +1615,15 @@ export function ProposalWizard({
       // Clear error after 5 seconds
       setTimeout(() => setError(null), 5000);
 
-      // Track validation failure
-      trackProposalCreation({
-        proposalId: 'mobile_wizard_access',
-        creationTime: Date.now(),
-        complexityScore: 0,
-        estimatedTimeline: 0,
-        teamAssignmentTime: 0,
-        coordinationSetupTime: 0,
-        teamSize: 0,
-        aiSuggestionsAccepted: 0,
-        manualAssignments: 0,
-        assignmentAccuracy: 0,
-        contentSuggestionsUsed: 0,
-        validationIssuesFound: 0,
-        wizardCompletionRate: 0,
-        stepCompletionTimes: [],
-        userStory: ['US-3.1', 'US-4.1'],
-        hypotheses: ['H7', 'H3'],
-      });
-
       return; // Don't proceed to next step
     }
 
     // Clear any existing errors
     setError(null);
 
-    if (currentStep < WIZARD_STEPS.length) {
+    if (currentStep < STEP_META.length) {
       setCurrentStep(currentStep + 1);
-      // Track successful step progression
-      trackProposalCreation({
-        proposalId: 'mobile_wizard_access',
-        creationTime: Date.now(),
-        complexityScore: 0,
-        estimatedTimeline: 0,
-        teamAssignmentTime: 0,
-        coordinationSetupTime: 0,
-        teamSize: 0,
-        aiSuggestionsAccepted: 0,
-        manualAssignments: 0,
-        assignmentAccuracy: 0,
-        contentSuggestionsUsed: 0,
-        validationIssuesFound: 0,
-        wizardCompletionRate: 0,
-        stepCompletionTimes: [],
-        userStory: ['US-3.1', 'US-4.1'],
-        hypotheses: ['H7', 'H3'],
-      });
-    } else if (currentStep === WIZARD_STEPS.length) {
+    } else if (currentStep === STEP_META.length) {
       // Handle final step - create proposal
       handleCreateProposal();
     }
@@ -1657,7 +1638,7 @@ export function ProposalWizard({
   };
 
   // Get current step component
-  const CurrentStepComponent = WIZARD_STEPS[currentStep - 1].component;
+  const CurrentStepComponent = getStepComponent(currentStep);
 
   // Create step-specific data handlers
   const getStepData = useCallback(
@@ -1717,8 +1698,7 @@ export function ProposalWizard({
 
   // ✅ PERFORMANCE: Dynamic component optimization using useMemo (props typed as any to avoid heavy unions)
   const OptimizedCurrentStepComponent = useMemo<React.ComponentType<any>>(() => {
-    const Component = WIZARD_STEPS[currentStep - 1]
-      .component as unknown as React.ComponentType<any>;
+    const Component = getStepComponent(currentStep) as unknown as React.ComponentType<any>;
     return memo(Component) as unknown as React.ComponentType<any>;
   }, [currentStep]);
 
@@ -1759,7 +1739,7 @@ export function ProposalWizard({
             <div className="space-y-6">
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
-                  {WIZARD_STEPS[currentStep - 1].title}
+                  {STEP_META[currentStep - 1].title}
                 </h1>
                 <p className="text-sm sm:text-base text-gray-600">
                   Complete this step to continue with your proposal creation.
@@ -1772,7 +1752,7 @@ export function ProposalWizard({
                   <OptimizedCurrentStepComponent
                     data={getStepData(currentStep)}
                     onUpdate={createStepUpdateHandler(currentStep)}
-                    onNext={currentStep === WIZARD_STEPS.length ? handleCreateProposal : handleNext}
+                    onNext={currentStep === STEP_META.length ? handleCreateProposal : handleNext}
                     analytics={trackProposalCreation}
                   />
                 </Suspense>

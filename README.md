@@ -283,15 +283,15 @@ posalpro-app/
 ---
 
 ## 🔧 Critical Development Patterns
+
 ### **Auth & Session (Unified)**
 
 - Always import `useAuth` from `@/components/providers/AuthProvider`.
 - SessionProvider tuned for dev: `refetchOnWindowFocus=false`,
   `refetchInterval=600`.
-- Dev-only smoothing: ultra-short TTL throttle (~2s) inside
-  `callbacks.session` (development only). Short-lived SW cache for
-  `/api/auth/session` and `/api/auth/providers` (development only).
-
+- Dev-only smoothing: ultra-short TTL throttle (~2s) inside `callbacks.session`
+  (development only). Short-lived SW cache for `/api/auth/session` and
+  `/api/auth/providers` (development only).
 
 ### **Database Transaction Patterns**
 

@@ -4,6 +4,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { withApiTiming } from '@/lib/observability/apiTiming';
+import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Simple in-memory cache to reduce repeated heavy queries
@@ -12,6 +14,7 @@ const DASHBOARD_STATS_TTL_MS = 60 * 1000; // 60 seconds
 
 export async function GET(request: NextRequest) {
   let session;
+  const start = performance.now();
   try {
     session = await getServerSession(authOptions);
 
@@ -141,6 +144,8 @@ export async function GET(request: NextRequest) {
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
+    const duration = Math.round(performance.now() - start);
+    recordLatency(duration);
     return response;
   } catch (error) {
     // ✅ ENHANCED: Use proper ErrorHandlingService singleton
@@ -164,6 +169,9 @@ export async function GET(request: NextRequest) {
       errorCode: standardError.code,
     });
 
+    recordError(standardError.code);
+    const duration = Math.round(performance.now() - start);
+    recordLatency(duration);
     return NextResponse.json(
       {
         success: false,

@@ -234,12 +234,12 @@ export class ProposalDenormalizationService {
 
     // Basic completion checks
     const checks = [
-      proposal.title?.length > 0, // Has title
-      proposal.description?.length > 0, // Has description
-      proposal.products?.length > 0, // Has products
-      proposal.sections?.length > 0, // Has sections
-      proposal.dueDate !== null, // Has due date
-      proposal.value !== null, // Has value
+      (proposal.title ?? '').length > 0, // Has title
+      (proposal.description ?? '').length > 0, // Has description
+      (proposal.products ?? []).length > 0, // Has products
+      (proposal.sections ?? []).length > 0, // Has sections
+      proposal.dueDate != null, // Has due date
+      proposal.value != null, // Has value
       proposal.status !== 'DRAFT', // Beyond draft status
     ];
 

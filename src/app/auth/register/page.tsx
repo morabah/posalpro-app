@@ -32,7 +32,6 @@ const RegistrationForm = dynamic(
         </div>
       </div>
     ),
-    ssr: false, // Disable SSR for better performance
   }
 );
 

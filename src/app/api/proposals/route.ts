@@ -20,6 +20,7 @@ import { Prisma, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 
 /**
  * Component Traceability Matrix:
@@ -771,6 +772,8 @@ export async function GET(request: NextRequest) {
       response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
       response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
+      const duration = Date.now() - queryStartTime;
+      recordLatency(duration);
       return response;
     } catch (error) {
       // ✅ ENHANCED: Use proper logger instead of console.error
@@ -802,6 +805,9 @@ export async function GET(request: NextRequest) {
           standardError: standardError.message,
           errorCode: standardError.code,
         });
+        recordError(ErrorCodes.DATA.QUERY_FAILED);
+        const duration = Date.now() - queryStartTime;
+        recordLatency(duration);
         return createApiErrorResponse(
           new StandardError({
             message: 'Database error while retrieving proposals',
@@ -821,6 +827,11 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      recordError(
+        error instanceof StandardError ? error.code : ErrorCodes.SYSTEM.INTERNAL_ERROR
+      );
+      const duration = Date.now() - queryStartTime;
+      recordLatency(duration);
       return createApiErrorResponse(
         error instanceof StandardError
           ? error
@@ -845,6 +856,7 @@ export async function GET(request: NextRequest) {
 
     // Determine if it's a validation error
     if (error instanceof z.ZodError) {
+      recordError(ErrorCodes.VALIDATION.INVALID_INPUT);
       return createApiErrorResponse(
         new StandardError({
           message: 'Invalid request parameters',
@@ -868,6 +880,7 @@ export async function GET(request: NextRequest) {
 
     // Handle database connection errors
     if (isPrismaError(error)) {
+      recordError(ErrorCodes.DATA.DATABASE_ERROR);
       let errorCode = ErrorCodes.DATA.DATABASE_ERROR;
       const statusCode = 500;
       let message = 'Database error';
@@ -897,6 +910,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    recordError(ErrorCodes.SYSTEM.INTERNAL_ERROR);
     return createApiErrorResponse(
       new StandardError({
         message: 'Internal server error',
