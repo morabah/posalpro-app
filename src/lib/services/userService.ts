@@ -1,190 +1,269 @@
 /**
- * PosalPro MVP2 - User Database Service
- * Database operations for user management using Prisma
- * Implements robust error handling with StandardError and ErrorCodes
+ * PosalPro MVP2 - User Service
+ * Enhanced with performance optimization and caching
+ *
+ * 🚀 PHASE 6 OPTIMIZATION: Aggressive caching and query optimization
+ * Target: Reduce authentication time from 1138ms to <500ms
  */
 
-import { UserStatus } from '@prisma/client';
-import { hashPassword } from '../auth/passwordUtils';
-import { prisma } from '../prisma';
-import { ErrorCodes, StandardError, errorHandlingService } from '../errors';
-import { isPrismaError } from '../utils/errorUtils';
+import { prisma } from '@/lib/prisma';
+import { Role, User } from '@prisma/client';
 
-export interface CreateUserData {
-  email: string;
-  name: string;
-  password: string;
-  department: string;
-}
+// ✅ CRITICAL: Performance optimization - User cache
+const userCache = new Map<string, { user: AuthUserRecord; timestamp: number }>();
+const USER_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const MAX_CACHE_SIZE = 100;
 
-export interface UserWithoutPassword {
-  id: string;
-  email: string;
-  name: string;
-  department: string;
-  status: UserStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  lastLogin: Date | null;
-}
+// ✅ CRITICAL: Performance optimization - Role cache
+const roleCache = new Map<string, { roles: Role[]; timestamp: number }>();
+const ROLE_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-/**
- * Create a new user in the database
- * @param data - User data including plaintext password
- * @returns Promise resolving to created user (without password)
- */
-export async function createUser(data: CreateUserData): Promise<UserWithoutPassword> {
-  try {
-    // Hash the password before storing
-    const hashedPassword = await hashPassword(data.password);
-
-    // Create user in database
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        name: data.name,
-        password: hashedPassword,
-        department: data.department,
-        status: UserStatus.ACTIVE,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        department: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        lastLogin: true,
-      },
-    });
-
-    return user;
-  } catch (error) {
-    errorHandlingService.processError(error);
-
-    // Handle unique constraint violations (duplicate email)
-    if (isPrismaError(error) && error.code === 'P2002') {
-      throw new StandardError({
-        message: 'A user with this email already exists',
-        code: ErrorCodes.DATA.CONFLICT,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'UserService',
-          operation: 'createUser',
-          email: data.email
-        },
-      });
-    }
-
-    throw new StandardError({
-      message: 'Failed to create user',
-      code: ErrorCodes.DATA.CREATE_FAILED,
-      cause: error instanceof Error ? error : undefined,
-      metadata: {
-        component: 'UserService',
-        operation: 'createUser',
-        email: data.email
-      },
-    });
+// ✅ CRITICAL: Cache cleanup function
+function cleanupCache(cache: Map<string, any>, maxSize: number) {
+  if (cache.size > maxSize) {
+    const entries = Array.from(cache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toDelete = entries.slice(0, Math.floor(maxSize * 0.2)); // Remove 20% of oldest entries
+    toDelete.forEach(([key]) => cache.delete(key));
   }
 }
 
+// ✅ CRITICAL: Get cached user or fetch from database
+async function getCachedUser(email: string): Promise<AuthUserRecord | null> {
+  const now = Date.now();
+  const cached = userCache.get(email);
+
+  if (cached && now - cached.timestamp < USER_CACHE_TTL) {
+    return cached.user;
+  }
+
+  return null;
+}
+
+// ✅ CRITICAL: Cache user data
+function cacheUser(email: string, user: AuthUserRecord) {
+  userCache.set(email, { user, timestamp: Date.now() });
+  cleanupCache(userCache, MAX_CACHE_SIZE);
+}
+
+// ✅ CRITICAL: Get cached roles or fetch from database
+async function getCachedRoles(): Promise<Role[]> {
+  const now = Date.now();
+  const cached = roleCache.get('all_roles');
+
+  if (cached && now - cached.timestamp < ROLE_CACHE_TTL) {
+    return cached.roles;
+  }
+
+  return [];
+}
+
+// ✅ CRITICAL: Cache roles data
+function cacheRoles(roles: Role[]) {
+  roleCache.set('all_roles', { roles, timestamp: Date.now() });
+}
+
 /**
- * Retrieve a user by email address
- * @param email - User's email address
- * @returns Promise resolving to user data or null if not found
+ * Get user by email with optimized caching
+ * 🚀 PHASE 6: Optimized for <500ms authentication
  */
-export async function getUserByEmail(email: string): Promise<{
+interface AuthUserRecord {
   id: string;
   email: string;
   name: string;
-  password: string;
   department: string;
-  status: UserStatus;
-  roles: Array<{
-    role: {
-      name: string;
-    };
-  }>;
-} | null> {
+  status: any;
+  password: string;
+  createdAt: Date;
+  updatedAt: Date;
+  lastLogin: Date | null;
+  roles: { role: { name: string } }[];
+}
+
+export async function getUserByEmail(email: string): Promise<AuthUserRecord | null> {
   try {
-    const user = await prisma.user.findUnique({
+    // ✅ CRITICAL: Check cache first
+    const cachedUser = await getCachedUser(email);
+    if (cachedUser) {
+      console.log(`📦 [User Cache] Cache hit for: ${email}`);
+      return cachedUser;
+    }
+
+    console.log(`🔍 [User Service] Fetching user from database: ${email}`);
+
+    // ✅ PERFORMANCE: Avoid transaction for single read to reduce auth latency
+    const result = await prisma.user.findUnique({
       where: { email },
       select: {
         id: true,
         email: true,
         name: true,
-        password: true,
         department: true,
         status: true,
+        password: true,
+        createdAt: true,
+        updatedAt: true,
+        lastLogin: true,
         roles: {
+          where: { isActive: true },
           select: {
             role: {
-              select: {
-                name: true,
-              },
+              select: { name: true },
             },
           },
         },
       },
     });
 
-    return user;
+    if (result) {
+      // ✅ CRITICAL: Cache the result
+      cacheUser(email, result);
+      console.log(`📦 [User Cache] Cached user: ${email}`);
+    }
+
+    return result;
   } catch (error) {
-    errorHandlingService.processError(error);
-    throw new StandardError({
-      message: 'Failed to retrieve user by email',
-      code: ErrorCodes.DATA.QUERY_FAILED,
-      cause: error instanceof Error ? error : undefined,
-      metadata: {
-        component: 'UserService',
-        operation: 'getUserByEmail',
-        email
-      },
-    });
+    console.error('[User Service] Error fetching user:', error);
+    return null;
   }
 }
 
 /**
- * Update user's last login timestamp
- * @param userId - User's ID
- * @returns Promise resolving to success boolean
+ * Update user's last login time
+ * 🚀 PHASE 6: Optimized with minimal database impact
  */
-export async function updateLastLogin(userId: string): Promise<boolean> {
+export async function updateLastLogin(userId: string): Promise<void> {
   try {
+    // ✅ CRITICAL: Use update instead of findUnique + update
     await prisma.user.update({
       where: { id: userId },
       data: { lastLogin: new Date() },
     });
-
-    return true;
   } catch (error) {
-    errorHandlingService.processError(error);
-    
-    // Check for Prisma not found error
-    if (isPrismaError(error) && error.code === 'P2025') {
-      throw new StandardError({
-        message: 'User not found',
-        code: ErrorCodes.DATA.NOT_FOUND,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'UserService',
-          operation: 'updateLastLogin',
-          userId
+    console.error('[User Service] Error updating last login:', error);
+  }
+}
+
+/**
+ * Get all users with pagination and caching
+ * 🚀 PHASE 6: Optimized for dashboard performance
+ */
+export async function getUsers(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: string;
+}): Promise<{ users: User[]; total: number }> {
+  try {
+    const { page = 1, limit = 10, search, role } = params;
+    const skip = (page - 1) * limit;
+
+    // ✅ CRITICAL: Single transaction for users and count
+    const [users, total] = await prisma.$transaction([
+      prisma.user.findMany({
+        where: {
+          AND: [
+            search
+              ? {
+                  OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                  ],
+                }
+              : {},
+            role ? { roles: { some: { role: { name: role }, isActive: true } } } : {},
+          ],
         },
-      });
+        include: {
+          roles: {
+            where: { isActive: true },
+            include: { role: true },
+          },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.user.count({
+        where: {
+          AND: [
+            search
+              ? {
+                  OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                  ],
+                }
+              : {},
+            role ? { roles: { some: { role: { name: role }, isActive: true } } } : {},
+          ],
+        },
+      }),
+    ]);
+
+    return { users, total };
+  } catch (error) {
+    console.error('[User Service] Error fetching users:', error);
+    return { users: [], total: 0 };
+  }
+}
+
+/**
+ * Get user roles with caching
+ * 🚀 PHASE 6: Optimized for role-based access control
+ */
+export async function getUserRoles(userId: string): Promise<Role[]> {
+  try {
+    // ✅ CRITICAL: Check cache first
+    const cachedRoles = await getCachedRoles();
+    if (cachedRoles.length > 0) {
+      return cachedRoles;
     }
-    
-    throw new StandardError({
-      message: 'Failed to update user last login',
-      code: ErrorCodes.DATA.UPDATE_FAILED,
-      cause: error instanceof Error ? error : undefined,
-      metadata: {
-        component: 'UserService',
-        operation: 'updateLastLogin',
-        userId
+
+    // ✅ CRITICAL: Single query for all roles
+    const roles = await prisma.role.findMany({
+      where: {
+        userRoles: {
+          some: {
+            userId,
+            isActive: true,
+          },
+        },
       },
     });
+
+    // ✅ CRITICAL: Cache roles
+    cacheRoles(roles);
+
+    return roles;
+  } catch (error) {
+    console.error('[User Service] Error fetching user roles:', error);
+    return [];
   }
+}
+
+/**
+ * Clear user cache (for testing or cache invalidation)
+ */
+export function clearUserCache(): void {
+  userCache.clear();
+  roleCache.clear();
+  console.log('🧹 [User Cache] Cache cleared');
+}
+
+/**
+ * Get cache statistics
+ */
+export function getCacheStats(): {
+  userCacheSize: number;
+  roleCacheSize: number;
+  userCacheHits: number;
+  roleCacheHits: number;
+} {
+  return {
+    userCacheSize: userCache.size,
+    roleCacheSize: roleCache.size,
+    userCacheHits: 0, // TODO: Implement hit tracking
+    roleCacheHits: 0, // TODO: Implement hit tracking
+  };
 }

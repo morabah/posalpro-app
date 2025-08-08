@@ -22,7 +22,11 @@ export function getPrismaSelect(
 
   const select: Record<string, any> = {};
 
-  const fieldsToSelect = requestedFields?.length ? requestedFields : config.allowedFields;
+  const fieldsToSelect = requestedFields?.length
+    ? requestedFields
+    : config.defaultFields && config.defaultFields.length > 0
+    ? config.defaultFields
+    : config.allowedFields;
 
   fieldsToSelect.forEach(field => {
     if (config.allowedFields.includes(field)) {
@@ -52,6 +56,7 @@ type RelationValue = string[] | { select: any };
  */
 interface FieldConfig {
   allowedFields: string[];
+  defaultFields?: string[];
   relations?: Record<string, RelationValue>;
   computed?: string[];
   security?: {
@@ -137,6 +142,16 @@ const FIELD_CONFIGS: Record<string, FieldConfig> = {
       'completionRate',
       'lastActivityAt',
       'statsUpdatedAt',
+    ],
+    defaultFields: [
+      'id',
+      'title',
+      'status',
+      'priority',
+      'createdAt',
+      'updatedAt',
+      'customerName',
+      'creatorName',
     ],
     relations: {
       customer: { select: { id: true, name: true, email: true, status: true } },

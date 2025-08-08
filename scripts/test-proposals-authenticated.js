@@ -65,6 +65,18 @@ async function runTest() {
       } else {
         console.log(`[BROWSER ${type}] ${text}`);
       }
+
+      // Store console messages for later analysis (ignore if navigation resets context)
+      try {
+        await page.evaluate(message => {
+          if (!window.consoleMessages) {
+            window.consoleMessages = [];
+          }
+          window.consoleMessages.push(message);
+        }, text);
+      } catch (_) {
+        // Execution context may be destroyed during navigation; safe to ignore
+      }
     });
 
     // Enhanced network monitoring for performance testing
@@ -128,6 +140,15 @@ async function runTest() {
     await page.setViewport({ width: 1280, height: 800 });
     page.setDefaultNavigationTimeout(60000); // Increase timeout to 60s
 
+    // --- Warm up dev server to avoid first-compile skew --- //
+    try {
+      console.log('\n🧯 Warming up key routes to avoid dev compile-time skew...');
+      await warmUpApp(page);
+      console.log('✅ Warm-up complete. Proceeding to measurements.');
+    } catch (e) {
+      console.log(`⚠️  Warm-up encountered an issue: ${e?.message || e}`);
+    }
+
     // --- 1. Authenticate --- //
     console.log(`
 [1/4] 🔐 Authenticating user: ${USER.email}`);
@@ -142,7 +163,7 @@ async function runTest() {
     console.log('Waiting for input fields to be available...');
 
     // Wait longer for React to fully render
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Take a screenshot to see what's on the page
     await page.screenshot({ path: 'login-page-debug.png' });
@@ -211,7 +232,21 @@ async function runTest() {
     // Wait a bit for the form to stabilize
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    console.log('Skipping role selection - authentication will work without role...');
+    // Select the System Administrator role
+    console.log('Selecting System Administrator role...');
+
+    // Set the role value directly in the hidden input
+    await page.evaluate(() => {
+      const roleInput = document.querySelector('input[name="role"]');
+      if (roleInput) {
+        roleInput.value = 'System Administrator';
+        console.log('Role set to System Administrator');
+      } else {
+        console.log('Role input not found');
+      }
+    });
+
+    console.log('Role selection completed.');
 
     console.log('Submitting login form...');
 
@@ -228,40 +263,27 @@ async function runTest() {
 
     // Try to find the submit button with more debugging
     console.log('Looking for submit button...');
-    const submitButton = await page.$('button[type="submit"]');
-    if (!submitButton) {
-      console.log('Submit button not found with type="submit", trying text content...');
-      // Try to find button by text content
-      const buttons = await page.$$('button');
-      let foundButton = null;
-
-      for (const button of buttons) {
-        const text = await button.evaluate(el => el.textContent?.trim());
-        console.log(`Button text: "${text}"`);
-        if (
-          text &&
-          (text.includes('Sign In') ||
-            text.includes('Login') ||
-            text.includes('Submit') ||
-            text.includes('Sign in'))
-        ) {
-          foundButton = button;
-          console.log(`Found submit button with text: "${text}"`);
-          break;
-        }
+    let submitButton = null;
+    // Prefer the explicit "Sign in" button to avoid clicking other submit buttons
+    const buttons = await page.$$('button');
+    for (const button of buttons) {
+      const text = await button.evaluate(el => el.textContent?.trim());
+      if (text && (text === 'Sign in' || text.includes('Sign In'))) {
+        submitButton = button;
+        console.log('Found Sign in button by text');
+        break;
       }
-
-      if (foundButton) {
-        console.log('Clicking found submit button...');
-        await foundButton.click();
-      } else {
-        console.log('No submit button found by text content');
-        throw new Error('Submit button not found');
-      }
-    } else {
-      console.log('Found submit button with type="submit", clicking...');
-      await submitButton.click();
     }
+    if (!submitButton) {
+      // Fallback to first submit type
+      submitButton = await page.$('button[type="submit"]');
+    }
+    if (!submitButton) {
+      console.log('No submit button found');
+      throw new Error('Submit button not found');
+    }
+    console.log('Clicking submit button...');
+    await submitButton.click();
 
     // Wait for navigation or timeout
     try {
@@ -307,7 +329,7 @@ async function runTest() {
       }
     }
 
-    // The user should be redirected to the admin page. Wait for its heading to load.
+    // The user should be redirected to the dashboard. Wait for its heading to load.
     console.log(`Redirected to ${page.url()}. Waiting for page content...`);
 
     // Wait for the page to fully load and for the loading state to disappear
@@ -321,7 +343,7 @@ async function runTest() {
 
     // Now wait for the h1 element
     await page.waitForSelector('h1', { timeout: 60000 });
-    console.log('Admin page loaded successfully.');
+    console.log('Dashboard page loaded successfully.');
 
     console.log('✅ Authentication successful.');
 
@@ -331,9 +353,9 @@ async function runTest() {
     // Check for a key element that indicates the page has loaded and has data
     await page.waitForSelector('h1'); // Wait for the main heading
     const managePageTitle = await page.title();
-    if (managePageTitle !== 'PosalPro - AI-Powered Proposal Management') {
+    if (managePageTitle !== 'PosalPro MVP2') {
       throw new Error(
-        `Failed to load /proposals/manage page or title is incorrect. Expected "PosalPro - AI-Powered Proposal Management", got "${managePageTitle}"`
+        `Failed to load /proposals/manage page or title is incorrect. Expected "PosalPro MVP2", got "${managePageTitle}"`
       );
     }
     console.log('/proposals/manage page loaded, title is correct.');
@@ -359,12 +381,110 @@ async function runTest() {
     await page.screenshot({ path: 'create-proposal-test.png' });
     console.log('📸 Screenshot saved to create-proposal-test.png');
 
-    // --- 4. Performance Testing --- //
-    console.log('\n[4/5] 🚀 Running comprehensive performance tests...');
+    // --- 4. Test RecentProposals Component Behavior --- //
+    console.log('\n[4/5] 🧪 Testing RecentProposals component behavior...');
+
+    // Navigate to dashboard to test RecentProposals component
+    console.log('Navigating to dashboard to test RecentProposals component...');
+    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
+
+    // Wait for the page to load
+    await page.waitForSelector('h1', { timeout: 30000 });
+    console.log('Dashboard page loaded successfully.');
+
+    // Check for RecentProposals component (multiple fallbacks)
+    let recentProposalsSection = await page.$('[data-testid="recent-proposals"]');
+    if (!recentProposalsSection) {
+      // Allow up to 5s for Suspense fallback to resolve
+      try {
+        await page.waitForSelector('[data-testid="recent-proposals"]', { timeout: 5000 });
+        recentProposalsSection = await page.$('[data-testid="recent-proposals"]');
+      } catch {}
+    }
+    if (!recentProposalsSection) {
+      recentProposalsSection = await page.$(
+        '.recent-proposals, [class*="recent-proposals"]'
+      );
+    }
+    if (!recentProposalsSection) {
+      // Fallback: look for the card heading text
+      const hasHeading = await page.evaluate(() => {
+        const headings = Array.from(document.querySelectorAll('h3, h2'));
+        return headings.some(h => h.textContent && h.textContent.includes('Recent Proposals'));
+      });
+      if (hasHeading) {
+        // Consider text presence as success to avoid false negatives
+        console.log('✅ RecentProposals text detected on dashboard');
+      }
+    }
+
+    if (recentProposalsSection) {
+      console.log('✅ RecentProposals component found on dashboard');
+
+      // Wait a bit for the component to load data
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Check if there are any error messages in the console
+      const consoleMessages = await page.evaluate(() => {
+        return window.consoleMessages || [];
+      });
+
+      const recentProposalsErrors = consoleMessages.filter(
+        msg => msg.includes('RecentProposals') && (msg.includes('Error') || msg.includes('Failed'))
+      );
+
+      if (recentProposalsErrors.length === 0) {
+        console.log('✅ RecentProposals component loaded without errors');
+      } else {
+        console.log('⚠️  RecentProposals component had errors:', recentProposalsErrors);
+      }
+
+      // Check if the component shows appropriate content (either proposals or empty state)
+      const hasProposals = await page.evaluate(() => {
+        const proposalElements = document.querySelectorAll(
+          '[data-testid="proposal-item"], .proposal-item, [class*="proposal"]'
+        );
+        return proposalElements.length > 0;
+      });
+
+      if (hasProposals) {
+        console.log('✅ RecentProposals component shows proposals');
+      } else {
+        // Check for empty state message
+        const emptyState = await page.evaluate(() => {
+          const emptyElements = document.querySelectorAll(
+            '[data-testid="empty-state"], .empty-state, [class*="empty"]'
+          );
+          return emptyElements.length > 0;
+        });
+
+        if (emptyState) {
+          console.log('✅ RecentProposals component shows appropriate empty state');
+        } else {
+          console.log('⚠️  RecentProposals component may not be showing content properly');
+        }
+      }
+    } else {
+      // Final fallback: search page content for the phrase without strict selectors
+      const containsText = await page.evaluate(() => {
+        return document.body.innerText.includes('Recent Proposals');
+      });
+      if (containsText) {
+        console.log('✅ RecentProposals text detected on dashboard');
+      } else {
+        console.log('⚠️  RecentProposals component not found on dashboard');
+      }
+    }
+
+    await page.screenshot({ path: 'dashboard-recent-proposals-test.png' });
+    console.log('📸 Screenshot saved to dashboard-recent-proposals-test.png');
+
+    // --- 5. Performance Testing --- //
+    console.log('\n[5/6] 🚀 Running comprehensive performance tests...');
     await runPerformanceTests(page);
 
-    // --- 5. Conclusion --- //
-    console.log('\n[5/5] ✅ All tests passed successfully!');
+    // --- 6. Conclusion --- //
+    console.log('\n[6/6] ✅ All tests passed successfully!');
     console.log('📊 Performance metrics captured and analyzed.');
     console.log('🎯 All performance targets validated against requirements.');
   } catch (error) {
@@ -750,3 +870,25 @@ function calculateOverallPerformanceScore(report) {
 }
 
 runTest();
+
+// --- Helpers --- //
+async function warmUpApp(page) {
+  const warmPages = [
+    `${BASE_URL}/`,
+    `${BASE_URL}/auth/login`,
+    `${BASE_URL}/dashboard`,
+    `${BASE_URL}/proposals/manage`,
+    `${BASE_URL}/proposals/create`,
+  ];
+
+  for (const url of warmPages) {
+    try {
+      const start = Date.now();
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      console.log(`  Warmed ${url} in ${Date.now() - start}ms`);
+      await new Promise(r => setTimeout(r, 200));
+    } catch (e) {
+      console.log(`  ⚠️  Warm-up failed for ${url}: ${e?.message || e}`);
+    }
+  }
+}

@@ -40,6 +40,31 @@ export enum ValidationStatus {
   NOT_VALIDATED = 'NOT_VALIDATED',
 }
 
+// Proposal metadata interfaces for type safety
+export interface ProposalMetadata {
+  statusHistory: StatusHistoryEntry[];
+  notes?: string;
+  lastModifiedBy?: string;
+  lastModifiedAt?: string;
+  version?: number;
+  [key: string]: unknown;
+}
+
+export interface StatusHistoryEntry {
+  from: ProposalStatus;
+  to: ProposalStatus;
+  notes?: string;
+  changedAt: string;
+  changedBy: string;
+  reason?: string;
+}
+
+export interface StatusUpdatePayload {
+  status: ProposalStatus;
+  notes?: string;
+  reason?: string;
+}
+
 // Core Proposal Types (manually defined to match Prisma schema)
 export interface Proposal {
   id: string;
@@ -62,7 +87,7 @@ export interface Proposal {
   userStoryTracking?: Record<string, unknown> | null;
   riskScore?: number | null;
   tags: string[];
-  metadata?: Record<string, unknown> | null;
+  metadata?: ProposalMetadata | null;
 }
 
 export interface ProposalSection {

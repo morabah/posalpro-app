@@ -471,7 +471,11 @@ function SessionWarningModal({
 // Main provider that wraps NextAuth SessionProvider
 export function AuthProvider({ children, session }: AuthProviderProps) {
   return (
-    <SessionProvider session={session}>
+    <SessionProvider
+      session={session}
+      refetchOnWindowFocus={false}
+      refetchInterval={10 * 60} // 10 minutes
+    >
       <AuthContextProvider>{children}</AuthContextProvider>
     </SessionProvider>
   );

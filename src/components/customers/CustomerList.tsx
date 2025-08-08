@@ -2,6 +2,8 @@
  * PosalPro MVP2 - Customer List Component
  * Enhanced with React Query for caching and performance optimization
  * Component Traceability: US-4.1, US-4.2, H4, H6
+ *
+ * 🚀 PHASE 6 OPTIMIZATION: Virtual scrolling for memory reduction
  */
 
 'use client';
@@ -10,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Customer, useCustomers } from '@/hooks/useCustomers';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { VirtualList } from '@/hooks/useVirtualScrolling';
 import { debounce } from '@/lib/utils';
 import {
   BuildingOfficeIcon,
@@ -60,6 +63,125 @@ const CustomerSkeleton = memo(() => (
     </Card>
   </div>
 ));
+
+// ✅ CRITICAL: Virtual scrolling customer item component
+const CustomerItem = memo(
+  ({
+    customer,
+    onView,
+    onEdit,
+  }: {
+    customer: Customer;
+    onView: (customer: Customer) => void;
+    onEdit: (customer: Customer) => void;
+  }) => {
+    const getTierBadgeColor = (tier: string) => {
+      switch (tier.toLowerCase()) {
+        case 'premium':
+          return 'bg-purple-100 text-purple-800';
+        case 'enterprise':
+          return 'bg-blue-100 text-blue-800';
+        case 'standard':
+          return 'bg-gray-100 text-gray-800';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    };
+
+    const getStatusBadgeColor = (status: string) => {
+      switch (status.toLowerCase()) {
+        case 'active':
+          return 'bg-green-100 text-green-800';
+        case 'inactive':
+          return 'bg-red-100 text-red-800';
+        case 'pending':
+          return 'bg-yellow-100 text-yellow-800';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    };
+
+    const formatRevenue = (revenue?: number) => {
+      if (!revenue) return 'N/A';
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(revenue);
+    };
+
+    return (
+      <Card className="h-48 hover:shadow-lg transition-shadow duration-200">
+        <div className="p-6 h-full flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <BuildingOfficeIcon className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 truncate">{customer.name}</h3>
+                <p className="text-sm text-gray-500">{customer.email}</p>
+              </div>
+            </div>
+            <span
+              className={`px-2 py-1 text-xs font-medium rounded-full ${getTierBadgeColor(customer.tier)}`}
+            >
+              {customer.tier}
+            </span>
+          </div>
+
+          <div className="flex-1 space-y-2">
+            {customer.industry && (
+              <div className="flex items-center text-sm text-gray-600">
+                <TagIcon className="h-4 w-4 mr-2" />
+                <span>{customer.industry}</span>
+              </div>
+            )}
+            {customer.revenue && (
+              <div className="flex items-center text-sm text-gray-600">
+                <CurrencyDollarIcon className="h-4 w-4 mr-2" />
+                <span>{formatRevenue(customer.revenue)}</span>
+              </div>
+            )}
+            <div className="flex items-center text-sm text-gray-600">
+              <UserGroupIcon className="h-4 w-4 mr-2" />
+              <span
+                className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(customer.status)}`}
+              >
+                {customer.status}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center mt-4">
+            <span className="text-xs text-gray-500">
+              Updated {new Date(customer.updatedAt).toLocaleDateString()}
+            </span>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onView(customer)}
+                className="h-8 w-8 p-0"
+              >
+                <EyeIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(customer)}
+                className="h-8 w-8 p-0"
+              >
+                <PencilIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+);
 
 const CustomerList = memo(() => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -243,77 +365,25 @@ const CustomerList = memo(() => {
 
       {/* Customers Grid */}
       {!isLoading && customers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {customers.map((customer: Customer) => (
-            <Card key={customer.id} className="h-48 hover:shadow-lg transition-shadow">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <BuildingOfficeIcon className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{customer.name}</h3>
-                      <p className="text-sm text-gray-500">{customer.email}</p>
-                    </div>
-                  </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(customer.status)}`}
-                  >
-                    {customer.status}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <CurrencyDollarIcon className="h-4 w-4 mr-2" />
-                    <span>{formatRevenue(customer.revenue)}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <UserGroupIcon className="h-4 w-4 mr-2" />
-                    <span>{customer.companySize || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <TagIcon className="h-4 w-4 mr-2" />
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${getTierBadgeColor(customer.tier)}`}
-                    >
-                      {customer.tier}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center mt-6">
-                  <span className="text-xs text-gray-500">
-                    Updated {new Date(customer.updatedAt).toLocaleDateString()}
-                  </span>
-                  <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleCustomerView(customer)}
-                      className="p-1"
-                    >
-                      <EyeIcon className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        // Handle edit customer
-                        analytics('customer_edit_clicked', {
-                          customerId: customer.id,
-                          customerName: customer.name,
-                        });
-                      }}
-                      className="p-1"
-                    >
-                      <PencilIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <VirtualList
+          items={customers}
+          itemHeight={192} // Adjust based on the height of CustomerItem
+          containerHeight={600} // Fixed container height for virtual scrolling
+          renderItem={(customer, index) => (
+            <CustomerItem
+              key={customer.id}
+              customer={customer}
+              onView={handleCustomerView}
+              onEdit={() => {
+                // Handle edit customer
+                analytics('customer_edit_clicked', {
+                  customerId: customer.id,
+                  customerName: customer.name,
+                });
+              }}
+            />
+          )}
+        />
       )}
 
       {/* Empty State */}

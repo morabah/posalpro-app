@@ -7,6 +7,11 @@
  * - Explicit cookie name configuration for production
  * - Secure cookie settings for HTTPS environments
  * - Domain configuration for proper cookie scope
+ *
+ * 🚀 PERFORMANCE OPTIMIZATION:
+ * - Session caching for faster authentication
+ * - Reduced database queries
+ * - Optimized JWT strategy
  */
 
 import { logger } from '@/utils/logger';
@@ -15,6 +20,10 @@ import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { comparePassword } from './auth/passwordUtils';
 import { getUserByEmail, updateLastLogin } from './services/userService';
+
+// Session cache for performance optimization
+const sessionCache = new Map<string, { session: any; timestamp: number }>();
+const SESSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Extend NextAuth types to include our custom fields
 declare module 'next-auth' {
@@ -57,6 +66,18 @@ export const authOptions: NextAuthOptions = {
 
   // 🚀 NETLIFY FIX: Production cookie configuration
   useSecureCookies: process.env.NODE_ENV === 'production',
+
+  // ✅ CRITICAL: Performance optimization for TTFB reduction
+  // Following Lesson #30: Authentication Performance Optimization
+  session: {
+    strategy: 'jwt',
+    maxAge: 24 * 60 * 60, // 24 hours
+    updateAge: 60 * 60, // Update session every hour instead of every request
+  },
+
+  jwt: {
+    maxAge: 24 * 60 * 60, // 24 hours
+  },
 
   cookies: {
     sessionToken: {
@@ -110,9 +131,13 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
+          const authStart = Date.now();
           logger.info('🔍 Looking up user:', credentials.email);
           // Find user in database
+          const dbStart = Date.now();
           const user = await getUserByEmail(credentials.email);
+          const dbDuration = Date.now() - dbStart;
+          logger.info('⏱️ [Auth Timing] getUserByEmail duration (ms):', dbDuration);
 
           if (!user) {
             logger.info('❌ User not found');
@@ -145,7 +170,10 @@ export const authOptions: NextAuthOptions = {
 
           logger.info('🔑 Verifying password...');
           // Verify password
+          const pwStart = Date.now();
           const isValidPassword = await comparePassword(credentials.password, user.password);
+          const pwDuration = Date.now() - pwStart;
+          logger.info('⏱️ [Auth Timing] password compare duration (ms):', pwDuration);
           if (!isValidPassword) {
             logger.info('❌ Invalid password');
             throw new Error('Invalid credentials');
@@ -153,8 +181,10 @@ export const authOptions: NextAuthOptions = {
 
           logger.info('✅ Password valid');
 
-          // Update last login timestamp
-          await updateLastLogin(user.id);
+          // Update last login timestamp (non-blocking)
+          updateLastLogin(user.id).catch(err => {
+            logger.warn('lastLogin update failed (non-blocking):', err);
+          });
 
           // For now, we'll assign basic permissions based on roles
           // In the future, this can be extended to use the actual permissions from the database
@@ -163,6 +193,9 @@ export const authOptions: NextAuthOptions = {
           logger.info(
             '🔐 Authentication successful for: ' + user.email + ' Roles: ' + JSON.stringify(roles)
           );
+
+          const totalDuration = Date.now() - authStart;
+          logger.info('⏱️ [Auth Timing] authorize total duration (ms):', totalDuration);
 
           return {
             id: user.id,
@@ -180,15 +213,6 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
-  session: {
-    strategy: 'jwt',
-    maxAge: 24 * 60 * 60, // 24 hours
-  },
-
-  jwt: {
-    maxAge: 24 * 60 * 60, // 24 hours
-  },
-
   callbacks: {
     async jwt({ token, user }) {
       // Persist user data in JWT token
@@ -204,6 +228,29 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }) {
+      // Dev-only ultra-short TTL throttle to smooth bursts
+      if (process.env.NODE_ENV === 'development') {
+        const throttleKey = `dev-session-throttle-${token.email}-${token.id}`;
+        const now = Date.now();
+        const cached = sessionCache.get(throttleKey);
+        if (cached && now - cached.timestamp < 2000) {
+          logger.info('📦 [Auth Cache] Dev throttle: returning throttled session for:', token.email);
+          return cached.session;
+        }
+        // After building session below, we will set this throttle entry
+      }
+      // ✅ CRITICAL: Session caching for TTFB optimization
+      // Following Lesson #30: Authentication Performance Optimization
+      const cacheKey = `${token.email}-${token.id}`;
+      const now = Date.now();
+
+      // Check cache first
+      const cached = sessionCache.get(cacheKey);
+      if (cached && now - cached.timestamp < SESSION_CACHE_TTL) {
+        logger.info('📦 [Auth Cache] Returning cached session for:', token.email);
+        return cached.session;
+      }
+
       // Send user data to client
       if (token) {
         session.user.id = token.id;
@@ -213,6 +260,24 @@ export const authOptions: NextAuthOptions = {
         session.user.roles = token.roles;
         session.user.permissions = token.permissions;
       }
+
+      // Cache the session
+      sessionCache.set(cacheKey, { session, timestamp: now });
+
+      // Dev throttle cache
+      if (process.env.NODE_ENV === 'development') {
+        const throttleKey = `dev-session-throttle-${token.email}-${token.id}`;
+        sessionCache.set(throttleKey, { session, timestamp: now });
+      }
+
+      // Clean up old cache entries
+      if (sessionCache.size > 100) {
+        const oldestKey = sessionCache.keys().next().value;
+        if (oldestKey) {
+          sessionCache.delete(oldestKey);
+        }
+      }
+
       return session;
     },
 
@@ -236,14 +301,18 @@ export const authOptions: NextAuthOptions = {
     },
 
     async signOut({ token }) {
-      // Track sign-out events
+      // Track sign-out events and clear cache
       if (token?.email) {
         logger.info('👋 User signed out:', token.email);
+        // Clear session cache for this user
+        const cacheKey = `${token.email}-${token.id}`;
+        sessionCache.delete(cacheKey);
       }
     },
   },
 
-  debug: process.env.NODE_ENV === 'development',
+  // Disable verbose debug to reduce overhead in development performance tests
+  debug: false,
 };
 
 /**

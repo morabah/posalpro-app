@@ -1,7 +1,7 @@
-import { Suspense } from 'react';
 import DashboardStats from '@/components/dashboard/DashboardStats';
-import RecentProposals from '@/components/dashboard/RecentProposals';
 import QuickActions from '@/components/dashboard/QuickActions';
+import RecentProposals from '@/components/dashboard/RecentProposals';
+import { Suspense } from 'react';
 
 export default function DashboardPage() {
   return (
@@ -15,14 +15,22 @@ export default function DashboardPage() {
       </Suspense>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-64"></div>}>
-          <RecentProposals />
-        </Suspense>
+        <div data-testid="recent-proposals">
+          <Suspense
+            fallback={
+              <div className="animate-pulse bg-gray-200 rounded-lg h-64" />
+            }
+          >
+            <RecentProposals />
+          </Suspense>
+        </div>
 
         <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-48"></div>}>
           <QuickActions />
         </Suspense>
       </div>
+
+      {/* Debug component removed to prevent server-side unauthorized API calls */}
     </div>
   );
 }

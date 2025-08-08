@@ -102,15 +102,13 @@ export function useCustomers(
         }>(`customers?${searchParams.toString()}`);
 
         if (!response.success) {
-          // Fallback to mock data for development/demo purposes
-          return generateMockCustomersData(params);
+          throw new Error(response.message || 'Failed to fetch customers');
         }
 
         return response.data;
       } catch (error) {
-        // ✅ PERFORMANCE: Fast fallback instead of cache complexity
-        console.warn('[useCustomers] API failed, using mock data:', error);
-        return generateMockCustomersData(params);
+        console.error('[useCustomers] API failed:', error);
+        throw error;
       }
     },
     // ✅ PERFORMANCE: Optimized for speed (following BasicInformationStep.tsx pattern)
@@ -140,7 +138,10 @@ export function useCustomer(id: string): UseQueryResult<Customer, Error> {
 
       if (!response.success) {
         // Log error but let React Query handle the error state
-        console.warn('[useCustomers] Customer fetch failed:', response.message || 'Failed to fetch customer');
+        console.warn(
+          '[useCustomers] Customer fetch failed:',
+          response.message || 'Failed to fetch customer'
+        );
         throw new Error(response.message || 'Failed to fetch customer');
       }
 
@@ -183,8 +184,7 @@ export function useCustomerSearch(
       }>(`customers?${searchParams.toString()}`);
 
       if (!response.success) {
-        // Fallback to mock data
-        return generateMockCustomersData({ ...options, search: searchTerm });
+        throw new Error(response.message || 'Failed to search customers');
       }
 
       return response.data;
@@ -196,175 +196,4 @@ export function useCustomerSearch(
     gcTime: 5 * 60 * 1000,
     retry: 1,
   });
-}
-
-// Mock data generator for fallback
-function generateMockCustomersData(params: CustomersQueryParams = {}): CustomersResponse {
-  const mockCustomers: Customer[] = [
-    {
-      id: '1',
-      name: 'Acme Corporation',
-      email: 'contact@acme.com',
-      industry: 'Manufacturing',
-      tier: 'ENTERPRISE',
-      status: 'ACTIVE',
-      revenue: 2500000,
-      tags: ['enterprise', 'manufacturing'],
-      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      proposalsCount: 12,
-      contactsCount: 5,
-    },
-    {
-      id: '2',
-      name: 'Tech Solutions Inc',
-      email: 'info@techsolutions.com',
-      industry: 'Technology',
-      tier: 'PREMIUM',
-      status: 'ACTIVE',
-      revenue: 1200000,
-      tags: ['tech', 'saas'],
-      createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      proposalsCount: 8,
-      contactsCount: 3,
-    },
-    {
-      id: '3',
-      name: 'Global Services Ltd',
-      email: 'hello@globalservices.com',
-      industry: 'Services',
-      tier: 'STANDARD',
-      status: 'PROSPECT',
-      revenue: 800000,
-      tags: ['services', 'consulting'],
-      createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      proposalsCount: 3,
-      contactsCount: 2,
-    },
-    {
-      id: '4',
-      name: 'Innovation Labs',
-      email: 'contact@innovationlabs.com',
-      industry: 'Research',
-      tier: 'VIP',
-      status: 'ACTIVE',
-      revenue: 5000000,
-      tags: ['research', 'innovation'],
-      createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      proposalsCount: 25,
-      contactsCount: 8,
-    },
-    {
-      id: '5',
-      name: 'StartupCo',
-      email: 'team@startupco.com',
-      industry: 'Technology',
-      tier: 'STANDARD',
-      status: 'PROSPECT',
-      revenue: 150000,
-      tags: ['startup', 'early-stage'],
-      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-      proposalsCount: 1,
-      contactsCount: 1,
-    },
-    {
-      id: '6',
-      name: 'Enterprise Corp',
-      email: 'business@enterprise.com',
-      industry: 'Finance',
-      tier: 'ENTERPRISE',
-      status: 'ACTIVE',
-      revenue: 3200000,
-      tags: ['finance', 'enterprise'],
-      createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      proposalsCount: 18,
-      contactsCount: 6,
-    },
-  ];
-
-  // Apply search filter
-  let filteredCustomers = mockCustomers;
-  if (params.search) {
-    const searchLower = params.search.toLowerCase();
-    filteredCustomers = mockCustomers.filter(
-      customer =>
-        customer.name.toLowerCase().includes(searchLower) ||
-        customer.email?.toLowerCase().includes(searchLower) ||
-        customer.industry?.toLowerCase().includes(searchLower) ||
-        customer.tags.some(tag => tag.toLowerCase().includes(searchLower))
-    );
-  }
-
-  // Apply status filter
-  if (params.status) {
-    filteredCustomers = filteredCustomers.filter(customer => customer.status === params.status);
-  }
-
-  // Apply tier filter
-  if (params.tier) {
-    filteredCustomers = filteredCustomers.filter(customer => customer.tier === params.tier);
-  }
-
-  // Apply industry filter
-  if (params.industry) {
-    filteredCustomers = filteredCustomers.filter(customer =>
-      customer.industry?.toLowerCase().includes(params.industry!.toLowerCase())
-    );
-  }
-
-  // Apply sorting
-  if (params.sortBy) {
-    filteredCustomers.sort((a, b) => {
-      let aValue: any = a[params.sortBy as keyof Customer];
-      let bValue: any = b[params.sortBy as keyof Customer];
-
-      // Handle date sorting
-      if (params.sortBy === 'createdAt' || params.sortBy === 'updatedAt') {
-        aValue = new Date(aValue).getTime();
-        bValue = new Date(bValue).getTime();
-      }
-
-      // Handle string sorting
-      if (typeof aValue === 'string') {
-        aValue = aValue.toLowerCase();
-        bValue = bValue.toLowerCase();
-      }
-
-      if (params.sortOrder === 'desc') {
-        return bValue > aValue ? 1 : -1;
-      }
-      return aValue > bValue ? 1 : -1;
-    });
-  }
-
-  // Apply pagination
-  const page = params.page || 1;
-  const limit = params.limit || 20;
-  const startIndex = (page - 1) * limit;
-  const endIndex = startIndex + limit;
-  const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
-  const hasMore = endIndex < filteredCustomers.length;
-
-  return {
-    customers: paginatedCustomers,
-    pagination: {
-      page,
-      limit,
-      total: filteredCustomers.length,
-      totalPages: Math.ceil(filteredCustomers.length / limit),
-      hasMore,
-      nextCursor: hasMore ? paginatedCustomers[paginatedCustomers.length - 1]?.id : null,
-    },
-    filters: {
-      search: params.search,
-      status: params.status,
-      tier: params.tier,
-      industry: params.industry,
-    },
-  };
 }

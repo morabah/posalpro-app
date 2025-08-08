@@ -38,7 +38,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -62,7 +62,7 @@ const COMPONENT_MAPPING = {
 };
 
 export default function ProductManagementPage() {
-  const { data: session } = useSession() || {};
+  const { user, isAuthenticated } = useAuth();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const [sessionStartTime] = useState(Date.now());

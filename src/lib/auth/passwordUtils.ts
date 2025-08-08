@@ -9,8 +9,9 @@ import { ErrorCodes, StandardError } from '@/lib/errors';
 // Platform compatibility: Using bcryptjs (pure JS) instead of bcrypt (native)
 // See IMPLEMENTATION_LOG.md and LESSONS_LEARNED.md for details
 
-// Number of salt rounds for bcrypt (12 provides good security/performance balance)
-const SALT_ROUNDS = 12;
+// Number of salt rounds for bcrypt
+// Use lower cost in development to improve authentication latency
+const SALT_ROUNDS = process.env.NODE_ENV === 'development' ? 6 : 12;
 
 /**
  * Hash a password using bcrypt

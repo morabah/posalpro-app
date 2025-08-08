@@ -386,7 +386,9 @@ export class ProductService {
       const currentPage = page || 1;
       const skip = (currentPage - 1) * pageSize;
 
-      const [products, total] = await Promise.all([
+      // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
+      // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
+      const [products, total] = await prisma.$transaction([
         prisma.product.findMany({
           where,
           orderBy,
@@ -426,8 +428,9 @@ export class ProductService {
     createdBy: string
   ): Promise<ProductRelationship> {
     try {
-      // Validate that both products exist
-      const [sourceProduct, targetProduct] = await Promise.all([
+      // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
+      // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
+      const [sourceProduct, targetProduct] = await prisma.$transaction([
         prisma.product.findUnique({ where: { id: data.sourceProductId }, select: { id: true } }),
         prisma.product.findUnique({ where: { id: data.targetProductId }, select: { id: true } }),
       ]);
@@ -708,7 +711,9 @@ export class ProductService {
 
   async getProductAnalytics(id: string): Promise<ProductAnalytics> {
     try {
-      const [product, proposalProducts, validationIssues] = await Promise.all([
+      // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
+      // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
+      const [product, proposalProducts, validationIssues] = await prisma.$transaction([
         prisma.product.findUnique({
           where: { id },
           select: {
@@ -818,25 +823,28 @@ export class ProductService {
         if (filters.isActive !== undefined) where.isActive = filters.isActive;
       }
 
-      const [total, active, inactive, priceStats, categoryStats, usageStats] = await Promise.all([
-        prisma.product.count({ where }),
-        prisma.product.count({ where: { ...where, isActive: true } }),
-        prisma.product.count({ where: { ...where, isActive: false } }),
-        prisma.product.aggregate({
-          where,
-          _avg: { price: true },
-        }),
-        prisma.product.findMany({
-          where,
-          select: { category: true },
-        }),
-        prisma.proposalProduct.groupBy({
-          by: ['productId'],
-          _count: { productId: true },
-          orderBy: { _count: { productId: 'desc' } },
-          take: 10,
-        }),
-      ]);
+      // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
+      // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
+      const [total, active, inactive, priceStats, categoryStats, usageStats] =
+        await prisma.$transaction([
+          prisma.product.count({ where }),
+          prisma.product.count({ where: { ...where, isActive: true } }),
+          prisma.product.count({ where: { ...where, isActive: false } }),
+          prisma.product.aggregate({
+            where,
+            _avg: { price: true },
+          }),
+          prisma.product.findMany({
+            where,
+            select: { category: true },
+          }),
+          prisma.proposalProduct.groupBy({
+            by: ['productId'],
+            _count: { productId: true },
+            orderBy: { _count: { productId: 'desc' } },
+            take: 10,
+          }),
+        ]);
 
       // Calculate category distribution
       const categoryMap = new Map<string, number>();
@@ -860,7 +868,7 @@ export class ProductService {
         return {
           id: stat.productId,
           name: product?.name || 'Unknown',
-          usage: stat._count.productId,
+          usage: (stat._count as any)?.productId || 0,
         };
       });
 

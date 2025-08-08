@@ -1,10 +1,10 @@
+import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -114,19 +114,82 @@ export async function PUT(request: NextRequest) {
 
     const profileData = validationResult.data;
 
-    // Update the user profile in the database
+    // Update the user profile in the database using proper schema pattern
     try {
-      const updatedUser = await prisma.user.update({
-        where: {
-          email: session.user.email,
-        },
-        data: {
-          name: `${profileData.firstName} ${profileData.lastName}`,
-          department: profileData.department || 'Unassigned', // Use default value since department is required
-          // Note: We'll need to add these fields to the User model if they don't exist
-          // For now, we'll update the basic fields that exist
-        },
+      // First, get the user to check if they exist
+      const existingUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        include: { preferences: true },
       });
+
+      if (!existingUser) {
+        return createApiErrorResponse(
+          new StandardError({
+            message: 'User not found',
+            code: ErrorCodes.DATA.NOT_FOUND,
+            metadata: {
+              component: 'ProfileUpdateRoute',
+              operation: 'updateProfile',
+              userEmail: session.user.email,
+            },
+          }),
+          'User not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404,
+          { userFriendlyMessage: 'User account not found. Please log in again.' }
+        );
+      }
+
+      // Use transaction to update both User and UserPreferences
+      const result = await prisma.$transaction(async prisma => {
+        // Update basic User fields that exist in schema
+        const updatedUser = await prisma.user.update({
+          where: { email: session.user.email },
+          data: {
+            name: `${profileData.firstName} ${profileData.lastName}`,
+            department: profileData.department || existingUser.department || 'Unassigned',
+          },
+        });
+
+        // Store extended profile data in UserPreferences
+        const extendedProfileData = {
+          firstName: profileData.firstName,
+          lastName: profileData.lastName,
+          title: profileData.title,
+          phone: profileData.phone,
+          office: profileData.office,
+          languages: profileData.languages || [],
+          bio: profileData.bio,
+          profileImage: profileData.profileImage,
+          expertiseAreas: profileData.expertiseAreas || [],
+          lastUpdated: new Date().toISOString(),
+        };
+
+        // Upsert UserPreferences with extended profile data
+        const updatedPreferences = await prisma.userPreferences.upsert({
+          where: { userId: existingUser.id },
+          create: {
+            userId: existingUser.id,
+            theme: 'system',
+            language: 'en',
+            analyticsConsent: false,
+            performanceTracking: false,
+            dashboardLayout: {
+              profile: extendedProfileData,
+            },
+          },
+          update: {
+            dashboardLayout: {
+              ...((existingUser.preferences?.dashboardLayout as any) || {}),
+              profile: extendedProfileData,
+            },
+          },
+        });
+
+        return { updatedUser, updatedPreferences };
+      });
+
+      const { updatedUser, updatedPreferences } = result;
 
       logger.info('Profile update for user: ' + session.user.email, {
         updatedUser: {
@@ -136,25 +199,33 @@ export async function PUT(request: NextRequest) {
           department: updatedUser.department,
         },
         profileData,
+        preferencesUpdated: !!updatedPreferences,
       });
+
+      // Extract profile data from preferences for response
+      const storedProfile = (updatedPreferences.dashboardLayout as any)?.profile || {};
 
       // Return success response with updated data from database
       return NextResponse.json({
         success: true,
         message: 'Profile updated successfully',
         data: {
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-          title: profileData.title,
-          email: profileData.email,
-          phone: profileData.phone,
-          department: profileData.department,
-          office: profileData.office,
-          languages: profileData.languages,
-          bio: profileData.bio,
-          profileImage: profileData.profileImage,
-          expertiseAreas: profileData.expertiseAreas,
+          // Basic user data from User table
+          name: updatedUser.name,
+          email: updatedUser.email,
+          department: updatedUser.department,
+          // Extended profile data from UserPreferences
+          firstName: storedProfile.firstName || profileData.firstName,
+          lastName: storedProfile.lastName || profileData.lastName,
+          title: storedProfile.title || profileData.title,
+          phone: storedProfile.phone || profileData.phone,
+          office: storedProfile.office || profileData.office,
+          languages: storedProfile.languages || profileData.languages || [],
+          bio: storedProfile.bio || profileData.bio,
+          profileImage: storedProfile.profileImage || profileData.profileImage,
+          expertiseAreas: storedProfile.expertiseAreas || profileData.expertiseAreas || [],
           updatedAt: updatedUser.updatedAt.toISOString(),
+          lastUpdated: storedProfile.lastUpdated,
         },
       });
     } catch (dbError) {

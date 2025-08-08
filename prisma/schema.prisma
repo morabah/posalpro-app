@@ -1,7 +1,7 @@
 generator client {
   provider        = "prisma-client-js"
-  binaryTargets   = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
   previewFeatures = ["fullTextIndex", "fullTextSearch"]
+  binaryTargets   = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -45,6 +45,8 @@ model User {
   @@index([name])
   @@index([department])
   @@index([status])
+  @@index([department], map: "idx_users_department")
+  @@index([status], map: "idx_users_status")
   @@map("users")
 }
 
@@ -441,6 +443,7 @@ model TestCase {
   @@index([userStory])
   @@index([hypothesis])
   @@index([status])
+  @@index([status], map: "idx_test_cases_status")
   @@map("test_cases")
 }
 
@@ -518,6 +521,8 @@ model Customer {
   @@index([cloudId])
   @@index([name])
   @@index([email])
+  @@index([email], map: "idx_customers_email")
+  @@index([industry], map: "idx_customers_industry")
   @@map("customers")
 }
 
@@ -565,21 +570,17 @@ model Proposal {
   lastSyncedAt      DateTime?
   syncStatus        String?             @default("PENDING")
   projectType       String?
-
-  // 🚀 STRATEGIC DENORMALIZATION: Pre-calculated metrics for performance
-  // Eliminates N+1 queries and improves dashboard/list loading
-  creatorName       String?             // Denormalized from User.name
-  creatorEmail      String?             // Denormalized from User.email
-  customerName      String?             // Denormalized from Customer.name
-  customerTier      String?             // Denormalized from Customer.tier
-  productCount      Int                 @default(0)    // Count of associated products
-  sectionCount      Int                 @default(0)    // Count of proposal sections
-  approvalCount     Int                 @default(0)    // Count of approvals
-  totalValue        Float?              // Calculated total with products
-  completionRate    Float               @default(0)    // Percentage complete (0-100)
-  lastActivityAt    DateTime?           // Last modification timestamp
-  // Stats updated via triggers or background jobs
-  statsUpdatedAt    DateTime?           // When denormalized data was last updated
+  approvalCount     Int                 @default(0)
+  completionRate    Float               @default(0)
+  creatorEmail      String?
+  creatorName       String?
+  customerName      String?
+  customerTier      String?
+  lastActivityAt    DateTime?
+  productCount      Int                 @default(0)
+  sectionCount      Int                 @default(0)
+  statsUpdatedAt    DateTime?
+  totalValue        Float?
   approvals         ApprovalExecution[]
   products          ProposalProduct[]
   sections          ProposalSection[]
@@ -592,6 +593,8 @@ model Proposal {
   @@index([customerId, status])
   @@index([createdBy])
   @@index([cloudId])
+  @@index([createdBy], map: "idx_proposals_created_by")
+  @@index([customerId, status], map: "idx_proposals_customer_status")
   @@map("proposals")
 }
 
@@ -610,6 +613,7 @@ model ProposalSection {
   proposal         Proposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([proposalId, order])
+  @@index([proposalId, order], map: "idx_proposal_sections_order")
   @@map("proposal_sections")
 }
 
@@ -631,9 +635,11 @@ model ProposalProduct {
 
   @@index([proposalId])
   @@index([productId])
+  @@index([productId], map: "idx_proposal_products_product_id")
   @@map("proposal_products")
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Product {
   id                String                @id @default(cuid())
   name              String
@@ -661,7 +667,6 @@ model Product {
   @@index([sku])
   @@index([category], type: Gin)
   @@index([tags], type: Gin)
-
   @@map("products")
 }
 
@@ -684,9 +689,12 @@ model ProductRelationship {
   @@index([sourceProductId])
   @@index([targetProductId])
   @@index([type])
+  @@index([targetProductId], map: "idx_product_relationships_target_id")
+  @@index([type], map: "idx_product_relationships_type")
   @@map("product_relationships")
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Content {
   id                 String             @id @default(cuid())
   title              String
@@ -718,7 +726,7 @@ model Content {
   @@index([tags])
   @@index([category])
   @@index([cloudId])
-  @@index([type, isActive], map: "idx_content_type_active")
+  @@index([category], map: "idx_content_category")
   @@map("content")
 }
 
@@ -855,6 +863,7 @@ model WorkflowStage {
   workflow            ApprovalWorkflow    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId, order])
+  @@index([workflowId, order], map: "idx_workflow_stages_order")
   @@map("workflow_stages")
 }
 

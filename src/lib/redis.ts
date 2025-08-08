@@ -5,11 +5,14 @@
 
 import { createClient } from 'redis';
 
+// Enable Redis only in production unless explicitly overridden
+const USE_REDIS = process.env.NODE_ENV === 'production' && process.env.USE_REDIS !== 'false';
+
 // Redis client configuration
 const redisClient = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379',
   socket: {
-    connectTimeout: 5000,
+    connectTimeout: 3000,
   },
 });
 
@@ -23,8 +26,15 @@ const CACHE_CONFIG = {
 
 // Initialize Redis connection
 let isConnected = false;
+// In-memory cache fallback when Redis is disabled/unavailable
+const memoryCache = new Map<string, { value: any; expiresAt: number }>();
 
 export async function initializeRedis() {
+  if (!USE_REDIS) {
+    // Skip connecting in development for faster startup
+    isConnected = false;
+    return redisClient;
+  }
   if (isConnected) return redisClient;
 
   try {
@@ -62,12 +72,20 @@ export async function getCache(key: string): Promise<any> {
   try {
     await ensureRedisConnection();
 
-    if (!isConnected) return null;
+    if (!isConnected) {
+      const entry = memoryCache.get(key);
+      if (!entry) return null;
+      if (Date.now() > entry.expiresAt) {
+        memoryCache.delete(key);
+        return null;
+      }
+      return entry.value;
+    }
 
     const value = await redisClient.get(key);
     return value ? JSON.parse(value) : null;
   } catch (error) {
-    console.warn('⚠️  Redis get error:', error instanceof Error ? error.message : String(error));
+    console.warn('⚠️  Cache get error:', error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -80,16 +98,22 @@ export async function setCache(
   try {
     await ensureRedisConnection();
 
-    if (!isConnected) return;
+    if (!isConnected) {
+      memoryCache.set(key, { value, expiresAt: Date.now() + ttl * 1000 });
+      return;
+    }
 
     await redisClient.setEx(key, ttl, JSON.stringify(value));
   } catch (error) {
-    console.warn('⚠️  Redis set error:', error instanceof Error ? error.message : String(error));
+    console.warn('⚠️  Cache set error:', error instanceof Error ? error.message : String(error));
   }
 }
 
 export async function deleteCache(key: string): Promise<void> {
-  if (!isConnected) return;
+  if (!isConnected) {
+    memoryCache.delete(key);
+    return;
+  }
 
   try {
     await redisClient.del(key);

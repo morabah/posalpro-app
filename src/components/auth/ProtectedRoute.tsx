@@ -8,7 +8,7 @@
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { AlertCircle, Loader2, Lock, Shield } from 'lucide-react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
@@ -42,7 +42,7 @@ export function ProtectedRoute({
   requireAuth = true,
   className = '',
 }: ProtectedRouteProps) {
-  const { data: session, status } = useSession() || {};
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const [accessLevel, setAccessLevel] = useState<AccessLevel>('loading');
@@ -54,12 +54,12 @@ export function ProtectedRoute({
       analytics('protected_route_access_attempt', {
         requiredRoles,
         requiredPermissions,
-        sessionStatus: status,
+        sessionStatus: isAuthenticated ? 'authenticated' : isLoading ? 'loading' : 'unauthenticated',
         component: 'ProtectedRoute',
         userStory: 'US-2.3',
       });
 
-      if (status === 'loading') {
+      if (isLoading) {
         setAccessLevel('loading');
         return;
       }
@@ -69,7 +69,7 @@ export function ProtectedRoute({
         return;
       }
 
-      if (status === 'unauthenticated' || !session) {
+      if (!isAuthenticated) {
         setAccessLevel('unauthorized');
         setErrorMessage('Authentication required. Please sign in to access this page.');
 
@@ -86,8 +86,8 @@ export function ProtectedRoute({
         return;
       }
 
-      const userRoles = session.user?.roles || [];
-      const userPermissions = session.user?.permissions || [];
+      const userRoles = user?.roles || [];
+      const userPermissions = user?.permissions || [];
 
       // Check role requirements
       if (requiredRoles.length > 0) {
@@ -156,8 +156,9 @@ export function ProtectedRoute({
 
     checkAccess();
   }, [
-    session,
-    status,
+    isAuthenticated,
+    isLoading,
+    user,
     requiredRoles,
     requiredPermissions,
     requireAuth,
@@ -233,15 +234,15 @@ export function ProtectedRoute({
             </button>
           </div>
 
-          {session?.user && (
+          {user && (
             <div className="mt-6 p-4 bg-neutral-50 rounded-lg text-left">
               <h3 className="text-sm font-medium text-neutral-900 mb-2">Your Current Access:</h3>
               <div className="text-xs text-neutral-600 space-y-1">
                 <p>
-                  <strong>Roles:</strong> {session.user.roles?.join(', ') || 'None'}
+                  <strong>Roles:</strong> {user.roles?.join(', ') || 'None'}
                 </p>
                 <p>
-                  <strong>Department:</strong> {session.user.department || 'Not specified'}
+                  <strong>Department:</strong> {user.department || 'Not specified'}
                 </p>
               </div>
             </div>
@@ -280,40 +281,40 @@ export function withProtectedRoute<P extends object>(
 
 // Utility hooks for checking access in components
 export function useRequireAuth() {
-  const { data: session, status } = useSession() || {};
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (status === 'loading') return;
+    if (isLoading) return;
 
-    if (status === 'unauthenticated') {
+    if (!isAuthenticated) {
       const currentUrl = window.location.pathname + window.location.search;
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(currentUrl)}`);
     }
-  }, [status, router]);
+  }, [isLoading, isAuthenticated, router]);
 
   return {
-    isAuthenticated: status === 'authenticated',
-    isLoading: status === 'loading',
-    session,
+    isAuthenticated,
+    isLoading,
+    session: user ? { user } : null,
   };
 }
 
 export function useHasRole(requiredRoles: string | string[]) {
-  const { data: session } = useSession() || {};
+  const { user } = useAuth();
   const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
-  const userRoles = session?.user?.roles || [];
+  const userRoles = user?.roles || [];
 
   return roles.some(role => userRoles.includes(role) || userRoles.includes('Administrator'));
 }
 
 export function useHasPermission(requiredPermissions: string | string[]) {
-  const { data: session } = useSession() || {};
+  const { user } = useAuth();
   const permissions = Array.isArray(requiredPermissions)
     ? requiredPermissions
     : [requiredPermissions];
-  const userPermissions = session?.user?.permissions || [];
-  const userRoles = session?.user?.roles || [];
+  const userPermissions = user?.permissions || [];
+  const userRoles = user?.roles || [];
 
   return permissions.some(
     permission =>

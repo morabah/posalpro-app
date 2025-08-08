@@ -2,6 +2,9 @@ import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Customers API Routes
  * Enhanced customer management with authentication and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
+ *
+ * 🚀 PHASE 6 OPTIMIZATION: Aggressive caching and query optimization
+ * Target: Reduce response time from 537ms to <200ms
  */
 
 import { authOptions } from '@/lib/auth';
@@ -16,6 +19,44 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+
+// ✅ CRITICAL: Performance optimization - Customer cache
+const customerCache = new Map<string, { data: any; timestamp: number }>();
+const CUSTOMER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 50;
+
+// ✅ CRITICAL: Cache cleanup function
+function cleanupCache() {
+  if (customerCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(customerCache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toDelete = entries.slice(0, Math.floor(MAX_CACHE_SIZE * 0.2));
+    toDelete.forEach(([key]) => customerCache.delete(key));
+  }
+}
+
+// ✅ CRITICAL: Generate cache key for customer queries
+function generateCacheKey(params: any): string {
+  return `customers:${JSON.stringify(params)}`;
+}
+
+// ✅ CRITICAL: Get cached customer data
+function getCachedCustomers(cacheKey: string): any | null {
+  const now = Date.now();
+  const cached = customerCache.get(cacheKey);
+
+  if (cached && now - cached.timestamp < CUSTOMER_CACHE_TTL) {
+    return cached.data;
+  }
+
+  return null;
+}
+
+// ✅ CRITICAL: Cache customer data
+function cacheCustomers(cacheKey: string, data: any) {
+  customerCache.set(cacheKey, { data, timestamp: Date.now() });
+  cleanupCache();
+}
 
 /**
  * Component Traceability Matrix:
@@ -117,6 +158,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = CustomerQuerySchema.parse(Object.fromEntries(searchParams));
 
+    // ✅ CRITICAL: Check cache first for performance optimization
+    const cacheKey = generateCacheKey(query);
+    const cachedResult = getCachedCustomers(cacheKey);
+    if (cachedResult) {
+      console.log(`📦 [Customer Cache] Cache hit for query: ${cacheKey}`);
+      return NextResponse.json(cachedResult, {
+        headers: {
+          'Cache-Control': 'public, max-age=300',
+          'X-Cache': 'HIT',
+        },
+      });
+    }
+
+    console.log(`🔍 [Customer API] Fetching from database: ${cacheKey}`);
+
     // Build where clause
     const where: CustomerWhereClause = {};
 
@@ -150,12 +206,21 @@ export async function GET(request: NextRequest) {
         where.id = { gt: query.cursor };
       }
 
-      // ✅ PERFORMANCE FIX: Remove expensive proposal counting for cursor pagination
+      // ✅ PERFORMANCE FIX: Use selective fields and remove expensive counts for cursor pagination
       const results = await prisma.customer.findMany({
         where: where as any, // Prisma compatibility
         take: query.limit + 1,
         orderBy: { [query.sortBy]: query.sortOrder },
-        // Removed expensive _count aggregation for faster queries
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          industry: true,
+          tier: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
 
       const hasMore = results.length > query.limit;
@@ -171,66 +236,64 @@ export async function GET(request: NextRequest) {
     } else {
       const skip = (query.page - 1) * query.limit;
 
-      // Optimized transaction with reduced query complexity
-      const [total, results] = await prisma.$transaction([
-        prisma.customer.count({ where: where as any }),
-        prisma.customer.findMany({
-          where: where as any,
-          skip,
-          take: query.limit,
-          orderBy: { [query.sortBy]: query.sortOrder },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            industry: true,
-            tier: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            // Exclude heavy fields for better performance
-          },
-        }),
-      ]);
+      // ✅ OPTIMIZATION: Avoid expensive total count; infer hasMore via limit+1
+      const results = await prisma.customer.findMany({
+        where: where as any,
+        skip,
+        take: query.limit + 1,
+        orderBy: { [query.sortBy]: query.sortOrder },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          industry: true,
+          tier: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
 
-      customers = results as Customer[];
+      const hasMore = results.length > query.limit;
+      customers = hasMore ? (results.slice(0, -1) as Customer[]) : (results as Customer[]);
+
       pagination = {
         customers,
-        total,
-        hasMore: skip + query.limit < total,
+        total: customers.length,
+        hasMore,
         nextCursor: null,
       };
     }
 
-    return NextResponse.json({
+    const response = {
       success: true,
       data: {
         customers: pagination.customers,
         pagination: {
           total: pagination.total,
-          page: query.page,
-          limit: query.limit,
           hasMore: pagination.hasMore,
           nextCursor: pagination.nextCursor,
         },
       },
+    };
+
+    // ✅ CRITICAL: Cache the result for future requests
+    cacheCustomers(cacheKey, response);
+
+    const queryTime = Date.now() - queryStartTime;
+    console.log(`📊 [Customer API] Query completed in ${queryTime}ms`);
+
+    return NextResponse.json(response, {
+      headers: {
+        'Cache-Control': 'public, max-age=300',
+        'X-Cache': 'MISS',
+        'X-Query-Time': queryTime.toString(),
+      },
     });
   } catch (error) {
-    if (isPrismaError(error)) {
-      return NextResponse.json(
-        { error: 'Database error', details: getPrismaErrorMessage(error.code) },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch customers',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    console.error('[Customer API] Error:', error);
+    return createApiErrorResponse(error);
   }
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { Loader2 } from 'lucide-react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { LogoutButton } from './LogoutButton';
@@ -22,18 +22,18 @@ export function AuthenticatedRedirect({
   redirectTo = '/dashboard',
   className = '',
 }: AuthenticatedRedirectProps) {
-  const { data: session, status } = useSession() || {};
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (status === 'authenticated' && session) {
+    if (isAuthenticated) {
       // User is already logged in, redirect them
       router.push(redirectTo);
     }
-  }, [status, session, router, redirectTo]);
+  }, [isAuthenticated, router, redirectTo]);
 
   // Show loading while checking authentication
-  if (status === 'loading') {
+  if (isLoading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${className}`}>
         <div className="text-center">
@@ -45,7 +45,7 @@ export function AuthenticatedRedirect({
   }
 
   // If user is authenticated, show redirect message (briefly before redirect)
-  if (status === 'authenticated') {
+  if (isAuthenticated) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${className}`}>
         <div className="text-center max-w-md w-full mx-4">
@@ -54,7 +54,7 @@ export function AuthenticatedRedirect({
           </div>
           <h1 className="text-2xl font-semibold text-neutral-900 mb-4">Already Signed In</h1>
           <p className="text-neutral-600 mb-6">
-            You&apos;re already signed in as <strong>{session?.user?.email}</strong>.
+            You&apos;re already signed in as <strong>{user?.email}</strong>.
           </p>
           <p className="text-neutral-600 mb-6">
             If you need to register a different account, please sign out first.

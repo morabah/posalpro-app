@@ -354,7 +354,9 @@ export class CustomerService {
       const currentPage = page || 1;
       const skip = (currentPage - 1) * pageSize;
 
-      const [customers, total] = await Promise.all([
+      // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
+      // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
+      const [customers, total] = await prisma.$transaction([
         prisma.customer.findMany({
           where,
           orderBy,
@@ -718,15 +720,19 @@ export class CustomerService {
     averageRevenue: number;
   }> {
     try {
-      const [total, statusCounts, tierCounts, revenueStats] = await Promise.all([
+      // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
+      // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
+      const [total, statusCounts, tierCounts, revenueStats] = await prisma.$transaction([
         prisma.customer.count(),
         prisma.customer.groupBy({
           by: ['status'],
           _count: { status: true },
+          orderBy: { status: 'asc' },
         }),
         prisma.customer.groupBy({
           by: ['tier'],
           _count: { tier: true },
+          orderBy: { tier: 'asc' },
         }),
         prisma.customer.aggregate({
           _sum: { revenue: true },
@@ -736,7 +742,8 @@ export class CustomerService {
 
       const byStatus = Object.values(CustomerStatus).reduce(
         (acc, status) => {
-          acc[status] = statusCounts.find(s => s.status === status)?._count.status || 0;
+          const count = statusCounts.find(s => s.status === status)?._count as any;
+          acc[status] = count?.status || 0;
           return acc;
         },
         {} as Record<CustomerStatus, number>
@@ -744,7 +751,8 @@ export class CustomerService {
 
       const byTier = Object.values(CustomerTier).reduce(
         (acc, tier) => {
-          acc[tier] = tierCounts.find(t => t.tier === tier)?._count.tier || 0;
+          const count = tierCounts.find(t => t.tier === tier)?._count as any;
+          acc[tier] = count?.tier || 0;
           return acc;
         },
         {} as Record<CustomerTier, number>

@@ -18,7 +18,8 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { ApiResponseOptimizer } from '@/lib/performance/ApiResponseOptimizer';
-import { getSession, signOut, useSession } from 'next-auth/react';
+import { getSession, signOut } from 'next-auth/react';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -78,7 +79,15 @@ const DEFAULT_WARNING_CONFIG: SessionWarningConfig = {
 };
 
 export function useEnhancedSessionManagement(config: Partial<SessionWarningConfig> = {}) {
-  const { data: session, status, update } = useSession() || {};
+  const { isAuthenticated, isLoading, refreshSession: update } = useAuth();
+  // Derive session via next-auth getSession() only when needed
+  const [session, setLocalSession] = useState<Awaited<ReturnType<typeof getSession>> | null>(null);
+  useEffect(() => {
+    (async () => {
+      const s = await getSession();
+      setLocalSession(s);
+    })();
+  }, []);
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
@@ -343,7 +352,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
 
   // Activity monitoring setup
   useEffect(() => {
-    if (status === 'authenticated' && session) {
+    if (isAuthenticated && session) {
       setSessionState(prev => ({ ...prev, isActive: true }));
       sessionStartTime.current = Date.now();
 
@@ -371,7 +380,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
     } else {
       setSessionState(prev => ({ ...prev, isActive: false }));
     }
-  }, [status, session, analytics, updateSessionHealth]);
+  }, [isAuthenticated, session, analytics, updateSessionHealth]);
 
   // Session warning management
   useEffect(() => {
@@ -494,8 +503,8 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
     getSessionReport,
 
     // Computed values
-    isAuthenticated: status === 'authenticated' && !!session,
-    isLoading: status === 'loading',
+    isAuthenticated,
+    isLoading,
     timeUntilExpiry: sessionState.timeRemaining,
     sessionHealth: sessionState.sessionHealth,
   };

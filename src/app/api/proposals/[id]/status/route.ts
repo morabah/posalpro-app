@@ -13,24 +13,15 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { isPrismaError } from '@/lib/utils/errorUtils';
+import {
+  createStatusHistoryEntry,
+  mergeMetadataWithStatusHistory,
+} from '@/lib/utils/proposal-metadata';
+import { statusUpdatePayloadSchema } from '@/lib/validation/schemas/proposal';
+import { ProposalStatus, StatusUpdatePayload } from '@/types/entities/proposal';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-
-// Status update validation schema
-const statusUpdateSchema = z.object({
-  status: z.enum([
-    'DRAFT',
-    'IN_REVIEW',
-    'PENDING_APPROVAL',
-    'APPROVED',
-    'REJECTED',
-    'SUBMITTED',
-    'ACCEPTED',
-    'DECLINED',
-  ]),
-  notes: z.string().optional(),
-});
 
 /**
  * PUT /api/proposals/[id]/status - Update proposal status
@@ -59,8 +50,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const { id } = params;
     const body = await request.json();
 
-    // Validate the status update data
-    const validatedData = statusUpdateSchema.parse(body);
+    // Validate the status update data using type-safe schema
+    const validatedData: StatusUpdatePayload = statusUpdatePayloadSchema.parse(body);
 
     // Get existing proposal
     const existingProposal = await prisma.proposal.findUnique({
@@ -120,8 +111,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       );
     }
 
-    // Validate status transition
-    const currentStatus = existingProposal.status as any;
+    // Validate status transition using type-safe status
+    const currentStatus = existingProposal.status as ProposalStatus;
     const newStatus = validatedData.status;
 
     if (!isValidStatusTransition(currentStatus, newStatus)) {
@@ -146,7 +137,16 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       );
     }
 
-    // Prepare update data
+    // Create type-safe status history entry
+    const newStatusEntry = createStatusHistoryEntry(
+      currentStatus,
+      newStatus,
+      session.user.id,
+      validatedData.notes,
+      validatedData.reason
+    );
+
+    // Prepare update data with type-safe metadata
     const updateData: any = {
       status: newStatus,
       updatedAt: new Date(),
@@ -154,26 +154,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     };
 
     // Add status-specific timestamps
-    if (newStatus === 'SUBMITTED') {
+    if (newStatus === ProposalStatus.SUBMITTED) {
       updateData.submittedAt = new Date();
-    } else if (newStatus === 'APPROVED') {
+    } else if (newStatus === ProposalStatus.APPROVED) {
       updateData.approvedAt = new Date();
     }
 
-    // Store status transition in metadata for history tracking
-    const statusHistory = (existingProposal.metadata as any)?.statusHistory || [];
-    const newStatusEntry = {
-      from: currentStatus,
-      to: newStatus,
-      notes: validatedData.notes,
-      changedAt: new Date().toISOString(),
-      changedBy: session.user.id,
-    };
+    // Store status transition in metadata for history tracking using type-safe utilities
+    const updatedMetadata = mergeMetadataWithStatusHistory(
+      existingProposal.metadata,
+      newStatusEntry
+    );
 
-    updateData.metadata = {
-      ...((existingProposal.metadata as any) || {}),
-      statusHistory: [...statusHistory, newStatusEntry],
-    };
+    updateData.metadata = updatedMetadata;
 
     // Update the proposal
     const updatedProposal = await prisma.proposal.update({
@@ -334,16 +327,24 @@ async function checkUpdatePermissions(userId: string, proposalCreatorId: string)
 /**
  * Validate status transitions according to workflow rules
  */
-function isValidStatusTransition(current: string, next: string): boolean {
-  const transitions: Record<string, string[]> = {
-    DRAFT: ['IN_REVIEW', 'REJECTED'],
-    IN_REVIEW: ['DRAFT', 'PENDING_APPROVAL', 'REJECTED'],
-    PENDING_APPROVAL: ['IN_REVIEW', 'APPROVED', 'REJECTED'],
-    APPROVED: ['SUBMITTED', 'REJECTED'],
-    SUBMITTED: ['ACCEPTED', 'DECLINED'],
-    REJECTED: ['DRAFT', 'IN_REVIEW'], // Can be restarted
-    ACCEPTED: [], // Terminal state
-    DECLINED: ['DRAFT', 'IN_REVIEW'], // Can be restarted
+function isValidStatusTransition(current: ProposalStatus, next: ProposalStatus): boolean {
+  const transitions: Record<ProposalStatus, ProposalStatus[]> = {
+    [ProposalStatus.DRAFT]: [ProposalStatus.IN_REVIEW, ProposalStatus.REJECTED],
+    [ProposalStatus.IN_REVIEW]: [
+      ProposalStatus.DRAFT,
+      ProposalStatus.PENDING_APPROVAL,
+      ProposalStatus.REJECTED,
+    ],
+    [ProposalStatus.PENDING_APPROVAL]: [
+      ProposalStatus.IN_REVIEW,
+      ProposalStatus.APPROVED,
+      ProposalStatus.REJECTED,
+    ],
+    [ProposalStatus.APPROVED]: [ProposalStatus.SUBMITTED, ProposalStatus.REJECTED],
+    [ProposalStatus.SUBMITTED]: [ProposalStatus.ACCEPTED, ProposalStatus.DECLINED],
+    [ProposalStatus.REJECTED]: [ProposalStatus.DRAFT, ProposalStatus.IN_REVIEW], // Can be restarted
+    [ProposalStatus.ACCEPTED]: [], // Terminal state
+    [ProposalStatus.DECLINED]: [ProposalStatus.DRAFT, ProposalStatus.IN_REVIEW], // Can be restarted
   };
 
   return transitions[current]?.includes(next) || false;

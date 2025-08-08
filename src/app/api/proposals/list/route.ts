@@ -5,12 +5,27 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Small in-memory cache for dashboard list to prevent repeated hits
+const proposalsListCache = new Map<string, { data: any; ts: number }>();
+const PROPOSALS_LIST_TTL_MS = 60 * 1000; // 60 seconds
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Return cached list when fresh
+    const cacheKey = `list:${session.user.id}`;
+    const cached = proposalsListCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < PROPOSALS_LIST_TTL_MS) {
+      return NextResponse.json({
+        success: true,
+        data: cached.data,
+        message: 'Proposals retrieved successfully (cache)',
+      });
     }
 
     const proposals = await prisma.proposal.findMany({
@@ -20,13 +35,20 @@ export async function GET(request: NextRequest) {
         status: true,
         priority: true,
         customerName: true,
+        // include minimal fields needed by dashboard cards
+        value: true,
+        dueDate: true,
+        updatedAt: true,
         createdAt: true,
       },
       orderBy: {
-        createdAt: 'desc',
+        updatedAt: 'desc',
       },
-      take: 10, // Limit to 10 for debugging
+      take: 10,
     });
+
+    // Update cache (non-blocking best-effort)
+    proposalsListCache.set(cacheKey, { data: proposals, ts: Date.now() });
 
     return NextResponse.json({
       success: true,

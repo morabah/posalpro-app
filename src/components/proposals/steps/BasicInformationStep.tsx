@@ -73,8 +73,8 @@ const basicInformationSchema = z.object({
 
 type BasicInformationFormData = z.infer<typeof basicInformationSchema>;
 
-// Industry options based on common business sectors
-const INDUSTRY_OPTIONS = [
+// Industry options based on common business sectors (lazy to reduce initial heap)
+const getIndustryOptions = () => ([
   { value: 'technology', label: 'Technology' },
   { value: 'healthcare', label: 'Healthcare' },
   { value: 'finance', label: 'Finance' },
@@ -84,7 +84,7 @@ const INDUSTRY_OPTIONS = [
   { value: 'government', label: 'Government' },
   { value: 'nonprofit', label: 'Non-profit' },
   { value: 'other', label: 'Other' },
-];
+]);
 
 interface BasicInformationStepProps {
   data: Partial<ProposalWizardStep1Data>;
@@ -178,9 +178,10 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   // ✅ CRITICAL FIX: Prevent duplicate API calls with request deduplication
   const isRequestInProgress = useRef(false);
 
-  // Fetch customers on component mount
-  useEffect(() => {
-    const fetchCustomers = async () => {
+  // Fetch customers lazily on first user intent (focus/open), not always on mount
+  const hasAttemptedFetch = useRef(false);
+
+  const fetchCustomers = useCallback(async () => {
       // ✅ CRITICAL: Prevent duplicate requests
       if (isRequestInProgress.current) {
         console.log('🔍 [BasicInformationStep] Request already in progress, skipping...');
@@ -198,12 +199,12 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         setCustomersLoading(true);
         setCustomersError(null);
 
-        console.log('🔍 [BasicInformationStep] Fetching customers...');
+        console.log('🔍 [BasicInformationStep] Fetching customers (limit=10, sortBy=name)...');
         const response = await apiClient.get<{
           success: boolean;
           data?: { customers: Customer[] };
           message?: string;
-        }>('/customers');
+        }>(`/customers?page=1&limit=10&sortBy=name&sortOrder=asc`);
 
         console.log('🔍 [BasicInformationStep] Raw API response:', response);
 
@@ -283,11 +284,15 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         setCustomersLoading(false);
         isRequestInProgress.current = false;
       }
-    };
+    hasAttemptedFetch.current = true;
+  }, [apiClient, customers.length, errorHandlingService]);
 
-    // ✅ CRITICAL FIX: Always fetch on mount, don't depend on customers length
-    fetchCustomers();
-  }, []); // ✅ CRITICAL: Empty dependency array for mount-only execution
+  // Trigger fetch when user focuses the customer field or opens the dropdown
+  const handleCustomerFieldFocus = useCallback(() => {
+    if (!hasAttemptedFetch.current && !customersLoading && customers.length === 0) {
+      fetchCustomers();
+    }
+  }, [customers.length, customersLoading, fetchCustomers]);
 
   // ✅ PERFORMANCE OPTIMIZATION: Debounced update function - SIMPLIFIED
   const debouncedHandleUpdate = useCallback(
@@ -580,6 +585,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
               <Select
                 value={selectedCustomer?.id || ''}
                 onChange={handleCustomerChange}
+                onFocus={handleCustomerFieldFocus}
                 options={customers.map(customer => ({
                   value: customer.id,
                   label: customer.name,

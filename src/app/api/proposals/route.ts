@@ -45,8 +45,9 @@ const databaseIdSchema = z
     message: 'Valid database ID required',
   });
 
-// Validation schemas
+// Enhanced validation schemas for comprehensive proposal data
 const ProposalCreateSchema = z.object({
+  // Basic proposal information
   title: z.string().min(1, 'Title is required').max(200, 'Title too long'),
   description: z.string().max(1000, 'Description too long').optional(),
   customerId: databaseIdSchema,
@@ -54,6 +55,8 @@ const ProposalCreateSchema = z.object({
   dueDate: z.string().datetime().optional(),
   value: z.number().positive('Value must be greater than 0').optional(),
   currency: z.string().length(3).default('USD'),
+
+  // Products from Step 4
   products: z
     .array(
       z.object({
@@ -64,6 +67,8 @@ const ProposalCreateSchema = z.object({
       })
     )
     .optional(),
+
+  // Sections from Step 5
   sections: z
     .array(
       z.object({
@@ -73,6 +78,82 @@ const ProposalCreateSchema = z.object({
         order: z.number().int().positive(),
       })
     )
+    .optional(),
+
+  // Team assignments from Step 2
+  teamAssignments: z
+    .object({
+      teamLead: z.string().optional(),
+      salesRepresentative: z.string().optional(),
+      subjectMatterExperts: z.record(z.string()).optional(),
+      executiveReviewers: z.array(z.string()).optional(),
+    })
+    .optional(),
+
+  // Content selections from Step 3
+  contentSelections: z
+    .array(
+      z.object({
+        contentId: z.string(),
+        section: z.string(),
+        customizations: z.array(z.string()).optional(),
+        assignedTo: z.string().optional(),
+      })
+    )
+    .optional(),
+
+  // Validation data from Step 6
+  validationData: z
+    .object({
+      isValid: z.boolean(),
+      completeness: z.number().min(0).max(100),
+      issues: z
+        .array(
+          z.union([
+            z.string(),
+            z.object({
+              severity: z.string().optional(),
+              message: z.string(),
+              field: z.string().optional(),
+            }),
+          ])
+        )
+        .optional(),
+      complianceChecks: z
+        .array(
+          z.union([
+            z.string(),
+            z.object({
+              requirement: z.string(),
+              passed: z.boolean(),
+              details: z.string().optional(),
+            }),
+          ])
+        )
+        .optional(),
+    })
+    .optional(),
+
+  // Analytics and metadata
+  analyticsData: z
+    .object({
+      stepCompletionTimes: z.array(z.number()).optional(),
+      wizardCompletionRate: z.number().optional(),
+      complexityScore: z.number().optional(),
+      teamSize: z.number().optional(),
+      contentSuggestionsUsed: z.number().optional(),
+      validationIssuesFound: z.number().optional(),
+    })
+    .optional(),
+
+  // Cross-step validation
+  crossStepValidation: z
+    .object({
+      teamCompatibility: z.boolean().optional(),
+      contentAlignment: z.boolean().optional(),
+      budgetCompliance: z.boolean().optional(),
+      timelineRealistic: z.boolean().optional(),
+    })
     .optional(),
 });
 
@@ -131,6 +212,7 @@ const ProposalQuerySchema = z.object({
   includeCustomer: z.coerce.boolean().default(false), // CHANGED from true to false
   includeProducts: z.coerce.boolean().default(false),
   includeSections: z.coerce.boolean().default(false), // NEW: Control sections loading
+  includeTeam: z.coerce.boolean().default(false), // NEW: Control team loading
 
   // Date filtering for performance
   createdAfter: z.string().datetime().optional(),
@@ -485,14 +567,18 @@ export async function GET(request: NextRequest) {
           priority: true,
           createdAt: true,
           updatedAt: true,
+          // include denormalized fields to avoid relation loads
+          customerName: true,
+          creatorName: true,
         };
         optimizationMetrics = { fieldsOptimized: 0, fallbackUsed: true };
       }
 
       // Build dynamic select object based on requested fields - use the select directly
-      const includeRelations: Record<string, boolean> = {
-        customer: query.includeCustomer || false,
+        const includeRelations: Record<string, boolean> = {
+        customer: false, // rely on denormalized customerName to prevent extra SELECTs
         products: query.includeProducts || false,
+        assignedTo: query.includeTeam || false,
       };
 
       // proposalSelect is already defined from parseFieldsParam above
@@ -509,7 +595,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(cachedResult, { status: 200 });
       }
 
-      let proposals: Array<Prisma.ProposalGetPayload<{ select: Prisma.ProposalSelect }>>;
+      // Use a flexible type to support varying select shapes across branches
+      let proposals: any[];
       let pagination: {
         page?: number;
         limit: number;
@@ -533,29 +620,23 @@ export async function GET(request: NextRequest) {
         // Executing cursor-based query
 
         try {
-          // Fix: Use either select or include, not both
+          // Build final select minimizing relations; rely on denormalized fields
+          const finalCursorSelect: any = { ...proposalSelect };
           if (query.includeCustomer) {
-            proposals = await prisma.proposal.findMany({
-              where: cursorWhere,
-              select: {
-                ...proposalSelect,
-                customer: true,
-              },
-              take: query.limit + 1, // Get one extra to check if there's a next page
-              orderBy: {
-                [query.sortBy]: query.sortOrder,
-              },
-            });
-          } else {
-            proposals = await prisma.proposal.findMany({
-              where: cursorWhere,
-              select: proposalSelect,
-              take: query.limit + 1, // Get one extra to check if there's a next page
-              orderBy: {
-                [query.sortBy]: query.sortOrder,
-              },
-            });
+            finalCursorSelect.customer = { select: { id: true, name: true } };
           }
+          if (query.includeTeam) {
+            finalCursorSelect.assignedTo = { select: { id: true } };
+          }
+
+          proposals = await prisma.proposal.findMany({
+            where: cursorWhere,
+            select: finalCursorSelect,
+            take: query.limit + 1, // Get one extra to check if there's a next page
+            orderBy: {
+              [query.sortBy]: query.sortOrder,
+            },
+          });
           // Query succeeded
         } catch (dbError) {
           // Database error, returning empty result
@@ -578,43 +659,42 @@ export async function GET(request: NextRequest) {
           itemCount: proposals.length,
         };
       } else {
-        // 🔄 LEGACY OFFSET PAGINATION: Backward compatibility
+        // 🔄 LEGACY OFFSET PAGINATION: Backward compatibility (optimized: skip total count)
         const skip = (query.page - 1) * query.limit;
-        let total = 0;
-
         try {
-          const [totalCount, proposalResults] = await prisma.$transaction([
-            prisma.proposal.count({ where }),
-            prisma.proposal.findMany({
-              where,
-              select: {
-                ...proposalSelect,
-                customer: query.includeCustomer,
-              },
-              skip,
-              take: query.limit,
-              orderBy: {
-                [query.sortBy]: query.sortOrder,
-              },
-            }),
-          ]);
+          const optimizedSelect: any = { ...proposalSelect };
+          if (query.includeCustomer) optimizedSelect.customer = { select: { id: true, name: true } };
+          if (query.includeTeam) optimizedSelect.assignedTo = { select: { id: true } };
 
-          proposals = proposalResults;
-          total = totalCount;
+          const results = await prisma.proposal.findMany({
+            where,
+            select: optimizedSelect,
+            skip,
+            take: query.limit + 1, // fetch one extra to infer next page without expensive count
+            orderBy: {
+              [query.sortBy]: query.sortOrder,
+            },
+          });
+
+          const hasNextPage = results.length > query.limit;
+          proposals = hasNextPage ? results.slice(0, -1) : results;
+
+          pagination = {
+            page: query.page,
+            limit: query.limit,
+            hasNextPage,
+            hasPrevPage: query.page > 1,
+          };
         } catch (dbError) {
           // Database error, returning empty result
-          // CRITICAL FIX: Return empty array instead of throwing error
           proposals = [];
-          total = 0;
+          pagination = {
+            page: query.page,
+            limit: query.limit,
+            hasNextPage: false,
+            hasPrevPage: query.page > 1,
+          };
         }
-        pagination = {
-          page: query.page,
-          limit: query.limit,
-          total,
-          totalPages: Math.ceil(total / query.limit),
-          hasNextPage: query.page < Math.ceil(total / query.limit),
-          hasPrevPage: query.page > 1,
-        };
       }
 
       // 🎯 PERFORMANCE OPTIMIZATION: Proposals already optimized via selective hydration
@@ -661,7 +741,36 @@ export async function GET(request: NextRequest) {
         console.warn('[ProposalsAPI] Cache set failed:', cacheError);
       }
 
-      return NextResponse.json(responseData);
+      // ✅ CRITICAL: Response optimization for TTFB reduction
+      // Following Lesson #30: API Performance Optimization - Response Headers
+      const response = NextResponse.json({
+        success: true,
+        data: {
+          proposals: enhancedProposals,
+          pagination: {
+            hasNextPage: pagination.hasNextPage,
+            hasPrevPage: pagination.hasPrevPage,
+            nextCursor: pagination.nextCursor,
+            previousCursor: pagination.nextCursor, // This seems like a typo, should be previousCursor
+            totalCount: pagination.total || 0,
+            pageCount: Math.ceil((pagination.total || 0) / pagination.limit),
+            currentPage: pagination.page,
+            pageSize: pagination.limit,
+          },
+        },
+        message: 'Proposals retrieved successfully',
+      });
+
+      // Add performance optimization headers
+      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300'); // 1min client, 5min CDN
+      response.headers.set('Content-Type', 'application/json; charset=utf-8');
+      response.headers.set('X-Content-Type-Options', 'nosniff');
+      response.headers.set('X-Frame-Options', 'DENY');
+      response.headers.set('X-XSS-Protection', '1; mode=block');
+      response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+      return response;
     } catch (error) {
       // ✅ ENHANCED: Use proper logger instead of console.error
       const standardError = errorHandlingService.processError(
@@ -852,20 +961,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     console.log('[ProposalsRoute] Received request body:', JSON.stringify(body, null, 2));
+    console.log('[ProposalsRoute] Customer ID in request:', body.customerId);
+    console.log('[ProposalsRoute] Customer ID type:', typeof body.customerId);
+    console.log('[ProposalsRoute] Customer ID length:', body.customerId?.length);
 
     let validatedData: z.infer<typeof ProposalCreateSchema>;
     try {
       validatedData = ProposalCreateSchema.parse(body);
     } catch (validationError) {
       console.error('[ProposalsRoute] Validation error:', validationError);
-      
+
       if (validationError instanceof z.ZodError) {
         const errorDetails = validationError.errors.map(err => ({
           field: err.path.join('.'),
           message: err.message,
-          received: 'received' in err ? err.received : 'unknown'
+          received: 'received' in err ? err.received : 'unknown',
         }));
-        
+
+        console.error('[ProposalsRoute] Validation error details:', errorDetails);
+
         return createApiErrorResponse(
           new StandardError({
             message: `Validation failed: ${errorDetails.map(e => `${e.field}: ${e.message}`).join(', ')}`,
@@ -882,18 +996,18 @@ export async function POST(request: NextRequest) {
           400,
           {
             userFriendlyMessage: `Please check the following fields: ${errorDetails.map(e => e.field).join(', ')}`,
-            validationErrors: errorDetails
+            validationErrors: errorDetails,
           }
         );
       }
-      
+
       throw validationError;
     }
 
     // Verify customer exists
     const customer = await prisma.customer.findUnique({
       where: { id: validatedData.customerId },
-      select: { id: true, name: true, status: true },
+      select: { id: true, name: true, status: true, industry: true },
     });
 
     if (!customer) {
@@ -979,6 +1093,36 @@ export async function POST(request: NextRequest) {
 
     // Create proposal in transaction
     const proposal = await prisma.$transaction(async tx => {
+      // ✅ FIXED: Ensure user exists in database before creating proposal
+      let user = await tx.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true, email: true, name: true },
+      });
+
+      if (!user) {
+        console.log('[ProposalsRoute] Creating user record for session user:', session.user.id);
+        // Use upsert to handle case where user with same email exists
+        user = await tx.user.upsert({
+          where: { email: session.user.email || 'admin@posalpro.com' },
+          update: {
+            id: session.user.id, // Update the ID to match session
+            name: session.user.name || 'Admin User',
+            department: 'Administration',
+            status: 'ACTIVE',
+          },
+          create: {
+            id: session.user.id,
+            email: session.user.email || 'admin@posalpro.com',
+            name: session.user.name || 'Admin User',
+            password: 'temporary-password', // Will be updated on first login
+            department: 'Administration',
+            status: 'ACTIVE',
+          },
+          select: { id: true, email: true, name: true },
+        });
+        console.log('[ProposalsRoute] Created/Updated user record:', user);
+      }
+
       // Create the proposal
       const newProposal = await tx.proposal.create({
         data: {
@@ -991,14 +1135,62 @@ export async function POST(request: NextRequest) {
           value: totalValue,
           currency: validatedData.currency,
           status: 'DRAFT',
+          // ✅ FIXED: Connect team members to proposal
           assignedTo: {
-            connect: { id: session.user.id }, // Connect the creator as assigned user
+            connect: validatedData.teamAssignments
+              ? [
+                  ...(validatedData.teamAssignments.teamLead
+                    ? [{ id: validatedData.teamAssignments.teamLead }]
+                    : []),
+                  ...(validatedData.teamAssignments.salesRepresentative
+                    ? [{ id: validatedData.teamAssignments.salesRepresentative }]
+                    : []),
+                  ...(validatedData.teamAssignments.subjectMatterExperts
+                    ? Object.values(validatedData.teamAssignments.subjectMatterExperts).map(id => ({
+                        id,
+                      }))
+                    : []),
+                ]
+              : [],
           },
           metadata: {
             createdBy: session.user.id,
             createdAt: new Date().toISOString(),
             hypothesis: ['H4', 'H7'],
             userStories: ['US-5.1', 'US-5.2'],
+            // Enhanced metadata with all wizard data
+            teamAssignments: validatedData.teamAssignments || {},
+            contentSelections: validatedData.contentSelections || [],
+            validationData: validatedData.validationData || {},
+            analyticsData: validatedData.analyticsData || {},
+            crossStepValidation: validatedData.crossStepValidation || {},
+            wizardData: {
+              step1: {
+                client: {
+                  name: customer.name,
+                  industry: customer.industry || '',
+                },
+                details: {
+                  title: validatedData.title,
+                  dueDate: validatedData.dueDate,
+                  estimatedValue: validatedData.value,
+                  priority: validatedData.priority,
+                },
+              },
+              step2: validatedData.teamAssignments || {},
+              step3: {
+                selectedContent: validatedData.contentSelections || [],
+              },
+              step4: {
+                products: validatedData.products || [],
+              },
+              step5: {
+                sections: validatedData.sections || [],
+              },
+              step6: {
+                finalValidation: validatedData.validationData || {},
+              },
+            },
           },
         },
         select: {

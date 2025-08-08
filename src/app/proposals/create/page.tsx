@@ -12,6 +12,7 @@
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 import React, { Suspense } from 'react';
 
 // Component Traceability Matrix (for documentation)
@@ -65,6 +66,8 @@ const PerformanceDashboard = dynamic(
  */
 export default function ProposalCreatePage() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const searchParams = useSearchParams();
+  const editProposalId = searchParams.get('edit');
 
   React.useEffect(() => {
     // Track page load with performance metrics
@@ -126,9 +129,13 @@ export default function ProposalCreatePage() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <header className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Create New Proposal</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {editProposalId ? 'Edit Proposal' : 'Create New Proposal'}
+            </h1>
             <p className="text-gray-600 mt-2">
-              Build comprehensive proposals with our guided wizard
+              {editProposalId
+                ? 'Update your proposal with our guided wizard'
+                : 'Build comprehensive proposals with our guided wizard'}
             </p>
           </header>
 
@@ -169,7 +176,7 @@ export default function ProposalCreatePage() {
               </div>
             }
           >
-            <ProposalWizard />
+            <ProposalWizard editProposalId={editProposalId || undefined} />
           </Suspense>
 
           {/* Footer with Performance Info */}

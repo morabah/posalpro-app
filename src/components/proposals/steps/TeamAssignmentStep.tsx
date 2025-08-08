@@ -42,52 +42,7 @@ interface User {
   roles?: Array<{ name: string }>;
 }
 
-// Mock data for team members (would come from API in production)
-const MOCK_EXECUTIVES = [
-  {
-    id: '1',
-    name: 'David Chen',
-    title: 'Chief Technology Officer (CTO)',
-    department: 'Technology',
-  },
-  {
-    id: '2',
-    name: 'Maria Rodriguez',
-    title: 'Chief Financial Officer (CFO)',
-    department: 'Finance',
-  },
-  { id: '3', name: 'Robert Kim', title: 'Chief Executive Officer (CEO)', department: 'Executive' },
-  { id: '4', name: 'Susan Lee', title: 'Chief Operating Officer (COO)', department: 'Operations' },
-];
-
-const MOCK_SME_POOL = {
-  [ExpertiseArea.TECHNICAL]: [
-    { id: '1', name: 'John Smith', expertise: 'Cloud Architecture', availability: 70 },
-    { id: '2', name: 'David Kim', expertise: 'DevOps & Infrastructure', availability: 85 },
-    { id: '3', name: 'Rachel Green', expertise: 'Application Development', availability: 60 },
-  ],
-  [ExpertiseArea.SECURITY]: [
-    { id: '4', name: 'Alex Parker', expertise: 'Cybersecurity', availability: 75 },
-    { id: '5', name: 'Maria Santos', expertise: 'Compliance & Risk', availability: 90 },
-    { id: '6', name: 'James Wilson', expertise: 'Identity Management', availability: 55 },
-  ],
-  [ExpertiseArea.LEGAL]: [
-    { id: '7', name: 'Jennifer Adams', expertise: 'Contract Law', availability: 80 },
-    { id: '8', name: 'Robert Taylor', expertise: 'IP & Licensing', availability: 70 },
-  ],
-  [ExpertiseArea.PRICING]: [
-    { id: '9', name: 'Lisa Kim', expertise: 'Financial Modeling', availability: 85 },
-    { id: '10', name: 'Tom Brown', expertise: 'Cost Analysis', availability: 75 },
-  ],
-  [ExpertiseArea.COMPLIANCE]: [
-    { id: '11', name: 'Carol Davis', expertise: 'Regulatory Affairs', availability: 90 },
-    { id: '12', name: 'Frank Miller', expertise: 'Quality Assurance', availability: 65 },
-  ],
-  [ExpertiseArea.BUSINESS_ANALYSIS]: [
-    { id: '13', name: 'Emma Clark', expertise: 'Business Requirements', availability: 80 },
-    { id: '14', name: 'Kevin Lee', expertise: 'Process Analysis', availability: 70 },
-  ],
-};
+// Removed mock data to comply with project rules. All data comes from API responses.
 
 // Validation schema for team assignment step
 const teamAssignmentSchema = z.object({
@@ -334,18 +289,14 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     const suggestions = {
-      teamLead: teamLeads[0], // Suggest first available team lead
-      salesRep: salesReps[0], // Suggest first available sales rep
+      teamLead: teamLeads[0],
+      salesRep: salesReps[0],
       smes: {
-        [ExpertiseArea.TECHNICAL]: MOCK_SME_POOL[ExpertiseArea.TECHNICAL].find(
-          sme => sme.availability > 70
-        ),
-        [ExpertiseArea.SECURITY]: MOCK_SME_POOL[ExpertiseArea.SECURITY].find(
-          sme => sme.availability > 70
-        ),
+        [ExpertiseArea.TECHNICAL]: teamLeads[1] || salesReps[1] || null,
+        [ExpertiseArea.SECURITY]: teamLeads[2] || salesReps[2] || null,
       },
-      executives: [executives[0]], // Suggest first available executive
-    };
+      executives: executives.slice(0, 1),
+    } as const;
 
     setAiSuggestions(suggestions);
     setIsLoadingSuggestions(false);
@@ -562,9 +513,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                         <div className="flex justify-between items-center mb-2">
                           <Label htmlFor={`sme-${area}`}>
                             {area}{' '}
-                            <span className="text-gray-500">
-                              ({(MOCK_SME_POOL[area] || []).length} available)
-                            </span>
+                            <span className="text-gray-500">&nbsp;</span>
                           </Label>
                         </div>
 
@@ -574,9 +523,9 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                           render={({ field }) => (
                             <Select
                               id={`sme-${area}`}
-                              options={(MOCK_SME_POOL[area] || []).map(sme => ({
-                                value: sme.id,
-                                label: `${sme.name} - ${sme.expertise} (${sme.availability}% available)`,
+                              options={[...teamLeads, ...salesReps, ...executives].map(user => ({
+                                value: user.id,
+                                label: `${user.name}${user.department ? ` - ${user.department}` : ''}`,
                               }))}
                               value={field.value || ''}
                               onChange={(value: string | string[]) => {

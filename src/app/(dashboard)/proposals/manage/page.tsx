@@ -32,8 +32,20 @@ import { ProposalData } from '../../../../lib/entities/proposal';
 
 // API Response interfaces
 interface ProposalApiResponse {
-  proposals: Array<ProposalData & { customer?: any }>;
-  pagination: {
+  success?: boolean;
+  data?: {
+    proposals: Array<ProposalData & { customer?: any }>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  };
+  proposals?: Array<ProposalData & { customer?: any }>; // Fallback for direct access
+  pagination?: {
     page: number;
     limit: number;
     total: number;
@@ -41,7 +53,7 @@ interface ProposalApiResponse {
     hasNextPage: boolean;
     hasPrevPage: boolean;
   };
-  meta: {
+  meta?: {
     paginationType: string;
     sortBy: string;
     sortOrder: string;
@@ -140,34 +152,56 @@ function ProposalManagementDashboardContent() {
 
     setIsLoading(true);
     setError(null);
+
     try {
+      console.log('🚀 [PROPOSALS] Fetching proposals with apiClient...');
+
+      // Use denormalized fields; avoid heavy relation includes by default
       const response = await apiClient.get<ProposalApiResponse>(
-        '/proposals?page=1&limit=50&sortBy=createdAt&sortOrder=desc&includeCustomer=true'
+        '/proposals?page=1&limit=50&sortBy=updatedAt&sortOrder=desc&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName,customer(id,name),assignedTo(id,name)'
       );
 
-      if (response.proposals && Array.isArray(response.proposals)) {
-        const proposalsData = response.proposals;
+      // Handle the actual API response structure
+      const proposalsData = response.data?.proposals || response.proposals || [];
 
-        const transformedProposals: Proposal[] = proposalsData.map(apiProposal => ({
-          id: apiProposal.id,
-          title: apiProposal.title,
-          client: apiProposal.customer?.name || 'Unknown Client',
-          status: mapApiStatusToUIStatus(apiProposal.status),
-          priority: mapApiPriorityToUIPriority(apiProposal.priority),
-          dueDate: new Date(apiProposal.deadline || Date.now()),
-          createdAt: new Date(apiProposal.createdAt),
-          updatedAt: new Date(apiProposal.updatedAt),
-          estimatedValue: apiProposal.estimatedValue || 0,
-          teamLead: apiProposal.createdBy || 'Unassigned',
-          assignedTeam: apiProposal.assignedTo || [],
-          progress: calculateProgress(apiProposal.status),
-          stage: getStageFromStatus(apiProposal.status),
-          riskLevel: calculateRiskLevel(apiProposal),
-          tags: apiProposal.tags || [],
-          description: apiProposal.description,
-          lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
-          customer: apiProposal.customer,
-        }));
+      if (proposalsData && Array.isArray(proposalsData)) {
+        const transformedProposals: Proposal[] = proposalsData.map(apiProposal => {
+          // ✅ ENHANCED: Better data mapping with fallbacks
+          const teamLead = (apiProposal as any).creatorName || apiProposal.createdBy || 'Unassigned';
+          const assignedTeam = Array.isArray((apiProposal as any).assignedTo)
+            ? (apiProposal as any).assignedTo
+            : [];
+
+          // ✅ FIXED: Handle team data properly - assignedTo is an array of User objects
+          const teamMembers = Array.isArray(assignedTeam)
+            ? assignedTeam.map((member: any) => member.name || member.id || 'Unknown')
+            : [];
+
+          // ✅ FIXED: Use correct field names from Proposal model with type assertion
+          const estimatedValue = (apiProposal as any).value || 0;
+          const dueDate = (apiProposal as any).dueDate || new Date();
+
+          return {
+            id: apiProposal.id,
+            title: apiProposal.title,
+            client: (apiProposal as any).customerName || apiProposal.customer?.name || 'Unknown Client',
+            status: mapApiStatusToUIStatus(apiProposal.status),
+            priority: mapApiPriorityToUIPriority(apiProposal.priority),
+            dueDate: new Date(dueDate),
+            createdAt: new Date(apiProposal.createdAt),
+            updatedAt: new Date(apiProposal.updatedAt),
+            estimatedValue: estimatedValue,
+            teamLead: teamLead,
+            assignedTeam: teamMembers,
+            progress: calculateProgress(apiProposal.status),
+            stage: getStageFromStatus(apiProposal.status),
+            riskLevel: calculateRiskLevel(apiProposal),
+            tags: apiProposal.tags || [],
+            description: apiProposal.description,
+            lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
+            customer: apiProposal.customer,
+          };
+        });
 
         setProposals(transformedProposals);
 

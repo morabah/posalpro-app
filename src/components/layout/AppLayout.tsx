@@ -2,16 +2,35 @@
  * PosalPro MVP2 - Main Application Layout
  * Implements the complete navigation system with header, sidebar, and footer
  * Based on DASHBOARD_SCREEN.md and WIREFRAME_INTEGRATION_GUIDE.md specifications
+ * 🚀 LCP OPTIMIZATION: Lazy loading for better performance
  */
 
 'use client';
 
 import { AnalyticsStorageMonitor } from '@/components/common/AnalyticsStorageMonitor';
 import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-import { AppFooter } from './AppFooter';
-import { AppHeader } from './AppHeader';
-import { AppSidebar } from './AppSidebar';
+
+// ✅ CRITICAL: Lazy loading for LCP optimization
+// Following Lesson #30: Performance Optimization - Component Lazy Loading
+const AppFooter = dynamic(() => import('./AppFooter').then(mod => ({ default: mod.AppFooter })), {
+  loading: () => <div className="h-16 bg-gray-100 animate-pulse" />,
+  ssr: false,
+});
+
+const AppHeader = dynamic(() => import('./AppHeader').then(mod => ({ default: mod.AppHeader })), {
+  loading: () => <div className="h-16 bg-white border-b animate-pulse" />,
+  ssr: true,
+});
+
+const AppSidebar = dynamic(
+  () => import('./AppSidebar').then(mod => ({ default: mod.AppSidebar })),
+  {
+    loading: () => <div className="w-64 bg-white border-r animate-pulse" />,
+    ssr: false,
+  }
+);
 
 // Component Traceability Matrix for Navigation System
 const COMPONENT_MAPPING = {
@@ -99,37 +118,46 @@ export function AppLayout({ children, user }: AppLayoutProps) {
         <div
           className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
         />
       )}
 
-      {/* Sidebar */}
-      <AppSidebar
-        isOpen={sidebarOpen}
-        isMobile={isMobile}
-        onClose={() => setSidebarOpen(false)}
-        user={user}
-      />
-
-      {/* Main content */}
-      <div className={`flex flex-col min-h-screen ${isMobile ? '' : 'lg:pl-64'}`}>
-        {/* Header */}
-        <AppHeader
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-          user={user}
-          isMobile={isMobile}
-        />
+      {/* ✅ CRITICAL: LCP optimized layout structure */}
+      <div className="flex h-full">
+        {/* Sidebar */}
+        <div
+          className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-white shadow-lg transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <AppSidebar
+            isOpen={sidebarOpen}
+            isMobile={isMobile}
+            onClose={() => setSidebarOpen(false)}
+            user={user}
+          />
+        </div>
 
         {/* Main content area */}
-        <main className="flex-1" id="main-content" role="main">
-          {children}
-        </main>
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Header */}
+          <AppHeader
+            onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+            isMobile={isMobile}
+            user={user}
+          />
 
-        {/* Footer */}
-        <AppFooter />
+          {/* Main content */}
+          <main className="flex-1 overflow-auto p-6">
+            {/* ✅ CRITICAL: LCP optimized content wrapper */}
+            <div className="lcp-optimized critical-content">{children}</div>
+          </main>
+
+          {/* Footer */}
+          <AppFooter />
+        </div>
       </div>
 
-      {/* Analytics Storage Monitor - Development Only */}
+      {/* Analytics monitoring */}
       <AnalyticsStorageMonitor />
     </div>
   );

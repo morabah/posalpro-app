@@ -15,6 +15,7 @@
  * - Performance optimization with form state management
  */
 
+import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
@@ -122,6 +123,15 @@ export function UserProfile({ className = '' }: UserProfileProps) {
   const { user, isAuthenticated } = useAuth() || {};
   const analytics = useUserProfileAnalytics();
   const apiClient = useApiClient();
+  const { success: showSuccess, info: showInfo } = useToast();
+
+  // Track component lifecycle for debugging
+  console.log(
+    '🎯 UserProfile component render, user:',
+    user?.email,
+    'authenticated:',
+    isAuthenticated
+  );
 
   const [activeTab, setActiveTab] = useState<TabSection>('personal');
   const [isEditing, setIsEditing] = useState(false);
@@ -161,6 +171,63 @@ export function UserProfile({ className = '' }: UserProfileProps) {
       router.push('/auth/login');
     }
   }, [isAuthenticated, router]);
+
+  // Load existing profile data on component mount
+  useEffect(() => {
+    console.log('🔍 UserProfile useEffect triggered, user:', user?.email);
+
+    const loadProfileData = async () => {
+      if (!user?.email) {
+        console.log('❌ No user email available, skipping profile data load');
+        return;
+      }
+
+      try {
+        console.log('🔄 Loading existing profile data from database...');
+        const response = await apiClient.get<{
+          success: boolean;
+          data?: any;
+          error?: string;
+        }>('/api/profile');
+
+        if (response.success && response.data) {
+          const profileData = response.data;
+          console.log('✅ Profile data loaded:', profileData);
+          console.log('🔥 CRITICAL DEBUG: About to reset form with title:', profileData.title);
+
+          // Populate form with existing data
+          const formData = {
+            firstName: profileData.firstName || '',
+            lastName: profileData.lastName || '',
+            title: profileData.title || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            department: profileData.department || '',
+            office: profileData.office || '',
+            languages: profileData.languages || ['English'],
+            bio: profileData.bio || '',
+            expertiseAreas: profileData.expertiseAreas || [],
+          };
+
+          console.log('🔄 Form data being reset with:', formData);
+          console.log('📋 Job title being set to:', formData.title);
+
+          reset(formData);
+
+          // Set additional state
+          setExpertiseAreas(profileData.expertiseAreas || []);
+          setProfileImage(profileData.profileImage || null);
+
+          console.log('✅ Form populated with existing data');
+          console.log('🎯 FINAL DEBUG: Form should now display title:', formData.title);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load profile data:', error);
+      }
+    };
+
+    loadProfileData();
+  }, [user?.email, apiClient, reset]);
 
   // Track page load
   useEffect(() => {
@@ -276,6 +343,12 @@ export function UserProfile({ className = '' }: UserProfileProps) {
 
       setIsEditing(false);
       setError(null);
+
+      // Show success toast to user
+      showSuccess('Profile updated successfully!', {
+        title: 'Success',
+        duration: 4000,
+      });
     } catch (error) {
       // Use standardized error handling
       const standardError = errorHandlingService.processError(
@@ -463,6 +536,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
                   }}
                   user={user}
                   completeness={calculateCompleteness()}
+                  showInfo={showInfo}
                 />
               )}
 
@@ -508,6 +582,7 @@ interface PersonalTabProps {
   onCancel: () => void;
   user: any;
   completeness: number;
+  showInfo: (message: string, options?: any) => void;
 }
 
 function PersonalTab({
@@ -526,6 +601,7 @@ function PersonalTab({
   onCancel,
   user,
   completeness,
+  showInfo,
 }: PersonalTabProps) {
   return (
     <div className="p-8">
@@ -540,7 +616,13 @@ function PersonalTab({
         <div className="flex items-center space-x-4">
           {!isEditing && (
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                setIsEditing(true);
+                showInfo('Make your changes and click "Save Changes" when done.', {
+                  title: 'Edit Mode Activated',
+                  duration: 3000,
+                });
+              }}
               className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <Edit3 className="w-4 h-4" />
@@ -650,6 +732,9 @@ function PersonalTab({
                 {...register('title')}
                 type="text"
                 disabled={!isEditing}
+                onFocus={() =>
+                  console.log('🎯 Job Title Field Focus - Current Value:', watch('title'))
+                }
                 className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
                   !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
                 } ${errors.title ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}

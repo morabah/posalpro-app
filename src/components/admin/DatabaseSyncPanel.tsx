@@ -27,7 +27,7 @@ import {
   SignalIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useCallback, useEffect, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
@@ -89,7 +89,7 @@ export default function DatabaseSyncPanel({
   onSyncComplete,
   onConflictDetected,
 }: DatabaseSyncPanelProps) {
-  const { data: session, status: sessionStatus } = useSession() || {};
+  const { user, isAuthenticated, isLoading } = useAuth();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const apiClient = useApiClient();
   const errorHandlingService = ErrorHandlingService.getInstance();
@@ -115,23 +115,23 @@ export default function DatabaseSyncPanel({
 
   // Check if user has admin privileges
   const isAdminUser = useCallback(() => {
-    if (sessionStatus === 'loading') return false;
-    if (!session?.user) return false;
+    if (isLoading) return false;
+    if (!isAuthenticated || !user) return false;
 
     // In development, allow bypass
     if (process.env.NODE_ENV === 'development') return true;
 
     // Check user roles for admin privileges
-    const user = session.user as any;
-    if (typeof user.roles === 'string') {
-      return user.roles.toLowerCase().includes('admin');
+    const u = user as any;
+    if (typeof u.roles === 'string') {
+      return u.roles.toLowerCase().includes('admin');
     }
-    if (Array.isArray(user.roles)) {
-      return user.roles.some((role: string) => role.toLowerCase().includes('admin'));
+    if (Array.isArray(u.roles)) {
+      return u.roles.some((role: string) => role.toLowerCase().includes('admin'));
     }
 
     return false;
-  }, [session, sessionStatus]);
+  }, [user, isAuthenticated, isLoading]);
 
   // Real-time database status monitoring
   const checkDatabaseStatus = useCallback(
@@ -460,14 +460,14 @@ export default function DatabaseSyncPanel({
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-lg font-medium">Sync Operations</h4>
-          {sessionStatus === 'loading' ? (
+          {isLoading ? (
             <span className="text-sm text-gray-500">Checking authentication...</span>
-          ) : !session?.user ? (
+          ) : !isAuthenticated || !user ? (
             <span className="text-sm text-red-600">Authentication required</span>
           ) : !isAdminUser() ? (
             <span className="text-sm text-red-600">Admin privileges required</span>
           ) : (
-            <span className="text-sm text-green-600">✅ Authenticated as {session.user.email}</span>
+            <span className="text-sm text-green-600">✅ Authenticated as {user.email}</span>
           )}
         </div>
 
@@ -477,13 +477,7 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('localToCloud')}
-            disabled={
-              isSyncing ||
-              !localDbStatus.isOnline ||
-              !cloudDbStatus.isOnline ||
-              sessionStatus === 'loading' ||
-              !isAdminUser()
-            }
+            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline || isLoading || !isAdminUser()}
           >
             <CloudArrowUpIcon className="w-4 h-4 mr-2" />
             Local → Cloud
@@ -494,13 +488,7 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('cloudToLocal')}
-            disabled={
-              isSyncing ||
-              !localDbStatus.isOnline ||
-              !cloudDbStatus.isOnline ||
-              sessionStatus === 'loading' ||
-              !isAdminUser()
-            }
+            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline || isLoading || !isAdminUser()}
           >
             <CloudArrowDownIcon className="w-4 h-4 mr-2" />
             Cloud → Local
@@ -511,13 +499,7 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('bidirectional')}
-            disabled={
-              isSyncing ||
-              !localDbStatus.isOnline ||
-              !cloudDbStatus.isOnline ||
-              sessionStatus === 'loading' ||
-              !isAdminUser()
-            }
+            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline || isLoading || !isAdminUser()}
           >
             <ArrowPathIcon className="w-4 h-4 mr-2" />
             Bi-directional
@@ -530,9 +512,9 @@ export default function DatabaseSyncPanel({
           </p>
         )}
 
-        {sessionStatus !== 'loading' && !isAdminUser() && (
+        {!isLoading && !isAdminUser() && (
           <p className="text-sm text-red-600 mt-2">
-            {!session?.user
+            {!isAuthenticated || !user
               ? 'Please log in with an administrator account to perform sync operations.'
               : 'Admin privileges are required for database synchronization.'}
           </p>

@@ -4,7 +4,7 @@
  * Based on PROPOSAL_CREATION_SCREEN.md and proposal management requirements
  */
 
-import { ProposalStatus } from '@/types';
+import { ProposalStatus } from '@/types/entities/proposal';
 import { z } from 'zod';
 import {
   databaseIdArraySchema,
@@ -65,6 +65,42 @@ export const proposalMetadataSchema = z.object({
 });
 
 export type ProposalMetadata = z.infer<typeof proposalMetadataSchema>;
+
+/**
+ * Status history entry validation schema
+ */
+export const statusHistoryEntrySchema = z.object({
+  from: z.nativeEnum(ProposalStatus),
+  to: z.nativeEnum(ProposalStatus),
+  notes: z.string().optional(),
+  changedAt: z.string(),
+  changedBy: z.string(),
+  reason: z.string().optional(),
+});
+
+/**
+ * Status update payload validation schema
+ */
+export const statusUpdatePayloadSchema = z.object({
+  status: z.nativeEnum(ProposalStatus),
+  notes: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+/**
+ * Enhanced proposal metadata schema with status history
+ */
+export const enhancedProposalMetadataSchema = z.object({
+  statusHistory: z.array(statusHistoryEntrySchema).default([]),
+  notes: z.string().optional(),
+  lastModifiedBy: z.string().optional(),
+  lastModifiedAt: z.string().optional(),
+  version: z.number().optional(),
+});
+
+export type StatusHistoryEntry = z.infer<typeof statusHistoryEntrySchema>;
+export type StatusUpdatePayload = z.infer<typeof statusUpdatePayloadSchema>;
+export type EnhancedProposalMetadata = z.infer<typeof enhancedProposalMetadataSchema>;
 
 /**
  * RFP document validation schema

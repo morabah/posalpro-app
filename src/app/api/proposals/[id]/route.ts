@@ -172,6 +172,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       customerIndustry: proposal.customer?.industry,
       customerTier: proposal.customer?.tier,
       customerEmail: proposal.customer?.email,
+      // Contact information from metadata
+      contactPerson: (proposal.metadata as any)?.wizardData?.step1?.client?.contactPerson || '',
+      contactPhone: (proposal.metadata as any)?.wizardData?.step1?.client?.contactPhone || '',
 
       // Creator information
       createdBy: proposal.creator?.name || 'Unknown Creator',
@@ -212,6 +215,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             (new Date(proposal.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
           )
         : null,
+
+      // ✅ ENHANCED: Wizard data from metadata for comprehensive summary
+      wizardData: (proposal.metadata as any)?.wizardData || null,
+      teamAssignments: (proposal.metadata as any)?.teamAssignments || null,
+      contentSelections: (proposal.metadata as any)?.contentSelections || null,
+      validationData: (proposal.metadata as any)?.validationData || null,
+      analyticsData: (proposal.metadata as any)?.analyticsData || null,
+      crossStepValidation: (proposal.metadata as any)?.crossStepValidation || null,
     };
 
     console.log('[ProposalDetailAPI] Successfully fetched proposal:', proposalId);

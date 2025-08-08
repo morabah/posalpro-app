@@ -107,18 +107,45 @@ class MemoryOptimizationService {
   }
 
   /**
-   * Get current memory metrics
+   * Get current memory metrics (browser-compatible)
    */
   public getMemoryMetrics(): MemoryMetrics {
-    const usage = process.memoryUsage();
-    return {
-      rss: usage.rss,
-      heapTotal: usage.heapTotal,
-      heapUsed: usage.heapUsed,
-      external: usage.external,
-      arrayBuffers: usage.arrayBuffers,
-      timestamp: Date.now(),
-    };
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined') {
+      // Use browser Performance Memory API if available
+      const memory = (performance as any).memory;
+      if (memory) {
+        return {
+          rss: 0, // Not available in browser
+          heapTotal: memory.totalJSHeapSize || 0,
+          heapUsed: memory.usedJSHeapSize || 0,
+          external: 0, // Not available in browser
+          arrayBuffers: 0, // Not available in browser
+          timestamp: Date.now(),
+        };
+      } else {
+        // Fallback for browsers without memory API
+        return {
+          rss: 0,
+          heapTotal: 0,
+          heapUsed: 0,
+          external: 0,
+          arrayBuffers: 0,
+          timestamp: Date.now(),
+        };
+      }
+    } else {
+      // Server-side Node.js environment
+      const usage = process.memoryUsage();
+      return {
+        rss: usage.rss,
+        heapTotal: usage.heapTotal,
+        heapUsed: usage.heapUsed,
+        external: usage.external,
+        arrayBuffers: usage.arrayBuffers,
+        timestamp: Date.now(),
+      };
+    }
   }
 
   /**

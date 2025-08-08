@@ -1,17 +1,50 @@
 {
-  "timestamp": "2025-08-04T18:35:23.288Z",
-  "duration": 929,
-  "results": {
-    "passed": 1,
-    "failed": 1,
-    "duration": 0,
+  "timestamp": "2025-08-08T09:34:50.182Z",
+  "testDuration": 59663,
+  "webVitals": {
+    "TTFB": 96.89999961853027,
+    "domContentLoaded": 0,
+    "loadComplete": 0,
+    "memoryUsed": 218,
+    "memoryTotal": 263
+  },
+  "pageLoadTimes": {
+    "Login": 578,
+    "Dashboard": 2374,
+    "Proposals Manage": 680,
+    "Proposals Create": 23067
+  },
+  "memoryUsage": {
+    "Timestamp": 3768326.367245,
+    "Documents": 9,
+    "Frames": 5,
+    "JSEventListeners": 290,
+    "Nodes": 473,
+    "LayoutCount": 1,
+    "RecalcStyleCount": 5,
+    "LayoutDuration": 0.046327,
+    "RecalcStyleDuration": 0.030146,
+    "ScriptDuration": 0.017405,
+    "TaskDuration": 0.770851,
+    "JSHeapUsedSize": 41033096,
+    "JSHeapTotalSize": 44089344,
+    "usedJSHeapSize": 241,
+    "totalJSHeapSize": 244,
+    "jsHeapSizeLimit": 2144
+  },
+  "apiPerformance": {
+    "totalCalls": 25,
+    "averageResponseTime": 122.32,
+    "slowCalls": 3
+  },
+  "violations": {
+    "total": 0,
     "details": []
   },
-  "optimizations": [
-    "Duplicate API call prevention implemented",
-    "Navigation analytics throttling optimized",
-    "Click handler performance improved",
-    "Debug logging removed",
-    "Fast Refresh issues investigated"
-  ]
+  "compliance": {
+    "webVitalsCompliant": true,
+    "apiPerformanceCompliant": false,
+    "memoryUsageCompliant": false,
+    "noViolations": true
+  }
 }

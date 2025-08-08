@@ -1,6 +1,7 @@
 'use client';
 
 import { CommunicationCenter } from '@/components/coordination/CommunicationCenter';
+import { WizardSummary } from '@/components/proposals/WizardSummary';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
@@ -75,6 +76,69 @@ interface ProposalDetail {
   approvalStages: number;
   isOverdue: boolean;
   daysUntilDeadline: number | null;
+
+  // ✅ ENHANCED: Wizard data for comprehensive summary
+  wizardData: {
+    step1?: {
+      client?: {
+        name?: string;
+        industry?: string;
+        contactPerson?: string;
+        contactPhone?: string;
+      };
+      details?: {
+        title?: string;
+        dueDate?: string;
+        estimatedValue?: number;
+        priority?: string;
+      };
+    };
+    step2?: any;
+    step3?: {
+      selectedContent?: any[];
+    };
+    step4?: {
+      products?: any[];
+    };
+    step5?: {
+      sections?: any[];
+    };
+    step6?: {
+      finalValidation?: any;
+    };
+  } | null;
+  teamAssignments: {
+    teamLead?: string;
+    salesRepresentative?: string;
+    subjectMatterExperts?: Record<string, string>;
+    executiveReviewers?: string[];
+  } | null;
+  contentSelections: Array<{
+    contentId: string;
+    section: string;
+    customizations: any[];
+    assignedTo: string;
+  }> | null;
+  validationData: {
+    isValid?: boolean;
+    completeness?: number;
+    issues?: any[];
+    complianceChecks?: any[];
+  } | null;
+  analyticsData: {
+    stepCompletionTimes?: any[];
+    wizardCompletionRate?: number;
+    complexityScore?: number;
+    teamSize?: number;
+    contentSuggestionsUsed?: number;
+    validationIssuesFound?: number;
+  } | null;
+  crossStepValidation: {
+    teamCompatibility?: boolean;
+    contentAlignment?: boolean;
+    budgetCompliance?: boolean;
+    timelineRealistic?: boolean;
+  } | null;
 }
 
 export default function ProposalDetailPage() {
@@ -362,6 +426,17 @@ export default function ProposalDetailPage() {
                 </div>
               </div>
             </Card>
+
+            {/* ✅ ENHANCED: Wizard Summary */}
+            <WizardSummary
+              wizardData={proposal.wizardData}
+              teamAssignments={proposal.teamAssignments}
+              contentSelections={proposal.contentSelections || []}
+              validationData={proposal.validationData}
+              analyticsData={proposal.analyticsData}
+              crossStepValidation={proposal.crossStepValidation}
+              assignedTo={proposal.assignedTo} // ✅ ADDED: Pass resolved user data
+            />
 
             {/* Sections */}
             {proposal.sections.length > 0 && (

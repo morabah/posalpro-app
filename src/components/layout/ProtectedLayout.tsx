@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { AppLayout } from './AppLayout';
@@ -23,36 +23,27 @@ export function ProtectedLayout({
   redirectTo = '/auth/login',
 }: ProtectedLayoutProps) {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   useEffect(() => {
-    if (status === 'loading') return; // Do nothing while loading
+    if (isLoading) return; // Do nothing while loading
 
-    if (status === 'unauthenticated') {
+    if (!isAuthenticated) {
       router.push(redirectTo);
       return;
     }
 
-    if (status === 'authenticated') {
-      if (!session?.user) {
-        // Handle the case where user is null despite being authenticated
-        router.push(redirectTo);
-        return;
-      }
-
+    if (isAuthenticated && user) {
       if (requiredRole.length > 0) {
-        const userRoles = session.user.roles.map(r => r.toLowerCase()) || [];
-        if (
-          !userRoles.length ||
-          !requiredRole.some(role => userRoles.includes(role.toLowerCase()))
-        ) {
+        const userRoles = (user.roles || []).map(r => r.toLowerCase());
+        if (!userRoles.length || !requiredRole.some(role => userRoles.includes(role.toLowerCase()))) {
           router.push('/unauthorized');
         }
       }
     }
-  }, [session, status, requiredRole, router, redirectTo]);
+  }, [isAuthenticated, isLoading, user, requiredRole, router, redirectTo]);
 
-  if (status === 'loading') {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -63,12 +54,12 @@ export function ProtectedLayout({
     );
   }
 
-  if (status === 'authenticated' && session?.user) {
+  if (isAuthenticated && user) {
     // Ensure session.user exists before passing it to AppLayout
     // Adapt the session user to the structure expected by AppLayout
     const userForLayout = {
-      ...session.user,
-      role: session.user.roles?.[0] || 'user', // Pass the first role, or a default
+      ...user,
+      role: user.roles?.[0] || 'user', // Pass the first role, or a default
     };
     return <AppLayout user={userForLayout}>{children}</AppLayout>;
   }

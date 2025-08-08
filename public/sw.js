@@ -24,6 +24,10 @@ const API_CACHE_PATTERNS = [
   '/api/health',
   '/api/config',
   '/api/dashboard/stats',
+  // Short-lived provider discovery cache to smooth dev spikes
+  '/api/auth/providers',
+  // Short-lived session cache to smooth dev spikes
+  '/api/auth/session',
 ];
 
 // Cache strategies
@@ -38,7 +42,7 @@ const CACHE_STRATEGIES = {
 // Install event - cache static assets
 self.addEventListener('install', event => {
   console.log('[SW] Installing service worker...');
-  
+
   event.waitUntil(
     caches.open(STATIC_CACHE_NAME)
       .then(cache => {
@@ -58,13 +62,13 @@ self.addEventListener('install', event => {
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
   console.log('[SW] Activating service worker...');
-  
+
   event.waitUntil(
     caches.keys()
       .then(cacheNames => {
         return Promise.all(
           cacheNames.map(cacheName => {
-            if (cacheName !== STATIC_CACHE_NAME && 
+            if (cacheName !== STATIC_CACHE_NAME &&
                 cacheName !== DYNAMIC_CACHE_NAME &&
                 cacheName !== CACHE_NAME) {
               console.log('[SW] Deleting old cache:', cacheName);
@@ -84,17 +88,17 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
-  
+
   // Skip non-GET requests
   if (request.method !== 'GET') {
     return;
   }
-  
+
   // Skip chrome-extension and other non-http requests
   if (!url.protocol.startsWith('http')) {
     return;
   }
-  
+
   // Handle different types of requests
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(handleApiRequest(request));
@@ -110,39 +114,39 @@ self.addEventListener('fetch', event => {
 // Handle API requests with network-first strategy
 async function handleApiRequest(request) {
   const url = new URL(request.url);
-  
+
   // Check if this API should be cached
-  const shouldCache = API_CACHE_PATTERNS.some(pattern => 
+  const shouldCache = API_CACHE_PATTERNS.some(pattern =>
     url.pathname.startsWith(pattern)
   );
-  
+
   if (!shouldCache) {
     return fetch(request);
   }
-  
+
   try {
     // Try network first
     const networkResponse = await fetch(request);
-    
+
     if (networkResponse.ok) {
       // Cache successful responses
       const cache = await caches.open(DYNAMIC_CACHE_NAME);
       cache.put(request, networkResponse.clone());
     }
-    
+
     return networkResponse;
   } catch (error) {
     console.log('[SW] Network failed for API request, trying cache:', url.pathname);
-    
+
     // Fallback to cache
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
-    
+
     // Return offline response for critical APIs
     if (url.pathname === '/api/health') {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         status: 'offline',
         message: 'Service worker active, network unavailable'
       }), {
@@ -150,7 +154,7 @@ async function handleApiRequest(request) {
         status: 200
       });
     }
-    
+
     throw error;
   }
 }
@@ -158,19 +162,19 @@ async function handleApiRequest(request) {
 // Handle static assets with cache-first strategy
 async function handleStaticAssets(request) {
   const cachedResponse = await caches.match(request);
-  
+
   if (cachedResponse) {
     return cachedResponse;
   }
-  
+
   try {
     const networkResponse = await fetch(request);
-    
+
     if (networkResponse.ok) {
       const cache = await caches.open(STATIC_CACHE_NAME);
       cache.put(request, networkResponse.clone());
     }
-    
+
     return networkResponse;
   } catch (error) {
     console.error('[SW] Failed to fetch static asset:', request.url);
@@ -185,12 +189,12 @@ async function handleAuthPages(request) {
     return networkResponse;
   } catch (error) {
     console.log('[SW] Network failed for auth page, trying cache');
-    
+
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
-    
+
     // Return offline page for auth routes
     return new Response(`
       <!DOCTYPE html>
@@ -199,14 +203,14 @@ async function handleAuthPages(request) {
           <title>PosalPro - Offline</title>
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                    text-align: center; padding: 50px; background: #f5f5f5; }
-            .offline-container { max-width: 400px; margin: 0 auto; background: white; 
+            .offline-container { max-width: 400px; margin: 0 auto; background: white;
                                 padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             .offline-icon { font-size: 48px; margin-bottom: 20px; }
             h1 { color: #333; margin-bottom: 10px; }
             p { color: #666; margin-bottom: 20px; }
-            button { background: #007bff; color: white; border: none; padding: 10px 20px; 
+            button { background: #007bff; color: white; border: none; padding: 10px 20px;
                     border-radius: 4px; cursor: pointer; }
             button:hover { background: #0056b3; }
           </style>
@@ -231,7 +235,7 @@ async function handleAuthPages(request) {
 async function handlePageRequest(request) {
   const cache = await caches.open(DYNAMIC_CACHE_NAME);
   const cachedResponse = await cache.match(request);
-  
+
   // Fetch from network in background
   const networkResponsePromise = fetch(request)
     .then(response => {
@@ -244,14 +248,14 @@ async function handlePageRequest(request) {
       console.log('[SW] Network failed for page request:', request.url);
       return null;
     });
-  
+
   // Return cached version immediately if available
   if (cachedResponse) {
     // Update cache in background
     networkResponsePromise.catch(() => {});
     return cachedResponse;
   }
-  
+
   // Wait for network if no cache available
   return networkResponsePromise || new Response('Offline', { status: 503 });
 }
@@ -259,7 +263,7 @@ async function handlePageRequest(request) {
 // Handle background sync for offline actions
 self.addEventListener('sync', event => {
   console.log('[SW] Background sync triggered:', event.tag);
-  
+
   if (event.tag === 'background-sync') {
     event.waitUntil(handleBackgroundSync());
   }
@@ -267,12 +271,12 @@ self.addEventListener('sync', event => {
 
 async function handleBackgroundSync() {
   console.log('[SW] Performing background sync...');
-  
+
   try {
     // Sync any pending offline actions
     const cache = await caches.open(DYNAMIC_CACHE_NAME);
     const requests = await cache.keys();
-    
+
     // Process any queued requests
     for (const request of requests) {
       if (request.url.includes('offline-queue')) {
@@ -293,7 +297,7 @@ async function handleBackgroundSync() {
 // Handle push notifications (future enhancement)
 self.addEventListener('push', event => {
   console.log('[SW] Push notification received');
-  
+
   const options = {
     body: 'You have new updates in PosalPro',
     icon: '/icon-192x192.png',
@@ -311,7 +315,7 @@ self.addEventListener('push', event => {
       }
     ]
   };
-  
+
   event.waitUntil(
     self.registration.showNotification('PosalPro Update', options)
   );
@@ -320,9 +324,9 @@ self.addEventListener('push', event => {
 // Handle notification clicks
 self.addEventListener('notificationclick', event => {
   console.log('[SW] Notification clicked:', event.action);
-  
+
   event.notification.close();
-  
+
   if (event.action === 'open') {
     event.waitUntil(
       clients.openWindow('/')
@@ -334,7 +338,7 @@ self.addEventListener('notificationclick', event => {
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'PERFORMANCE_MEASURE') {
     console.log('[SW] Performance measure:', event.data.measure);
-    
+
     // Could send to analytics service
     // analytics.track('sw_performance', event.data.measure);
   }

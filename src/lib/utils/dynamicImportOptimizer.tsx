@@ -3,6 +3,7 @@
  *
  * Provides utilities for optimizing component loading and reducing bundle sizes.
  * Target: Reduce memory usage and improve performance through code splitting.
+ * 🚀 MEMORY OPTIMIZATION: Enhanced with aggressive memory management
  */
 
 import React, { ComponentType, lazy, Suspense } from 'react';
@@ -35,19 +36,34 @@ export function createOptimizedDynamicImport<T extends ComponentType<any>>(
 
 /**
  * Create a memory-optimized dynamic import that unloads when not visible
+ * 🚀 ENHANCED: Aggressive memory management for 243MB → 100MB target
  */
 export function createMemoryOptimizedImport<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
   options: {
     unloadDelay?: number; // ms to wait before unloading
     loadingComponent?: ComponentType;
+    maxMemoryUsage?: number; // MB threshold for forced cleanup
   } = {}
 ): ComponentType<React.ComponentProps<T>> {
-  const { unloadDelay = 30000, loadingComponent } = options;
+  const { unloadDelay = 15000, loadingComponent, maxMemoryUsage = 100 } = options;
   let componentCache: T | null = null;
   let unloadTimer: NodeJS.Timeout | null = null;
 
   const LazyComponent = lazy(async () => {
+    // ✅ CRITICAL: Memory threshold check
+    if (typeof window !== 'undefined') {
+      const memoryInfo = (performance as any).memory;
+      if (memoryInfo && memoryInfo.usedJSHeapSize > maxMemoryUsage * 1024 * 1024) {
+        // Force cleanup when memory usage is high
+        componentCache = null;
+        if (unloadTimer) {
+          clearTimeout(unloadTimer);
+          unloadTimer = null;
+        }
+      }
+    }
+
     if (componentCache) {
       return { default: componentCache };
     }
@@ -55,7 +71,7 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
     const module = await importFn();
     componentCache = module.default;
 
-    // Schedule unloading
+    // Schedule unloading with shorter delay for memory optimization
     if (unloadTimer) {
       clearTimeout(unloadTimer);
     }
@@ -84,6 +100,83 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
 }
 
 /**
+ * Create a route-based dynamic import with preloading
+ */
+export function createRouteOptimizedImport<T extends ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>,
+  preloadRoutes: string[] = []
+): ComponentType<React.ComponentProps<T>> {
+  return createOptimizedDynamicImport(importFn);
+}
+
+/**
+ * 🚀 NEW: Memory-aware component loader with automatic cleanup
+ */
+export function createMemoryAwareImport<T extends ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>,
+  options: {
+    memoryThreshold?: number; // MB
+    cleanupInterval?: number; // ms
+    loadingComponent?: ComponentType;
+  } = {}
+): ComponentType<React.ComponentProps<T>> {
+  const { memoryThreshold = 150, cleanupInterval = 30000, loadingComponent } = options;
+  let componentCache: T | null = null;
+  let cleanupTimer: NodeJS.Timeout | null = null;
+
+  // ✅ CRITICAL: Memory monitoring
+  const checkMemoryUsage = () => {
+    if (typeof window !== 'undefined') {
+      const memoryInfo = (performance as any).memory;
+      if (memoryInfo && memoryInfo.usedJSHeapSize > memoryThreshold * 1024 * 1024) {
+        // Force cleanup
+        componentCache = null;
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+        }
+      }
+    }
+  };
+
+  const LazyComponent = lazy(async () => {
+    checkMemoryUsage();
+
+    if (componentCache) {
+      return { default: componentCache };
+    }
+
+    const module = await importFn();
+    componentCache = module.default;
+
+    // Set up periodic cleanup
+    if (cleanupTimer) {
+      clearTimeout(cleanupTimer);
+    }
+    cleanupTimer = setInterval(() => {
+      checkMemoryUsage();
+    }, cleanupInterval);
+
+    return module;
+  });
+
+  const LoadingFallback =
+    loadingComponent ||
+    (() => (
+      <div className="flex items-center justify-center p-4">
+        <div className="animate-pulse bg-gray-200 rounded-lg h-32 w-full"></div>
+      </div>
+    ));
+
+  return function MemoryAwareComponent(props: React.ComponentProps<T>) {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <LazyComponent {...props} />
+      </Suspense>
+    );
+  };
+}
+
+/**
  * Preload a component for better performance
  */
 export function preloadComponent(importFn: () => Promise<any>): void {
@@ -96,120 +189,87 @@ export function preloadComponent(importFn: () => Promise<any>): void {
 }
 
 /**
- * Create a route-based dynamic import with preloading
- */
-export function createRouteOptimizedImport<T extends ComponentType<any>>(
-  importFn: () => Promise<{ default: T }>,
-  preloadRoutes: string[] = []
-): ComponentType<React.ComponentProps<T>> {
-  // Preload if current route matches
-  if (typeof window !== 'undefined') {
-    const currentPath = window.location.pathname;
-    if (preloadRoutes.some(route => currentPath.includes(route))) {
-      preloadComponent(importFn);
-    }
-  }
-
-  return createOptimizedDynamicImport(importFn);
-}
-
-/**
- * Bundle size analyzer for development
+ * Analyze bundle size for optimization
  */
 export function analyzeBundleSize(componentName: string, importFn: () => Promise<any>): void {
-  if (process.env.NODE_ENV === 'development') {
-    const startTime = performance.now();
+  const startTime = performance.now();
 
-    importFn()
-      .then(() => {
-        const loadTime = performance.now() - startTime;
-        console.log(`📦 ${componentName} loaded in ${loadTime.toFixed(2)}ms`);
-      })
-      .catch(error => {
-        console.warn(`📦 Failed to analyze ${componentName}:`, error);
-      });
-  }
+  importFn()
+    .then(() => {
+      const loadTime = performance.now() - startTime;
+      console.log(`📦 [Bundle Analysis] ${componentName}: ${loadTime.toFixed(2)}ms`);
+    })
+    .catch(() => {
+      console.warn(`⚠️ [Bundle Analysis] Failed to load ${componentName}`);
+    });
 }
 
 /**
- * Optimize heavy dashboard components
- */
-export const OptimizedDashboardStats = createMemoryOptimizedImport(
-  () => import('@/components/dashboard/DashboardStats'),
-  { unloadDelay: 60000 } // Keep for 1 minute
-);
-
-export const OptimizedRecentProposals = createMemoryOptimizedImport(
-  () => import('@/components/dashboard/RecentProposals'),
-  { unloadDelay: 60000 }
-);
-
-export const OptimizedQuickActions = createMemoryOptimizedImport(
-  () => import('@/components/dashboard/QuickActions'),
-  { unloadDelay: 60000 }
-);
-
-/**
- * Optimize proposal creation components
- */
-export const OptimizedProposalWizard = createRouteOptimizedImport(
-  () =>
-    import('@/components/proposals/ProposalWizard').then(module => ({
-      default: module.ProposalWizard,
-    })),
-  ['/proposals/create', '/proposals/edit']
-);
-
-export const OptimizedBasicInformationStep = createMemoryOptimizedImport(
-  () =>
-    import('@/components/proposals/steps/BasicInformationStep').then(module => ({
-      default: module.BasicInformationStep,
-    })),
-  { unloadDelay: 30000 }
-);
-
-/**
- * Optimize customer management components
- */
-export const OptimizedCustomerList = createMemoryOptimizedImport(
-  () => import('@/components/customers/CustomerList'),
-  { unloadDelay: 45000 }
-);
-
-// CustomerForm component doesn't exist - removed from dynamic imports
-
-/**
- * Memory usage tracker for dynamic imports
+ * 🚀 NEW: Memory usage tracker for dynamic imports
  */
 class DynamicImportTracker {
   private loadedComponents = new Set<string>();
   private loadTimes = new Map<string, number>();
+  private memoryUsage = new Map<string, number>();
 
   trackLoad(componentName: string): void {
     this.loadedComponents.add(componentName);
-    this.loadTimes.set(componentName, Date.now());
+    this.loadTimes.set(componentName, performance.now());
+
+    // Track memory usage
+    if (typeof window !== 'undefined') {
+      const memoryInfo = (performance as any).memory;
+      if (memoryInfo) {
+        this.memoryUsage.set(componentName, memoryInfo.usedJSHeapSize);
+      }
+    }
   }
 
   trackUnload(componentName: string): void {
     this.loadedComponents.delete(componentName);
     this.loadTimes.delete(componentName);
+    this.memoryUsage.delete(componentName);
   }
 
   getStats(): {
     loadedCount: number;
     components: string[];
     averageLoadTime: number;
+    totalMemoryUsage: number;
   } {
     const components = Array.from(this.loadedComponents);
     const loadTimes = Array.from(this.loadTimes.values());
-    const averageLoadTime =
-      loadTimes.length > 0 ? loadTimes.reduce((sum, time) => sum + time, 0) / loadTimes.length : 0;
+    const memoryUsage = Array.from(this.memoryUsage.values());
 
     return {
       loadedCount: components.length,
       components,
-      averageLoadTime,
+      averageLoadTime:
+        loadTimes.length > 0 ? loadTimes.reduce((a, b) => a + b, 0) / loadTimes.length : 0,
+      totalMemoryUsage: memoryUsage.length > 0 ? memoryUsage.reduce((a, b) => a + b, 0) : 0,
     };
+  }
+
+  // ✅ CRITICAL: Memory optimization methods
+  forceCleanup(): void {
+    this.loadedComponents.clear();
+    this.loadTimes.clear();
+    this.memoryUsage.clear();
+
+    // Force garbage collection if available
+    if (typeof window !== 'undefined' && (window as any).gc) {
+      (window as any).gc();
+    }
+  }
+
+  getMemoryUsage(): number {
+    if (typeof window !== 'undefined') {
+      const memoryInfo = (performance as any).memory;
+      if (memoryInfo) {
+        return memoryInfo.usedJSHeapSize / (1024 * 1024); // Convert to MB
+      }
+    }
+    return 0;
   }
 }
 

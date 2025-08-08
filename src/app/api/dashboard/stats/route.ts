@@ -6,6 +6,10 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Simple in-memory cache to reduce repeated heavy queries
+const dashboardStatsCache = new Map<string, { data: any; ts: number }>();
+const DASHBOARD_STATS_TTL_MS = 60 * 1000; // 60 seconds
+
 export async function GET(request: NextRequest) {
   let session;
   try {
@@ -15,16 +19,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch real statistics from database
+    // Check cache first
+    const cacheKey = `stats:${session.user.id}`;
+    const cached = dashboardStatsCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < DASHBOARD_STATS_TTL_MS) {
+      const response = NextResponse.json({
+        success: true,
+        data: cached.data,
+        message: 'Dashboard statistics retrieved successfully (cache)'
+      });
+      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+      return response;
+    }
+
+    // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
+    // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
     const [
       totalProposals,
       activeProposals,
       totalCustomers,
       totalRevenue,
-      completionRate,
-      avgResponseTime,
-      recentGrowth,
-    ] = await Promise.all([
+      approvedProposals,
+      totalProposalsForRate,
+      recentProposals,
+      previousProposals,
+    ] = await prisma.$transaction([
       // Total proposals
       prisma.proposal.count(),
 
@@ -52,53 +71,45 @@ export async function GET(request: NextRequest) {
         },
       }),
 
-      // Completion rate (approved / total)
-      prisma.proposal
-        .aggregate({
-          _count: {
-            id: true,
-          },
-          where: {
-            status: 'APPROVED',
-          },
-        })
-        .then(result => {
-          return prisma.proposal.count().then(total => {
-            return total > 0 ? (result._count.id / total) * 100 : 0;
-          });
-        }),
+      // Approved proposals count for completion rate
+      prisma.proposal.count({
+        where: {
+          status: 'APPROVED',
+        },
+      }),
 
-      // Average response time (placeholder - would need more complex calculation)
-      Promise.resolve(2.3),
+      // Total proposals count for completion rate
+      prisma.proposal.count(),
 
-      // Recent growth (proposals created in last 30 days)
-      prisma.proposal
-        .count({
-          where: {
-            createdAt: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-            },
+      // Recent proposals (last 30 days)
+      prisma.proposal.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
           },
-        })
-        .then(recentProposals => {
-          return prisma.proposal
-            .count({
-              where: {
-                createdAt: {
-                  gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-                  lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-                },
-              },
-            })
-            .then(previousProposals => {
-              return {
-                proposals: recentProposals,
-                customers: Math.floor(recentProposals * 0.3), // Estimate
-                revenue: Math.floor(recentProposals * 50000), // Estimate
-              };
-            });
-        }),
+        },
+      }),
+
+      // Previous period proposals (30-60 days ago)
+      prisma.proposal.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+            lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          },
+        },
+      }),
     ]);
+
+    // Calculate derived metrics outside transaction
+    const completionRate =
+      totalProposalsForRate > 0 ? (approvedProposals / totalProposalsForRate) * 100 : 0;
+    const avgResponseTime = 2.3; // Placeholder - would need more complex calculation
+    const recentGrowth = {
+      proposals: recentProposals,
+      customers: Math.floor(recentProposals * 0.3), // Estimate
+      revenue: Math.floor(recentProposals * 50000), // Estimate
+    };
 
     const stats = {
       totalProposals,
@@ -110,11 +121,27 @@ export async function GET(request: NextRequest) {
       recentGrowth,
     };
 
-    return NextResponse.json({
+    // Update cache (non-blocking best-effort)
+    dashboardStatsCache.set(cacheKey, { data: stats, ts: Date.now() });
+
+    // ✅ CRITICAL: Response optimization for TTFB reduction
+    // Following Lesson #30: API Performance Optimization - Response Headers
+    const response = NextResponse.json({
       success: true,
       data: stats,
       message: 'Dashboard statistics retrieved successfully',
     });
+
+    // Add performance optimization headers
+    response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120'); // 1min client, 2min CDN
+    response.headers.set('Content-Type', 'application/json; charset=utf-8');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set('X-XSS-Protection', '1; mode=block');
+    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+    return response;
   } catch (error) {
     // ✅ ENHANCED: Use proper ErrorHandlingService singleton
     const errorHandlingService = ErrorHandlingService.getInstance();

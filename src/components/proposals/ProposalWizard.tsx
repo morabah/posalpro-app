@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useMemoryOptimization } from '@/hooks/useMemoryOptimization';
 import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
 import { Priority } from '@/types/enums';
 import { ExpertiseArea, ProposalPriority, ProposalWizardData } from '@/types/proposals';
@@ -33,7 +34,9 @@ import { debounce } from 'lodash';
 import { useRouter } from 'next/navigation';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// 🚀 MOBILE OPTIMIZATION: Lazy load heavy components
+// ✅ CRITICAL: Memory optimization hook
+
+// 🚀 MOBILE OPTIMIZATION: Lazy load heavy components with memory optimization
 const BasicInformationStep = lazy(() =>
   import('./steps/BasicInformationStep').then(module => ({ default: module.BasicInformationStep }))
 );
@@ -194,10 +197,19 @@ export function ProposalWizard({
   // ✅ FIXED: Move useApiClient to component level to follow Rules of Hooks
   const apiClient = useApiClient();
 
+  // ✅ CRITICAL: Memory optimization for large component
+  const { optimizeComponentMemory, getMemoryUsageMB } = useMemoryOptimization({
+    threshold: 220, // MB - reduce aggressiveness to avoid repeated cleanups in dev
+    cleanupInterval: 0, // disable periodic monitoring to reduce listeners
+    forceCleanupThreshold: 280, // MB
+    enableGarbageCollection: true,
+  });
+
   // Component state management
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Initialize only step1 eagerly; other steps are deferred until activation to reduce initial heap
   const [wizardData, setWizardData] = useState<ProposalWizardData>({
     step1: {
       client: {
@@ -214,32 +226,12 @@ export function ProposalWizard({
         priority: ProposalPriority.MEDIUM,
       },
     },
-    step2: {
-      teamLead: '',
-      salesRepresentative: '',
-      subjectMatterExperts: {} as Record<ExpertiseArea, string>,
-      executiveReviewers: [],
-    },
-    step3: {
-      selectedContent: [],
-      searchHistory: [],
-    },
-    step4: {
-      products: [],
-    },
-    step5: {
-      sections: [],
-      sectionAssignments: {},
-    },
-    step6: {
-      finalValidation: {
-        isValid: false,
-        completeness: 0,
-        issues: [],
-        complianceChecks: [],
-      },
-      approvals: [],
-    },
+    // The following steps are set to lightweight placeholders and will be hydrated on first activation
+    step2: {} as any,
+    step3: {} as any,
+    step4: {} as any,
+    step5: {} as any,
+    step6: {} as any,
     currentStep: 1,
     isValid: [false, false, false, false, false, false],
     isDirty: false,
@@ -268,12 +260,8 @@ export function ProposalWizard({
   const DEBUG_MODE = process.env.NODE_ENV === 'development';
 
   // ✅ FIXED: Fix unsafe assignments with proper types
-  const [stepData, setStepData] = useState<Record<string, unknown>>({});
-  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
-  const [stepProgress, setStepProgress] = useState<Record<string, number>>({});
-  const [userPreferences, setUserPreferences] = useState<Record<string, unknown>>({});
-  const [analyticsData, setAnalyticsData] = useState<Record<string, unknown>>({});
-  const [performanceMetrics, setPerformanceMetrics] = useState<Record<string, unknown>>({});
+  // Remove generic top-level buckets; manage within each step as needed
+  // Defer optional analytics/preferences/metrics state to steps to reduce initial heap
 
   // ✅ FIXED: Add missing dependencies to useCallback
   const handleStepValidation = useCallback((step: number, isValid: boolean) => {
@@ -286,20 +274,192 @@ export function ProposalWizard({
 
   // ✅ FIXED: Add missing dependencies to useEffect
   useEffect(() => {
-    if (errorHandlingService && wizardData) {
-      // Initialize error handling for the wizard
-      errorHandlingService.processError(
-        new Error('Wizard initialized'),
-        'Proposal wizard initialized',
-        ErrorCodes.BUSINESS.PROCESS_FAILED,
-        {
-          component: 'ProposalWizard',
-          operation: 'initialization',
-          step: currentStep,
-        }
+    // ✅ CRITICAL: Memory observation on mount (no error processing)
+    const initialMemoryUsage = getMemoryUsageMB();
+    if (DEBUG_MODE) {
+      console.log(
+        `📊 [Memory Optimization] ProposalWizard mounted. Initial memory usage: ${initialMemoryUsage.toFixed(1)}MB`
       );
     }
-  }, [errorHandlingService, wizardData, currentStep]);
+
+    if (initialMemoryUsage > 280) {
+      if (DEBUG_MODE) {
+        console.log(`🧹 [Memory Optimization] Very high initial memory usage, optimizing...`);
+      }
+      optimizeComponentMemory('ProposalWizard');
+    }
+  }, [getMemoryUsageMB, optimizeComponentMemory]);
+
+  // ✅ NEW: Load existing proposal data when in edit mode
+  useEffect(() => {
+    const loadExistingProposal = async () => {
+      if (!editProposalId) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        console.log(`[ProposalWizard] Loading existing proposal: ${editProposalId}`);
+
+        // ✅ PERFORMANCE: Use useApiClient pattern per CORE_REQUIREMENTS.md
+        const response = await apiClient.get<{
+          success: boolean;
+          data: {
+            id: string;
+            title: string;
+            description?: string;
+            customerId: string;
+            priority: string;
+            dueDate?: string;
+            value?: number;
+            currency: string;
+            customerName?: string;
+            customerIndustry?: string;
+            customerEmail?: string;
+            contactPerson?: string;
+            contactPhone?: string;
+            sections?: Array<{
+              id: string;
+              title: string;
+              content: string;
+              type: string;
+              order: number;
+            }>;
+            assignedTo?: Array<{
+              id: string;
+              name: string;
+              email: string;
+            }>;
+            metadata?: any;
+          };
+          message: string;
+        }>(`/api/proposals/${editProposalId}`);
+
+        if (!response.success || !response.data) {
+          throw new Error('Failed to load proposal data');
+        }
+
+        const proposal = response.data;
+
+        // Transform the loaded data into wizard format
+        const loadedWizardData: ProposalWizardData = {
+          step1: {
+            client: {
+              id: proposal.customerId || '',
+              name: proposal.customerName || '',
+              industry: proposal.customerIndustry || '',
+              contactPerson: proposal.contactPerson || '',
+              contactEmail: proposal.customerEmail || '',
+              contactPhone: proposal.contactPhone || '',
+            },
+            details: {
+              title: proposal.title,
+              dueDate: proposal.dueDate ? new Date(proposal.dueDate) : ensureFutureDate(),
+              estimatedValue: proposal.value || 0,
+              priority: (proposal.priority as ProposalPriority) || ProposalPriority.MEDIUM,
+            },
+          },
+          step2: {
+            teamLead: '',
+            salesRepresentative: '',
+            subjectMatterExperts: {} as Record<ExpertiseArea, string>,
+            executiveReviewers: [],
+          },
+          step3: {
+            selectedContent: [],
+            searchHistory: [],
+          },
+          step4: {
+            products: [], // Products are not included in the current API response
+          },
+          step5: {
+            sections:
+              proposal.sections?.map(section => ({
+                id: section.id,
+                title: section.title,
+                required: true,
+                content: [],
+                assignedTo: undefined,
+                status: 'not_started' as const,
+                estimatedHours: 0,
+              })) || [],
+            sectionAssignments: {},
+          },
+          step6: {
+            finalValidation: {
+              isValid: false,
+              completeness: 0,
+              issues: [],
+              complianceChecks: [],
+            },
+            approvals: [],
+          },
+          currentStep: 1,
+          isValid: [false, false, false, false, false, false],
+          isDirty: false,
+        };
+
+        // Load additional data from metadata if available
+        if (proposal.metadata) {
+          const metadata = proposal.metadata;
+
+          if (metadata.teamAssignments) {
+            loadedWizardData.step2 = {
+              ...loadedWizardData.step2,
+              ...metadata.teamAssignments,
+            };
+          }
+
+          if (metadata.contentSelections) {
+            loadedWizardData.step3.selectedContent = metadata.contentSelections;
+          }
+
+          if (metadata.validationData) {
+            loadedWizardData.step6.finalValidation = {
+              ...loadedWizardData.step6.finalValidation,
+              ...metadata.validationData,
+            };
+          }
+        }
+
+        setWizardData(loadedWizardData);
+        console.log(`[ProposalWizard] Successfully loaded proposal data for editing`);
+
+        // Update step validation based on loaded data
+        const newStepValidation = [
+          !!(loadedWizardData.step1.client.name && loadedWizardData.step1.details.title),
+          !!(loadedWizardData.step2.teamLead || loadedWizardData.step2.salesRepresentative),
+          loadedWizardData.step3.selectedContent.length > 0,
+          loadedWizardData.step4.products.length > 0,
+          loadedWizardData.step5.sections.length > 0,
+          loadedWizardData.step6.finalValidation.isValid,
+        ];
+        setStepValidation(newStepValidation);
+      } catch (error) {
+        console.error('[ProposalWizard] Failed to load existing proposal:', error);
+
+        // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService per CORE_REQUIREMENTS.md
+        const standardError = errorHandlingService.processError(
+          error,
+          'Failed to load existing proposal data. Please try again.',
+          ErrorCodes.API.REQUEST_FAILED,
+          {
+            component: 'ProposalWizard',
+            operation: 'loadExistingProposal',
+            editProposalId,
+            userId: user?.id,
+          }
+        );
+
+        // Set user-friendly error message
+        setError(errorHandlingService.getUserFriendlyMessage(standardError));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadExistingProposal();
+  }, [editProposalId, apiClient, errorHandlingService, user?.id]);
 
   // Enhanced proposal creation handler with proper error handling
   const handleCreateProposal = useCallback(async () => {
@@ -422,6 +582,7 @@ export function ProposalWizard({
         });
       }
 
+      // ✅ ENHANCED: Send all wizard data to database
       const proposalData = {
         title: wizardData.step1.details.title,
         description: smartDescription,
@@ -435,7 +596,25 @@ export function ProposalWizard({
             value: wizardData.step1.details.estimatedValue,
           }),
         currency: 'USD',
-        // Add products if available
+
+        // ✅ STEP 2: Team assignments
+        teamAssignments: {
+          teamLead: wizardData.step2?.teamLead || '',
+          salesRepresentative: wizardData.step2?.salesRepresentative || '',
+          subjectMatterExperts: wizardData.step2?.subjectMatterExperts || {},
+          executiveReviewers: wizardData.step2?.executiveReviewers || [],
+        },
+
+        // ✅ STEP 3: Content selections
+        contentSelections:
+          wizardData.step3?.selectedContent?.map(content => ({
+            contentId: content.item.id,
+            section: content.section,
+            customizations: content.customizations || [],
+            assignedTo: content.assignedTo || '',
+          })) || [],
+
+        // ✅ STEP 4: Products
         ...(wizardData.step4?.products &&
           wizardData.step4.products.length > 0 && {
             products: wizardData.step4.products.map(product => ({
@@ -445,7 +624,8 @@ export function ProposalWizard({
               discount: 0, // Default discount
             })),
           }),
-        // Add sections if available
+
+        // ✅ STEP 5: Sections
         ...(wizardData.step5?.sections &&
           wizardData.step5.sections.length > 0 && {
             sections: wizardData.step5.sections.map((section, index) => ({
@@ -455,7 +635,42 @@ export function ProposalWizard({
               order: index + 1,
             })),
           }),
+
+        // ✅ STEP 6: Validation data
+        validationData: {
+          isValid: wizardData.step6?.finalValidation?.isValid || false,
+          completeness: wizardData.step6?.finalValidation?.completeness || 0,
+          issues: wizardData.step6?.finalValidation?.issues || [],
+          complianceChecks: wizardData.step6?.finalValidation?.complianceChecks || [],
+        },
+
+        // ✅ Analytics data
+        analyticsData: {
+          stepCompletionTimes: [],
+          wizardCompletionRate: 1.0,
+          complexityScore: 2, // Default medium complexity
+          teamSize: Object.keys(wizardData.step2?.subjectMatterExperts || {}).length,
+          contentSuggestionsUsed: wizardData.step3?.selectedContent?.length || 0,
+          validationIssuesFound: wizardData.step6?.finalValidation?.issues?.length || 0,
+        },
+
+        // ✅ Cross-step validation
+        crossStepValidation: {
+          teamCompatibility: true,
+          contentAlignment: true,
+          budgetCompliance: true,
+          timelineRealistic: true,
+        },
       };
+
+      // ✅ CRITICAL DEBUG: Log the complete proposal data being sent
+      console.log(
+        '[ProposalWizard] Complete proposal data being sent:',
+        JSON.stringify(proposalData, null, 2)
+      );
+      console.log('[ProposalWizard] Customer ID in proposal data:', proposalData.customerId);
+      console.log('[ProposalWizard] Customer ID type:', typeof proposalData.customerId);
+      console.log('[ProposalWizard] Customer ID length:', proposalData.customerId?.length);
 
       // Create the proposal using the entity
       // ✅ FIXED: Use real API call instead of mock response
@@ -636,6 +851,60 @@ export function ProposalWizard({
     );
 
     if (currentStep < WIZARD_STEPS.length) {
+      // Lazy-initialize next step's data on first navigation in
+      const nextStep = currentStep + 1;
+      setWizardData(prev => {
+        const updated = { ...prev } as ProposalWizardData;
+        switch (nextStep) {
+          case 2:
+            if (!updated.step2 || Object.keys(updated.step2 as any).length === 0) {
+              (updated as any).step2 = {
+                teamLead: '',
+                salesRepresentative: '',
+                subjectMatterExperts: {} as Record<ExpertiseArea, string>,
+                executiveReviewers: [],
+              };
+            }
+            break;
+          case 3:
+            if (!updated.step3 || Object.keys(updated.step3 as any).length === 0) {
+              (updated as any).step3 = {
+                selectedContent: [],
+                searchHistory: [],
+              };
+            }
+            break;
+          case 4:
+            if (!updated.step4 || Object.keys(updated.step4 as any).length === 0) {
+              (updated as any).step4 = {
+                products: [],
+              };
+            }
+            break;
+          case 5:
+            if (!updated.step5 || Object.keys(updated.step5 as any).length === 0) {
+              (updated as any).step5 = {
+                sections: [],
+                sectionAssignments: {},
+              };
+            }
+            break;
+          case 6:
+            if (!updated.step6 || Object.keys(updated.step6 as any).length === 0) {
+              (updated as any).step6 = {
+                finalValidation: {
+                  isValid: false,
+                  completeness: 0,
+                  issues: [],
+                  complianceChecks: [],
+                },
+                approvals: [],
+              };
+            }
+            break;
+        }
+        return updated;
+      });
       console.log('[handleNext] Moving to next step:', currentStep + 1);
       setCurrentStep(currentStep + 1);
     } else if (currentStep === WIZARD_STEPS.length) {
@@ -1077,15 +1346,7 @@ export function ProposalWizard({
     const isDisabled = loading || !isCurrentStepValid();
     const isFinalStep = currentStep === WIZARD_STEPS.length;
 
-    console.log('[NavigationButtons] Debug:', {
-      currentStep,
-      totalSteps: WIZARD_STEPS.length,
-      isFinalStep,
-      loading,
-      isCurrentStepValid: isCurrentStepValid(),
-      isDisabled,
-      buttonText: isFinalStep ? 'Create Proposal' : 'Continue',
-    });
+    // Debug logs removed for performance
 
     return (
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 border-t border-gray-200">
@@ -1111,11 +1372,6 @@ export function ProposalWizard({
           <Button
             type="button"
             onClick={() => {
-              console.log('[NavigationButtons] Button clicked!', {
-                currentStep,
-                isFinalStep,
-                isDisabled,
-              });
               handleNext();
             }}
             disabled={isDisabled}
@@ -1204,6 +1460,15 @@ export function ProposalWizard({
       return;
     }
 
+    // ✅ CRITICAL: Memory optimization on step change
+    const currentMemoryUsage = getMemoryUsageMB();
+    if (currentMemoryUsage > 100) {
+      console.log(
+        `🧹 [Memory Optimization] High memory usage (${currentMemoryUsage.toFixed(1)}MB) before step change, optimizing...`
+      );
+      optimizeComponentMemory('ProposalWizard');
+    }
+
     // ✅ PERFORMANCE: Batch state updates
     if (currentStep < WIZARD_STEPS.length) {
       setCurrentStep(prev => prev + 1);
@@ -1228,7 +1493,13 @@ export function ProposalWizard({
         hypotheses: ['H7', 'H3'],
       });
     }
-  }, [currentStep, isCurrentStepValid, trackProposalCreation]);
+  }, [
+    currentStep,
+    isCurrentStepValid,
+    trackProposalCreation,
+    getMemoryUsageMB,
+    optimizeComponentMemory,
+  ]);
 
   // ✅ PERFORMANCE: Optimized step data update with debouncing
   const updateStepData = useCallback(
@@ -1395,15 +1666,23 @@ export function ProposalWizard({
         case 1:
           return wizardData.step1;
         case 2:
-          return wizardData.step2;
+          return (wizardData.step2 as any)?.teamLead !== undefined
+            ? wizardData.step2
+            : { teamLead: '', salesRepresentative: '', subjectMatterExperts: {}, executiveReviewers: [] };
         case 3:
-          return wizardData.step3;
+          return (wizardData.step3 as any)?.selectedContent !== undefined
+            ? wizardData.step3
+            : { selectedContent: [], searchHistory: [] };
         case 4:
-          return wizardData.step4;
+          return (wizardData.step4 as any)?.products !== undefined ? wizardData.step4 : { products: [] };
         case 5:
-          return wizardData.step5;
+          return (wizardData.step5 as any)?.sections !== undefined
+            ? wizardData.step5
+            : { sections: [], sectionAssignments: {} };
         case 6:
-          return wizardData.step6;
+          return (wizardData.step6 as any)?.finalValidation !== undefined
+            ? wizardData.step6
+            : { finalValidation: { isValid: false, completeness: 0, issues: [], complianceChecks: [] }, approvals: [] };
         default:
           return {};
       }
@@ -1421,10 +1700,10 @@ export function ProposalWizard({
     [debouncedWizardUpdate] // ✅ CRITICAL FIX: Include debounced function in dependencies
   );
 
-  // ✅ PERFORMANCE: Dynamic component optimization using useMemo
-  const OptimizedCurrentStepComponent = useMemo(() => {
-    const Component = WIZARD_STEPS[currentStep - 1].component;
-    return memo(Component);
+  // ✅ PERFORMANCE: Dynamic component optimization using useMemo (props typed as any to avoid heavy unions)
+  const OptimizedCurrentStepComponent = useMemo<React.ComponentType<any>>(() => {
+    const Component = WIZARD_STEPS[currentStep - 1].component as unknown as React.ComponentType<any>;
+    return memo(Component) as unknown as React.ComponentType<any>;
   }, [currentStep]);
 
   return (
@@ -1479,11 +1758,6 @@ export function ProposalWizard({
                     onUpdate={createStepUpdateHandler(currentStep)}
                     onNext={currentStep === WIZARD_STEPS.length ? handleCreateProposal : handleNext}
                     analytics={trackProposalCreation}
-                    allWizardData={wizardData}
-                    proposalMetadata={wizardData.step1}
-                    teamData={wizardData.step2}
-                    contentData={wizardData.step3}
-                    productData={wizardData.step4}
                   />
                 </Suspense>
               </div>
