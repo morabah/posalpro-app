@@ -59,7 +59,14 @@ type TeamAssignmentFormData = z.infer<typeof teamAssignmentSchema>;
 interface TeamAssignmentStepProps {
   data: Partial<ProposalWizardStep2Data>;
   onUpdate: (data: Partial<ProposalWizardStep2Data>) => void;
-  analytics: any;
+  analytics: {
+    trackWizardStep?: (
+      stepNumber: number,
+      stepName: string,
+      action: string,
+      metadata?: Record<string, unknown>
+    ) => void;
+  };
 }
 
 export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignmentStepProps) {

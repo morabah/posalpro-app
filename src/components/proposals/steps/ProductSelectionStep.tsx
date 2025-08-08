@@ -62,7 +62,7 @@ interface SelectedProduct {
   unitPrice: number;
   totalPrice: number;
   priceModel: string;
-  configuration: Record<string, any>;
+  configuration: Record<string, unknown>;
   customizations: string[];
   notes?: string;
   validationErrors?: string[];
@@ -99,11 +99,18 @@ type EnhancedProductSelectionFormData = z.infer<typeof enhancedProductSelectionS
 interface ProductSelectionStepProps {
   data: Partial<ProposalWizardStep4Data>;
   onUpdate: (data: Partial<ProposalWizardStep4Data>) => void;
-  analytics: any;
+  analytics: {
+    trackWizardStep?: (
+      stepNumber: number,
+      stepName: string,
+      action: string,
+      metadata: Record<string, unknown>
+    ) => void;
+  };
   // Cross-step data for validation
-  proposalMetadata?: any;
-  teamData?: any;
-  contentData?: any;
+  proposalMetadata?: { projectType?: string; budget?: number };
+  teamData?: { teamMembers?: Array<{ id?: string; name?: string; expertise?: string }> };
+  contentData?: { selectedContent?: unknown[] };
 }
 
 export function ProductSelectionStep({
@@ -133,12 +140,8 @@ export function ProductSelectionStep({
   // Mobile detection
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
-  const {
-    register,
-    setValue,
-    formState: { errors, isValid },
-    getValues,
-  } = useForm<EnhancedProductSelectionFormData>({
+  // Initialize form schema (values not directly read here; validation is handled on submit paths)
+  useForm<EnhancedProductSelectionFormData>({
     resolver: zodResolver(enhancedProductSelectionSchema),
     defaultValues: {
       selectedProducts:
@@ -252,7 +255,7 @@ export function ProductSelectionStep({
 
   // Enhanced analytics tracking with cross-step context
   const trackProductSelection = useCallback(
-    (action: string, productId: string, metadata: any = {}) => {
+    (action: string, productId: string, metadata: Record<string, unknown> = {}) => {
       const enhancedMetadata = {
         ...metadata,
         stepContext: 'product_selection',
@@ -419,9 +422,9 @@ export function ProductSelectionStep({
 
     // Validate team compatibility
     if (teamData?.teamMembers) {
-      const hasTechnicalExpert = teamData.teamMembers.some(
-        (member: any) => member.expertise === 'Technical'
-      );
+        const hasTechnicalExpert = teamData.teamMembers.some(
+          (member: { expertise?: string }) => member.expertise === 'Technical'
+        );
 
       if (!hasTechnicalExpert && selectedProducts.size > 0) {
         warnings.push('Consider adding a technical expert to the team for complex products');
