@@ -33,3 +33,20 @@ export function getRequestMeta(headers: Headers): { requestId?: string } {
   const id = headers.get('x-request-id') || undefined;
   return { requestId: id };
 }
+
+// Stable one-way hash for user identifiers (avoid logging raw IDs)
+export function userIdToHash(userId: string | undefined | null): string | undefined {
+  if (!userId) return undefined;
+  try {
+    // Node.js crypto hashing (fallback to simple base64 if not available)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(String(userId)).digest('hex').slice(0, 16);
+  } catch {
+    try {
+      return Buffer.from(String(userId)).toString('base64').slice(0, 16);
+    } catch {
+      return undefined;
+    }
+  }
+}

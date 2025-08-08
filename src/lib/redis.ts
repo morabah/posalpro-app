@@ -3,9 +3,8 @@
  * High-performance caching layer for session and providers data
  */
 
-import { createClient } from 'redis';
 import { recordCacheHit, recordCacheMiss, recordLatency } from '@/lib/observability/metricsStore';
-import { logger } from '@/lib/logging/structuredLogger';
+import { createClient } from 'redis';
 
 // Enable Redis only in production unless explicitly overridden
 const USE_REDIS = process.env.NODE_ENV === 'production' && process.env.USE_REDIS !== 'false';
@@ -93,7 +92,8 @@ export async function getCache<T = unknown>(key: string): Promise<T | null> {
 
     const value = await redisClient.get(key);
     const hit = Boolean(value);
-    if (hit) recordCacheHit(); else recordCacheMiss();
+    if (hit) recordCacheHit();
+    else recordCacheMiss();
     recordLatency(Date.now() - start);
     return hit ? (JSON.parse(value as string) as T) : null;
   } catch (error) {

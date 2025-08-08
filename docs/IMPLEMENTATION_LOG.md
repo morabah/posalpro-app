@@ -702,21 +702,23 @@ Traceability**: US-4.1, US-4.3, US-2.3, US-5.1, US-5.2 **Hypotheses**: H7
 
 ## 2025-08-08 16:10 - P4-P5 Extensions: Web Vitals, Metrics UI, CI Guardrails
 
-**Phase**: P4 — Observability (extended), P5 — Docs & Checklist
-**Status**: ✅ COMPLETE
-**Duration**: 1.0 hour
+**Phase**: P4 — Observability (extended), P5 — Docs & Checklist **Status**: ✅
+COMPLETE **Duration**: 1.0 hour
 
 **Files Modified / Added**:
 
-- src/lib/observability/metricsStore.ts (Web Vitals aggregation: FCP/LCP/CLS/TTFB/INP buckets + p95/p99)
+- src/lib/observability/metricsStore.ts (Web Vitals aggregation:
+  FCP/LCP/CLS/TTFB/INP buckets + p95/p99)
 - src/app/reportWebVitals.ts (client hook to beacon Web Vitals)
 - src/app/api/observability/web-vitals/route.ts (accept POST beacons)
 - src/app/api/observability/metrics/route.ts (headline metrics + Server-Timing)
-- src/app/observability/page.tsx (cards: requests/db/cache; top error codes; web vitals headline)
+- src/app/observability/page.tsx (cards: requests/db/cache; top error codes; web
+  vitals headline)
 - src/app/api/proposals/list/route.ts (Server-Timing db; recordDbLatency)
 - src/app/api/customers/route.ts (Server-Timing app; recordDbLatency)
 - scripts/check-bundle-budgets.js (fail if any route > 300KB first-load)
-- scripts/check-observability-contract.js (assert x-request-id echo + Server-Timing)
+- scripts/check-observability-contract.js (assert x-request-id echo +
+  Server-Timing)
 - package.json (scripts: ci:bundle, ci:obs)
 - README.md (Observability section and CI commands)
 

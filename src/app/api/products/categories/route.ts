@@ -1,4 +1,4 @@
-import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
+import { getRequestMeta, logger, userIdToHash } from '@/lib/logging/structuredLogger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 /**
  * PosalPro MVP2 - Product Categories API Routes
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
       code: 'OK',
       route: '/api/products/categories',
       method: 'GET',
-      userId: session.user.id,
+      userIdHash: userIdToHash(session.user.id),
       totalCategories: categories.length,
     });
     recordLatency(duration);
