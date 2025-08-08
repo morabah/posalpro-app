@@ -20,8 +20,8 @@ export interface Customer {
   tier: 'STANDARD' | 'PREMIUM' | 'ENTERPRISE' | 'VIP';
   status: 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'CHURNED';
   tags: string[];
-  metadata?: Record<string, any>;
-  segmentation?: Record<string, any>;
+  metadata?: Record<string, unknown>;
+  segmentation?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   proposalsCount?: number;

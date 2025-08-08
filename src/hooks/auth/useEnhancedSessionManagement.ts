@@ -125,7 +125,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
 
   // Activity tracking
   const trackActivity = useCallback(
-    (activityType: string, metadata: Record<string, any> = {}) => {
+    (activityType: string, metadata: Record<string, unknown> = {}) => {
       const now = Date.now();
 
       setSessionState(prev => ({
