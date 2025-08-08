@@ -187,9 +187,11 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
                       {Object.entries(teamAssignments.subjectMatterExperts).map(([key, value]) => (
                         <div key={key} className="text-xs">
                           {key}:{' '}
-                          {typeof value === 'string' && value.length > 20
-                            ? `User ${value.substring(0, 8)}...`
-                            : value}
+                          {typeof value === 'string'
+                            ? value.length > 20
+                              ? `User ${value.substring(0, 8)}...`
+                              : value
+                            : String(value)}
                         </div>
                       ))}
                     </div>
