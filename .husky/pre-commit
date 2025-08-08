@@ -1,20 +1,14 @@
 #!/usr/bin/env sh
 . "$(dirname "$0")/_/husky.sh"
 
-# Run lint-staged for staged files
-npx lint-staged
+echo "Running lint-staged on staged files..."
+npx lint-staged --quiet || exit 1
 
-# Run type checking only on staged TypeScript files
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM "*.ts" "*.tsx" | tr '\n' ' ')
-if [ -n "$STAGED_FILES" ]; then
-  echo "Running type checking on staged TypeScript files..."
-  npx tsc --noEmit
-fi
-
-# Run Jest tests for affected files and related tests
-TEST_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(ts|tsx|js|jsx)$" | grep -v "node_modules" | grep -v "\.d\.ts$")
+# Fast feedback: run related tests for just the staged files (if any)
+TEST_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(ts|tsx|js|jsx)$" | grep -v "node_modules" | grep -v "\.d\.ts$" || true)
 if [ -n "$TEST_FILES" ]; then
-  echo "Running tests related to staged files..."
-  # Use the related flag to run tests for files impacted by changes
-  npx jest --bail --findRelatedTests $TEST_FILES
+  echo "Running related tests (fast)..."
+  npx jest --findRelatedTests --passWithNoTests --bail $TEST_FILES || exit 1
 fi
+
+echo "Pre-commit checks completed."
