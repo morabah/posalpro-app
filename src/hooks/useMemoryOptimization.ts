@@ -31,7 +31,8 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
   const cleanupTimerRef = useRef<NodeJS.Timeout | number | null>(null);
   const lastCleanupRef = useRef<number>(0);
-  const ENABLE_LOGS = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ENABLE_MEMORY_LOGS === 'true';
+  const ENABLE_LOGS =
+    typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ENABLE_MEMORY_LOGS === 'true';
 
   // ✅ CRITICAL: Get current memory usage
   const getMemoryUsage = useCallback((): MemoryInfo | null => {
@@ -89,7 +90,9 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
           });
 
           if (ENABLE_LOGS) {
-            console.log(`🧹 [Memory Optimization] Cleared ${keysToRemove.length} localStorage items`);
+            console.log(
+              `🧹 [Memory Optimization] Cleared ${keysToRemove.length} localStorage items`
+            );
           }
         } catch (error) {
           if (ENABLE_LOGS) {

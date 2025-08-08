@@ -1668,13 +1668,20 @@ export function ProposalWizard({
         case 2:
           return (wizardData.step2 as any)?.teamLead !== undefined
             ? wizardData.step2
-            : { teamLead: '', salesRepresentative: '', subjectMatterExperts: {}, executiveReviewers: [] };
+            : {
+                teamLead: '',
+                salesRepresentative: '',
+                subjectMatterExperts: {},
+                executiveReviewers: [],
+              };
         case 3:
           return (wizardData.step3 as any)?.selectedContent !== undefined
             ? wizardData.step3
             : { selectedContent: [], searchHistory: [] };
         case 4:
-          return (wizardData.step4 as any)?.products !== undefined ? wizardData.step4 : { products: [] };
+          return (wizardData.step4 as any)?.products !== undefined
+            ? wizardData.step4
+            : { products: [] };
         case 5:
           return (wizardData.step5 as any)?.sections !== undefined
             ? wizardData.step5
@@ -1682,7 +1689,15 @@ export function ProposalWizard({
         case 6:
           return (wizardData.step6 as any)?.finalValidation !== undefined
             ? wizardData.step6
-            : { finalValidation: { isValid: false, completeness: 0, issues: [], complianceChecks: [] }, approvals: [] };
+            : {
+                finalValidation: {
+                  isValid: false,
+                  completeness: 0,
+                  issues: [],
+                  complianceChecks: [],
+                },
+                approvals: [],
+              };
         default:
           return {};
       }
@@ -1702,7 +1717,8 @@ export function ProposalWizard({
 
   // ✅ PERFORMANCE: Dynamic component optimization using useMemo (props typed as any to avoid heavy unions)
   const OptimizedCurrentStepComponent = useMemo<React.ComponentType<any>>(() => {
-    const Component = WIZARD_STEPS[currentStep - 1].component as unknown as React.ComponentType<any>;
+    const Component = WIZARD_STEPS[currentStep - 1]
+      .component as unknown as React.ComponentType<any>;
     return memo(Component) as unknown as React.ComponentType<any>;
   }, [currentStep]);
 

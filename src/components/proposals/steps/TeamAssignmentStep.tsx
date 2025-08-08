@@ -512,8 +512,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                       <div className="space-y-6">
                         <div className="flex justify-between items-center mb-2">
                           <Label htmlFor={`sme-${area}`}>
-                            {area}{' '}
-                            <span className="text-gray-500">&nbsp;</span>
+                            {area} <span className="text-gray-500">&nbsp;</span>
                           </Label>
                         </div>
 

@@ -575,7 +575,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Build dynamic select object based on requested fields - use the select directly
-        const includeRelations: Record<string, boolean> = {
+      const includeRelations: Record<string, boolean> = {
         customer: false, // rely on denormalized customerName to prevent extra SELECTs
         products: query.includeProducts || false,
         assignedTo: query.includeTeam || false,
@@ -663,7 +663,8 @@ export async function GET(request: NextRequest) {
         const skip = (query.page - 1) * query.limit;
         try {
           const optimizedSelect: any = { ...proposalSelect };
-          if (query.includeCustomer) optimizedSelect.customer = { select: { id: true, name: true } };
+          if (query.includeCustomer)
+            optimizedSelect.customer = { select: { id: true, name: true } };
           if (query.includeTeam) optimizedSelect.assignedTo = { select: { id: true } };
 
           const results = await prisma.proposal.findMany({

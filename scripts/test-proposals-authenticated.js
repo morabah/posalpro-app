@@ -402,9 +402,7 @@ async function runTest() {
       } catch {}
     }
     if (!recentProposalsSection) {
-      recentProposalsSection = await page.$(
-        '.recent-proposals, [class*="recent-proposals"]'
-      );
+      recentProposalsSection = await page.$('.recent-proposals, [class*="recent-proposals"]');
     }
     if (!recentProposalsSection) {
       // Fallback: look for the card heading text

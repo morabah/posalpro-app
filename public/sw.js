@@ -36,7 +36,7 @@ const CACHE_STRATEGIES = {
   NETWORK_FIRST: 'network-first',
   STALE_WHILE_REVALIDATE: 'stale-while-revalidate',
   NETWORK_ONLY: 'network-only',
-  CACHE_ONLY: 'cache-only'
+  CACHE_ONLY: 'cache-only',
 };
 
 // Install event - cache static assets
@@ -44,7 +44,8 @@ self.addEventListener('install', event => {
   console.log('[SW] Installing service worker...');
 
   event.waitUntil(
-    caches.open(STATIC_CACHE_NAME)
+    caches
+      .open(STATIC_CACHE_NAME)
       .then(cache => {
         console.log('[SW] Caching static assets');
         return cache.addAll(STATIC_ASSETS);
@@ -64,13 +65,16 @@ self.addEventListener('activate', event => {
   console.log('[SW] Activating service worker...');
 
   event.waitUntil(
-    caches.keys()
+    caches
+      .keys()
       .then(cacheNames => {
         return Promise.all(
           cacheNames.map(cacheName => {
-            if (cacheName !== STATIC_CACHE_NAME &&
-                cacheName !== DYNAMIC_CACHE_NAME &&
-                cacheName !== CACHE_NAME) {
+            if (
+              cacheName !== STATIC_CACHE_NAME &&
+              cacheName !== DYNAMIC_CACHE_NAME &&
+              cacheName !== CACHE_NAME
+            ) {
               console.log('[SW] Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
@@ -116,9 +120,7 @@ async function handleApiRequest(request) {
   const url = new URL(request.url);
 
   // Check if this API should be cached
-  const shouldCache = API_CACHE_PATTERNS.some(pattern =>
-    url.pathname.startsWith(pattern)
-  );
+  const shouldCache = API_CACHE_PATTERNS.some(pattern => url.pathname.startsWith(pattern));
 
   if (!shouldCache) {
     return fetch(request);
@@ -146,13 +148,16 @@ async function handleApiRequest(request) {
 
     // Return offline response for critical APIs
     if (url.pathname === '/api/health') {
-      return new Response(JSON.stringify({
-        status: 'offline',
-        message: 'Service worker active, network unavailable'
-      }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 200
-      });
+      return new Response(
+        JSON.stringify({
+          status: 'offline',
+          message: 'Service worker active, network unavailable',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
     }
 
     throw error;
@@ -196,7 +201,8 @@ async function handleAuthPages(request) {
     }
 
     // Return offline page for auth routes
-    return new Response(`
+    return new Response(
+      `
       <!DOCTYPE html>
       <html>
         <head>
@@ -224,10 +230,12 @@ async function handleAuthPages(request) {
           </div>
         </body>
       </html>
-    `, {
-      headers: { 'Content-Type': 'text/html' },
-      status: 200
-    });
+    `,
+      {
+        headers: { 'Content-Type': 'text/html' },
+        status: 200,
+      }
+    );
   }
 }
 
@@ -307,18 +315,16 @@ self.addEventListener('push', event => {
     actions: [
       {
         action: 'open',
-        title: 'Open App'
+        title: 'Open App',
       },
       {
         action: 'dismiss',
-        title: 'Dismiss'
-      }
-    ]
+        title: 'Dismiss',
+      },
+    ],
   };
 
-  event.waitUntil(
-    self.registration.showNotification('PosalPro Update', options)
-  );
+  event.waitUntil(self.registration.showNotification('PosalPro Update', options));
 });
 
 // Handle notification clicks
@@ -328,9 +334,7 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
 
   if (event.action === 'open') {
-    event.waitUntil(
-      clients.openWindow('/')
-    );
+    event.waitUntil(clients.openWindow('/'));
   }
 });
 

@@ -14,12 +14,12 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { ApiResponseOptimizer } from '@/lib/performance/ApiResponseOptimizer';
 import { getSession, signOut } from 'next-auth/react';
-import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -140,15 +140,19 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
       }));
 
       // Track activity analytics
-      analytics('session_activity', {
-        activityType,
-        sessionId: session?.user?.id,
-        sessionDuration: now - sessionStartTime.current,
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        componentMapping: COMPONENT_MAPPING,
-        ...metadata,
-      }, 'low');
+      analytics(
+        'session_activity',
+        {
+          activityType,
+          sessionId: session?.user?.id,
+          sessionDuration: now - sessionStartTime.current,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          componentMapping: COMPONENT_MAPPING,
+          ...metadata,
+        },
+        'low'
+      );
 
       lastHeartbeat.current = now;
     },
@@ -189,15 +193,19 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
       }));
 
       // Track session refresh analytics
-      analytics('session_refresh', {
-        success: true,
-        duration: refreshDuration,
-        fromCache: optimizedResult.fromCache,
-        sessionId: session?.user?.id,
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'medium');
+      analytics(
+        'session_refresh',
+        {
+          success: true,
+          duration: refreshDuration,
+          fromCache: optimizedResult.fromCache,
+          sessionId: session?.user?.id,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'medium'
+      );
 
       return true;
     } catch (error) {
@@ -213,12 +221,16 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         }
       );
 
-      analytics('session_refresh_error', {
-        error: standardError.code,
-        sessionId: session?.user?.id,
-        userStories: COMPONENT_MAPPING.userStories,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'high');
+      analytics(
+        'session_refresh_error',
+        {
+          error: standardError.code,
+          sessionId: session?.user?.id,
+          userStories: COMPONENT_MAPPING.userStories,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'high'
+      );
 
       return false;
     }
@@ -227,12 +239,16 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
   // Session extension
   const extendSession = useCallback(async (): Promise<boolean> => {
     if (extensionCount.current >= sessionState.warningConfig.maxExtensions) {
-      analytics('session_extension_denied', {
-        reason: 'max_extensions_reached',
-        extensionCount: extensionCount.current,
-        sessionId: session?.user?.id,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'medium');
+      analytics(
+        'session_extension_denied',
+        {
+          reason: 'max_extensions_reached',
+          extensionCount: extensionCount.current,
+          sessionId: session?.user?.id,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'medium'
+      );
       return false;
     }
 
@@ -246,13 +262,17 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         timeRemaining: prev.warningConfig.extendDuration * 60 * 1000,
       }));
 
-      analytics('session_extended', {
-        extensionNumber: extensionCount.current,
-        extensionDuration: sessionState.warningConfig.extendDuration,
-        sessionId: session?.user?.id,
-        userStories: COMPONENT_MAPPING.userStories,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'medium');
+      analytics(
+        'session_extended',
+        {
+          extensionNumber: extensionCount.current,
+          extensionDuration: sessionState.warningConfig.extendDuration,
+          sessionId: session?.user?.id,
+          userStories: COMPONENT_MAPPING.userStories,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'medium'
+      );
     }
 
     return success;
@@ -265,15 +285,19 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         const sessionDuration = Date.now() - sessionStartTime.current;
 
         // Track logout analytics
-        analytics('session_logout', {
-          reason,
-          sessionDuration,
-          activityCount: sessionState.metrics.activityCount,
-          extensionCount: extensionCount.current,
-          sessionId: session?.user?.id,
-          userStories: COMPONENT_MAPPING.userStories,
-          componentMapping: COMPONENT_MAPPING,
-        }, 'medium');
+        analytics(
+          'session_logout',
+          {
+            reason,
+            sessionDuration,
+            activityCount: sessionState.metrics.activityCount,
+            extensionCount: extensionCount.current,
+            sessionId: session?.user?.id,
+            userStories: COMPONENT_MAPPING.userStories,
+            componentMapping: COMPONENT_MAPPING,
+          },
+          'medium'
+        );
 
         // Clear timers
         if (activityTimer.current) {
@@ -339,14 +363,18 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
 
     // Track health changes
     if (health !== sessionState.sessionHealth) {
-      analytics('session_health_change', {
-        oldHealth: sessionState.sessionHealth,
-        newHealth: health,
-        idleTime,
-        sessionDuration,
-        sessionId: session?.user?.id,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'medium');
+      analytics(
+        'session_health_change',
+        {
+          oldHealth: sessionState.sessionHealth,
+          newHealth: health,
+          idleTime,
+          sessionDuration,
+          sessionId: session?.user?.id,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'medium'
+      );
     }
   }, [sessionState, session?.user?.id, analytics]);
 
@@ -362,14 +390,18 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
       }, 60000); // Check every minute
 
       // Track session start
-      analytics('session_started', {
-        sessionId: session.user.id,
-        userRoles: session.user.roles,
-        userDepartment: session.user.department,
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'high');
+      analytics(
+        'session_started',
+        {
+          sessionId: session.user.id,
+          userRoles: session.user.roles,
+          userDepartment: session.user.department,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'high'
+      );
 
       return () => {
         if (activityTimer.current) {
@@ -397,11 +429,15 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         sessionState.warningConfig.warningThreshold * 60 * 1000
       );
 
-      analytics('session_warning_triggered', {
-        timeRemaining: sessionState.warningConfig.warningThreshold,
-        sessionId: session?.user?.id,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'medium');
+      analytics(
+        'session_warning_triggered',
+        {
+          timeRemaining: sessionState.warningConfig.warningThreshold,
+          sessionId: session?.user?.id,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'medium'
+      );
     }
 
     return () => {
@@ -435,13 +471,17 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         currentSession.user?.permissions && currentSession.user.permissions.length > 0;
 
       if (!hasValidRoles || !hasValidPermissions) {
-        analytics('session_validation_failed', {
-          reason: 'invalid_permissions',
-          hasRoles: hasValidRoles,
-          hasPermissions: hasValidPermissions,
-          sessionId: session?.user?.id,
-          componentMapping: COMPONENT_MAPPING,
-        }, 'high');
+        analytics(
+          'session_validation_failed',
+          {
+            reason: 'invalid_permissions',
+            hasRoles: hasValidRoles,
+            hasPermissions: hasValidPermissions,
+            sessionId: session?.user?.id,
+            componentMapping: COMPONENT_MAPPING,
+          },
+          'high'
+        );
 
         logout('invalid_permissions');
         return false;

@@ -3,8 +3,8 @@
  * Secure password operations using bcrypt
  */
 
+import { StandardError } from '@/lib/errors';
 import bcrypt from 'bcryptjs';
-import { ErrorCodes, StandardError } from '@/lib/errors';
 
 // Platform compatibility: Using bcryptjs (pure JS) instead of bcrypt (native)
 // See IMPLEMENTATION_LOG.md and LESSONS_LEARNED.md for details
@@ -23,15 +23,11 @@ export async function hashPassword(password: string): Promise<string> {
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
     return hashedPassword;
   } catch (error) {
-    throw StandardError.server(
-      'Failed to hash password',
-      error,
-      {
-        component: 'passwordUtils',
-        operation: 'hashPassword',
-        userFriendlyMessage: 'Unable to process your password. Please try again later.',
-      }
-    );
+    throw StandardError.server('Failed to hash password', error, {
+      component: 'passwordUtils',
+      operation: 'hashPassword',
+      userFriendlyMessage: 'Unable to process your password. Please try again later.',
+    });
   }
 }
 
@@ -41,22 +37,15 @@ export async function hashPassword(password: string): Promise<string> {
  * @param hashedPassword Hashed password to compare against
  * @returns Boolean indicating if passwords match
  */
-export async function comparePassword(
-  password: string,
-  hashedPassword: string
-): Promise<boolean> {
+export async function comparePassword(password: string, hashedPassword: string): Promise<boolean> {
   try {
     const isMatch = await bcrypt.compare(password, hashedPassword);
     return isMatch;
   } catch (error) {
-    throw StandardError.server(
-      'Failed to compare passwords',
-      error,
-      {
-        component: 'passwordUtils',
-        operation: 'comparePassword',
-        userFriendlyMessage: 'Unable to verify your password. Please try again later.',
-      }
-    );
+    throw StandardError.server('Failed to compare passwords', error, {
+      component: 'passwordUtils',
+      operation: 'comparePassword',
+      userFriendlyMessage: 'Unable to verify your password. Please try again later.',
+    });
   }
 }
