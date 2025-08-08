@@ -22,6 +22,10 @@ import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreat
 import { useApiClient } from '@/hooks/useApiClient';
 import { useMemoryOptimization } from '@/hooks/useMemoryOptimization';
 import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors';
+import {
+  createMemoryOptimizedImport,
+  dynamicImportTracker,
+} from '@/lib/utils/dynamicImportOptimizer';
 import { Priority } from '@/types/enums';
 import { ExpertiseArea, ProposalPriority, ProposalWizardData } from '@/types/proposals';
 import {
@@ -33,7 +37,6 @@ import {
 import { debounce } from 'lodash';
 import { useRouter } from 'next/navigation';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createMemoryOptimizedImport, dynamicImportTracker } from '@/lib/utils/dynamicImportOptimizer';
 
 // ✅ CRITICAL: Memory optimization hook
 
@@ -49,19 +52,29 @@ const BasicInformationStep = lazy(() =>
   import('./steps/BasicInformationStep').then(module => ({ default: module.BasicInformationStep }))
 );
 const TeamAssignmentStep = createMemoryOptimizedImport(
-  () => import('./steps/TeamAssignmentStep').then(module => ({ default: module.TeamAssignmentStep })),
+  () =>
+    import('./steps/TeamAssignmentStep').then(module => ({ default: module.TeamAssignmentStep })),
   { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
 const ContentSelectionStep = createMemoryOptimizedImport(
-  () => import('./steps/ContentSelectionStep').then(module => ({ default: module.ContentSelectionStep })),
+  () =>
+    import('./steps/ContentSelectionStep').then(module => ({
+      default: module.ContentSelectionStep,
+    })),
   { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
 const ProductSelectionStep = createMemoryOptimizedImport(
-  () => import('./steps/ProductSelectionStep').then(module => ({ default: module.ProductSelectionStep })),
+  () =>
+    import('./steps/ProductSelectionStep').then(module => ({
+      default: module.ProductSelectionStep,
+    })),
   { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
 const SectionAssignmentStep = createMemoryOptimizedImport(
-  () => import('./steps/SectionAssignmentStep').then(module => ({ default: module.SectionAssignmentStep })),
+  () =>
+    import('./steps/SectionAssignmentStep').then(module => ({
+      default: module.SectionAssignmentStep,
+    })),
   { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
 );
 const ReviewStep = createMemoryOptimizedImport(
@@ -288,35 +301,32 @@ export function ProposalWizard({
   }, []);
 
   // Proactively dispose previous heavy step component cache to reduce heap usage on step change
-  const goToStep = useCallback(
-    (stepNumber: number) => {
-      setCurrentStep(prev => {
-        try {
-          if (prev !== stepNumber) {
-            switch (prev) {
-              case 2:
-                (TeamAssignmentStep as any).dispose?.();
-                break;
-              case 3:
-                (ContentSelectionStep as any).dispose?.();
-                break;
-              case 4:
-                (ProductSelectionStep as any).dispose?.();
-                break;
-              case 5:
-                (SectionAssignmentStep as any).dispose?.();
-                break;
-              case 6:
-                (ReviewStep as any).dispose?.();
-                break;
-            }
+  const goToStep = useCallback((stepNumber: number) => {
+    setCurrentStep(prev => {
+      try {
+        if (prev !== stepNumber) {
+          switch (prev) {
+            case 2:
+              (TeamAssignmentStep as any).dispose?.();
+              break;
+            case 3:
+              (ContentSelectionStep as any).dispose?.();
+              break;
+            case 4:
+              (ProductSelectionStep as any).dispose?.();
+              break;
+            case 5:
+              (SectionAssignmentStep as any).dispose?.();
+              break;
+            case 6:
+              (ReviewStep as any).dispose?.();
+              break;
           }
-        } catch {}
-        return stepNumber;
-      });
-    },
-    []
-  );
+        }
+      } catch {}
+      return stepNumber;
+    });
+  }, []);
 
   // ✅ FIXED: Add missing dependencies to useEffect
   useEffect(() => {
@@ -903,7 +913,12 @@ export function ProposalWizard({
   }, [wizardData, user, onComplete, trackProposalCreation, router, errorHandlingService]);
 
   const handleNext = useCallback(() => {
-    console.log('[handleNext] Called with currentStep:', currentStep, 'totalSteps:', STEP_META.length);
+    console.log(
+      '[handleNext] Called with currentStep:',
+      currentStep,
+      'totalSteps:',
+      STEP_META.length
+    );
 
     if (currentStep < STEP_META.length) {
       // Dispose current step heavy component cache before moving on
@@ -987,7 +1002,12 @@ export function ProposalWizard({
       console.log('[ProposalWizard] 🎯 Final step reached, calling handleCreateProposal');
       handleCreateProposal();
     } else {
-      console.log('[handleNext] Unexpected state - currentStep:', currentStep, 'totalSteps:', STEP_META.length);
+      console.log(
+        '[handleNext] Unexpected state - currentStep:',
+        currentStep,
+        'totalSteps:',
+        STEP_META.length
+      );
     }
   }, [currentStep, handleCreateProposal]);
 
@@ -1269,7 +1289,9 @@ export function ProposalWizard({
           </button>
 
           <div className="flex-1 text-center">
-            <h2 className="text-lg font-semibold text-gray-900">Step {currentStep} of {STEP_META.length}</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Step {currentStep} of {STEP_META.length}
+            </h2>
             <p className="text-sm text-gray-600">
               {isMobile ? STEP_META[currentStep - 1].shortTitle : STEP_META[currentStep - 1].title}
             </p>
@@ -1383,7 +1405,7 @@ export function ProposalWizard({
   const NavigationButtons = () => {
     // Add debugging to understand button state
     const isDisabled = loading || !isCurrentStepValid();
-  const isFinalStep = currentStep === STEP_META.length;
+    const isFinalStep = currentStep === STEP_META.length;
 
     // Debug logs removed for performance
 

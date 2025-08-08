@@ -6,9 +6,9 @@
  * Target: Reduce authentication time from 1138ms to <500ms
  */
 
+import { hashPassword } from '@/lib/auth/passwordUtils';
 import { prisma } from '@/lib/prisma';
 import { Role, User } from '@prisma/client';
-import { hashPassword } from '@/lib/auth/passwordUtils';
 
 // ✅ CRITICAL: Performance optimization - User cache
 const userCache = new Map<string, { user: AuthUserRecord; timestamp: number }>();
@@ -92,7 +92,10 @@ export type UserWithoutPassword = Omit<User, 'password'>;
 
 export async function createUser(data: CreateUserData): Promise<UserWithoutPassword> {
   // Check for existing user
-  const existing = await prisma.user.findUnique({ where: { email: data.email }, select: { id: true } });
+  const existing = await prisma.user.findUnique({
+    where: { email: data.email },
+    select: { id: true },
+  });
   if (existing) {
     // Keep error message for API route compatibility
     throw new Error('A user with this email already exists');

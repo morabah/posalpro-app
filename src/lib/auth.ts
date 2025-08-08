@@ -233,7 +233,10 @@ export const authOptions: NextAuthOptions = {
         const now = Date.now();
         const cached = sessionCache.get(throttleKey);
         if (cached && now - cached.timestamp < 2000) {
-          logger.info('📦 [Auth Cache] Dev throttle: returning throttled session for:', token.email);
+          logger.info(
+            '📦 [Auth Cache] Dev throttle: returning throttled session for:',
+            token.email
+          );
           return cached.session;
         }
         // After building session below, we will set this throttle entry

@@ -21,9 +21,23 @@ export function MemoryOptimizationDashboard() {
   }> = [];
   const currentMetrics = getMemoryUsage();
   const isAcceptable = getMemoryUsageMB() < 150;
-  const leaks: Array<{ type: 'increasing' | 'stagnant' | 'high_usage'; description: string; severity: 'low' | 'medium' | 'high' }> = [];
-  const recommendations: Array<{ type: 'memory' | 'query' | 'cache'; priority: 'low' | 'medium' | 'high'; description: string; impact: string }> = [];
-  const getQueryMetrics = () => ({ queryCount: 0, averageQueryTime: 0, slowQueries: [], memoryImpact: 0 });
+  const leaks: Array<{
+    type: 'increasing' | 'stagnant' | 'high_usage';
+    description: string;
+    severity: 'low' | 'medium' | 'high';
+  }> = [];
+  const recommendations: Array<{
+    type: 'memory' | 'query' | 'cache';
+    priority: 'low' | 'medium' | 'high';
+    description: string;
+    impact: string;
+  }> = [];
+  const getQueryMetrics = () => ({
+    queryCount: 0,
+    averageQueryTime: 0,
+    slowQueries: [],
+    memoryImpact: 0,
+  });
   const trackQuery = (_q: string, _d: number, _m: number) => {};
 
   const queryMetrics = getQueryMetrics();
@@ -101,21 +115,15 @@ export function MemoryOptimizationDashboard() {
         <h3 className="text-lg font-semibold mb-4">Memory Status</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900">
-              {formatBytes(usedHeapBytes)}
-            </div>
+            <div className="text-2xl font-bold text-gray-900">{formatBytes(usedHeapBytes)}</div>
             <div className="text-sm text-gray-600">Heap Used</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900">
-              {formatBytes(totalHeapBytes)}
-            </div>
+            <div className="text-2xl font-bold text-gray-900">{formatBytes(totalHeapBytes)}</div>
             <div className="text-sm text-gray-600">Heap Total</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900">
-              N/A
-            </div>
+            <div className="text-2xl font-bold text-gray-900">N/A</div>
             <div className="text-sm text-gray-600">External</div>
           </div>
           <div className="text-center">
@@ -256,11 +264,15 @@ export function MemoryOptimizationDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div className="text-sm font-medium text-gray-600">JS Heap Size Limit</div>
-              <div className="text-lg font-semibold">{formatBytes(currentMetrics?.jsHeapSizeLimit ?? 0)}</div>
+              <div className="text-lg font-semibold">
+                {formatBytes(currentMetrics?.jsHeapSizeLimit ?? 0)}
+              </div>
             </div>
             <div>
               <div className="text-sm font-medium text-gray-600">Used / Total</div>
-              <div className="text-lg font-semibold">{formatBytes(usedHeapBytes)} / {formatBytes(totalHeapBytes)}</div>
+              <div className="text-lg font-semibold">
+                {formatBytes(usedHeapBytes)} / {formatBytes(totalHeapBytes)}
+              </div>
             </div>
           </div>
         </Card>

@@ -13,6 +13,7 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { logError } from '@/lib/logger';
+import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getCache, setCache } from '@/lib/redis';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
@@ -20,7 +21,6 @@ import { Prisma, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 
 /**
  * Component Traceability Matrix:
@@ -827,9 +827,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      recordError(
-        error instanceof StandardError ? error.code : ErrorCodes.SYSTEM.INTERNAL_ERROR
-      );
+      recordError(error instanceof StandardError ? error.code : ErrorCodes.SYSTEM.INTERNAL_ERROR);
       const duration = Date.now() - queryStartTime;
       recordLatency(duration);
       return createApiErrorResponse(

@@ -36,7 +36,10 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
 
   // ✅ CRITICAL: Get current memory usage
   const getMemoryUsage = useCallback((): MemoryInfo | null => {
-    if (typeof window !== 'undefined' && (performance as unknown as { memory?: MemoryInfo }).memory) {
+    if (
+      typeof window !== 'undefined' &&
+      (performance as unknown as { memory?: MemoryInfo }).memory
+    ) {
       return (performance as unknown as { memory?: MemoryInfo }).memory || null;
     }
     return null;

@@ -8,7 +8,9 @@
 
 import React, { ComponentType, lazy, Suspense } from 'react';
 
-export type MemoryOptimizedComponent<T extends ComponentType<any>> = ComponentType<React.ComponentProps<T>> & {
+export type MemoryOptimizedComponent<T extends ComponentType<any>> = ComponentType<
+  React.ComponentProps<T>
+> & {
   dispose?: () => void;
 };
 
@@ -57,7 +59,8 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
   const LazyComponent = lazy(async () => {
     // ✅ CRITICAL: Memory threshold check
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } })
+        .memory;
       const used = memoryInfo?.usedJSHeapSize ?? 0;
       if (used > maxMemoryUsage * 1024 * 1024) {
         // Force cleanup when memory usage is high
@@ -144,7 +147,8 @@ export function createMemoryAwareImport<T extends ComponentType<any>>(
   // ✅ CRITICAL: Memory monitoring
   const checkMemoryUsage = () => {
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } })
+        .memory;
       const used = memoryInfo?.usedJSHeapSize ?? 0;
       if (used > memoryThreshold * 1024 * 1024) {
         // Force cleanup
@@ -236,7 +240,8 @@ class DynamicImportTracker {
 
     // Track memory usage
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } })
+        .memory;
       const used = memoryInfo?.usedJSHeapSize;
       if (typeof used === 'number') {
         this.memoryUsage.set(componentName, used);
@@ -283,7 +288,8 @@ class DynamicImportTracker {
 
   getMemoryUsage(): number {
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } })
+        .memory;
       const used = memoryInfo?.usedJSHeapSize;
       if (typeof used === 'number') {
         return used / (1024 * 1024); // Convert to MB
