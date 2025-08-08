@@ -100,9 +100,14 @@ export default function RecentProposals() {
   useEffect(() => {
     const fetchProposals = async () => {
       try {
-        // Don't fetch if still loading authentication or not authenticated
-        if (authLoading || !isAuthenticated) {
-          console.log('[RecentProposals] Skipping fetch - auth loading or not authenticated');
+        // Wait for auth to resolve before deciding
+        if (authLoading) {
+          setLoading(true);
+          return;
+        }
+
+        // If not authenticated (should not happen on protected dashboard), show empty state
+        if (!isAuthenticated) {
           setProposals([]);
           setLoading(false);
           return;
@@ -124,14 +129,9 @@ export default function RecentProposals() {
 
         console.log('[RecentProposals] Starting API call to fetch proposals...');
 
-        // Prevent duplicate fetches in React Strict Mode (dev) by checking a guard flag
-        const alreadyFetched = (window as any).__recentProposalsFetched;
-        if (alreadyFetched) {
-          console.log('[RecentProposals] Fetch already performed, skipping duplicate in StrictMode');
-          setLoading(false);
-          return;
-        }
-        (window as any).__recentProposalsFetched = true;
+        // Note: Avoid global guard flags that can suppress legitimate retries
+        // across auth/session changes. The lightweight API and server cache
+        // make duplicate fetches inexpensive in development.
 
         // Fetch real data from lightweight list API to avoid heavy counts/selects
         const response = await apiClient.get<any>('proposals/list');

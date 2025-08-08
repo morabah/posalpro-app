@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Small in-memory cache for dashboard list to prevent repeated hits
 const proposalsListCache = new Map<string, { data: any; ts: number }>();
-const PROPOSALS_LIST_TTL_MS = 60 * 1000; // 60 seconds
+  const PROPOSALS_LIST_TTL_MS = process.env.NODE_ENV === 'development' ? 5000 : 60 * 1000; // shorter TTL in dev to reflect changes
 
 export async function GET(request: NextRequest) {
   try {
