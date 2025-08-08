@@ -18,9 +18,8 @@ architecture and systematic learning capture.
 **🚀 Live Demo**:
 [https://posalpro-mvp2.windsurf.build](https://posalpro-mvp2.windsurf.build)
 **📚 Documentation**: Comprehensive guides in `/docs/` directory **🏗️
-Architecture**: Next.js 15 + TypeScript + Prisma + Redis **🔒 Security**:
-NextAuth.js with RBAC + Rate Limiting **📊 Analytics**: Real-time performance
-monitoring
+Architecture**: Next.js 15 + TypeScript + Prisma **🔒 Security**: NextAuth.js
+with RBAC + Rate Limiting **📊 Analytics**: Real-time performance monitoring
 
 ---
 
@@ -40,7 +39,8 @@ monitoring
   tables
 - **[PostgreSQL](https://www.postgresql.org/)** - Primary database with
   optimized indexes
-- **[Redis 5.7.0](https://redis.io/)** - Caching and session management
+- In development we use lightweight in-memory caches for selected endpoints;
+  Redis is used only in production.
 - **[NextAuth.js 4.24.11](https://next-auth.js.org/)** - Authentication with
   RBAC
 
@@ -63,12 +63,9 @@ monitoring
 
 ### **Performance & Analytics**
 
-- **[@tanstack/react-query 5.80.5](https://tanstack.com/query)** - Data fetching
-  and caching
-- **[@vercel/analytics 1.5.0](https://vercel.com/analytics)** - Performance
-  monitoring
-- **[React Virtualized 9.22.6](https://github.com/bvaughn/react-virtualized)** -
-  Large list optimization
+- **useApiClient pattern** for client fetching with centralized error handling
+- **@vercel/analytics** for performance monitoring
+- **Virtualized lists** for large data sets
 
 ---
 
@@ -79,7 +76,7 @@ monitoring
 #### **Data Fetching**
 
 ```typescript
-// ✅ Always use useApiClient pattern
+// ✅ Always use useApiClient pattern (client)
 const apiClient = useApiClient();
 
 useEffect(() => {
@@ -216,10 +213,13 @@ npm run build              # Production build
 npm run type-check         # TypeScript validation
 npm run lint               # ESLint checking
 
-# Testing
-npm run test:comprehensive # Comprehensive test suite
-npm run test:authenticated # Authenticated testing
-npm run performance:monitor # Performance monitoring
+# Testing (CLI examples)
+# Canonical perf/auth test
+node scripts/test-proposals-authenticated.js
+# Real-world perf sweep
+node scripts/real-world-performance-test.js
+# Proposal wizard E2E (Puppeteer)
+node scripts/test-proposal-wizard-puppeteer.js
 
 # Database
 npm run db:generate        # Generate Prisma client
@@ -283,6 +283,15 @@ posalpro-app/
 ---
 
 ## 🔧 Critical Development Patterns
+### **Auth & Session (Unified)**
+
+- Always import `useAuth` from `@/components/providers/AuthProvider`.
+- SessionProvider tuned for dev: `refetchOnWindowFocus=false`,
+  `refetchInterval=600`.
+- Dev-only smoothing: ultra-short TTL throttle (~2s) inside
+  `callbacks.session` (development only). Short-lived SW cache for
+  `/api/auth/session` and `/api/auth/providers` (development only).
+
 
 ### **Database Transaction Patterns**
 
@@ -372,7 +381,7 @@ const COMPONENT_MAPPING = {
 - **VERSION_HISTORY.md** - Automated deployment tracking
 - **LESSONS_LEARNED.md** - Complex implementation insights
 - **ERROR_HANDLING_IMPLEMENTATION.md** - Error handling patterns
-- **PERFORMANCE_CRISIS_ANALYSIS.md** - Performance optimization insights
+- **PERFORMANCE_OPTIMIZATION_GUIDE.md** - Performance optimization insights
 
 ---
 
@@ -382,7 +391,7 @@ const COMPONENT_MAPPING = {
 
 - **Platform**: Netlify with serverless functions
 - **Database**: PostgreSQL with connection pooling
-- **Caching**: Redis for session and data caching
+- **Caching**: Redis for session and data caching (dev uses in-memory caches)
 - **Monitoring**: Real-time performance analytics
 - **Version**: 0.2.1-alpha.3
 
