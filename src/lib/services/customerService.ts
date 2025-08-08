@@ -674,11 +674,14 @@ export class CustomerService {
     }
   }
 
-  async updateSegmentation(customerId: string, segmentation: any): Promise<void> {
+  async updateSegmentation(
+    customerId: string,
+    segmentation: Record<string, unknown>
+  ): Promise<void> {
     try {
       await prisma.customer.update({
         where: { id: customerId },
-        data: { segmentation },
+        data: { segmentation: toPrismaJson(segmentation) },
       });
     } catch (error) {
       // Log the error using ErrorHandlingService
@@ -691,7 +694,7 @@ export class CustomerService {
           cause: error,
           metadata: {
             component: 'CustomerService',
-            operation: 'updateSegmentation',
+          operation: 'updateSegmentation',
             customerId,
             prismaCode: error.code,
           },

@@ -48,12 +48,12 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
 ): ComponentType<React.ComponentProps<T>> {
   const { unloadDelay = 15000, loadingComponent, maxMemoryUsage = 100 } = options;
   let componentCache: T | null = null;
-  let unloadTimer: NodeJS.Timeout | null = null;
+  let unloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   const LazyComponent = lazy(async () => {
     // ✅ CRITICAL: Memory threshold check
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as any).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
       if (memoryInfo && memoryInfo.usedJSHeapSize > maxMemoryUsage * 1024 * 1024) {
         // Force cleanup when memory usage is high
         componentCache = null;
@@ -122,17 +122,17 @@ export function createMemoryAwareImport<T extends ComponentType<any>>(
 ): ComponentType<React.ComponentProps<T>> {
   const { memoryThreshold = 150, cleanupInterval = 30000, loadingComponent } = options;
   let componentCache: T | null = null;
-  let cleanupTimer: NodeJS.Timeout | null = null;
+  let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   // ✅ CRITICAL: Memory monitoring
   const checkMemoryUsage = () => {
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as any).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
       if (memoryInfo && memoryInfo.usedJSHeapSize > memoryThreshold * 1024 * 1024) {
         // Force cleanup
         componentCache = null;
         if (cleanupTimer) {
-          clearTimeout(cleanupTimer);
+          clearInterval(cleanupTimer);
         }
       }
     }
@@ -218,7 +218,7 @@ class DynamicImportTracker {
 
     // Track memory usage
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as any).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
       if (memoryInfo) {
         this.memoryUsage.set(componentName, memoryInfo.usedJSHeapSize);
       }
@@ -264,7 +264,7 @@ class DynamicImportTracker {
 
   getMemoryUsage(): number {
     if (typeof window !== 'undefined') {
-      const memoryInfo = (performance as any).memory;
+      const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
       if (memoryInfo) {
         return memoryInfo.usedJSHeapSize / (1024 * 1024); // Convert to MB
       }
