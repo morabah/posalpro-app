@@ -4,6 +4,8 @@
  */
 
 import { createClient } from 'redis';
+import { recordCacheHit, recordCacheMiss, recordLatency } from '@/lib/observability/metricsStore';
+import { logger } from '@/lib/logging/structuredLogger';
 
 // Enable Redis only in production unless explicitly overridden
 const USE_REDIS = process.env.NODE_ENV === 'production' && process.env.USE_REDIS !== 'false';
@@ -71,19 +73,29 @@ export async function ensureRedisConnection() {
 export async function getCache<T = unknown>(key: string): Promise<T | null> {
   try {
     await ensureRedisConnection();
+    const start = Date.now();
 
     if (!isConnected) {
       const entry = memoryCache.get(key);
-      if (!entry) return null;
-      if (Date.now() > entry.expiresAt) {
-        memoryCache.delete(key);
+      if (!entry) {
+        recordCacheMiss();
         return null;
       }
+      if (Date.now() > entry.expiresAt) {
+        memoryCache.delete(key);
+        recordCacheMiss();
+        return null;
+      }
+      recordCacheHit();
+      recordLatency(Date.now() - start);
       return entry.value as T;
     }
 
     const value = await redisClient.get(key);
-    return value ? (JSON.parse(value) as T) : null;
+    const hit = Boolean(value);
+    if (hit) recordCacheHit(); else recordCacheMiss();
+    recordLatency(Date.now() - start);
+    return hit ? (JSON.parse(value as string) as T) : null;
   } catch (error) {
     console.warn('⚠️  Cache get error:', error instanceof Error ? error.message : String(error));
     return null;
@@ -97,13 +109,16 @@ export async function setCache(
 ): Promise<void> {
   try {
     await ensureRedisConnection();
+    const start = Date.now();
 
     if (!isConnected) {
       memoryCache.set(key, { value, expiresAt: Date.now() + ttl * 1000 });
+      recordLatency(Date.now() - start);
       return;
     }
 
     await redisClient.setEx(key, ttl, JSON.stringify(value));
+    recordLatency(Date.now() - start);
   } catch (error) {
     console.warn('⚠️  Cache set error:', error instanceof Error ? error.message : String(error));
   }

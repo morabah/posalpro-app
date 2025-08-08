@@ -10,6 +10,8 @@ import { prisma } from '@/lib/db/prisma';
 import { createApiErrorResponse, ErrorCodes, StandardError } from '@/lib/errors';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError } from '@/lib/logger';
+import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
+import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -36,6 +38,8 @@ function createApiResponse<T>(data: T, message: string, status = 200) {
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   let session;
   let proposalId;
+  const start = Date.now();
+  const { requestId } = getRequestMeta(request.headers);
   try {
     // Await params
     const params = await context.params;
@@ -225,9 +229,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       crossStepValidation: (proposal.metadata as any)?.crossStepValidation || null,
     };
 
-    console.log('[ProposalDetailAPI] Successfully fetched proposal:', proposalId);
+    const duration = Date.now() - start;
+    logger.info('ProposalDetailAPI GET success', {
+      requestId,
+      duration,
+      code: 'OK',
+      route: '/api/proposals/[id]',
+      method: 'GET',
+      proposalId,
+      userId: session.user.id,
+    });
+    recordLatency(duration);
 
-    return NextResponse.json(
+    const res = NextResponse.json(
       {
         success: true,
         data: proposalDetail,
@@ -235,6 +249,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       },
       { status: 200 }
     );
+    res.headers.set('Server-Timing', `app;dur=${duration}`);
+    if (requestId) res.headers.set('x-request-id', String(requestId));
+    return res;
   } catch (error) {
     // ✅ ENHANCED: Use proper logger instead of console.error
     const standardError = errorHandlingService.processError(
@@ -249,16 +266,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       }
     );
 
-    logError('Error fetching proposal', error, {
-      component: 'ProposalDetailAPI',
-      operation: 'GET',
-      proposalId,
+    const duration = Date.now() - start;
+    logger.error('ProposalDetailAPI GET error', {
+      requestId,
+      duration,
+      code: standardError.code,
+      route: '/api/proposals/[id]',
+      method: 'GET',
+      proposalId: proposalId || 'unknown',
       userId: session?.user?.id || 'unknown',
-      standardError: standardError.message,
-      errorCode: standardError.code,
+      message: standardError.message,
     });
+    recordError(standardError.code);
 
-    return createApiErrorResponse(
+    const res = createApiErrorResponse(
       new StandardError({
         message: 'Failed to retrieve proposal',
         code: ErrorCodes.DATA.QUERY_FAILED,
@@ -275,6 +296,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       500,
       { userFriendlyMessage: 'Unable to load proposal details. Please try again later.' }
     );
+    res.headers.set('Server-Timing', `app;dur=${duration}`);
+    if (requestId) res.headers.set('x-request-id', String(requestId));
+    return res;
   }
 }
 

@@ -12,6 +12,8 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
+import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -38,6 +40,7 @@ const CustomerSearchSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
+  const { requestId } = getRequestMeta(request.headers);
 
   try {
     // Authentication check
@@ -125,7 +128,18 @@ export async function GET(request: NextRequest) {
       searchDuration
     );
 
-    return NextResponse.json({
+    logger.info('CustomerSearch GET success', {
+      requestId,
+      duration: searchDuration,
+      code: 'OK',
+      route: '/api/customers/search',
+      method: 'GET',
+      userId: session.user.id,
+      resultCount: customers.length,
+    });
+    recordLatency(searchDuration);
+
+    const res = NextResponse.json({
       success: true,
       data: {
         customers,
@@ -143,6 +157,9 @@ export async function GET(request: NextRequest) {
       },
       message: `Found ${customers.length} customers matching "${validatedQuery.q}"`,
     });
+    res.headers.set('Server-Timing', `app;dur=${searchDuration}`);
+    if (requestId) res.headers.set('x-request-id', String(requestId));
+    return res;
   } catch (error) {
     const searchDuration = Date.now() - startTime;
 
@@ -150,7 +167,15 @@ export async function GET(request: NextRequest) {
     errorHandlingService.processError(error);
 
     if (error instanceof z.ZodError) {
-      return createApiErrorResponse(
+      logger.warn('CustomerSearch GET validation error', {
+        requestId,
+        duration: searchDuration,
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        route: '/api/customers/search',
+        method: 'GET',
+      });
+      recordError(ErrorCodes.VALIDATION.INVALID_INPUT);
+      const res = createApiErrorResponse(
         new StandardError({
           message: 'Validation failed for customer search parameters',
           code: ErrorCodes.VALIDATION.INVALID_INPUT,
@@ -167,9 +192,21 @@ export async function GET(request: NextRequest) {
         400,
         { userFriendlyMessage: 'Please check your search parameters and try again.' }
       );
+      res.headers.set('Server-Timing', `app;dur=${searchDuration}`);
+      if (requestId) res.headers.set('x-request-id', String(requestId));
+      return res;
     }
 
-    return createApiErrorResponse(
+    logger.error('CustomerSearch GET error', {
+      requestId,
+      duration: searchDuration,
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      route: '/api/customers/search',
+      method: 'GET',
+      message: 'Customer search failed',
+    });
+    recordError(ErrorCodes.SYSTEM.INTERNAL_ERROR);
+    const res = createApiErrorResponse(
       new StandardError({
         message: 'Customer search failed',
         code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
@@ -188,6 +225,9 @@ export async function GET(request: NextRequest) {
           'An unexpected error occurred while searching customers. Please try again later.',
       }
     );
+    res.headers.set('Server-Timing', `app;dur=${searchDuration}`);
+    if (requestId) res.headers.set('x-request-id', String(requestId));
+    return res;
   }
 }
 

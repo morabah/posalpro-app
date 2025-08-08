@@ -1,4 +1,6 @@
-import { logger } from '@/utils/logger';/**
+import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
+import { recordError, recordLatency } from '@/lib/observability/metricsStore';
+/**
  * PosalPro MVP2 - Product Categories API Routes
  * Enhanced category management with analytics tracking
  * Component Traceability: US-3.1, US-3.2, H3
@@ -22,6 +24,8 @@ import { NextRequest, NextResponse } from 'next/server';
  * GET /api/products/categories - Get all product categories with statistics
  */
 export async function GET(request: NextRequest) {
+  const start = Date.now();
+  const { requestId } = getRequestMeta(request.headers);
   try {
     // Authentication check
     const session = await getServerSession(authOptions);
@@ -102,8 +106,20 @@ export async function GET(request: NextRequest) {
     // Track category access for analytics
     await trackCategoryAccessEvent(session.user.id, categories.length);
 
+    const duration = Date.now() - start;
+    logger.info('ProductCategories GET success', {
+      requestId,
+      duration,
+      code: 'OK',
+      route: '/api/products/categories',
+      method: 'GET',
+      userId: session.user.id,
+      totalCategories: categories.length,
+    });
+    recordLatency(duration);
+
     if (includeStats) {
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         data: {
           categories,
@@ -120,6 +136,9 @@ export async function GET(request: NextRequest) {
         },
         message: 'Product categories retrieved successfully',
       });
+      res.headers.set('Server-Timing', `app;dur=${duration}`);
+      if (requestId) res.headers.set('x-request-id', String(requestId));
+      return res;
     }
 
     // Return simplified category list
@@ -130,16 +149,31 @@ export async function GET(request: NextRequest) {
       totalUsage: cat.totalUsage,
     }));
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         categories: simplifiedCategories,
       },
       message: 'Product categories retrieved successfully',
     });
+    res.headers.set('Server-Timing', `app;dur=${duration}`);
+    if (requestId) res.headers.set('x-request-id', String(requestId));
+    return res;
   } catch (error) {
-    logger.error('Product categories fetch error:', error);
-    return NextResponse.json({ error: 'Failed to fetch product categories' }, { status: 500 });
+    const duration = Date.now() - start;
+    logger.error('ProductCategories GET error', {
+      requestId,
+      duration,
+      code: 'CATEGORIES_FETCH_FAILED',
+      route: '/api/products/categories',
+      method: 'GET',
+      message: 'Failed to fetch product categories',
+    });
+    recordError('CATEGORIES_FETCH_FAILED');
+    const res = NextResponse.json({ error: 'Failed to fetch product categories' }, { status: 500 });
+    res.headers.set('Server-Timing', `app;dur=${duration}`);
+    if (requestId) res.headers.set('x-request-id', String(requestId));
+    return res;
   }
 }
 
@@ -167,7 +201,9 @@ async function trackCategoryAccessEvent(userId: string, categoriesCount: number)
       },
     });
   } catch (error) {
-    logger.warn('Failed to track category access event:', error);
+    logger.warn('Failed to track category access event', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     // Don't fail the main operation if analytics tracking fails
   }
 }

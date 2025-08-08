@@ -202,6 +202,9 @@ npm run type-check         # TypeScript validation
 npm run quality:check      # Full quality validation
 npm run pre-commit         # Pre-commit validation
 npm run build              # Production build
+npm run analyze            # Build with bundle analyzer
+npm run ci:bundle          # Enforce 300KB route bundle budgets
+npm run ci:obs             # Check observability contract (Server-Timing, x-request-id)
 ```
 
 ### **Available Scripts**
@@ -294,6 +297,14 @@ posalpro-app/
   `/api/auth/providers` (development only).
 
 ### **Database Transaction Patterns**
+### **Observability**
+
+- Request correlation via `x-request-id` header (middleware injects if absent)
+- Standard `Server-Timing` on APIs: `app;dur=…` and `db;dur=…` when available
+- Metrics endpoint: `GET /api/observability/metrics` (requests/db/cache/webVitals)
+- Client Web Vitals: emitted via `src/app/reportWebVitals.ts` → `POST /api/observability/web-vitals`
+- CI checks: `ci:bundle` (bundles ≤300KB), `ci:obs` (headers present on hot routes)
+
 
 ```typescript
 // ✅ CORRECT: Use prisma.$transaction for related queries

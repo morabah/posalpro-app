@@ -4,7 +4,7 @@ import { StandardError } from '@/lib/errors/StandardError';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { recordLatency, recordError } from '@/lib/observability/metricsStore';
+import { recordLatency, recordError, recordDbLatency } from '@/lib/observability/metricsStore';
 
 // Small in-memory cache for dashboard list to prevent repeated hits
 const proposalsListCache = new Map<string, { data: any; ts: number }>();
@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const dbStart = Date.now();
     const proposals = await prisma.proposal.findMany({
       select: {
         id: true,
@@ -52,13 +53,17 @@ export async function GET(request: NextRequest) {
     // Update cache (non-blocking best-effort)
     proposalsListCache.set(cacheKey, { data: proposals, ts: Date.now() });
 
+    const dbMs = Date.now() - dbStart;
+    recordDbLatency(dbMs);
     const duration = Math.round(performance.now() - start);
     recordLatency(duration);
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: proposals,
       message: 'Proposals retrieved successfully',
     });
+    res.headers.set('Server-Timing', `app;dur=${duration}, db;dur=${dbMs}`);
+    return res;
   } catch (error) {
     console.error('[ProposalListAPI] Error:', error);
 

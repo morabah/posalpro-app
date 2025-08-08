@@ -7,6 +7,8 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logger } from '@/lib/logging/structuredLogger';
+import { recordDbLatency } from '@/lib/observability/metricsStore';
 
 declare global {
   var prisma: PrismaClient | undefined;
@@ -34,3 +36,35 @@ if (process.env.NODE_ENV !== 'production') {
 
 export default prisma;
 export { prisma };
+
+// Observability: Prisma middleware to record per-query timings (no PII)
+// Note: Middleware registration should be idempotent in dev
+let prismaMiddlewareRegistered = false;
+if (!prismaMiddlewareRegistered) {
+  prisma.$use(async (params, next) => {
+    const start = Date.now();
+    try {
+      const result = await next(params);
+      const ms = Date.now() - start;
+      recordDbLatency(ms);
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('DB query', {
+          model: params.model,
+          action: params.action,
+          dbMs: ms,
+        });
+      }
+      return result;
+    } catch (err) {
+      const ms = Date.now() - start;
+      recordDbLatency(ms);
+      logger.warn('DB query error', {
+        model: params.model,
+        action: params.action,
+        dbMs: ms,
+      });
+      throw err;
+    }
+  });
+  prismaMiddlewareRegistered = true;
+}

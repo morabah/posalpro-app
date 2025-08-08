@@ -19,7 +19,7 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { recordLatency, recordError } from '@/lib/observability/metricsStore';
+import { recordLatency, recordError, recordDbLatency } from '@/lib/observability/metricsStore';
 
 // ✅ CRITICAL: Performance optimization - Customer cache
 const customerCache = new Map<string, { data: any; timestamp: number }>();
@@ -203,6 +203,7 @@ export async function GET(request: NextRequest) {
     let pagination: CustomerPaginationResult;
 
     if (useCursorPagination) {
+      const dbStart = Date.now();
       if (query.cursor) {
         where.id = { gt: query.cursor };
       }
@@ -225,6 +226,7 @@ export async function GET(request: NextRequest) {
       });
 
       const hasMore = results.length > query.limit;
+      recordDbLatency(Date.now() - dbStart);
       customers = hasMore ? (results.slice(0, -1) as Customer[]) : (results as Customer[]);
       const nextCursor = hasMore ? results[results.length - 2]?.id || null : null;
 
@@ -235,6 +237,7 @@ export async function GET(request: NextRequest) {
         nextCursor,
       };
     } else {
+      const dbStart = Date.now();
       const skip = (query.page - 1) * query.limit;
 
       // ✅ OPTIMIZATION: Avoid expensive total count; infer hasMore via limit+1
@@ -257,6 +260,7 @@ export async function GET(request: NextRequest) {
       });
 
       const hasMore = results.length > query.limit;
+      recordDbLatency(Date.now() - dbStart);
       customers = hasMore ? (results.slice(0, -1) as Customer[]) : (results as Customer[]);
 
       pagination = {
@@ -287,13 +291,15 @@ export async function GET(request: NextRequest) {
 
     const duration = Date.now() - queryStartTime;
     recordLatency(duration);
-    return NextResponse.json(response, {
+    const res = NextResponse.json(response, {
       headers: {
         'Cache-Control': 'public, max-age=300',
         'X-Cache': 'MISS',
         'X-Query-Time': queryTime.toString(),
       },
     });
+    res.headers.set('Server-Timing', `app;dur=${duration}`);
+    return res;
   } catch (error) {
     console.error('[Customer API] Error:', error);
     recordError(ErrorCodes.SYSTEM.INTERNAL_ERROR);

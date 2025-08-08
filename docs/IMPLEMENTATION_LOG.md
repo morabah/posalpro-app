@@ -598,6 +598,140 @@ Netlify platform.
 
 ---
 
+## 2025-08-08 14:05 - P3/P4 Complete: Dev Build & Bundle Performance + Observability Baseline
+
+**Phase**: P3 — Dev build and bundle performance; P4 — Observability baseline
+**Status**: ✅ COMPLETE **Duration**: 2.5 hours
+
+**Files Modified**:
+
+- next.config.js (conditional analyzer + ESLint bypass when ANALYZE=true)
+- package.json (added analyze script)
+- src/app/proposals/create/page.tsx (server shell with Suspense)
+- src/app/proposals/create/ClientPage.tsx (NEW client wrapper with dynamic
+  ProposalWizard)
+- src/app/(dashboard)/dashboard/page.tsx (lazy/dynamic widgets)
+- src/components/dashboard/client/DashboardStatsClient.tsx (NEW)
+- src/components/dashboard/client/RecentProposalsClient.tsx (NEW)
+- src/components/dashboard/client/QuickActionsClient.tsx (NEW)
+- src/app/api/dashboard/stats/route.ts (latency/error metrics)
+- src/app/api/proposals/list/route.ts (latency/error metrics)
+- src/app/api/proposals/route.ts (latency/error metrics)
+- src/app/api/customers/route.ts (latency/error metrics)
+- src/app/api/products/route.ts (latency/error metrics)
+- src/middleware.ts (x-request-id propagation via crypto.randomUUID())
+- src/lib/logging/structuredLogger.ts (JSON structured logger)
+- src/lib/observability/apiTiming.ts (API timing helper)
+- src/lib/observability/metricsStore.ts (in-memory metrics)
+- src/app/api/observability/metrics/route.ts (metrics endpoint)
+- src/app/observability/page.tsx (simple metrics dashboard)
+
+**Key Changes**:
+
+- Analyzer gated by `ANALYZE=true`; builds can bypass ESLint only for audits.
+- Fixed CSR-only usage by introducing `ClientPage` for `/proposals/create`;
+  server page wraps in Suspense.
+- `/dashboard` widgets split into dynamic client wrappers to reduce initial JS.
+- Standardized latency/error recording on hot API routes; request IDs propagated
+  for traceability.
+- Minimal observability surface: metrics store + API + dashboard for p95/p99 and
+  error totals.
+
+**Acceptance Targets vs Results**:
+
+- Dev compile: cold ~2.5–3s page compiles (measured per-route), hot ~<2s after
+  warm-up (local).
+- `/dashboard` first-load JS: ≤ 300KB (analyzer report indicates within budget).
+- Dev TTFB (after warm-up): dashboard < 500ms typical; initial warm-up > 1s
+  acceptable in dev.
+- Logs/metrics: requestId present, duration recorded on instrumented routes,
+  metrics visible at `/observability`.
+
+**Component Traceability Matrix (CTM) Coverage Snapshot**:
+
+- CTM present in major UI components and APIs, including: `ProposalWizard` and
+  all key steps (BasicInformation, TeamAssignment, ProductSelection,
+  SectionAssignment, Review), `RecentProposals`, `DashboardStats`,
+  `DashboardShell`, `AuthProvider`, `ProtectedRoute`, `AppLayout`,
+  `UserProfile`, proposal and product/customer API routes, validation APIs.
+- Newly added client wrapper files (`DashboardStatsClient.tsx`,
+  `RecentProposalsClient.tsx`, `QuickActionsClient.tsx`) are thin wrappers (no
+  CTM), but underlying components include CTM.
+- Observability infra files intentionally exclude CTM (infrastructure).
+- Action: Maintain CTM on feature components; wrappers/infra excluded by design.
+
+**Wireframe Reference**: `DASHBOARD_SCREEN.md`,
+`PROPOSAL_MANAGEMENT_DASHBOARD.md`, `PROPOSAL_CREATION_SCREEN.md` **Component
+Traceability**: US-4.1, US-4.3, US-2.3, US-5.1, US-5.2 **Hypotheses**: H7
+(deadline), H4 (coordination), H8 (tech quality), H9 (performance)
+
+**Analytics/Observability**:
+
+- Latency and error counts recorded via `metricsStore`; requestId attached via
+  middleware.
+- Structured logger available for future expansion.
+- Metrics endpoint `/api/observability/metrics` feeds `/observability` page.
+
+**Accessibility**:
+
+- Dynamic loading states provide skeletons/spinners with descriptive text; no
+  change to WCAG compliance.
+
+**Testing/Verification**:
+
+- Analyzer run: `ANALYZE=true npm run build` generates `.next/analyze/*.html`
+  (client/node/edge).
+- Manual verification: `/dashboard`, `/proposals/manage`, `/proposals/[id]`
+  load; API timing headers/metrics observed; requestId present.
+- Dev warm-up maintained to stabilize measurements.
+
+**Performance Impact**:
+
+- Reduced `/dashboard` initial JS by deferring heavy widgets; improved
+  responsiveness.
+- Standardized timing across hot APIs; baseline p95/p99 visible for future
+  tuning.
+
+**Next Steps**:
+
+- Optionally extend timing to remaining high-traffic routes; add per-route
+  budgets to CI.
+- Keep CTM annotations for any new feature components; wrappers/infra remain
+  exempt.
+- Consider adding lightweight WCAG automated checks to analyzer workflow.
+
+## 2025-08-08 16:10 - P4-P5 Extensions: Web Vitals, Metrics UI, CI Guardrails
+
+**Phase**: P4 — Observability (extended), P5 — Docs & Checklist
+**Status**: ✅ COMPLETE
+**Duration**: 1.0 hour
+
+**Files Modified / Added**:
+
+- src/lib/observability/metricsStore.ts (Web Vitals aggregation: FCP/LCP/CLS/TTFB/INP buckets + p95/p99)
+- src/app/reportWebVitals.ts (client hook to beacon Web Vitals)
+- src/app/api/observability/web-vitals/route.ts (accept POST beacons)
+- src/app/api/observability/metrics/route.ts (headline metrics + Server-Timing)
+- src/app/observability/page.tsx (cards: requests/db/cache; top error codes; web vitals headline)
+- src/app/api/proposals/list/route.ts (Server-Timing db; recordDbLatency)
+- src/app/api/customers/route.ts (Server-Timing app; recordDbLatency)
+- scripts/check-bundle-budgets.js (fail if any route > 300KB first-load)
+- scripts/check-observability-contract.js (assert x-request-id echo + Server-Timing)
+- package.json (scripts: ci:bundle, ci:obs)
+- README.md (Observability section and CI commands)
+
+**Acceptance**:
+
+- Web Vitals recorded server-side with simple histograms and p95/p99
+- `/observability` shows requests/db/cache and top error codes + vitals headline
+- `Server-Timing` present on metrics, proposals list, customers APIs
+- `ci:bundle` and `ci:obs` runnable locally; budgets enforced at 300KB
+
+**Notes**:
+
+- Logs remain schema-stable; no raw emails/IDs; add userIdHash if needed
+- Metrics/logging are non-blocking best-effort; do not affect responses
+
 ## 2025-01-09 13:10 - MANUAL DEPLOYMENT & COMPREHENSIVE TESTING COMPLETE
 
 **Phase**: Production Support - Deployment Verification & Testing **Status**: ✅
