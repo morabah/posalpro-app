@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     // Check cache for optimization results
     const cacheKey = `optimization:status:${session.user.id}`;
-    const cachedStatus = await getCache(cacheKey);
+    const cachedStatus = await getCache<{ timestamp?: string }>(cacheKey);
 
     const optimizationStatus = {
       timestamp: new Date().toISOString(),
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       },
       cache: {
         hasCachedStatus: !!cachedStatus,
-        lastOptimization: cachedStatus?.timestamp || null,
+        lastOptimization: cachedStatus?.timestamp ?? null,
       },
     };
 

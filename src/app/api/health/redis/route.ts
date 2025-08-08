@@ -25,9 +25,8 @@ export async function GET(request: NextRequest) {
       const testValue = { timestamp: Date.now(), test: true };
 
       await setCache(testKey, testValue, 10); // 10 second TTL
-      const retrievedValue = await getCache(testKey);
-
-      cacheTestPassed = retrievedValue && retrievedValue.test === true;
+      const retrievedValue = await getCache<Record<string, unknown>>(testKey);
+      cacheTestPassed = Boolean(retrievedValue && (retrievedValue as Record<string, unknown>).test === true);
       cacheTestTime = Date.now() - cacheTestStart;
     }
 

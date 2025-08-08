@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { Role, User } from '@prisma/client';
+import { hashPassword } from '@/lib/auth/passwordUtils';
 
 // ✅ CRITICAL: Performance optimization - User cache
 const userCache = new Map<string, { user: AuthUserRecord; timestamp: number }>();
@@ -78,6 +79,38 @@ interface AuthUserRecord {
   updatedAt: Date;
   lastLogin: Date | null;
   roles: { role: { name: string } }[];
+}
+
+export interface CreateUserData {
+  email: string;
+  name: string;
+  password: string;
+  department: string;
+}
+
+export type UserWithoutPassword = Omit<User, 'password'>;
+
+export async function createUser(data: CreateUserData): Promise<UserWithoutPassword> {
+  // Check for existing user
+  const existing = await prisma.user.findUnique({ where: { email: data.email }, select: { id: true } });
+  if (existing) {
+    // Keep error message for API route compatibility
+    throw new Error('A user with this email already exists');
+  }
+
+  const passwordHash = await hashPassword(data.password);
+  const created = await prisma.user.create({
+    data: {
+      email: data.email,
+      name: data.name,
+      password: passwordHash,
+      department: data.department,
+      status: 'ACTIVE',
+    },
+  });
+  // Omit password
+  const { password, ...rest } = created;
+  return rest as UserWithoutPassword;
 }
 
 export async function getUserByEmail(email: string): Promise<AuthUserRecord | null> {

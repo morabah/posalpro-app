@@ -38,7 +38,7 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
   analyticsData,
   crossStepValidation,
   assignedTo = [], // ✅ ADDED: Use existing resolved data
-}) => {
+}): JSX.Element | null => {
   const apiClient = useApiClient();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);

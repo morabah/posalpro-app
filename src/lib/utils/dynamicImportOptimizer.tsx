@@ -54,7 +54,8 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
     // ✅ CRITICAL: Memory threshold check
     if (typeof window !== 'undefined') {
       const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
-      if (memoryInfo && memoryInfo.usedJSHeapSize > maxMemoryUsage * 1024 * 1024) {
+      const used = memoryInfo?.usedJSHeapSize ?? 0;
+      if (used > maxMemoryUsage * 1024 * 1024) {
         // Force cleanup when memory usage is high
         componentCache = null;
         if (unloadTimer) {
@@ -128,7 +129,8 @@ export function createMemoryAwareImport<T extends ComponentType<any>>(
   const checkMemoryUsage = () => {
     if (typeof window !== 'undefined') {
       const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
-      if (memoryInfo && memoryInfo.usedJSHeapSize > memoryThreshold * 1024 * 1024) {
+      const used = memoryInfo?.usedJSHeapSize ?? 0;
+      if (used > memoryThreshold * 1024 * 1024) {
         // Force cleanup
         componentCache = null;
         if (cleanupTimer) {
@@ -154,7 +156,7 @@ export function createMemoryAwareImport<T extends ComponentType<any>>(
     }
     cleanupTimer = setInterval(() => {
       checkMemoryUsage();
-    }, cleanupInterval);
+    }, cleanupInterval as number);
 
     return module;
   });
@@ -219,8 +221,9 @@ class DynamicImportTracker {
     // Track memory usage
     if (typeof window !== 'undefined') {
       const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
-      if (memoryInfo) {
-        this.memoryUsage.set(componentName, memoryInfo.usedJSHeapSize);
+      const used = memoryInfo?.usedJSHeapSize;
+      if (typeof used === 'number') {
+        this.memoryUsage.set(componentName, used);
       }
     }
   }
@@ -265,8 +268,9 @@ class DynamicImportTracker {
   getMemoryUsage(): number {
     if (typeof window !== 'undefined') {
       const memoryInfo = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory;
-      if (memoryInfo) {
-        return memoryInfo.usedJSHeapSize / (1024 * 1024); // Convert to MB
+      const used = memoryInfo?.usedJSHeapSize;
+      if (typeof used === 'number') {
+        return used / (1024 * 1024); // Convert to MB
       }
     }
     return 0;

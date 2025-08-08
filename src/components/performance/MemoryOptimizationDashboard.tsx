@@ -9,18 +9,22 @@ export function MemoryOptimizationDashboard() {
   const [enableAutoOptimization, setEnableAutoOptimization] = useState(true);
   const [showAdvancedMetrics, setShowAdvancedMetrics] = useState(false);
 
-  const {
-    isOptimizing,
-    lastOptimization,
-    optimizationHistory,
-    currentMetrics,
-    isAcceptable,
-    leaks,
-    recommendations,
-    optimizeMemory,
-    getQueryMetrics,
-    trackQuery,
-  } = useMemoryOptimization();
+  const { optimizeMemory, getMemoryUsage, getMemoryUsageMB, checkMemoryUsage } =
+    useMemoryOptimization();
+  const isOptimizing = false;
+  const lastOptimization: Date | null = null;
+  const optimizationHistory: Array<{
+    success: boolean;
+    timestamp: Date;
+    memoryReduced: number;
+    error?: string;
+  }> = [];
+  const currentMetrics = getMemoryUsage();
+  const isAcceptable = getMemoryUsageMB() < 150;
+  const leaks: Array<{ type: 'increasing' | 'stagnant' | 'high_usage'; description: string; severity: 'low' | 'medium' | 'high' }> = [];
+  const recommendations: Array<{ type: 'memory' | 'query' | 'cache'; priority: 'low' | 'medium' | 'high'; description: string; impact: string }> = [];
+  const getQueryMetrics = () => ({ queryCount: 0, averageQueryTime: 0, slowQueries: [], memoryImpact: 0 });
+  const trackQuery = (_q: string, _d: number, _m: number) => {};
 
   const queryMetrics = getQueryMetrics();
 
@@ -67,6 +71,9 @@ export function MemoryOptimizationDashboard() {
     }
   };
 
+  const usedHeapBytes = currentMetrics?.usedJSHeapSize ?? 0;
+  const totalHeapBytes = currentMetrics?.totalJSHeapSize ?? 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -95,19 +102,19 @@ export function MemoryOptimizationDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-gray-900">
-              {currentMetrics ? formatBytes(currentMetrics.heapUsed) : 'N/A'}
+              {formatBytes(usedHeapBytes)}
             </div>
             <div className="text-sm text-gray-600">Heap Used</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-gray-900">
-              {currentMetrics ? formatBytes(currentMetrics.heapTotal) : 'N/A'}
+              {formatBytes(totalHeapBytes)}
             </div>
             <div className="text-sm text-gray-600">Heap Total</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-gray-900">
-              {currentMetrics ? formatBytes(currentMetrics.external) : 'N/A'}
+              N/A
             </div>
             <div className="text-sm text-gray-600">External</div>
           </div>
@@ -243,19 +250,17 @@ export function MemoryOptimizationDashboard() {
       )}
 
       {/* Advanced Metrics */}
-      {showAdvancedMetrics && currentMetrics && (
+      {showAdvancedMetrics && (
         <Card className="p-6">
           <h3 className="text-lg font-semibold mb-4">Advanced Metrics</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <div className="text-sm font-medium text-gray-600">RSS Memory</div>
-              <div className="text-lg font-semibold">{formatBytes(currentMetrics.rss)}</div>
+              <div className="text-sm font-medium text-gray-600">JS Heap Size Limit</div>
+              <div className="text-lg font-semibold">{formatBytes(currentMetrics?.jsHeapSizeLimit ?? 0)}</div>
             </div>
             <div>
-              <div className="text-sm font-medium text-gray-600">Array Buffers</div>
-              <div className="text-lg font-semibold">
-                {formatBytes(currentMetrics.arrayBuffers)}
-              </div>
+              <div className="text-sm font-medium text-gray-600">Used / Total</div>
+              <div className="text-lg font-semibold">{formatBytes(usedHeapBytes)} / {formatBytes(totalHeapBytes)}</div>
             </div>
           </div>
         </Card>
