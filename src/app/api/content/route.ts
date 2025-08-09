@@ -253,7 +253,7 @@ export async function GET(request: NextRequest) {
         }),
       ]);
 
-      // Transform database content to match frontend interface
+      // Transform database content to match frontend interface (no mock fields)
       const content = rawContent.map(item => ({
         id: item.id,
         title: item.title,
@@ -263,11 +263,7 @@ export async function GET(request: NextRequest) {
         tags: item.tags,
         createdAt: item.createdAt,
         lastModified: item.updatedAt,
-        usageCount: 0, // Mock data
-        qualityScore: Math.floor(Math.random() * 3) + 7, // Mock: 7-10
         createdBy: item.createdBy,
-        fileSize: '2.5 MB', // Mock data
-        documentUrl: `/content/${item.id}`, // Mock URL
       }));
 
       // Track content search event

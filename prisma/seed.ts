@@ -15,6 +15,194 @@ async function main() {
   console.log('🌱 Starting PosalPro MVP2 production database seeding...');
 
   // ========================================
+  // PRE-FLIGHT: Seed only if database is empty
+  // ========================================
+  const [userCount, roleCount, customerCount, productCount, contentCount, proposalCount] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.role.count(),
+      prisma.customer.count(),
+      prisma.product.count(),
+      prisma.content.count(),
+      prisma.proposal.count(),
+    ]);
+
+  const totalExisting =
+    userCount + roleCount + customerCount + productCount + contentCount + proposalCount;
+  if (totalExisting > 0) {
+    console.log(
+      `ℹ️ Database already contains some data (users: ${userCount}, roles: ${roleCount}, customers: ${customerCount}, products: ${productCount}, content: ${contentCount}, proposals: ${proposalCount}). Performing selective seeding for empty tables only.`
+    );
+
+    // Ensure Content has at least a baseline of templates/documents
+    if (contentCount === 0) {
+      console.log('📄 Content empty — creating initial templates/resources...');
+      const fallbackUser = await prisma.user.findFirst({ select: { id: true, email: true } });
+      const contentItems = [
+        {
+          title: 'Executive Summary Template',
+          type: 'TEMPLATE' as const,
+          category: ['Executive'],
+          content: 'Executive summary template for high-level proposal overview...',
+          tags: ['executive', 'summary', 'overview'],
+        },
+        {
+          title: 'Technical Architecture Overview',
+          type: 'TEMPLATE' as const,
+          category: ['Technical'],
+          content: 'Technical architecture template for system design proposals...',
+          tags: ['technical', 'architecture', 'system-design'],
+        },
+        {
+          title: 'Security Compliance Framework',
+          type: 'DOCUMENT' as const,
+          category: ['Security'],
+          content: 'Comprehensive security compliance framework and requirements...',
+          tags: ['security', 'compliance', 'framework'],
+        },
+      ];
+      for (const item of contentItems) {
+        await prisma.content.create({
+          data: {
+            title: item.title,
+            type: item.type,
+            category: item.category,
+            content: item.content,
+            tags: item.tags,
+            isActive: true,
+            createdBy: fallbackUser?.id ?? 'unknown',
+          },
+        });
+      }
+      console.log('✅ Seeded initial Content items');
+    }
+
+    // Top-up templates if below minimum threshold
+    const templateCount = await prisma.content.count({
+      where: { type: 'TEMPLATE', isActive: true },
+    });
+    if (templateCount < 2) {
+      console.log(`📄 TEMPLATE content low (${templateCount}) — topping up...`);
+      const fallbackUser2 = await prisma.user.findFirst({ select: { id: true } });
+      const toCreate = 2 - templateCount;
+      const templates = [
+        {
+          title: 'Proposal Strategy Template',
+          category: ['Executive'],
+          content: 'Standard strategy outline including goals, risks, and KPIs...',
+          tags: ['strategy', 'executive'],
+        },
+        {
+          title: 'Implementation Plan Template',
+          category: ['Project Management'],
+          content: 'Milestones, tasks, dependencies, and timeline structure...',
+          tags: ['implementation', 'timeline'],
+        },
+      ];
+      for (let i = 0; i < toCreate; i++) {
+        await prisma.content.create({
+          data: {
+            title: templates[i].title,
+            type: 'TEMPLATE',
+            category: templates[i].category,
+            content: templates[i].content,
+            tags: templates[i].tags,
+            isActive: true,
+            createdBy: fallbackUser2?.id ?? 'unknown',
+          },
+        });
+      }
+      console.log('✅ TEMPLATE content topped up');
+    }
+
+    // Seed HypothesisValidationEvent if empty
+    let hvCount = await prisma.hypothesisValidationEvent.count();
+    if (hvCount < 10) {
+      console.log(`🧪 HypothesisValidationEvent low (${hvCount}) — seeding analytics events...`);
+      const anyUser = await prisma.user.findFirst({ select: { id: true } });
+      const hypotheses: Array<'H1' | 'H3' | 'H4' | 'H6' | 'H7' | 'H8'> = [
+        'H1',
+        'H3',
+        'H4',
+        'H6',
+        'H7',
+        'H8',
+      ];
+      const toAdd = 10 - hvCount;
+      for (let i = 0; i < toAdd; i++) {
+        await prisma.hypothesisValidationEvent.create({
+          data: {
+            userId: anyUser?.id ?? 'unknown',
+            hypothesis: hypotheses[i % hypotheses.length],
+            userStoryId: `US-${(i % 7) + 1}.${(i % 3) + 1}`,
+            componentId: 'CommunicationsSeed',
+            action: 'seed_event',
+            measurementData: { source: 'seed', idx: i },
+            targetValue: 100,
+            actualValue: 95 + Math.random() * 10,
+            performanceImprovement: Math.random() * 10,
+            userRole: 'System',
+            sessionId: `seed-${Date.now()}-${i}`,
+            testCaseId: `TC-SEED-${i}`,
+          },
+        });
+      }
+      console.log('✅ Seeded HypothesisValidationEvent items');
+    }
+
+    // Ensure at least a couple of ApprovalWorkflow templates exist
+    const workflowCount = await prisma.approvalWorkflow.count();
+    if (workflowCount === 0) {
+      console.log('🧭 ApprovalWorkflow empty — creating baseline workflows...');
+      const creator = await prisma.user.findFirst({ select: { id: true } });
+      const proposalWorkflow = await prisma.approvalWorkflow.create({
+        data: {
+          name: 'Standard Proposal Approval',
+          description: 'Two-stage review and approval for proposals',
+          entityType: 'PROPOSAL',
+          createdBy: creator?.id ?? 'unknown',
+          stages: {
+            create: [
+              { name: 'Manager Review', order: 1, slaHours: 24 },
+              { name: 'Executive Approval', order: 2, slaHours: 48 },
+            ],
+          },
+        },
+      });
+      await prisma.approvalWorkflow.create({
+        data: {
+          name: 'Content Quality Review',
+          description: 'Quality and compliance review for content items',
+          entityType: 'CONTENT',
+          createdBy: creator?.id ?? 'unknown',
+          stages: { create: [{ name: 'Content Manager Review', order: 1, slaHours: 12 }] },
+        },
+      });
+      console.log('✅ Created baseline ApprovalWorkflow templates:', proposalWorkflow.name);
+    }
+
+    // Assign participants to proposals if none assigned
+    const proposals = await prisma.proposal.findMany({ select: { id: true } });
+    if (proposals.length > 0) {
+      const assignableUsers = await prisma.user.findMany({ take: 2, select: { id: true } });
+      if (assignableUsers.length > 0) {
+        for (const p of proposals.slice(0, 3)) {
+          await prisma.proposal.update({
+            where: { id: p.id },
+            data: {
+              assignedTo: { connect: assignableUsers.map(u => ({ id: u.id })) },
+            },
+          });
+        }
+        console.log('✅ Assigned users to proposals for initial participants');
+      }
+    }
+
+    // Done with selective seeding
+    return;
+  }
+
+  // ========================================
   // CLEAN EXISTING DATA (if needed)
   // ========================================
 
@@ -823,6 +1011,68 @@ async function main() {
   }
 
   console.log(`✅ Created ${Object.keys(createdProposals).length} proposals`);
+
+  // ========================================
+  // OPTIONAL: COMMUNICATIONS SUPPORT SEEDING
+  // ========================================
+
+  // Seed hypothesis validation events if none exist to provide initial communications
+  const hvCount = await prisma.hypothesisValidationEvent.count();
+  if (hvCount === 0) {
+    console.log('🧪 Seeding hypothesis validation events...');
+    const hypotheses: Array<'H1' | 'H3' | 'H4' | 'H6' | 'H7' | 'H8'> = [
+      'H1',
+      'H3',
+      'H4',
+      'H6',
+      'H7',
+      'H8',
+    ];
+    const eventUsers = [
+      createdUsers['pm1@posalpro.com']?.id,
+      createdUsers['sme1@posalpro.com']?.id,
+      createdUsers['admin@posalpro.com']?.id,
+    ].filter(Boolean) as string[];
+
+    for (let i = 0; i < 12; i++) {
+      const userId = eventUsers[i % eventUsers.length];
+      await prisma.hypothesisValidationEvent.create({
+        data: {
+          userId,
+          hypothesis: hypotheses[i % hypotheses.length],
+          userStoryId: `US-${(i % 7) + 1}.${(i % 3) + 1}`,
+          componentId: 'CommunicationsSeed',
+          action: 'seed_event',
+          measurementData: { source: 'seed', idx: i },
+          targetValue: 100,
+          actualValue: 100 + Math.random() * 20 - 10,
+          performanceImprovement: Math.random() * 10,
+          userRole: 'System',
+          sessionId: `seed-${Date.now()}-${i}`,
+          testCaseId: `TC-SEED-${i}`,
+        },
+      });
+    }
+    console.log('✅ Seeded hypothesis validation events');
+  }
+
+  // Assign a few users to proposals if none assigned to support participants API
+  console.log('👥 Assigning users to proposals for initial participants...');
+  const proposalList = await prisma.proposal.findMany({ select: { id: true } });
+  const assignableUsers = await prisma.user.findMany({
+    where: { email: { in: ['pm1@posalpro.com', 'sme1@posalpro.com'] } },
+    select: { id: true },
+  });
+  for (const p of proposalList.slice(0, 3)) {
+    await prisma.proposal.update({
+      where: { id: p.id },
+      data: {
+        assignedTo: {
+          connect: assignableUsers.map(u => ({ id: u.id })),
+        },
+      },
+    });
+  }
 
   // ========================================
   // FINAL STATISTICS

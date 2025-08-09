@@ -210,6 +210,18 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
   const onUpdateRef = useRef(onUpdate);
   const lastSentDataRef = useRef<string>('');
 
+  // Build sectionAssignments map from current sections
+  const buildSectionAssignments = useCallback((list: ProposalSection[]) => {
+    const map: Record<string, string> = {};
+    for (const s of list) {
+      const key = s.id || s.title;
+      if (key && s.assignedTo) {
+        map[key] = s.assignedTo;
+      }
+    }
+    return map;
+  }, []);
+
   // Update ref when onUpdate changes
   useEffect(() => {
     onUpdateRef.current = onUpdate;
@@ -220,6 +232,7 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
     control,
     setValue,
     getValues,
+    reset,
     formState: { errors, isValid },
   } = useForm<SectionAssignmentFormData>({
     resolver: zodResolver(sectionAssignmentSchema),
@@ -266,10 +279,13 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
             return {
               ...originalSection,
               ...formSection,
-            };
+            } as ProposalSection;
           });
 
-          onUpdateRef.current({ sections: updatedSections as ProposalSection[] });
+          onUpdateRef.current({
+            sections: updatedSections as ProposalSection[],
+            sectionAssignments: buildSectionAssignments(updatedSections),
+          });
           lastSentDataRef.current = currentJson;
 
           // Analytics tracking with mobile context
@@ -289,34 +305,162 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
       },
       isMobile ? 500 : 300
     ), // Mobile-aware delay
-    [analytics, sections, isMobile]
+    [analytics, sections, isMobile, buildSectionAssignments]
   );
 
   // ✅ MOBILE-OPTIMIZED: Field change handler with debouncing
   const handleFieldChange = useCallback(
-    (field: string, value: any) => {
-      // Set new timeout with mobile-optimized delay
-      const delay = isMobile ? 500 : 300;
-
-      setTimeout(() => {
-        const formData = collectFormData();
-        debouncedOnUpdate(formData);
-      }, delay);
+    (_field: string, _value: any) => {
+      // Flush latest form values promptly so parent wizard stores them
+      const formData = collectFormData();
+      debouncedOnUpdate(formData);
     },
-    [collectFormData, debouncedOnUpdate, isMobile]
+    [collectFormData, debouncedOnUpdate]
   );
 
-  // Initialize sections from props
+  // Initialize sections from props (hydrate assignments and hours)
   useEffect(() => {
+    console.log('[SectionAssignmentStep] Hydration check:', {
+      incomingSections: (data.sections && data.sections.length) || 0,
+      hasAssignments: Boolean((data as any)?.sectionAssignments),
+    });
+    console.log('[SectionAssignmentStep] Raw data received:', data);
+    console.log(
+      '[SectionAssignmentStep] sectionAssignments received:',
+      (data as any)?.sectionAssignments
+    );
+    console.log(
+      '[SectionAssignmentStep] sectionAssignments keys:',
+      Object.keys((data as any)?.sectionAssignments || {})
+    );
+
+    const normalize = (s: string) =>
+      (s || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+    // Start from incoming sections if provided
+    let baseSections: ProposalSection[] = [];
     if (data.sections && data.sections.length > 0) {
-      // Map the incoming sections to match our ProposalSection interface
-      const mappedSections = data.sections.map(section => ({
-        ...section,
-        dependencies: section.dependencies || [],
+      baseSections = data.sections.map(section => ({
+        id: section.id,
+        title: section.title,
+        required: section.required ?? true,
+        order: (section as any).order || 1,
+        estimatedHours: (section as any).estimatedHours ?? 0,
+        dueDate: (section as any).dueDate ? new Date((section as any).dueDate) : undefined,
+        assignedTo: (section as any).assignedTo,
+        status: (section as any).status || 'not_started',
+        description: (section as any).description,
+        dependencies: (section as any).dependencies || [],
+        priority: (section as any).priority || 'medium',
+        contentItems: (section as any).contentItems || 0,
       }));
-      setSections(mappedSections);
     }
-  }, [data.sections]);
+
+    // Merge with defaults to ensure full list is available
+    const byTitle = new Map<string, ProposalSection>();
+    DEFAULT_PROPOSAL_SECTIONS.forEach(def => byTitle.set(normalize(def.title), def));
+    baseSections.forEach(sec =>
+      byTitle.set(normalize(sec.title), {
+        ...byTitle.get(normalize(sec.title)),
+        ...sec,
+      } as ProposalSection)
+    );
+
+    const mergedSections = Array.from(byTitle.values())
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map((s, idx) => ({ ...s, order: idx + 1 }) as ProposalSection);
+
+    // Merge sectionAssignments map (if provided) into assignedTo values
+    const assignments = ((data as any).sectionAssignments || {}) as Record<string, string>;
+    if (assignments && Object.keys(assignments).length > 0) {
+      console.log('[SectionAssignmentStep] Merging sectionAssignments:', assignments);
+      for (const s of mergedSections) {
+        if (!s.assignedTo) {
+          if (assignments[s.id]) s.assignedTo = assignments[s.id];
+          else {
+            const key = Object.keys(assignments).find(k => normalize(k) === normalize(s.title));
+            if (key) s.assignedTo = assignments[key];
+          }
+        }
+      }
+    }
+
+    setSections(mergedSections);
+
+    // Sync RHF values with hydrated sections (defaultValues are not reactive)
+    try {
+      reset({
+        sections: mergedSections.map(section => ({
+          id: section.id,
+          assignedTo: section.assignedTo || '',
+          estimatedHours: section.estimatedHours,
+          dueDate: section.dueDate,
+          priority: section.priority,
+        })),
+      });
+      const assignedCount = mergedSections.filter(s => !!s.assignedTo).length;
+      console.log(
+        '[SectionAssignmentStep] RHF reset with hydrated sections. Assigned count:',
+        assignedCount
+      );
+      // Push hydrated assignments up so wizard can persist them
+      onUpdateRef.current({
+        sections: mergedSections as ProposalSection[],
+        sectionAssignments: buildSectionAssignments(mergedSections),
+      });
+    } catch (e) {}
+
+    console.log('[SectionAssignmentStep] Hydration complete. Sections:', mergedSections.length);
+  }, [data.sections, (data as any)?.sectionAssignments, reset, buildSectionAssignments]);
+
+  // Merge assignments even when no sections were provided (match by id or by title)
+  useEffect(() => {
+    const assignments = ((data as any).sectionAssignments || {}) as Record<string, string>;
+    const keys = Object.keys(assignments || {});
+    console.log('[SectionAssignmentStep] Assignment keys:', keys);
+    if (!keys.length) return;
+
+    const normalize = (s: string) =>
+      (s || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+    setSections(prev =>
+      prev.map(sec => {
+        const byId = assignments[sec.id];
+        let byTitle: string | undefined;
+        if (!byId) {
+          const key = keys.find(k => normalize(k) === normalize(sec.title));
+          if (key) byTitle = assignments[key];
+        }
+        const assignedTo = byId || byTitle || sec.assignedTo;
+        return { ...sec, assignedTo } as typeof sec;
+      })
+    );
+
+    // Also push merged assignments up
+    try {
+      const formSections = getValues().sections;
+      const next = sections.map(s => {
+        const f = formSections.find(fs => fs.id === s.id);
+        return {
+          ...s,
+          assignedTo: f?.assignedTo || s.assignedTo,
+          estimatedHours: f?.estimatedHours ?? s.estimatedHours,
+          dueDate: f?.dueDate ?? s.dueDate,
+          priority: (f?.priority as any) || s.priority,
+        } as ProposalSection;
+      });
+      onUpdateRef.current({
+        sections: next,
+        sectionAssignments: assignments,
+      });
+    } catch {}
+  }, [(data as any)?.sectionAssignments]);
 
   // Calculate critical path based on dependencies and hours
   const calculateCriticalPath = useCallback((sectionList: ProposalSection[]): string[] => {
@@ -589,7 +733,10 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
                           placeholder="Unassigned"
                           options={teamMemberOptions}
                           value={field.value}
-                          onChange={value => field.onChange(value)}
+                          onChange={value => {
+                            field.onChange(value);
+                            handleFieldChange(`sections.${index}.assignedTo`, value);
+                          }}
                           aria-label={`Assignee for ${section.title}`}
                         />
                       )}
@@ -599,13 +746,14 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
                     <Input
                       type="number"
                       value={section.estimatedHours}
-                      onChange={e =>
-                        updateSectionAssignment(
-                          section.id,
-                          'estimatedHours',
-                          parseInt(e.target.value) || 0
-                        )
-                      }
+                      onChange={e => {
+                        const val = parseInt(e.target.value) || 0;
+                        updateSectionAssignment(section.id, 'estimatedHours', val);
+                        setValue(`sections.${index}.estimatedHours` as const, val, {
+                          shouldDirty: true,
+                        });
+                        handleFieldChange(`sections.${index}.estimatedHours`, val);
+                      }}
                       min="0"
                       className="w-20"
                     />
@@ -618,13 +766,13 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
                         { value: 'medium', label: 'Medium' },
                         { value: 'low', label: 'Low' },
                       ]}
-                      onChange={(value: string) =>
-                        updateSectionAssignment(
-                          section.id,
-                          'priority',
-                          value as 'high' | 'medium' | 'low'
-                        )
-                      }
+                      onChange={(value: string) => {
+                        updateSectionAssignment(section.id, 'priority', value as any);
+                        setValue(`sections.${index}.priority` as const, value as any, {
+                          shouldDirty: true,
+                        });
+                        handleFieldChange(`sections.${index}.priority`, value);
+                      }}
                     />
                   </td>
                   <td className="py-3 px-4">

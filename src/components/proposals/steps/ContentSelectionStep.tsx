@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ContentItem, ProposalWizardStep3Data, SelectedContent } from '@/types/proposals';
 import {
@@ -72,139 +73,7 @@ interface EnhancedContentItem extends ContentItem {
   };
 }
 
-// Enhanced content library integrated from content search system
-const ENHANCED_CONTENT_LIBRARY: EnhancedContentItem[] = [
-  {
-    id: 'content-001',
-    title: 'Cloud Migration Case Study - Fortune 500',
-    type: 'case_study',
-    relevanceScore: 95,
-    section: 'Technical Approach',
-    tags: ['cloud', 'migration', 'aws', 'enterprise', 'fortune-500'],
-    content:
-      "Comprehensive case study detailing the successful migration of a Fortune 500 company's entire IT infrastructure to AWS cloud services. The project involved migrating 200+ servers, 50TB of data, and 100+ applications with zero downtime...",
-    successRate: 92,
-    lastUsed: new Date('2024-01-15'),
-    createdBy: 'Sarah Johnson',
-    fileSize: '2.3 MB',
-    documentUrl: '/docs/cloud-migration-case-study.pdf',
-    usageCount: 12,
-    qualityScore: 9.2,
-    status: 'ACTIVE',
-    isVisible: true,
-    isFeatured: true,
-    metadata: {
-      wordCount: 3500,
-      readingTime: 14,
-      lastReviewed: new Date('2024-06-15'),
-      version: 2,
-    },
-  },
-  {
-    id: 'content-002',
-    title: 'Security Compliance Framework - Enterprise',
-    type: 'compliance',
-    relevanceScore: 88,
-    section: 'Security Compliance',
-    tags: ['security', 'compliance', 'gdpr', 'soc2', 'iso27001', 'enterprise'],
-    content:
-      'Comprehensive security compliance framework for enterprise environments covering GDPR, SOC 2, ISO 27001, and HIPAA requirements with implementation checklists and audit procedures...',
-    successRate: 95,
-    lastUsed: new Date('2024-02-10'),
-    createdBy: 'Alex Chen',
-    fileSize: '4.1 MB',
-    documentUrl: '/docs/security-compliance-framework.pdf',
-    usageCount: 18,
-    qualityScore: 9.5,
-    status: 'ACTIVE',
-    isVisible: true,
-    isFeatured: true,
-    metadata: {
-      wordCount: 5200,
-      readingTime: 21,
-      lastReviewed: new Date('2024-05-30'),
-      version: 3,
-    },
-  },
-  {
-    id: 'content-003',
-    title: 'AI Analytics Solution Brief',
-    type: 'template',
-    relevanceScore: 85,
-    section: 'Technical Approach',
-    tags: ['ai', 'analytics', 'machine-learning', 'business-intelligence'],
-    content:
-      'Advanced AI-powered analytics platform for business intelligence and predictive insights. Features include automated report generation, anomaly detection, and custom dashboards...',
-    successRate: 88,
-    lastUsed: new Date('2024-01-28'),
-    createdBy: 'Mohamed Rabah',
-    fileSize: '1.8 MB',
-    documentUrl: '/docs/ai-analytics-solution-brief.pdf',
-    usageCount: 8,
-    qualityScore: 8.8,
-    status: 'ACTIVE',
-    isVisible: true,
-    isFeatured: false,
-    metadata: {
-      wordCount: 2800,
-      readingTime: 11,
-      lastReviewed: new Date('2024-06-20'),
-      version: 1,
-    },
-  },
-  {
-    id: 'content-004',
-    title: 'Data Migration Methodology',
-    type: 'methodology',
-    relevanceScore: 82,
-    section: 'Implementation Plan',
-    tags: ['data', 'migration', 'methodology', 'planning', 'enterprise'],
-    content:
-      'Step-by-step data migration approach with planning checklists, risk assessment frameworks, validation procedures, and rollback strategies for enterprise-scale migrations...',
-    successRate: 90,
-    lastUsed: new Date('2024-01-05'),
-    createdBy: 'Lisa Wang',
-    fileSize: '3.2 MB',
-    documentUrl: '/templates/data-migration-methodology.docx',
-    usageCount: 15,
-    qualityScore: 9.0,
-    status: 'ACTIVE',
-    isVisible: true,
-    isFeatured: true,
-    metadata: {
-      wordCount: 4100,
-      readingTime: 16,
-      lastReviewed: new Date('2024-04-10'),
-      version: 2,
-    },
-  },
-  {
-    id: 'content-005',
-    title: 'Network Security Best Practices',
-    type: 'reference',
-    relevanceScore: 78,
-    section: 'Security Compliance',
-    tags: ['network', 'security', 'firewall', 'vpn', 'nist'],
-    content:
-      'Industry best practices for network security including firewall configuration, intrusion detection systems, VPN setup, and security monitoring. Updated with latest NIST guidelines...',
-    successRate: 93,
-    lastUsed: new Date('2024-02-20'),
-    createdBy: 'John Smith',
-    fileSize: '2.7 MB',
-    documentUrl: '/docs/network-security-best-practices.pdf',
-    usageCount: 22,
-    qualityScore: 9.3,
-    status: 'ACTIVE',
-    isVisible: true,
-    isFeatured: false,
-    metadata: {
-      wordCount: 3800,
-      readingTime: 15,
-      lastReviewed: new Date('2024-05-05'),
-      version: 4,
-    },
-  },
-];
+// Removed static ENHANCED_CONTENT_LIBRARY; content must be loaded from live API
 
 // Enhanced proposal sections with descriptions
 const ENHANCED_PROPOSAL_SECTIONS = [
@@ -305,10 +174,10 @@ export function ContentSelectionStep({
 }: ContentSelectionStepProps) {
   // ✅ MOBILE OPTIMIZATION: Add responsive detection
   const { isMobile } = useResponsive();
+  const apiClient = useApiClient();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredContent, setFilteredContent] =
-    useState<EnhancedContentItem[]>(ENHANCED_CONTENT_LIBRARY);
+  const [filteredContent, setFilteredContent] = useState<EnhancedContentItem[]>([]);
   const [selectedContentIds, setSelectedContentIds] = useState<Set<string>>(new Set());
   const [selectedContentMap, setSelectedContentMap] = useState<Map<string, SelectedContent>>(
     new Map()
@@ -323,6 +192,8 @@ export function ContentSelectionStep({
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
   const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  // Guard to ensure we hydrate selected content from props only once
+  const hasHydratedSelectedContentRef = useRef<boolean>(false);
 
   // Keep onUpdate ref current
   useEffect(() => {
@@ -395,9 +266,21 @@ export function ContentSelectionStep({
     };
   }, []);
 
-  // Initialize selected content from props
+  // Initialize selected content from props (one-time hydration to avoid loops/overwrites)
   useEffect(() => {
-    if (data.selectedContent) {
+    console.log('[ContentSelectionStep] Hydration check:', {
+      hasHydrated: hasHydratedSelectedContentRef.current,
+      incomingCount: data.selectedContent?.length || 0,
+    });
+    if (
+      !hasHydratedSelectedContentRef.current &&
+      data.selectedContent &&
+      data.selectedContent.length > 0
+    ) {
+      console.log(
+        '[ContentSelectionStep] Hydrating selectedContent from props:',
+        data.selectedContent.length
+      );
       const contentMap = new Map<string, SelectedContent>();
       const contentIds = new Set<string>();
 
@@ -408,6 +291,8 @@ export function ContentSelectionStep({
 
       setSelectedContentMap(contentMap);
       setSelectedContentIds(contentIds);
+      hasHydratedSelectedContentRef.current = true;
+      console.log('[ContentSelectionStep] Hydration complete. Map size:', contentMap.size);
     }
   }, [data.selectedContent]);
 
@@ -589,6 +474,13 @@ export function ContentSelectionStep({
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       const selectedContentArray: SelectedContent[] = Array.from(selectedContentMap.values());
+      // Only log if content actually changed to reduce noise
+      if (selectedContentArray.length > 0) {
+        console.log(
+          '[ContentSelectionStep] Debounced update fired. selectedContent size:',
+          selectedContentArray.length
+        );
+      }
       const validationResults = performCrossStepValidation();
 
       const formattedData: ProposalWizardStep3Data = {
@@ -604,71 +496,104 @@ export function ContentSelectionStep({
       };
 
       handleUpdate(formattedData);
-    }, 300);
+    }, 500); // Increased debounce time to reduce frequency
 
     return () => clearTimeout(timeoutId);
-  }, [selectedContentMap, data.searchHistory, handleUpdate, performCrossStepValidation]);
+  }, [selectedContentMap, data.searchHistory, handleUpdate]); // Removed performCrossStepValidation from deps
 
-  // Enhanced filter content based on search query with quality scoring
+  // Load content from live API and filter based on search query with quality scoring
   useEffect(() => {
-    let filtered = ENHANCED_CONTENT_LIBRARY.filter(
-      item => item.isVisible && item.status === 'ACTIVE'
-    );
+    let isCancelled = false;
+    const load = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (searchQuery.trim()) params.set('search', searchQuery.trim());
+        // Request minimal fields; server enforces selective hydration
+        // Use correct API route and support multiple response shapes
+        const res = await apiClient.get<any>(`/api/content?${params.toString()}`);
+        if (isCancelled) return;
+        const rawList: any[] =
+          (res?.data?.items as any[]) ||
+          (res?.data?.content as any[]) ||
+          (res?.content as any[]) ||
+          [];
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        item =>
-          item.title.toLowerCase().includes(query) ||
-          item.tags.some(tag => tag.toLowerCase().includes(query)) ||
-          item.section.toLowerCase().includes(query) ||
-          item.content.toLowerCase().includes(query) ||
-          item.createdBy.toLowerCase().includes(query)
-      );
+        const items: EnhancedContentItem[] = rawList.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          type: c.type,
+          relevanceScore: 0,
+          section: 'Executive Summary',
+          tags: c.tags || [],
+          content: c.content || '',
+          successRate: 0,
+          lastUsed: new Date(c.updatedAt || c.createdAt),
+          createdBy: c.createdBy || 'Unknown',
+          fileSize: '',
+          documentUrl: `/content/${c.id}`,
+          usageCount: 0,
+          qualityScore: (c.qualityScore as number) ?? 0,
+          status: 'ACTIVE',
+          isVisible: true,
+          isFeatured: false,
+          metadata: {},
+        }));
 
-      // Add relevance scoring for search results
-      filtered = filtered.map(item => {
-        let score = item.relevanceScore || 0;
-        const q = query.toLowerCase();
+        let filtered = items.filter(item => item.isVisible && item.status === 'ACTIVE');
 
-        // Title match gets highest score
-        if (item.title.toLowerCase().includes(q)) score += 20;
-        // Tag match gets good score
-        if (item.tags.some(tag => tag.toLowerCase().includes(q))) score += 15;
-        // Content match gets medium score
-        if (item.content.toLowerCase().includes(q)) score += 10;
-        // Usage and quality boost
-        score += (item.usageCount || 0) * 0.5;
-        score += (item.qualityScore || 0) * 2;
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          filtered = filtered.filter(
+            item =>
+              item.title.toLowerCase().includes(query) ||
+              item.tags.some(tag => tag.toLowerCase().includes(query)) ||
+              item.section.toLowerCase().includes(query) ||
+              item.content.toLowerCase().includes(query) ||
+              item.createdBy.toLowerCase().includes(query)
+          );
 
-        return { ...item, relevanceScore: Math.min(100, score) };
-      });
+          filtered = filtered.map(item => {
+            let score = item.relevanceScore || 0;
+            const q = query.toLowerCase();
+            if (item.title.toLowerCase().includes(q)) score += 20;
+            if (item.tags.some(tag => tag.toLowerCase().includes(q))) score += 15;
+            if (item.content.toLowerCase().includes(q)) score += 10;
+            score += (item.usageCount || 0) * 0.5;
+            score += (item.qualityScore || 0) * 2;
+            return { ...item, relevanceScore: Math.min(100, score) };
+          });
 
-      // Sort by enhanced relevance
-      filtered.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-    } else {
-      // Sort by featured status, quality, and usage when no search query
-      filtered.sort((a, b) => {
-        if (a.isFeatured && !b.isFeatured) return -1;
-        if (!a.isFeatured && b.isFeatured) return 1;
-        return (
-          (b.qualityScore || 0) +
-          (b.usageCount || 0) * 0.1 -
-          ((a.qualityScore || 0) + (a.usageCount || 0) * 0.1)
-        );
-      });
-    }
+          filtered.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+        } else {
+          filtered.sort((a, b) => {
+            if (a.isFeatured && !b.isFeatured) return -1;
+            if (!a.isFeatured && b.isFeatured) return 1;
+            return (
+              (b.qualityScore || 0) +
+              (b.usageCount || 0) * 0.1 -
+              ((a.qualityScore || 0) + (a.usageCount || 0) * 0.1)
+            );
+          });
+        }
 
-    setFilteredContent(filtered);
+        setFilteredContent(filtered);
 
-    // Track search analytics
-    if (searchQuery.trim()) {
-      trackContentSelection('search_performed', '', {
-        query: searchQuery,
-        resultsCount: filtered.length,
-      });
-    }
-  }, [searchQuery, trackContentSelection]);
+        if (searchQuery.trim()) {
+          trackContentSelection('search_performed', '', {
+            query: searchQuery,
+            resultsCount: filtered.length,
+          });
+        }
+      } catch (e) {
+        // In case of failure, show empty list (no mock data)
+        if (!isCancelled) setFilteredContent([]);
+      }
+    };
+    load();
+    return () => {
+      isCancelled = true;
+    };
+  }, [apiClient, searchQuery, trackContentSelection]);
 
   // Enhanced AI recommendations based on cross-step data
   const generateAISuggestions = useCallback(async () => {
@@ -689,18 +614,16 @@ export function ContentSelectionStep({
         currentSelections: Array.from(selectedContentIds),
       };
 
-      // Generate recommendations based on context
-      const recommendations = ENHANCED_CONTENT_LIBRARY.filter(
-        item => !selectedContentIds.has(item.id)
-      )
-        .filter(item => {
-          // Filter based on RFP requirements
+      // Generate recommendations based on context from live content list
+      const recommendations = filteredContent
+        .filter((item: EnhancedContentItem) => !selectedContentIds.has(item.id))
+        .filter((item: EnhancedContentItem) => {
           if (context.rfpRequirements.length > 0) {
             return context.rfpRequirements.some((req: any) =>
-              item.tags.some(
-                tag =>
-                  tag.toLowerCase().includes(req.category?.toLowerCase()) ||
-                  req.text.toLowerCase().includes(tag.toLowerCase())
+              (item.tags as string[]).some(
+                (tag: string) =>
+                  tag.toLowerCase().includes((req.category || '').toLowerCase()) ||
+                  (req.text || '').toLowerCase().includes(tag.toLowerCase())
               )
             );
           }
@@ -720,7 +643,15 @@ export function ContentSelectionStep({
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, [proposalMetadata, rfpData, teamData, productData, selectedContentIds, trackContentSelection]);
+  }, [
+    proposalMetadata,
+    rfpData,
+    teamData,
+    productData,
+    selectedContentIds,
+    filteredContent,
+    trackContentSelection,
+  ]);
 
   // Add content item to selection
   const addContentItem = useCallback(

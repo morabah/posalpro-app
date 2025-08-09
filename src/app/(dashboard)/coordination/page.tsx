@@ -12,7 +12,8 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useCallback, useMemo, useState } from 'react';
+import { useApiClient } from '@/hooks/useApiClient';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string) => {
@@ -361,139 +362,12 @@ interface AIInsight {
   teamMemberId?: string;
 }
 
-// Mock data for demonstration
-const MOCK_PROPOSALS: Proposal[] = [
-  {
-    id: '1',
-    name: 'Enterprise IT Solution',
-    client: 'TechCorp Inc.',
-    status: 'In Progress',
-    progress: 75,
-    deadline: new Date('2024-06-10'),
-    priority: 'High',
-    complexity: 8,
-    estimatedHours: 160,
-    actualHours: 120,
-    lastUpdate: new Date('2024-01-04T10:30:00'),
-    criticalPath: true,
-    riskLevel: 'Medium',
-    teamMembers: [
-      {
-        id: '1',
-        name: 'Sarah Chen',
-        role: 'Technical Lead',
-        department: 'Engineering',
-        assignedSections: ['Architecture', 'Security'],
-        workload: 85,
-        availability: 'Busy',
-        lastActive: new Date('2024-01-04T09:15:00'),
-        completionRate: 92,
-      },
-      {
-        id: '2',
-        name: 'Michael Rodriguez',
-        role: 'Solution Architect',
-        department: 'Engineering',
-        assignedSections: ['Infrastructure', 'Integration'],
-        workload: 70,
-        availability: 'Available',
-        lastActive: new Date('2024-01-04T11:45:00'),
-        completionRate: 88,
-      },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Healthcare Platform RFP',
-    client: 'MedSys Healthcare',
-    status: 'Review',
-    progress: 45,
-    deadline: new Date('2024-06-05'),
-    priority: 'High',
-    complexity: 9,
-    estimatedHours: 200,
-    actualHours: 90,
-    lastUpdate: new Date('2024-01-04T14:20:00'),
-    criticalPath: false,
-    riskLevel: 'High',
-    teamMembers: [
-      {
-        id: '3',
-        name: 'Dr. Emily Watson',
-        role: 'Domain Expert',
-        department: 'Healthcare',
-        assignedSections: ['Compliance', 'Clinical Workflows'],
-        workload: 60,
-        availability: 'Available',
-        lastActive: new Date('2024-01-04T13:30:00'),
-        completionRate: 95,
-      },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Education Platform',
-    client: 'EduTech Solutions',
-    status: 'Draft',
-    progress: 90,
-    deadline: new Date('2024-06-25'),
-    priority: 'Medium',
-    complexity: 6,
-    estimatedHours: 120,
-    actualHours: 108,
-    lastUpdate: new Date('2024-01-04T16:00:00'),
-    criticalPath: false,
-    riskLevel: 'Low',
-    teamMembers: [
-      {
-        id: '4',
-        name: 'Alex Thompson',
-        role: 'Content Specialist',
-        department: 'Education',
-        assignedSections: ['Curriculum', 'Assessment'],
-        workload: 45,
-        availability: 'Available',
-        lastActive: new Date('2024-01-04T15:45:00'),
-        completionRate: 87,
-      },
-    ],
-  },
-];
-
-const MOCK_AI_INSIGHTS: AIInsight[] = [
-  {
-    id: '1',
-    type: 'bottleneck',
-    message:
-      'Healthcare Platform RFP is behind schedule due to pending compliance review. Consider allocating additional compliance expertise.',
-    confidence: 0.92,
-    priority: 'High',
-    actionable: true,
-    proposalId: '2',
-  },
-  {
-    id: '2',
-    type: 'optimization',
-    message:
-      "Sarah Chen's workload is at 85%. Consider redistributing Architecture tasks to reduce risk of burnout.",
-    confidence: 0.78,
-    priority: 'Medium',
-    actionable: true,
-    teamMemberId: '1',
-  },
-  {
-    id: '3',
-    type: 'suggestion',
-    message:
-      'Enterprise IT Solution can leverage existing security templates from previous TechCorp projects to save 15% time.',
-    confidence: 0.85,
-    priority: 'Medium',
-    actionable: true,
-    proposalId: '1',
-  },
-];
+// Live data only – initialize empty and load from APIs
+const MOCK_PROPOSALS: Proposal[] = [];
+const MOCK_AI_INSIGHTS: AIInsight[] = [];
 
 export default function CoordinationHub() {
+  const apiClient = useApiClient();
   const [activeTab, setActiveTab] = useState<'proposals' | 'team' | 'timeline' | 'analytics'>(
     'proposals'
   );
@@ -502,9 +376,67 @@ export default function CoordinationHub() {
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [priorityFilter, setPriorityFilter] = useState<string>('All');
 
+  // Load live proposals and insights
+  useEffect(() => {
+    let isCancelled = false;
+    (async () => {
+      try {
+        const [proposalsRes, insightsRes] = await Promise.all([
+          apiClient.get<{ success: boolean; data: { proposals: Proposal[] } }>(
+            '/proposals?limit=20&sortBy=updatedAt&sortOrder=desc'
+          ),
+          apiClient.get<{ success: boolean; data: AIInsight[] }>('/analytics/insights?limit=10'),
+        ]);
+        if (isCancelled) return;
+        const proposals = (proposalsRes as any)?.data?.proposals || [];
+        const insights = (insightsRes as any)?.data || [];
+        // Map proposals to UI shape if needed
+        const mapped: Proposal[] = proposals.map((p: any) => ({
+          id: p.id,
+          name: p.title ?? p.name ?? 'Untitled',
+          client: p.customerName ?? p.customer?.name ?? 'Unknown',
+          status: (p.status as any) ?? 'Draft',
+          progress: Math.min(100, Math.max(0, Math.round((p.completionRate ?? 0) * 100))),
+          deadline: new Date(p.dueDate ?? Date.now()),
+          priority: (p.priority as any) ?? 'Medium',
+          complexity: p.complexity ?? 5,
+          estimatedHours: p.estimatedHours ?? 0,
+          actualHours: p.actualHours ?? 0,
+          lastUpdate: new Date(p.updatedAt ?? Date.now()),
+          criticalPath: Boolean(p.criticalPath),
+          riskLevel: (p.riskLevel as any) ?? 'Low',
+          teamMembers: (p.teamMembers ?? []).map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            role: m.role ?? 'Member',
+            department: m.department ?? 'General',
+            assignedSections: m.assignedSections ?? [],
+            workload: m.workload ?? 0,
+            availability: m.availability ?? 'Available',
+            lastActive: new Date(m.lastActive ?? Date.now()),
+            completionRate: m.completionRate ?? 0,
+          })),
+        }));
+        // Set state via local setters introduced below
+        setLiveProposals(mapped);
+        setAiInsights(insights as AIInsight[]);
+      } catch {
+        if (!isCancelled) {
+          setLiveProposals([]);
+          setAiInsights([]);
+        }
+      }
+    })();
+    return () => {
+      isCancelled = true;
+    };
+  }, [apiClient]);
+
   // Filter proposals based on search and filters
+  const [liveProposals, setLiveProposals] = useState<Proposal[]>([]);
+  const [aiInsights, setAiInsights] = useState<AIInsight[]>([]);
   const filteredProposals = useMemo(() => {
-    return MOCK_PROPOSALS.filter(proposal => {
+    return liveProposals.filter(proposal => {
       const matchesSearch =
         proposal.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         proposal.client.toLowerCase().includes(searchTerm.toLowerCase());
@@ -513,7 +445,7 @@ export default function CoordinationHub() {
 
       return matchesSearch && matchesStatus && matchesPriority;
     });
-  }, [searchTerm, statusFilter, priorityFilter]);
+  }, [liveProposals, searchTerm, statusFilter, priorityFilter]);
 
   // Get status icon and color
   const getStatusIcon = (status: string) => {
@@ -561,14 +493,15 @@ export default function CoordinationHub() {
 
   // Analytics calculations
   const coordinationMetrics = useMemo(() => {
-    const totalProposals = MOCK_PROPOSALS.length;
-    const completedProposals = MOCK_PROPOSALS.filter(p => p.status === 'Completed').length;
-    const inProgressProposals = MOCK_PROPOSALS.filter(p => p.status === 'In Progress').length;
-    const overdue = MOCK_PROPOSALS.filter(
+    const totalProposals = liveProposals.length;
+    const completedProposals = liveProposals.filter(p => p.status === 'Completed').length;
+    const inProgressProposals = liveProposals.filter(p => p.status === 'In Progress').length;
+    const overdue = liveProposals.filter(
       p => new Date(p.deadline) < new Date() && p.status !== 'Completed'
     ).length;
-    const avgProgress = MOCK_PROPOSALS.reduce((acc, p) => acc + p.progress, 0) / totalProposals;
-    const highRiskCount = MOCK_PROPOSALS.filter(
+    const avgProgress =
+      liveProposals.reduce((acc, p) => acc + p.progress, 0) / (totalProposals || 1) || 0;
+    const highRiskCount = liveProposals.filter(
       p => p.riskLevel === 'High' || p.riskLevel === 'Critical'
     ).length;
 
@@ -579,14 +512,18 @@ export default function CoordinationHub() {
       overdue,
       avgProgress: Math.round(avgProgress),
       highRiskCount,
-      onTimeRate: Math.round(((totalProposals - overdue) / totalProposals) * 100),
+      onTimeRate:
+        totalProposals > 0 ? Math.round(((totalProposals - overdue) / totalProposals) * 100) : 0,
     };
-  }, []);
+  }, [liveProposals]);
 
-  const handleViewProposal = useCallback((proposalId: string) => {
-    setSelectedProposal(proposalId);
-    showToast(`Viewing proposal: ${MOCK_PROPOSALS.find(p => p.id === proposalId)?.name}`);
-  }, []);
+  const handleViewProposal = useCallback(
+    (proposalId: string) => {
+      setSelectedProposal(proposalId);
+      showToast(`Viewing proposal: ${liveProposals.find(p => p.id === proposalId)?.name ?? ''}`);
+    },
+    [liveProposals]
+  );
 
   const handleAssignTeamMember = useCallback((proposalId: string) => {
     showToast('Team assignment interface would open here');
@@ -611,7 +548,7 @@ export default function CoordinationHub() {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <BellIcon className="h-5 w-5 text-gray-400" />
-                <span className="text-sm text-gray-600">{MOCK_AI_INSIGHTS.length} insights</span>
+                <span className="text-sm text-gray-600">{aiInsights.length} insights</span>
               </div>
               <Button onClick={() => showToast('New proposal wizard would open')}>
                 <PlusIcon className="h-4 w-4 mr-2" />
@@ -717,7 +654,7 @@ export default function CoordinationHub() {
             </Button>
           </div>
           <div className="space-y-3">
-            {MOCK_AI_INSIGHTS.map(insight => (
+            {aiInsights.map(insight => (
               <div
                 key={insight.id}
                 className={`p-4 rounded-lg border-l-4 ${

@@ -73,18 +73,7 @@ const basicInformationSchema = z.object({
 
 type BasicInformationFormData = z.infer<typeof basicInformationSchema>;
 
-// Industry options based on common business sectors (lazy to reduce initial heap)
-const getIndustryOptions = () => [
-  { value: 'technology', label: 'Technology' },
-  { value: 'healthcare', label: 'Healthcare' },
-  { value: 'finance', label: 'Finance' },
-  { value: 'manufacturing', label: 'Manufacturing' },
-  { value: 'retail', label: 'Retail' },
-  { value: 'education', label: 'Education' },
-  { value: 'government', label: 'Government' },
-  { value: 'nonprofit', label: 'Non-profit' },
-  { value: 'other', label: 'Other' },
-];
+// Removed hardcoded industry options; industry should come from selected customer or taxonomy API
 
 interface BasicInformationStepProps {
   data: Partial<ProposalWizardStep1Data>;
@@ -392,6 +381,28 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
 
   // ✅ SEPARATE EFFECT: Handle pre-selected customer when data changes
   useEffect(() => {
+    // When initial data arrives (edit mode), reset form defaults to reflect it
+    if (data?.client || data?.details) {
+      reset({
+        client: {
+          id: data.client?.id || '',
+          name: data.client?.name || '',
+          industry: data.client?.industry || '',
+          contactPerson: data.client?.contactPerson || '',
+          contactEmail: data.client?.contactEmail || '',
+          contactPhone: data.client?.contactPhone || '',
+        },
+        details: {
+          title: data.details?.title || '',
+          rfpReferenceNumber: data.details?.rfpReferenceNumber || '',
+          dueDate: formatDateForInput(data.details?.dueDate),
+          estimatedValue: data.details?.estimatedValue || 0,
+          priority: data.details?.priority || ProposalPriority.MEDIUM,
+          description: data.details?.description || '',
+        },
+      });
+    }
+
     if (data.client?.id && customers.length > 0) {
       const existingCustomer = customers.find((c: Customer) => c.id === data.client?.id);
       if (existingCustomer && !selectedCustomer) {
@@ -407,7 +418,14 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         console.log('[BasicInformationStep] Pre-selected customer:', existingCustomer.name);
       }
     }
-  }, [data.client?.id, customers, selectedCustomer, setValue]); // ✅ Stable dependencies
+  }, [data?.client, data?.details, customers, selectedCustomer, setValue, reset]); // ✅ Stable dependencies
+
+  // Auto-fetch customers once when entering edit mode so the dropdown can resolve the selected customer
+  useEffect(() => {
+    if ((data?.client?.id || data?.client?.name) && customers.length === 0 && !customersLoading) {
+      fetchCustomers();
+    }
+  }, [data?.client?.id, data?.client?.name, customers.length, customersLoading, fetchCustomers]);
 
   // ✅ FIXED: Handle customer selection with proper form validation
   const handleCustomerChange = useCallback(

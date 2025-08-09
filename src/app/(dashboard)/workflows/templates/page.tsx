@@ -12,6 +12,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
 import {
   AdjustmentsHorizontalIcon,
   ChartBarIcon,
@@ -212,173 +213,12 @@ interface DelegationRule {
   autoDelegate: boolean;
 }
 
-// Mock data for workflow templates
-const MOCK_TEMPLATES: WorkflowTemplate[] = [
-  {
-    id: 'template-001',
-    name: 'Enterprise Proposal Approval',
-    description: 'Comprehensive approval workflow for enterprise proposals over $100K',
-    version: 3,
-    isActive: true,
-    entityType: 'proposal',
-    stages: [
-      {
-        id: 'stage-001',
-        name: 'Technical Review',
-        description: 'Technical feasibility and architecture validation',
-        order: 1,
-        stageType: 'sequential',
-        approvers: ['john.smith@company.com'],
-        roles: ['Technical Lead'],
-        slaHours: 24,
-        conditions: [],
-        actions: [],
-        isRequired: true,
-        canSkip: false,
-        escalationRules: [],
-        dependsOn: [],
-      },
-      {
-        id: 'stage-002',
-        name: 'Financial Review',
-        description: 'Financial validation and budget approval',
-        order: 2,
-        stageType: 'parallel',
-        approvers: ['maria.rodriguez@company.com'],
-        roles: ['Finance Manager'],
-        slaHours: 16,
-        conditions: [],
-        actions: [],
-        isRequired: true,
-        canSkip: false,
-        escalationRules: [],
-        parallelGroup: 'review-group-1',
-        dependsOn: ['stage-001'],
-      },
-    ],
-    conditionalRules: [
-      {
-        id: 'rule-001',
-        name: 'High-Value Technical Review',
-        condition: {
-          field: 'proposal.value',
-          operator: 'greaterThan',
-          value: 500000,
-        },
-        action: {
-          type: 'addStage',
-          target: 'security-review',
-          parameters: { position: 'after', stage: 'stage-001' },
-        },
-        priority: 1,
-        isActive: true,
-      },
-    ],
-    slaSettings: {
-      defaultHours: 48,
-      conditionalSLAs: [],
-      escalationThresholds: [
-        { percentage: 80, action: 'notify', recipients: ['manager@company.com'] },
-        { percentage: 100, action: 'escalate', recipients: ['director@company.com'] },
-        { percentage: 150, action: 'bypass', recipients: ['executive@company.com'] },
-      ],
-      businessHoursOnly: true,
-      holidayHandling: 'extend',
-      timezoneHandling: 'approver',
-    },
-    parallelProcessing: {
-      enabled: true,
-      maxParallelStages: 3,
-      waitForAll: true,
-      failureHandling: 'continue',
-      minimumApprovals: 2,
-    },
-    createdAt: new Date('2024-11-01'),
-    updatedAt: new Date('2024-12-01'),
-    createdBy: 'admin@company.com',
-    usage: {
-      totalExecutions: 143,
-      activeWorkflows: 12,
-      averageCompletionTime: 38.5,
-      successRate: 94.2,
-      lastUsed: new Date(),
-    },
-    performance: {
-      averageCompletionTime: 38.5,
-      slaCompliance: 89.3,
-      bottleneckStages: ['stage-002'],
-      userSatisfaction: 87.4,
-      performanceScore: 91.2,
-      timelinePredictionAccuracy: 85.7,
-    },
-    approvers: [],
-  },
-  {
-    id: 'template-002',
-    name: 'Standard Approval',
-    description: 'Streamlined approval for standard proposals under $50K',
-    version: 2,
-    isActive: true,
-    entityType: 'proposal',
-    stages: [
-      {
-        id: 'stage-101',
-        name: 'Manager Approval',
-        description: 'Direct manager approval for standard proposals',
-        order: 1,
-        stageType: 'sequential',
-        approvers: ['manager@company.com'],
-        roles: ['Manager'],
-        slaHours: 8,
-        conditions: [],
-        actions: [],
-        isRequired: true,
-        canSkip: false,
-        escalationRules: [],
-        dependsOn: [],
-      },
-    ],
-    conditionalRules: [],
-    slaSettings: {
-      defaultHours: 24,
-      conditionalSLAs: [],
-      escalationThresholds: [
-        { percentage: 100, action: 'escalate', recipients: ['director@company.com'] },
-      ],
-      businessHoursOnly: true,
-      holidayHandling: 'extend',
-      timezoneHandling: 'approver',
-    },
-    parallelProcessing: {
-      enabled: false,
-      maxParallelStages: 1,
-      waitForAll: true,
-      failureHandling: 'abort',
-    },
-    createdAt: new Date('2024-10-15'),
-    updatedAt: new Date('2024-11-20'),
-    createdBy: 'admin@company.com',
-    usage: {
-      totalExecutions: 287,
-      activeWorkflows: 23,
-      averageCompletionTime: 12.3,
-      successRate: 97.8,
-      lastUsed: new Date(),
-    },
-    performance: {
-      averageCompletionTime: 12.3,
-      slaCompliance: 95.1,
-      bottleneckStages: [],
-      userSatisfaction: 94.2,
-      performanceScore: 96.1,
-      timelinePredictionAccuracy: 92.4,
-    },
-    approvers: [],
-  },
-];
+// Removed MOCK_TEMPLATES; will load from /api/workflows
 
 export default function WorkflowTemplateManager() {
+  const apiClient = useApiClient();
   const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate | null>(null);
+  const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [activeTab, setActiveTab] = useState<
     'overview' | 'builder' | 'rules' | 'sla' | 'analytics'
   >('overview');
@@ -397,28 +237,28 @@ export default function WorkflowTemplateManager() {
 
   // Calculate system performance metrics
   const systemMetrics = useMemo(() => {
-    const totalExecutions = MOCK_TEMPLATES.reduce((sum, t) => sum + t.usage.totalExecutions, 0);
-    const activeWorkflows = MOCK_TEMPLATES.reduce((sum, t) => sum + t.usage.activeWorkflows, 0);
+    const totalExecutions = templates.reduce((sum, t) => sum + (t.usage?.totalExecutions || 0), 0);
+    const activeWorkflows = templates.reduce((sum, t) => sum + (t.usage?.activeWorkflows || 0), 0);
     const avgCompletionTime =
-      MOCK_TEMPLATES.reduce((sum, t) => sum + t.performance.averageCompletionTime, 0) /
-      MOCK_TEMPLATES.length;
+      templates.reduce((sum, t) => sum + (t.performance?.averageCompletionTime || 0), 0) /
+        Math.max(templates.length, 1) || 0;
     const avgSLACompliance =
-      MOCK_TEMPLATES.reduce((sum, t) => sum + t.performance.slaCompliance, 0) /
-      MOCK_TEMPLATES.length;
+      templates.reduce((sum, t) => sum + (t.performance?.slaCompliance || 0), 0) /
+        Math.max(templates.length, 1) || 0;
     const avgUserSatisfaction =
-      MOCK_TEMPLATES.reduce((sum, t) => sum + t.performance.userSatisfaction, 0) /
-      MOCK_TEMPLATES.length;
+      templates.reduce((sum, t) => sum + (t.performance?.userSatisfaction || 0), 0) /
+        Math.max(templates.length, 1) || 0;
 
     return {
-      totalTemplates: MOCK_TEMPLATES.length,
-      activeTemplates: MOCK_TEMPLATES.filter(t => t.isActive).length,
+      totalTemplates: templates.length,
+      activeTemplates: templates.filter(t => t.isActive).length,
       totalExecutions,
       activeWorkflows,
       avgCompletionTime: Math.round(avgCompletionTime * 10) / 10,
       avgSLACompliance: Math.round(avgSLACompliance * 10) / 10,
       avgUserSatisfaction: Math.round(avgUserSatisfaction * 10) / 10,
     };
-  }, []);
+  }, [templates]);
 
   // Handle template actions
   const handleTemplateAction = useCallback(
@@ -460,6 +300,88 @@ export default function WorkflowTemplateManager() {
       activeTemplates: systemMetrics.activeTemplates,
     });
   }, [systemMetrics, trackTemplateAction]);
+
+  // Load templates from live API
+  useEffect(() => {
+    let isCancelled = false;
+    async function load() {
+      try {
+        const res = await apiClient.get<{ success: boolean; data: { workflows: any[] } }>(
+          '/workflows?limit=50&sortBy=updatedAt&sortOrder=desc'
+        );
+        if (isCancelled) return;
+        if (res?.success) {
+          const mapped: WorkflowTemplate[] = res.data.workflows.map(w => ({
+            id: w.id,
+            name: w.name,
+            description: w.description || '',
+            version: 1,
+            isActive: w.isActive,
+            entityType: 'proposal',
+            stages: (w.stages || []).map((s: any, idx: number) => ({
+              id: s.id || `stage-${idx}`,
+              name: s.name,
+              description: s.description || '',
+              order: s.order ?? idx + 1,
+              stageType: (s.isParallel ? 'parallel' : 'sequential') as any,
+              approvers: [],
+              roles: [],
+              slaHours: s.slaHours ?? 24,
+              conditions: [],
+              actions: [],
+              isRequired: true,
+              canSkip: false,
+              escalationRules: [],
+              dependsOn: [],
+            })),
+            conditionalRules: [],
+            slaSettings: {
+              defaultHours: 24,
+              conditionalSLAs: [],
+              escalationThresholds: [],
+              businessHoursOnly: true,
+              holidayHandling: 'extend',
+              timezoneHandling: 'approver',
+            },
+            parallelProcessing: {
+              enabled: false,
+              maxParallelStages: 1,
+              waitForAll: true,
+              failureHandling: 'continue',
+            },
+            createdAt: new Date(w.createdAt),
+            updatedAt: new Date(w.updatedAt),
+            createdBy: w.creator?.email || 'system',
+            usage: {
+              totalExecutions: w.statistics?.totalExecutions || 0,
+              activeWorkflows: 0,
+              averageCompletionTime: w.statistics?.averageCompletionTime || 0,
+              successRate: w.statistics?.successRate || 0,
+              lastUsed: new Date(),
+            },
+            performance: {
+              averageCompletionTime: w.statistics?.averageCompletionTime || 0,
+              slaCompliance: w.statistics?.slaCompliance || 0,
+              bottleneckStages: [],
+              userSatisfaction: 0,
+              performanceScore: 0,
+              timelinePredictionAccuracy: 0,
+            },
+            approvers: [],
+          }));
+          setTemplates(mapped);
+        } else {
+          setTemplates([]);
+        }
+      } catch {
+        setTemplates([]);
+      }
+    }
+    load();
+    return () => {
+      isCancelled = true;
+    };
+  }, [apiClient]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -573,7 +495,7 @@ export default function WorkflowTemplateManager() {
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-medium text-gray-900">
-                      Workflow Templates ({MOCK_TEMPLATES.length})
+                      Workflow Templates ({templates.length})
                     </h3>
                     <div className="flex items-center space-x-2">
                       <select className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
@@ -586,7 +508,7 @@ export default function WorkflowTemplateManager() {
                   </div>
 
                   <div className="space-y-4">
-                    {MOCK_TEMPLATES.map(template => (
+                    {templates.map(template => (
                       <div
                         key={template.id}
                         className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
@@ -1025,7 +947,7 @@ export default function WorkflowTemplateManager() {
               <div className="p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Template Performance</h3>
                 <div className="space-y-4">
-                  {MOCK_TEMPLATES.map(template => (
+                  {templates.map(template => (
                     <div key={template.id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="font-medium text-gray-900">{template.name}</h4>

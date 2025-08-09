@@ -95,6 +95,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             industry: true,
             tier: true,
             email: true,
+            phone: true,
+            contacts: {
+              where: { isPrimary: true, isActive: true },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: {
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
           },
         },
         creator: {
@@ -114,6 +125,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           },
           orderBy: {
             order: 'asc',
+          },
+        },
+        // ✅ INCLUDE: Products joined through ProposalProduct with embedded product details
+        products: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                currency: true,
+              },
+            },
           },
         },
         assignedTo: {
@@ -176,9 +200,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       customerIndustry: proposal.customer?.industry,
       customerTier: proposal.customer?.tier,
       customerEmail: proposal.customer?.email,
-      // Contact information from metadata
-      contactPerson: (proposal.metadata as any)?.wizardData?.step1?.client?.contactPerson || '',
-      contactPhone: (proposal.metadata as any)?.wizardData?.step1?.client?.contactPhone || '',
+      // Contact information: prefer metadata, then primary contact, then customer
+      contactPerson:
+        (proposal.metadata as any)?.wizardData?.step1?.client?.contactPerson ||
+        (proposal.customer as any)?.contacts?.[0]?.name ||
+        '',
+      contactEmail:
+        (proposal.metadata as any)?.wizardData?.step1?.client?.contactEmail ||
+        (proposal.customer as any)?.contacts?.[0]?.email ||
+        proposal.customer?.email ||
+        '',
+      contactPhone:
+        (proposal.metadata as any)?.wizardData?.step1?.client?.contactPhone ||
+        (proposal.customer as any)?.contacts?.[0]?.phone ||
+        (proposal.customer as any)?.phone ||
+        '',
 
       // Creator information
       createdBy: proposal.creator?.name || 'Unknown Creator',
@@ -192,6 +228,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         type: section.type,
         order: section.order,
       })),
+
+      // Products
+      products: (proposal as any).products?.map((pp: any) => ({
+        id: pp.product?.id,
+        productId: pp.productId || pp.product?.id,
+        name: pp.product?.name,
+        quantity: pp.quantity,
+        unitPrice: pp.unitPrice ?? pp.product?.price,
+        currency: pp.product?.currency || 'USD',
+        discount: pp.discount ?? 0,
+      })) || [],
 
       // Assigned team members
       assignedTo: proposal.assignedTo.map(user => ({

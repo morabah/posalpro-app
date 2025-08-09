@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { usePerformanceOptimization } from '@/hooks/usePerformanceOptimization';
@@ -169,79 +170,7 @@ export function CommunicationCenter({
     [analytics, proposalId, currentUserId, handleAsyncError]
   );
 
-  // Mock data for wireframe demonstration
-  const mockMessages: CommunicationMessage[] = [
-    {
-      id: '1',
-      proposalId,
-      from: {
-        id: 'user-1',
-        name: 'J. Smith',
-        role: 'Proposal Manager',
-        department: 'Sales',
-      },
-      content: '@A.Lee: Technical specs need ISO compliance details added',
-      type: 'message',
-      priority: 'high',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-      isRead: false,
-      mentions: ['A.Lee'],
-      tags: ['technical', 'compliance'],
-      clientInsights: [
-        {
-          id: 'insight-1',
-          type: 'requirement',
-          content: 'Client emphasizes ISO compliance as critical requirement',
-          confidence: 0.92,
-          impact: 'high',
-          suggestedActions: [
-            'Review current compliance status',
-            'Schedule compliance review meeting',
-          ],
-        },
-      ],
-    },
-    {
-      id: '2',
-      proposalId,
-      from: {
-        id: 'user-2',
-        name: 'S. Roberts',
-        role: 'Client Manager',
-        department: 'Account Management',
-      },
-      content: '@All: Client requested change in scope for network security requirements',
-      type: 'status_update',
-      priority: 'urgent',
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-      isRead: true,
-      mentions: ['@All'],
-      tags: ['scope-change', 'security'],
-    },
-  ];
-
-  const mockParticipants: CommunicationParticipant[] = [
-    {
-      id: 'user-1',
-      name: 'J. Smith',
-      role: 'Proposal Manager',
-      department: 'Sales',
-      email: 'j.smith@company.com',
-      isOnline: true,
-      lastActive: new Date(),
-      permissions: ['read', 'write', 'assign_tasks'],
-    },
-    {
-      id: 'user-2',
-      name: 'S. Roberts',
-      role: 'Client Manager',
-      department: 'Account Management',
-      email: 's.roberts@company.com',
-      isOnline: false,
-      lastActive: new Date(Date.now() - 15 * 60 * 1000),
-      permissions: ['read', 'write', 'client_insights'],
-    },
-  ];
+  const apiClient = useApiClient();
 
   // Load communication data
   const loadCommunicationData = useCallback(async () => {
@@ -249,14 +178,43 @@ export function CommunicationCenter({
     const startTime = Date.now();
 
     try {
-      // Use mock data for demonstration
-      setMessages(mockMessages);
-      setParticipants(mockParticipants);
+      const [messagesRes, participantsRes] = await Promise.all([
+        apiClient.get<{ success: boolean; data: CommunicationMessage[] }>(
+          `/communications?proposalId=${encodeURIComponent(proposalId)}`
+        ),
+        apiClient.get<{ success: boolean; data: CommunicationParticipant[] }>(
+          `/communications/participants?proposalId=${encodeURIComponent(proposalId)}`
+        ),
+      ]);
+
+      // Normalize date fields from API (strings) → Date objects
+      const normalizedMessages: CommunicationMessage[] = (((messagesRes as any)?.data ?? []) as any[]).map(
+        (m: any) => ({
+          ...m,
+          timestamp: m?.timestamp ? new Date(m.timestamp) : new Date(),
+          actionItems: Array.isArray(m?.actionItems)
+            ? m.actionItems.map((ai: any) => ({
+                ...ai,
+                dueDate: ai?.dueDate ? new Date(ai.dueDate) : undefined,
+              }))
+            : m?.actionItems,
+        })
+      );
+
+      const normalizedParticipants: CommunicationParticipant[] = (((participantsRes as any)?.data ?? []) as any[]).map(
+        (p: any) => ({
+          ...p,
+          lastActive: p?.lastActive ? new Date(p.lastActive) : new Date(),
+        })
+      );
+
+      setMessages(normalizedMessages);
+      setParticipants(normalizedParticipants);
 
       const loadTime = Date.now() - startTime;
       trackCommunicationMetrics('data_loaded', {
-        messageCount: mockMessages.length,
-        participantCount: mockParticipants.length,
+        messageCount: ((messagesRes as any)?.data ?? []).length,
+        participantCount: ((participantsRes as any)?.data ?? []).length,
         loadTime,
       });
     } catch (error) {

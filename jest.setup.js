@@ -36,8 +36,11 @@ if (typeof global.Response === 'undefined') {
   };
 }
 
-// Jest DOM setup
-import '@testing-library/jest-dom';
+// Jest DOM setup (only when DOM is available)
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('@testing-library/jest-dom');
+}
 import React from 'react';
 // MSW Server Setup - Temporarily disabled for integration testing
 // import { server } from './src/test/mocks/server';
@@ -49,27 +52,33 @@ import React from 'react';
 
 // Mock next-auth to prevent ES module transformation errors
 jest.mock('next-auth', () => ({
-  getServerSession: jest.fn(() => Promise.resolve({
-    user: {
-      id: 'test-user-id',
-      email: 'test@example.com',
-      name: 'Test User',
-      role: 'USER'
-    }
-  }))
+  getServerSession: jest.fn(() =>
+    Promise.resolve({
+      user: {
+        id: 'test-user-id',
+        email: 'test@example.com',
+        name: 'Test User',
+        role: 'USER',
+      },
+    })
+  ),
 }));
 
-jest.mock('next-auth/providers/credentials', () => jest.fn(() => ({
-  id: 'credentials',
-  name: 'Credentials',
-  type: 'credentials',
-  credentials: {},
-  authorize: jest.fn(() => Promise.resolve({
-    id: 'test-user-id',
-    email: 'test@example.com',
-    name: 'Test User'
+jest.mock('next-auth/providers/credentials', () =>
+  jest.fn(() => ({
+    id: 'credentials',
+    name: 'Credentials',
+    type: 'credentials',
+    credentials: {},
+    authorize: jest.fn(() =>
+      Promise.resolve({
+        id: 'test-user-id',
+        email: 'test@example.com',
+        name: 'Test User',
+      })
+    ),
   }))
-})));
+);
 
 // Mock Next.js modules
 jest.mock('next/router', () => ({
@@ -197,20 +206,22 @@ jest.mock('react-hot-toast', () => ({
   Toaster: () => null,
 }));
 
-// Mock window.matchMedia for responsive design tests
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+// Mock window.matchMedia for responsive design tests (DOM only)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: jest.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  });
+}
 
 // Mock IntersectionObserver for virtual scrolling tests
 global.IntersectionObserver = class IntersectionObserver {
@@ -236,26 +247,57 @@ global.PerformanceObserver = jest.fn().mockImplementation(() => ({
   disconnect: jest.fn(),
 }));
 
-// Mock performance API
-Object.defineProperty(window, 'performance', {
-  writable: true,
-  value: {
-    now: jest.fn(() => Date.now()),
-    mark: jest.fn(),
-    measure: jest.fn(),
-    getEntriesByType: jest.fn(() => []),
-    getEntriesByName: jest.fn(() => []),
-    clearMarks: jest.fn(),
-    clearMeasures: jest.fn(),
-    navigation: {
-      type: 0,
+// Mock performance API (DOM only)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'performance', {
+    writable: true,
+    value: {
+      now: jest.fn(() => Date.now()),
+      mark: jest.fn(),
+      measure: jest.fn(),
+      getEntriesByType: jest.fn(() => []),
+      getEntriesByName: jest.fn(() => []),
+      clearMarks: jest.fn(),
+      clearMeasures: jest.fn(),
+      navigation: {
+        type: 0,
+      },
+      timing: {
+        navigationStart: Date.now(),
+        loadEventEnd: Date.now() + 1000,
+      },
     },
-    timing: {
-      navigationStart: Date.now(),
-      loadEventEnd: Date.now() + 1000,
-    },
-  },
-});
+  });
+}
+
+// Minimal polyfills for Headers and Blob in Node
+if (typeof global.Headers === 'undefined') {
+  class SimpleHeaders {
+    constructor(init = {}) {
+      this.map = new Map(Object.entries(init));
+    }
+    append(key, value) {
+      this.map.set(key, value);
+    }
+    get(key) {
+      return this.map.get(key);
+    }
+    set(key, value) {
+      this.map.set(key, value);
+    }
+    entries() {
+      return this.map.entries();
+    }
+  }
+  // @ts-ignore
+  global.Headers = SimpleHeaders;
+}
+if (typeof global.Blob === 'undefined') {
+  // @ts-ignore
+  global.Blob = class Blob {
+    constructor() {}
+  };
+}
 
 // Mock crypto API for security tests
 Object.defineProperty(global, 'crypto', {
@@ -267,7 +309,7 @@ Object.defineProperty(global, 'crypto', {
   },
 });
 
-// Mock localStorage and sessionStorage with all required methods
+// Mock localStorage and sessionStorage with all required methods (DOM only)
 const mockStorage = {
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -279,35 +321,41 @@ const mockStorage = {
   },
 };
 
-Object.defineProperty(window, 'localStorage', {
-  value: mockStorage,
-  writable: true,
-});
-
-Object.defineProperty(window, 'sessionStorage', {
-  value: mockStorage,
-  writable: true,
-});
-
-// Mock geolocation API
-Object.defineProperty(navigator, 'geolocation', {
-  value: {
-    getCurrentPosition: jest.fn(),
-    watchPosition: jest.fn(),
-    clearWatch: jest.fn(),
-  },
-});
-
-// Mock clipboard API for copy/paste functionality
-if (!Object.prototype.hasOwnProperty.call(navigator, 'clipboard')) {
-  Object.defineProperty(navigator, 'clipboard', {
-    value: {
-      writeText: jest.fn(() => Promise.resolve()),
-      readText: jest.fn(() => Promise.resolve('mock clipboard text')),
-    },
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'localStorage', {
+    value: mockStorage,
     writable: true,
-    configurable: true,
   });
+
+  Object.defineProperty(window, 'sessionStorage', {
+    value: mockStorage,
+    writable: true,
+  });
+}
+
+// Mock geolocation API (browser only)
+if (typeof navigator !== 'undefined') {
+  Object.defineProperty(navigator, 'geolocation', {
+    value: {
+      getCurrentPosition: jest.fn(),
+      watchPosition: jest.fn(),
+      clearWatch: jest.fn(),
+    },
+  });
+}
+
+// Mock clipboard API for copy/paste functionality (browser only)
+if (typeof navigator !== 'undefined') {
+  if (!Object.prototype.hasOwnProperty.call(navigator, 'clipboard')) {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: jest.fn(() => Promise.resolve()),
+        readText: jest.fn(() => Promise.resolve('mock clipboard text')),
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
 }
 
 // Mock Web Workers
@@ -338,7 +386,7 @@ global.Request = class MockRequest {
       value: url,
       writable: false,
       enumerable: true,
-      configurable: false
+      configurable: false,
     });
     this.method = options.method || 'GET';
     this.headers = new Headers(options.headers || {});
@@ -385,8 +433,8 @@ jest.mock('next/server', () => {
         statusText: init.statusText || 'OK',
         headers: {
           'Content-Type': 'application/json',
-          ...init.headers
-        }
+          ...init.headers,
+        },
       });
       return response;
     }
@@ -394,7 +442,7 @@ jest.mock('next/server', () => {
     static redirect(url, status = 302) {
       return new MockNextResponse(null, {
         status,
-        headers: { Location: url }
+        headers: { Location: url },
       });
     }
   }
@@ -403,7 +451,7 @@ jest.mock('next/server', () => {
     NextResponse: MockNextResponse,
     NextRequest: jest.fn().mockImplementation((url, options = {}) => {
       return new global.Request(url, options);
-    })
+    }),
   };
 });
 
@@ -469,12 +517,14 @@ afterAll(() => {
 afterEach(() => {
   jest.clearAllMocks();
 
-  // Clear localStorage and sessionStorage using our mock methods
-  if (window.localStorage && typeof window.localStorage.clear === 'function') {
-    window.localStorage.clear();
-  }
-  if (window.sessionStorage && typeof window.sessionStorage.clear === 'function') {
-    window.sessionStorage.clear();
+  // Clear localStorage and sessionStorage using our mock methods (DOM only)
+  if (typeof window !== 'undefined') {
+    if (window.localStorage && typeof window.localStorage.clear === 'function') {
+      window.localStorage.clear();
+    }
+    if (window.sessionStorage && typeof window.sessionStorage.clear === 'function') {
+      window.sessionStorage.clear();
+    }
   }
 
   // Reset fetch mock

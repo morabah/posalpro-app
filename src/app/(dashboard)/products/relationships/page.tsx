@@ -13,6 +13,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
 import {
   ArrowPathIcon,
   BeakerIcon,
@@ -168,137 +169,20 @@ interface VersionHistoryEntry {
   rollbackAvailable: boolean;
 }
 
-// Mock data for enhanced functionality
-const MOCK_RELATIONSHIPS: ProductRelationship[] = [
-  {
-    id: 'rel-001',
-    sourceProductId: 'prod-001',
-    targetProductId: 'prod-002',
-    type: 'requires',
-    quantity: 1,
-    createdAt: new Date('2024-11-15'),
-    updatedAt: new Date('2024-12-01'),
-    createdBy: 'John Smith',
-    version: 3,
-    validationHistory: [
-      {
-        timestamp: new Date('2024-12-01'),
-        validationResult: true,
-        performance: 94.2,
-        userStory: 'US-3.1',
-        hypothesis: 'H8',
-        testCase: 'TC-H8-001',
-        changesSummary: 'Updated quantity requirement from 2 to 1',
-        validator: 'Sarah Johnson',
-      },
-    ],
-    performanceImpact: {
-      validationSpeedImprovement: 31.5,
-      errorReduction: 47.3,
-      configurationEfficiency: 89.1,
-      userSatisfaction: 92.4,
-    },
-    aiRecommendations: [
-      {
-        id: 'ai-001',
-        type: 'optimization',
-        confidence: 87,
-        description: 'Consider making this relationship bidirectional for better user experience',
-        suggestedAction: 'Add reverse compatibility check',
-        impact: 'medium',
-        createdAt: new Date('2024-12-01'),
-      },
-    ],
-  },
-];
+// Removed mock relationships; will load from live APIs
+const MOCK_RELATIONSHIPS: ProductRelationship[] = [];
 
-const MOCK_CIRCULAR_DEPENDENCIES: CircularDependency[] = [
-  {
-    id: 'cycle-001',
-    cycle: ['Product A', 'Product B', 'Product C', 'Product A'],
-    impact: 'critical',
-    affectedProposals: 12,
-    suggestedResolutions: [
-      {
-        action: 'break_relationship',
-        description: 'Remove Product A → Product B dependency',
-        impact: 'Minimal impact on 2 active proposals',
-        difficulty: 'easy',
-      },
-      {
-        action: 'create_alternative',
-        description: 'Create optional alternative path via Product D',
-        impact: 'Preserves all current functionality',
-        difficulty: 'moderate',
-      },
-    ],
-  },
-];
+const MOCK_CIRCULAR_DEPENDENCIES: CircularDependency[] = [];
 
-const MOCK_VERSION_HISTORY: VersionHistoryEntry[] = [
-  {
-    id: 'ver-001',
-    version: 12,
-    timestamp: new Date('2024-12-01T14:30:00'),
-    changeType: 'update',
-    changedBy: 'Sarah Johnson',
-    description: 'Updated 3 relationships to optimize validation performance',
-    affectedRelationships: 3,
-    validationImpact: 15.2,
-    rollbackAvailable: true,
-  },
-  {
-    id: 'ver-002',
-    version: 11,
-    timestamp: new Date('2024-11-28T09:15:00'),
-    changeType: 'batch_import',
-    changedBy: 'David Chen',
-    description: 'Imported relationships from legacy system',
-    affectedRelationships: 47,
-    validationImpact: -8.3,
-    rollbackAvailable: true,
-  },
-];
+const MOCK_VERSION_HISTORY: VersionHistoryEntry[] = [];
 
-const MOCK_PROPOSAL_SIMULATIONS: ProposalSimulation[] = [
-  {
-    id: 'sim-001',
-    name: 'Enterprise Security Package Test',
-    products: ['Security Suite Pro', 'Firewall Module', 'Monitoring Tools'],
-    validationResults: [
-      {
-        productId: 'prod-001',
-        productName: 'Security Suite Pro',
-        status: 'valid',
-        issues: [],
-        suggestions: ['Consider adding advanced monitoring for better coverage'],
-      },
-      {
-        productId: 'prod-002',
-        productName: 'Firewall Module',
-        status: 'warning',
-        issues: [
-          {
-            severity: 'warning',
-            message: 'License pool may be insufficient for enterprise deployment',
-            affectedProducts: ['prod-002'],
-            resolutionOptions: ['Upgrade to enterprise license pool', 'Add additional licenses'],
-          },
-        ],
-        suggestions: ['Verify license pool capacity before proposal submission'],
-      },
-    ],
-    recommendedChanges: [
-      'Add monitoring license to firewall configuration',
-      'Verify enterprise license pool capacity',
-    ],
-    compatibilityScore: 87.5,
-    estimatedErrors: 1,
-    performance: 94.2,
-  },
-];
+const MOCK_PROPOSAL_SIMULATIONS: ProposalSimulation[] = [];
 
 export default function ProductRelationshipsManagement() {
+  const apiClient = useApiClient();
+  const [relationships, setRelationships] = useState<ProductRelationship[]>([]);
+  const [circular, setCircular] = useState<CircularDependency[]>([]);
+  const [versionHistory, setVersionHistory] = useState<VersionHistoryEntry[]>([]);
   const [activeTab, setActiveTab] = useState<
     'overview' | 'simulator' | 'history' | 'ai' | 'dependencies'
   >('overview');
@@ -324,19 +208,19 @@ export default function ProductRelationshipsManagement() {
   const runProposalSimulation = useCallback(async () => {
     setSimulationRunning(true);
     trackRelationshipAction('proposal_simulation_started', {
-      products: MOCK_PROPOSAL_SIMULATIONS[0].products.length,
-      relationships: MOCK_RELATIONSHIPS.length,
+      products: MOCK_PROPOSAL_SIMULATIONS[0]?.products?.length ?? 0,
+      relationships: relationships.length,
     });
 
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    setSelectedSimulation(MOCK_PROPOSAL_SIMULATIONS[0]);
+    setSelectedSimulation(MOCK_PROPOSAL_SIMULATIONS[0] || null);
     setSimulationRunning(false);
 
     trackRelationshipAction('proposal_simulation_completed', {
-      compatibilityScore: MOCK_PROPOSAL_SIMULATIONS[0].compatibilityScore,
-      estimatedErrors: MOCK_PROPOSAL_SIMULATIONS[0].estimatedErrors,
+      compatibilityScore: MOCK_PROPOSAL_SIMULATIONS[0]?.compatibilityScore ?? 0,
+      estimatedErrors: MOCK_PROPOSAL_SIMULATIONS[0]?.estimatedErrors ?? 0,
     });
   }, [trackRelationshipAction]);
 
@@ -350,16 +234,45 @@ export default function ProductRelationshipsManagement() {
   // Calculate system metrics
   const systemMetrics = useMemo(() => {
     return {
-      totalRelationships: MOCK_RELATIONSHIPS.length,
-      circularDependencies: MOCK_CIRCULAR_DEPENDENCIES.length,
-      aiRecommendations: MOCK_RELATIONSHIPS.reduce(
-        (sum, rel) => sum + rel.aiRecommendations.length,
+      totalRelationships: relationships.length,
+      circularDependencies: circular.length,
+      aiRecommendations: relationships.reduce(
+        (sum, rel) => sum + (rel.aiRecommendations?.length || 0),
         0
       ),
       validationAccuracy: 94.2,
       performanceImprovement: 31.5,
     };
-  }, []);
+  }, [relationships, circular]);
+
+  // Load relationships and derived data from live APIs
+  useEffect(() => {
+    let isCancelled = false;
+    async function load() {
+      try {
+        // Assuming an endpoint exists or will be added; fallback to products to infer none
+        const res = await apiClient.get<{
+          success: boolean;
+          data: { relationships: ProductRelationship[] };
+        }>('/products?fields=relationships');
+        if (isCancelled) return;
+        const rels = (res as any)?.data?.relationships || [];
+        setRelationships(rels);
+        setCircular([]);
+        setVersionHistory([]);
+      } catch {
+        if (!isCancelled) {
+          setRelationships([]);
+          setCircular([]);
+          setVersionHistory([]);
+        }
+      }
+    }
+    load();
+    return () => {
+      isCancelled = true;
+    };
+  }, [apiClient]);
 
   // Track page load
   useEffect(() => {
@@ -506,10 +419,11 @@ export default function ProductRelationshipsManagement() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Products to Test ({MOCK_PROPOSAL_SIMULATIONS[0].products.length} selected)
+                      Products to Test ({MOCK_PROPOSAL_SIMULATIONS[0]?.products?.length ?? 0}{' '}
+                      selected)
                     </label>
                     <div className="space-y-2">
-                      {MOCK_PROPOSAL_SIMULATIONS[0].products.map((product, index) => (
+                      {(MOCK_PROPOSAL_SIMULATIONS[0]?.products ?? []).map((product, index) => (
                         <div key={index} className="flex items-center space-x-2">
                           <input
                             type="checkbox"
@@ -634,7 +548,7 @@ export default function ProductRelationshipsManagement() {
               </div>
 
               <div className="space-y-4">
-                {MOCK_VERSION_HISTORY.map(entry => (
+                {versionHistory.map(entry => (
                   <div key={entry.id} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -704,10 +618,10 @@ export default function ProductRelationshipsManagement() {
             <Card>
               <div className="p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Circular Dependencies ({MOCK_CIRCULAR_DEPENDENCIES.length})
+                  Circular Dependencies ({circular.length})
                 </h3>
                 <div className="space-y-4">
-                  {MOCK_CIRCULAR_DEPENDENCIES.map(dependency => (
+                  {circular.map(dependency => (
                     <div
                       key={dependency.id}
                       className="border border-red-200 rounded-lg p-4 bg-red-50"

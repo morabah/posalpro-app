@@ -72,14 +72,15 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
     // For any remaining IDs not found in assignedTo, use fallback
     userIds.forEach(userId => {
       if (!nameMap[userId]) {
-        nameMap[userId] = userId.length > 20 ? `User ${userId.substring(0, 8)}...` : `User ${userId}`;
+        nameMap[userId] =
+          userId.length > 20 ? `User ${userId.substring(0, 8)}...` : `User ${userId}`;
       }
     });
 
     console.log('🔍 [WizardSummary] Using resolved data:', {
       userIds,
       assignedTo: assignedTo.map(u => ({ id: u.id, name: u.name })),
-      nameMap
+      nameMap,
     });
 
     setUserNames(nameMap);
@@ -187,11 +188,7 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
                       {Object.entries(teamAssignments.subjectMatterExperts).map(([key, value]) => (
                         <div key={key} className="text-xs">
                           {key}:{' '}
-                          {typeof value === 'string'
-                            ? value.length > 20
-                              ? `User ${value.substring(0, 8)}...`
-                              : value
-                            : String(value)}
+                          {typeof value === 'string' ? getUserDisplayName(value) : String(value)}
                         </div>
                       ))}
                     </div>
@@ -202,21 +199,38 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
         )}
 
         {/* Step 3: Content Selections */}
-        {contentSelections && contentSelections.length > 0 && (
+        {(wizardData?.step3?.selectedContent?.length > 0 ||
+          (contentSelections && contentSelections.length > 0)) && (
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-gray-700 flex items-center">
               <DocumentTextIcon className="h-4 w-4 mr-2 text-purple-500" />
               Content Selections
             </h3>
             <div className="space-y-2 text-sm">
-              {contentSelections.map((content, index) => (
-                <div key={index}>
-                  <div className="font-medium">{content.section}</div>
-                  {content.contentId && (
-                    <div className="text-xs text-gray-500">ID: {content.contentId}</div>
-                  )}
-                </div>
-              ))}
+              {/* Prefer detailed titles from wizardData if present; fallback to API metadata */}
+              {wizardData?.step3?.selectedContent?.length
+                ? wizardData.step3.selectedContent.map((c: any, index: number) => (
+                    <div key={`wd-${index}`}>
+                      <div className="font-medium">{c.section}</div>
+                      <div className="text-xs text-gray-600">
+                        {c.item?.title || 'Selected Content'}
+                      </div>
+                      {c.item?.id && (
+                        <div className="text-[11px] text-gray-500">ID: {c.item.id}</div>
+                      )}
+                    </div>
+                  ))
+                : contentSelections.map((content, index) => (
+                    <div key={`cs-${index}`}>
+                      <div className="font-medium">{content.section}</div>
+                      {content.title && (
+                        <div className="text-xs text-gray-600">{content.title}</div>
+                      )}
+                      {content.contentId && (
+                        <div className="text-[11px] text-gray-500">ID: {content.contentId}</div>
+                      )}
+                    </div>
+                  ))}
             </div>
           </div>
         )}

@@ -56,6 +56,13 @@ const ProposalCreateSchema = z.object({
   dueDate: z.string().datetime().optional(),
   value: z.number().positive('Value must be greater than 0').optional(),
   currency: z.string().length(3).default('USD'),
+  // RFP reference (Step 1)
+  rfpReferenceNumber: z.string().optional(),
+
+  // Contact info from Step 1 (mandatory in UI, persisted in metadata)
+  contactPerson: z.string().min(1, 'Contact person is required'),
+  contactEmail: z.string().email('Valid contact email is required'),
+  contactPhone: z.string().optional(),
 
   // Products from Step 4
   products: z
@@ -77,6 +84,23 @@ const ProposalCreateSchema = z.object({
         content: z.string(),
         type: z.enum(['TEXT', 'PRODUCTS', 'TERMS', 'PRICING', 'CUSTOM']).default('TEXT'),
         order: z.number().int().positive(),
+      })
+    )
+    .optional(),
+
+  // Extended section metadata (assignments, estimates, etc.) from Step 5
+  sectionsMeta: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        title: z.string().optional(),
+        assignedTo: z.string().optional(),
+        estimatedHours: z.number().min(0).optional(),
+        dueDate: z.string().datetime().optional(),
+        priority: z.enum(['high', 'medium', 'low']).optional(),
+        status: z.enum(['not_started', 'in_progress', 'completed', 'reviewed']).optional(),
+        order: z.number().int().positive().optional(),
+        content: z.any().optional(),
       })
     )
     .optional(),
@@ -1182,12 +1206,17 @@ export async function POST(request: NextRequest) {
                 client: {
                   name: customer.name,
                   industry: customer.industry || '',
+                  contactPerson: validatedData.contactPerson,
+                  contactEmail: validatedData.contactEmail,
+                  contactPhone: validatedData.contactPhone,
                 },
                 details: {
                   title: validatedData.title,
                   dueDate: validatedData.dueDate,
                   estimatedValue: validatedData.value,
                   priority: validatedData.priority,
+                  description: validatedData.description,
+                  rfpReferenceNumber: validatedData.rfpReferenceNumber,
                 },
               },
               step2: validatedData.teamAssignments || {},
@@ -1198,7 +1227,10 @@ export async function POST(request: NextRequest) {
                 products: validatedData.products || [],
               },
               step5: {
-                sections: validatedData.sections || [],
+                // Store extended section metadata if provided; fallback to minimal sections
+                sections: (validatedData.sectionsMeta && validatedData.sectionsMeta.length > 0)
+                  ? validatedData.sectionsMeta
+                  : (validatedData.sections || []),
               },
               step6: {
                 finalValidation: validatedData.validationData || {},

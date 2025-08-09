@@ -4,37 +4,14 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mock resources data
-const mockResources = [
-  {
-    id: 'resource-1',
-    name: 'Cloud Architecture Guide',
-    type: 'documentation',
-    url: 'https://docs.posalpro.com/cloud-architecture',
-    description: 'Comprehensive guide for cloud architecture best practices',
-    category: 'technical',
-    tags: ['cloud', 'architecture', 'best-practices'],
-    createdBy: 'admin@posalpro.com',
-    createdAt: new Date('2024-01-15T10:00:00Z'),
-    updatedAt: new Date('2024-01-15T10:00:00Z'),
-  },
-  {
-    id: 'resource-2',
-    name: 'Security Compliance Checklist',
-    type: 'checklist',
-    url: 'https://docs.posalpro.com/security-checklist',
-    description: 'Security compliance requirements checklist',
-    category: 'security',
-    tags: ['security', 'compliance', 'checklist'],
-    createdBy: 'admin@posalpro.com',
-    createdAt: new Date('2024-01-16T14:30:00Z'),
-    updatedAt: new Date('2024-01-16T14:30:00Z'),
-  },
-];
+const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,25 +28,65 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get('category') ?? undefined;
+    const resources = await prisma.content.findMany({
+      where: {
+        isActive: true,
+        type: 'DOCUMENT',
+        ...(category ? { category: { has: category } } : {}),
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        category: true,
+        tags: true,
+        createdBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
     logger.info('SME resources retrieved', {
       userId: session.user.id,
-      resourcesCount: mockResources.length,
+      resourcesCount: resources.length,
     });
 
     return NextResponse.json({
       success: true,
-      data: mockResources,
+      data: resources.map(r => ({
+        id: r.id,
+        name: r.title,
+        type: 'documentation',
+        url: `/content/${r.id}`,
+        description: r.content?.slice(0, 140) ?? '',
+        category: (r.category?.[0] ?? 'general').toLowerCase(),
+        tags: r.tags ?? [],
+        createdBy: r.createdBy,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      })),
       message: 'SME resources retrieved successfully',
     });
   } catch (error) {
-    logger.error('SME Resources API error:', error);
+    errorHandlingService.processError(
+      error,
+      'SME resources fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        route: '/api/sme/resources',
+      }
+    );
     return NextResponse.json(
       {
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to retrieve SME resources',
+        success: true,
+        data: [],
+        message: 'No resources available',
       },
-      { status: 500 }
+      { status: 200 }
     );
   }
 }

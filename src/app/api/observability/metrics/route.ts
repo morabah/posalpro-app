@@ -1,9 +1,11 @@
-import { NextResponse } from 'next/server';
+import { getRequestMeta } from '@/lib/logging/structuredLogger';
 import { snapshot } from '@/lib/observability/metricsStore';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const t0 = Date.now();
   const data = snapshot();
+  const { requestId } = getRequestMeta(request.headers);
   // Flatten a few headline metrics for the UI
   const lcpP95 = data.webVitals?.LCP?.p95 ?? 0;
   const inpP95 = data.webVitals?.INP?.p95 ?? 0;
@@ -28,5 +30,6 @@ export async function GET() {
   });
   const dur = Date.now() - t0;
   res.headers.set('Server-Timing', `app;dur=${dur}`);
+  if (requestId) res.headers.set('x-request-id', String(requestId));
   return res;
 }

@@ -1,24 +1,24 @@
 {
-  "timestamp": "2025-08-07T12:29:01.111Z",
-  "testDuration": 15796,
+  "timestamp": "2025-08-08T22:09:36.096Z",
+  "testDuration": 24432,
   "steps": [
     {
       "name": "Authentication",
       "status": "PASS",
       "message": "User authenticated successfully",
-      "timestamp": 1754569735207
+      "timestamp": 1754690969337
     },
     {
       "name": "Edit Navigation",
       "status": "PASS",
       "message": "Successfully navigated to edit proposal page",
-      "timestamp": 1754569736091
+      "timestamp": 1754690971078
     },
     {
       "name": "Contact Data Verification",
       "status": "PASS",
       "message": "Contact data retrieved successfully",
-      "timestamp": 1754569741111
+      "timestamp": 1754690976096
     }
   ],
   "errors": [],
@@ -27,104 +27,74 @@
       {
         "url": "http://localhost:3000/api/auth/session",
         "status": 200,
-        "responseTime": 96,
-        "timestamp": 1754569730171
+        "responseTime": 199,
+        "timestamp": 1754690959661
       },
       {
         "url": "http://localhost:3000/api/auth/session",
         "status": 200,
-        "responseTime": 16,
-        "timestamp": 1754569730586
+        "responseTime": 204,
+        "timestamp": 1754690959666
+      },
+      {
+        "url": "http://localhost:3000/api/auth/session",
+        "status": 200,
+        "responseTime": 205,
+        "timestamp": 1754690959667
+      },
+      {
+        "url": "http://localhost:3000/api/auth/providers",
+        "status": 200,
+        "responseTime": 170,
+        "timestamp": 1754690963032
+      },
+      {
+        "url": "http://localhost:3000/api/auth/csrf",
+        "status": 200,
+        "responseTime": 32,
+        "timestamp": 1754690963067
+      },
+      {
+        "url": "http://localhost:3000/api/auth/callback/credentials",
+        "status": 200,
+        "responseTime": 1584,
+        "timestamp": 1754690964654
+      },
+      {
+        "url": "http://localhost:3000/api/auth/session",
+        "status": 200,
+        "responseTime": 0,
+        "timestamp": 1754690964656
       },
       {
         "url": "http://localhost:3000/api/auth/session",
         "status": 200,
         "responseTime": 23,
-        "timestamp": 1754569730593
-      },
-      {
-        "url": "http://localhost:3000/api/auth/providers",
-        "status": 200,
-        "responseTime": 129,
-        "timestamp": 1754569733523
-      },
-      {
-        "url": "http://localhost:3000/api/auth/csrf",
-        "status": 200,
-        "responseTime": 14,
-        "timestamp": 1754569733537
-      },
-      {
-        "url": "http://localhost:3000/api/auth/callback/credentials",
-        "status": 200,
-        "responseTime": 1242,
-        "timestamp": 1754569734779
+        "timestamp": 1754690970667
       },
       {
         "url": "http://localhost:3000/api/auth/session",
         "status": 200,
-        "responseTime": 1,
-        "timestamp": 1754569734781
+        "responseTime": 2,
+        "timestamp": 1754690970690
       },
       {
         "url": "http://localhost:3000/api/auth/session",
         "status": 200,
-        "responseTime": 3,
-        "timestamp": 1754569735419
-      },
-      {
-        "url": "http://localhost:3000/api/auth/session",
-        "status": 200,
-        "responseTime": 0,
-        "timestamp": 1754569735734
-      },
-      {
-        "url": "http://localhost:3000/api/auth/session",
-        "status": 200,
-        "responseTime": 0,
-        "timestamp": 1754569735734
-      },
-      {
-        "url": "http://localhost:3000/api/customers",
-        "status": 200,
-        "responseTime": 120,
-        "timestamp": 1754569736178
-      },
-      {
-        "url": "http://localhost:3000/api/proposals/cme1cklde000259if5avq01m2",
-        "status": 200,
-        "responseTime": 2765,
-        "timestamp": 1754569738854
-      },
-      {
-        "url": "http://localhost:3000/api/proposals/cme1cklde000259if5avq01m2",
-        "status": 200,
-        "responseTime": 2767,
-        "timestamp": 1754569738856
-      },
-      {
-        "url": "http://localhost:3000/api/proposals/cme1cklde000259if5avq01m2",
-        "status": 200,
-        "responseTime": 2769,
-        "timestamp": 1754569738858
-      },
-      {
-        "url": "http://localhost:3000/api/proposals/cme1cklde000259if5avq01m2",
-        "status": 200,
-        "responseTime": 2769,
-        "timestamp": 1754569738858
+        "responseTime": 2,
+        "timestamp": 1754690970690
       }
     ],
     "pageLoadTimes": [
       {
         "page": "Login",
-        "loadTime": 5850,
-        "timestamp": 1754569735162
+        "loadTime": 15039,
+        "timestamp": 1754690969069
       },
       {
         "page": "Edit Proposal",
-        "loadTime": 884,
-        "timestamp": 1754569736091
+        "loadTime": 1738,
+        "timestamp": 1754690971078
       }
     ]
   },
@@ -135,7 +105,7 @@
     "contactPerson": "",
     "contactEmail": "",
     "contactPhone": "",
-    "dueDate": "2025-08-14",
+    "dueDate": "2025-08-15",
     "estimatedValue": null,
     "priority": null
   },
@@ -143,7 +113,7 @@
     "totalSteps": 3,
     "passedSteps": 3,
     "failedSteps": 0,
-    "averageApiResponseTime": 847.6,
-    "averagePageLoadTime": 3367
+    "averageApiResponseTime": 242.1,
+    "averagePageLoadTime": 8388.5
   }
 }

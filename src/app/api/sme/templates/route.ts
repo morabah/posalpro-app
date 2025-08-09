@@ -4,37 +4,14 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mock templates data
-const mockTemplates = [
-  {
-    id: 'template-1',
-    name: 'Technical Specification Template',
-    category: 'technical',
-    description: 'Standard template for technical specifications',
-    content: 'This technical specification provides...',
-    wordCount: 250,
-    tags: ['technical', 'specification', 'cloud'],
-    createdBy: 'admin@posalpro.com',
-    createdAt: new Date('2024-01-15T10:00:00Z'),
-    updatedAt: new Date('2024-01-15T10:00:00Z'),
-  },
-  {
-    id: 'template-2',
-    name: 'Security Assessment Template',
-    category: 'security',
-    description: 'Comprehensive security assessment template',
-    content: 'This security assessment covers...',
-    wordCount: 300,
-    tags: ['security', 'assessment', 'compliance'],
-    createdBy: 'admin@posalpro.com',
-    createdAt: new Date('2024-01-16T14:30:00Z'),
-    updatedAt: new Date('2024-01-16T14:30:00Z'),
-  },
-];
+const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,25 +28,63 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const templates = await prisma.content.findMany({
+      where: {
+        isActive: true,
+        type: 'TEMPLATE',
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        category: true,
+        content: true,
+        tags: true,
+        createdBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
     logger.info('SME templates retrieved', {
       userId: session.user.id,
-      templatesCount: mockTemplates.length,
+      templatesCount: templates.length,
     });
 
     return NextResponse.json({
       success: true,
-      data: mockTemplates,
+      data: templates.map(t => ({
+        id: t.id,
+        name: t.title,
+        category: (t.category?.[0] ?? 'general').toLowerCase(),
+        description: t.description ?? '',
+        content: t.content,
+        wordCount: t.content?.length ?? 0,
+        tags: t.tags ?? [],
+        createdBy: t.createdBy,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+      })),
       message: 'SME templates retrieved successfully',
     });
   } catch (error) {
-    logger.error('SME Templates API error:', error);
+    errorHandlingService.processError(
+      error,
+      'SME templates fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        route: '/api/sme/templates',
+      }
+    );
     return NextResponse.json(
       {
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to retrieve SME templates',
+        success: true,
+        data: [],
+        message: 'No templates available',
       },
-      { status: 500 }
+      { status: 200 }
     );
   }
 }

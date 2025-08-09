@@ -39,8 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Simulate report generation
-    // In production, this would generate actual PDF/CSV reports
+    // Placeholder report generation; integrate real generator when available
     const reportData = {
       format,
       timeFilter,
@@ -50,9 +49,8 @@ export async function POST(request: NextRequest) {
       includeRules: includeRules || false,
     };
 
-    // Simulate file generation with a mock download URL
     const fileName = `validation-report-${new Date().toISOString().split('T')[0]}.${format}`;
-    const downloadUrl = `/api/validation/downloads/${fileName}`;
+    const downloadUrl = `/api/validation/downloads/${encodeURIComponent(fileName)}`;
 
     return NextResponse.json({
       success: true,

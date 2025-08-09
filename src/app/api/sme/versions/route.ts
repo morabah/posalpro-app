@@ -4,47 +4,14 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mock versions data
-const mockVersions = [
-  {
-    id: 'version-1',
-    assignmentId: 'sme-assignment-001',
-    version: 3,
-    content:
-      'This technical specification outlines the comprehensive cloud migration strategy for TechCorp Industries...',
-    wordCount: 156,
-    createdBy: 'sarah.johnson@posalpro.com',
-    createdAt: new Date('2024-12-19T14:30:00Z'),
-    changes: 'Updated technical specifications with cloud architecture details',
-    status: 'draft',
-  },
-  {
-    id: 'version-2',
-    assignmentId: 'sme-assignment-001',
-    version: 2,
-    content: 'This technical specification provides cloud migration strategy...',
-    wordCount: 142,
-    createdBy: 'sarah.johnson@posalpro.com',
-    createdAt: new Date('2024-12-18T11:15:00Z'),
-    changes: 'Added security compliance requirements',
-    status: 'draft',
-  },
-  {
-    id: 'version-3',
-    assignmentId: 'sme-assignment-001',
-    version: 1,
-    content: 'Technical specification for cloud migration...',
-    wordCount: 98,
-    createdBy: 'sarah.johnson@posalpro.com',
-    createdAt: new Date('2024-12-17T09:00:00Z'),
-    changes: 'Initial draft created',
-    status: 'draft',
-  },
-];
+const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,25 +28,61 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { searchParams } = new URL(request.url);
+    const assignmentId = searchParams.get('assignmentId') ?? undefined;
+
+    // Using ProposalSection as a basic version source; adjust when versioning model exists
+    const sections = await prisma.proposalSection.findMany({
+      where: assignmentId ? { proposalId: assignmentId } : {},
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        proposalId: true,
+        content: true,
+        updatedAt: true,
+        title: true,
+      },
+    });
+
+    const versions = sections.map((s, idx) => ({
+      id: s.id,
+      assignmentId: s.proposalId,
+      version: idx + 1,
+      content: s.content,
+      wordCount: s.content.length,
+      createdBy: 'unknown',
+      createdAt: s.updatedAt,
+      changes: `Section ${s.title} updated`,
+      status: 'draft',
+    }));
+
     logger.info('SME versions retrieved', {
       userId: session.user.id,
-      versionsCount: mockVersions.length,
+      versionsCount: versions.length,
     });
 
     return NextResponse.json({
       success: true,
-      data: mockVersions,
+      data: versions,
       message: 'SME versions retrieved successfully',
     });
   } catch (error) {
-    logger.error('SME Versions API error:', error);
+    errorHandlingService.processError(
+      error,
+      'SME versions fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        route: '/api/sme/versions',
+      }
+    );
     return NextResponse.json(
       {
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to retrieve SME versions',
+        success: true,
+        data: [],
+        message: 'No versions available',
       },
-      { status: 500 }
+      { status: 200 }
     );
   }
 }

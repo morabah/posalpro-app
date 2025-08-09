@@ -135,6 +135,20 @@ useEffect(() => {
 - Do not use mock data in UI paths; always fetch from database via
   `useApiClient`.
 
+### 🔁 Wizard Data Hydration (Multi-Source Merge – Mandatory)
+
+- Hydrate step data using a defensive, non-destructive merge across known
+  sources in this priority order:
+  1. `proposal.metadata.*` (latest canonical shape)
+  2. top-level fields (e.g., `proposal.teamAssignments`)
+  3. `proposal.wizardData.stepN` (historic fallback)
+- Never overwrite a populated nested object with an empty object during
+  hydration.
+- For nested RHF objects (e.g., `subjectMatterExperts`), set both the full
+  object and each nested path to ensure field registration.
+- Ensure Select option sets include any pre-selected ids so values render
+  immediately while labels resolve after lists load.
+
 ## 🗃️ **API & DATABASE PERFORMANCE (MANDATORY)**
 
 **🔎 Selective Hydration**

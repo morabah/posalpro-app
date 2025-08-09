@@ -81,6 +81,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
   const [teamLeads, setTeamLeads] = useState<User[]>([]);
   const [salesReps, setSalesReps] = useState<User[]>([]);
   const [executives, setExecutives] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoadingTeamData, setIsLoadingTeamData] = useState(false);
   const [teamDataError, setTeamDataError] = useState<string | null>(null);
   const [expertiseAreas, setExpertiseAreas] = useState<ExpertiseArea[]>([
@@ -92,6 +93,21 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
   const lastSentDataRef = useRef<string>('');
   const onUpdateRef = useRef(onUpdate);
   const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  // Normalize various stored SME representations to a clean userId
+  const normalizeUserId = useCallback((raw: unknown): string => {
+    if (!raw) return '';
+    const v = String(raw).trim();
+    const uuid = v.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuid) return uuid[0];
+    const cuid = v.match(/c[a-z0-9]{8,}/i);
+    if (cuid) return cuid[0];
+    if (v.toLowerCase().startsWith('user')) {
+      const last = v.split(/\s|:/).filter(Boolean).pop();
+      return last || '';
+    }
+    return v;
+  }, []);
 
   // Keep onUpdate ref current
   useEffect(() => {
@@ -153,6 +169,47 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     [isMobile]
   );
 
+  // ✅ HYDRATION: When `data` changes (edit mode), reflect it into the form
+  useEffect(() => {
+    if (data) {
+      console.log('[TeamAssignmentStep] Hydrating data:', data);
+      console.log('[TeamAssignmentStep] Raw subjectMatterExperts:', data.subjectMatterExperts);
+      console.log(
+        '[TeamAssignmentStep] typeof subjectMatterExperts:',
+        typeof data.subjectMatterExperts
+      );
+      console.log(
+        '[TeamAssignmentStep] JSON.stringify subjectMatterExperts:',
+        JSON.stringify(data.subjectMatterExperts)
+      );
+
+      if (data.teamLead) setValue('teamLead', normalizeUserId(data.teamLead));
+      if (data.salesRepresentative)
+        setValue('salesRepresentative', normalizeUserId(data.salesRepresentative));
+      if (data.subjectMatterExperts) {
+        // Create a deep copy to prevent reference issues
+        const smeData = JSON.parse(JSON.stringify(data.subjectMatterExperts));
+        console.log('[TeamAssignmentStep] Deep copied SMEs:', smeData);
+        const entries = Object.entries(smeData as Record<string, string>);
+        console.log('[TeamAssignmentStep] SME entries:', entries);
+        // Set the full object for completeness
+        const normalized = Object.fromEntries(entries.map(([k, v]) => [k, normalizeUserId(v)]));
+        console.log('[TeamAssignmentStep] Normalized SMEs:', normalized);
+        setValue('subjectMatterExperts', normalized as any, { shouldValidate: false });
+        // Also set each nested path explicitly to ensure RHF field registration picks them up
+        entries.forEach(([k, v]) => {
+          const id = normalizeUserId(v);
+          console.log(`[TeamAssignmentStep] Setting subjectMatterExperts.${k} = ${id}`);
+          setValue(`subjectMatterExperts.${k}` as any, id, { shouldValidate: false });
+        });
+        // Ensure all expertise areas present
+        const areas = Object.keys(normalized) as ExpertiseArea[];
+        setExpertiseAreas(prev => Array.from(new Set([...prev, ...areas])) as ExpertiseArea[]);
+      }
+      if (data.executiveReviewers) setValue('executiveReviewers', data.executiveReviewers as any);
+    }
+  }, [data, setValue, normalizeUserId]);
+
   // Track analytics for team assignments
   const trackTeamAssignment = useCallback(
     (memberType: string, memberId: string, suggested: boolean = false) => {
@@ -175,9 +232,10 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
         console.log('[TeamAssignmentStep] 🚀 Fetching team data via apiClient...');
 
         // Fetch both user types in parallel using apiClient like customer selection
-        const [managersResponse, executivesResponse] = await Promise.all([
+        const [managersResponse, executivesResponse, allUsersResponse] = await Promise.all([
           apiClient.get<any>(`users?role=${UserType.PROPOSAL_MANAGER}`),
           apiClient.get<any>(`users?role=${UserType.EXECUTIVE}`),
+          apiClient.get<any>(`users`),
         ]);
 
         console.log('[TeamAssignmentStep] ✅ Managers response:', managersResponse);
@@ -194,6 +252,11 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
             ? executivesResponse.data.users || executivesResponse.data || []
             : [];
 
+        const all =
+          allUsersResponse && (allUsersResponse.success ?? true)
+            ? allUsersResponse.data?.users || allUsersResponse.data || []
+            : [];
+
         console.log('[TeamAssignmentStep] ✅ Setting data:', {
           managers: managers.length,
           executives: executives.length,
@@ -202,10 +265,29 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
         setTeamLeads(managers);
         setSalesReps(managers); // Same users for both roles
         setExecutives(executives);
+        setAllUsers(all);
+
+        // Reconcile preloaded SMEs after options load
+        try {
+          const current = getValues();
+          const smes = (current.subjectMatterExperts as Record<string, string>) || {};
+          let changed = false;
+          const normalized: Record<string, string> = {};
+          for (const [area, val] of Object.entries(smes)) {
+            const id = normalizeUserId(val);
+            normalized[area] = id;
+            if (id !== val) changed = true;
+          }
+          if (changed) {
+            setValue('subjectMatterExperts', normalized as any, { shouldValidate: false });
+            debouncedHandleUpdate(collectFormData());
+          }
+        } catch {}
 
         analytics?.trackWizardStep?.(2, 'Team Assignment', 'team_data_loaded', {
           managersCount: managers.length,
           executivesCount: executives.length,
+          allUsersCount: all.length,
           source: 'api_client',
         });
       } catch (error) {
@@ -262,15 +344,21 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
     fetchTeamData();
   }, [apiClient, analytics]); // Simple dependency like customer selection
 
-  // ✅ PERFORMANCE OPTIMIZATION: Cleanup on unmount
+  // ✅ PERFORMANCE OPTIMIZATION: Cleanup on unmount with final flush
   useEffect(() => {
     return () => {
-      // Clear debounced timeout on unmount
+      // If a debounced update is pending, flush the latest values before unmount
       if (debouncedUpdateRef.current) {
         clearTimeout(debouncedUpdateRef.current);
+        const latest = collectFormData();
+        const dataHash = JSON.stringify(latest);
+        if (dataHash !== lastSentDataRef.current) {
+          lastSentDataRef.current = dataHash;
+          onUpdateRef.current(latest);
+        }
       }
     };
-  }, []);
+  }, [collectFormData]);
 
   // ✅ PERFORMANCE OPTIMIZATION: Memoized team data options
   const teamLeadOptions = useMemo(() => {
@@ -286,6 +374,95 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
       label: `${rep.name} (${rep.roles?.map((r: any) => r.name).join(', ') || rep.department || 'No role'})`,
     }));
   }, [salesReps]);
+
+  // ✅ FIX: Deduplicate SME options to avoid duplicate React keys
+  const smeOptions = useMemo(() => {
+    const combinedUsers: User[] = [...teamLeads, ...salesReps, ...executives, ...allUsers];
+    const idToUser = new Map<string, User>();
+    for (const u of combinedUsers) {
+      if (!idToUser.has(u.id)) idToUser.set(u.id, u);
+    }
+
+    const baseOptions = Array.from(idToUser.values()).map(user => ({
+      value: String(user.id),
+      label: `${user.name}${user.department ? ` - ${user.department}` : ''}`,
+    }));
+
+    // Ensure currently assigned SME ids always appear as options (even if user not in fetched lists yet)
+    const ensureAssignedOptions = (): Array<{ value: string; label: string }> => {
+      try {
+        const current = getValues();
+        const currentSmes = (current.subjectMatterExperts as Record<string, string>) || {};
+        const fromData = (data?.subjectMatterExperts as unknown as Record<string, string>) || {};
+        const values = new Set<string>();
+        Object.values(currentSmes).forEach(v => {
+          const id = normalizeUserId(v);
+          if (id) values.add(id);
+        });
+        Object.values(fromData).forEach(v => {
+          const id = normalizeUserId(v);
+          if (id) values.add(id);
+        });
+
+        const extras: Array<{ value: string; label: string }> = [];
+        for (const id of values) {
+          // Skip if already present in base options
+          if (idToUser.has(id)) continue;
+          const fallbackUser = combinedUsers.find(u => u.id === id);
+          const label = fallbackUser
+            ? `${fallbackUser.name}${fallbackUser.department ? ` - ${fallbackUser.department}` : ''}`
+            : id;
+          extras.push({ value: id, label });
+        }
+        return extras;
+      } catch {
+        return [];
+      }
+    };
+
+    return [...baseOptions, ...ensureAssignedOptions()];
+  }, [teamLeads, salesReps, executives, allUsers, getValues, data, normalizeUserId]);
+
+  // After options are loaded, resolve SME values that might be names into actual userIds
+  useEffect(() => {
+    const combined: User[] = [...teamLeads, ...salesReps, ...executives, ...allUsers];
+    if (combined.length === 0) return;
+    try {
+      const current = getValues();
+      const currentSMEs = (current.subjectMatterExperts as Record<string, string>) || {};
+      let changed = false;
+      const resolved: Record<string, string> = {};
+      Object.entries(currentSMEs).forEach(([area, val]) => {
+        let v = normalizeUserId(val);
+        if (!combined.some(u => u.id === v) && v) {
+          const lower = v.toLowerCase();
+          const match = combined.find(u => u.name?.toLowerCase().includes(lower));
+          if (match) v = match.id;
+        }
+        resolved[area] = v;
+        if (v !== val) changed = true;
+      });
+      if (changed) {
+        setValue('subjectMatterExperts', resolved as any, { shouldValidate: false });
+        debouncedHandleUpdate(collectFormData());
+      }
+      // Ensure rows exist for all areas present in data
+      const areas = Object.keys(currentSMEs) as ExpertiseArea[];
+      if (areas.length) {
+        setExpertiseAreas(prev => Array.from(new Set([...prev, ...areas])) as ExpertiseArea[]);
+      }
+    } catch {}
+  }, [
+    teamLeads,
+    salesReps,
+    executives,
+    allUsers,
+    getValues,
+    setValue,
+    debouncedHandleUpdate,
+    collectFormData,
+    normalizeUserId,
+  ]);
 
   // Generate AI suggestions based on proposal context
   const generateAISuggestions = useCallback(async () => {
@@ -435,20 +612,24 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                 <Label htmlFor="teamLead" required>
                   Team Lead
                 </Label>
-                <Select
-                  id="teamLead"
-                  options={teamLeadOptions}
-                  error={errors.teamLead?.message}
-                  {...register('teamLead')}
-                  onChange={(value: string | string[]) => {
-                    const stringValue = Array.isArray(value) ? value[0] || '' : value;
-                    setValue('teamLead', stringValue);
-                    trackTeamAssignment('teamLead', stringValue);
-                    // Trigger form data update
-                    debouncedHandleUpdate(collectFormData());
-                  }}
-                  value={collectFormData().teamLead}
-                  placeholder="Select team lead..."
+                <Controller
+                  name="teamLead"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      id="teamLead"
+                      options={teamLeadOptions}
+                      error={errors.teamLead?.message}
+                      value={field.value || ''}
+                      onChange={(value: string | string[]) => {
+                        const stringValue = Array.isArray(value) ? value[0] || '' : value;
+                        field.onChange(stringValue);
+                        trackTeamAssignment('teamLead', stringValue);
+                        debouncedHandleUpdate(collectFormData());
+                      }}
+                      placeholder="Select team lead..."
+                    />
+                  )}
                 />
               </div>
 
@@ -456,20 +637,24 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                 <Label htmlFor="salesRepresentative" required>
                   Sales Representative
                 </Label>
-                <Select
-                  id="salesRepresentative"
-                  options={salesRepOptions}
-                  error={errors.salesRepresentative?.message}
-                  {...register('salesRepresentative')}
-                  onChange={(value: string | string[]) => {
-                    const stringValue = Array.isArray(value) ? value[0] || '' : value;
-                    setValue('salesRepresentative', stringValue);
-                    trackTeamAssignment('salesRepresentative', stringValue);
-                    // Trigger form data update
-                    debouncedHandleUpdate(collectFormData());
-                  }}
-                  value={collectFormData().salesRepresentative}
-                  placeholder="Select sales representative..."
+                <Controller
+                  name="salesRepresentative"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      id="salesRepresentative"
+                      options={salesRepOptions}
+                      error={errors.salesRepresentative?.message}
+                      value={field.value || ''}
+                      onChange={(value: string | string[]) => {
+                        const stringValue = Array.isArray(value) ? value[0] || '' : value;
+                        field.onChange(stringValue);
+                        trackTeamAssignment('salesRepresentative', stringValue);
+                        debouncedHandleUpdate(collectFormData());
+                      }}
+                      placeholder="Select sales representative..."
+                    />
+                  )}
                 />
               </div>
             </div>
@@ -500,66 +685,89 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
             </Button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-medium text-gray-900">Expertise</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-900">Assigned SME</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expertiseAreas.map(area => (
-                  <tr key={area} className="border-b border-gray-100">
-                    <td className="py-3 px-4 capitalize font-medium text-gray-700">
-                      {area.replace('_', ' ')}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="space-y-6">
-                        <div className="flex justify-between items-center mb-2">
-                          <Label htmlFor={`sme-${area}`}>
-                            {area} <span className="text-gray-500">&nbsp;</span>
-                          </Label>
-                        </div>
-
-                        <Controller
-                          name={`subjectMatterExperts.${area}` as any}
-                          control={control}
-                          render={({ field }) => (
-                            <Select
-                              id={`sme-${area}`}
-                              options={[...teamLeads, ...salesReps, ...executives].map(user => ({
-                                value: user.id,
-                                label: `${user.name}${user.department ? ` - ${user.department}` : ''}`,
-                              }))}
-                              value={field.value || ''}
-                              onChange={(value: string | string[]) => {
-                                const stringValue = Array.isArray(value) ? value[0] || '' : value;
-                                field.onChange(stringValue);
-                                trackTeamAssignment('sme', stringValue);
-                              }}
-                              placeholder={`Select ${area.replace('_', ' ')} expert...`}
-                            />
-                          )}
-                        />
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeExpertiseArea(area)}
-                        className="text-red-600 hover:bg-red-50"
-                      >
-                        <XMarkIcon className="w-4 h-4" />
-                      </Button>
-                    </td>
+          {isLoadingTeamData ? (
+            <div className="flex justify-center items-center h-24">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+              <p className="ml-3 text-gray-600">Loading subject matter experts...</p>
+            </div>
+          ) : teamDataError ? (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-800" role="alert">
+                {teamDataError}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Expertise</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Assigned SME</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {expertiseAreas.map(area => (
+                    <tr key={area} className="border-b border-gray-100">
+                      <td className="py-3 px-4 capitalize font-medium text-gray-700">
+                        {area.replace('_', ' ')}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="space-y-6">
+                          <div className="flex justify-between items-center mb-2">
+                            <Label htmlFor={`sme-${area}`}>
+                              {area} <span className="text-gray-500">&nbsp;</span>
+                            </Label>
+                          </div>
+
+                          <Controller
+                            name={`subjectMatterExperts.${area}` as any}
+                            control={control}
+                            render={({ field }) => {
+                              const fieldValue = String(
+                                (field.value as string) ||
+                                  normalizeUserId((data.subjectMatterExperts as any)?.[area]) ||
+                                  ''
+                              ).trim();
+                              console.log(
+                                `[SME Debug] ${area}: field.value=${field.value}, data=${(data.subjectMatterExperts as any)?.[area]}, normalized=${fieldValue}`
+                              );
+                              return (
+                                <Select
+                                  id={`sme-${area}`}
+                                  options={smeOptions}
+                                  value={fieldValue}
+                                  onChange={(value: string | string[]) => {
+                                    const stringValue = Array.isArray(value)
+                                      ? value[0] || ''
+                                      : value;
+                                    field.onChange(stringValue);
+                                    trackTeamAssignment('sme', stringValue);
+                                    debouncedHandleUpdate(collectFormData());
+                                  }}
+                                  placeholder={`Select ${area.replace('_', ' ')} expert...`}
+                                />
+                              );
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeExpertiseArea(area)}
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -607,6 +815,8 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                                 );
                               }
                               trackTeamAssignment('executive', executive.id, false);
+                              // Ensure wizard step data is updated
+                              debouncedHandleUpdate(collectFormData());
                             }}
                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                           />

@@ -12,7 +12,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ProposalWizardStep4Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, CheckCircle, Info, Search, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -227,29 +227,32 @@ export function ProductSelectionStep({
     loadProducts();
   }, [loadProducts]);
 
-  // Initialize selected products from props
+  // Initialize selected products from props (hydrate prices) once
+  const initializedFromDataRef = useRef(false);
   useEffect(() => {
-    if (data.products && products.length > 0) {
+    if (initializedFromDataRef.current) return;
+    if (data.products && data.products.length > 0) {
       const productsMap = new Map<string, SelectedProduct>();
       data.products.forEach(product => {
         const dbProduct = products.find(p => p.id === product.id);
-        if (dbProduct) {
-          productsMap.set(product.id, {
-            id: product.id,
-            name: product.name,
-            productId: dbProduct.sku,
-            category: product.category || dbProduct.category[0] || 'General',
-            quantity: product.quantity || 1,
-            unitPrice: product.unitPrice || dbProduct.price,
-            totalPrice: product.totalPrice || dbProduct.price * (product.quantity || 1),
-            priceModel: 'FIXED',
-            configuration: product.configuration || {},
-            customizations: product.customizations || [],
-            notes: product.notes,
-          });
-        }
+        const unitPrice = product.unitPrice || dbProduct?.price || 0;
+        const quantity = product.quantity || 1;
+        productsMap.set(product.id, {
+          id: product.id,
+          name: product.name,
+          productId: dbProduct?.sku || product.id,
+          category: product.category || dbProduct?.category?.[0] || 'General',
+          quantity,
+          unitPrice,
+          totalPrice: product.totalPrice || unitPrice * quantity,
+          priceModel: 'FIXED',
+          configuration: product.configuration || {},
+          customizations: product.customizations || [],
+          notes: product.notes,
+        });
       });
       setSelectedProducts(productsMap);
+      initializedFromDataRef.current = true;
     }
   }, [data.products, products]);
 

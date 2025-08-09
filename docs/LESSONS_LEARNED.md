@@ -449,3 +449,151 @@ repository history for reference.
   File Responsibility Matrix.
 - Prefer automated scripts for endpoint testing over manual browser steps when
   possible.
+
+---
+
+## Wizard Cross‑Step Hydration and Derived Defaults (General Pattern)
+
+**Date**: 2025-08-09 • **Category**: Data Hydration / UX / Wizards
+
+### Context
+
+Multi-step wizards often have downstream steps that depend on data selected
+upstream (e.g., team selections → section assignments, content selections →
+ownership). A common failure mode is rendering an empty downstream map on first
+visit even though earlier steps are complete.
+
+### Problem (Generalized)
+
+- Downstream step state (e.g., `assignments`, `owners`, `mappings`) is
+  initialized empty and shown directly in the UI.
+- Hydration only considers the current step’s stored state and ignores upstream
+  sources.
+- Key mismatches (id vs title/name) prevent matching even when data exists.
+- Result: users see blank fields despite having completed earlier steps.
+
+### Standard Solution
+
+Implement a non-destructive, layered derivation when computing downstream step
+data. If the core mapping is empty or missing keys, derive defaults from prior
+steps and local hints:
+
+1. Current step explicit data (highest precedence)
+2. Current step local hints (e.g., `sections[].assignedTo`)
+3. Upstream step outputs (team selections, content selections, etc.)
+4. Heuristics (normalized title/name matching)
+
+Merge order must preserve user input. Only fill missing keys; never overwrite
+explicit values.
+
+### Key Techniques
+
+- Normalization: define a single helper used across steps: lowercase → strip
+  non-alphanumerics → trim. Use both stable ids and `normalize(title)` keys when
+  merging.
+- Guarded seeding: only derive when the downstream map is empty or a specific
+  key is missing.
+- Persistence: after deriving, push the hydrated data up to the wizard state so
+  subsequent renders are stable.
+- Logging: log counts and key sets (not entire payloads) to verify hydration
+  without noise.
+
+### Anti‑Patterns
+
+- Showing the downstream map without attempting derivation when empty.
+- Overwriting user-entered downstream values with upstream heuristics.
+- Relying on string equality without normalization across sources (id vs
+  title/name).
+
+### Diagnostic Signals
+
+- Console repeatedly shows an empty key set for the downstream map on first
+  visit.
+- Navigating back shows upstream selections intact, but downstream remains
+  blank.
+- Downstream becomes populated only after manual edits (indicates missing
+  derivation).
+
+### Implementation Checklist (Apply to any wizard step with dependencies)
+
+- [ ] Identify upstream sources required to seed this step.
+- [ ] Implement `deriveDefaults()` that builds a map using the precedence order
+      above.
+- [ ] Normalize keys consistently; support both id and normalized title/name
+      lookups.
+- [ ] Merge non-destructively into current step state; fill only missing keys.
+- [ ] Persist the merged result to the parent wizard state on first hydration.
+- [ ] Add unit tests: empty current map + populated upstream → derived map is
+      correct.
+- [ ] Add e2e test: complete upstream step → first visit to downstream step
+      shows prefilled values.
+
+### Example Merge Precedence (Abstract)
+
+CurrentStep.map > CurrentStep.localHints > UpstreamStep.outputs >
+HeuristicMapping
+
+This rule applies broadly: owners, reviewers, assignments, default dates/hours,
+etc.
+
+---
+
+## SME Prefill Hydration – TeamAssignmentStep (Resolved)
+
+**Date**: 2025-08-09 • **Phase**: 2.3.x – Proposal Management • **Category**:
+Data Hydration / UX
+
+### Context
+
+Editing an existing proposal showed correct SMEs in summary but empty SME
+selects in Step 2.
+
+### Problem
+
+- `TeamAssignmentStep` received an empty `subjectMatterExperts` object even
+  though the API returned valid SME data.
+- Data existed in multiple possible locations (`metadata.teamAssignments`,
+  top-level `teamAssignments`, and `wizardData.step2`).
+
+### Root Cause
+
+- Hydration relied primarily on `metadata` and a narrow readiness check.
+- Missing fallbacks meant SMEs were dropped when data landed in alternate
+  shapes/paths.
+
+### Solution
+
+- Implemented defensive merge in `ProposalWizard` for Step 2:
+  - Merge sources in priority order:
+    1. `proposal.metadata.teamAssignments.subjectMatterExperts`
+    2. top-level `proposal.teamAssignments.subjectMatterExperts`
+    3. `proposal.wizardData.step2.subjectMatterExperts`
+  - Preserve existing values; no destructive overwrites.
+- Removed duplicate/competing merge block; added targeted debug logs during
+  verification.
+- Ensured `TeamAssignmentStep` registers nested RHF fields and keeps options
+  including pre-assigned SME ids.
+
+### Standards (Prevention)
+
+- Always support multiple historical shapes when hydrating wizard data.
+- Step hydration must be a non-destructive merge; never zero-out nested objects.
+- Prefer explicit source priority: metadata → top-level → wizardData.
+- For nested RHF objects, set both the whole object and each nested path to
+  guarantee registration.
+- Ensure Select options include any preassigned ids so values render immediately
+  while labels resolve after user list loads.
+
+### Verification
+
+- CLI: authenticated GET `/api/proposals/:id` confirmed SME ids.
+- UI: Step 2 now pre-fills SMEs consistently; logs show merged
+  `step2.subjectMatterExperts`.
+
+### Checklist
+
+- [x] Defensive merge in `ProposalWizard`
+- [x] Remove duplicate code
+- [x] RHF nested registration for SMEs
+- [x] Options include pre-assigned ids
+- [x] Lints clean and behavior validated

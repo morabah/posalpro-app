@@ -16,6 +16,7 @@ interface UseApiClientReturn {
   get: <T>(endpoint: string) => Promise<T>;
   post: <T>(endpoint: string, data?: unknown) => Promise<T>;
   put: <T>(endpoint: string, data?: unknown) => Promise<T>;
+  patch: <T>(endpoint: string, data?: unknown) => Promise<T>;
   delete: <T>(endpoint: string) => Promise<T>;
   validateConnection: () => Promise<boolean>;
 }
@@ -227,6 +228,17 @@ export function useApiClient(): UseApiClientReturn {
     [makeRequest]
   );
 
+  // PATCH request
+  const patch = useCallback(
+    <T>(endpoint: string, data?: unknown): Promise<T> => {
+      return makeRequest<T>(endpoint, {
+        method: 'PATCH',
+        body: data ? JSON.stringify(data) : undefined,
+      });
+    },
+    [makeRequest]
+  );
+
   // DELETE request
   const del = useCallback(
     <T>(endpoint: string): Promise<T> => {
@@ -266,10 +278,11 @@ export function useApiClient(): UseApiClientReturn {
       get,
       post,
       put,
+      patch,
       delete: del,
       validateConnection,
     }),
-    [config, makeRequest, get, post, put, del, validateConnection]
+    [config, makeRequest, get, post, put, patch, del, validateConnection]
   );
 }
 

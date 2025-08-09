@@ -1,3 +1,6 @@
+import prisma from '@/lib/db/prisma';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/utils/logger';
 /**
  * PosalPro MVP2 - SME Assignment API Route
@@ -8,6 +11,8 @@ import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+const errorHandlingService = ErrorHandlingService.getInstance();
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,40 +21,59 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Mock SME assignment data
+    const { searchParams } = new URL(request.url);
+    const proposalId = searchParams.get('proposalId') ?? undefined;
+
+    // Use latest proposal section as a proxy for an assignment
+    const section = await prisma.proposalSection.findFirst({
+      where: proposalId ? { proposalId } : {},
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        proposalId: true,
+        title: true,
+        content: true,
+        updatedAt: true,
+        proposal: {
+          select: {
+            title: true,
+            customerName: true,
+            priority: true,
+            totalValue: true,
+          },
+        },
+      },
+    });
+
+    if (!section) {
+      return NextResponse.json({ success: true, data: null, message: 'No assignment available' });
+    }
+
     const assignment = {
-      id: 'sme-assignment-001',
-      proposalId: 'proposal-001',
-      proposalTitle: 'Enterprise Cloud Migration Solution',
-      customer: 'TechCorp Industries',
-      sectionType: 'technical_specs',
-      assignedBy: 'John Smith',
-      assignedAt: new Date('2024-12-15T10:00:00Z'),
-      dueDate: new Date('2024-12-25T17:00:00Z'),
+      id: section.id,
+      proposalId: section.proposalId,
+      proposalTitle: section.proposal?.title ?? 'Untitled',
+      customer: section.proposal?.customerName ?? 'Unknown',
+      sectionType: section.title,
+      assignedBy: 'System',
+      assignedAt: section.updatedAt,
+      dueDate: null,
       status: 'in_progress',
-      requirements: [
-        'Provide detailed technical specifications for cloud infrastructure',
-        'Include security compliance requirements and implementation details',
-        'Document integration points with existing systems',
-        'Specify performance benchmarks and monitoring requirements',
-        'Include disaster recovery and backup strategies',
-      ],
+      requirements: [],
       context: {
-        proposalValue: 2500000,
-        industry: 'Technology',
-        complexity: 'high',
-        priority: 'critical',
+        proposalValue: section.proposal?.totalValue ?? 0,
+        industry: 'Unknown',
+        complexity: 'medium',
+        priority: (section.proposal?.priority ?? 'MEDIUM').toString().toLowerCase(),
       },
       content: {
-        draft:
-          'This technical specification outlines the comprehensive cloud migration strategy for TechCorp Industries...',
-        wordCount: 156,
-        lastSaved: new Date('2024-12-19T14:30:00Z'),
-        version: 3,
+        draft: section.content,
+        wordCount: section.content.length,
+        lastSaved: section.updatedAt,
+        version: 1,
       },
     };
 
-    // ✅ CRITICAL FIX: Return the correct response format
     return NextResponse.json({
       success: true,
       data: assignment,
@@ -57,13 +81,17 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error('SME Assignment API error:', error);
-    return NextResponse.json(
+    errorHandlingService.processError(
+      error,
+      'SME assignment fetch failed',
+      ErrorCodes.DATA.FETCH_FAILED,
       {
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to retrieve SME assignment',
-      },
-      { status: 500 }
+        route: '/api/sme/assignment',
+      }
+    );
+    return NextResponse.json(
+      { success: true, data: null, message: 'No assignment available' },
+      { status: 200 }
     );
   }
 }

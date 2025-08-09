@@ -51,10 +51,8 @@ const MobileLoadingSpinner = () => (
 const BasicInformationStep = lazy(() =>
   import('./steps/BasicInformationStep').then(module => ({ default: module.BasicInformationStep }))
 );
-const TeamAssignmentStep = createMemoryOptimizedImport(
-  () =>
-    import('./steps/TeamAssignmentStep').then(module => ({ default: module.TeamAssignmentStep })),
-  { unloadDelay: 5000, loadingComponent: MobileLoadingSpinner, maxMemoryUsage: 130 }
+const TeamAssignmentStep = lazy(() =>
+  import('./steps/TeamAssignmentStep').then(module => ({ default: module.TeamAssignmentStep }))
 );
 const ContentSelectionStep = createMemoryOptimizedImport(
   () =>
@@ -265,6 +263,9 @@ export function ProposalWizard({
     isDirty: false,
   });
 
+  // ✅ FIX: Prevent duplicate loads in edit mode (StrictMode/dev re-invocations)
+  const hasLoadedEditProposalRef = useRef<string | null>(null);
+
   // ✅ FIXED: Fix unsafe assignments with proper types
   const [stepValidation, setStepValidation] = useState<boolean[]>([
     false, // Step 1
@@ -360,10 +361,15 @@ export function ProposalWizard({
     };
   }, []);
 
-  // ✅ NEW: Load existing proposal data when in edit mode
+  // ✅ NEW: Load existing proposal data when in edit mode (single-run per ID)
   useEffect(() => {
     const loadExistingProposal = async () => {
       if (!editProposalId) return;
+
+      // Guard against duplicate loads
+      if (hasLoadedEditProposalRef.current === editProposalId) {
+        return;
+      }
 
       setLoading(true);
       setError(null);
@@ -386,14 +392,23 @@ export function ProposalWizard({
             customerName?: string;
             customerIndustry?: string;
             customerEmail?: string;
+            contactEmail?: string;
             contactPerson?: string;
             contactPhone?: string;
+            rfpReferenceNumber?: string;
             sections?: Array<{
               id: string;
               title: string;
               content: string;
               type: string;
               order: number;
+            }>;
+            products?: Array<{
+              productId: string;
+              quantity: number;
+              unitPrice: number;
+              discount?: number;
+              name?: string;
             }>;
             assignedTo?: Array<{
               id: string;
@@ -419,7 +434,8 @@ export function ProposalWizard({
               name: proposal.customerName || '',
               industry: proposal.customerIndustry || '',
               contactPerson: proposal.contactPerson || '',
-              contactEmail: proposal.customerEmail || '',
+              // Some endpoints return customerEmail, others contactEmail; prefer contactEmail when present
+              contactEmail: proposal.contactEmail || proposal.customerEmail || '',
               contactPhone: proposal.contactPhone || '',
             },
             details: {
@@ -427,6 +443,9 @@ export function ProposalWizard({
               dueDate: proposal.dueDate ? new Date(proposal.dueDate) : ensureFutureDate(),
               estimatedValue: proposal.value || 0,
               priority: (proposal.priority as ProposalPriority) || ProposalPriority.MEDIUM,
+              description: proposal.description || '',
+              // Populate RFP number from API if available; metadata merge later can override
+              rfpReferenceNumber: proposal.rfpReferenceNumber || '',
             },
           },
           step2: {
@@ -440,7 +459,14 @@ export function ProposalWizard({
             searchHistory: [],
           },
           step4: {
-            products: [], // Products are not included in the current API response
+            products:
+              proposal.products?.map(p => ({
+                id: p.productId,
+                name: p.name || '',
+                included: true,
+                quantity: p.quantity || 1,
+                unitPrice: p.unitPrice || 0,
+              })) || [],
           },
           step5: {
             sections:
@@ -449,7 +475,7 @@ export function ProposalWizard({
                 title: section.title,
                 required: true,
                 content: [],
-                assignedTo: undefined,
+                assignedTo: (section as any).assignedTo || undefined,
                 status: 'not_started' as const,
                 estimatedHours: 0,
               })) || [],
@@ -472,16 +498,262 @@ export function ProposalWizard({
         // Load additional data from metadata if available
         if (proposal.metadata) {
           const metadata = proposal.metadata;
+          console.log('[ProposalWizard] Processing metadata:', metadata);
 
           if (metadata.teamAssignments) {
+            console.log('[ProposalWizard] Found teamAssignments:', metadata.teamAssignments);
             loadedWizardData.step2 = {
               ...loadedWizardData.step2,
               ...metadata.teamAssignments,
             };
+            console.log(
+              '[ProposalWizard] After teamAssignments merge, step2:',
+              loadedWizardData.step2
+            );
+          }
+
+          // ✅ Robust SME merge: support multiple metadata shapes
+          const normalizeArea = (area: string): ExpertiseArea | string => {
+            const key = (area || '').toUpperCase().replace(/\s+/g, '_');
+            return (ExpertiseArea as any)[key] ?? area;
+          };
+
+          // 1) If subjectMatterExperts provided directly at metadata root
+          if (metadata.subjectMatterExperts && typeof metadata.subjectMatterExperts === 'object') {
+            console.log(
+              '[ProposalWizard] Found metadata.subjectMatterExperts:',
+              metadata.subjectMatterExperts
+            );
+            loadedWizardData.step2.subjectMatterExperts = {
+              ...(loadedWizardData.step2.subjectMatterExperts || {}),
+              ...Object.fromEntries(
+                Object.entries(metadata.subjectMatterExperts as Record<string, any>).map(
+                  ([k, v]) => [normalizeArea(k), typeof v === 'string' ? v : v?.id || '']
+                )
+              ),
+            } as Record<ExpertiseArea, string>;
+            console.log(
+              '[ProposalWizard] After metadata.subjectMatterExperts merge, step2.subjectMatterExperts:',
+              loadedWizardData.step2.subjectMatterExperts
+            );
+          }
+
+          // 2) If teamAssignments contains smeAssignments array
+          const smeArrayA = (metadata.teamAssignments as any)?.smeAssignments;
+          if (Array.isArray(smeArrayA)) {
+            console.log('[ProposalWizard] Found teamAssignments.smeAssignments:', smeArrayA);
+            const mapped = smeArrayA.reduce<Record<string, string>>((acc, item: any) => {
+              const area = normalizeArea(item?.expertise || item?.area || '');
+              const id = typeof item?.userId === 'string' ? item.userId : item?.user?.id || '';
+              if (area && id) acc[area as string] = id;
+              return acc;
+            }, {});
+            loadedWizardData.step2.subjectMatterExperts = {
+              ...(loadedWizardData.step2.subjectMatterExperts || {}),
+              ...(mapped as any),
+            } as Record<ExpertiseArea, string>;
+            console.log(
+              '[ProposalWizard] After smeArrayA merge, step2.subjectMatterExperts:',
+              loadedWizardData.step2.subjectMatterExperts
+            );
+          }
+
+          // 3) If metadata has smeAssignments at root
+          const smeArrayB = (metadata as any)?.smeAssignments;
+          if (Array.isArray(smeArrayB)) {
+            console.log('[ProposalWizard] Found metadata.smeAssignments:', smeArrayB);
+            const mapped = smeArrayB.reduce<Record<string, string>>((acc, item: any) => {
+              const area = normalizeArea(item?.expertise || item?.area || '');
+              const id = typeof item?.userId === 'string' ? item.userId : item?.user?.id || '';
+              if (area && id) acc[area as string] = id;
+              return acc;
+            }, {});
+            loadedWizardData.step2.subjectMatterExperts = {
+              ...(loadedWizardData.step2.subjectMatterExperts || {}),
+              ...(mapped as any),
+            } as Record<ExpertiseArea, string>;
+            console.log(
+              '[ProposalWizard] After smeArrayB merge, step2.subjectMatterExperts:',
+              loadedWizardData.step2.subjectMatterExperts
+            );
+          }
+
+          // 4) Wizard data step2 subjectMatterExperts
+          const wdSME = metadata?.wizardData?.step2?.subjectMatterExperts;
+          if (wdSME && typeof wdSME === 'object') {
+            console.log(
+              '[ProposalWizard] Found metadata.wizardData.step2.subjectMatterExperts:',
+              wdSME
+            );
+            loadedWizardData.step2.subjectMatterExperts = {
+              ...(loadedWizardData.step2.subjectMatterExperts || {}),
+              ...Object.fromEntries(
+                Object.entries(wdSME as Record<string, any>).map(([k, v]) => [
+                  normalizeArea(k),
+                  typeof v === 'string' ? v : v?.id || '',
+                ])
+              ),
+            } as Record<ExpertiseArea, string>;
+            console.log(
+              '[ProposalWizard] After wdSME merge, step2.subjectMatterExperts:',
+              loadedWizardData.step2.subjectMatterExperts
+            );
           }
 
           if (metadata.contentSelections) {
-            loadedWizardData.step3.selectedContent = metadata.contentSelections;
+            const selections = metadata.contentSelections as Array<{
+              contentId: string;
+              section: string;
+              customizations?: string[];
+              assignedTo?: string;
+            }>;
+
+            try {
+              const hydrated = await Promise.all(
+                selections.map(async sel => {
+                  try {
+                    const itemRes = await apiClient.get<any>(`/api/content/${sel.contentId}`);
+                    const item =
+                      itemRes && itemRes.id
+                        ? {
+                            id: itemRes.id,
+                            title: itemRes.title,
+                            type: itemRes.type,
+                            tags: itemRes.tags || [],
+                            content: itemRes.content || '',
+                            relevanceScore: 0,
+                            successRate: 0,
+                          }
+                        : {
+                            id: sel.contentId,
+                            title: 'Selected Content',
+                            type: 'Template',
+                            tags: [],
+                            content: '',
+                            relevanceScore: 0,
+                            successRate: 0,
+                          };
+                    return {
+                      item,
+                      section: sel.section,
+                      customizations: sel.customizations || [],
+                      assignedTo: sel.assignedTo || '',
+                    };
+                  } catch {
+                    return {
+                      item: {
+                        id: sel.contentId,
+                        title: 'Selected Content',
+                        type: 'Template',
+                        tags: [],
+                        content: '',
+                        relevanceScore: 0,
+                        successRate: 0,
+                      },
+                      section: sel.section,
+                      customizations: sel.customizations || [],
+                      assignedTo: sel.assignedTo || '',
+                    };
+                  }
+                })
+              );
+              loadedWizardData.step3.selectedContent = hydrated as any;
+            } catch {
+              loadedWizardData.step3.selectedContent = selections as any;
+            }
+
+            // Optional: restore saved search history if present
+            if (metadata?.wizardData?.step3?.searchHistory) {
+              (loadedWizardData.step3 as any).searchHistory =
+                metadata.wizardData.step3.searchHistory;
+            }
+          }
+
+          // Fallbacks for Step 3: hydrate from top-level contentSelections or wizardData when metadata absent
+          console.log('[ProposalWizard] Step3 before fallbacks:', loadedWizardData.step3);
+          if (!loadedWizardData.step3.selectedContent?.length) {
+            const topLevelSelections = (proposal as any)?.contentSelections as
+              | Array<{
+                  contentId: string;
+                  section: string;
+                  assignedTo?: string;
+                  customizations?: string[];
+                }>
+              | undefined;
+            const wdSelections = (proposal as any)?.wizardData?.step3?.selectedContent as
+              | Array<{
+                  contentId: string;
+                  section: string;
+                  assignedTo?: string;
+                  customizations?: string[];
+                }>
+              | undefined;
+            console.log(
+              '[ProposalWizard] Step3 sources - topLevel:',
+              topLevelSelections?.length || 0,
+              'wd:',
+              wdSelections?.length || 0
+            );
+            const source = topLevelSelections?.length ? topLevelSelections : wdSelections || [];
+            if (source.length) {
+              try {
+                const hydrated = await Promise.all(
+                  source.map(async sel => {
+                    try {
+                      const itemRes = await apiClient.get<any>(`/api/content/${sel.contentId}`);
+                      const item =
+                        itemRes && itemRes.id
+                          ? {
+                              id: itemRes.id,
+                              title: itemRes.title,
+                              type: itemRes.type,
+                              tags: itemRes.tags || [],
+                              content: itemRes.content || '',
+                              relevanceScore: 0,
+                              successRate: 0,
+                            }
+                          : {
+                              id: sel.contentId,
+                              title: 'Selected Content',
+                              type: 'Template',
+                              tags: [],
+                              content: '',
+                              relevanceScore: 0,
+                              successRate: 0,
+                            };
+                      return {
+                        item,
+                        section: sel.section,
+                        customizations: sel.customizations || [],
+                        assignedTo: sel.assignedTo || '',
+                      };
+                    } catch {
+                      return {
+                        item: {
+                          id: sel.contentId,
+                          title: 'Selected Content',
+                          type: 'Template',
+                          tags: [],
+                          content: '',
+                          relevanceScore: 0,
+                          successRate: 0,
+                        },
+                        section: sel.section,
+                        customizations: sel.customizations || [],
+                        assignedTo: sel.assignedTo || '',
+                      };
+                    }
+                  })
+                );
+                loadedWizardData.step3.selectedContent = hydrated as any;
+                console.log(
+                  '[ProposalWizard] Step3 after fallback hydration:',
+                  loadedWizardData.step3.selectedContent?.length
+                );
+              } catch {
+                loadedWizardData.step3.selectedContent = source as any;
+              }
+            }
           }
 
           if (metadata.validationData) {
@@ -490,10 +762,431 @@ export function ProposalWizard({
               ...metadata.validationData,
             };
           }
+
+          // Enrich step1 fields from stored wizard metadata when present
+          const metadataStep1Client = metadata?.wizardData?.step1?.client;
+          const metadataStep1Details = metadata?.wizardData?.step1?.details;
+          if (metadataStep1Client) {
+            loadedWizardData.step1.client = {
+              ...loadedWizardData.step1.client,
+              contactPerson:
+                metadataStep1Client.contactPerson ||
+                loadedWizardData.step1.client.contactPerson ||
+                '',
+              contactEmail:
+                metadataStep1Client.contactEmail ||
+                loadedWizardData.step1.client.contactEmail ||
+                '',
+              contactPhone:
+                metadataStep1Client.contactPhone ||
+                loadedWizardData.step1.client.contactPhone ||
+                '',
+            } as typeof loadedWizardData.step1.client;
+          }
+          if (metadataStep1Details) {
+            loadedWizardData.step1.details = {
+              ...loadedWizardData.step1.details,
+              description:
+                metadataStep1Details.description ||
+                loadedWizardData.step1.details.description ||
+                '',
+              rfpReferenceNumber:
+                metadataStep1Details.rfpReferenceNumber ||
+                (loadedWizardData.step1.details as any).rfpReferenceNumber ||
+                '',
+            } as typeof loadedWizardData.step1.details;
+          }
+
+          // Merge products from metadata if present (e.g., richer product info)
+          if (metadata?.wizardData?.step4?.products?.length) {
+            loadedWizardData.step4.products = metadata.wizardData.step4.products;
+          }
+
+          // Merge sections (step 5) from metadata for full fidelity (assignments, hours, priorities)
+          if (metadata?.wizardData?.step5?.sections?.length) {
+            const metaSections = metadata.wizardData.step5.sections;
+            loadedWizardData.step5.sections = metaSections.map((s: any, index: number) => ({
+              id: s.id || loadedWizardData.step5.sections[index]?.id || String(index + 1),
+              title:
+                s.title || loadedWizardData.step5.sections[index]?.title || `Section ${index + 1}`,
+              required: s.required ?? true,
+              content: s.content || [],
+              assignedTo: s.assignedTo,
+              status: s.status || 'not_started',
+              estimatedHours: s.estimatedHours ?? 0,
+            }));
+          }
+          if (metadata?.wizardData?.step5?.sectionAssignments) {
+            console.log(
+              '[ProposalWizard] Loading sectionAssignments from metadata:',
+              metadata.wizardData.step5.sectionAssignments
+            );
+            loadedWizardData.step5.sectionAssignments =
+              metadata.wizardData.step5.sectionAssignments;
+          }
+
+          // Also check top-level wizardData (API returns it at top level)
+          if ((proposal as any)?.wizardData?.step5?.sections?.length) {
+            const metaSections = (proposal as any).wizardData.step5.sections;
+            loadedWizardData.step5.sections = metaSections.map((s: any, index: number) => ({
+              id: s.id || loadedWizardData.step5.sections[index]?.id || String(index + 1),
+              title:
+                s.title || loadedWizardData.step5.sections[index]?.title || `Section ${index + 1}`,
+              required: s.required ?? true,
+              content: s.content || [],
+              assignedTo: s.assignedTo,
+              status: s.status || 'not_started',
+              estimatedHours: s.estimatedHours ?? 0,
+            }));
+          }
+          if ((proposal as any)?.wizardData?.step5?.sectionAssignments) {
+            console.log(
+              '[ProposalWizard] Loading sectionAssignments from top-level wizardData:',
+              (proposal as any).wizardData.step5.sectionAssignments
+            );
+            loadedWizardData.step5.sectionAssignments = (
+              proposal as any
+            ).wizardData.step5.sectionAssignments;
+          }
+
+          // Merge step6 additional data if available
+          if (metadata?.wizardData?.step6?.finalValidation) {
+            loadedWizardData.step6.finalValidation = {
+              ...loadedWizardData.step6.finalValidation,
+              ...metadata.wizardData.step6.finalValidation,
+            };
+          }
         }
+
+        // If no metadata team assignments but API includes assignedTo, derive simple defaults
+        if (
+          (!loadedWizardData.step2.teamLead || !loadedWizardData.step2.salesRepresentative) &&
+          Array.isArray((proposal as any).assignedTo) &&
+          (proposal as any).assignedTo.length > 0
+        ) {
+          const members = (proposal as any).assignedTo as Array<{ id: string }>;
+          loadedWizardData.step2.teamLead = loadedWizardData.step2.teamLead || members[0]?.id || '';
+          loadedWizardData.step2.salesRepresentative =
+            loadedWizardData.step2.salesRepresentative || members[1]?.id || members[0]?.id || '';
+        }
+
+        // Map API approvals into step6.approvals (best-effort)
+        if (Array.isArray((proposal as any).approvals) && (proposal as any).approvals.length > 0) {
+          loadedWizardData.step6.approvals = (proposal as any).approvals.map((a: any) => ({
+            reviewer: a.currentStage || 'Reviewer',
+            approved: a.status === 'COMPLETED' || a.status === 'APPROVED',
+            comments: '',
+            timestamp: a.completedAt
+              ? new Date(a.completedAt)
+              : a.startedAt
+                ? new Date(a.startedAt)
+                : undefined,
+          }));
+        }
+
+        // Map API team assignments into step2 data
+        // This is already handled above in the metadata processing section, so removing duplicate code
+
+        // Fallbacks: merge top-level fields when metadata is absent or incomplete
+        const topLevelTeam = (proposal as any)?.teamAssignments;
+        if (topLevelTeam && typeof topLevelTeam === 'object') {
+          if (topLevelTeam.teamLead && !loadedWizardData.step2.teamLead) {
+            loadedWizardData.step2.teamLead = topLevelTeam.teamLead as string;
+          }
+          if (topLevelTeam.salesRepresentative && !loadedWizardData.step2.salesRepresentative) {
+            loadedWizardData.step2.salesRepresentative = topLevelTeam.salesRepresentative as string;
+          }
+          if (
+            topLevelTeam.subjectMatterExperts &&
+            typeof topLevelTeam.subjectMatterExperts === 'object'
+          ) {
+            loadedWizardData.step2.subjectMatterExperts = {
+              ...(loadedWizardData.step2.subjectMatterExperts || {}),
+              ...(topLevelTeam.subjectMatterExperts as Record<string, string>),
+            } as Record<ExpertiseArea, string>;
+          }
+        }
+
+        const topLevelWdSme = (proposal as any)?.wizardData?.step2?.subjectMatterExperts;
+        if (topLevelWdSme && typeof topLevelWdSme === 'object') {
+          loadedWizardData.step2.subjectMatterExperts = {
+            ...(loadedWizardData.step2.subjectMatterExperts || {}),
+            ...(topLevelWdSme as Record<string, string>),
+          } as Record<ExpertiseArea, string>;
+        }
+
+        // Metadata-independent fallbacks to ensure hydration even when proposal.metadata is absent
+        if (!loadedWizardData.step3.selectedContent?.length) {
+          try {
+            const topLevelSelections = (proposal as any)?.contentSelections as
+              | Array<{
+                  contentId: string;
+                  section: string;
+                  assignedTo?: string;
+                  customizations?: string[];
+                }>
+              | undefined;
+            const wdSelections = (proposal as any)?.wizardData?.step3?.selectedContent as
+              | Array<{
+                  contentId: string;
+                  section: string;
+                  assignedTo?: string;
+                  customizations?: string[];
+                }>
+              | undefined;
+            const source = topLevelSelections?.length ? topLevelSelections : wdSelections || [];
+            if (source.length) {
+              console.log('[ProposalWizard] (global) Step3 fallback source size:', source.length);
+              const hydrated = await Promise.all(
+                source.map(async sel => {
+                  try {
+                    const itemRes = await apiClient.get<any>(`/api/content/${sel.contentId}`);
+                    const item =
+                      itemRes && itemRes.id
+                        ? {
+                            id: itemRes.id,
+                            title: itemRes.title,
+                            type: itemRes.type,
+                            tags: itemRes.tags || [],
+                            content: itemRes.content || '',
+                            relevanceScore: 0,
+                            successRate: 0,
+                          }
+                        : {
+                            id: sel.contentId,
+                            title: 'Selected Content',
+                            type: 'Template',
+                            tags: [],
+                            content: '',
+                            relevanceScore: 0,
+                            successRate: 0,
+                          };
+                    return {
+                      item,
+                      section: sel.section,
+                      customizations: sel.customizations || [],
+                      assignedTo: sel.assignedTo || '',
+                    };
+                  } catch {
+                    return {
+                      item: {
+                        id: sel.contentId,
+                        title: 'Selected Content',
+                        type: 'Template',
+                        tags: [],
+                        content: '',
+                        relevanceScore: 0,
+                        successRate: 0,
+                      },
+                      section: sel.section,
+                      customizations: sel.customizations || [],
+                      assignedTo: sel.assignedTo || '',
+                    };
+                  }
+                })
+              );
+              loadedWizardData.step3.selectedContent = hydrated as any;
+              console.log(
+                '[ProposalWizard] (global) Step3 hydrated count:',
+                loadedWizardData.step3.selectedContent?.length || 0
+              );
+            }
+          } catch {}
+        }
+
+        if (!loadedWizardData.step5.sections?.length) {
+          const topLevelSections = (proposal as any)?.sections as
+            | Array<{
+                id?: string;
+                title?: string;
+                assignedTo?: string;
+                content?: any[];
+                required?: boolean;
+                status?: string;
+                estimatedHours?: number;
+              }>
+            | undefined;
+          const wdSections = (proposal as any)?.wizardData?.step5
+            ?.sections as typeof topLevelSections;
+          const source = topLevelSections?.length ? topLevelSections : wdSections || [];
+          if (source.length) {
+            console.log('[ProposalWizard] (global) Step5 fallback source size:', source.length);
+            loadedWizardData.step5.sections = source.map((s: any, index: number) => ({
+              id: s.id || String(index + 1),
+              title: s.title || `Section ${index + 1}`,
+              required: s.required ?? true,
+              content: s.content || [],
+              assignedTo: s.assignedTo || '',
+              status: s.status || 'not_started',
+              estimatedHours: s.estimatedHours ?? 0,
+            }));
+          }
+        }
+        // Global fallbacks for Step 5 sectionAssignments (multi-source merge)
+        if (
+          !loadedWizardData.step5.sectionAssignments ||
+          Object.keys(loadedWizardData.step5.sectionAssignments).length === 0
+        ) {
+          // The API returns wizardData at top level, not nested under metadata
+          const metadataAssignments = (proposal as any)?.wizardData?.step5?.sectionAssignments as
+            | Record<string, any>
+            | undefined;
+          const metadataAssignmentsRoot = (proposal as any)?.metadata?.sectionAssignments as
+            | Record<string, any>
+            | undefined;
+          const wdAssignments = (proposal as any)?.wizardData?.step5?.sectionAssignments as
+            | Record<string, any>
+            | undefined;
+          const topLevelAssignments = (proposal as any)?.sectionAssignments as
+            | Record<string, any>
+            | undefined;
+
+          console.log(
+            '[ProposalWizard] (global) Step5 assignments sources - metadata:',
+            Object.keys(metadataAssignments || {}),
+            'wd:',
+            Object.keys(wdAssignments || {}),
+            'topLevel:',
+            Object.keys(topLevelAssignments || {})
+          );
+
+          const source =
+            metadataAssignmentsRoot || metadataAssignments || wdAssignments || topLevelAssignments;
+          if (source && Object.keys(source).length > 0) {
+            loadedWizardData.step5.sectionAssignments = {
+              ...(loadedWizardData.step5.sectionAssignments || {}),
+              ...source,
+            };
+            console.log(
+              '[ProposalWizard] (global) Step5 assignments hydrated count:',
+              Object.keys(loadedWizardData.step5.sectionAssignments).length
+            );
+          }
+        }
+
+        // Final fallback for Step 5: derive sections from Step 3 selectedContent when none provided
+        if (!loadedWizardData.step5.sections?.length) {
+          const sel = loadedWizardData.step3.selectedContent || [];
+          if (sel.length > 0) {
+            const uniqueSections = Array.from(new Set(sel.map((s: any) => s.section).values()));
+            if (uniqueSections.length > 0) {
+              loadedWizardData.step5.sections = uniqueSections.map(
+                (title: string, index: number) => ({
+                  id: String(index + 1),
+                  title: title || `Section ${index + 1}`,
+                  required: true,
+                  content: [],
+                  assignedTo: undefined as any,
+                  status: 'not_started' as const,
+                  estimatedHours: 0,
+                })
+              );
+              console.log(
+                '[ProposalWizard] (global) Step5 derived from Step3 sections:',
+                uniqueSections
+              );
+            }
+          }
+        }
+
+        // If assignments still empty, derive from loaded Step 5 sections themselves (assignedTo fields)
+        if (
+          (!loadedWizardData.step5.sectionAssignments ||
+            Object.keys(loadedWizardData.step5.sectionAssignments).length === 0) &&
+          Array.isArray(loadedWizardData.step5.sections) &&
+          loadedWizardData.step5.sections.length > 0
+        ) {
+          const derivedFromStep5Sections: Record<string, string> = {};
+          const normalize = (s: string) =>
+            (s || '')
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, ' ')
+              .trim();
+          for (const s of loadedWizardData.step5.sections as any[]) {
+            const assignee: string | undefined = s?.assignedTo || s?.assignee;
+            if (assignee && typeof assignee === 'string' && assignee.trim().length > 0) {
+              if (s.id) derivedFromStep5Sections[String(s.id)] = assignee;
+              if (s.title) derivedFromStep5Sections[normalize(String(s.title))] = assignee;
+            }
+          }
+          if (Object.keys(derivedFromStep5Sections).length > 0) {
+            loadedWizardData.step5.sectionAssignments = {
+              ...(loadedWizardData.step5.sectionAssignments || {}),
+              ...derivedFromStep5Sections,
+            };
+            console.log(
+              '[ProposalWizard] (global) Step5 assignments derived from sections:',
+              Object.keys(derivedFromStep5Sections)
+            );
+          }
+        }
+
+        // If assignments still empty, derive from top-level sections and Step 3 selections
+        if (
+          !loadedWizardData.step5.sectionAssignments ||
+          Object.keys(loadedWizardData.step5.sectionAssignments).length === 0
+        ) {
+          const derivedFromTopLevel: Record<string, string> = {};
+          const topLevelSections = (proposal as any)?.sections as
+            | Array<{ id?: string; title?: string; assignedTo?: string }>
+            | undefined;
+          if (Array.isArray(topLevelSections)) {
+            for (const s of topLevelSections) {
+              if (s?.assignedTo) {
+                if (s.id) derivedFromTopLevel[s.id] = s.assignedTo;
+                if (s.title) derivedFromTopLevel[s.title] = s.assignedTo;
+              }
+            }
+          }
+
+          const derivedFromStep3: Record<string, string> = {};
+          const sel = loadedWizardData.step3.selectedContent || [];
+          if (Array.isArray(sel) && sel.length > 0) {
+            for (const item of sel as any[]) {
+              if (item?.assignedTo && item?.section) {
+                derivedFromStep3[item.section] = item.assignedTo;
+              }
+            }
+          }
+
+          const mergedDerived = { ...derivedFromTopLevel, ...derivedFromStep3 };
+          console.log(
+            '[ProposalWizard] (global) Step5 derived assignments sources - topLevel:',
+            Object.keys(derivedFromTopLevel),
+            'step3:',
+            Object.keys(derivedFromStep3)
+          );
+          if (Object.keys(mergedDerived).length > 0) {
+            loadedWizardData.step5.sectionAssignments = {
+              ...(loadedWizardData.step5.sectionAssignments || {}),
+              ...mergedDerived,
+            };
+            console.log(
+              '[ProposalWizard] (global) Step5 derived assignments hydrated count:',
+              Object.keys(loadedWizardData.step5.sectionAssignments).length
+            );
+          }
+        }
+
+        console.log('[ProposalWizard] Final wizardData before setWizardData:', {
+          step2: loadedWizardData.step2,
+          step3: loadedWizardData.step3,
+          step5: loadedWizardData.step5,
+        });
+
+        // DEBUG: Log the raw proposal data to see what's available
+        console.log('[ProposalWizard] Raw proposal data for debugging:', {
+          metadata: (proposal as any)?.metadata,
+          wizardData: (proposal as any)?.wizardData,
+          sections: (proposal as any)?.sections,
+          metadataWizardData: (proposal as any)?.metadata?.wizardData,
+          metadataSectionAssignments: (proposal as any)?.metadata?.sectionAssignments,
+          wizardDataStep5: (proposal as any)?.metadata?.wizardData?.step5,
+        });
 
         setWizardData(loadedWizardData);
         console.log(`[ProposalWizard] Successfully loaded proposal data for editing`);
+        hasLoadedEditProposalRef.current = editProposalId;
 
         // Update step validation based on loaded data
         const newStepValidation = [
@@ -529,10 +1222,16 @@ export function ProposalWizard({
     };
 
     loadExistingProposal();
-  }, [editProposalId, apiClient, errorHandlingService, user?.id]);
+  }, [editProposalId]);
 
   // Enhanced proposal creation handler with proper error handling
   const handleCreateProposal = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (loading) {
+      console.log('[ProposalWizard] Creation already in progress, skipping duplicate call');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -666,6 +1365,10 @@ export function ProposalWizard({
             value: wizardData.step1.details.estimatedValue,
           }),
         currency: 'USD',
+        // Persist mandatory contact info with the proposal (API stores in metadata)
+        contactPerson: wizardData.step1.client.contactPerson,
+        contactEmail: wizardData.step1.client.contactEmail,
+        contactPhone: wizardData.step1.client.contactPhone,
 
         // ✅ STEP 2: Team assignments
         teamAssignments: {
@@ -675,14 +1378,21 @@ export function ProposalWizard({
           executiveReviewers: wizardData.step2?.executiveReviewers || [],
         },
 
-        // ✅ STEP 3: Content selections
+        // ✅ STEP 3: Content selections with Step 5 assignments
         contentSelections:
-          wizardData.step3?.selectedContent?.map(content => ({
-            contentId: content.item.id,
-            section: content.section,
-            customizations: content.customizations || [],
-            assignedTo: content.assignedTo || '',
-          })) || [],
+          wizardData.step3?.selectedContent?.map(content => {
+            // Find the corresponding section assignment from Step 5
+            const sectionAssignment =
+              wizardData.step5?.sectionAssignments?.[content.item.id] ||
+              wizardData.step5?.sections?.find(s => s.title === content.section)?.assignedTo;
+
+            return {
+              contentId: content.item.id,
+              section: content.section,
+              customizations: content.customizations || [],
+              assignedTo: sectionAssignment || content.assignedTo || '',
+            };
+          }) || [],
 
         // ✅ STEP 4: Products
         ...(wizardData.step4?.products &&
@@ -695,16 +1405,57 @@ export function ProposalWizard({
             })),
           }),
 
-        // ✅ STEP 5: Sections
+        // ✅ STEP 5: Sections with assignments
         ...(wizardData.step5?.sections &&
           wizardData.step5.sections.length > 0 && {
             sections: wizardData.step5.sections.map((section, index) => ({
               title: section.title || `Section ${index + 1}`,
-              content: section.content || '',
+              content: typeof (section as any).content === 'string' ? (section as any).content : '',
               type: 'TEXT' as const,
               order: index + 1,
+              assignedTo: (section as any).assignedTo || '',
+              estimatedHours: (section as any).estimatedHours || 0,
+              dueDate: (section as any).dueDate || null,
+              priority: (section as any).priority || 'MEDIUM',
             })),
           }),
+
+        // ✅ METADATA: Persist SMEs, content selections, and full section details for reliable reloads
+        metadata: {
+          subjectMatterExperts: wizardData.step2?.subjectMatterExperts || {},
+          contentSelections:
+            wizardData.step3?.selectedContent?.map(sc => {
+              // Find the corresponding section assignment from Step 5
+              const sectionAssignment =
+                wizardData.step5?.sectionAssignments?.[sc.item.id] ||
+                wizardData.step5?.sections?.find(s => s.title === sc.section)?.assignedTo;
+
+              return {
+                contentId: sc.item.id,
+                section: sc.section,
+                customizations: sc.customizations || [],
+                assignedTo: sectionAssignment || sc.assignedTo || '',
+              };
+            }) || [],
+          sectionAssignments: wizardData.step5?.sectionAssignments || {},
+          wizardData: {
+            step5: {
+              sections: (wizardData.step5?.sections || []).map((s, i) => ({
+                id: (s as any).id || String(i + 1),
+                title: s.title || `Section ${i + 1}`,
+                required: s.required ?? true,
+                content: s.content || [],
+                assignedTo: (s as any).assignedTo,
+                status: (s as any).status || 'not_started',
+                estimatedHours: (s as any).estimatedHours ?? 0,
+                dueDate: (s as any).dueDate || null,
+                priority: (s as any).priority || 'MEDIUM',
+              })),
+              // Also persist assignments under wizardData for reliable hydration
+              sectionAssignments: wizardData.step5?.sectionAssignments || {},
+            },
+          },
+        },
 
         // ✅ STEP 6: Validation data
         validationData: {
@@ -742,16 +1493,78 @@ export function ProposalWizard({
       console.log('[ProposalWizard] Customer ID type:', typeof proposalData.customerId);
       console.log('[ProposalWizard] Customer ID length:', proposalData.customerId?.length);
 
-      // Create the proposal using the entity
-      // ✅ FIXED: Use real API call instead of mock response
+      // Create or update depending on edit mode so the proposal ID doesn't change when editing
+      const isEditing = Boolean(editProposalId);
       console.log('[ProposalWizard] Creating proposal with data:', proposalData);
 
-      // Make real API call to /api/proposals
-      const response = await apiClient.post<{
-        success: boolean;
-        data: { id: string; title: string; status: string };
-        message: string;
-      }>('/api/proposals', proposalData);
+      const response = isEditing
+        ? await apiClient.patch<{
+            success: boolean;
+            data: { id: string; title: string; status: string };
+            message: string;
+          }>(`/api/proposals/${editProposalId}` as any, {
+            // Send full minimal+assignments payload so edits persist
+            title: wizardData.step1.details.title,
+            description: smartDescription,
+            priority: (wizardData.step1.details.priority || 'MEDIUM').toUpperCase(),
+            value: wizardData.step1.details.estimatedValue || undefined,
+            dueDate: wizardData.step1.details.dueDate
+              ? new Date(wizardData.step1.details.dueDate).toISOString()
+              : undefined,
+            // Persist Step 5 sections with assignedTo if present
+            ...(wizardData.step5?.sections && wizardData.step5.sections.length > 0
+              ? {
+                  sections: wizardData.step5.sections.map((section, index) => ({
+                    title: section.title || `Section ${index + 1}`,
+                    content:
+                      typeof (section as any).content === 'string' ? (section as any).content : '',
+                    type: 'TEXT' as const,
+                    order: index + 1,
+                    assignedTo: (section as any).assignedTo || '',
+                    estimatedHours: (section as any).estimatedHours || 0,
+                    dueDate: (section as any).dueDate || null,
+                    priority: (section as any).priority || 'MEDIUM',
+                  })),
+                }
+              : {}),
+            metadata: {
+              subjectMatterExperts: wizardData.step2?.subjectMatterExperts || {},
+              contentSelections:
+                wizardData.step3?.selectedContent?.map(sc => {
+                  const sectionAssignment =
+                    wizardData.step5?.sectionAssignments?.[sc.item.id] ||
+                    wizardData.step5?.sections?.find(s => s.title === sc.section)?.assignedTo;
+                  return {
+                    contentId: sc.item.id,
+                    section: sc.section,
+                    customizations: sc.customizations || [],
+                    assignedTo: sectionAssignment || sc.assignedTo || '',
+                  };
+                }) || [],
+              sectionAssignments: wizardData.step5?.sectionAssignments || {},
+              wizardData: {
+                step5: {
+                  sections: (wizardData.step5?.sections || []).map((s, i) => ({
+                    id: (s as any).id || String(i + 1),
+                    title: s.title || `Section ${i + 1}`,
+                    required: s.required ?? true,
+                    content: s.content || [],
+                    assignedTo: (s as any).assignedTo,
+                    status: (s as any).status || 'not_started',
+                    estimatedHours: (s as any).estimatedHours ?? 0,
+                    dueDate: (s as any).dueDate || null,
+                    priority: (s as any).priority || 'MEDIUM',
+                  })),
+                  sectionAssignments: wizardData.step5?.sectionAssignments || {},
+                },
+              },
+            },
+          })
+        : await apiClient.post<{
+            success: boolean;
+            data: { id: string; title: string; status: string };
+            message: string;
+          }>('/api/proposals', proposalData);
 
       // Check for successful API response
       if (!response.success) {
@@ -779,6 +1592,11 @@ export function ProposalWizard({
       } else if (response.data && typeof response.data === 'string') {
         proposalId = response.data as string;
         console.log('[ProposalWizard] ✅ Proposal ID found as response.data string:', proposalId);
+      }
+
+      // When editing, prefer the original id if the API returns nothing
+      if (isEditing && (!proposalId || proposalId === 'undefined')) {
+        proposalId = editProposalId;
       }
 
       // Validate proposal ID format and content
@@ -1669,14 +2487,22 @@ export function ProposalWizard({
         case 1:
           return wizardData.step1;
         case 2:
-          return (wizardData.step2 as any)?.teamLead !== undefined
-            ? wizardData.step2
-            : {
-                teamLead: '',
-                salesRepresentative: '',
-                subjectMatterExperts: {},
-                executiveReviewers: [],
-              };
+          console.log('[ProposalWizard] getStepData case 2 - wizardData.step2:', wizardData.step2);
+          console.log(
+            '[ProposalWizard] getStepData case 2 - teamLead check:',
+            (wizardData.step2 as any)?.teamLead !== undefined
+          );
+          const step2Data =
+            (wizardData.step2 as any)?.teamLead !== undefined
+              ? wizardData.step2
+              : {
+                  teamLead: '',
+                  salesRepresentative: '',
+                  subjectMatterExperts: {},
+                  executiveReviewers: [],
+                };
+          console.log('[ProposalWizard] getStepData case 2 - returning:', step2Data);
+          return step2Data;
         case 3:
           return (wizardData.step3 as any)?.selectedContent !== undefined
             ? wizardData.step3
@@ -1685,10 +2511,105 @@ export function ProposalWizard({
           return (wizardData.step4 as any)?.products !== undefined
             ? wizardData.step4
             : { products: [] };
-        case 5:
-          return (wizardData.step5 as any)?.sections !== undefined
-            ? wizardData.step5
-            : { sections: [], sectionAssignments: {} };
+        case 5: {
+          console.log('[ProposalWizard] getStepData case 5 - wizardData.step5:', wizardData.step5);
+          const currentAssignments = ((wizardData.step5 as any)?.sectionAssignments ||
+            {}) as Record<string, string>;
+          console.log(
+            '[ProposalWizard] getStepData case 5 - sectionAssignments keys:',
+            Object.keys(currentAssignments)
+          );
+
+          // Build a derived assignments map if empty (runtime lazy derivation)
+          let result: any =
+            (wizardData.step5 as any)?.sections !== undefined
+              ? wizardData.step5
+              : { sections: [], sectionAssignments: {} };
+
+          const keys = Object.keys(currentAssignments || {});
+          if (keys.length === 0) {
+            const derived: Record<string, string> = {};
+            const normalize = (s: string) =>
+              (s || '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
+
+            // From step5.sections assignedTo
+            const sections = ((wizardData.step5 as any)?.sections || []) as Array<any>;
+            for (const s of sections) {
+              const assignee: string | undefined = s?.assignedTo || s?.assignee;
+              if (assignee && typeof assignee === 'string' && assignee.trim()) {
+                if (s.id) derived[String(s.id)] = assignee;
+                if (s.title) derived[normalize(String(s.title))] = assignee;
+              }
+            }
+
+            // From step3.selectedContent assignedTo
+            const selected = ((wizardData.step3 as any)?.selectedContent || []) as Array<any>;
+            for (const item of selected) {
+              if (item?.assignedTo && item?.section) {
+                derived[normalize(String(item.section))] = String(item.assignedTo);
+              }
+            }
+
+            // NEW: Seed defaults from step2 team selections (SMEs, team lead, sales rep)
+            try {
+              const step2: any = (wizardData as any).step2 || {};
+              const smes: Record<string, string> = (step2?.subjectMatterExperts || {}) as Record<
+                string,
+                string
+              >;
+
+              const areaToSections: Record<string, string[]> = {
+                technical: ['Technical Approach', 'Implementation Plan', 'Quality Assurance'],
+                security: ['Security & Compliance'],
+                pricing: ['Pricing & Commercial Terms'],
+                legal: ['Pricing & Commercial Terms'],
+              };
+
+              const setIfEmpty = (title: string, userId: string) => {
+                const key = normalize(title);
+                if (userId && !derived[key]) derived[key] = String(userId);
+              };
+
+              // Apply SME mappings
+              for (const [area, userId] of Object.entries(smes)) {
+                const titles = areaToSections[area?.toLowerCase?.() || ''] || [];
+                titles.forEach(t => setIfEmpty(t, userId));
+              }
+
+              // Team Lead → Executive Summary (+ optionally Understanding & Requirements)
+              if (step2?.teamLead) {
+                setIfEmpty('Executive Summary', String(step2.teamLead));
+                setIfEmpty('Understanding & Requirements', String(step2.teamLead));
+              }
+
+              // Sales Representative → Pricing & Commercial Terms
+              if (step2?.salesRepresentative) {
+                setIfEmpty('Pricing & Commercial Terms', String(step2.salesRepresentative));
+              }
+            } catch {}
+
+            result = {
+              ...result,
+              sectionAssignments: { ...(result.sectionAssignments || {}), ...derived },
+            };
+            console.log(
+              '[ProposalWizard] getStepData case 5 - derived assignments keys:',
+              Object.keys(result.sectionAssignments || {})
+            );
+          } else {
+            result = { ...result, sectionAssignments: currentAssignments };
+          }
+
+          console.log('[ProposalWizard] getStepData case 5 - returning:', result);
+          console.log(
+            '[ProposalWizard] getStepData case 5 - returning sectionAssignments keys:',
+            Object.keys((result as any).sectionAssignments || {})
+          );
+          return result;
+        }
         case 6:
           return (wizardData.step6 as any)?.finalValidation !== undefined
             ? wizardData.step6
@@ -1774,7 +2695,14 @@ export function ProposalWizard({
                   <OptimizedCurrentStepComponent
                     data={getStepData(currentStep)}
                     onUpdate={createStepUpdateHandler(currentStep)}
-                    onNext={currentStep === STEP_META.length ? handleCreateProposal : handleNext}
+                    onNext={() => {
+                      // Force-flush latest data of current step right before navigating
+                      try {
+                        const stepData = getStepData(currentStep);
+                        createStepUpdateHandler(currentStep)(stepData as any);
+                      } catch {}
+                      currentStep === STEP_META.length ? handleCreateProposal() : handleNext();
+                    }}
                     analytics={trackProposalCreation}
                   />
                 </Suspense>
