@@ -1,47 +1,67 @@
 // [AUTH_FIX] Enhanced session validation
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
+import type { Session } from 'next-auth';
+
+interface ValidationDebug {
+  hasSession: boolean;
+  hasUser: boolean;
+  hasUserId: boolean;
+  userEmail: string | null | undefined;
+  userRoles: unknown;
+  timestamp: string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  session: Session | null;
+  user: Session['user'] | null;
+  error: string | null;
+  debug: ValidationDebug;
+}
 
 export class SessionValidator {
-  static async validateSession(request: any) {
+  static async validateSession(): Promise<ValidationResult> {
     const session = await getServerSession(authOptions);
+    const user = session?.user as ({ id?: unknown; email?: string | null; roles?: unknown } | undefined);
 
-    const validation = {
+    const validation: ValidationResult = {
       isValid: false,
       session: null,
       user: null,
       error: null,
       debug: {
-        hasSession: !!session,
-        hasUser: !!session?.user,
-        hasUserId: !!session?.user?.id,
-        userEmail: session?.user?.email,
-        userRoles: session?.user?.roles,
+        hasSession: Boolean(session),
+        hasUser: Boolean(user),
+        hasUserId: Boolean(user?.id),
+        userEmail: user?.email ?? null,
+        userRoles: user?.roles,
         timestamp: new Date().toISOString(),
       },
     };
 
     if (!session) {
-      validation.error = 'No session found' as any;
+      validation.error = 'No session found';
       console.log('[AUTH_FIX] Session validation failed: No session');
       return validation;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime safety guard for potentially undefined user
     if (!session.user) {
-      validation.error = 'No user in session' as any;
+      validation.error = 'No user in session';
       console.log('[AUTH_FIX] Session validation failed: No user in session');
       return validation;
     }
 
-    if (!session.user.id) {
-      validation.error = 'No user ID in session' as any;
+    if (!('id' in session.user) || !(session.user as { id?: unknown }).id) {
+      validation.error = 'No user ID in session';
       console.log('[AUTH_FIX] Session validation failed: No user ID');
       return validation;
     }
 
     validation.isValid = true;
-    validation.session = session as any;
-    validation.user = session.user as any;
+    validation.session = session;
+    validation.user = session.user;
 
     console.log('[AUTH_FIX] Session validation successful:', {
       userId: session.user.id,
@@ -52,7 +72,7 @@ export class SessionValidator {
     return validation;
   }
 
-  static createUnauthorizedResponse(validation: any) {
+  static createUnauthorizedResponse(validation: ValidationResult) {
     return new Response(
       JSON.stringify({
         error: 'Unauthorized',

@@ -68,6 +68,7 @@ export class ComponentLazyLoading {
   }
 
   public static getInstance(config?: Partial<LazyLoadConfig>): ComponentLazyLoading {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!ComponentLazyLoading.instance) {
       ComponentLazyLoading.instance = new ComponentLazyLoading(config);
     }
@@ -110,16 +111,13 @@ export class ComponentLazyLoading {
       // Create lazy component with error boundary
       const lazyComponent = lazy(async () => {
         try {
-          const module = await importFunction();
+          const importedModule = await importFunction();
           const loadEndTime = performance.now();
           const loadTime = loadEndTime - loadStartTime;
 
-          // Estimate bundle size (simplified)
-          const bundleSize = this.estimateBundleSize(componentName);
-
           this.recordLoadMetrics(componentName, loadStartTime, loadTime, true, false);
 
-          return module;
+          return importedModule;
         } catch (error) {
           const loadEndTime = performance.now();
           const loadTime = loadEndTime - loadStartTime;
@@ -130,11 +128,11 @@ export class ComponentLazyLoading {
             loadTime,
             false,
             false,
-            (error as Error).message
+            this.errorHandlingService.getUserFriendlyMessage(error)
           );
 
           this.errorHandlingService.processError(
-            error as Error,
+            error,
             `Failed to load component: ${componentName}`,
             ErrorCodes.SYSTEM.COMPONENT_LOAD_FAILED,
             {
@@ -168,7 +166,7 @@ export class ComponentLazyLoading {
       this.loadingPromises.delete(componentName);
 
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         `Component lazy loading failed: ${componentName}`,
         ErrorCodes.SYSTEM.COMPONENT_LOAD_FAILED,
         {
@@ -221,7 +219,7 @@ export class ComponentLazyLoading {
       }, this.config.preloadDelay);
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         `Failed to preload next step: ${currentStep + 1}`,
         ErrorCodes.SYSTEM.PRELOAD_FAILED,
         {
@@ -267,7 +265,7 @@ export class ComponentLazyLoading {
       }
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to cleanup unused components',
         ErrorCodes.SYSTEM.CLEANUP_FAILED,
         {

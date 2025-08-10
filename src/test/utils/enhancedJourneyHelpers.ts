@@ -586,7 +586,8 @@ export function validateDataFlow(
         errors.push('Data structure mismatch');
       }
     } catch (error) {
-      errors.push(`Data validation error: ${(error as Error).message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`Data validation error: ${message}`);
     }
   }
 
@@ -671,7 +672,7 @@ export class ErrorRecoveryTester {
           attempts,
         };
       } catch (error) {
-        lastError = error as Error;
+        lastError = error instanceof Error ? error : new Error(String(error));
 
         if (attempts < strategy.maxAttempts) {
           // Wait before retry

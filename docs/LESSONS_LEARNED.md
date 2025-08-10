@@ -597,3 +597,247 @@ selects in Step 2.
 - [x] RHF nested registration for SMEs
 - [x] Options include pre-assigned ids
 - [x] Lints clean and behavior validated
+
+---
+
+## Standardized Wizard Data Retrieval & Hydration Contract
+
+**Date**: 2025-08-09 • **Category**: Data Hydration / UX / Wizards
+
+### Why
+
+Save/retrieve bugs often come from inconsistent shapes and key mismatches across
+sources (metadata vs relations vs wizardData). This contract standardizes how
+every wizard step retrieves and populates data, preventing empty UIs despite
+saved data.
+
+### Core Rules
+
+- Non-destructive merge: never overwrite explicit step values; only fill missing
+  fields
+- Source priority (highest → lowest):
+  1. `metadata.wizardData.stepN`
+  2. `metadata` step-level synonyms (e.g., `metadata.teamAssignments`,
+     `metadata.sectionAssignments`)
+  3. Top-level relational data (e.g., `products`, `sections`, `assignedTo`)
+  4. Derived defaults from upstream steps (only if missing)
+  5. Safe defaults
+- Stable keys: prefer IDs; when titles are used, also store `normalize(title)`
+  keys
+- Normalization utilities:
+  - IDs: `String(id)`
+  - SME roles: uppercase keys
+  - Titles: lowercase → trim → remove non-alphanumerics
+- Validation: ignore non-existent IDs (stale references)
+- Persist merged result upward (so subsequent renders are stable)
+
+### Per-Step Retrieval Matrix
+
+- Step 1 (Basic Information)
+  - From: `metadata.wizardData.step1.details/client` → top-level proposal fields
+    → safe defaults
+  - Contact fields: prefer metadata; fallback to customer primary contact; then
+    customer
+
+- Step 2 (Team Assignment)
+  - From: `metadata.wizardData.step2` → `metadata.teamAssignments` → derive from
+    `assignedTo` if roles are known
+  - SME keys normalized to UPPERCASE; preserve any existing values
+
+- Step 3 (Content Selection)
+  - From: `metadata.wizardData.step3.selectedContent` →
+    `metadata.contentSelections`
+  - Validate each `contentId` exists; drop invalid; do not fabricate items
+
+- Step 4 (Product Selection)
+  - From: relation `products` (proposalProducts join) →
+    `metadata.wizardData.step4.products`
+  - Always use real `product.id` as `productId` (never SKU); hydrate
+    `unitPrice/category` from DB when present
+  - De-duplicate by `product.id`; preserve quantities and totals when provided
+
+- Step 5 (Section Assignment)
+  - Sections: relation `sections` (ordered) →
+    `metadata.wizardData.step5.sections`
+  - Assignments: `metadata.wizardData.step5.sectionAssignments` →
+    `metadata.sectionAssignments`
+  - Derive any missing assignments from Step 2 team roles and Step 3 content
+    ownership; fill only missing keys
+
+### Reference Pseudo-Implementation
+
+```ts
+function hydrateStepData(proposal) {
+  const md = proposal.metadata || {};
+  const wd = md.wizardData || {};
+
+  // Step 1
+  const step1 = {
+    client: wd.step1?.client ?? buildClientFromCustomer(proposal.customer),
+    details: {
+      ...wd.step1?.details,
+      title: wd.step1?.details?.title ?? proposal.title,
+      dueDate: wd.step1?.details?.dueDate ?? iso(proposal.dueDate),
+      estimatedValue: wd.step1?.details?.estimatedValue ?? proposal.value,
+      priority: wd.step1?.details?.priority ?? proposal.priority,
+      description: wd.step1?.details?.description ?? proposal.description,
+      rfpReferenceNumber:
+        wd.step1?.details?.rfpReferenceNumber ?? md.rfpReferenceNumber,
+    },
+  };
+
+  // Step 2 (normalize SME keys)
+  const normalizedTA = normalizeSmeKeys(
+    wd.step2 ??
+      md.teamAssignments ??
+      deriveTeamFromAssignedTo(proposal.assignedTo)
+  );
+  const step2 = { ...normalizedTA };
+
+  // Step 3 (validate IDs)
+  const step3Raw = wd.step3?.selectedContent ?? md.contentSelections ?? [];
+  const step3 = { selectedContent: validateContentIds(step3Raw) };
+
+  // Step 4 (prefer relation; ensure productId is product.id)
+  const step4FromRelation = (proposal.products || []).map(pp => ({
+    id: pp.product?.id,
+    name: pp.product?.name,
+    quantity: pp.quantity,
+    unitPrice: pp.unitPrice ?? pp.product?.price,
+    totalPrice: (pp.unitPrice ?? pp.product?.price) * pp.quantity,
+    category: undefined,
+  }));
+  const step4 = {
+    products: mergeProducts(step4FromRelation, wd.step4?.products).map(p =>
+      coerceProductWithDb(p)
+    ),
+  };
+
+  // Step 5
+  const baseSections = proposal.sections?.length
+    ? proposal.sections
+    : (wd.step5?.sections ?? []);
+  const assignments = nonDestructiveMerge(
+    wd.step5?.sectionAssignments ?? {},
+    md.sectionAssignments ?? {}
+  );
+  const derived = deriveMissingAssignments(
+    assignments,
+    step2,
+    step3,
+    baseSections
+  );
+  const step5 = {
+    sections: baseSections,
+    sectionAssignments: { ...assignments, ...derived },
+  };
+
+  return { step1, step2, step3, step4, step5 };
+}
+```
+
+### Verification Checklist
+
+- [ ] Logs print only counts and key sets (not whole payloads)
+- [ ] Missing IDs are dropped; no 404s from stale references
+- [ ] Product `productId` equals DB `product.id` across create/edit
+- [ ] SME keys are UPPERCASE; values preserved on edit
+- [ ] Section assignments fill only missing keys (never overwrite user edits)
+
+### Adoption Guidance
+
+- Implement a single `hydrateStepData(proposal)` in the wizard container and
+  pass shaped data to each step
+- Keep all normalization helpers colocated (SME keys, title normalization, ID
+  coercion)
+- When adding new step fields, extend the matrix and pseudo-implementation;
+  preserve the merge order
+
+### Persistence & Retrieval Contract (Generalized)
+
+This unified contract ensures edits persist across all wizard steps and reload reliably.
+
+1) PATCH Payload Rules
+
+- Mirror snapshots under both roots:
+  - `metadata.wizardData.stepN.*` (UI-friendly, future-proof) and
+  - `wizardData.stepN.*` (historic fallback)
+- Include top-level scalars where the backend expects them (e.g., `title`, `description`, `priority`, `rfpReferenceNumber`, `dueDate`, `value`).
+  - Enums to backend: send in expected enum case (e.g., `priority` as UPPERCASE if required by API), while storing UI-facing values in normalized form (e.g., lowercase) inside `metadata.wizardData`.
+- Relations (e.g., products in Step 4):
+  - Send relation-friendly shape the API can process (ids, quantities, prices), and also mirror under `metadata.wizardData.step4.products` for hydration.
+- Content selections and assignments:
+  - Mirror `contentSelections` at metadata root with `{ contentId, section, customizations, assignedTo }`.
+  - Persist `sectionAssignments` at `metadata.sectionAssignments` and within `metadata.wizardData.step5` as needed.
+- Do not drop existing metadata: deep-merge by step; preserve previous keys.
+
+2) GET/Hydration Rules
+
+- Always unwrap Prisma-style wrappers: if metadata is `{ set: ... }`, use `.set`.
+- Merge order for each step:
+  1. `metadata.wizardData.stepN` (latest canonical snapshot)
+  2. top-level convenience fields (e.g., `proposal.priority`, `proposal.sections`)
+  3. legacy `wizardData.stepN`
+  4. derived defaults (IDs from relations, normalized titles, inferred assignments)
+- Normalize and coerce types consistently:
+  - Priority: coerce to `ProposalPriority` ('high' | 'medium' | 'low') for UI; map to backend enum casing for PATCH.
+  - IDs: ensure `productId === product.id`; drop unknown IDs.
+- Non-destructive merges: only fill missing keys; never overwrite user-entered values.
+
+3) Logging & Validation
+
+- Log counts and key sets only; avoid dumping full payloads (PII/noise).
+- Validate incoming IDs exist; silently drop stale entries.
+- Unit-test hydration: each step with and without metadata/relations.
+
+### Do‑Not List (Persistence Pitfalls)
+
+- Do not rely on a single source (only metadata or only relations). Always merge across metadata, top-level, wizardData, and derived defaults.
+- Do not overwrite nested `metadata.wizardData` objects; deep-merge per step.
+- Do not persist only UI casing for enums to the backend; map to backend enum casing on PATCH.
+- Do not store SKU or display names as IDs; always use real database ids.
+- Do not assume metadata is raw; unwrap `{ set: ... }` before use.
+- Do not log entire metadata or PATCH bodies in development; log shapes and sizes only.
+
+### Deprecated (Removed) Approaches
+
+- Storing only `wizardData.stepN` without mirroring under `metadata.wizardData`.
+- Hydrating strictly from a single path (e.g., only `metadata` or only top-level relations).
+- Sending PATCH bodies that overwrite entire `metadata` trees instead of merging per step.
+- Relying on title-based keys without normalized fallback or stable ids.
+
+### Do‑Not List (Common Failure Patterns and How to Avoid Them)
+
+- Do not use SKU as `productId` in Step 4; always use the real `product.id`.
+  Hydrate price/category from DB.
+- Do not overwrite nested `metadata.wizardData` on PATCH; deep-merge per step,
+  merging `step5.sectionAssignments` non-destructively.
+- Do not rely on a single source for hydration. Always merge: `wizardData.stepN`
+  → `metadata.*` synonyms → top-level relations → derived defaults.
+- Do not include stale or dummy IDs (e.g., `patch-test-1`) in
+  `contentSelections`. Validate IDs and drop non-existent entries.
+- Do not write access logs when there is no content or when the session user is
+  not persisted; guard and skip.
+- Do not early‑return a separate dev path for PATCH. Dev bypass must run the
+  same merge/update flow and only skip permission checks.
+- Do not assume UUID validation for IDs when schema uses CUID; use flexible
+  string validation and server-side existence checks.
+- Do not include unstable instances (e.g., `apiClient`, error handlers) in
+  mount-only effect dependencies; avoid re-render loops.
+- Do not log entire payloads; only log counts and key sets for verification to
+  reduce noise and PII risk.
+- Do not attempt to persist to removed/mismatched DB columns (e.g.,
+  `rfpReferenceNumber` when schema stores it in metadata). Align seed/scripts
+  with current schema.
+- Do not overwrite user-entered section assignments. Derive only when keys are
+  missing; preserve explicit values.
+- Do not depend on stale proposal IDs. Navigate from lists or re-resolve IDs
+  before fetch/edit.
+- Do not omit raw `metadata` in GET responses when the client hydrates from it;
+  include it explicitly.
+- Do not fetch with ad‑hoc clients. Use the standard `useApiClient` which
+  handles base URL, credentials, and error handling.
+- Do not create FK rows with placeholder IDs (e.g., `'LIST_OPERATION'`); only
+  write logs with real IDs.
+- Do not mismatch Step 5 keys (title vs id). Prefer IDs; when titles are needed,
+  also store normalized title keys.

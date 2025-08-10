@@ -158,7 +158,7 @@ export default function EnhancedPerformanceDashboard({
       await collectMetrics();
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to collect performance metrics',
         ErrorCodes.SYSTEM.METRICS_COLLECTION_FAILED,
         {
@@ -185,7 +185,7 @@ export default function EnhancedPerformanceDashboard({
       }, 'high');
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to trigger performance optimization',
         ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
         {
@@ -237,7 +237,7 @@ export default function EnhancedPerformanceDashboard({
       }, 'medium');
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to generate performance report',
         ErrorCodes.SYSTEM.REPORT_GENERATION_FAILED,
         {

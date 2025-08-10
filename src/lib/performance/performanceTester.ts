@@ -35,6 +35,7 @@ class PerformanceTester {
   > = new Map();
 
   static getInstance(): PerformanceTester {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!PerformanceTester.instance) {
       PerformanceTester.instance = new PerformanceTester();
     }
@@ -44,7 +45,8 @@ class PerformanceTester {
   /**
    * Start a performance test for a component
    */
-  startTest(testName: string, test: PerformanceTest): void {
+  startTest(testName: string, _test: PerformanceTest): void {
+    void _test;
     const initialMemory = this.getMemoryUsage();
 
     this.activeTests.set(testName, {

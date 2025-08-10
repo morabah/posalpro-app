@@ -58,7 +58,7 @@ interface ProposalsApiResponse {
     total: number;
     totalPages: number;
   };
-  filters: any;
+  filters?: Partial<ProposalQueryOptions>;
 }
 
 export interface TeamAssignment {
@@ -113,15 +113,27 @@ export interface ProposalAnalytics {
  * Provides comprehensive proposal management with workflow support
  */
 export class ProposalEntity {
-  private static instance: ProposalEntity;
+  private static instance: ProposalEntity | null = null;
   private cache = new Map<string, ProposalData>();
   private cacheExpiry = new Map<string, number>();
   private readonly CACHE_TTL = 3 * 60 * 1000; // 3 minutes (shorter for frequently changing data)
 
   private constructor() {}
 
+  // Runtime type guard to ensure unknown API payloads are ProposalData
+  private static isProposalData(value: unknown): value is ProposalData {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    return (
+      typeof v.id === 'string' &&
+      typeof v.status === 'string' &&
+      typeof v.createdBy === 'string' &&
+      typeof v.customerId === 'string'
+    );
+  }
+
   public static getInstance(): ProposalEntity {
-    if (!ProposalEntity.instance) {
+    if (ProposalEntity.instance === null) {
       ProposalEntity.instance = new ProposalEntity();
     }
     return ProposalEntity.instance;
@@ -146,18 +158,19 @@ export class ProposalEntity {
       const response = await proposalsApi.createProposal(clientValidatedData);
       logger.info('[ProposalEntity] API response:', response);
 
-      if (response.success && response.data) {
+      if (response.success && ProposalEntity.isProposalData(response.data)) {
+        const data = response.data;
         // Cache the new proposal
-        this.setCache(response.data.id, response.data);
+        this.setCache(data.id, data);
         logger.info('[ProposalEntity] Proposal cached');
 
         // Track proposal creation event
         logger.info('[ProposalEntity] Tracking proposal creation event');
         trackAuthEvent('proposal_created', {
-          proposalId: response.data.id,
-          title: response.data.title,
-          priority: response.data.priority,
-          estimatedValue: response.data.estimatedValue,
+          proposalId: data.id,
+          title: data.title,
+          priority: data.priority,
+          estimatedValue: data.estimatedValue,
         });
         logger.info('[ProposalEntity] Event tracked');
       }
@@ -187,7 +200,7 @@ export class ProposalEntity {
       // Fetch from API
       const response = await apiClient.get<ProposalData>(`proposals/${id}`);
 
-      if (response.success && response.data) {
+      if (response.success && ProposalEntity.isProposalData(response.data)) {
         this.setCache(id, response.data);
       }
 
@@ -213,7 +226,7 @@ export class ProposalEntity {
       // Update via API
       const response = await apiClient.put<ProposalData>(`proposals/${id}`, updateData);
 
-      if (response.success && response.data) {
+      if (response.success && ProposalEntity.isProposalData(response.data)) {
         // Update cache
         this.setCache(id, response.data);
 
@@ -282,14 +295,14 @@ export class ProposalEntity {
       );
 
       // Cache results
-      if (response.success && response.data?.proposals) {
+      if (response.success) {
         response.data.proposals.forEach((proposal: ProposalData) =>
           this.setCache(proposal.id, proposal)
         );
       }
 
       // Return properly typed PaginatedResponse
-      if (response.success && response.data) {
+      if (response.success) {
         return {
           success: true,
           message: response.message,
@@ -310,14 +323,19 @@ export class ProposalEntity {
           totalPages: 0,
         },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to query proposals:', error);
+
+      // Narrow error for property access
+      const err = (typeof error === 'object' && error !== null)
+        ? (error as { message?: string; status?: number; name?: string })
+        : {};
 
       // Handle authentication errors specifically
       if (
-        error.message?.includes('Your session has expired') ||
-        error.status === 401 ||
-        (error.name === 'ApiError' && error.status === 401)
+        (typeof err.message === 'string' && err.message.includes('Your session has expired')) ||
+        err.status === 401 ||
+        (err.name === 'ApiError' && err.status === 401)
       ) {
         // Return a structured response for authentication errors
         trackAuthEvent('session_expired');
@@ -337,7 +355,8 @@ export class ProposalEntity {
       // For other errors, return a structured error response instead of throwing
       return {
         success: false,
-        message: error.message || 'An unexpected error occurred while fetching proposals.',
+        message: (typeof err.message === 'string' ? err.message : undefined) ||
+          'An unexpected error occurred while fetching proposals.',
         data: [],
         pagination: {
           page: options.page || 1,
@@ -363,7 +382,7 @@ export class ProposalEntity {
         notes,
       });
 
-      if (response.success && response.data) {
+      if (response.success && ProposalEntity.isProposalData(response.data)) {
         this.setCache(id, response.data);
 
         // Track status change
@@ -433,7 +452,7 @@ export class ProposalEntity {
     try {
       const response = await apiClient.post<ProposalData>(`proposals/${id}/submit`, {});
 
-      if (response.success && response.data) {
+      if (response.success && ProposalEntity.isProposalData(response.data)) {
         this.setCache(id, response.data);
 
         // Track submission
@@ -566,7 +585,7 @@ export class ProposalEntity {
         newTitle,
       });
 
-      if (response.success && response.data) {
+      if (response.success && ProposalEntity.isProposalData(response.data)) {
         this.setCache(response.data.id, response.data);
 
         // Track cloning
@@ -614,8 +633,9 @@ export class ProposalEntity {
 
       if (response.success) {
         logger.info('[ProposalEntity] Draft saved successfully');
+        const draftId = ProposalEntity.isProposalData(response.data) ? response.data.id : undefined;
         trackAuthEvent('proposal_draft_saved', {
-          proposalId: response.data?.id,
+          proposalId: draftId,
           title: proposalData.metadata.title,
         });
       }

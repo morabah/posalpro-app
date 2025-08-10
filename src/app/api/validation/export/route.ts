@@ -66,14 +66,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const processedError = errorHandlingService.processError(
-      error as Error,
+      error,
       'Failed to export validation report'
     );
 
     return NextResponse.json(
       {
         success: false,
-        error: errorHandlingService.getUserFriendlyMessage(processedError),
+        error: errorHandlingService.getUserFriendlyMessage(error),
         componentMapping: COMPONENT_MAPPING,
       },
       { status: 500 }

@@ -142,8 +142,10 @@ export class ProductCompatibilityService {
    * Detects circular dependencies in product relationships
    */
   async detectCircularDependencies(
-    relationships: ProductRelationship[]
+    _relationships: ProductRelationship[]
   ): Promise<CircularDependency[]> {
+    // Mark parameter as used without altering behavior
+    void _relationships;
     // Placeholder implementation
     return [];
   }
@@ -236,9 +238,12 @@ export class ProductCompatibilityService {
 
   private determineOverallCompatibility(
     compatibility: ProductCompatibility[],
-    circularDependencies: CircularDependency[],
-    licenseConflicts: LicenseConflict[]
+    _circularDependencies: CircularDependency[],
+    _licenseConflicts: LicenseConflict[]
   ): 'compatible' | 'incompatible' | 'warning' {
+    // Mark parameters as used without altering behavior
+    void _circularDependencies;
+    void _licenseConflicts;
     const incompatiblePairs = compatibility.filter(c => c.status === 'incompatible').length;
 
     if (incompatiblePairs > 0) {

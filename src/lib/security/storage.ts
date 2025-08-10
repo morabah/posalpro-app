@@ -12,19 +12,10 @@
 
 import { deleteCache, getCache, setCache } from '@/lib/redis';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-9.1'],
-  acceptanceCriteria: ['AC-9.1.1', 'AC-9.1.2'],
-  methods: ['getSecurityState()', 'setSecurityState()', 'deleteSecurityState()'],
-  hypotheses: ['H9'],
-  testCases: ['TC-H9-001', 'TC-H9-002'],
-};
-
 // Abstract storage interface for security state
 export interface SecurityStorage {
-  get(key: string): Promise<any>;
-  set(key: string, value: any, ttl?: number): Promise<void>;
+  get<T = unknown>(key: string): Promise<T | null>;
+  set<T = unknown>(key: string, value: T, ttl?: number): Promise<void>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
   getKeys(pattern: string): Promise<string[]>;
@@ -61,17 +52,17 @@ export class RedisSecurityStorage implements SecurityStorage {
     return `${this.prefix}:${key}`;
   }
 
-  async get(key: string): Promise<any> {
+  async get<T = unknown>(key: string): Promise<T | null> {
     try {
       const value = await getCache(this.getKey(key));
-      return value;
+      return (value ?? null) as T | null;
     } catch (error) {
       console.warn('Security storage get error:', error);
       return null;
     }
   }
 
-  async set(key: string, value: any, ttl: number = this.defaultTTL): Promise<void> {
+  async set<T = unknown>(key: string, value: T, ttl: number = this.defaultTTL): Promise<void> {
     try {
       await setCache(this.getKey(key), value, ttl);
     } catch (error) {
@@ -97,9 +88,13 @@ export class RedisSecurityStorage implements SecurityStorage {
     }
   }
 
-  async getKeys(pattern: string): Promise<string[]> {
+  async getKeys(_pattern: string): Promise<string[]> {
     // Note: Redis keys pattern matching would need to be implemented
     // For now, return empty array as this is not critical for current use cases
+    // Reference the parameter to satisfy no-unused-vars without affecting behavior
+    if (_pattern) {
+      // no-op: pattern matching not implemented yet
+    }
     return [];
   }
 }
@@ -112,9 +107,18 @@ export class RedisCSRFStorage implements CSRFStorage {
     this.storage = storage;
   }
 
+  private isTokenRecord(value: unknown): value is { token: string; expires: number } {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { token?: unknown }).token === 'string' &&
+      typeof (value as { expires?: unknown }).expires === 'number'
+    );
+  }
+
   async getToken(sessionId: string): Promise<string | null> {
-    const data = await this.storage.get(sessionId);
-    if (!data) return null;
+    const data = await this.storage.get<unknown>(sessionId);
+    if (!data || !this.isTokenRecord(data)) return null;
 
     // Check if token is expired
     if (Date.now() > data.expires) {
@@ -151,9 +155,18 @@ export class RedisRateLimitStorage implements RateLimitStorage {
     this.storage = storage;
   }
 
+  private isAttemptsRecord(value: unknown): value is { count: number; resetTime: number } {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { count?: unknown }).count === 'number' &&
+      typeof (value as { resetTime?: unknown }).resetTime === 'number'
+    );
+  }
+
   async getAttempts(identifier: string): Promise<{ count: number; resetTime: number } | null> {
-    const data = await this.storage.get(identifier);
-    if (!data) return null;
+    const data = await this.storage.get<unknown>(identifier);
+    if (!data || !this.isAttemptsRecord(data)) return null;
 
     // Check if window has expired
     if (Date.now() > data.resetTime) {
@@ -161,7 +174,7 @@ export class RedisRateLimitStorage implements RateLimitStorage {
       return null;
     }
 
-    return data;
+    return { count: data.count, resetTime: data.resetTime };
   }
 
   async setAttempts(identifier: string, count: number, resetTime: number): Promise<void> {

@@ -156,6 +156,132 @@ export default function ProposalDetailPage() {
 
   const proposalId = params?.id as string;
 
+  // Helper: unwrap prisma-style { set: ... }
+  const unwrapSet = (v: any) => {
+    if (v && typeof v === 'object' && 'set' in v) return (v as any).set;
+    return v;
+  };
+
+  // Helper: normalize priority to UI format
+  const normalizePriority = (p?: string | null) => {
+    if (!p) return undefined;
+    const s = String(p).toLowerCase();
+    if (s === 'high' || s === 'medium' || s === 'low' || s === 'critical') return s;
+    return undefined;
+  };
+
+  // Enrich proposal with wizard summary friendly fields
+  const enrichProposal = (raw: any): ProposalDetail => {
+    const md = unwrapSet(raw?.metadata) || {};
+    const wd = md?.wizardData || raw?.wizardData || {};
+
+    // Step 1
+    const step1 = {
+      client: {
+        name: wd?.step1?.client?.name ?? raw?.customerName ?? md?.step1?.client?.name,
+        industry: wd?.step1?.client?.industry ?? raw?.customerIndustry ?? md?.step1?.client?.industry,
+        contactPerson: wd?.step1?.client?.contactPerson ?? md?.step1?.client?.contactPerson,
+        contactPhone: wd?.step1?.client?.contactPhone ?? md?.step1?.client?.contactPhone,
+      },
+      details: {
+        title: wd?.step1?.details?.title ?? raw?.title ?? md?.step1?.details?.title,
+        dueDate: wd?.step1?.details?.dueDate ?? raw?.dueDate ?? md?.step1?.details?.dueDate,
+        estimatedValue:
+          wd?.step1?.details?.estimatedValue ?? raw?.value ?? md?.step1?.details?.estimatedValue,
+        priority:
+          normalizePriority(wd?.step1?.details?.priority) ||
+          normalizePriority(raw?.priority) ||
+          normalizePriority(md?.step1?.details?.priority),
+      },
+    };
+
+    // Step 3 (content selections)
+    const contentSelections = Array.isArray(raw?.contentSelections)
+      ? raw.contentSelections.map((c: any) => ({
+          ...c,
+          contentId: c?.contentId ?? c?.id,
+          title: c?.title ?? c?.item?.title,
+          section: c?.section,
+          customizations: c?.customizations ?? [],
+          assignedTo: c?.assignedTo,
+          item: c?.item ?? (c?.contentId || c?.id
+            ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title }
+            : undefined),
+        }))
+      : Array.isArray(md?.contentSelections)
+      ? md.contentSelections
+      : Array.isArray(wd?.step3?.selectedContent)
+      ? wd.step3.selectedContent.map((c: any) => ({
+          ...c,
+          contentId: c?.contentId ?? c?.id,
+          title: c?.title ?? c?.item?.title ?? c?.name,
+          section: c?.section,
+          customizations: c?.customizations ?? [],
+          assignedTo: c?.assignedTo,
+          item: c?.item ?? (c?.contentId || c?.id
+            ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title ?? c?.name }
+            : undefined),
+        }))
+      : [];
+
+    // Step 4 (products)
+    const productsFromRelation = Array.isArray(raw?.products)
+      ? raw.products.map((pp: any) => ({
+          id: pp?.product?.id,
+          name: pp?.product?.name,
+          quantity: pp?.quantity,
+          unitPrice: pp?.unitPrice ?? pp?.product?.price,
+          totalPrice: (pp?.unitPrice ?? pp?.product?.price) * (pp?.quantity ?? 0),
+        }))
+      : [];
+    const productsFromMd = Array.isArray(wd?.step4?.products)
+      ? wd.step4.products
+      : Array.isArray(md?.wizardData?.step4?.products)
+      ? md.wizardData.step4.products
+      : [];
+    const step4 = {
+      products: (productsFromRelation.length ? productsFromRelation : productsFromMd).filter(
+        (p: any) => p && (p.id || p.productId)
+      ),
+    };
+
+    // Step 5 (sections)
+    const step5 = {
+      sections: Array.isArray(raw?.sections) ? raw.sections : wd?.step5?.sections ?? [],
+    };
+
+    // Team assignments
+    const teamAssignments =
+      raw?.teamAssignments || md?.teamAssignments || {
+        teamLead: undefined,
+        salesRepresentative: undefined,
+        subjectMatterExperts: undefined,
+        executiveReviewers: undefined,
+      };
+
+    // Validation/analytics/cross-step (best-effort from metadata)
+    const validationData = raw?.validationData || md?.validation || wd?.step6?.finalValidation || null;
+    const analyticsData = raw?.analyticsData || md?.analytics || null;
+    const crossStepValidation = raw?.crossStepValidation || md?.crossStepValidation || null;
+
+    return {
+      ...raw,
+      wizardData: {
+        step1,
+        step2: wd?.step2 || md?.teamAssignments || null,
+        step3: { selectedContent: contentSelections },
+        step4,
+        step5,
+        step6: { finalValidation: validationData },
+      },
+      teamAssignments,
+      contentSelections,
+      validationData,
+      analyticsData,
+      crossStepValidation,
+    } as ProposalDetail;
+  };
+
   // ✅ CRITICAL FIX: Single useEffect with proper dependency management
   useEffect(() => {
     let isMounted = true;
@@ -179,10 +305,11 @@ export default function ProposalDetailPage() {
 
         const response = (await apiClient.get(`proposals/${proposalId}`)) as any;
 
-        if (response.success && response.data) {
+        if (response.success) {
           // Only update state if component is still mounted
           if (isMounted) {
-            setProposal(response.data);
+            const enriched = enrichProposal(response.data);
+            setProposal(enriched);
             console.log('[ProposalDetailAPI] Successfully fetched proposal:', proposalId);
           }
         } else {
@@ -207,9 +334,9 @@ export default function ProposalDetailPage() {
           // Fetch available proposals to help user navigate
           try {
             const proposalsResponse = (await apiClient.get('proposals')) as any;
-            if (proposalsResponse.success && proposalsResponse.data?.proposals) {
+            if (proposalsResponse.success && proposalsResponse.data!.proposals) {
               setAvailableProposals(
-                proposalsResponse.data.proposals.slice(0, 5).map((p: any) => ({
+                proposalsResponse.data!.proposals.slice(0, 5).map((p: any) => ({
                   id: p.id,
                   title: p.title,
                 }))

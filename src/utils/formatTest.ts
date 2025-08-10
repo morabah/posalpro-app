@@ -1,8 +1,4 @@
 // This is a test file to verify Prettier and Husky setup
-const testFunction = () => {
-  const test = { name: 'test', value: 1 };
-  return test;
-};
 
 export const testObject = {
   id: 1,

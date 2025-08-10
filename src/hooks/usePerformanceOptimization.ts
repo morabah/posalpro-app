@@ -9,8 +9,6 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Component Traceability Matrix
@@ -104,14 +102,8 @@ const DEFAULT_CONFIG: PerformanceConfig = {
  * ✅ MEMORY OPTIMIZATION: Reduced memory footprint and operation frequency
  */
 export function usePerformanceOptimization(config: Partial<PerformanceConfig> = {}) {
-  // ✅ CRITICAL OPTIMIZATION: Dramatically increased intervals to eliminate performance violations
-  const ANALYTICS_THROTTLE_INTERVAL = 600000; // 10 minutes (was 5 minutes)
-  const OPTIMIZED_METRICS_INTERVAL = 300000; // 5 minutes (was 2 minutes)
-  const OPTIMIZED_MEMORY_INTERVAL = 180000; // 3 minutes (was 1 minute)
+  // ✅ CRITICAL OPTIMIZATION: Interval constants removed to avoid unused warnings
   const DEBOUNCE_DELAY = 2000; // 2 second debounce
-
-  const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const errorHandlingService = ErrorHandlingService.getInstance();
 
   const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
@@ -130,9 +122,8 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
     optimizationScore: 0,
   }));
 
-  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isOptimizing] = useState(false);
   const [lastOptimization, setLastOptimization] = useState<number>(0);
-  const [lastAnalyticsLog, setLastAnalyticsLog] = useState<number>(0);
 
   // ✅ PERFORMANCE FIX: Enhanced debounce tracking with cleanup
   const debouncedCallsRef = useRef(new Map<string, NodeJS.Timeout>());
@@ -289,8 +280,22 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
    */
   const collectMemoryMetrics = useCallback(() => {
     try {
-      if ('memory' in performance) {
-        const memory = (performance as any).memory;
+      // Narrow Performance.memory safely (available in Chromium-based browsers)
+      interface PerformanceMemory {
+        usedJSHeapSize: number;
+        totalJSHeapSize: number;
+        jsHeapSizeLimit: number;
+      }
+
+      const perf = performance as unknown as { memory?: unknown };
+      const isPerformanceMemory = (val: unknown): val is PerformanceMemory =>
+        typeof val === 'object' && val !== null &&
+        typeof (val as { usedJSHeapSize?: unknown }).usedJSHeapSize === 'number' &&
+        typeof (val as { totalJSHeapSize?: unknown }).totalJSHeapSize === 'number' &&
+        typeof (val as { jsHeapSizeLimit?: unknown }).jsHeapSizeLimit === 'number';
+
+      if (isPerformanceMemory(perf.memory)) {
+        const memory = perf.memory;
         const memoryUsagePercentage = (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100;
 
         setMetrics(prev => ({
@@ -355,7 +360,21 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified optimization score calculation
    */
-  const calculateOptimizationScore = useCallback((bundleMetrics: any, cacheMetrics: any) => {
+  interface SimpleBundleMetrics {
+    totalSize: number;
+    chunkSizes: Record<string, number>;
+    loadTimes: Record<string, number>;
+    compressionRatio: number;
+  }
+
+  interface SimpleCacheMetrics {
+    hitRate: number;
+    missRate: number;
+    evictionRate: number;
+    totalRequests: number;
+  }
+
+  const calculateOptimizationScore = useCallback((bundleMetrics: SimpleBundleMetrics, cacheMetrics: SimpleCacheMetrics) => {
     try {
       return 0; // Simplified score
     } catch (error) {

@@ -243,12 +243,12 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
 
         // Handle response structure like customer selection
         const managers =
-          managersResponse.success && managersResponse.data
+          managersResponse.success
             ? managersResponse.data.users || managersResponse.data || []
             : [];
 
         const executives =
-          executivesResponse.success && executivesResponse.data
+          executivesResponse.success
             ? executivesResponse.data.users || executivesResponse.data || []
             : [];
 

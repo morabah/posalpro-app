@@ -281,9 +281,9 @@ class EnhancedApiClient {
           logger.debug('[ApiClient] Parsed response data:', data);
 
           // Apply error interceptor
-          const interceptedResponse = await errorInterceptor.interceptResponse(
+          const interceptedResponse = await errorInterceptor.interceptResponse<T>(
             response,
-            data,
+            data as unknown,
             config.errorHandling
           );
           logger.debug('[ApiClient] Error interceptor applied:', interceptedResponse);

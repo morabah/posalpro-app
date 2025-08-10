@@ -17,7 +17,7 @@ export interface LogContext {
   level: LogLevel;
   message: string;
   data?: Record<string, unknown>;
-  error?: Error | unknown;
+  error?: unknown;
   environment: string;
   userAgent?: string;
   sessionId?: string;
@@ -38,7 +38,7 @@ interface LoggerConfig {
 
 // Environment-aware configuration
 const getLoggerConfig = (): LoggerConfig => {
-  const env = process.env.NODE_ENV || 'development';
+  const env = process.env.NODE_ENV;
   const isProduction = env === 'production';
   const isTest = env === 'test';
 
@@ -101,13 +101,13 @@ class Logger {
     level: LogLevel,
     message: string,
     data?: Record<string, unknown>,
-    error?: Error | unknown
+    error?: unknown
   ): LogContext {
     const context: LogContext = {
       timestamp: new Date().toISOString(),
       level,
       message,
-      environment: process.env.NODE_ENV || 'development',
+      environment: process.env.NODE_ENV,
       sessionId: this.sessionId,
     };
 
@@ -180,7 +180,7 @@ class Logger {
     level: LogLevel,
     message: string,
     data?: Record<string, unknown>,
-    error?: Error | unknown
+    error?: unknown
   ): Promise<void> {
     if (!this.shouldLog(level)) return;
 
@@ -210,7 +210,7 @@ class Logger {
 
   public async error(
     message: string,
-    error?: Error | unknown,
+    error?: unknown,
     data?: Record<string, unknown>
   ): Promise<void> {
     await this.log(LogLevel.ERROR, message, data, error);
@@ -275,7 +275,7 @@ export const logWarn = (message: string, data?: Record<string, unknown>): Promis
 
 export const logError = (
   message: string,
-  error?: Error | unknown,
+  error?: unknown,
   data?: Record<string, unknown>
 ): Promise<void> => logger.error(message, error, data);
 

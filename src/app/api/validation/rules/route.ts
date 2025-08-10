@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     const processedError = errorHandlingService.processError(
-      error as Error,
+      error,
       'Failed to retrieve validation rules'
     );
 

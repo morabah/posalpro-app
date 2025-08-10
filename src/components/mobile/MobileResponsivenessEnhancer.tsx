@@ -271,7 +271,7 @@ export function MobileResponsivenessEnhancer({
       });
     } catch (error) {
       errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to optimize viewport for mobile device'
       );
     }
@@ -462,7 +462,7 @@ export function MobileResponsivenessEnhancer({
         componentMapping: COMPONENT_MAPPING,
       });
     } catch (error) {
-      errorHandlingService.processError(error as Error, 'Mobile enhancement initialization failed');
+      errorHandlingService.processError(error, 'Mobile enhancement initialization failed');
     } finally {
       setIsEnhancing(false);
     }

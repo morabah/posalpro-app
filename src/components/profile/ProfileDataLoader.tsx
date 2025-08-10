@@ -28,7 +28,7 @@ export function ProfileDataLoader() {
 
         console.log('📊 Profile API Response:', response);
 
-        if (response.success && response.data) {
+        if (response.success) {
           console.log('✅ SUCCESS: Profile data retrieved!');
           console.log('📋 Job Title in database:', response.data.title);
           console.log('📋 Full profile data:', response.data);

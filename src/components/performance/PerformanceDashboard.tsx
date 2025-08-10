@@ -104,7 +104,7 @@ export default function PerformanceDashboard({
       });
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to trigger performance optimization',
         ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
         {

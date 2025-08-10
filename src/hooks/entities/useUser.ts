@@ -99,7 +99,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.create(userData);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             user: response.data,
@@ -127,7 +127,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.findById(id);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             user: response.data!,
@@ -154,7 +154,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.findByEmail(email);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             user: response.data!,
@@ -181,7 +181,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.update(id, updateData);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             user: prev.user?.id === id ? response.data : prev.user,
@@ -238,7 +238,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.query(options);
 
-        if (response.success && response.data?.users) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             users: response.data.users,
@@ -270,7 +270,7 @@ export const useUser = (): UseUserState & UseUserActions => {
       const { usersApi } = await import('@/lib/api/endpoints/users');
       const response = await usersApi.getUsersByRole(role);
 
-      if (response.success && response.data) {
+      if (response.success) {
         return response.data;
       } else {
         return [];
@@ -290,7 +290,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.getPermissions(id);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             permissions: response.data,
@@ -320,7 +320,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.updatePermissions(id, permissions);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             permissions: response.data,
@@ -351,7 +351,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.getActivityLog(id, options);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             activityLog: response.data,
@@ -380,7 +380,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.activate(id);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             user: prev.user?.id === id ? response.data : prev.user,
@@ -408,7 +408,7 @@ export const useUser = (): UseUserState & UseUserActions => {
 
         const response = await userEntity.deactivate(id);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             user: prev.user?.id === id ? response.data : prev.user,

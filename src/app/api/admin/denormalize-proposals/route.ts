@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const processedError = errorHandlingService.processError(
-      error as Error,
+      error,
       'Failed to denormalize proposals',
       ErrorCodes.DATA.UPDATE_FAILED,
       {

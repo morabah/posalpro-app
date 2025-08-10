@@ -4,16 +4,21 @@
  * Provides reusable form validation patterns and error handling
  */
 
-import { FieldError, FieldErrors, UseFormSetError } from 'react-hook-form';
+import { FieldError, FieldErrors, UseFormSetError, Path } from 'react-hook-form';
 import { z } from 'zod';
 
 /**
  * Convert Zod validation errors to React Hook Form errors
  */
-export const zodErrorsToFormErrors = (zodError: z.ZodError, setError: UseFormSetError<any>) => {
+export const zodErrorsToFormErrors = <TFieldValues extends Record<string, unknown>>(
+  zodError: z.ZodError,
+  setError: UseFormSetError<TFieldValues>
+) => {
   zodError.errors.forEach(error => {
-    const fieldName = error.path.join('.');
-    setError(fieldName as any, {
+    const name = (error.path.length === 0
+      ? 'root'
+      : (error.path.join('.') as unknown)) as Path<TFieldValues> | 'root';
+    setError(name, {
       type: 'validation',
       message: error.message,
     });
@@ -23,23 +28,23 @@ export const zodErrorsToFormErrors = (zodError: z.ZodError, setError: UseFormSet
 /**
  * Extract field-level errors from React Hook Form errors
  */
-export const getFieldError = (
+export const getFieldError = <TFieldValues extends Record<string, unknown>>(
   fieldName: string,
-  errors: FieldErrors<any>
+  errors: FieldErrors<TFieldValues>
 ): FieldError | undefined => {
   const path = fieldName.split('.');
-  let current: any = errors;
+  let current: unknown = errors;
 
   for (const key of path) {
-    if (current && typeof current === 'object' && key in current) {
-      current = current[key];
+    if (current && typeof current === 'object' && key in (current as Record<string, unknown>)) {
+      current = (current as Record<string, unknown>)[key];
     } else {
       return undefined;
     }
   }
 
   // Check if current is a FieldError (has message property)
-  if (current && typeof current === 'object' && 'message' in current) {
+  if (current && typeof current === 'object' && 'message' in (current as Record<string, unknown>)) {
     return current as FieldError;
   }
 
@@ -49,31 +54,34 @@ export const getFieldError = (
 /**
  * Get error message for a specific field
  */
-export const getFieldErrorMessage = (
+export const getFieldErrorMessage = <TFieldValues extends Record<string, unknown>>(
   fieldName: string,
-  errors: FieldErrors<any>
+  errors: FieldErrors<TFieldValues>
 ): string | undefined => {
-  const error = getFieldError(fieldName, errors);
+  const error = getFieldError<TFieldValues>(fieldName, errors);
   return error?.message;
 };
 
 /**
  * Check if a specific field has an error
  */
-export const hasFieldError = (fieldName: string, errors: FieldErrors<any>): boolean => {
-  return !!getFieldError(fieldName, errors);
+export const hasFieldError = <TFieldValues extends Record<string, unknown>>(
+  fieldName: string,
+  errors: FieldErrors<TFieldValues>
+): boolean => {
+  return !!getFieldError<TFieldValues>(fieldName, errors);
 };
 
 /**
  * Get CSS classes for form field based on validation state
  */
-export const getFieldClasses = (
+export const getFieldClasses = <TFieldValues extends Record<string, unknown>>(
   fieldName: string,
-  errors: FieldErrors<any>,
+  errors: FieldErrors<TFieldValues>,
   baseClasses: string = 'form-field',
   errorClasses: string = 'border-error-500 focus:border-error-500 focus:ring-error-500'
 ): string => {
-  const hasError = hasFieldError(fieldName, errors);
+  const hasError = hasFieldError<TFieldValues>(fieldName, errors);
   return hasError ? `${baseClasses} ${errorClasses}` : baseClasses;
 };
 
@@ -85,9 +93,9 @@ export type FieldValidationState = 'idle' | 'validating' | 'valid' | 'invalid';
 /**
  * Get validation state for a form field
  */
-export const getFieldValidationState = (
+export const getFieldValidationState = <TFieldValues extends Record<string, unknown>>(
   fieldName: string,
-  errors: FieldErrors<any>,
+  errors: FieldErrors<TFieldValues>,
   isValidating?: boolean,
   touchedFields?: Record<string, boolean>
 ): FieldValidationState => {
@@ -104,11 +112,11 @@ export const getFieldValidationState = (
 /**
  * Form validation configuration
  */
-export interface FormValidationConfig<T extends z.ZodType<any>> {
+export interface FormValidationConfig<T extends z.ZodType<unknown>> {
   schema: T;
   mode?: 'onChange' | 'onBlur' | 'onSubmit' | 'onTouched' | 'all';
   reValidateMode?: 'onChange' | 'onBlur' | 'onSubmit';
-  resolver?: any; // zodResolver will be passed here
+  resolver?: (values: unknown, context?: unknown) => unknown; // zodResolver will be passed here
 }
 
 /**
@@ -291,10 +299,14 @@ export const formAnalytics = {
   /**
    * Track form field interactions
    */
+  
+  // Typed analytics function signature used across helpers
+  // event, payload, optional priority
+  
   trackFieldInteraction: (
     fieldName: string,
     action: 'focus' | 'blur' | 'change' | 'error',
-    analytics?: any
+    analytics?: (event: string, payload: Record<string, unknown>, priority?: 'low' | 'medium' | 'high') => void
   ) => {
     if (analytics) {
       analytics('form_field_interaction', {
@@ -307,7 +319,12 @@ export const formAnalytics = {
   /**
    * Track form submission attempts
    */
-  trackFormSubmission: (formName: string, success: boolean, errors?: string[], analytics?: any) => {
+  trackFormSubmission: (
+    formName: string,
+    success: boolean,
+    errors?: string[],
+    analytics?: (event: string, payload: Record<string, unknown>, priority?: 'low' | 'medium' | 'high') => void
+  ) => {
     if (analytics) {
       analytics('form_submission', {
         form: formName,
@@ -320,7 +337,11 @@ export const formAnalytics = {
   /**
    * Track validation errors
    */
-  trackValidationErrors: (formName: string, errors: Record<string, string>, analytics?: any) => {
+  trackValidationErrors: (
+    formName: string,
+    errors: Record<string, string>,
+    analytics?: (event: string, payload: Record<string, unknown>, priority?: 'low' | 'medium' | 'high') => void
+  ) => {
     if (analytics) {
       analytics('form_validation_errors', {
         form: formName,

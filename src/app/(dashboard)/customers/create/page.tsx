@@ -69,9 +69,9 @@ export default function CustomerCreationPage() {
         formData
       );
 
-      if (response.success && response.data) {
+      if (response.success) {
         // Navigate to the newly created customer
-        router.push(`/customers/${response.data.id}`);
+        router.push(`/customers/${response.data!.id}`);
       }
     } catch (error) {
       handleAsyncError(

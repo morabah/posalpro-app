@@ -327,10 +327,21 @@ export class OptimizedProductService {
    * Batch operation for multiple product operations
    */
   async batchProductOperations(
-    operations: Array<{
-      type: 'stats' | 'search' | 'analytics';
-      params: any;
-    }>
+    operations: Array<
+      | { type: 'stats'; params?: { dateFrom?: Date; dateTo?: Date; category?: string[]; isActive?: boolean } }
+      | {
+          type: 'search';
+          params: {
+            search?: string;
+            category?: string[];
+            priceRange?: { min: number; max: number };
+            isActive?: boolean;
+            limit?: number;
+            offset?: number;
+          };
+        }
+      | { type: 'analytics'; params: { productId: string } }
+    >
   ) {
     try {
       const startTime = Date.now();
@@ -348,7 +359,7 @@ export class OptimizedProductService {
                 data: await this.getProductUsageAnalytics(op.params.productId),
               };
             default:
-              throw new Error(`Unknown operation type: ${op.type}`);
+              throw new Error('Unknown operation type');
           }
         })
       );

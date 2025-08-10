@@ -205,7 +205,7 @@ export class ProposalService {
 
       if (isPrismaError(error)) {
         if (error.code === 'P2003') {
-          const fieldName = (error.meta as { field_name?: string })?.field_name;
+          const fieldName = (error.meta as { field_name?: string }).field_name;
           throw new StandardError({
             message: `Database constraint failed for field: ${fieldName || 'unknown field'}. Ensure related records exist.`,
             code: ErrorCodes.DATA.INTEGRITY_VIOLATION,
@@ -1104,9 +1104,11 @@ export class ProposalService {
   async updateProposalStatus(
     id: string,
     status: ProposalStatus,
-    updatedBy: string
+    _updatedBy: string
   ): Promise<Proposal> {
     try {
+      // Mark parameter as used without affecting behavior
+      void _updatedBy;
       const updateData: {
         status: ProposalStatus;
         submittedAt?: Date;

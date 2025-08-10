@@ -17,7 +17,7 @@ export function getApiBaseUrl(): string {
   }
 
   // Server-side: check environment directly without triggering config loading
-  const nodeEnv = (process.env.NODE_ENV || 'development').toLowerCase();
+  const nodeEnv = process.env.NODE_ENV.toLowerCase();
 
   if (nodeEnv === 'production' || nodeEnv === 'staging') {
     // Production/staging: use explicit API_BASE_URL or fallback to relative
@@ -42,7 +42,7 @@ export function getNextAuthUrl(): string {
   }
 
   // Server-side: check environment directly
-  const nodeEnv = (process.env.NODE_ENV || 'development').toLowerCase();
+  const nodeEnv = process.env.NODE_ENV.toLowerCase();
 
   if (nodeEnv === 'production' || nodeEnv === 'staging') {
     // Production/staging: use explicit NEXTAUTH_URL

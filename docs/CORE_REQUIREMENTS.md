@@ -149,6 +149,56 @@ useEffect(() => {
 - Ensure Select option sets include any pre-selected ids so values render
   immediately while labels resolve after lists load.
 
+### 💾 Wizard Persistence & Retrieval Contract (Generalized – Mandatory)
+
+To guarantee edits persist and reload correctly across create/edit:
+
+1) PATCH Payload Requirements
+
+- Mirror snapshots under both roots per step:
+  - `metadata.wizardData.stepN.*` (canonical snapshot for hydration) and
+  - `wizardData.stepN.*` (legacy fallback).
+- Include top-level scalars where API expects them (e.g., `priority`, `customerId`, `title`, `description`, `dueDate`, `estimatedValue`).
+  - Map enums to backend enum casing (often UPPERCASE) at top-level; keep UI values normalized (e.g., lowercase) inside `metadata.wizardData`.
+- Relations:
+  - Products: use real `product.id` as `productId`; include `quantity`, `unitPrice` and mirror list under `metadata.wizardData.step4.products`.
+  - Content selections: persist at metadata root as structured entries; mirror within step if step-local UIs require it.
+- Deep-merge by step when patching metadata; never replace the whole tree.
+
+2) GET/Hydration Requirements
+
+- Unwrap Prisma-style update wrappers: if metadata is `{ set: ... }`, use `.set`.
+- Merge order per step (non-destructive):
+  1. `metadata.wizardData.stepN`
+  2. top-level convenience fields (e.g., `proposal.priority`, relations)
+  3. `wizardData.stepN` (legacy)
+  4. derived defaults (normalized title/ids, inferred assignments)
+- Normalize consistently:
+  - Priority: coerce to `ProposalPriority` ('high' | 'medium' | 'low') for UI; convert to backend enum casing on PATCH.
+  - IDs: validate existence; drop unknowns; ensure `productId === product.id`.
+- Only fill missing keys; never overwrite explicit user values.
+
+3) Logging & Validation
+
+- Log counts and key sets (not full payloads) to reduce noise/PII.
+- Validate referenced IDs on the server; drop stale client entries.
+- Add unit tests for hydration and persistence round-trips per step.
+
+### 🚫 Do-Not (Persistence Pitfalls)
+
+- Do not rely on a single source (only metadata or only relations). Always merge across metadata, top-level, legacy `wizardData`, and derived defaults.
+- Do not overwrite nested `metadata.wizardData` objects; deep-merge per step.
+- Do not send UI-cased enums to backend; map to backend enum casing for scalars.
+- Do not use SKU/display names as IDs; use database ids.
+- Do not assume raw metadata; unwrap `{ set: ... }` before hydration.
+- Do not log entire PATCH bodies or metadata; log shapes/sizes only.
+
+### ⛔ Deprecated (Removed) Strategies
+
+- Persisting only `wizardData.stepN` without mirroring under `metadata.wizardData`.
+- Hydrating from a single path (e.g., only metadata or only top-level); replaced by multi-source merge.
+- Replacing entire `metadata` on PATCH; replaced by per-step deep merges.
+
 ## 🗃️ **API & DATABASE PERFORMANCE (MANDATORY)**
 
 **🔎 Selective Hydration**

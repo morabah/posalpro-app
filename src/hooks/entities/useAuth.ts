@@ -109,7 +109,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
         const response = await authEntity.login(credentials);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             session: response.data.session,
@@ -138,7 +138,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
         const response = await authEntity.register(userData);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({ ...prev, loading: false }));
           return response.data;
         } else {
@@ -189,7 +189,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
       const response = await authEntity.refreshTokens();
 
-      if (response.success && response.data) {
+      if (response.success) {
         setState(prev => ({
           ...prev,
           tokens: response.data,
@@ -214,7 +214,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
       const response = await authEntity.getCurrentSession();
 
-      if (response.success && response.data) {
+      if (response.success) {
         setState(prev => ({
           ...prev,
           session: response.data,
@@ -335,7 +335,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
       const response = await authEntity.setup2FA();
 
-      if (response.success && response.data) {
+      if (response.success) {
         setState(prev => ({
           ...prev,
           twoFactorSetup: response.data,
@@ -363,7 +363,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
         const response = await authEntity.confirm2FA(setupToken, verificationCode);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             twoFactorSetup: null,
@@ -413,7 +413,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
       const response = await authEntity.getSecuritySettings();
 
-      if (response.success && response.data) {
+      if (response.success) {
         setState(prev => ({
           ...prev,
           securitySettings: response.data,
@@ -438,7 +438,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
         const response = await authEntity.updateSecuritySettings(settings);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             securitySettings: response.data,
@@ -465,7 +465,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
         const response = await authEntity.getLoginHistory(page, limit);
 
-        if (response.success && response.data) {
+        if (response.success) {
           setState(prev => ({
             ...prev,
             loginHistory: response.data,
@@ -491,7 +491,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
 
       const response = await authEntity.getDeviceSessions();
 
-      if (response.success && response.data) {
+      if (response.success) {
         setState(prev => ({
           ...prev,
           deviceSessions: response.data,

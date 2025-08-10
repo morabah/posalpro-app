@@ -33,6 +33,8 @@ const COMPONENT_MAPPING = {
   hypotheses: ['H8', 'H9'],
   testCases: ['TC-H8-003', 'TC-H9-001'],
 };
+// Mark traceability metadata as intentionally used to satisfy linting without changing behavior
+void COMPONENT_MAPPING;
 
 // Performance metrics interface
 export interface BundleMetrics {
@@ -100,6 +102,7 @@ export class BundleOptimizerService {
   }
 
   static getInstance(): BundleOptimizerService {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!BundleOptimizerService.instance) {
       BundleOptimizerService.instance = new BundleOptimizerService();
     }
@@ -152,7 +155,7 @@ export class BundleOptimizerService {
       return lazyComponent;
     } catch (error) {
       const processedError = this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to create optimized component',
         ErrorCodes.SYSTEM.COMPONENT_LOAD_FAILED,
         {
@@ -176,14 +179,14 @@ export class BundleOptimizerService {
     config: ComponentOptimizationConfig
   ): Promise<{ default: ComponentType<any> }> {
     const startTime = performance.now();
-    const { id, chunkName, fallbackComponent } = config;
+    const { id, chunkName } = config;
 
     try {
       // Track component utilization
       this.utilizationTracking.set(id, (this.utilizationTracking.get(id) || 0) + 1);
 
       // Dynamic import with chunk name annotation
-      const module = await import(
+      const importedModule = await import(
         /* webpackChunkName: "[request]" */
         `@/components/${id}`
       );
@@ -194,9 +197,9 @@ export class BundleOptimizerService {
       // Analytics: Track successful component load
       // Disabled analytics to prevent performance overhead (Lesson #13)
       // TODO: migrate to optimized analytics with throttling
-      // this.analytics?.('component_loaded', { componentId: config.id, loadTime, chunkSize: module.default.toString().length }, 'low');
+      // this.analytics?.('component_loaded', { componentId: config.id, loadTime, chunkSize: importedModule.default.toString().length }, 'low');
 
-      return module;
+      return importedModule;
     } catch (error) {
       const loadTime = performance.now() - startTime;
 
@@ -205,7 +208,7 @@ export class BundleOptimizerService {
       // this.analytics?.('component_load_failed', { componentId: id, errorType: error instanceof Error ? error.message : 'Unknown error' }, 'low');
 
       const processedError = this.errorHandlingService.processError(
-        error as Error,
+        error,
         `Failed to load component: ${id}`,
         ErrorCodes.SYSTEM.COMPONENT_LOAD_FAILED,
         {
@@ -246,6 +249,8 @@ export class BundleOptimizerService {
       // TODO: migrate to optimized analytics with throttling
       // this.analytics?.('component_preloaded', { componentId: id }, 'low');
     } catch (error) {
+      // Mark error as used while analytics is disabled
+      void error;
       // Disabled analytics to prevent performance overhead (Lesson #13)
       // TODO: migrate to optimized analytics with throttling
       // this.analytics?.('component_preload_failed', { componentId: id, errorType: error instanceof Error ? error.message : 'Unknown error' }, 'low');
@@ -258,8 +263,6 @@ export class BundleOptimizerService {
    * Prefetch component for future use
    */
   private prefetchComponent(config: ComponentOptimizationConfig): void {
-    const { id } = config;
-
     if ('requestIdleCallback' in window) {
       window.requestIdleCallback(
         () => {
@@ -282,7 +285,9 @@ export class BundleOptimizerService {
     config: ComponentOptimizationConfig,
     error: Error
   ): ComponentType<any> {
-    const { id, fallbackComponent } = config;
+    // mark error as used (analytics disabled for now)
+    void error;
+    const { id } = config;
 
     return function FallbackComponent() {
       return React.createElement(
@@ -336,17 +341,12 @@ export class BundleOptimizerService {
       this.performanceObserver = new PerformanceObserver(list => {
         list.getEntries().forEach(entry => {
           if (entry.entryType === 'navigation') {
-            const navEntry = entry as PerformanceNavigationTiming;
-
             // Disabled analytics to prevent performance overhead (Lesson #13)
             // TODO: migrate to optimized analytics with throttling
             // this.analytics?.('bundle_performance_metrics', { domContentLoaded, firstByte, loadComplete }, 'low');
           }
 
           if (entry.entryType === 'resource' && entry.name.includes('.js')) {
-            const resourceEntry = entry as PerformanceResourceTiming;
-            const chunkName = entry.name.split('/').pop() || 'unknown';
-
             // Disabled analytics to prevent performance overhead (Lesson #13)
             // TODO: migrate to optimized analytics with throttling
             // this.analytics?.('chunk_load_performance', { chunkName, loadTime: resourceEntry.responseEnd - resourceEntry.requestStart }, 'low');
@@ -425,9 +425,9 @@ export class BundleOptimizerService {
     };
 
     if ('performance' in window) {
-      const navigation = performance.getEntriesByType(
-        'navigation'
-      )[0] as PerformanceNavigationTiming;
+      const navigation = performance.getEntriesByType('navigation')[0] as
+        | PerformanceNavigationTiming
+        | undefined;
       if (navigation) {
         bundleMetrics.criticalResourcesLoadTime =
           navigation.domContentLoadedEventEnd - navigation.fetchStart;
@@ -559,7 +559,7 @@ export function useBundlePerformance() {
 
   const recommendations = React.useMemo(() => {
     return optimizer.generateOptimizationRecommendations();
-  }, [optimizer, metrics]);
+  }, [optimizer]);
 
   return {
     metrics,

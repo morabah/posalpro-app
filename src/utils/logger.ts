@@ -1,14 +1,14 @@
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
 class Logger {
-  private static instance: Logger;
+  private static instance: Logger | null = null;
   private logLevels: LogLevel[] = ['error', 'warn', 'info', 'debug'];
   private currentLogLevel: LogLevel = typeof window !== 'undefined' ? 'info' : 'debug';
 
   private constructor() {}
 
   public static getInstance(): Logger {
-    if (!Logger.instance) {
+    if (Logger.instance === null) {
       Logger.instance = new Logger();
     }
     return Logger.instance;
@@ -33,50 +33,44 @@ class Logger {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
 
-    // Enhanced meaningful data detection to prevent "Object" logging
+    // Use a typed map of console functions to avoid unsafe member access
+    const consoleFns: Record<LogLevel, (...args: unknown[]) => void> = {
+      error: console.error.bind(console),
+      warn: console.warn.bind(console),
+      info: console.info.bind(console),
+      debug: console.debug.bind(console),
+    };
+
+    // Enhanced meaningful data detection to prevent noisy "[object Object]" logs
     if (data !== undefined && data !== null) {
-      // Check if data is an empty object or meaningless
-      const isEmptyObject =
-        typeof data === 'object' && data !== null && Object.keys(data).length === 0;
-
+      const isObject = typeof data === 'object';
+      const isArray = Array.isArray(data);
+      const isEmptyObject = isObject && !isArray && Object.keys(data as Record<string, unknown>).length === 0;
       const isEmptyString = typeof data === 'string' && data.trim() === '';
+      const isLargePlainObject = isObject && !isArray && Object.keys(data as Record<string, unknown>).length > 10;
 
-      // Check if it's a generic object that would show as "Object" in console
-      const isGenericObject =
-        typeof data === 'object' &&
-        data !== null &&
-        data.constructor === Object &&
-        data.toString() === '[object Object]';
-
-      // Check for large objects that would be meaningless to log
-      const isMeaninglessObject =
-        typeof data === 'object' &&
-        data !== null &&
-        Object.keys(data).length > 10 &&
-        !Array.isArray(data);
-
-      if (!isEmptyObject && !isEmptyString && !isGenericObject && !isMeaninglessObject) {
-        // For small objects, try to stringify for better readability
-        if (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length <= 5) {
+      if (!isEmptyObject && !isEmptyString && !isLargePlainObject) {
+        // For small plain objects, try to stringify for better readability
+        if (isObject && !isArray && Object.keys(data as Record<string, unknown>).length <= 5) {
           try {
             const stringified = JSON.stringify(data, null, 2);
-            if (stringified && stringified !== '{}' && stringified !== 'null') {
-              console[level](`${logMessage} ${stringified}`);
+            if (stringified !== '{}' && stringified !== 'null') {
+              consoleFns[level](`${logMessage} ${stringified}`);
             } else {
-              console[level](logMessage);
+              consoleFns[level](logMessage);
             }
           } catch {
-            console[level](logMessage);
+            consoleFns[level](logMessage);
           }
         } else {
-          console[level](logMessage, data);
+          consoleFns[level](logMessage, data);
         }
       } else {
         // Log message only if data is empty/meaningless
-        console[level](logMessage);
+        consoleFns[level](logMessage);
       }
     } else {
-      console[level](logMessage);
+      consoleFns[level](logMessage);
     }
   }
 

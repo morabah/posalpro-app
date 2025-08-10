@@ -16,8 +16,27 @@ import {
 } from './ErrorCodes';
 import { ErrorMetadata, StandardError } from './StandardError';
 
+function hasName(value: unknown): value is { name: unknown } {
+  return !!value && typeof value === 'object' && 'name' in value;
+}
+
+function isStandardErrorLike(value: unknown): value is StandardError {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'code' in value &&
+    'message' in value &&
+    hasName(value) &&
+    value.name === 'StandardError'
+  );
+}
+
+function hasIssuesArray(value: unknown): value is { issues: unknown } {
+  return !!value && typeof value === 'object' && 'issues' in value;
+}
+
 export class ErrorHandlingService {
-  private static instance: ErrorHandlingService;
+  private static instance: ErrorHandlingService | undefined;
 
   private constructor() {}
 
@@ -38,14 +57,8 @@ export class ErrorHandlingService {
     metadata?: ErrorMetadata
   ): StandardError {
     // If it's already a StandardError, return it (robust check)
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      'name' in error &&
-      (error as any).name === 'StandardError'
-    ) {
-      return error as StandardError;
+    if (isStandardErrorLike(error)) {
+      return error;
     }
 
     // Fallback instanceof check with protection
@@ -53,7 +66,7 @@ export class ErrorHandlingService {
       if (error instanceof StandardError) {
         return error;
       }
-    } catch (instanceofError) {
+    } catch {
       // instanceof failed, continue with other checks
     }
 
@@ -62,7 +75,7 @@ export class ErrorHandlingService {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         return this.processPrismaError(error, defaultMessage, metadata);
       }
-    } catch (instanceofError) {
+    } catch {
       // Prisma instanceof failed, check manually
       if (error && typeof error === 'object' && 'code' in error && 'clientVersion' in error) {
         return this.processPrismaError(
@@ -77,14 +90,9 @@ export class ErrorHandlingService {
       if (error instanceof z.ZodError) {
         return this.processZodError(error, defaultMessage, metadata);
       }
-    } catch (instanceofError) {
+    } catch {
       // Zod instanceof failed, check manually
-      if (
-        error &&
-        typeof error === 'object' &&
-        'issues' in error &&
-        Array.isArray((error as any).issues)
-      ) {
+      if (hasIssuesArray(error) && Array.isArray((error as { issues: unknown }).issues)) {
         return this.processZodError(error as z.ZodError, defaultMessage, metadata);
       }
     }
@@ -101,16 +109,17 @@ export class ErrorHandlingService {
           },
         });
       }
-    } catch (instanceofError) {
+    } catch {
       // Error instanceof failed, check manually
       if (error && typeof error === 'object' && 'message' in error && 'stack' in error) {
+        const anyErr = error as { message?: unknown; stack?: unknown };
         return new StandardError({
-          message: (error as Error).message || defaultMessage,
+          message: typeof anyErr.message === 'string' ? anyErr.message : defaultMessage,
           code: defaultCode,
           cause: error,
           metadata: {
             ...metadata,
-            stack: (error as Error).stack,
+            stack: typeof anyErr.stack === 'string' ? anyErr.stack : undefined,
           },
         });
       }
@@ -146,24 +155,30 @@ export class ErrorHandlingService {
 
     // Handle specific Prisma error codes
     switch (prismaCode) {
-      case 'P2002': // Unique constraint failed
-        const target = (error.meta?.target as string[]) || [];
+      case 'P2002': {
+        // Unique constraint failed
+        const metaTarget = error.meta?.target;
+        const target = Array.isArray(metaTarget) ? metaTarget : [];
         message = `Duplicate entry: ${target.join(', ')} already exists`;
         additionalMetadata = { fields: target };
         break;
-
-      case 'P2003': // Foreign key constraint failed
-        const field = (error.meta?.field_name as string) || 'unknown field';
+      }
+      case 'P2003': {
+        // Foreign key constraint failed
+        const metaField = error.meta?.field_name;
+        const field = typeof metaField === 'string' && metaField ? metaField : 'unknown field';
         message = `Referenced record does not exist for ${field}`;
         additionalMetadata = { field };
         break;
-
-      case 'P2025': // Record not found
+      }
+      case 'P2025': {
+        // Record not found
         message = 'Record not found';
         break;
-
-      default:
+      }
+      default: {
         message = `Database error: ${error.message}`;
+      }
     }
 
     return new StandardError({
@@ -300,25 +315,30 @@ export class ErrorHandlingService {
 
     // Network, timeout, and some server errors are retryable
     if (category === ErrorCategory.API) {
-      return [
+      const retryableApi: readonly ErrorCode[] = [
         ErrorCodes.API.NETWORK_ERROR,
         ErrorCodes.API.TIMEOUT,
         ErrorCodes.API.SERVICE_UNAVAILABLE,
-      ].includes(standardError.code as any);
+      ];
+      return retryableApi.includes(standardError.code);
     }
 
     // Database connection and timeout errors are retryable
     if (category === ErrorCategory.DATA) {
-      return [ErrorCodes.DATA.TIMEOUT, ErrorCodes.DATA.QUERY_FAILED].includes(
-        standardError.code as any
-      );
+      const retryableData: readonly ErrorCode[] = [
+        ErrorCodes.DATA.TIMEOUT,
+        ErrorCodes.DATA.QUERY_FAILED,
+      ];
+      return retryableData.includes(standardError.code);
     }
 
     // System timeouts are retryable
     if (category === ErrorCategory.SYSTEM) {
-      return [ErrorCodes.SYSTEM.TIMEOUT, ErrorCodes.SYSTEM.RESOURCE_EXHAUSTED].includes(
-        standardError.code as any
-      );
+      const retryableSystem: readonly ErrorCode[] = [
+        ErrorCodes.SYSTEM.TIMEOUT,
+        ErrorCodes.SYSTEM.RESOURCE_EXHAUSTED,
+      ];
+      return retryableSystem.includes(standardError.code);
     }
 
     return false;

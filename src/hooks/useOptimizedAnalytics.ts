@@ -151,7 +151,7 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
       }
     } catch (error) {
       const standardError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to flush analytics batch',
         ErrorCodes.ANALYTICS.TRACKING_ERROR,
         { component: 'useOptimizedAnalytics' }

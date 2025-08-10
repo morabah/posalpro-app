@@ -35,6 +35,9 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H8-007', 'TC-H11-003', 'TC-H12-001'],
 };
 
+// Mark traceability metadata as intentionally referenced to satisfy no-unused-vars
+void COMPONENT_MAPPING;
+
 // Query optimization configuration
 export interface QueryOptimizerConfig {
   enableQueryCaching: boolean;
@@ -138,6 +141,7 @@ export class DatabaseQueryOptimizer {
   }
 
   static getInstance(config?: Partial<QueryOptimizerConfig>): DatabaseQueryOptimizer {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!DatabaseQueryOptimizer.instance) {
       DatabaseQueryOptimizer.instance = new DatabaseQueryOptimizer(config);
     }
@@ -255,7 +259,7 @@ export class DatabaseQueryOptimizer {
       const executionTime = performance.now() - startTime;
 
       const processedError = this.errorHandlingService.processError(
-        error as Error,
+        error,
         `Database query execution failed: ${queryKey}`,
         ErrorCodes.DATA.QUERY_EXECUTION_FAILED,
         {
@@ -281,6 +285,7 @@ export class DatabaseQueryOptimizer {
    */
   private async getCachedQuery<T>(queryKey: string): Promise<T | null> {
     // Caching is handled by Prisma and apiClient built-in caching
+    void queryKey;
     return null;
   }
 
@@ -295,6 +300,11 @@ export class DatabaseQueryOptimizer {
     cacheTTL: number
   ): Promise<void> {
     // Caching is handled by Prisma and apiClient built-in caching
+    void queryKey;
+    void result;
+    void executionTime;
+    void tablesTouched;
+    void cacheTTL;
     return;
   }
 
@@ -317,7 +327,8 @@ export class DatabaseQueryOptimizer {
         })
         .catch(error => {
           clearTimeout(timeoutHandle);
-          reject(error);
+          // Ensure rejection reason is an Error
+          reject(error instanceof Error ? error : new Error(String(error)));
         });
     });
   }
@@ -436,7 +447,7 @@ export class DatabaseQueryOptimizer {
       }
     } catch (error) {
       const processedError = this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to invalidate cache',
         ErrorCodes.SYSTEM.CACHE_OPERATION_FAILED,
         {

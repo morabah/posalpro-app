@@ -55,6 +55,7 @@ class ImageOptimizationService {
   }
 
   public static getInstance(): ImageOptimizationService {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!ImageOptimizationService.instance) {
       ImageOptimizationService.instance = new ImageOptimizationService();
     }
@@ -344,7 +345,7 @@ class ImageOptimizationService {
         size: stats.size,
         format: ext,
       };
-    } catch (error) {
+    } catch {
       return {
         isValid: false,
         size: 0,

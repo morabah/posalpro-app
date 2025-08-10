@@ -233,15 +233,15 @@ export default function SMEContributionInterface() {
           }
         }
 
-        if (templatesResponse.success && templatesResponse.data) {
+        if (templatesResponse.success && Array.isArray(templatesResponse.data)) {
           setTemplatesData(templatesResponse.data);
         }
 
-        if (resourcesResponse.success && resourcesResponse.data) {
+        if (resourcesResponse.success && Array.isArray(resourcesResponse.data)) {
           setResourcesData(resourcesResponse.data);
         }
 
-        if (versionsResponse.success && versionsResponse.data) {
+        if (versionsResponse.success && Array.isArray(versionsResponse.data)) {
           setVersionsData(
             versionsResponse.data.map((v: VersionHistory) => ({
               ...v,
@@ -278,10 +278,11 @@ export default function SMEContributionInterface() {
 
       if (response.success && response.data) {
         const versionData = response.data;
-        setVersionsData(prev => [
-          ...prev,
-          { ...versionData, savedAt: new Date(versionData.savedAt) },
-        ]);
+        const normalizedVersion: VersionHistory = {
+          ...versionData,
+          savedAt: new Date(versionData.savedAt),
+        };
+        setVersionsData(prev => [...prev, normalizedVersion]);
         setHasUnsavedChanges(false);
         setLastSaved(new Date());
         setAutosaveStatus('Saved');
@@ -306,7 +307,8 @@ export default function SMEContributionInterface() {
     } catch (error) {
       setAutosaveStatus('Error saving');
       showToast('Failed to auto-save draft.', 'error');
-      trackAction('autosave_failed', { error: (error as Error).message }, 'high');
+      const message = error instanceof Error ? error.message : String(error);
+      trackAction('autosave_failed', { error: message }, 'high');
     }
   }, [assignmentData, content, wordCount, hasUnsavedChanges, versionsData, apiClient]); // ✅ CRITICAL FIX: Remove trackAction dependency
 

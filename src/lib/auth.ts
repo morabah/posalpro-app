@@ -15,7 +15,8 @@
  */
 
 import { logger } from '@/utils/logger';
-import { NextAuthOptions, type Session } from 'next-auth';
+import { NextAuthOptions, type Session, type User as NextAuthUser } from 'next-auth';
+import type { JWT as NextAuthJWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { comparePassword } from './auth/passwordUtils';
 import { getUserByEmail, updateLastLogin } from './services/userService';
@@ -91,7 +92,7 @@ export const authOptions: NextAuthOptions = {
         secure: process.env.NODE_ENV === 'production',
         domain:
           process.env.NODE_ENV === 'production'
-            ? process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, '')
+            ? (process.env.NEXTAUTH_URL ? process.env.NEXTAUTH_URL.replace(/^https?:\/\//, '') : undefined)
             : undefined,
       },
     },
@@ -117,24 +118,28 @@ export const authOptions: NextAuthOptions = {
           placeholder: 'Optional role selection',
         },
       },
-      async authorize(credentials) {
+      async authorize(credentials: { email?: string; password?: string; role?: string } | undefined) {
+        const email = credentials?.email ?? '';
+        const hasPassword = Boolean(credentials?.password);
+        const role = credentials?.role;
+
         logger.info('🔐 Authorization attempt:', {
-          email: credentials?.email,
-          hasPassword: !!credentials?.password,
-          role: credentials?.role,
+          email,
+          hasPassword,
+          role,
         });
 
-        if (!credentials?.email || !credentials?.password) {
+        if (!email || !credentials?.password) {
           logger.info('❌ Missing credentials');
           throw new Error('Email and password are required');
         }
 
         try {
           const authStart = Date.now();
-          logger.info('🔍 Looking up user:', credentials.email);
+          logger.info('🔍 Looking up user:', email);
           // Find user in database
           const dbStart = Date.now();
-          const user = await getUserByEmail(credentials.email);
+          const user = await getUserByEmail(email);
           const dbDuration = Date.now() - dbStart;
           logger.info('⏱️ [Auth Timing] getUserByEmail duration (ms):', dbDuration);
 
@@ -213,7 +218,7 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: NextAuthJWT; user?: NextAuthUser | null }) {
       // Persist user data in JWT token
       if (user) {
         token.id = user.id;
@@ -226,7 +231,7 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: NextAuthJWT }) {
       // Dev-only ultra-short TTL throttle to smooth bursts
       if (process.env.NODE_ENV === 'development') {
         const throttleKey = `dev-session-throttle-${token.email}-${token.id}`;
@@ -253,15 +258,13 @@ export const authOptions: NextAuthOptions = {
         return cached.session;
       }
 
-      // Send user data to client
-      if (token) {
-        session.user.id = token.id;
-        session.user.email = token.email;
-        session.user.name = token.name;
-        session.user.department = token.department;
-        session.user.roles = token.roles;
-        session.user.permissions = token.permissions;
-      }
+      // Send user data to client (token is always provided in NextAuth session callback)
+      session.user.id = token.id;
+      session.user.email = token.email;
+      session.user.name = token.name;
+      session.user.department = token.department;
+      session.user.roles = token.roles;
+      session.user.permissions = token.permissions;
 
       // Cache the session
       sessionCache.set(cacheKey, { session, timestamp: now });
@@ -302,9 +305,9 @@ export const authOptions: NextAuthOptions = {
       logger.info('✅ User signed in successfully:', user.email);
     },
 
-    async signOut({ token }) {
+    async signOut({ token }: { token?: NextAuthJWT }) {
       // Track sign-out events and clear cache
-      if (token?.email) {
+      if (token && 'email' in token && token.email) {
         logger.info('👋 User signed out:', token.email);
         // Clear session cache for this user
         const cacheKey = `${token.email}-${token.id}`;
@@ -322,7 +325,7 @@ export const authOptions: NextAuthOptions = {
  * This is a simplified version - in the future, permissions should come from the database
  */
 function generatePermissionsFromRoles(roles: string[]): string[] {
-  const rolePermissionMap: Record<string, string[]> = {
+  const rolePermissionMap: Partial<Record<string, string[]>> = {
     'System Administrator': ['*:*'],
     'Proposal Manager': ['proposals:read', 'proposals:write', 'proposals:manage'],
     'Subject Matter Expert (SME)': ['content:read', 'content:write', 'validation:execute'],

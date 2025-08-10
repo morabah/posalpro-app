@@ -191,11 +191,11 @@ export const ValidationMessages = {
 export const getMessage = (path: string, fallback: string = 'Invalid input'): string => {
   try {
     const keys = path.split('.');
-    let current: any = ValidationMessages;
+    let current: unknown = ValidationMessages;
 
     for (const key of keys) {
-      if (current && typeof current === 'object' && key in current) {
-        current = current[key];
+      if (current && typeof current === 'object' && key in (current as Record<string, unknown>)) {
+        current = (current as Record<string, unknown>)[key];
       } else {
         return fallback;
       }

@@ -93,7 +93,8 @@ export class ComponentTester {
   private startTime: number = 0;
   private memoryStart: number = 0;
 
-  private startTest(testName: string): void {
+  private startTest(_testName: string): void {
+    void _testName;
     this.startTime = performance.now();
     this.memoryStart = (performance as any).memory?.usedJSHeapSize || 0;
   }
@@ -189,7 +190,8 @@ export class ComponentTester {
         if (field.validation) {
           const validationStart = performance.now();
 
-          for (const rule of field.validation) {
+          for (const _rule of field.validation) {
+            void _rule;
             await new Promise(resolve => setTimeout(resolve, 5));
             eventCount++;
           }
@@ -204,6 +206,7 @@ export class ComponentTester {
         }
 
         // Validate required properties
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!field.id || !field.type || !field.label) {
           errors.push(`Missing required properties for field: ${field.id}`);
           passed = false;
@@ -278,7 +281,8 @@ export class ComponentTester {
       }
 
       // Test keyboard navigation
-      for (const tab of MOCK_TABS.filter(t => !t.disabled)) {
+      for (const _tab of MOCK_TABS.filter(t => !t.disabled)) {
+        void _tab;
         // Simulate keyboard navigation
         await new Promise(resolve => setTimeout(resolve, 5));
         eventCount++;
@@ -343,6 +347,7 @@ export class ComponentTester {
         }
 
         // Validate button properties
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!button.id || !button.type || !button.text) {
           errors.push(`Missing required properties for button: ${button.id}`);
           passed = false;
@@ -527,7 +532,8 @@ export class ComponentTester {
         const inputStart = performance.now();
 
         // Simulate typing
-        for (const char of term) {
+        for (const _char of term) {
+          void _char;
           await new Promise(resolve => setTimeout(resolve, 2));
           eventCount++;
         }
@@ -570,7 +576,8 @@ export class ComponentTester {
 
       // Test advanced filters
       const filterTypes = ['date', 'status', 'category', 'priority'];
-      for (const filterType of filterTypes) {
+      for (const _filterType of filterTypes) {
+        void _filterType;
         await new Promise(resolve => setTimeout(resolve, 15)); // Simulate filter application
         eventCount++;
       }

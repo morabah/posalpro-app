@@ -33,6 +33,19 @@ export default function ClientPage() {
 
   useEffect(() => {
     const loadStartTime = performance.now();
+    // Non-standard memory API is available only in Chromium-based browsers
+    type ChromiumPerformance = Performance & {
+      memory?: {
+        usedJSHeapSize: number;
+        totalJSHeapSize: number;
+        jsHeapSizeLimit: number;
+      };
+    };
+    const perf = performance as ChromiumPerformance;
+    const navEntry = performance.getEntriesByType('navigation')[0] as
+      | PerformanceNavigationTiming
+      | PerformanceEntry
+      | undefined;
     analytics(
       'proposal_create_page_loaded',
       {
@@ -40,12 +53,12 @@ export default function ClientPage() {
         hypotheses: ['H7', 'H8', 'H9'],
         loadStartTime,
         browserPerformance: {
-          navigationTiming: performance.getEntriesByType('navigation')[0],
-          memoryUsage: (performance as any).memory
+          navigationTiming: navEntry ?? null,
+          memoryUsage: perf.memory
             ? {
-                usedJSHeapSize: (performance as any).memory.usedJSHeapSize,
-                totalJSHeapSize: (performance as any).memory.totalJSHeapSize,
-                jsHeapSizeLimit: (performance as any).memory.jsHeapSizeLimit,
+                usedJSHeapSize: perf.memory.usedJSHeapSize,
+                totalJSHeapSize: perf.memory.totalJSHeapSize,
+                jsHeapSizeLimit: perf.memory.jsHeapSizeLimit,
               }
             : null,
         },

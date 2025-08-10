@@ -97,8 +97,12 @@ export class PredictiveValidation {
           dataPoints: relevantPatterns.length,
         },
       };
-    } catch (error: any) {
-      logger.error('Prediction error:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        logger.error('Prediction error:', { message: error.message, stack: error.stack });
+      } else {
+        logger.error('Prediction error:', error);
+      }
       return {
         confidence: 0,
         predictedIssues: [],
@@ -137,8 +141,12 @@ export class PredictiveValidation {
           this.patterns.set(pattern.id, pattern);
         }
       }
-    } catch (error: any) {
-      logger.error('Learning error:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        logger.error('Learning error:', { message: error.message, stack: error.stack });
+      } else {
+        logger.error('Learning error:', error);
+      }
     }
   }
 
@@ -146,18 +154,17 @@ export class PredictiveValidation {
    * Private helper methods
    */
 
-  private async findRelevantPatterns(context: ValidationContext): Promise<ValidationPattern[]> {
-    // Find patterns relevant to the current context
-    return Array.from(this.patterns.values()).filter(pattern => {
-      // Implement pattern matching logic here
-      return true; // Placeholder
-    });
+  private async findRelevantPatterns(_context: ValidationContext): Promise<ValidationPattern[]> {
+    // Return all patterns for now; future implementations can filter using _context
+    void _context;
+    return Array.from(this.patterns.values());
   }
 
   private async generatePrediction(
     pattern: ValidationPattern,
-    context: ValidationContext
+    _context: ValidationContext
   ): Promise<PredictedIssue & { confidence: number }> {
+    void _context;
     // Generate prediction based on pattern
     return {
       type: 'predicted',
@@ -190,8 +197,9 @@ export class PredictiveValidation {
 
   private extractPatterns(
     result: ValidationResult,
-    context: ValidationContext
+    _context: ValidationContext
   ): ValidationPattern[] {
+    void _context;
     // Extract patterns from validation result
     return [
       {

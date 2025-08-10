@@ -115,7 +115,7 @@ export class ProposalDenormalizationService {
       );
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to update proposal denormalized fields',
         ErrorCodes.DATA.UPDATE_FAILED,
         {
@@ -198,7 +198,7 @@ export class ProposalDenormalizationService {
       stats.totalProcessingTime = Date.now() - startTime;
 
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to bulk update proposal denormalized fields',
         ErrorCodes.DATA.UPDATE_FAILED,
         {
@@ -223,8 +223,8 @@ export class ProposalDenormalizationService {
   private calculateCompletionRate(proposal: {
     title?: string | null;
     description?: string | null;
-    products?: Array<unknown> | null;
-    sections?: Array<unknown> | null;
+    products?: unknown[] | null;
+    sections?: unknown[] | null;
     dueDate?: Date | null;
     value?: number | null;
     status?: string | null;

@@ -19,25 +19,7 @@ import type {
   TeamMember,
 } from './types';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1', 'US-4.3', 'US-2.3'],
-  acceptanceCriteria: [
-    'AC-4.1.1', // Timeline visualization
-    'AC-4.1.3', // On-time completion tracking
-    'AC-4.3.1', // Priority visualization
-    'AC-4.3.3', // Progress tracking
-  ],
-  methods: [
-    'getDashboardData()',
-    'getProposalMetrics()',
-    'getActivityFeed()',
-    'getTeamStatus()',
-    'getUpcomingDeadlines()',
-  ],
-  hypotheses: ['H7', 'H4', 'H8'],
-  testCases: ['TC-H7-001', 'TC-H7-002', 'TC-H4-001'],
-};
+// Component Traceability Matrix (documentation only, removed runtime constant to satisfy lint rules)
 
 // Cache configuration
 const CACHE_CONFIG = {
@@ -52,9 +34,9 @@ const CACHE_CONFIG = {
 
 // In-memory cache with TTL
 class DashboardCache {
-  private cache: Map<string, { data: any; timestamp: number; ttl: number }> = new Map();
+  private cache: Map<string, { data: unknown; timestamp: number; ttl: number }> = new Map();
 
-  set(key: string, data: any, ttl: number): void {
+  set<T>(key: string, data: T, ttl: number): void {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
@@ -62,7 +44,7 @@ class DashboardCache {
     });
   }
 
-  get(key: string): any | null {
+  get<T>(key: string): T | null {
     const entry = this.cache.get(key);
     if (!entry) return null;
 
@@ -72,7 +54,7 @@ class DashboardCache {
       return null;
     }
 
-    return entry.data;
+    return entry.data as T;
   }
 
   invalidate(pattern?: string): void {
@@ -98,6 +80,15 @@ class DashboardCache {
 
 const dashboardCache = new DashboardCache();
 
+// Narrowed section literal union for stronger typing across APIs
+type DashboardSection =
+  | 'proposals'
+  | 'activities'
+  | 'team'
+  | 'deadlines'
+  | 'performance'
+  | 'notifications';
+
 // Dashboard API Query Options
 export interface DashboardQueryOptions {
   userId?: string;
@@ -113,13 +104,11 @@ export interface DashboardQueryOptions {
  * Main Dashboard Data API
  */
 export class DashboardAPI {
-  private static instance: DashboardAPI;
+  private static instance: DashboardAPI | null = null;
 
   public static getInstance(): DashboardAPI {
-    if (!DashboardAPI.instance) {
-      DashboardAPI.instance = new DashboardAPI();
-    }
-    return DashboardAPI.instance;
+    // Use nullish coalescing assignment to avoid unnecessary-conditional warning
+    return (this.instance ??= new DashboardAPI());
   }
 
   /**
@@ -131,7 +120,7 @@ export class DashboardAPI {
 
     // Check cache first unless refresh is requested
     if (!refresh) {
-      const cached = dashboardCache.get(cacheKey);
+      const cached = dashboardCache.get<DashboardData>(cacheKey);
       if (cached) {
         logger.info('Dashboard data retrieved from cache');
         return cached;
@@ -172,30 +161,34 @@ export class DashboardAPI {
         notifications: notificationData.status === 'fulfilled' ? notificationData.value : [],
       };
 
-      // Log any failures
-      const failures = [
-        proposalData,
-        activityData,
-        teamData,
-        deadlineData,
-        performanceData,
-        notificationData,
-      ]
-        .filter(result => result.status === 'rejected')
-        .map((result, index) => {
-          const sections = [
-            'proposals',
-            'activities',
-            'team',
-            'deadlines',
-            'performance',
-            'notifications',
-          ];
-          return {
-            section: sections[index],
-            error: (result).reason,
-          };
-        });
+      // Log any failures using a type guard for rejected results
+      const getErrorMessage = (e: unknown): string => {
+        if (e instanceof Error) return e.message;
+        if (typeof e === 'string') return e;
+        try {
+          return JSON.stringify(e);
+        } catch {
+          return 'Unknown error';
+        }
+      };
+      const isRejected = <T>(r: PromiseSettledResult<T>): r is PromiseRejectedResult => r.status === 'rejected';
+      const labeledResults: Array<{
+        section: DashboardSection;
+        result: PromiseSettledResult<unknown>;
+      }> = [
+        { section: 'proposals', result: proposalData },
+        { section: 'activities', result: activityData },
+        { section: 'team', result: teamData },
+        { section: 'deadlines', result: deadlineData },
+        { section: 'performance', result: performanceData },
+        { section: 'notifications', result: notificationData },
+      ];
+      const failures: Array<{ section: DashboardSection; error: string }> = [];
+      for (const { section, result } of labeledResults) {
+        if (isRejected(result)) {
+          failures.push({ section, error: getErrorMessage(result.reason) });
+        }
+      }
 
       if (failures.length > 0) {
         logger.warn('Some dashboard sections failed to load:', failures);
@@ -257,7 +250,7 @@ export class DashboardAPI {
         `/api/dashboard/proposals/metrics?${queryParams.toString()}`
       );
 
-      const metrics = metricsResponse.data || this.getEmptyProposalMetrics();
+      const metrics = metricsResponse.data;
 
       return {
         active: activeProposals,
@@ -278,7 +271,7 @@ export class DashboardAPI {
     const cacheKey = `activity:${userId}:${userRole}:${limit}`;
 
     if (!refresh) {
-      const cached = dashboardCache.get(cacheKey);
+      const cached = dashboardCache.get<ActivityFeedItem[]>(cacheKey);
       if (cached) return cached;
     }
 
@@ -313,7 +306,7 @@ export class DashboardAPI {
     const cacheKey = `team:${userId}:${userRole}`;
 
     if (!refresh) {
-      const cached = dashboardCache.get(cacheKey);
+      const cached = dashboardCache.get<TeamMember[]>(cacheKey);
       if (cached) return cached;
     }
 
@@ -347,7 +340,7 @@ export class DashboardAPI {
     const cacheKey = `deadlines:${userId}:${userRole}:${timeRange}`;
 
     if (!refresh) {
-      const cached = dashboardCache.get(cacheKey);
+      const cached = dashboardCache.get<Deadline[]>(cacheKey);
       if (cached) return cached;
     }
 
@@ -386,7 +379,7 @@ export class DashboardAPI {
     const cacheKey = `performance:${userId}:${userRole}:${timeRange}`;
 
     if (!refresh) {
-      const cached = dashboardCache.get(cacheKey);
+      const cached = dashboardCache.get<PerformanceMetrics>(cacheKey);
       if (cached) return cached;
     }
 
@@ -400,7 +393,7 @@ export class DashboardAPI {
         `/api/dashboard/performance?${queryParams.toString()}`
       );
 
-      const performance = response.data || this.getEmptyPerformanceData();
+      const performance = response.data;
 
       // Cache result
       dashboardCache.set(cacheKey, performance, CACHE_CONFIG.performance);
@@ -420,7 +413,7 @@ export class DashboardAPI {
     const cacheKey = `notifications:${userId}:${userRole}:${limit}`;
 
     if (!refresh) {
-      const cached = dashboardCache.get(cacheKey);
+      const cached = dashboardCache.get<Notification[]>(cacheKey);
       if (cached) return cached;
     }
 
@@ -481,7 +474,18 @@ export class DashboardAPI {
   /**
    * Refresh specific dashboard section
    */
-  async refreshSection(section: string, options: DashboardQueryOptions = {}): Promise<any> {
+  // Typed overloads for better type safety based on section
+  async refreshSection(
+    section: 'proposals',
+    options?: DashboardQueryOptions
+  ): Promise<{ active: ProposalSummary[]; recent: ProposalActivity[]; metrics: ProposalMetrics }>;
+  async refreshSection(section: 'activities', options?: DashboardQueryOptions): Promise<ActivityFeedItem[]>;
+  async refreshSection(section: 'team', options?: DashboardQueryOptions): Promise<TeamMember[]>;
+  async refreshSection(section: 'deadlines', options?: DashboardQueryOptions): Promise<Deadline[]>;
+  async refreshSection(section: 'performance', options?: DashboardQueryOptions): Promise<PerformanceMetrics>;
+  async refreshSection(section: 'notifications', options?: DashboardQueryOptions): Promise<Notification[]>;
+  async refreshSection(section: string, options?: DashboardQueryOptions): Promise<unknown>;
+  async refreshSection(section: string, options: DashboardQueryOptions = {}): Promise<unknown> {
     const refreshOptions = { ...options, refresh: true };
 
     switch (section) {

@@ -37,7 +37,7 @@ export interface ErrorMetadata {
 export interface StandardErrorOptions {
   message: string;
   code: ErrorCode;
-  cause?: Error | unknown;
+  cause?: unknown;
   metadata?: ErrorMetadata;
 }
 
@@ -53,7 +53,7 @@ export class StandardError extends Error {
   /**
    * Original error that caused this error
    */
-  public readonly cause?: Error | unknown;
+  public readonly cause?: unknown;
   
   /**
    * Additional metadata about the error
@@ -80,10 +80,9 @@ export class StandardError extends Error {
     this.metadata = options.metadata;
     this.timestamp = new Date().toISOString();
     
-    // Capture stack trace
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, StandardError);
-    }
+    // Capture stack trace when available (V8 environments)
+    (Error as unknown as { captureStackTrace?: (err: unknown) => void })
+      .captureStackTrace?.(this);
   }
   
   /**
@@ -215,7 +214,7 @@ export class StandardError extends Error {
    */
   static server(
     message = 'Internal server error',
-    cause?: Error | unknown,
+    cause?: unknown,
     metadata?: ErrorMetadata
   ): StandardError {
     return new StandardError({

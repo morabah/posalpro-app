@@ -36,8 +36,8 @@ export function withRole(
 
       return handler(req);
     } catch (error) {
-      const processedError = errorHandlingService.processError(
-        error as Error,
+      errorHandlingService.processError(
+        error,
         'RBAC authorization failed',
         ErrorCodes.AUTH.AUTHORIZATION_FAILED,
         {

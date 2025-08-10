@@ -30,13 +30,13 @@ const COMPONENT_MAPPING = {
 
 // Mock storage implementation for testing
 class MockSecurityStorage implements SecurityStorage {
-  private store = new Map<string, any>();
+  private store = new Map<string, unknown>();
 
-  async get(key: string): Promise<any> {
-    return this.store.get(key) || null;
+  async get<T = unknown>(key: string): Promise<T | null> {
+    return (this.store.get(key) ?? null) as T | null;
   }
 
-  async set(key: string, value: any, ttl?: number): Promise<void> {
+  async set<T = unknown>(key: string, value: T, ttl?: number): Promise<void> {
     this.store.set(key, value);
   }
 
@@ -62,7 +62,7 @@ class MockCSRFStorage implements CSRFStorage {
   }
 
   async getToken(sessionId: string): Promise<string | null> {
-    const data = await this.storage.get(sessionId);
+    const data = await this.storage.get<{ token: string; expires: number }>(sessionId);
     if (!data) return null;
 
     // Check if token is expired
@@ -100,7 +100,7 @@ class MockRateLimitStorage implements RateLimitStorage {
   }
 
   async getAttempts(identifier: string): Promise<{ count: number; resetTime: number } | null> {
-    const data = await this.storage.get(identifier);
+    const data = await this.storage.get<{ count: number; resetTime: number }>(identifier);
     if (!data) return null;
 
     // Check if window has expired

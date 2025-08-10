@@ -158,13 +158,13 @@ export default function ValidationDashboardPage() {
 
       // Fetch validation issues
       const issuesResponse = await apiClient.get<ApiResponse<ValidationIssue[]>>('/validation/issues');
-      if (issuesResponse?.success && issuesResponse.data) {
+      if (issuesResponse?.success && Array.isArray(issuesResponse.data)) {
         setValidationIssues(issuesResponse.data);
       }
 
       // Fetch validation rules
       const rulesResponse = await apiClient.get<ApiResponse<ValidationRule[]>>('/validation/rules');
-      if (rulesResponse?.success && rulesResponse.data) {
+      if (rulesResponse?.success && Array.isArray(rulesResponse.data)) {
         setValidationRules(rulesResponse.data);
       }
 
@@ -183,7 +183,7 @@ export default function ValidationDashboardPage() {
         'high'
       );
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to load validation data', {
+      handleAsyncError(error, 'Failed to load validation data', {
         context: 'ValidationDashboard',
         userStory: 'US-3.1',
         hypothesis: 'H8',
@@ -286,7 +286,7 @@ export default function ValidationDashboardPage() {
           includeRules: true,
         });
 
-        if (response?.success && response.data?.downloadUrl) {
+        if (response?.success && response.data && response.data.downloadUrl) {
           // Trigger download
           const link = document.createElement('a');
           link.href = response.data.downloadUrl;

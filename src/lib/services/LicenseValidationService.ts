@@ -33,7 +33,8 @@ export class LicenseValidationService {
       // Example: Check for products that require licenses
       config.products.forEach(product => {
         // Placeholder license check
-        if (product.settings?.requiresLicense && !product.settings?.licenseKey) {
+        const settings = product.settings;
+        if (settings.requiresLicense && !settings.licenseKey) {
           issues.push({
             id: `license_issue_${Math.random().toString(36).substr(2, 9)}`,
             type: 'error',

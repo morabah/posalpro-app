@@ -271,7 +271,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       }
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to collect integrated performance metrics',
         ErrorCodes.SYSTEM.METRICS_COLLECTION_FAILED,
         {
@@ -401,7 +401,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       return result;
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Comprehensive optimization failed',
         ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
         {
@@ -645,7 +645,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       return integratedReport;
     } catch (error) {
       const processedError = errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to generate integrated performance report',
         ErrorCodes.SYSTEM.REPORT_GENERATION_FAILED,
         {

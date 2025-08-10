@@ -7,7 +7,6 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
   ActionResult,
-  ActionTarget,
   ActionType,
   FixSuggestion,
   RuleAction,
@@ -190,7 +189,7 @@ export class RuleExecutor {
         context,
       };
     } catch (error) {
-      const processedError = this.errorHandlingService.processError(
+      this.errorHandlingService.processError(
         error,
         `Rule execution error: ${rule.name}`,
         ErrorCodes.VALIDATION.OPERATION_FAILED,
@@ -293,7 +292,7 @@ export class RuleExecutor {
             );
             break;
           }
-        } catch (error) {
+        } catch {
           // Handle individual rule execution errors
           criticalErrorEncountered = true;
           break;
@@ -416,15 +415,29 @@ export class RuleExecutor {
         case 'equals':
           return value === condition.value;
         case 'contains':
+          if (typeof condition.value !== 'string') return false;
           return typeof value === 'string' && value.includes(condition.value);
         case 'exists':
           return value !== undefined && value !== null;
         case 'greater':
+          if (typeof condition.value !== 'number') return false;
           return typeof value === 'number' && value > condition.value;
         case 'less':
+          if (typeof condition.value !== 'number') return false;
           return typeof value === 'number' && value < condition.value;
         case 'matches':
-          return typeof value === 'string' && new RegExp(condition.value).test(value);
+          if (
+            typeof condition.value !== 'string' && !(condition.value instanceof RegExp)
+          ) {
+            return false;
+          }
+          {
+            const regex =
+              typeof condition.value === 'string'
+                ? new RegExp(condition.value)
+                : condition.value;
+            return typeof value === 'string' && regex.test(value);
+          }
         default:
           logger.warn('Unknown condition operator', { operator: condition.operator });
           return false;
@@ -443,12 +456,14 @@ export class RuleExecutor {
 
   private async executeAction(
     action: RuleAction,
-    context: ValidationContext
+    _context: ValidationContext
   ): Promise<ActionResult> {
+    // Mark parameter as used to satisfy ESLint without altering behavior
+    void _context;
     return {
       type: action.type,
       message: action.message,
-      data: action.data,
+      data: this.normalizeActionData(action.data),
       automated: action.automated,
     };
   }
@@ -467,6 +482,20 @@ export class RuleExecutor {
     }
 
     return value;
+  }
+
+  private normalizeActionData(data: unknown): ActionResult['data'] {
+    if (data === undefined) return undefined;
+    if (data !== null && typeof data === 'object') {
+      const obj = data as Record<string, unknown>;
+      const normalized: NonNullable<ActionResult['data']> = {};
+      if (typeof obj.description === 'string') normalized.description = obj.description;
+      if (typeof obj.confidence === 'number') normalized.confidence = obj.confidence;
+      if (typeof obj.target === 'string') normalized.target = obj.target;
+      if ('value' in obj) normalized.value = obj.value;
+      return Object.keys(normalized).length > 0 ? normalized : undefined;
+    }
+    return { value: data };
   }
 
   private extractAffectedProducts(context: ValidationContext, actionResult: any): string[] {

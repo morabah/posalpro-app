@@ -137,6 +137,19 @@ export function ProductSelectionStep({
     warnings: string[];
   }>({ errors: [], warnings: [] });
 
+  // DEBUG: Log incoming props and selection size
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ProductSelectionStep][DEBUG] props.data.products:', Array.isArray(data.products) ? data.products.length : 0);
+    }
+  }, [data.products]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ProductSelectionStep][DEBUG] selectedProducts size:', selectedProducts.size, 'ids:', Array.from(selectedProducts.keys()));
+    }
+  }, [selectedProducts]);
+
   // Mobile detection
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -207,9 +220,12 @@ export function ProductSelectionStep({
         };
       }>('/api/products?page=1&limit=100&isActive=true');
 
-      if (response.success && response.data?.products) {
+      if (response.success) {
         setProducts(response.data.products);
         setFilteredProducts(response.data.products);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ProductSelectionStep][DEBUG] loaded products count:', response.data.products.length);
+        }
       } else {
         throw new Error('Failed to load products');
       }
@@ -229,32 +245,87 @@ export function ProductSelectionStep({
 
   // Initialize selected products from props (hydrate prices) once
   const initializedFromDataRef = useRef(false);
+
+  // Helper to resolve the source product ID from props (supports {id} or {productId})
+  const resolveSourceId = useCallback((p: any): string | undefined => {
+    return (p && (p.id || p.productId)) || undefined;
+  }, []);
+
+  const buildSelectedProduct = useCallback(
+    (p: any): SelectedProduct | null => {
+      const sourceId = resolveSourceId(p);
+      if (!sourceId) return null;
+      const dbProduct = products.find(dp => dp.id === sourceId);
+      const unitPrice = p.unitPrice || dbProduct?.price || 0;
+      const quantity = p.quantity || 1;
+      const name = p.name || dbProduct?.name || 'Unknown Product';
+      const category = p.category || dbProduct?.category?.[0] || 'General';
+      return {
+        id: sourceId,
+        name,
+        productId: dbProduct?.id || sourceId,
+        category,
+        quantity,
+        unitPrice,
+        totalPrice: p.totalPrice || unitPrice * quantity,
+        priceModel: 'FIXED',
+        configuration: p.configuration || {},
+        customizations: p.customizations || [],
+        notes: p.notes,
+      };
+    },
+    [products, resolveSourceId]
+  );
+
   useEffect(() => {
     if (initializedFromDataRef.current) return;
     if (data.products && data.products.length > 0) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ProductSelectionStep][DEBUG] initial hydration from props, count:', data.products.length);
+      }
       const productsMap = new Map<string, SelectedProduct>();
       data.products.forEach(product => {
-        const dbProduct = products.find(p => p.id === product.id);
-        const unitPrice = product.unitPrice || dbProduct?.price || 0;
-        const quantity = product.quantity || 1;
-        productsMap.set(product.id, {
-          id: product.id,
-          name: product.name,
-          productId: dbProduct?.sku || product.id,
-          category: product.category || dbProduct?.category?.[0] || 'General',
-          quantity,
-          unitPrice,
-          totalPrice: product.totalPrice || unitPrice * quantity,
-          priceModel: 'FIXED',
-          configuration: product.configuration || {},
-          customizations: product.customizations || [],
-          notes: product.notes,
-        });
+        const sp = buildSelectedProduct(product);
+        if (sp) productsMap.set(sp.id, sp);
       });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ProductSelectionStep][DEBUG] hydration map size:', productsMap.size);
+      }
       setSelectedProducts(productsMap);
       initializedFromDataRef.current = true;
     }
-  }, [data.products, products]);
+  }, [data.products, products, buildSelectedProduct]);
+
+  // Backfill any missing items if props contain more products than the current map
+  useEffect(() => {
+    if (!data.products || data.products.length === 0) return;
+    const existingIds = new Set(Array.from(selectedProducts.keys()));
+    const missing = data.products.filter(p => {
+      const sid = resolveSourceId(p);
+      return sid ? !existingIds.has(sid) : false;
+    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        '[ProductSelectionStep][DEBUG] backfill check: props=',
+        data.products.length,
+        'map=',
+        selectedProducts.size,
+        'missing=',
+        missing.map(m => resolveSourceId(m))
+      );
+    }
+    if (missing.length === 0) return;
+
+    const newMap = new Map(selectedProducts);
+    missing.forEach(product => {
+      const sp = buildSelectedProduct(product);
+      if (sp) newMap.set(sp.id, sp);
+    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ProductSelectionStep][DEBUG] backfill applied, new map size:', newMap.size);
+    }
+    setSelectedProducts(newMap);
+  }, [data.products, selectedProducts, products, resolveSourceId, buildSelectedProduct]);
 
   // Enhanced analytics tracking with cross-step context
   const trackProductSelection = useCallback(
@@ -341,12 +412,15 @@ export function ProductSelectionStep({
         };
 
         setSelectedProducts(prev => new Map(prev.set(product.id, updatedProduct)));
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ProductSelectionStep][DEBUG] increment quantity for', product.id, 'map size:', selectedProducts.size);
+        }
       } else {
         // Add new product
         const newProduct: SelectedProduct = {
           id: product.id,
           name: product.name,
-          productId: product.sku,
+          productId: product.id,
           category: product.category[0] || 'General',
           quantity: 1,
           unitPrice: product.price,
@@ -358,6 +432,9 @@ export function ProductSelectionStep({
         };
 
         setSelectedProducts(prev => new Map(prev.set(product.id, newProduct)));
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ProductSelectionStep][DEBUG] add new product', product.id, 'map size:', selectedProducts.size + 1);
+        }
       }
 
       trackProductSelection('product_selected', product.id, {
@@ -416,6 +493,9 @@ export function ProductSelectionStep({
   useEffect(() => {
     const formData = collectFormData();
     onUpdate(formData);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ProductSelectionStep][DEBUG] onUpdate sent products:', formData.products.length);
+    }
   }, [collectFormData, onUpdate]);
 
   // Cross-step validation
@@ -564,7 +644,7 @@ export function ProductSelectionStep({
           className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
           {categories.map(category => (
-            <option key={category} value={category}>
+            <option key={`opt-${category}`} value={category}>
               {category}
             </option>
           ))}
@@ -580,7 +660,7 @@ export function ProductSelectionStep({
           </div>
           <ul className="mt-2 text-sm text-yellow-700">
             {crossStepValidationResults.warnings.map((warning, index) => (
-              <li key={index} className="list-disc list-inside">
+              <li key={`warn-${index}-${String(warning)}`} className="list-disc list-inside">
                 {warning}
               </li>
             ))}
@@ -597,7 +677,7 @@ export function ProductSelectionStep({
           </div>
           <ul className="mt-2 text-sm text-red-700">
             {crossStepValidationResults.errors.map((error, index) => (
-              <li key={index} className="list-disc list-inside">
+              <li key={`err-${index}-${String(error)}`} className="list-disc list-inside">
                 {error}
               </li>
             ))}
@@ -609,7 +689,7 @@ export function ProductSelectionStep({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProducts.map(product => (
           <div
-            key={product.id}
+            key={`card-${product.id}`}
             className={`p-4 border rounded-lg cursor-pointer transition-all ${
               selectedProducts.has(product.id)
                 ? 'border-blue-500 bg-blue-50'
@@ -645,7 +725,7 @@ export function ProductSelectionStep({
           <div className="space-y-3">
             {Array.from(selectedProducts.values()).map(product => (
               <div
-                key={product.id}
+                key={`sel-${product.id}`}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
               >
                 <div className="flex-1">

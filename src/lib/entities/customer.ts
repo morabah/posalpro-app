@@ -32,9 +32,51 @@ export interface PaginatedCustomerResponse {
 }
 
 export class CustomerEntity {
-  private static instance: CustomerEntity;
+  private static instance: CustomerEntity | null = null;
 
   private constructor() {}
+
+  // ---- Runtime type guards ----
+  private static isCustomerData(value: unknown): value is CustomerData {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    return typeof v.id === 'string' && typeof v.name === 'string';
+  }
+
+  private static isCustomerArray(value: unknown): value is CustomerData[] {
+    return Array.isArray(value) && value.every((item) => CustomerEntity.isCustomerData(item));
+  }
+
+  private static isPaginatedCustomerResponse(value: unknown): value is PaginatedCustomerResponse {
+    if (typeof value !== 'object' || value === null) return false;
+    const maybe = value as { customers?: unknown; pagination?: unknown };
+    const customers = maybe.customers;
+    const pagination = maybe.pagination as
+      | { page?: unknown; limit?: unknown; total?: unknown; totalPages?: unknown }
+      | undefined;
+    return (
+      CustomerEntity.isCustomerArray(customers) &&
+      !!pagination &&
+      typeof pagination.page === 'number' &&
+      typeof pagination.limit === 'number' &&
+      typeof pagination.total === 'number' &&
+      typeof pagination.totalPages === 'number'
+    );
+  }
+
+  private static extractCustomers(data: unknown): CustomerData[] {
+    // Accept either { customers: [...] } or { data: { customers: [...] } }
+    if (CustomerEntity.isPaginatedCustomerResponse(data)) {
+      return data.customers;
+    }
+    if (typeof data === 'object' && data !== null && 'data' in data) {
+      const inner = (data as { data: unknown }).data;
+      if (CustomerEntity.isPaginatedCustomerResponse(inner)) {
+        return inner.customers;
+      }
+    }
+    return [];
+  }
 
   public static getInstance(): CustomerEntity {
     if (!CustomerEntity.instance) {
@@ -56,18 +98,17 @@ export class CustomerEntity {
       const { apiClient } = await import('@/lib/api/client');
 
       // First, try to find existing customer by name
-      const searchResponse = await apiClient.get<any>(
+      const searchResponse = await apiClient.get<unknown>(
         `/customers?search=${encodeURIComponent(name)}&limit=1`
       );
 
       logger.debug('[CustomerEntity] Search response:', searchResponse);
       logger.debug('[CustomerEntity] Search response data:', searchResponse.data);
 
-      if (searchResponse.success && searchResponse.data) {
-        // Handle nested response structure from API client
-        const responseData = searchResponse.data.data || searchResponse.data;
-        if (responseData?.customers?.length > 0) {
-          const existingCustomer = responseData.customers[0];
+      if (searchResponse.success) {
+        const customers = CustomerEntity.extractCustomers(searchResponse.data);
+        if (customers.length > 0) {
+          const existingCustomer = customers[0];
           logger.info('[CustomerEntity] Found existing customer:', existingCustomer.id);
           return existingCustomer.id;
         }
@@ -75,13 +116,12 @@ export class CustomerEntity {
 
       // If no exact match, try to get any customer as fallback
       logger.info('[CustomerEntity] No exact match found, trying to get any customer as fallback');
-      const fallbackResponse = await apiClient.get<any>('/customers?limit=1');
+      const fallbackResponse = await apiClient.get<unknown>('/customers?limit=1');
 
-      if (fallbackResponse.success && fallbackResponse.data) {
-        // Handle nested response structure from API client
-        const responseData = fallbackResponse.data.data || fallbackResponse.data;
-        if (responseData?.customers?.length > 0) {
-          const fallbackCustomer = responseData.customers[0];
+      if (fallbackResponse.success) {
+        const customers = CustomerEntity.extractCustomers(fallbackResponse.data);
+        if (customers.length > 0) {
+          const fallbackCustomer = customers[0];
           logger.info('[CustomerEntity] Using fallback customer:', {
             id: fallbackCustomer.id,
             name: fallbackCustomer.name,
@@ -93,7 +133,7 @@ export class CustomerEntity {
       // If not found, create new customer
       logger.info('[CustomerEntity] Creating new customer');
       try {
-        const createResponse = await apiClient.post<any>('/customers', {
+        const createResponse = await apiClient.post<unknown>('/customers', {
           name,
           status: 'ACTIVE',
           tier: 'STANDARD',
@@ -103,13 +143,15 @@ export class CustomerEntity {
         logger.debug('[CustomerEntity] Create response data:', createResponse.data);
         logger.debug('[CustomerEntity] Create response data type:', typeof createResponse.data);
 
-        if (createResponse.success && createResponse.data) {
-          // Handle nested response structure from API client
-          const customerData = createResponse.data.data || createResponse.data;
-          if (customerData && customerData.id) {
-            logger.info('[CustomerEntity] Created new customer ID:', customerData.id);
-            logger.debug('[CustomerEntity] Full customer object:', customerData);
-            return customerData.id;
+        if (createResponse.success) {
+          const data = createResponse.data;
+          const candidate = (typeof data === 'object' && data !== null && 'data' in data)
+            ? (data as { data: unknown }).data
+            : data;
+          if (CustomerEntity.isCustomerData(candidate)) {
+            logger.info('[CustomerEntity] Created new customer ID:', candidate.id);
+            logger.debug('[CustomerEntity] Full customer object:', candidate);
+            return candidate.id;
           }
         }
 
@@ -121,13 +163,12 @@ export class CustomerEntity {
       // Final fallback: try to get any existing customer
       logger.info('[CustomerEntity] All customer resolution attempts failed, using final fallback');
       try {
-        const finalFallbackResponse = await apiClient.get<any>('/customers?limit=1');
+        const finalFallbackResponse = await apiClient.get<unknown>('/customers?limit=1');
 
-        if (finalFallbackResponse.success && finalFallbackResponse.data) {
-          // Handle nested response structure from API client
-          const responseData = finalFallbackResponse.data.data || finalFallbackResponse.data;
-          if (responseData?.customers?.length > 0) {
-            const finalFallbackCustomer = responseData.customers[0];
+        if (finalFallbackResponse.success) {
+          const customers = CustomerEntity.extractCustomers(finalFallbackResponse.data);
+          if (customers.length > 0) {
+            const finalFallbackCustomer = customers[0];
             logger.info('[CustomerEntity] Using final fallback customer:', {
               id: finalFallbackCustomer.id,
               name: finalFallbackCustomer.name,

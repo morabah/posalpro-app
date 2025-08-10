@@ -5,12 +5,13 @@
 
 import { recordCacheHit, recordCacheMiss, recordLatency } from '@/lib/observability/metricsStore';
 import { createClient } from 'redis';
+import type { RedisClientType } from 'redis';
 
 // Enable Redis only in production unless explicitly overridden
 const USE_REDIS = process.env.NODE_ENV === 'production' && process.env.USE_REDIS !== 'false';
 
 // Redis client configuration
-const redisClient = createClient({
+const redisClient: RedisClientType = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379',
   socket: {
     connectTimeout: 3000,
@@ -30,7 +31,7 @@ let isConnected = false;
 // In-memory cache fallback when Redis is disabled/unavailable
 const memoryCache = new Map<string, { value: unknown; expiresAt: number }>();
 
-export async function initializeRedis() {
+export async function initializeRedis(): Promise<RedisClientType> {
   if (!USE_REDIS) {
     // Skip connecting in development for faster startup
     isConnected = false;
@@ -59,9 +60,9 @@ export async function initializeRedis() {
 }
 
 // Ensure Redis is initialized when module is loaded
-let initializationPromise: Promise<any> | null = null;
+let initializationPromise: Promise<RedisClientType> | null = null;
 
-export async function ensureRedisConnection() {
+export async function ensureRedisConnection(): Promise<RedisClientType> {
   if (!initializationPromise) {
     initializationPromise = initializeRedis();
   }

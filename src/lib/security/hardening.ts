@@ -78,7 +78,7 @@ export class InputValidator {
   // Sanitize string input
   static sanitizeString(input: string): string {
     return input
-      .replace(/[<>\"'%;()&+]/g, '') // Remove potentially dangerous characters
+      .replace(/[<>"'%;()&+]/g, '') // Remove potentially dangerous characters
       .trim()
       .substring(0, 1000); // Limit length
   }
@@ -146,9 +146,9 @@ export class InputValidator {
   static validateSqlInput(input: string): boolean {
     const sqlInjectionPatterns = [
       /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)/i,
-      /(--|\*\/|\/\*)/,
+      /(--)|\*\/|\/\*/,
       /(\b(OR|AND)\b.*=.*\b(OR|AND)\b)/i,
-      /[';\"]/,
+      /[';"]/,
     ];
 
     return !sqlInjectionPatterns.some(pattern => pattern.test(input));
@@ -279,7 +279,7 @@ export interface AuditLogEntry {
   sessionId?: string;
   action: string;
   resource: string;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   ipAddress: string;
   userAgent: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
@@ -316,11 +316,17 @@ export class AuditLogger {
       return this.logs;
     }
 
+    const keys = Object.keys(filters) as Array<keyof AuditLogEntry>;
+    if (keys.length === 0) return this.logs;
+
     return this.logs.filter(log => {
-      return Object.entries(filters).every(([key, value]) => {
-        if (value === undefined) return true;
-        return log[key as keyof AuditLogEntry] === value;
-      });
+      for (const key of keys) {
+        const value = filters[key];
+        if (value !== undefined && log[key] !== value) {
+          return false;
+        }
+      }
+      return true;
     });
   }
 
@@ -343,11 +349,7 @@ export function createSecurityMiddleware() {
     SecurityHeaders.applyToResponse(response);
 
     // Get client info
-    const ip =
-      (request as any).ip ||
-      request.headers.get('x-forwarded-for') ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
+    const ip = getClientIp(request);
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
     // Apply rate limiting
@@ -398,6 +400,28 @@ export function createSecurityMiddleware() {
 
     return response;
   };
+}
+
+// Safely extract client IP from NextRequest without unsafe any access
+function getClientIp(req: NextRequest): string {
+  const xForwardedFor = req.headers.get('x-forwarded-for');
+  if (xForwardedFor && xForwardedFor.trim().length > 0) {
+    // First IP in the list is the original client
+    return xForwardedFor.split(',')[0]?.trim() || 'unknown';
+  }
+
+  const xRealIp = req.headers.get('x-real-ip');
+  if (xRealIp && xRealIp.trim().length > 0) {
+    return xRealIp;
+  }
+
+  // Some environments expose req.ip. Guard its type.
+  const possibleReq = req as unknown as { ip?: unknown };
+  if (typeof possibleReq.ip === 'string' && possibleReq.ip.trim().length > 0) {
+    return possibleReq.ip;
+  }
+
+  return 'unknown';
 }
 
 // Input validation schemas

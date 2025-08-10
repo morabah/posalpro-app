@@ -15,10 +15,6 @@ export function getPrismaSelect(
   requestedFields?: string[]
 ): Record<string, unknown> {
   const config = FIELD_CONFIGS[entityType];
-  if (!config) {
-    // Fallback for unknown entity types
-    return { id: true };
-  }
 
   const select: Record<string, unknown> = {};
 
@@ -373,7 +369,7 @@ export function parseFieldsParam(
  * @param baseWhere Base where conditions to apply
  * @returns A Prisma query object with proper where, take, and orderBy conditions
  */
-export function createCursorQuery<T>(
+export function createCursorQuery(
   options: {
     cursor?: string;
     limit?: number;
@@ -455,7 +451,8 @@ export function decidePaginationStrategy(options: {
   useCursorPagination: boolean;
   reason: string;
 } {
-  const { cursor, page, limit = 20, totalEstimate } = options;
+  const { cursor, page, limit: _limit = 20, totalEstimate } = options;
+  void _limit;
 
   // If cursor is provided, use cursor-based pagination
   if (cursor !== undefined) {

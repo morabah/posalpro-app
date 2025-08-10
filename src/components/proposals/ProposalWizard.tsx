@@ -265,6 +265,14 @@ export function ProposalWizard({
 
   // ✅ FIX: Prevent duplicate loads in edit mode (StrictMode/dev re-invocations)
   const hasLoadedEditProposalRef = useRef<string | null>(null);
+  const editingIdRef = useRef<string | null>(null);
+
+  // Pin the editing ID once when provided so it does not disappear during navigation
+  useEffect(() => {
+    if (!editingIdRef.current && editProposalId) {
+      editingIdRef.current = editProposalId;
+    }
+  }, [editProposalId]);
 
   // ✅ FIXED: Fix unsafe assignments with proper types
   const [stepValidation, setStepValidation] = useState<boolean[]>([
@@ -497,7 +505,12 @@ export function ProposalWizard({
 
         // Load additional data from metadata if available
         if (proposal.metadata) {
-          const metadata = proposal.metadata;
+          // Unwrap Prisma-style update wrapper `{ set: ... }` if present
+          const rawMetadata = proposal.metadata as any;
+          const metadata =
+            rawMetadata && typeof rawMetadata === 'object' && 'set' in rawMetadata
+              ? (rawMetadata as any).set
+              : rawMetadata;
           console.log('[ProposalWizard] Processing metadata:', metadata);
 
           if (metadata.teamAssignments) {
@@ -781,20 +794,58 @@ export function ProposalWizard({
                 metadataStep1Client.contactPhone ||
                 loadedWizardData.step1.client.contactPhone ||
                 '',
+              // Also persist selected customer identity for re-selection
+              id:
+                metadataStep1Client.id ||
+                (loadedWizardData.step1.client as any).id ||
+                undefined,
+              customerId:
+                metadataStep1Client.customerId ||
+                metadataStep1Client.id ||
+                (loadedWizardData.step1.client as any).customerId ||
+                undefined,
+              name:
+                metadataStep1Client.name ||
+                (loadedWizardData.step1.client as any).name ||
+                undefined,
             } as typeof loadedWizardData.step1.client;
           }
           if (metadataStep1Details) {
+            const normalizePriority = (p?: string) => {
+              const v = (p || '').toLowerCase();
+              return (v === 'high' || v === 'medium' || v === 'low') ? (v as ProposalPriority) : (loadedWizardData.step1.details.priority as ProposalPriority);
+            };
             loadedWizardData.step1.details = {
               ...loadedWizardData.step1.details,
+              title:
+                metadataStep1Details.title || loadedWizardData.step1.details.title || '',
               description:
                 metadataStep1Details.description ||
                 loadedWizardData.step1.details.description ||
                 '',
+              priority: normalizePriority((metadataStep1Details as any).priority),
               rfpReferenceNumber:
                 metadataStep1Details.rfpReferenceNumber ||
                 (loadedWizardData.step1.details as any).rfpReferenceNumber ||
                 '',
+              estimatedValue:
+                (metadataStep1Details as any).estimatedValue ??
+                (loadedWizardData.step1.details as any).estimatedValue ??
+                0,
+              dueDate:
+                (metadataStep1Details as any).dueDate ??
+                (loadedWizardData.step1.details as any).dueDate ??
+                null,
             } as typeof loadedWizardData.step1.details;
+          }
+
+          // Ensure priority is also hydrated from top-level scalar if present
+          const topLevelPriority = (proposal as any)?.priority as string | undefined;
+          if (topLevelPriority) {
+            const v = topLevelPriority.toLowerCase();
+            if (v === 'high' || v === 'medium' || v === 'low') {
+              loadedWizardData.step1.details.priority = v as ProposalPriority;
+            }
           }
 
           // Merge products from metadata if present (e.g., richer product info)
@@ -823,6 +874,15 @@ export function ProposalWizard({
             );
             loadedWizardData.step5.sectionAssignments =
               metadata.wizardData.step5.sectionAssignments;
+          }
+
+          // Also support sectionAssignments at metadata root for compatibility
+          if (metadata?.sectionAssignments) {
+            console.log(
+              '[ProposalWizard] Loading sectionAssignments from metadata root:',
+              metadata.sectionAssignments
+            );
+            loadedWizardData.step5.sectionAssignments = metadata.sectionAssignments;
           }
 
           // Also check top-level wizardData (API returns it at top level)
@@ -1494,43 +1554,136 @@ export function ProposalWizard({
       console.log('[ProposalWizard] Customer ID length:', proposalData.customerId?.length);
 
       // Create or update depending on edit mode so the proposal ID doesn't change when editing
-      const isEditing = Boolean(editProposalId);
-      console.log('[ProposalWizard] Creating proposal with data:', proposalData);
+      const pinnedEditId = editingIdRef.current || editProposalId || null;
+      const isEditing = Boolean(pinnedEditId);
+      console.log('[ProposalWizard] Submit mode:', isEditing ? 'PATCH' : 'POST', 'id:', pinnedEditId);
 
       const response = isEditing
         ? await apiClient.patch<{
             success: boolean;
             data: { id: string; title: string; status: string };
             message: string;
-          }>(`/api/proposals/${editProposalId}` as any, {
-            // Send full minimal+assignments payload so edits persist
+          }>(`/api/proposals/${pinnedEditId}` as any, {
+            // Send scalar fields + top-level wizard metadata so backend merges correctly
             title: wizardData.step1.details.title,
             description: smartDescription,
-            priority: (wizardData.step1.details.priority || 'MEDIUM').toUpperCase(),
+            // top-level scalar stays UPPERCASE for backend enum
+            priority: (wizardData.step1.details.priority || 'medium').toString().toUpperCase(),
             value: wizardData.step1.details.estimatedValue || undefined,
             dueDate: wizardData.step1.details.dueDate
               ? new Date(wizardData.step1.details.dueDate).toISOString()
               : undefined,
-            // Persist Step 5 sections with assignedTo if present
-            ...(wizardData.step5?.sections && wizardData.step5.sections.length > 0
-              ? {
-                  sections: wizardData.step5.sections.map((section, index) => ({
-                    title: section.title || `Section ${index + 1}`,
-                    content:
-                      typeof (section as any).content === 'string' ? (section as any).content : '',
-                    type: 'TEXT' as const,
-                    order: index + 1,
-                    assignedTo: (section as any).assignedTo || '',
-                    estimatedHours: (section as any).estimatedHours || 0,
-                    dueDate: (section as any).dueDate || null,
-                    priority: (section as any).priority || 'MEDIUM',
-                  })),
-                }
-              : {}),
-            metadata: {
+            rfpReferenceNumber:
+              (wizardData.step1 as any)?.details?.rfpReferenceNumber || undefined,
+            // Persist selected customer at the proposal level
+            customerId:
+              (wizardData.step1 as any)?.client?.customerId ||
+              (wizardData.step1 as any)?.client?.id ||
+              undefined,
+
+            // Step 2: Team assignments (top-level as expected by PATCH schema)
+            teamAssignments: {
+              teamLead: wizardData.step2?.teamLead || undefined,
+              salesRepresentative: wizardData.step2?.salesRepresentative || undefined,
               subjectMatterExperts: wizardData.step2?.subjectMatterExperts || {},
+              executiveReviewers: wizardData.step2?.executiveReviewers || undefined,
+            },
+
+            // Step 3: Content selections (top-level array)
+            contentSelections:
+              (wizardData.step3?.selectedContent?.map(sc => {
+                const sectionAssignment =
+                  wizardData.step5?.sectionAssignments?.[sc.item.id] ||
+                  wizardData.step5?.sections?.find(s => s.title === sc.section)?.assignedTo;
+                return {
+                  contentId: sc.item.id,
+                  section: sc.section,
+                  customizations: sc.customizations || [],
+                  assignedTo: sectionAssignment || sc.assignedTo || '',
+                };
+              })) || [],
+
+            // Step 5: Section assignees map (top-level)
+            sectionAssignments: wizardData.step5?.sectionAssignments || {},
+
+            // Redundant metadata payload to support backend fallbacks when present
+            metadata: {
+              // Mirror wizardData snapshot
+              wizardData: {
+                // ✅ Step 1: Persist client and details for reliable hydration
+                step1: {
+                  client: {
+                    contactPerson:
+                      (wizardData.step1 as any)?.client?.contactPerson || '',
+                    contactEmail: (wizardData.step1 as any)?.client?.contactEmail || '',
+                    contactPhone: (wizardData.step1 as any)?.client?.contactPhone || '',
+                    // keep a reference to the selected customer
+                    id:
+                      (wizardData.step1 as any)?.client?.customerId ||
+                      (wizardData.step1 as any)?.client?.id ||
+                      undefined,
+                    name: (wizardData.step1 as any)?.client?.name || undefined,
+                  },
+                  details: {
+                    title: wizardData.step1.details.title || '',
+                    description: smartDescription || '',
+                    // store lowercase in metadata snapshot for UI hydration
+                    priority: (wizardData.step1.details.priority || 'medium').toString().toLowerCase(),
+                    rfpReferenceNumber:
+                      (wizardData.step1 as any)?.details?.rfpReferenceNumber || '',
+                    estimatedValue: (wizardData.step1 as any)?.details?.estimatedValue || 0,
+                    dueDate: (wizardData.step1 as any)?.details?.dueDate || null,
+                  },
+                },
+                step2: {
+                  subjectMatterExperts: wizardData.step2?.subjectMatterExperts || {},
+                },
+                step3: {
+                  selectedContent:
+                    (wizardData.step3?.selectedContent?.map(sc => ({
+                      id: sc.item.id,
+                      section: sc.section,
+                      customizations: sc.customizations || [],
+                      assignedTo:
+                        wizardData.step5?.sectionAssignments?.[sc.item.id] || sc.assignedTo || '',
+                    }))) || [],
+                },
+                // ✅ Step 4: Persist selected products for hydration
+                step4: {
+                  products: (wizardData.step4?.products || []) as any,
+                },
+                step5: {
+                  sections: (wizardData.step5?.sections || []).map((s, i) => {
+                    interface Sec {
+                      id?: string;
+                      title?: string;
+                      required?: boolean;
+                      content?: unknown;
+                      assignedTo?: string;
+                      status?: string;
+                      estimatedHours?: number;
+                      dueDate?: string | null;
+                      priority?: string;
+                    }
+                    const sec = s as Sec;
+                    return {
+                      id: sec.id || String(i + 1),
+                      title: (s as { title?: string }).title || `Section ${i + 1}`,
+                      required: sec.required ?? true,
+                      content: sec.content ?? [],
+                      assignedTo: sec.assignedTo,
+                      status: sec.status || 'not_started',
+                      estimatedHours: sec.estimatedHours ?? 0,
+                      dueDate: sec.dueDate || null,
+                      priority: sec.priority || 'MEDIUM',
+                    };
+                  }),
+                  sectionAssignments: wizardData.step5?.sectionAssignments || {},
+                },
+              },
+              // Mirror content selections at metadata root for compatibility
               contentSelections:
-                wizardData.step3?.selectedContent?.map(sc => {
+                (wizardData.step3?.selectedContent?.map(sc => {
                   const sectionAssignment =
                     wizardData.step5?.sectionAssignments?.[sc.item.id] ||
                     wizardData.step5?.sections?.find(s => s.title === sc.section)?.assignedTo;
@@ -1540,24 +1693,102 @@ export function ProposalWizard({
                     customizations: sc.customizations || [],
                     assignedTo: sectionAssignment || sc.assignedTo || '',
                   };
-                }) || [],
+                })) || [],
+              // Mirror section assignments for compatibility
               sectionAssignments: wizardData.step5?.sectionAssignments || {},
-              wizardData: {
-                step5: {
-                  sections: (wizardData.step5?.sections || []).map((s, i) => ({
-                    id: (s as any).id || String(i + 1),
-                    title: s.title || `Section ${i + 1}`,
-                    required: s.required ?? true,
-                    content: s.content || [],
-                    assignedTo: (s as any).assignedTo,
-                    status: (s as any).status || 'not_started',
-                    estimatedHours: (s as any).estimatedHours ?? 0,
-                    dueDate: (s as any).dueDate || null,
-                    priority: (s as any).priority || 'MEDIUM',
-                  })),
-                  sectionAssignments: wizardData.step5?.sectionAssignments || {},
+            },
+
+            // Wizard snapshot for deep merge in backend metadata
+            wizardData: {
+              // Mirror step1 for backend deep-merge and future-proofing
+              step1: {
+                client: {
+                  contactPerson: (wizardData.step1 as any)?.client?.contactPerson || '',
+                  contactEmail: (wizardData.step1 as any)?.client?.contactEmail || '',
+                  contactPhone: (wizardData.step1 as any)?.client?.contactPhone || '',
+                  id:
+                    (wizardData.step1 as any)?.client?.customerId ||
+                    (wizardData.step1 as any)?.client?.id ||
+                    undefined,
+                  name: (wizardData.step1 as any)?.client?.name || undefined,
+                },
+                details: {
+                  title: wizardData.step1.details.title || '',
+                  description: smartDescription || '',
+                  // store lowercase in wizardData snapshot
+                  priority: (wizardData.step1.details.priority || 'medium').toString().toLowerCase(),
+                  rfpReferenceNumber: (wizardData.step1 as any)?.details?.rfpReferenceNumber || '',
+                  estimatedValue: (wizardData.step1 as any)?.details?.estimatedValue || 0,
+                  dueDate: (wizardData.step1 as any)?.details?.dueDate || null,
                 },
               },
+              step2: {
+                subjectMatterExperts: wizardData.step2?.subjectMatterExperts || {},
+              },
+              step3: {
+                selectedContent:
+                  wizardData.step3?.selectedContent?.map(sc => ({
+                    id: sc.item.id,
+                    section: sc.section,
+                    customizations: sc.customizations || [],
+                    assignedTo:
+                      wizardData.step5?.sectionAssignments?.[sc.item.id] || sc.assignedTo || '',
+                  })) || [],
+              },
+              // Mirror step4 products as part of wizardData for deep-merge
+              step4: {
+                products: (wizardData.step4?.products || []) as any,
+              },
+              step5: {
+                sections: (wizardData.step5?.sections || []).map((s, i) => {
+                  interface Sec {
+                    id?: string;
+                    title?: string;
+                    required?: boolean;
+                    content?: unknown;
+                    assignedTo?: string;
+                    status?: string;
+                    estimatedHours?: number;
+                    dueDate?: string | null;
+                    priority?: string;
+                  }
+                  const sec = s as Sec;
+                  return {
+                    id: sec.id || String(i + 1),
+                    title: (s as { title?: string }).title || `Section ${i + 1}`,
+                    required: sec.required ?? true,
+                    content: sec.content ?? [],
+                    assignedTo: sec.assignedTo,
+                    status: sec.status || 'not_started',
+                    estimatedHours: sec.estimatedHours ?? 0,
+                    dueDate: sec.dueDate || null,
+                    priority: sec.priority || 'MEDIUM',
+                  };
+                }),
+                sectionAssignments: wizardData.step5?.sectionAssignments || {},
+              },
+            },
+
+            // Step 6 and analytics
+            validationData: {
+              isValid: wizardData.step6?.finalValidation?.isValid || false,
+              completeness: wizardData.step6?.finalValidation?.completeness || 0,
+              issues: wizardData.step6?.finalValidation?.issues || [],
+              complianceChecks: wizardData.step6?.finalValidation?.complianceChecks || [],
+            },
+            analyticsData: {
+              stepCompletionTimes: [],
+              wizardCompletionRate: 1.0,
+              complexityScore: 2,
+              teamSize: Object.keys(wizardData.step2?.subjectMatterExperts || {}).length,
+              contentSuggestionsUsed: wizardData.step3?.selectedContent?.length || 0,
+              validationIssuesFound: wizardData.step6?.finalValidation?.issues?.length || 0,
+            },
+            crossStepValidation: {
+              teamCompatibility: true,
+              contentAlignment: true,
+              budgetCompliance: true,
+              timelineRealistic: true,
             },
           })
         : await apiClient.post<{
@@ -1596,7 +1827,7 @@ export function ProposalWizard({
 
       // When editing, prefer the original id if the API returns nothing
       if (isEditing && (!proposalId || proposalId === 'undefined')) {
-        proposalId = editProposalId;
+        proposalId = pinnedEditId || undefined;
       }
 
       // Validate proposal ID format and content

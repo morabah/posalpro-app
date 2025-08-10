@@ -89,7 +89,7 @@ export class PerformanceOptimizer {
       });
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to initialize performance optimizer',
         ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
         {
@@ -169,7 +169,7 @@ export class PerformanceOptimizer {
       }
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to collect performance metrics',
         ErrorCodes.SYSTEM.METRICS_COLLECTION_FAILED,
         {
@@ -212,7 +212,7 @@ export class PerformanceOptimizer {
       }
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to report analytics batch',
         ErrorCodes.ANALYTICS.ANALYTICS_FAILED,
         {
@@ -243,7 +243,7 @@ export class PerformanceOptimizer {
       }
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to monitor errors',
         ErrorCodes.SYSTEM.INTERNAL_ERROR,
         {
@@ -284,7 +284,7 @@ export class PerformanceOptimizer {
       }
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to handle authentication loop',
         ErrorCodes.AUTH.SESSION_EXPIRED,
         {
@@ -321,7 +321,7 @@ export class PerformanceOptimizer {
       this.restartThrottledMonitoring();
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to handle timeout violations',
         ErrorCodes.SYSTEM.TIMEOUT,
         {
@@ -369,7 +369,7 @@ export class PerformanceOptimizer {
       });
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to trigger optimization',
         ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
         {
@@ -476,7 +476,7 @@ export class PerformanceOptimizer {
         }
       } catch (error) {
         this.errorHandlingService.processError(
-          error as Error,
+          error,
           `Failed to implement ${recommendation.type} optimization`,
           ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
           {

@@ -300,7 +300,7 @@ export class EnhancedPerformanceService {
       });
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to collect performance metrics',
         ErrorCodes.SYSTEM.METRICS_COLLECTION_FAILED,
         {
@@ -638,7 +638,7 @@ export class EnhancedPerformanceService {
       return report;
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to generate comprehensive performance report',
         ErrorCodes.SYSTEM.REPORT_GENERATION_FAILED,
         {

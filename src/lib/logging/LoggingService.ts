@@ -7,6 +7,24 @@ import { logger } from '@/utils/logger';/**
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 
+interface PerformanceMetrics {
+  executionTime?: number;
+  memoryUsage?: number;
+  cacheHitRate?: number;
+}
+
+export interface LogMetadata {
+  component?: string;
+  operation?: string;
+  userId?: string;
+  sessionId?: string;
+  metadata?: Record<string, unknown>;
+  userStories?: string[];
+  hypotheses?: string[];
+  performanceMetrics?: PerformanceMetrics;
+  [key: string]: unknown;
+}
+
 export interface LogEntry {
   id: string;
   timestamp: Date;
@@ -16,18 +34,14 @@ export interface LogEntry {
   operation?: string;
   userId?: string;
   sessionId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   userStories?: string[];
   hypotheses?: string[];
-  performanceMetrics?: {
-    executionTime?: number;
-    memoryUsage?: number;
-    cacheHitRate?: number;
-  };
+  performanceMetrics?: PerformanceMetrics;
 }
 
 export class LoggingService {
-  private static instance: LoggingService;
+  private static instance: LoggingService | undefined;
   private logs: LogEntry[] = [];
   private maxLogs: number = 10000;
   private errorHandlingService: ErrorHandlingService;
@@ -46,35 +60,35 @@ export class LoggingService {
   /**
    * Log debug information
    */
-  debug(message: string, metadata?: Record<string, any>): void {
+  debug(message: string, metadata?: LogMetadata): void {
     this.log('debug', message, metadata);
   }
 
   /**
    * Log informational messages
    */
-  info(message: string, metadata?: Record<string, any>): void {
+  info(message: string, metadata?: LogMetadata): void {
     this.log('info', message, metadata);
   }
 
   /**
    * Log warning messages
    */
-  warn(message: string, metadata?: Record<string, any>): void {
+  warn(message: string, metadata?: LogMetadata): void {
     this.log('warn', message, metadata);
   }
 
   /**
    * Log error messages
    */
-  error(message: string, metadata?: Record<string, any>): void {
+  error(message: string, metadata?: LogMetadata): void {
     this.log('error', message, metadata);
   }
 
   /**
    * Log critical messages
    */
-  critical(message: string, metadata?: Record<string, any>): void {
+  critical(message: string, metadata?: LogMetadata): void {
     this.log('critical', message, metadata);
   }
 
@@ -83,12 +97,8 @@ export class LoggingService {
    */
   performance(
     message: string,
-    metrics: {
-      executionTime?: number;
-      memoryUsage?: number;
-      cacheHitRate?: number;
-    },
-    metadata?: Record<string, any>
+    metrics: PerformanceMetrics,
+    metadata?: LogMetadata
   ): void {
     this.log('info', message, {
       ...metadata,
@@ -101,21 +111,22 @@ export class LoggingService {
   /**
    * Core logging method
    */
-  private log(level: LogEntry['level'], message: string, metadata?: Record<string, any>): void {
+  private log(level: LogEntry['level'], message: string, metadata?: LogMetadata): void {
     try {
+      const safeMeta: LogMetadata | undefined = metadata ? { ...metadata } : undefined;
       const logEntry: LogEntry = {
         id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         timestamp: new Date(),
         level,
         message,
-        component: metadata?.component,
-        operation: metadata?.operation,
-        userId: metadata?.userId,
-        sessionId: metadata?.sessionId,
-        metadata,
-        userStories: metadata?.userStories,
-        hypotheses: metadata?.hypotheses,
-        performanceMetrics: metadata?.performanceMetrics,
+        component: safeMeta?.component,
+        operation: safeMeta?.operation,
+        userId: safeMeta?.userId,
+        sessionId: safeMeta?.sessionId,
+        metadata: safeMeta?.metadata,
+        userStories: safeMeta?.userStories,
+        hypotheses: safeMeta?.hypotheses,
+        performanceMetrics: safeMeta?.performanceMetrics,
       };
 
       this.logs.push(logEntry);
@@ -127,9 +138,15 @@ export class LoggingService {
 
       // In development, also log to console
       if (process.env.NODE_ENV === 'development') {
-        const consoleMethod =
+        type ConsoleMethod = 'error' | 'warn' | 'log';
+        const consoleFns: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+          error: console.error.bind(console),
+          warn: console.warn.bind(console),
+          log: console.log.bind(console),
+        };
+        const method: ConsoleMethod =
           level === 'critical' || level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
-        console[consoleMethod](`[${level.toUpperCase()}] ${message}`, metadata);
+        consoleFns[method](`[${level.toUpperCase()}] ${message}`, safeMeta);
       }
 
       // For critical and error logs, also process through error handling service
@@ -146,13 +163,17 @@ export class LoggingService {
             logLevel: level,
             originalMessage: message,
             userFriendlyMessage: 'System logging event occurred.',
-            ...metadata,
+            ...(safeMeta ? (safeMeta as Record<string, unknown>) : {}),
           }
         );
       }
     } catch (error) {
       // Fallback to console if logging service fails
-      logger.error('LoggingService error: ' + (error instanceof Error ? error.message : String(error)), { level, message, metadata, error });
+      const metaForLog: Record<string, unknown> | undefined = metadata?.metadata;
+      logger.error(
+        'LoggingService error: ' + (error instanceof Error ? error.message : String(error)),
+        { level, message, metadata: metaForLog, error }
+      );
     }
   }
 
@@ -164,12 +185,31 @@ export class LoggingService {
       return this.logs;
     }
 
-    return this.logs.filter(log => {
-      return Object.entries(filters).every(([key, value]) => {
-        if (value === undefined) return true;
-        return log[key as keyof LogEntry] === value;
-      });
-    });
+    const keys = Object.keys(filters) as Array<keyof LogEntry>;
+    return this.logs.filter(log =>
+      keys.every(key => {
+        const expected = filters[key];
+        if (expected === undefined) return true;
+        const actual = log[key];
+        if (key === 'timestamp') {
+          return actual instanceof Date && expected instanceof Date
+            ? actual.getTime() === expected.getTime()
+            : false;
+        }
+        if (typeof actual !== typeof expected) return false;
+        if (typeof actual === 'string' && typeof expected === 'string') {
+          return actual === expected;
+        }
+        if (typeof actual === 'number' && typeof expected === 'number') {
+          return actual === expected;
+        }
+        if (typeof actual === 'boolean' && typeof expected === 'boolean') {
+          return actual === expected;
+        }
+        // For objects (including arrays), fall back to referential equality
+        return Object.is(actual as unknown, expected as unknown);
+      })
+    );
   }
 
   /**

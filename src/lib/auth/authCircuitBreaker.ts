@@ -56,7 +56,14 @@ export class AuthCircuitBreaker {
     try {
       const saved = this.sessionStorage.getItem('auth_circuit_breaker_state');
       if (saved) {
-        this.state = JSON.parse(saved);
+        const parsed: unknown = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          const partial = parsed as Partial<CircuitBreakerState>;
+          this.state = {
+            ...this.state,
+            ...partial,
+          };
+        }
       } else {
         this.resetState();
       }

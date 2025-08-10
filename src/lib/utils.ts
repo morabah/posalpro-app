@@ -17,32 +17,36 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Debounce function to limit function calls
  */
-export function debounce<T extends (...args: any[]) => any>(
-  func: T,
+export function debounce<A extends unknown[], R>(
+  func: (...args: A) => R,
   wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout;
+): (...args: A) => void {
+  let timeout: ReturnType<typeof setTimeout>;
 
-  return (...args: Parameters<T>) => {
+  return (...args: A) => {
     clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
+    timeout = setTimeout(() => {
+      void func(...args);
+    }, wait);
   };
 }
 
 /**
  * Throttle function to limit function calls
  */
-export function throttle<T extends (...args: any[]) => any>(
-  func: T,
+export function throttle<A extends unknown[], R>(
+  func: (...args: A) => R,
   limit: number
-): (...args: Parameters<T>) => void {
-  let inThrottle: boolean;
+): (...args: A) => void {
+  let inThrottle = false;
 
-  return (...args: Parameters<T>) => {
+  return (...args: A) => {
     if (!inThrottle) {
-      func(...args);
+      void func(...args);
       inThrottle = true;
-      setTimeout(() => (inThrottle = false), limit);
+      setTimeout(() => {
+        inThrottle = false;
+      }, limit);
     }
   };
 }
@@ -65,7 +69,7 @@ export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOpt
       day: 'numeric',
       ...options,
     }).format(dateObj);
-  } catch (error) {
+  } catch {
     return 'Invalid Date';
   }
 }
@@ -97,11 +101,11 @@ export function sleep(ms: number): Promise<void> {
 /**
  * Check if value is empty (null, undefined, empty string, empty array, empty object)
  */
-export function isEmpty(value: any): boolean {
+export function isEmpty(value: unknown): boolean {
   if (value == null) return true;
   if (typeof value === 'string') return value.trim() === '';
   if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'object') return Object.keys(value).length === 0;
+  if (typeof value === 'object') return Object.keys(value as Record<string, unknown>).length === 0;
   return false;
 }
 

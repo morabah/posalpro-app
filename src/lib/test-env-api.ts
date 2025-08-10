@@ -414,8 +414,34 @@ class ApiClientTestRunner {
 
       for (const method of methods) {
         try {
-          // @ts-expect-error - Dynamic method access for testing
-          await testClient[method]('/test', method === 'get' ? {} : { test: true });
+          // Call the appropriate client method in a type-safe way
+          const endpoint = '/test';
+          switch (method) {
+            case 'get':
+              await testClient.get(endpoint, {});
+              break;
+            case 'post':
+              await testClient.post(endpoint, { test: true });
+              break;
+            case 'put':
+              await testClient.put(endpoint, { test: true });
+              break;
+            case 'patch':
+              await testClient.patch(endpoint, { test: true });
+              break;
+            case 'delete':
+              await testClient.delete(endpoint, {});
+              break;
+            case 'head':
+              await testClient.head(endpoint, {});
+              break;
+            case 'options':
+              await testClient.options(endpoint, {});
+              break;
+            default:
+              // Exhaustiveness check
+              ((_: never) => _)(method as never);
+          }
         } catch (_error) {
           // Expected to fail due to network error, which is fine for this test
           if (_error instanceof ApiError && _error.type === ApiErrorType.NETWORK) {

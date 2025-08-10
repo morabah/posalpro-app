@@ -11,7 +11,7 @@ import { UserType } from '@/types/enums';
 interface Permission {
   action: string;
   resource: string;
-  conditions?: Record<string, any>;
+  conditions?: Record<string, unknown>;
 }
 
 interface RolePermissions {
@@ -66,7 +66,7 @@ const hasPermission = (
   userRole: UserType,
   action: string,
   resource: string,
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 ): boolean => {
   const permissions = ROLE_PERMISSIONS[userRole] || [];
 

@@ -17,26 +17,16 @@ import { UserType } from '@/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDashboardAnalytics } from './useDashboardAnalytics';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1', 'US-4.3', 'US-2.3'],
-  acceptanceCriteria: [
-    'AC-4.1.1', // Timeline visualization
-    'AC-4.1.3', // On-time completion tracking
-    'AC-4.3.1', // Priority visualization
-    'AC-4.3.3', // Progress tracking
-    'AC-2.3.1', // Role-based access
-  ],
-  methods: [
-    'fetchDashboardData()',
-    'refreshData()',
-    'handleRoleBasedFiltering()',
-    'manageDataState()',
-    'trackDataUsage()',
-  ],
-  hypotheses: ['H7', 'H4', 'H8'],
-  testCases: ['TC-H7-001', 'TC-H7-002', 'TC-H4-001'],
-};
+// Narrowed section type for strong typing across refresh operations
+type DashboardSection =
+  | 'proposals'
+  | 'activities'
+  | 'team'
+  | 'deadlines'
+  | 'performance'
+  | 'notifications';
+
+// Note: Removed unused COMPONENT_MAPPING to satisfy lint @typescript-eslint/no-unused-vars
 
 // Hook configuration
 interface UseDashboardDataOptions {
@@ -108,7 +98,7 @@ export interface UseDashboardDataReturn {
 
   // Actions
   refreshAll: () => Promise<void>;
-  refreshSection: (section: string) => Promise<void>;
+  refreshSection: (section: DashboardSection) => Promise<void>;
   clearErrors: () => void;
   markNotificationAsRead: (notificationId: string) => Promise<boolean>;
 
@@ -224,6 +214,7 @@ export function useDashboardData(
    */
   const fetchDashboardData = useCallback(
     async (refresh = false) => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!mountedRef.current) return;
 
       loadStartTimeRef.current = Date.now();
@@ -240,6 +231,7 @@ export function useDashboardData(
 
         const data = await dashboardAPI.getDashboardData(queryOptions);
 
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!mountedRef.current) return;
 
         setState(prev => ({
@@ -262,6 +254,7 @@ export function useDashboardData(
         // Notify callback
         options.onDataChange?.(data);
       } catch (error) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!mountedRef.current) return;
 
         const errorMessage =
@@ -271,6 +264,7 @@ export function useDashboardData(
 
         logger.error('Dashboard data fetch failed:', error);
       } finally {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (mountedRef.current) {
           updateLoadingState('overall', false);
         }
@@ -291,7 +285,8 @@ export function useDashboardData(
    * Refresh specific dashboard section
    */
   const refreshSection = useCallback(
-    async (section: string) => {
+    async (section: DashboardSection) => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!mountedRef.current) return;
 
       const sectionKey = section as keyof DashboardDataState['loading'];
@@ -308,7 +303,34 @@ export function useDashboardData(
           refresh: true,
         };
 
-        const sectionData = await dashboardAPI.refreshSection(section, queryOptions);
+        let sectionData:
+          | DashboardData['proposals']
+          | ActivityFeedItem[]
+          | TeamMember[]
+          | Deadline[]
+          | PerformanceMetrics
+          | Notification[];
+
+        switch (section) {
+          case 'proposals':
+            sectionData = await dashboardAPI.refreshSection('proposals', queryOptions);
+            break;
+          case 'activities':
+            sectionData = await dashboardAPI.refreshSection('activities', queryOptions);
+            break;
+          case 'team':
+            sectionData = await dashboardAPI.refreshSection('team', queryOptions);
+            break;
+          case 'deadlines':
+            sectionData = await dashboardAPI.refreshSection('deadlines', queryOptions);
+            break;
+          case 'performance':
+            sectionData = await dashboardAPI.refreshSection('performance', queryOptions);
+            break;
+          case 'notifications':
+            sectionData = await dashboardAPI.refreshSection('notifications', queryOptions);
+            break;
+        }
 
         if (!mountedRef.current) return;
 
@@ -319,22 +341,22 @@ export function useDashboardData(
           const updatedData = { ...prev.data };
           switch (section) {
             case 'proposals':
-              updatedData.proposals = sectionData;
+              updatedData.proposals = sectionData as DashboardData['proposals'];
               break;
             case 'activities':
-              updatedData.activities = sectionData;
+              updatedData.activities = sectionData as ActivityFeedItem[];
               break;
             case 'team':
-              updatedData.team = sectionData;
+              updatedData.team = sectionData as TeamMember[];
               break;
             case 'deadlines':
-              updatedData.deadlines = sectionData;
+              updatedData.deadlines = sectionData as Deadline[];
               break;
             case 'performance':
-              updatedData.performance = sectionData;
+              updatedData.performance = sectionData as PerformanceMetrics;
               break;
             case 'notifications':
-              updatedData.notifications = sectionData;
+              updatedData.notifications = sectionData as Notification[];
               break;
           }
 
@@ -446,7 +468,7 @@ export function useDashboardData(
   // Initial data fetch
   useEffect(() => {
     fetchDashboardData();
-  }, [options.userId, options.userRole, options.timeRange]); // Re-fetch when key options change
+  }, [fetchDashboardData]); // Re-fetch when key options change via memoized dependency
 
   // Auto-refresh setup
   useEffect(() => {

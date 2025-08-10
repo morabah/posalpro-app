@@ -1,11 +1,27 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger';
+/**
  * PosalPro MVP2 - Analytics Storage Cleanup Utility
  * Provides manual cleanup functions for development and troubleshooting
  */
 
-export const clearAnalyticsStorage = () => {
+// Augment Window with our developer helper functions (browser only)
+declare global {
+  interface Window {
+    clearAnalyticsStorage: () => boolean;
+    getStorageUsage: () =>
+      | {
+          total: number;
+          analytics: number;
+          percentage: number;
+          formatted: { total: string; analytics: string };
+        }
+      | null;
+  }
+}
+
+export const clearAnalyticsStorage = (): boolean => {
   try {
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined' && 'localStorage' in window) {
       // Clear all analytics-related data
       Object.keys(localStorage).forEach(key => {
         if (
@@ -27,9 +43,14 @@ export const clearAnalyticsStorage = () => {
   return false;
 };
 
-export const getStorageUsage = () => {
+export const getStorageUsage = (): {
+  total: number;
+  analytics: number;
+  percentage: number;
+  formatted: { total: string; analytics: string };
+} | null => {
   try {
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined' && 'localStorage' in window) {
       let totalSize = 0;
       let analyticsSize = 0;
 
@@ -62,6 +83,6 @@ export const getStorageUsage = () => {
 
 // Development helper - can be called from browser console
 if (typeof window !== 'undefined') {
-  (window as any).clearAnalyticsStorage = clearAnalyticsStorage;
-  (window as any).getStorageUsage = getStorageUsage;
+  window.clearAnalyticsStorage = clearAnalyticsStorage;
+  window.getStorageUsage = getStorageUsage;
 }

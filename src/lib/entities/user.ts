@@ -65,13 +65,13 @@ interface ApiUserResponse {
  * Provides comprehensive user management with CRUD operations
  */
 export class UserEntity {
-  private static instance: UserEntity;
+  private static instance: UserEntity | null = null;
   // Removed custom caching - using apiClient built-in caching per CORE_REQUIREMENTS.md
 
   private constructor() {}
 
   public static getInstance(): UserEntity {
-    if (!UserEntity.instance) {
+    if (UserEntity.instance === null) {
       UserEntity.instance = new UserEntity();
     }
     return UserEntity.instance;
@@ -88,7 +88,7 @@ export class UserEntity {
       // Create user via API
       const response = await apiClient.post<UserProfile>('/users', validatedData);
 
-      if (response.success && response.data) {
+      if (response.success) {
         // User created successfully - apiClient handles caching automatically
         // Track user creation event
         trackAuthEvent('user_created', {
@@ -131,11 +131,7 @@ export class UserEntity {
       const response = await apiClient.get<UserProfile>(
         `/users/email/${encodeURIComponent(email)}`
       );
-
-      if (response.success && response.data) {
-        // User updated successfully - apiClient handles caching automatically
-      }
-
+      // apiClient handles caching automatically
       return response;
     } catch (error) {
       logger.error(`Failed to find user by email ${email}:`, error);
@@ -158,7 +154,7 @@ export class UserEntity {
       // Update via API
       const response = await apiClient.put<UserProfile>(`/users/${id}`, validatedData);
 
-      if (response.success && response.data) {
+      if (response.success) {
         // User updated successfully - apiClient handles caching automatically
 
         // Track user update event
@@ -208,27 +204,46 @@ export class UserEntity {
 
       // Results cached automatically by apiClient
 
-      // Transform response to expected format
-      const users = Array.isArray(response.data)
-        ? response.data
-        : (response.data && typeof response.data === 'object' && 'users' in response.data && Array.isArray((response.data as { users: unknown[] }).users))
-        ? (response.data as { users: UserProfile[] }).users
-        : [];
-      const pagination = Array.isArray(response.data)
-        ? {
-            page: options.page || 1,
-            limit: options.limit || 10,
-            total: response.data.length,
-            totalPages: Math.ceil(response.data.length / (options.limit || 10)),
-          }
-        : (response.data && typeof response.data === 'object' && 'pagination' in response.data) 
-        ? (response.data as { pagination: unknown }).pagination 
-        : {
-            page: options.page || 1,
-            limit: options.limit || 10,
-            total: 0,
-            totalPages: 0,
-          };
+      // Transform response to expected format with safe runtime checks
+      const isUsersArray = (v: unknown): v is UserProfile[] => Array.isArray(v);
+      const isUsersEnvelope = (
+        v: unknown
+      ): v is { users: UserProfile[]; pagination?: { page: number; limit: number; total: number; totalPages: number } } => {
+        if (typeof v !== 'object' || v === null) return false;
+        const r = v as Record<string, unknown>;
+        return Array.isArray(r.users);
+      };
+
+      let users: UserProfile[] = [];
+      let pagination: { page: number; limit: number; total: number; totalPages: number } = {
+        page: options.page || 1,
+        limit: options.limit || 10,
+        total: 0,
+        totalPages: 0,
+      };
+
+      const data = response.data as unknown;
+      if (isUsersArray(data)) {
+        users = data;
+        const limit = options.limit || 10;
+        pagination = {
+          page: options.page || 1,
+          limit,
+          total: data.length,
+          totalPages: Math.ceil(data.length / limit),
+        };
+      } else if (isUsersEnvelope(data)) {
+        users = data.users;
+        if (
+          data.pagination &&
+          typeof data.pagination.page === 'number' &&
+          typeof data.pagination.limit === 'number' &&
+          typeof data.pagination.total === 'number' &&
+          typeof data.pagination.totalPages === 'number'
+        ) {
+          pagination = data.pagination;
+        }
+      }
 
       return {
         success: response.success,
@@ -318,7 +333,7 @@ export class UserEntity {
     try {
       const response = await apiClient.post<UserProfile>(`/users/${id}/activate`, {});
 
-      if (response.success && response.data) {
+      if (response.success) {
         // User activated successfully - apiClient handles caching automatically
         trackAuthEvent('user_activated', { userId: id });
       }
@@ -337,7 +352,7 @@ export class UserEntity {
     try {
       const response = await apiClient.post<UserProfile>(`/users/${id}/deactivate`, {});
 
-      if (response.success && response.data) {
+      if (response.success) {
         // User deactivated successfully - apiClient handles caching automatically
         trackAuthEvent('user_deactivated', { userId: id });
       }

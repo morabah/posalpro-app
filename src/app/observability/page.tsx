@@ -1,32 +1,89 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-type MetricsData = {
+interface MetricsData {
   requests: { count: number; p95: number; p99: number };
   db: { count: number; p95: number; p99: number };
   cache: { hit: number; miss: number; ratio: number };
   errors: { total: number; codes: Record<string, number> };
-  webVitals?: any;
+  webVitals?: {
+    lcp?: number;
+    fid?: number;
+    cls?: number;
+    inp?: number;
+    ttfb?: number;
+    [key: string]: unknown;
+  };
   headline?: { lcpP95: number; inpP95: number; clsRate: number };
-};
+}
+
+interface ApiMetricsResponse {
+  data?: MetricsData;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isMetricsData(value: unknown): value is MetricsData {
+  if (!isRecord(value)) return false;
+  const v = value;
+  return (
+    isRecord(v.requests) &&
+    typeof v.requests.count === 'number' &&
+    isRecord(v.db) &&
+    isRecord(v.cache) &&
+    isRecord(v.errors) &&
+    isRecord(v.errors.codes ?? {})
+  );
+}
+
+function isApiMetricsResponse(value: unknown): value is ApiMetricsResponse {
+  if (!isRecord(value)) return false;
+  if (!('data' in value)) return true;
+  const maybe = value as { data?: unknown };
+  return maybe.data === undefined || isMetricsData(maybe.data);
+}
 
 export default function ObservabilityPage() {
   const [data, setData] = useState<MetricsData | null>(null);
   useEffect(() => {
     const tick = async () => {
       const res = await fetch('/api/observability/metrics', { cache: 'no-store' });
-      const json = await res.json();
-      setData(json.data as MetricsData);
+      const json = (await res.json()) as unknown;
+      if (isApiMetricsResponse(json)) {
+        setData(json.data ?? null);
+      } else {
+        setData(null);
+      }
     };
     tick();
     const i = setInterval(tick, 2000);
     return () => clearInterval(i);
   }, []);
 
-  const codes = data?.errors?.codes || {};
+  const d = data;
+  const codes: Record<string, number> = d ? d.errors.codes : {};
   const topCodes = Object.entries(codes)
-    .sort((a, b) => (b[1] as number) - (a[1] as number))
+    .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
+
+  // Precompute safe primitives to avoid optional chaining in JSX
+  const requestsCount = d ? d.requests.count : 0;
+  const requestsP95 = d ? d.requests.p95 : 0;
+  const requestsP99 = d ? d.requests.p99 : 0;
+
+  const dbCount = d ? d.db.count : 0;
+  const dbP95 = d ? d.db.p95 : 0;
+  const dbP99 = d ? d.db.p99 : 0;
+
+  const cacheHit = d ? d.cache.hit : 0;
+  const cacheMiss = d ? d.cache.miss : 0;
+  const cacheRatio = d ? d.cache.ratio : 0;
+
+  const headlineLcpP95 = d && d.headline ? d.headline.lcpP95 : 0;
+  const headlineInpP95 = d && d.headline ? d.headline.inpP95 : 0;
+  const headlineClsRate = d && d.headline ? d.headline.clsRate : 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -35,23 +92,23 @@ export default function ObservabilityPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded border p-4 bg-white">
           <h2 className="font-semibold mb-2">Requests</h2>
-          <div className="text-sm">Count: {data?.requests?.count ?? 0}</div>
-          <div className="text-sm">p95: {data?.requests?.p95 ?? 0} ms</div>
-          <div className="text-sm">p99: {data?.requests?.p99 ?? 0} ms</div>
+          <div className="text-sm">Count: {requestsCount}</div>
+          <div className="text-sm">p95: {requestsP95} ms</div>
+          <div className="text-sm">p99: {requestsP99} ms</div>
         </div>
 
         <div className="rounded border p-4 bg-white">
           <h2 className="font-semibold mb-2">Database</h2>
-          <div className="text-sm">Queries: {data?.db?.count ?? 0}</div>
-          <div className="text-sm">p95: {data?.db?.p95 ?? 0} ms</div>
-          <div className="text-sm">p99: {data?.db?.p99 ?? 0} ms</div>
+          <div className="text-sm">Queries: {dbCount}</div>
+          <div className="text-sm">p95: {dbP95} ms</div>
+          <div className="text-sm">p99: {dbP99} ms</div>
         </div>
 
         <div className="rounded border p-4 bg-white">
           <h2 className="font-semibold mb-2">Cache</h2>
-          <div className="text-sm">Hit: {data?.cache?.hit ?? 0}</div>
-          <div className="text-sm">Miss: {data?.cache?.miss ?? 0}</div>
-          <div className="text-sm">Ratio: {(data?.cache?.ratio ?? 0).toFixed(2)}</div>
+          <div className="text-sm">Hit: {cacheHit}</div>
+          <div className="text-sm">Miss: {cacheMiss}</div>
+          <div className="text-sm">Ratio: {cacheRatio.toFixed(2)}</div>
         </div>
       </div>
 
@@ -68,7 +125,7 @@ export default function ObservabilityPage() {
             {topCodes.map(([code, count]) => (
               <tr key={code} className="border-t">
                 <td className="py-1">{code}</td>
-                <td className="py-1">{count as number}</td>
+                <td className="py-1">{count}</td>
               </tr>
             ))}
             {topCodes.length === 0 && (
@@ -84,9 +141,9 @@ export default function ObservabilityPage() {
 
       <div className="rounded border p-4 bg-white">
         <h2 className="font-semibold mb-2">Web Vitals (headline)</h2>
-        <div className="text-sm">LCP p95: {data?.headline?.lcpP95 ?? 0} ms</div>
-        <div className="text-sm">INP p95: {data?.headline?.inpP95 ?? 0} ms</div>
-        <div className="text-sm">CLS poor rate: {((data?.headline?.clsRate ?? 0) * 100).toFixed(1)}%</div>
+        <div className="text-sm">LCP p95: {headlineLcpP95} ms</div>
+        <div className="text-sm">INP p95: {headlineInpP95} ms</div>
+        <div className="text-sm">CLS poor rate: {(headlineClsRate * 100).toFixed(1)}%</div>
       </div>
     </div>
   );

@@ -88,13 +88,16 @@ export interface FixSuggestion {
 
 // Action result types
 export type ActionType = 'replace' | 'configure' | 'add' | 'remove' | 'update';
-export type ActionTarget =
-  | 'product'
-  | 'configuration'
-  | 'relationship'
-  | 'license'
-  | 'custom'
-  | string;
+// Using a broad string type to avoid redundant union constituents with `string`.
+// Known targets retained as a helper for documentation/reference.
+export type ActionTarget = string;
+export const KnownActionTargets = [
+  'product',
+  'configuration',
+  'relationship',
+  'license',
+  'custom',
+] as const;
 export type SuggestionType = 'automatic' | 'manual' | 'configuration' | 'replacement';
 export type SuggestionImpact = 'low' | 'medium' | 'high';
 
@@ -105,7 +108,7 @@ export interface ActionResult {
     description?: string;
     confidence?: number;
     target?: ActionTarget;
-    value?: any;
+    value?: unknown;
   };
   automated?: boolean;
 }
@@ -115,7 +118,7 @@ export interface FixAction {
   id: string;
   type: ActionType;
   target: ActionTarget;
-  value: any;
+  value: unknown;
   description: string;
   automated: boolean;
 }
@@ -137,7 +140,7 @@ export interface ValidationRule {
   userStoryMappings?: string[];
   version?: string;
   lastModified?: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Rule condition interface
@@ -146,7 +149,7 @@ export interface RuleCondition {
   type: 'product' | 'relationship' | 'configuration' | 'license' | 'custom';
   operator: 'equals' | 'contains' | 'exists' | 'greater' | 'less' | 'matches';
   field: string;
-  value: any;
+  value: unknown;
   negated?: boolean;
 }
 
@@ -155,7 +158,7 @@ export interface RuleAction {
   id: string;
   type: 'error' | 'warning' | 'fix' | 'suggest' | 'block';
   message: string;
-  data?: any;
+  data?: unknown;
   automated?: boolean;
 }
 
@@ -182,7 +185,7 @@ export interface ValidationContext {
   userId: string;
   products: Product[];
   relationships: ProductRelationship[];
-  configuration: Record<string, any>;
+  configuration: Record<string, unknown>;
   environment: 'development' | 'staging' | 'production';
   timestamp: Date;
   rules: ValidationRule[];
@@ -197,7 +200,7 @@ export interface ProductConfiguration {
   id: string;
   proposalId?: string;
   products: ConfiguredProduct[];
-  globalSettings: Record<string, any>;
+  globalSettings: Record<string, unknown>;
   relationships: ProductRelationshipConfig[];
   metadata: ConfigurationMetadata;
 }
@@ -206,8 +209,8 @@ export interface ProductConfiguration {
 export interface ConfiguredProduct {
   productId: string;
   quantity: number;
-  settings: Record<string, any>;
-  customizations: Record<string, any>;
+  settings: Record<string, unknown>;
+  customizations: Record<string, unknown>;
   dependencies: string[];
   conflicts: string[];
 }
@@ -219,7 +222,7 @@ export interface ProductRelationshipConfig {
   productBId: string;
   type: 'requires' | 'conflicts' | 'enhances' | 'replaces';
   strength: number; // 0-1 scale
-  conditions?: Record<string, any>;
+  conditions?: Record<string, unknown>;
 }
 
 // Configuration metadata

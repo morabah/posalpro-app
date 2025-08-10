@@ -201,10 +201,10 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       if (response && typeof response === 'object') {
         if (
           response.success &&
-          response.data?.customers &&
-          Array.isArray(response.data.customers)
+          response.data!.customers &&
+          Array.isArray(response.data!.customers)
         ) {
-          const customerList = response.data.customers;
+          const customerList = response.data!.customers;
           console.log('✅ [BasicInformationStep] Loaded customers:', customerList.length);
           setCustomers(customerList);
         } else if (response.success === false) {

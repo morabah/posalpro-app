@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import { logger } from '../logger';
 
-export interface ValidationTestCase<T = any> {
+export interface ValidationTestCase<T = unknown> {
   name: string;
   input: unknown;
   expected: {
@@ -21,7 +21,7 @@ export interface ValidationTestCase<T = any> {
   };
 }
 
-export interface ValidationTestSuite<T = any> {
+export interface ValidationTestSuite<T = unknown> {
   schema: z.ZodSchema<T>;
   name: string;
   description: string;
@@ -199,7 +199,7 @@ export class ValidationTester {
         }
 
         if (!result.success && testCase.expected.errors) {
-          const errorMessages = result.error?.issues.map(issue => issue.message) || [];
+          const errorMessages = result.error.issues.map(issue => issue.message);
           const hasExpectedErrors = testCase.expected.errors.every(expectedError =>
             errorMessages.some(actualError => actualError.includes(expectedError))
           );
@@ -216,7 +216,7 @@ export class ValidationTester {
         memoryUsage,
         errors,
         warnings,
-        actualOutput: result.success ? result.data : result.error?.issues,
+        actualOutput: result.success ? result.data : result.error.issues,
         expectedOutput: testCase.expected,
       };
     } catch (error) {
@@ -338,10 +338,12 @@ export class ValidationTester {
   private validateHypothesis(
     suite: ValidationTestSuite,
     results: ValidationTestResult[],
-    performanceMetrics: any
+    performanceMetrics: { fastestTest: number }
   ): boolean {
     const passRate = results.filter(r => r.passed).length / results.length;
-    const averageDuration = performanceMetrics.fastestTest;
+    const averageDuration = typeof performanceMetrics.fastestTest === 'number'
+      ? performanceMetrics.fastestTest
+      : 0;
 
     // Different validation criteria based on hypothesis
     switch (suite.hypothesis) {
@@ -357,7 +359,10 @@ export class ValidationTester {
   /**
    * Validate test result against expected outcome
    */
-  private validateTestResult(actual: z.SafeParseReturnType<any, any>, expected: any): boolean {
+  private validateTestResult(
+    actual: z.SafeParseReturnType<unknown, unknown>,
+    expected: { success: boolean; data?: unknown; errors?: string[] }
+  ): boolean {
     if (actual.success !== expected.success) {
       return false;
     }
@@ -379,19 +384,30 @@ export class ValidationTester {
   /**
    * Deep equality check for test validation
    */
-  private deepEqual(a: any, b: any): boolean {
+  private deepEqual(a: unknown, b: unknown): boolean {
     if (a === b) return true;
     if (a == null || b == null) return false;
     if (typeof a !== typeof b) return false;
 
-    if (typeof a === 'object') {
-      const keysA = Object.keys(a);
-      const keysB = Object.keys(b);
-      if (keysA.length !== keysB.length) return false;
+    // Arrays
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (!this.deepEqual(a[i], b[i])) return false;
+      }
+      return true;
+    }
 
+    // Objects
+    if (typeof a === 'object' && typeof b === 'object') {
+      const objA = a as Record<string, unknown>;
+      const objB = b as Record<string, unknown>;
+      const keysA = Object.keys(objA);
+      const keysB = Object.keys(objB);
+      if (keysA.length !== keysB.length) return false;
       for (const key of keysA) {
         if (!keysB.includes(key)) return false;
-        if (!this.deepEqual(a[key], b[key])) return false;
+        if (!this.deepEqual(objA[key], objB[key])) return false;
       }
       return true;
     }
@@ -403,8 +419,10 @@ export class ValidationTester {
    * Get current memory usage (simplified)
    */
   private getMemoryUsage(): number {
-    if (typeof process !== 'undefined' && process.memoryUsage) {
-      return process.memoryUsage().heapUsed;
+    const proc = (globalThis as unknown as { process?: { memoryUsage?: () => { heapUsed: number } } })
+      .process;
+    if (proc && typeof proc.memoryUsage === 'function') {
+      return proc.memoryUsage().heapUsed;
     }
     return 0;
   }
@@ -420,9 +438,10 @@ export class ValidationTester {
   /**
    * Generate valid test data (simplified)
    */
-  private generateValidData(schema: z.ZodSchema): unknown {
+  private generateValidData(_schema: z.ZodSchema): unknown {
     // This is a simplified implementation
     // In a real scenario, you would analyze the schema and generate appropriate data
+    void _schema;
     return {
       id: `test-${Math.random().toString(36).substr(2, 9)}`,
       name: `Test Name ${Math.floor(Math.random() * 1000)}`,

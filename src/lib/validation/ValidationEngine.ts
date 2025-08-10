@@ -206,7 +206,8 @@ export class ValidationEngine {
         });
       }
 
-      const fix = issue.suggestedFixes.find((f: any) => f.id === fixId);
+      const fixes = issue.suggestedFixes as Array<{ id: string; action: () => Promise<void> | void }>;
+      const fix = fixes.find(f => f.id === fixId);
       if (!fix) {
         throw new StandardError({
           message: `Fix ${fixId} not found for issue ${issueId}`,
@@ -247,7 +248,8 @@ export class ValidationEngine {
         return;
       }
 
-      const fix = issue.suggestedFixes.find((f: any) => f.id === fixId);
+      const fixes = issue.suggestedFixes as Array<{ id: string }>
+      const fix = fixes.find(f => f.id === fixId);
       if (fix) {
         // Apply the fix
         resolve(true);

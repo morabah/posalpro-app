@@ -185,7 +185,7 @@ export function extractArrayFromResponse<T = unknown>(
 
   // Pattern 5: Search for any array property
   const arrayProperties = Object.entries(responseData)
-    .filter(([_, value]) => Array.isArray(value))
+    .filter(([, value]) => Array.isArray(value))
     .map(([key, value]) => ({ key, array: value as T[] }));
 
   if (arrayProperties.length > 0) {

@@ -996,6 +996,24 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
+    // Extract sectionAssignments from raw body (not part of validation schema yet)
+    const sectionAssignmentsFromClient =
+      (body && body.metadata && body.metadata.sectionAssignments) ||
+      (body &&
+        body.wizardData &&
+        body.wizardData.step5 &&
+        body.wizardData.step5.sectionAssignments) ||
+      body?.sectionAssignments ||
+      undefined;
+    // Helper to normalize SME keys to uppercase
+    const normalizeSMEKeys = (ta: any) => {
+      if (!ta || !ta.subjectMatterExperts || typeof ta.subjectMatterExperts !== 'object') return ta;
+      const normalized: Record<string, string> = {};
+      for (const [key, val] of Object.entries(ta.subjectMatterExperts)) {
+        if (typeof val === 'string' && val) normalized[String(key).toUpperCase()] = val;
+      }
+      return { ...ta, subjectMatterExperts: normalized };
+    };
 
     console.log('[ProposalsRoute] Received request body:', JSON.stringify(body, null, 2));
     console.log('[ProposalsRoute] Customer ID in request:', body.customerId);
@@ -1040,6 +1058,35 @@ export async function POST(request: NextRequest) {
 
       throw validationError;
     }
+
+    // DEBUG: Log normalized step payloads
+    console.log('[ProposalsRoute][DEBUG] Step1 details:', {
+      title: validatedData.title,
+      dueDate: validatedData.dueDate,
+      value: validatedData.value,
+      priority: validatedData.priority,
+      rfpReferenceNumber: validatedData.rfpReferenceNumber,
+      contactPerson: validatedData.contactPerson,
+      contactEmail: validatedData.contactEmail,
+      contactPhone: validatedData.contactPhone,
+    });
+    console.log('[ProposalsRoute][DEBUG] Step2 teamAssignments:', validatedData.teamAssignments);
+    console.log(
+      '[ProposalsRoute][DEBUG] Step3 contentSelections:',
+      Array.isArray(validatedData.contentSelections) ? validatedData.contentSelections.length : 0
+    );
+    console.log(
+      '[ProposalsRoute][DEBUG] Step4 products:',
+      Array.isArray(validatedData.products) ? validatedData.products.length : 0
+    );
+    console.log(
+      '[ProposalsRoute][DEBUG] Step5 sections:',
+      Array.isArray(validatedData.sections) ? validatedData.sections.length : 0
+    );
+    console.log('[ProposalsRoute][DEBUG] Step5 sectionAssignments:', sectionAssignmentsFromClient);
+    console.log('[ProposalsRoute][DEBUG] Step6 validationData:', validatedData.validationData);
+    console.log('[ProposalsRoute][DEBUG] analyticsData:', validatedData.analyticsData);
+    console.log('[ProposalsRoute][DEBUG] crossStepValidation:', validatedData.crossStepValidation);
 
     // Verify customer exists
     const customer = await prisma.customer.findUnique({
@@ -1130,6 +1177,7 @@ export async function POST(request: NextRequest) {
 
     // Create proposal in transaction
     const proposal = await prisma.$transaction(async tx => {
+      console.log('[ProposalsRoute][DEBUG] Starting DB transaction for proposal creation');
       // ✅ FIXED: Ensure user exists in database before creating proposal
       let user = await tx.user.findUnique({
         where: { id: session.user.id },
@@ -1196,8 +1244,9 @@ export async function POST(request: NextRequest) {
             hypothesis: ['H4', 'H7'],
             userStories: ['US-5.1', 'US-5.2'],
             // Enhanced metadata with all wizard data
-            teamAssignments: validatedData.teamAssignments || {},
+            teamAssignments: normalizeSMEKeys(validatedData.teamAssignments) || {},
             contentSelections: validatedData.contentSelections || [],
+            sectionAssignments: sectionAssignmentsFromClient || {},
             validationData: validatedData.validationData || {},
             analyticsData: validatedData.analyticsData || {},
             crossStepValidation: validatedData.crossStepValidation || {},
@@ -1219,7 +1268,7 @@ export async function POST(request: NextRequest) {
                   rfpReferenceNumber: validatedData.rfpReferenceNumber,
                 },
               },
-              step2: validatedData.teamAssignments || {},
+              step2: normalizeSMEKeys(validatedData.teamAssignments) || {},
               step3: {
                 selectedContent: validatedData.contentSelections || [],
               },
@@ -1228,9 +1277,11 @@ export async function POST(request: NextRequest) {
               },
               step5: {
                 // Store extended section metadata if provided; fallback to minimal sections
-                sections: (validatedData.sectionsMeta && validatedData.sectionsMeta.length > 0)
-                  ? validatedData.sectionsMeta
-                  : (validatedData.sections || []),
+                sections:
+                  validatedData.sectionsMeta && validatedData.sectionsMeta.length > 0
+                    ? validatedData.sectionsMeta
+                    : validatedData.sections || [],
+                sectionAssignments: sectionAssignmentsFromClient || {},
               },
               step6: {
                 finalValidation: validatedData.validationData || {},
@@ -1251,9 +1302,14 @@ export async function POST(request: NextRequest) {
           updatedAt: true,
         },
       });
+      console.log('[ProposalsRoute][DEBUG] Proposal created with ID:', newProposal.id);
 
       // Add products if provided
       if (validatedData.products && validatedData.products.length > 0) {
+        console.log(
+          '[ProposalsRoute][DEBUG] Creating proposal products:',
+          validatedData.products.length
+        );
         const productsData = validatedData.products.map(p => ({
           proposalId: newProposal.id,
           productId: p.productId,
@@ -1270,6 +1326,10 @@ export async function POST(request: NextRequest) {
 
       // Add sections if provided
       if (validatedData.sections && validatedData.sections.length > 0) {
+        console.log(
+          '[ProposalsRoute][DEBUG] Creating proposal sections:',
+          validatedData.sections.length
+        );
         const sectionsData = validatedData.sections.map(s => ({
           proposalId: newProposal.id,
           title: s.title,
@@ -1289,6 +1349,7 @@ export async function POST(request: NextRequest) {
     // Track proposal creation for analytics
     await trackProposalCreationEvent(session.user.id, proposal.id, proposal.title, customer.name);
 
+    console.log('[ProposalsRoute][DEBUG] Returning success response for proposal:', proposal.id);
     return NextResponse.json(
       {
         success: true,

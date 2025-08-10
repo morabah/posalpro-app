@@ -9,7 +9,7 @@ import { ApiRequest } from './authInterceptor';
 // Extend Window interface for gtag
 declare global {
   interface Window {
-    gtag?: (...args: any[]) => void;
+    gtag?: (...args: unknown[]) => void;
   }
 }
 
@@ -30,7 +30,7 @@ export interface ProcessedError {
   code: string;
   message: string;
   userMessage: string;
-  details?: any;
+  details?: Record<string, unknown>;
   timestamp: Date;
   requestId?: string;
   retryable: boolean;
@@ -59,7 +59,7 @@ class ErrorInterceptor {
     this.errorHandlers.set(category, handler);
   }
 
-  private categorizeError(status: number, response: any): ErrorCategory {
+  private categorizeError(status: number, _response: unknown): ErrorCategory {
     if (status === 0 || status === undefined) {
       return ErrorCategory.NETWORK;
     }
@@ -134,7 +134,7 @@ class ErrorInterceptor {
     options: ErrorHandlerOptions = {}
   ): ProcessedError {
     let status: number;
-    let responseData: any;
+    let responseData: unknown;
     let originalMessage: string;
 
     // Add safety checks for error object
@@ -154,9 +154,12 @@ class ErrorInterceptor {
     if ('status' in error) {
       // API Response error
       status = typeof error.status === 'number' ? error.status : 0;
-      responseData = 'data' in error ? error.data : null;
-      originalMessage =
-        responseData?.message || responseData?.error || `HTTP ${status}` || 'Unknown API error';
+      responseData = 'data' in error ? (error as { data?: unknown }).data ?? null : null;
+      const rdForMsg =
+        typeof responseData === 'object' && responseData !== null ? (responseData as Record<string, unknown>) : null;
+      const msgFromMessage = rdForMsg && typeof rdForMsg.message === 'string' ? (rdForMsg.message as string) : undefined;
+      const msgFromError = rdForMsg && typeof rdForMsg.error === 'string' ? (rdForMsg.error as string) : undefined;
+      originalMessage = msgFromMessage || msgFromError || `HTTP ${status}` || 'Unknown API error';
     } else {
       // Network or other error
       status = 0;
@@ -169,9 +172,14 @@ class ErrorInterceptor {
     const severity = this.getSeverity(category, status);
     const retryable = options.retryable ?? this.isRetryable(category, status);
 
+    const rdForMeta =
+      typeof responseData === 'object' && responseData !== null ? (responseData as Record<string, unknown>) : null;
+    const codeMeta = rdForMeta && typeof rdForMeta.code === 'string' ? (rdForMeta.code as string) : undefined;
+    const requestIdMeta = rdForMeta && typeof rdForMeta.requestId === 'string' ? (rdForMeta.requestId as string) : undefined;
+
     const processedError: ProcessedError = {
       category,
-      code: responseData?.code || `${category}_${status}`,
+      code: codeMeta || `${category}_${status}`,
       message: originalMessage || 'No error message provided',
       userMessage,
       details: {
@@ -179,7 +187,7 @@ class ErrorInterceptor {
         url: request?.url || 'unknown',
         method: request?.method || 'GET',
         responseData,
-        requestId: responseData?.requestId,
+        requestId: requestIdMeta,
         originalError:
           error instanceof Error
             ? {
@@ -190,7 +198,7 @@ class ErrorInterceptor {
             : error,
       },
       timestamp: new Date(),
-      requestId: responseData?.requestId,
+      requestId: requestIdMeta,
       retryable,
       severity,
     };
@@ -328,17 +336,17 @@ class ErrorInterceptor {
     }
   }
 
-  private async sendToLoggingService(logData: any): Promise<void> {
+  private async sendToLoggingService(logData: Record<string, unknown>): Promise<void> {
     // Implement logging service integration
     // For now, just logger.info
     logger.info('[ErrorInterceptor] Error logged:', logData);
   }
 
-  async interceptResponse(
+  async interceptResponse<T>(
     response: Response,
-    data: any,
+    data: unknown,
     options: ErrorHandlerOptions = {}
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<T>> {
     if (!response.ok) {
       const error = this.processError(
         {
@@ -346,7 +354,7 @@ class ErrorInterceptor {
           data: data,
           success: false,
           message: `HTTP ${response.status}`,
-        } as ApiResponse<any>,
+        } as ApiResponse<T>,
         {
           url: response.url,
           method: response.type as string,
@@ -361,12 +369,12 @@ class ErrorInterceptor {
     // Handle API responses that already have the expected structure
     if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
       // API route already returns proper ApiResponse structure, pass it through
-      return data;
+      return data as ApiResponse<T>;
     }
 
     // For raw data, wrap it in ApiResponse structure
     return {
-      data: data,
+      data: data as T,
       success: true,
       message: 'Success',
     };
@@ -380,8 +388,12 @@ export const errorInterceptor = ErrorInterceptor.getInstance();
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', event => {
     try {
-      const error = event.reason || new Error('Unhandled promise rejection');
-      errorInterceptor.processError(error, {
+      const reason: unknown = event.reason;
+      const err: Error =
+        reason instanceof Error
+          ? reason
+          : new Error(typeof reason === 'string' ? reason : 'Unhandled promise rejection');
+      errorInterceptor.processError(err, {
         url: window.location.href,
         method: 'GET',
         headers: {},

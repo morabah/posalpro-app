@@ -214,7 +214,7 @@ export function EnhancedMobileNavigation({
           componentMapping: COMPONENT_MAPPING,
         }, 'low');
       } catch (error) {
-        handleAsyncError(error as Error, 'Failed to handle touch start', {
+        handleAsyncError(error, 'Failed to handle touch start', {
           context: 'EnhancedMobileNavigation.handleTouchStart',
           userStory: 'US-8.4',
         });
@@ -252,7 +252,7 @@ export function EnhancedMobileNavigation({
           setActiveGesture(direction);
         }
       } catch (error) {
-        handleAsyncError(error as Error, 'Failed to handle touch move', {
+        handleAsyncError(error, 'Failed to handle touch move', {
           context: 'EnhancedMobileNavigation.handleTouchMove',
           userStory: 'US-8.4',
         });
@@ -308,7 +308,7 @@ export function EnhancedMobileNavigation({
       setActiveGesture(null);
       setSwipeDistance(0);
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to handle touch end', {
+      handleAsyncError(error, 'Failed to handle touch end', {
         context: 'EnhancedMobileNavigation.handleTouchEnd',
         userStory: 'US-8.4',
       });
@@ -348,7 +348,7 @@ export function EnhancedMobileNavigation({
         return newState;
       });
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to toggle mobile menu', {
+      handleAsyncError(error, 'Failed to toggle mobile menu', {
         context: 'EnhancedMobileNavigation.handleMenuToggle',
         userStory: 'US-8.1',
       });
@@ -384,7 +384,7 @@ export function EnhancedMobileNavigation({
         return newState;
       });
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to toggle search', {
+      handleAsyncError(error, 'Failed to toggle search', {
         context: 'EnhancedMobileNavigation.handleSearchToggle',
         userStory: 'US-8.1',
       });
@@ -414,7 +414,7 @@ export function EnhancedMobileNavigation({
           setIsMenuOpen(false);
         }
       } catch (error) {
-        handleAsyncError(error as Error, 'Failed to handle navigation click', {
+        handleAsyncError(error, 'Failed to handle navigation click', {
           context: 'EnhancedMobileNavigation.handleNavigationClick',
           userStory: 'US-8.1',
           itemId: item.id,

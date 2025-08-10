@@ -38,7 +38,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
 
   // Create stable analytics functions using useMemo and useCallback
   const trackEvent = useCallback(
-    (eventName: string, properties: Record<string, any> = {}) => {
+    (eventName: string, properties: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         analytics(
@@ -61,7 +61,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
   );
 
   const trackPageView = useCallback(
-    (page: string, properties: Record<string, any> = {}) => {
+    (page: string, properties: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         analytics(
@@ -84,7 +84,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
   );
 
   const trackInteraction = useCallback(
-    (element: string, action: string, properties: Record<string, any> = {}) => {
+    (element: string, action: string, properties: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         analytics(
@@ -108,7 +108,7 @@ export function useDashboardAnalytics(userId: string, userRole: string, sessionI
   );
 
   const trackError = useCallback(
-    (error: Error | string, context: Record<string, any> = {}) => {
+    (error: Error | string, context: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         analytics(

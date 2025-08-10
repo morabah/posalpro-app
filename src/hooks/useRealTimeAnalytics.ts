@@ -24,7 +24,7 @@ export function useRealTimeAnalytics() {
           eventType,
         }, 'medium');
       } catch (error) {
-        await handleAsyncError(error as Error, "Failed to track event", {
+        await handleAsyncError(error, "Failed to track event", {
           context: "useRealTimeAnalytics",
         });
       }

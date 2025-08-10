@@ -19,8 +19,9 @@ const MAX_CACHE_SIZE = 100;
 const roleCache = new Map<string, { roles: Role[]; timestamp: number }>();
 const ROLE_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-// ✅ CRITICAL: Cache cleanup function
-function cleanupCache(cache: Map<string, any>, maxSize: number) {
+// ✅ CRITICAL: Cache cleanup function (generic to avoid any)
+interface CacheEntryBase { timestamp: number }
+function cleanupCache<T extends CacheEntryBase>(cache: Map<string, T>, maxSize: number) {
   if (cache.size > maxSize) {
     const entries = Array.from(cache.entries());
     entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
@@ -73,12 +74,12 @@ interface AuthUserRecord {
   email: string;
   name: string;
   department: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'PENDING' | string;
+  status: string;
   password: string;
   createdAt: Date;
   updatedAt: Date;
   lastLogin: Date | null;
-  roles: { role: { name: string } }[];
+  roles: Array<{ role: { name: string } }>;
 }
 
 export interface CreateUserData {
@@ -112,7 +113,8 @@ export async function createUser(data: CreateUserData): Promise<UserWithoutPassw
     },
   });
   // Omit password
-  const { password, ...rest } = created;
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  const { password: _password, ...rest } = created;
   return rest as UserWithoutPassword;
 }
 

@@ -1,6 +1,6 @@
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-type LogMeta = {
+export interface LogMeta {
   requestId?: string;
   route?: string;
   method?: string;
@@ -10,7 +10,7 @@ type LogMeta = {
   cache?: 'hit' | 'miss' | 'bypass';
   userIdHash?: string; // hashed user id (never raw PII)
   [key: string]: unknown;
-};
+}
 
 function format(level: LogLevel, message: string, meta?: LogMeta) {
   const entry = {
@@ -37,16 +37,15 @@ export function getRequestMeta(headers: Headers): { requestId?: string } {
 // Stable one-way hash for user identifiers (avoid logging raw IDs)
 export function userIdToHash(userId: string | undefined | null): string | undefined {
   if (!userId) return undefined;
-  try {
-    // Node.js crypto hashing (fallback to simple base64 if not available)
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const crypto = require('crypto');
-    return crypto.createHash('sha256').update(String(userId)).digest('hex').slice(0, 16);
-  } catch {
-    try {
-      return Buffer.from(String(userId)).toString('base64').slice(0, 16);
-    } catch {
-      return undefined;
-    }
+  // Deterministic non-cryptographic hash (FNV-1a 32-bit), returned as 16 hex chars by repeating
+  let hash = 0x811c9dc5; // FNV-1a offset
+  const str = String(userId);
+  for (let i = 0; i < str.length; i += 1) {
+    hash ^= str.charCodeAt(i);
+    // 32-bit FNV prime: 16777619
+    hash = (hash >>> 0) * 0x01000193;
   }
+  const hex = (hash >>> 0).toString(16).padStart(8, '0');
+  // Repeat to 16 chars to keep previous length behavior
+  return (hex + hex).slice(0, 16);
 }

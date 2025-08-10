@@ -226,7 +226,7 @@ export function MobileDashboardEnhancement({
         componentMapping: COMPONENT_MAPPING,
       }, 'medium');
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to track mobile dashboard usage', {
+      handleAsyncError(error, 'Failed to track mobile dashboard usage', {
         context: 'MobileDashboardEnhancement.trackMobileDashboardUsage',
         userStory: 'US-8.1',
       });
@@ -270,7 +270,7 @@ export function MobileDashboardEnhancement({
         // Execute original action
         onQuickAction?.(action);
       } catch (error) {
-        handleAsyncError(error as Error, 'Failed to handle mobile quick action', {
+        handleAsyncError(error, 'Failed to handle mobile quick action', {
           context: 'MobileDashboardEnhancement.handleMobileQuickAction',
           userStory: 'US-8.1',
           action,

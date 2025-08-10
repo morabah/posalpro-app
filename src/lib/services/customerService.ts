@@ -743,23 +743,52 @@ export class CustomerService {
         }),
       ]);
 
-      type StatusGroup = { status: CustomerStatus; _count: { status: number } };
-      const statusGroups = statusCounts as unknown as StatusGroup[];
+      // Safe extractors that avoid any/unsafe unions on _count
+      const getStatusCount = (arr: unknown, status: CustomerStatus): number => {
+        if (!Array.isArray(arr)) return 0;
+        for (const item of arr) {
+          if (typeof item !== 'object' || item === null) continue;
+          const rec = item as Record<string, unknown>;
+          const s = rec.status;
+          if (typeof s === 'string' && s === status) {
+            const count = rec._count;
+            if (typeof count === 'object' && count !== null) {
+              const c = (count as Record<string, unknown>).status;
+              if (typeof c === 'number') return c;
+            }
+          }
+        }
+        return 0;
+      };
+
+      const getTierCount = (arr: unknown, tier: CustomerTier): number => {
+        if (!Array.isArray(arr)) return 0;
+        for (const item of arr) {
+          if (typeof item !== 'object' || item === null) continue;
+          const rec = item as Record<string, unknown>;
+          const t = rec.tier;
+          if (typeof t === 'string' && t === tier) {
+            const count = rec._count;
+            if (typeof count === 'object' && count !== null) {
+              const c = (count as Record<string, unknown>).tier;
+              if (typeof c === 'number') return c;
+            }
+          }
+        }
+        return 0;
+      };
+
       const byStatus = Object.values(CustomerStatus).reduce(
         (acc, status) => {
-          const group = statusGroups.find(s => s.status === status);
-          acc[status] = group?._count.status ?? 0;
+          acc[status] = getStatusCount(statusCounts, status);
           return acc;
         },
         {} as Record<CustomerStatus, number>
       );
 
-      type TierGroup = { tier: CustomerTier; _count: { tier: number } };
-      const tierGroups = tierCounts as unknown as TierGroup[];
       const byTier = Object.values(CustomerTier).reduce(
         (acc, tier) => {
-          const group = tierGroups.find(t => t.tier === tier);
-          acc[tier] = group?._count.tier ?? 0;
+          acc[tier] = getTierCount(tierCounts, tier);
           return acc;
         },
         {} as Record<CustomerTier, number>

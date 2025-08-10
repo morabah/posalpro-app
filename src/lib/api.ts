@@ -416,7 +416,7 @@ class ApiClient {
   }
 
   // Default retry condition
-  private defaultRetryCondition(error: ApiError): boolean {
+  private defaultRetryCondition(this: void, error: ApiError): boolean {
     // Retry on network errors, timeouts, and 5xx server errors
     return (
       error.type === ApiErrorType.NETWORK ||
@@ -821,7 +821,7 @@ export { apiClient };
 export const createApiClient = (config?: Partial<ApiClientConfig>) => new ApiClient(config);
 
 // API response caching for performance optimization
-const apiCache = new Map();
+const apiCache = new Map<string, { data: unknown; timestamp: number }>();
 const API_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 // Cache cleanup function to prevent memory leaks
@@ -839,7 +839,10 @@ if (typeof window !== 'undefined') {
   setInterval(cleanupCache, 5 * 60 * 1000);
 }
 
-export const makeRequest = async (endpoint: string, options: RequestInit = {}) => {
+export const makeRequest = async (
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<unknown> => {
   const cacheKey = `${endpoint}_${JSON.stringify(options)}`;
   const cached = apiCache.get(cacheKey);
 
@@ -858,7 +861,7 @@ export const makeRequest = async (endpoint: string, options: RequestInit = {}) =
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data: unknown = await response.json();
 
     // Cache successful responses
     apiCache.set(cacheKey, {

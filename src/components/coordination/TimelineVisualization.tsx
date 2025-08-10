@@ -177,7 +177,7 @@ export function TimelineVisualization({
       toast.error(userMessage);
 
       analytics('timeline_visualization_error', {
-        error: (error as Error).message,
+        error: userMessage,
         proposalId,
         component: 'TimelineVisualization',
         traceability: COMPONENT_MAPPING,

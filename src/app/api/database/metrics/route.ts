@@ -196,7 +196,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     errorHandlingService.processError(
-      error as Error,
+      error,
       'Failed to fetch database metrics',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       {
@@ -211,7 +211,7 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: 'Failed to fetch database metrics',
-        message: errorHandlingService.getUserFriendlyMessage(error as Error),
+        message: errorHandlingService.getUserFriendlyMessage(error),
         timestamp: new Date().toISOString(),
       },
       { status: 500 }
@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     errorHandlingService.processError(
-      error as Error,
+      error,
       'Failed to record performance metric',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       {
@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: 'Failed to record performance metric',
-        message: errorHandlingService.getUserFriendlyMessage(error as Error),
+        message: errorHandlingService.getUserFriendlyMessage(error),
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

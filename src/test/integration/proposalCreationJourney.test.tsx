@@ -606,7 +606,7 @@ describe('Enhanced Proposal Creation Journey Integration Tests', () => {
                 mockTrackAnalytics('proposal_created_success', { timestamp: Date.now() });
               } catch (error) {
                 mockTrackAnalytics('proposal_creation_error', {
-                  error: (error as Error).message,
+                  error: error instanceof Error ? error.message : String(error),
                   timestamp: Date.now(),
                 });
 
@@ -617,7 +617,7 @@ describe('Enhanced Proposal Creation Journey Integration Tests', () => {
                     mockTrackAnalytics('proposal_created_after_retry', { timestamp: Date.now() });
                   } catch (retryError) {
                     mockTrackAnalytics('proposal_creation_failed', {
-                      error: (retryError as Error).message,
+                      error: retryError instanceof Error ? retryError.message : String(retryError),
                       timestamp: Date.now(),
                     });
                   }

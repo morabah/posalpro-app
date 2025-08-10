@@ -150,7 +150,7 @@ export function useOptimizedDataFetch<T = unknown>(
           meta?: FetchMeta;
         }> = await apiClient.get(url);
 
-        if (response.success && response.data) {
+        if (response.success) {
           const responseData = response.data;
           const newData =
             responseData.data || responseData.customers || responseData.proposals || [];

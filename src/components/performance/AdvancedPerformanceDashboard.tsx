@@ -145,7 +145,7 @@ export default function AdvancedPerformanceDashboard({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to generate performance report', {
+      handleAsyncError(error, 'Failed to generate performance report', {
         context: 'AdvancedPerformanceDashboard.handleGenerateReport',
         component: 'AdvancedPerformanceDashboard',
         userStory: 'US-6.1',
@@ -184,7 +184,7 @@ export default function AdvancedPerformanceDashboard({
         componentMapping: COMPONENT_MAPPING,
       }, 'high');
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to trigger system optimization', {
+      handleAsyncError(error, 'Failed to trigger system optimization', {
         context: 'AdvancedPerformanceDashboard.handleSystemOptimization',
         component: 'AdvancedPerformanceDashboard',
         userStory: 'US-6.1',
@@ -207,7 +207,7 @@ export default function AdvancedPerformanceDashboard({
         refreshType: 'manual',
       }, 'low');
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to refresh performance metrics', {
+      handleAsyncError(error, 'Failed to refresh performance metrics', {
         context: 'AdvancedPerformanceDashboard.handleRefreshMetrics',
         component: 'AdvancedPerformanceDashboard',
         userStory: 'US-6.1',

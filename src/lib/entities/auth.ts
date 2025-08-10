@@ -100,13 +100,13 @@ export interface DeviceSession {
  * Provides comprehensive authentication and session management
  */
 export class AuthEntity {
-  private static instance: AuthEntity;
+  private static instance: AuthEntity | null = null;
   private readonly errorHandlingService = ErrorHandlingService.getInstance();
 
   private constructor() {}
 
   public static getInstance(): AuthEntity {
-    if (!AuthEntity.instance) {
+    if (AuthEntity.instance === null) {
       AuthEntity.instance = new AuthEntity();
     }
     return AuthEntity.instance;
@@ -128,7 +128,7 @@ export class AuthEntity {
         validatedCredentials
       );
 
-      if (response.success && response.data) {
+      if (response.success) {
         // Session cached automatically by apiClient
         
         // Track successful login
@@ -254,7 +254,7 @@ export class AuthEntity {
 
       if (response.success) {
         trackAuthEvent('token_refresh_success', {
-          expiresAt: response.data?.expiresAt,
+          expiresAt: response.data.expiresAt,
         });
       }
 
@@ -284,11 +284,7 @@ export class AuthEntity {
   async getCurrentSession(): Promise<ApiResponse<AuthSession>> {
     try {
       const response = await apiClient.get<AuthSession>('/auth/session');
-
-      if (response.success && response.data) {
-        // Session cached automatically by apiClient
-      }
-
+      // Session caching handled automatically by apiClient
       return response;
     } catch (error) {
       const processedError = this.errorHandlingService.processError(
@@ -694,7 +690,10 @@ export class AuthEntity {
   async validateSession(): Promise<boolean> {
     try {
       const response = await apiClient.get<{ valid: boolean }>('/auth/validate');
-      return response.success && response.data?.valid === true;
+      if (response.success) {
+        return response.data.valid === true;
+      }
+      return false;
     } catch (error) {
       this.errorHandlingService.processError(
         error,

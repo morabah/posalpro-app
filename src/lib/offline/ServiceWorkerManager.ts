@@ -22,11 +22,42 @@ export interface ServiceWorkerStatus {
   lastUpdate: Date | null;
 }
 
-class ServiceWorkerManager {
+// Typed event payloads for the manager events
+interface SwEventPayloads {
+  initialized: ServiceWorkerStatus;
+  activated: ServiceWorkerStatus;
+  online: ServiceWorkerStatus;
+  offline: ServiceWorkerStatus;
+  updateavailable: ServiceWorkerStatus;
+  cachecleared: ServiceWorkerStatus;
+  unregistered: ServiceWorkerStatus;
+  configchanged: ServiceWorkerConfig;
+  cacheupdated: { size: number };
+  updatefound: ServiceWorkerStatus;
+  error: unknown;
+  offlineready: ServiceWorkerStatus;
+}
+
+// Public API that both the browser manager and the SSR stub must implement
+export interface ServiceWorkerPublicAPI {
+  initialize(): Promise<boolean>;
+  updateServiceWorker(): Promise<boolean>;
+  getCacheInfo(): Promise<Array<{ name: string; size: number }>>;
+  clearCaches(): Promise<boolean>;
+  queueForSync(action: string, data: Record<string, unknown>): Promise<boolean>;
+  getStatus(): ServiceWorkerStatus;
+  getConfig(): ServiceWorkerConfig;
+  updateConfig(newConfig: Partial<ServiceWorkerConfig>): void;
+  unregister(): Promise<boolean>;
+  on<E extends keyof SwEventPayloads>(event: E, callback: (data: SwEventPayloads[E]) => void): void;
+  off<E extends keyof SwEventPayloads>(event: E, callback: (data: SwEventPayloads[E]) => void): void;
+}
+
+class ServiceWorkerManager implements ServiceWorkerPublicAPI {
   private registration: ServiceWorkerRegistration | null = null;
   private config: ServiceWorkerConfig;
   private status: ServiceWorkerStatus;
-  private listeners: Map<string, Set<(data?: unknown) => void>> = new Map();
+  private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
   constructor(config: Partial<ServiceWorkerConfig> = {}) {
     this.config = {
@@ -156,17 +187,32 @@ class ServiceWorkerManager {
    * Handle messages from service worker
    */
   private handleServiceWorkerMessage(event: MessageEvent): void {
-    const { data } = event;
-    
-    if (data && typeof data === 'object' && 'type' in data) {
-      if (data.type === 'CACHE_UPDATED' && 'size' in data) {
-        this.status.cacheSize = data.size as number;
-        this.emit('cacheupdated', { size: data.size });
-      } else if (data.type === 'OFFLINE_READY') {
-        console.log('[SW Manager] Offline functionality ready');
-        this.emit('offlineready', this.status);
-      }
+    const data: unknown = (event as MessageEvent<unknown>).data;
+
+    interface CacheUpdatedMessage { type: 'CACHE_UPDATED'; size: number }
+    interface OfflineReadyMessage { type: 'OFFLINE_READY' }
+
+    const isObject = (val: unknown): val is Record<string, unknown> =>
+      typeof val === 'object' && val !== null;
+
+    const isCacheUpdated = (val: unknown): val is CacheUpdatedMessage =>
+      isObject(val) && (val as { type?: unknown }).type === 'CACHE_UPDATED' && typeof (val as { size?: unknown }).size === 'number';
+
+    const isOfflineReady = (val: unknown): val is OfflineReadyMessage =>
+      isObject(val) && (val as { type?: unknown }).type === 'OFFLINE_READY';
+
+    if (isCacheUpdated(data)) {
+      this.status.cacheSize = data.size;
+      this.emit('cacheupdated', { size: data.size });
+      return;
     }
+
+    if (isOfflineReady(data)) {
+      console.log('[SW Manager] Offline functionality ready');
+      this.emit('offlineready', this.status);
+      return;
+    }
+    // Ignore unknown message shapes
   }
 
   /**
@@ -329,28 +375,35 @@ class ServiceWorkerManager {
   /**
    * Event emitter functionality
    */
+  // Overloads: typed events, plus generic fallback for SSR compatibility
+  on<E extends keyof SwEventPayloads>(event: E, callback: (data: SwEventPayloads[E]) => void): void;
+  on(event: string, callback: (data?: unknown) => void): void;
   on(event: string, callback: (data?: unknown) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
-    this.listeners.get(event)!.add(callback);
+    // The Set stores listeners with unknown payload for broad compatibility
+    this.listeners.get(event)!.add(callback as (data: unknown) => void);
   }
 
+  off<E extends keyof SwEventPayloads>(event: E, callback: (data: SwEventPayloads[E]) => void): void;
+  off(event: string, callback: (data?: unknown) => void): void;
   off(event: string, callback: (data?: unknown) => void): void {
     const eventListeners = this.listeners.get(event);
     if (eventListeners) {
-      eventListeners.delete(callback);
+      eventListeners.delete(callback as (data: unknown) => void);
     }
   }
 
-  private emit(event: string, data?: unknown): void {
-    const eventListeners = this.listeners.get(event);
+  private emit<E extends keyof SwEventPayloads>(event: E, data: SwEventPayloads[E]): void {
+    const eventListeners = this.listeners.get(event as string);
     if (eventListeners) {
       eventListeners.forEach(callback => {
         try {
-          callback(data);
+          // Listeners are stored as (unknown) => void; pass the typed payload
+          (callback as (d: SwEventPayloads[E]) => void)(data);
         } catch (error) {
-          console.error(`[SW Manager] Error in event listener for ${event}:`, error);
+          console.error(`[SW Manager] Error in event listener for ${String(event)}:`, error);
         }
       });
     }
@@ -384,12 +437,25 @@ class ServiceWorkerManager {
 // Export lazy-loaded singleton instance to prevent SSR errors
 let _serviceWorkerManager: ServiceWorkerManager | null = null;
 
-export const serviceWorkerManager = (() => {
+export const serviceWorkerManager: ServiceWorkerPublicAPI = (() => {
   if (typeof window === 'undefined') {
     // Return a mock object during SSR
-    return {
-      register: () => Promise.resolve(),
-      unregister: () => Promise.resolve(),
+
+    const defaultConfig: ServiceWorkerConfig = {
+      enabled: false,
+      updateCheckInterval: 60000,
+      cacheStrategy: 'conservative',
+      offlineSupport: false,
+      backgroundSync: false,
+      pushNotifications: false,
+    };
+
+    const stub: ServiceWorkerPublicAPI = {
+      initialize: () => Promise.resolve(false),
+      updateServiceWorker: () => Promise.resolve(false),
+      getCacheInfo: () => Promise.resolve([]),
+      clearCaches: () => Promise.resolve(false),
+      queueForSync: () => Promise.resolve(false),
       getStatus: () => ({
         isSupported: false,
         isRegistered: false,
@@ -397,18 +463,19 @@ export const serviceWorkerManager = (() => {
         hasUpdate: false,
         isOffline: false,
         cacheSize: 0,
-        lastUpdate: null
+        lastUpdate: null,
       }),
-      getConfig: () => ({}),
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      updateCache: () => Promise.resolve(),
-      clearCache: () => Promise.resolve(),
-      forceUpdate: () => Promise.resolve(),
-      queueAction: () => Promise.resolve(false)
-    } as any;
+      getConfig: () => ({ ...defaultConfig }),
+      updateConfig: () => { /* no-op on server */ },
+      // Provide generic implementations that satisfy the typed signatures
+      on: () => { /* no-op on server */ },
+      off: () => { /* no-op on server */ },
+      unregister: () => Promise.resolve(false),
+    };
+    return stub;
   }
   
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!_serviceWorkerManager) {
     _serviceWorkerManager = new ServiceWorkerManager();
   }

@@ -50,7 +50,7 @@ export class CleanupMechanisms {
   private errorHandlingService: ErrorHandlingService;
   private config: CleanupConfig;
   private cleanupRegistry: Map<string, CleanupEntry> = new Map();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private metrics: CleanupMetrics;
 
   private constructor(config: Partial<CleanupConfig> = {}) {
@@ -78,6 +78,97 @@ export class CleanupMechanisms {
     };
 
     this.startCleanupScheduler();
+  }
+
+  /**
+   * 🕒 Private: Start periodic cleanup scheduler
+   */
+  private startCleanupScheduler(): void {
+    const existingInterval = this.cleanupInterval;
+    if (existingInterval !== null) {
+      clearInterval(existingInterval);
+      this.cleanupInterval = null;
+    }
+
+    this.cleanupInterval = setInterval(() => {
+      try {
+        // Periodically run key cleanup routines
+        if (this.config.enableMemoryCleanup) {
+          this.cleanupMemoryLeaks();
+        }
+        if (this.config.enableAsyncCleanup) {
+          this.cleanupAsyncOperations();
+        }
+      } catch (error) {
+        this.errorHandlingService.processError(
+          error,
+          'Cleanup scheduler tick failed',
+          ErrorCodes.SYSTEM.CLEANUP_FAILED,
+          {
+            component: 'CleanupMechanisms',
+            operation: 'startCleanupScheduler.tick',
+            timestamp: Date.now(),
+          }
+        );
+      }
+    }, this.config.cleanupInterval);
+  }
+
+  /**
+   * 🧽 Private: Perform cleanup for a single entry
+   */
+  private performCleanup(entry: CleanupEntry): boolean {
+    try {
+      switch (entry.type) {
+        case 'timeout':
+          if (entry.resource) {
+            clearTimeout(entry.resource);
+          }
+          return true;
+        case 'interval':
+          if (entry.resource) {
+            clearInterval(entry.resource);
+          }
+          return true;
+        case 'promise':
+          // Best-effort cancellation if supported
+          if (entry.resource && typeof entry.resource.cancel === 'function') {
+            entry.resource.cancel();
+          }
+          return true;
+        case 'event':
+          // Resource should be an unsubscribe/remove function
+          if (typeof entry.resource === 'function') {
+            try {
+              entry.resource();
+            } catch {
+              // ignore errors from user-provided cleanup fns
+            }
+          }
+          return true;
+        case 'memory':
+          // Help GC without assigning to `any`
+          (entry as { resource?: unknown }).resource = undefined;
+          return true;
+        default:
+          return false;
+      }
+    } catch (error) {
+      this.metrics.errorsEncountered++;
+      this.errorHandlingService.processError(
+        error,
+        'Failed to perform cleanup',
+        ErrorCodes.SYSTEM.CLEANUP_FAILED,
+        {
+          component: 'CleanupMechanisms',
+          operation: 'performCleanup',
+          entryId: entry.id,
+          entryType: entry.type,
+          timestamp: Date.now(),
+        }
+      );
+      return false;
+    }
   }
 
   public static getInstance(config?: Partial<CleanupConfig>): CleanupMechanisms {
@@ -112,7 +203,7 @@ export class CleanupMechanisms {
       console.log(`[CleanupMechanisms] Registered ${type} resource: ${id} (priority: ${priority})`);
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         `Failed to register cleanup resource: ${id}`,
         ErrorCodes.SYSTEM.CLEANUP_FAILED,
         {
@@ -148,7 +239,7 @@ export class CleanupMechanisms {
     } catch (error) {
       this.metrics.errorsEncountered++;
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         `Failed to cleanup resource: ${id}`,
         ErrorCodes.SYSTEM.CLEANUP_FAILED,
         {
@@ -196,7 +287,7 @@ export class CleanupMechanisms {
       }
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         `Failed to cleanup event listeners for component: ${componentId}`,
         ErrorCodes.SYSTEM.CLEANUP_FAILED,
         {
@@ -257,7 +348,7 @@ export class CleanupMechanisms {
       );
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to cleanup memory leaks',
         ErrorCodes.SYSTEM.CLEANUP_FAILED,
         {
@@ -310,134 +401,17 @@ export class CleanupMechanisms {
 
       if (operationsCancelled > 0) {
         console.log(
-          `[CleanupMechanisms] Cancelled ${operationsCancelled} async operations in ${cleanupTime.toFixed(2)}ms`
+          `[Cleanup] Cancelled ${operationsCancelled} async operations (timeouts: ${timeoutsCleaned}, intervals: ${intervalsCleaned}) in ${cleanupTime.toFixed(2)}ms`
         );
       }
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
-        `Failed to cleanup async operations for component: ${componentId}`,
+        error,
+        'Failed to cleanup async operations',
         ErrorCodes.SYSTEM.CLEANUP_FAILED,
         {
           component: 'CleanupMechanisms',
           operation: 'cleanupAsyncOperations',
-          componentId,
-          userStories: ['US-6.5', 'US-6.6'],
-          hypotheses: ['H13', 'H14'],
-          timestamp: Date.now(),
-        }
-      );
-    }
-  }
-
-  /**
-   * 📊 Get cleanup metrics
-   */
-  public getMetrics(): CleanupMetrics {
-    return { ...this.metrics };
-  }
-
-  /**
-   * 🔧 Private: Perform actual cleanup operation
-   */
-  private performCleanup(entry: CleanupEntry): boolean {
-    try {
-      switch (entry.type) {
-        case 'event':
-          if (entry.resource && typeof entry.resource.removeEventListener === 'function') {
-            entry.resource.removeEventListener();
-            return true;
-          }
-          break;
-
-        case 'timeout':
-          if (typeof entry.resource === 'number') {
-            clearTimeout(entry.resource);
-            return true;
-          }
-          break;
-
-        case 'interval':
-          if (typeof entry.resource === 'number') {
-            clearInterval(entry.resource);
-            return true;
-          }
-          break;
-
-        case 'promise':
-          if (entry.resource && typeof entry.resource.abort === 'function') {
-            entry.resource.abort();
-            return true;
-          }
-          break;
-
-        case 'memory':
-          // Memory cleanup is handled by setting reference to null
-          entry.resource = null;
-          return true;
-
-        default:
-          return false;
-      }
-      return false;
-    } catch (error) {
-      console.warn(
-        `[CleanupMechanisms] Failed to cleanup ${entry.type} resource ${entry.id}:`,
-        error
-      );
-      return false;
-    }
-  }
-
-  /**
-   * 🔧 Private: Start automated cleanup scheduler
-   */
-  private startCleanupScheduler(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
-
-    this.cleanupInterval = setInterval(() => {
-      this.performScheduledCleanup();
-    }, this.config.cleanupInterval);
-  }
-
-  /**
-   * 🔧 Private: Perform scheduled cleanup operations
-   */
-  private performScheduledCleanup(): void {
-    try {
-      // Clean up expired resources
-      const now = Date.now();
-      const expiredResources: string[] = [];
-
-      for (const [id, entry] of this.cleanupRegistry) {
-        if (now - entry.timestamp > this.config.maxRetentionTime) {
-          expiredResources.push(id);
-        }
-      }
-
-      for (const id of expiredResources) {
-        this.cleanupResource(id);
-      }
-
-      // Force memory cleanup if needed
-      this.cleanupMemoryLeaks();
-
-      console.log(
-        `[CleanupMechanisms] Scheduled cleanup completed: ${expiredResources.length} expired resources cleaned`
-      );
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error as Error,
-        'Scheduled cleanup failed',
-        ErrorCodes.SYSTEM.CLEANUP_FAILED,
-        {
-          component: 'CleanupMechanisms',
-          operation: 'performScheduledCleanup',
-          registrySize: this.cleanupRegistry.size,
-          userStories: ['US-6.4', 'US-6.5', 'US-6.6'],
-          hypotheses: ['H12', 'H13', 'H14'],
           timestamp: Date.now(),
         }
       );

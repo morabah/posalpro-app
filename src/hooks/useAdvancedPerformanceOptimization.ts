@@ -195,7 +195,7 @@ export function useAdvancedPerformanceOptimization(
         componentMapping: COMPONENT_MAPPING,
       }, 'low');
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to initialize performance monitoring', {
+      handleAsyncError(error, 'Failed to initialize performance monitoring', {
         context: 'useAdvancedPerformanceOptimization.initializeMonitoring',
         component: 'useAdvancedPerformanceOptimization',
         userStory: 'US-6.1',
@@ -329,7 +329,7 @@ export function useAdvancedPerformanceOptimization(
         return optimizationEvent;
       } catch (error) {
         setState(prev => ({ ...prev, isOptimizing: false }));
-        handleAsyncError(error as Error, 'Failed to perform optimization', {
+        handleAsyncError(error, 'Failed to perform optimization', {
           context: 'useAdvancedPerformanceOptimization.triggerOptimization',
           component: 'useAdvancedPerformanceOptimization',
           userStory: 'US-6.1',
@@ -406,7 +406,7 @@ export function useAdvancedPerformanceOptimization(
         }, 'low');
       } catch (error) {
         setState(prev => ({ ...prev, isGeneratingInsights: false }));
-        handleAsyncError(error as Error, 'Failed to generate performance insights', {
+        handleAsyncError(error, 'Failed to generate performance insights', {
           context: 'useAdvancedPerformanceOptimization.generatePerformanceInsights',
           component: 'useAdvancedPerformanceOptimization',
           userStory: 'US-6.1',
@@ -455,7 +455,7 @@ export function useAdvancedPerformanceOptimization(
 
       return enhancedReport;
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to generate performance report', {
+      handleAsyncError(error, 'Failed to generate performance report', {
         context: 'useAdvancedPerformanceOptimization.generateReport',
         component: 'useAdvancedPerformanceOptimization',
         userStory: 'US-6.1',

@@ -315,7 +315,22 @@ useAuthStore.subscribe(
 );
 
 // Analytics integration for auth events
-export const trackAuthEvent = (event: string, data?: any) => {
-  // TODO: Integrate with analytics system
-  logger.info('Auth Event: ' + event, data);
+type AnalyticsPriority = 'low' | 'medium' | 'high';
+type OptimizedTrackFn = (event: string, props?: Record<string, unknown>, priority?: AnalyticsPriority) => void;
+
+export const trackAuthEvent = (
+  event: string,
+  data?: Record<string, unknown>,
+  options?: { priority?: AnalyticsPriority; analytics?: OptimizedTrackFn }
+) => {
+  const priority: AnalyticsPriority = options?.priority ?? 'low';
+  const analytics = options?.analytics;
+
+  if (analytics) {
+    analytics(event, data, priority);
+    return;
+  }
+
+  // Fallback to logging if analytics not provided (SSR-safe and non-breaking)
+  logger.info('Auth Event: ' + event, { ...data, priority });
 };

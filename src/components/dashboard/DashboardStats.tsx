@@ -146,7 +146,7 @@ const DashboardStats = memo(() => {
             'dashboard_stats_fetch_success',
             {
               component: 'DashboardStats',
-              statsCount: Object.keys(response.data).length,
+              statsCount: response.data ? Object.keys(response.data).length : 0,
             },
             'low'
           );

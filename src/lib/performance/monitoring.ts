@@ -1,6 +1,6 @@
 // [PERFORMANCE_FIX] Global Performance Monitor
 export class PerformanceMonitor {
-  static measure(name: string, fn: Function) {
+  static measure<T>(name: string, fn: () => T): T {
     const start = performance.now();
     const result = fn();
     const end = performance.now();
@@ -15,7 +15,7 @@ export class PerformanceMonitor {
     return result;
   }
 
-  static async measureAsync(name: string, fn: Function) {
+  static async measureAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
     const start = performance.now();
     const result = await fn();
     const end = performance.now();
@@ -34,13 +34,27 @@ export class PerformanceMonitor {
 // Memory monitoring
 export class MemoryMonitor {
   static logMemoryUsage(context: string) {
-    if (typeof window !== 'undefined' && 'memory' in performance) {
-      const memory = performance.memory;
-      console.log(`[MEMORY] ${context}:`, {
-        used: Math.round((memory as any).usedJSHeapSize / 1024 / 1024) + 'MB',
-        total: Math.round((memory as any).totalJSHeapSize / 1024 / 1024) + 'MB',
-        limit: Math.round((memory as any).jsHeapSizeLimit / 1024 / 1024) + 'MB'
-      });
+    if (typeof window !== 'undefined') {
+      interface PerformanceMemory {
+        usedJSHeapSize: number;
+        totalJSHeapSize: number;
+        jsHeapSizeLimit: number;
+      }
+      const perf = performance as unknown as { memory?: unknown };
+      const isPerformanceMemory = (val: unknown): val is PerformanceMemory =>
+        typeof val === 'object' && val !== null &&
+        typeof (val as { usedJSHeapSize?: unknown }).usedJSHeapSize === 'number' &&
+        typeof (val as { totalJSHeapSize?: unknown }).totalJSHeapSize === 'number' &&
+        typeof (val as { jsHeapSizeLimit?: unknown }).jsHeapSizeLimit === 'number';
+
+      if (isPerformanceMemory(perf.memory)) {
+        const memory = perf.memory;
+        console.log(`[MEMORY] ${context}:`, {
+          used: Math.round(memory.usedJSHeapSize / 1024 / 1024) + 'MB',
+          total: Math.round(memory.totalJSHeapSize / 1024 / 1024) + 'MB',
+          limit: Math.round(memory.jsHeapSizeLimit / 1024 / 1024) + 'MB',
+        });
+      }
     }
   }
 

@@ -214,7 +214,8 @@ export function useApiCache(key: string, fetcher: () => Promise<any>, ttl: numbe
       cacheManager.set(key, result, ttl);
       setData(result);
     } catch (err) {
-      setError(err as Error);
+      const normalized = err instanceof Error ? err : new Error(String(err));
+      setError(normalized);
     } finally {
       setLoading(false);
     }

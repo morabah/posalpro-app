@@ -7,11 +7,15 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logging/structuredLogger';
 import { recordDbLatency } from '@/lib/observability/metricsStore';
 
 declare global {
+  // Reuse Prisma client across HMR cycles in dev
   var prisma: PrismaClient | undefined;
+  // Track middleware registration to avoid duplicate $use calls in dev
+  var prismaMiddlewareRegistered: boolean | undefined;
 }
 
 // Configure Prisma client with appropriate database URL based on environment
@@ -39,12 +43,15 @@ export { prisma };
 
 // Observability: Prisma middleware to record per-query timings (no PII)
 // Note: Middleware registration should be idempotent in dev
-let prismaMiddlewareRegistered = false;
-if (!prismaMiddlewareRegistered) {
+if (!globalThis.prismaMiddlewareRegistered) {
   prisma.$use(async (params, next) => {
     const start = Date.now();
     try {
-      const result = await next(params);
+      // next has a return type of Promise<any>; cast to Promise<unknown> to satisfy strict lint rules
+      const safeNext = (next as unknown as (
+        p: Prisma.MiddlewareParams
+      ) => Promise<unknown>);
+      const result = await safeNext(params);
       const ms = Date.now() - start;
       recordDbLatency(ms);
       if (process.env.NODE_ENV !== 'production') {
@@ -66,5 +73,5 @@ if (!prismaMiddlewareRegistered) {
       throw err;
     }
   });
-  prismaMiddlewareRegistered = true;
+  globalThis.prismaMiddlewareRegistered = true;
 }

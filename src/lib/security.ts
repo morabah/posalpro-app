@@ -9,6 +9,9 @@ import { NextRequest } from 'next/server';
 import validator from 'validator';
 import { CSRFStorage, RateLimitStorage, SecurityStorageFactory } from './security/storage';
 
+// Control characters regex using Unicode property class to satisfy no-control-regex
+const CONTROL_CHARS_REGEX = new RegExp('\\p{Cc}', 'gu');
+
 // CSRF Token Management with Redis Storage
 class CSRFProtection {
   private static storage: CSRFStorage = SecurityStorageFactory.createCSRFStorage();
@@ -83,7 +86,7 @@ export class InputValidator {
     if (typeof input !== 'string') return '';
 
     // Remove null bytes and control characters
-    let sanitized = input.replace(/[\x01-\x1f\x7f\x80-\x9f]/g, '');
+    let sanitized = input.replace(CONTROL_CHARS_REGEX, '');
 
     // Trim whitespace
     sanitized = sanitized.trim();
@@ -198,7 +201,6 @@ export function analyzeRequest(request: NextRequest): {
   const userAgent = request.headers.get('user-agent') || 'unknown';
   const sessionId = request.cookies.get('next-auth.session-token')?.value || crypto.randomUUID();
 
-  const suspicious = false;
   const reasons: string[] = [];
 
   // Check for suspicious patterns
@@ -249,9 +251,3 @@ setInterval(
   5 * 60 * 1000
 ); // Every 5 minutes
 
-// Control character detection (fixed regex)
-const controlCharPattern = /[\x00-\x1f\x7f\x80-\x9f]/g;
-
-// SQL injection pattern (fixed escapes)
-const sqlInjectionPattern =
-  /(\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\b)|(-{2}|\/\*|\*\/|;|\||&|\+)/gi;

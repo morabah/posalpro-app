@@ -1,4 +1,4 @@
-type MetricPoint = { ts: number; value: number };
+export interface MetricPoint { ts: number; value: number }
 
 const latencyPoints: MetricPoint[] = [];
 const dbLatencyPoints: MetricPoint[] = [];
@@ -16,7 +16,7 @@ const webVitalPoints: Record<WebVitalName, MetricPoint[]> = {
   INP: [],
 };
 
-type VitalBuckets = { total: number; good: number; needsImprovement: number; poor: number };
+export interface VitalBuckets { total: number; good: number; needsImprovement: number; poor: number }
 const webVitalBuckets: Record<WebVitalName, VitalBuckets> = {
   FCP: { total: 0, good: 0, needsImprovement: 0, poor: 0 },
   LCP: { total: 0, good: 0, needsImprovement: 0, poor: 0 },

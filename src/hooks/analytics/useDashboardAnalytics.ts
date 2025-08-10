@@ -3,7 +3,7 @@ import { logger } from '@/utils/logger'; /**
  * Specialized analytics tracking for dashboard interactions with stability improvements
  */
 
-('use client');
+'use client';
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback, useMemo, useRef } from 'react';
@@ -37,7 +37,7 @@ export function useDashboardAnalytics(userId?: string, userRole?: string, sessio
 
   // Create stable analytics functions using useMemo and useCallback
   const trackEvent = useCallback(
-    (eventName: string, properties: Record<string, any> = {}) => {
+    (eventName: string, properties: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         analytics(
@@ -60,7 +60,7 @@ export function useDashboardAnalytics(userId?: string, userRole?: string, sessio
   );
 
   const trackPageView = useCallback(
-    (page: string, properties: Record<string, any> = {}) => {
+    (page: string, properties: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         analytics(
@@ -83,7 +83,7 @@ export function useDashboardAnalytics(userId?: string, userRole?: string, sessio
   );
 
   const trackInteraction = useCallback(
-    (element: string, action: string, properties: Record<string, any> = {}) => {
+    (element: string, action: string, properties: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         analytics(
@@ -105,7 +105,7 @@ export function useDashboardAnalytics(userId?: string, userRole?: string, sessio
   );
 
   const trackError = useCallback(
-    (error: Error | string, context: Record<string, any> = {}) => {
+    (error: Error | string, context: Record<string, unknown> = {}) => {
       try {
         const params = paramsRef.current;
         const errorMessage = error instanceof Error ? error.message : error;

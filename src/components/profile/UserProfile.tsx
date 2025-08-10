@@ -190,7 +190,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
           error?: string;
         }>('/api/profile');
 
-        if (response.success && response.data) {
+        if (response.success) {
           const profileData = response.data;
           console.log('✅ Profile data loaded:', profileData);
           console.log('🔥 CRITICAL DEBUG: About to reset form with title:', profileData.title);

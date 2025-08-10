@@ -103,8 +103,10 @@ interface ProductStatsWhereInput {
 
 export class ProductService {
   // Product CRUD operations
-  async createProduct(data: CreateProductData, createdBy: string): Promise<Product> {
+  async createProduct(data: CreateProductData, _createdBy: string): Promise<Product> {
     try {
+      // Mark parameter as used without altering behavior
+      void _createdBy;
       return await prisma.product.create({
         data: {
           name: data.name,

@@ -57,7 +57,7 @@ export default function RFPAnalysisPage() {
           setMetrics(metricsResponse.data);
         }
 
-        if (trendsResponse.success && trendsResponse.data) {
+        if (trendsResponse.success && Array.isArray(trendsResponse.data)) {
           setTrends(trendsResponse.data);
         }
       } catch (error) {

@@ -135,7 +135,7 @@ export const usersApi = {
     const response = await apiClient.get<any>(`/users?role=${encodeURIComponent(role)}`);
 
     // Extract users array from the response data structure
-    if (response.success && response.data) {
+    if (response.success) {
       // The API client wraps the response, so we need to go deeper
       const actualData = response.data.data || response.data;
       const users = actualData.users || [];

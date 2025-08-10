@@ -124,8 +124,9 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
  */
 export function createRouteOptimizedImport<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
-  preloadRoutes: string[] = []
+  _preloadRoutes: string[] = []
 ): ComponentType<React.ComponentProps<T>> {
+  void _preloadRoutes;
   return createOptimizedDynamicImport(importFn);
 }
 
@@ -281,8 +282,14 @@ class DynamicImportTracker {
     this.memoryUsage.clear();
 
     // Force garbage collection if available
-    if (typeof window !== 'undefined' && (window as any).gc) {
-      (window as any).gc();
+    if (typeof window !== 'undefined') {
+      interface WindowWithGC {
+        gc?: () => void;
+      }
+      const w = window as unknown as WindowWithGC;
+      if (typeof w.gc === 'function') {
+        w.gc();
+      }
     }
   }
 

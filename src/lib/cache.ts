@@ -9,21 +9,22 @@
  */
 
 // Deprecated cache service - kept for backward compatibility
+/* eslint-disable @typescript-eslint/no-unused-vars */
 class CacheService {
-  private static instance: CacheService;
+  private static instance: CacheService | null = null;
 
   constructor() {
     console.warn('CacheService is deprecated. Use apiClient built-in caching instead.');
   }
 
   static getInstance(): CacheService {
-    if (!CacheService.instance) {
+    if (CacheService.instance === null) {
       CacheService.instance = new CacheService();
     }
     return CacheService.instance;
   }
 
-  set(_key: string, _data: unknown, _ttl: number = 300000): void {
+  set(_key: string, _data: unknown, _ttl: number): void {
     console.warn('CacheService.set is deprecated. Use apiClient built-in caching instead.');
   }
 
@@ -43,7 +44,7 @@ class CacheService {
   async cached<T>(
     _key: string,
     fn: () => Promise<T>,
-    _ttl: number = 300000
+    _ttl: number
   ): Promise<T> {
     console.warn('CacheService.cached is deprecated. Use apiClient built-in caching instead.');
     // Just execute the function without caching

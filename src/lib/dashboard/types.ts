@@ -6,6 +6,8 @@
 import { UserType } from '@/types';
 
 // Widget Configuration
+export type WidgetData = unknown;
+export type InteractionMetadata = Record<string, unknown>;
 export interface DashboardWidget {
   id: string;
   component: React.ComponentType<WidgetProps>;
@@ -25,11 +27,11 @@ export interface DashboardWidget {
 
 export interface WidgetProps {
   widget: DashboardWidget;
-  data?: any;
+  data?: WidgetData;
   loading?: boolean;
   error?: string;
   onRefresh?: () => void;
-  onInteraction?: (action: string, metadata?: any) => void;
+  onInteraction?: (action: string, metadata?: InteractionMetadata) => void;
 }
 
 // Dashboard Data Types
@@ -158,7 +160,7 @@ export interface WidgetState {
   minimized: boolean;
   lastRefresh: Date;
   refreshInterval: number;
-  data?: any;
+  data?: WidgetData;
   loading: boolean;
   error?: string;
 }

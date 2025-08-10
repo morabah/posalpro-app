@@ -13,11 +13,11 @@ export interface ApiRequest {
   url: string;
   method: string;
   headers: Record<string, string>;
-  body?: any;
+  body?: unknown;
 }
 
 export interface ApiResponse {
-  data: any;
+  data: unknown;
   status: number;
   headers: Record<string, string>;
   success?: boolean;
@@ -28,6 +28,16 @@ class AuthInterceptor {
   private static instance: AuthInterceptor;
   private tokens: AuthTokens | null = null;
   private refreshPromise: Promise<AuthTokens> | null = null;
+
+  private isAuthTokens(value: unknown): value is AuthTokens {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    return (
+      typeof v.accessToken === 'string' &&
+      typeof v.refreshToken === 'string' &&
+      typeof v.expiresAt === 'number'
+    );
+  }
 
   static getInstance(): AuthInterceptor {
     if (!AuthInterceptor.instance) {
@@ -46,7 +56,12 @@ class AuthInterceptor {
       const stored = localStorage.getItem('auth_tokens');
       if (stored) {
         try {
-          this.tokens = JSON.parse(stored);
+          const parsed: unknown = JSON.parse(stored);
+          if (this.isAuthTokens(parsed)) {
+            this.tokens = parsed;
+          } else {
+            this.clearTokens();
+          }
         } catch (error) {
           logger.error('Failed to parse stored tokens:', error);
           this.clearTokens();
@@ -103,12 +118,22 @@ class AuthInterceptor {
       throw new Error('Token refresh failed');
     }
 
-    const data = await response.json();
-    return {
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      expiresAt: Date.now() + data.expiresIn * 1000,
-    };
+    const data: unknown = await response.json();
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      typeof (data as Record<string, unknown>).accessToken === 'string' &&
+      typeof (data as Record<string, unknown>).refreshToken === 'string' &&
+      typeof (data as Record<string, unknown>).expiresIn === 'number'
+    ) {
+      const d = data as { accessToken: string; refreshToken: string; expiresIn: number };
+      return {
+        accessToken: d.accessToken,
+        refreshToken: d.refreshToken,
+        expiresAt: Date.now() + d.expiresIn * 1000,
+      };
+    }
+    throw new Error('Invalid token refresh response shape');
   }
 
   async interceptRequest(request: ApiRequest): Promise<ApiRequest> {

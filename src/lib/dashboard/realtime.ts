@@ -8,6 +8,7 @@ import { UserType } from '@/types';
 import type { ActivityFeedItem, DashboardData, Deadline, Notification, TeamMember } from './types';
 
 // Component Traceability Matrix
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const COMPONENT_MAPPING = {
   userStories: ['US-4.1', 'US-4.3', 'US-2.4'],
   acceptanceCriteria: [
@@ -54,13 +55,13 @@ export enum RealtimeEventType {
 }
 
 // Real-time event data structures
-export interface RealtimeEvent<T = any> {
+export interface RealtimeEvent<T = unknown> {
   type: RealtimeEventType;
   data: T;
   timestamp: number;
   userId?: string;
   sessionId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ConnectionConfig {
@@ -109,7 +110,7 @@ export interface EventSubscription {
  * Real-time WebSocket Manager
  */
 export class RealtimeManager {
-  private static instance: RealtimeManager;
+  private static instance: RealtimeManager | null;
   private socket: WebSocket | null = null;
   private config: ConnectionConfig;
   private state: ConnectionState;
@@ -150,7 +151,10 @@ export class RealtimeManager {
   }
 
   public static getInstance(config?: ConnectionConfig): RealtimeManager {
-    if (!RealtimeManager.instance && config) {
+    if (!RealtimeManager.instance) {
+      if (!config) {
+        throw new Error('RealtimeManager not initialized. Provide config on first call.');
+      }
       RealtimeManager.instance = new RealtimeManager(config);
     }
     return RealtimeManager.instance;
@@ -182,9 +186,9 @@ export class RealtimeManager {
 
         this.socket = new WebSocket(this.config.url, this.config.protocols);
 
-        this.socket.onopen = event => {
+        this.socket.onopen = _event => {
           clearTimeout(timeoutId);
-          this.handleConnectionOpen(event);
+          this.handleConnectionOpen();
           resolve(true);
         };
 
@@ -244,13 +248,13 @@ export class RealtimeManager {
     this.isDestroyed = true;
     this.disconnect();
     this.subscriptions.clear();
-    RealtimeManager.instance = null as any;
+    RealtimeManager.instance = null;
   }
 
   /**
    * Send real-time event
    */
-  send<T>(eventType: RealtimeEventType, data: T, metadata?: Record<string, any>): boolean {
+  send<T>(eventType: RealtimeEventType, data: T, metadata?: Record<string, unknown>): boolean {
     const event: RealtimeEvent<T> = {
       type: eventType,
       data,
@@ -282,7 +286,7 @@ export class RealtimeManager {
   /**
    * Subscribe to real-time events
    */
-  subscribe<T = any>(
+  subscribe<T = unknown>(
     eventType: RealtimeEventType,
     callback: (event: RealtimeEvent<T>) => void,
     options?: {
@@ -293,8 +297,8 @@ export class RealtimeManager {
     const subscription: EventSubscription = {
       id: this.generateSubscriptionId(),
       eventType,
-      callback: callback as (event: RealtimeEvent) => void,
-      filter: options?.filter as ((event: RealtimeEvent) => boolean) | undefined,
+      callback: callback as unknown as (event: RealtimeEvent) => void,
+      filter: options?.filter ? ((options.filter as unknown) as (event: RealtimeEvent) => boolean) : undefined,
       once: options?.once,
     };
 
@@ -332,7 +336,7 @@ export class RealtimeManager {
   /**
    * Handle connection open
    */
-  private handleConnectionOpen(event: Event): void {
+  private handleConnectionOpen(): void {
     logger.info('WebSocket connection established');
 
     this.updateState({
@@ -389,17 +393,12 @@ export class RealtimeManager {
   /**
    * Handle connection error
    */
-  private handleConnectionError(error: any): void {
-    const errorMessage = error instanceof Error ? error.message : 'WebSocket connection error';
-    logger.error('WebSocket error:', errorMessage);
-
+  private handleConnectionError(error: unknown): void {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    this.state.error = errorMessage;
     this.metrics.errorCount++;
-    this.updateState({
-      status: 'error',
-      error: errorMessage,
-    });
-
-    // Emit error event
+    logger.error('WebSocket connection error:', error);
+    this.scheduleReconnect();
     this.emit(RealtimeEventType.ERROR, {
       error: errorMessage,
       timestamp: Date.now(),
@@ -411,16 +410,28 @@ export class RealtimeManager {
    */
   private handleMessage(event: MessageEvent): void {
     try {
-      const realtimeEvent: RealtimeEvent = JSON.parse(event.data);
+      if (typeof event.data !== 'string') {
+        logger.error('Unexpected non-string WebSocket message data');
+        this.metrics.errorCount++;
+        return;
+      }
+      const parsed: unknown = JSON.parse(event.data);
+      const realtimeEvent = parsed as RealtimeEvent<Record<string, unknown>>;
       this.metrics.messagesReceived++;
 
       // Update latency if this is a heartbeat response
-      if (realtimeEvent.type === RealtimeEventType.HEARTBEAT && realtimeEvent.metadata?.sentAt) {
-        const latency = Date.now() - realtimeEvent.metadata.sentAt;
-        this.updateLatency(latency);
+      if (realtimeEvent.type === RealtimeEventType.HEARTBEAT) {
+        const sentAtVal = realtimeEvent.metadata?.sentAt;
+        if (typeof sentAtVal === 'number') {
+          const latency = Date.now() - sentAtVal;
+          this.updateLatency(latency);
+        }
       }
 
-      logger.info('Received real-time event: ' + realtimeEvent.type, realtimeEvent.data);
+      const dataPreview = (() => {
+        try { return JSON.stringify(realtimeEvent.data); } catch { return '[unserializable]'; }
+      })();
+      logger.info(`Received real-time event: ${realtimeEvent.type} ${dataPreview}`);
 
       // Emit to subscribers
       this.emit(realtimeEvent.type, realtimeEvent.data, realtimeEvent);
@@ -433,8 +444,8 @@ export class RealtimeManager {
   /**
    * Emit event to subscribers
    */
-  private emit<T>(eventType: RealtimeEventType, data: T, originalEvent?: RealtimeEvent): void {
-    const event: RealtimeEvent<T> = originalEvent || {
+  private emit<T>(eventType: RealtimeEventType, data: T, originalEvent?: RealtimeEvent<T>): void {
+    const event: RealtimeEvent<T> = (originalEvent as RealtimeEvent<T>) || {
       type: eventType,
       data,
       timestamp: Date.now(),
@@ -592,7 +603,7 @@ export class RealtimeManager {
 export class DashboardRealtimeSync {
   private realtimeManager: RealtimeManager;
   private subscriptionIds: string[] = [];
-  private updateCallbacks: Map<string, (data: any) => void> = new Map();
+  private updateCallbacks: Map<string, (data: unknown) => void> = new Map();
 
   constructor(realtimeManager: RealtimeManager) {
     this.realtimeManager = realtimeManager;
@@ -605,42 +616,42 @@ export class DashboardRealtimeSync {
   private setupEventSubscriptions(): void {
     // Dashboard data updates
     this.subscriptionIds.push(
-      this.realtimeManager.subscribe(RealtimeEventType.DASHBOARD_UPDATE, event =>
+      this.realtimeManager.subscribe<Partial<DashboardData>>(RealtimeEventType.DASHBOARD_UPDATE, event =>
         this.handleDashboardUpdate(event.data)
       )
     );
 
     // Proposal updates
     this.subscriptionIds.push(
-      this.realtimeManager.subscribe(RealtimeEventType.PROPOSAL_UPDATE, event =>
+      this.realtimeManager.subscribe<unknown>(RealtimeEventType.PROPOSAL_UPDATE, event =>
         this.handleProposalUpdate(event.data)
       )
     );
 
     // Activity feed updates
     this.subscriptionIds.push(
-      this.realtimeManager.subscribe(RealtimeEventType.ACTIVITY_UPDATE, event =>
+      this.realtimeManager.subscribe<ActivityFeedItem[]>(RealtimeEventType.ACTIVITY_UPDATE, event =>
         this.handleActivityUpdate(event.data)
       )
     );
 
     // Deadline updates
     this.subscriptionIds.push(
-      this.realtimeManager.subscribe(RealtimeEventType.DEADLINE_UPDATE, event =>
+      this.realtimeManager.subscribe<Deadline[]>(RealtimeEventType.DEADLINE_UPDATE, event =>
         this.handleDeadlineUpdate(event.data)
       )
     );
 
     // Team status updates
     this.subscriptionIds.push(
-      this.realtimeManager.subscribe(RealtimeEventType.TEAM_UPDATE, event =>
+      this.realtimeManager.subscribe<TeamMember[]>(RealtimeEventType.TEAM_UPDATE, event =>
         this.handleTeamUpdate(event.data)
       )
     );
 
     // Notification updates
     this.subscriptionIds.push(
-      this.realtimeManager.subscribe(RealtimeEventType.NOTIFICATION_UPDATE, event =>
+      this.realtimeManager.subscribe<Notification[]>(RealtimeEventType.NOTIFICATION_UPDATE, event =>
         this.handleNotificationUpdate(event.data)
       )
     );
@@ -649,7 +660,7 @@ export class DashboardRealtimeSync {
   /**
    * Register callback for specific data updates
    */
-  onDataUpdate(section: string, callback: (data: any) => void): void {
+  onDataUpdate(section: string, callback: (data: unknown) => void): void {
     this.updateCallbacks.set(section, callback);
   }
 
@@ -672,7 +683,7 @@ export class DashboardRealtimeSync {
   /**
    * Handle proposal updates
    */
-  private handleProposalUpdate(data: any): void {
+  private handleProposalUpdate(data: unknown): void {
     logger.info('Real-time proposal update received:', data);
     const callback = this.updateCallbacks.get('proposals');
     callback?.(data);

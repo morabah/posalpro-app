@@ -45,7 +45,7 @@ export default function RFPMainPage() {
       setLoading(true);
       try {
         const response = await apiClient.get<ApiResponse<RFPDocument[]>>('/api/rfp/documents');
-        if (response.success && response.data) {
+        if (response.success && Array.isArray(response.data)) {
           setDocuments(response.data);
         }
       } catch (error) {

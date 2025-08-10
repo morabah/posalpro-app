@@ -58,14 +58,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     });
   } catch (error) {
     const processedError = errorHandlingService.processError(
-      error as Error,
+      error,
       'Failed to resolve validation issue'
     );
 
     return NextResponse.json(
       {
         success: false,
-        error: errorHandlingService.getUserFriendlyMessage(processedError),
+        error: errorHandlingService.getUserFriendlyMessage(error),
         componentMapping: COMPONENT_MAPPING,
       },
       { status: 500 }

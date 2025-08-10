@@ -129,7 +129,7 @@ export class ApiResponseOptimizer {
       }, 30000); // Every 30 seconds
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to initialize API response optimizer',
         ErrorCodes.SYSTEM.INITIALIZATION,
         {
@@ -212,7 +212,7 @@ export class ApiResponseOptimizer {
       };
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to optimize API response',
         ErrorCodes.API.REQUEST_FAILED,
         {

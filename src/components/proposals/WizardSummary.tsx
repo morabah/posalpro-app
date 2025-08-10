@@ -14,14 +14,63 @@ import {
 } from '@heroicons/react/24/outline';
 import React, { ReactNode, useEffect, useState } from 'react';
 
+interface WizardStep1 {
+  client?: { name?: string; industry?: string };
+  details?: { priority?: string; dueDate?: string | number | Date };
+}
+
+interface WizardStep3 {
+  selectedContent?: RawContent[];
+}
+
+interface WizardData {
+  step1?: WizardStep1;
+  step3?: WizardStep3;
+  // Optional steps used by summary rendering
+  step4?: {
+    products?: Array<{ quantity?: number; unitPrice?: number }>;
+  };
+  step5?: {
+    sections?: Array<{ title?: string; description?: string }>;
+  };
+}
+
+interface TeamAssignments {
+  teamLead?: string;
+  salesRepresentative?: string;
+  subjectMatterExperts?: Record<string, string>;
+}
+
+type RawContent = {
+  item?: { id?: string; title?: string };
+  contentId?: string;
+  id?: string;
+  title?: string;
+  section?: string;
+  assignedTo?: string;
+};
+
+interface ValidationData {
+  isValid?: boolean;
+  completeness?: number;
+  issues?: unknown[];
+}
+
+interface AnalyticsData {
+  wizardCompletionRate?: number;
+  complexityScore?: number;
+  teamSize?: number;
+  contentSuggestionsUsed?: number;
+}
+
 interface WizardSummaryProps {
-  wizardData: any;
-  teamAssignments: any;
-  contentSelections: any[];
-  validationData: any;
-  analyticsData: any;
-  crossStepValidation: any;
-  assignedTo?: Array<{ id: string; name: string; email: string }>; // ✅ ADDED: Use existing resolved data
+  wizardData?: WizardData | null;
+  teamAssignments?: TeamAssignments | null;
+  contentSelections: RawContent[];
+  validationData?: ValidationData | null;
+  analyticsData?: AnalyticsData | null;
+  crossStepValidation?: Record<string, unknown> | null;
+  assignedTo?: Array<{ id: string; name: string; email: string }>;
 }
 
 interface User {
@@ -31,17 +80,61 @@ interface User {
 }
 
 export const WizardSummary: React.FC<WizardSummaryProps> = ({
-  wizardData,
-  teamAssignments,
+  wizardData = null,
+  teamAssignments = null,
   contentSelections,
-  validationData,
-  analyticsData,
-  crossStepValidation,
+  validationData = null,
+  analyticsData = null,
+  crossStepValidation = null,
   assignedTo = [], // ✅ ADDED: Use existing resolved data
 }): ReactNode => {
   const apiClient = useApiClient();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+
+  // Normalize and dedupe content selections
+  type ContentItem = {
+    id?: string;
+    title?: string;
+    section?: string;
+    assignedTo?: string;
+  };
+
+  const rawSelections: ContentItem[] = (wizardData?.step3?.selectedContent?.length
+    ? wizardData.step3.selectedContent
+    : contentSelections ?? [])
+    .map((c: RawContent) => ({
+      id: c?.item?.id || c?.contentId || c?.id,
+      title: c?.item?.title || c?.title || c?.section,
+      section: c?.section,
+      assignedTo: c?.assignedTo,
+    }));
+
+  const dedupedSelections = (() => {
+    const map = new Map<string, { item: ContentItem; count: number; assignees: Set<string> }>();
+    for (const c of rawSelections) {
+      // Prefer grouping by title+section when available to avoid visual duplicates with different IDs
+      const titleKey = (c.title ?? '').trim();
+      const sectionKey = (c.section ?? '').trim();
+      const key = (titleKey && sectionKey) ? `${titleKey}::${sectionKey}` : (c.id || `${titleKey}::${sectionKey}`);
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        if (c.assignedTo) existing.assignees.add(c.assignedTo);
+      } else {
+        map.set(key, {
+          item: c,
+          count: 1,
+          assignees: new Set(c.assignedTo ? [c.assignedTo] : []),
+        });
+      }
+    }
+    return Array.from(map.values()).map(({ item, count, assignees }) => ({
+      ...item,
+      count,
+      assignees: Array.from(assignees),
+    }));
+  })();
 
   // ✅ ENHANCED: Use existing resolved data instead of fetching separately
   useEffect(() => {
@@ -50,11 +143,13 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
       return;
     }
 
-    const userIds = [
-      teamAssignments.teamLead,
-      teamAssignments.salesRepresentative,
-      ...Object.values(teamAssignments.subjectMatterExperts || {}),
-    ].filter(Boolean);
+    const userIds = (
+      [
+        teamAssignments.teamLead,
+        teamAssignments.salesRepresentative,
+        ...Object.values(teamAssignments.subjectMatterExperts || {}),
+      ] as Array<string | undefined>
+    ).filter((id): id is string => typeof id === 'string' && id.length > 0);
 
     if (userIds.length === 0) {
       setLoading(false);
@@ -62,29 +157,47 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
     }
 
     // ✅ FOLLOWING CORE_REQUIREMENTS.md: Use existing resolved data first
-    const nameMap: Record<string, string> = {};
+    (async () => {
+      const nameMap: Record<string, string> = {};
 
-    // Map from assignedTo data (already resolved)
-    assignedTo.forEach(user => {
-      nameMap[user.id] = user.name;
-    });
+      // Map from assignedTo data (already resolved)
+      assignedTo.forEach(user => {
+        nameMap[user.id] = user.name;
+      });
 
-    // For any remaining IDs not found in assignedTo, use fallback
-    userIds.forEach(userId => {
-      if (!nameMap[userId]) {
-        nameMap[userId] =
-          userId.length > 20 ? `User ${userId.substring(0, 8)}...` : `User ${userId}`;
+      const unresolved = userIds.filter((id) => !nameMap[id]);
+
+      // Fallback: fetch unresolved user names in one request if possible
+      if (unresolved.length > 0) {
+        try {
+          const query = encodeURIComponent(unresolved.join(','));
+          const res: unknown = await apiClient.get(`users?ids=${query}`);
+          const users: Array<{ id: string; name?: string; email?: string }> = (() => {
+            if (res && typeof res === 'object') {
+              const dataVal = (res as { data?: unknown }).data;
+              if (Array.isArray((res as { users?: unknown }).users)) {
+                return (res as { users: Array<{ id: string; name?: string; email?: string }> }).users;
+              }
+              if (dataVal && typeof dataVal === 'object' && Array.isArray((dataVal as { users?: unknown }).users)) {
+                return (dataVal as { users: Array<{ id: string; name?: string; email?: string }> }).users;
+              }
+            }
+            return [];
+          })();
+          users.forEach(u => {
+            if (u?.id) nameMap[u.id] = u.name || u.email || `User ${u.id.substring(0, 8)}...`;
+          });
+        } catch (e) {
+          // Graceful fallback to truncated IDs
+          unresolved.forEach((userId) => {
+            nameMap[userId] = userId.length > 20 ? `User ${userId.substring(0, 8)}...` : `User ${userId}`;
+          });
+        }
       }
-    });
 
-    console.log('🔍 [WizardSummary] Using resolved data:', {
-      userIds,
-      assignedTo: assignedTo.map(u => ({ id: u.id, name: u.name })),
-      nameMap,
-    });
-
-    setUserNames(nameMap);
-    setLoading(false);
+      setUserNames(nameMap);
+      setLoading(false);
+    })();
   }, [teamAssignments, assignedTo]); // ✅ FIXED: Stable dependencies
 
   const getUserDisplayName = (userId: string) => {
@@ -199,38 +312,80 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
         )}
 
         {/* Step 3: Content Selections */}
-        {(wizardData?.step3?.selectedContent?.length > 0 ||
-          (contentSelections && contentSelections.length > 0)) && (
+        {dedupedSelections.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-gray-700 flex items-center">
               <DocumentTextIcon className="h-4 w-4 mr-2 text-purple-500" />
               Content Selections
             </h3>
             <div className="space-y-2 text-sm">
-              {/* Prefer detailed titles from wizardData if present; fallback to API metadata */}
-              {wizardData?.step3?.selectedContent?.length
-                ? wizardData.step3.selectedContent.map((c: any, index: number) => (
-                    <div key={`wd-${index}`}>
-                      <div className="font-medium">{c.section}</div>
-                      <div className="text-xs text-gray-600">
-                        {c.item?.title || 'Selected Content'}
+              {dedupedSelections.map((c: any, index: number) => {
+                const title = c.title || 'Selected Content';
+                const section = c.section || undefined;
+                const id = c.id;
+                const count = c.count as number;
+                const assignees: string[] = c.assignees || [];
+                return (
+                  <div key={`csel-${index}`} className="flex items-start justify-between">
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        <span>{title}</span>
+                        {count > 1 && (
+                          <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[11px] leading-5 text-gray-700">
+                            x{count}
+                          </span>
+                        )}
                       </div>
-                      {c.item?.id && (
-                        <div className="text-[11px] text-gray-500">ID: {c.item.id}</div>
+                      {section && (
+                        <div className="text-xs text-gray-600">{section}</div>
+                      )}
+                      {assignees.length > 0 && (
+                        <div className="text-[11px] text-gray-500">
+                          Assigned: {assignees.map((uid) => (loading ? 'Loading…' : getUserDisplayName(uid))).join(', ')}
+                        </div>
+                      )}
+                      {id && (
+                        <div className="text-[11px] text-gray-500">ID: {id}</div>
                       )}
                     </div>
-                  ))
-                : contentSelections.map((content, index) => (
-                    <div key={`cs-${index}`}>
-                      <div className="font-medium">{content.section}</div>
-                      {content.title && (
-                        <div className="text-xs text-gray-600">{content.title}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Sections & Assignments */}
+        {Array.isArray(wizardData?.step5?.sections) && wizardData!.step5!.sections!.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-gray-700 flex items-center">
+              <DocumentTextIcon className="h-4 w-4 mr-2 text-blue-500" />
+              Sections & Assignments
+            </h3>
+            <div className="space-y-2 text-sm">
+              {wizardData!.step5!.sections!.map((s: any, index: number) => {
+                const assignee = s?.assignedTo;
+                const assignees: string[] = Array.isArray(assignee)
+                  ? assignee.filter(Boolean)
+                  : (assignee ? [assignee] : []);
+                return (
+                  <div key={`sec-${index}`} className="flex items-start justify-between">
+                    <div>
+                      <div className="font-medium">{s?.title || 'Untitled Section'}</div>
+                      {assignees.length > 0 && (
+                        <div className="text-[11px] text-gray-500">
+                          Assigned: {assignees.map((uid) => (loading ? 'Loading…' : getUserDisplayName(uid))).join(', ')}
+                        </div>
                       )}
-                      {content.contentId && (
-                        <div className="text-[11px] text-gray-500">ID: {content.contentId}</div>
-                      )}
+                      <div className="flex gap-3 text-[11px] text-gray-500">
+                        {typeof s?.hours === 'number' && <span>Hours: {s.hours}</span>}
+                        {s?.priority && <span>Priority: {String(s.priority)}</span>}
+                        {s?.status && <span>Status: {String(s.status)}</span>}
+                      </div>
                     </div>
-                  ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

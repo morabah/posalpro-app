@@ -7,15 +7,7 @@ import { render, RenderOptions } from '@testing-library/react';
 import { SessionProvider } from 'next-auth/react';
 import { ReactElement, ReactNode } from 'react';
 
-// Fix Jest Mock import
-interface MockFunction<T = any> {
-  (...args: any[]): T;
-  mockReturnValue: (value: T) => MockFunction<T>;
-  mockResolvedValue: (value: T) => MockFunction<T>;
-  mockRejectedValue: (value: any) => MockFunction<T>;
-  mockClear: () => void;
-  mockReset: () => void;
-}
+// Note: Jest mocks are provided via global jest.fn in tests
 
 // Mock user for testing
 export const mockUser = {

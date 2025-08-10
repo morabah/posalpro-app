@@ -665,7 +665,7 @@ export class ContentService {
         averageUsageTime: 0, // This would need additional tracking
         popularityScore: totalAccess * 0.4 + uniqueUsers * 0.6,
         recentActivity,
-        qualityScore: (content.quality as any)?.score || 0,
+        qualityScore: (content.quality as unknown as { score?: number }).score ?? 0,
       };
     } catch (error) {
       errorHandlingService.processError(error);
@@ -699,7 +699,7 @@ export class ContentService {
     mostPopular: Array<{ id: string; title: string; access: number }>;
   }> {
     try {
-      const where: any = {};
+      const where: Prisma.ContentWhereInput = {};
 
       if (filters) {
         if (filters.type) where.type = { in: filters.type };
@@ -822,7 +822,7 @@ export class ContentService {
       const semanticQuery = this.buildSemanticQuery(request.query);
 
       // Apply user role-based access control
-      const where: any = {
+      const where: Prisma.ContentWhereInput = {
         isActive: true,
         OR: [{ isPublic: true }, { allowedRoles: { hasSome: request.userRoles } }],
         AND: [
@@ -1207,7 +1207,7 @@ export class ContentService {
       const totalViews = accessLogs.filter(log => log.accessType === 'VIEW').length;
       const totalUses = accessLogs.filter(log => log.accessType === 'USE').length;
       const uniqueUsers = new Set(accessLogs.map(log => log.userId)).size;
-      const lastAccessed = accessLogs[0]?.timestamp || new Date();
+      const lastAccessed = accessLogs[0]?.timestamp ?? new Date();
 
       return {
         totalViews,
@@ -1217,7 +1217,7 @@ export class ContentService {
         lastAccessed,
         popularityScore: (totalViews + totalUses * 2) * Math.min(uniqueUsers / 10, 1),
       };
-    } catch (error) {
+    } catch {
       return {
         totalViews: 0,
         totalUses: 0,
@@ -1261,7 +1261,9 @@ export class ContentService {
     };
   }
 
-  private calculateSearchAccuracy(results: ContentSearchResult[], query: string): number {
+  private calculateSearchAccuracy(results: ContentSearchResult[], _query: string): number {
+    // Mark parameter as used
+    void _query;
     if (results.length === 0) return 0;
 
     const averageRelevance =
@@ -1269,7 +1271,9 @@ export class ContentService {
     return Math.min(100, averageRelevance);
   }
 
-  private suggestCategoriesFromContent(content: string, existingCategories: string[]): string[] {
+  private suggestCategoriesFromContent(content: string, _existingCategories: string[]): string[] {
+    // Mark parameter as used
+    void _existingCategories;
     // Simple content-based category suggestion (would use actual AI/ML in production)
     const suggestions: string[] = [];
     const contentLower = content.toLowerCase();

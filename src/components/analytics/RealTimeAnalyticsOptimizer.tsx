@@ -333,7 +333,7 @@ export default function RealTimeAnalyticsOptimizer({
         componentMapping: COMPONENT_MAPPING,
       });
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to refresh analytics data', {
+      handleAsyncError(error, 'Failed to refresh analytics data', {
         context: 'RealTimeAnalyticsOptimizer.refreshAnalyticsData',
         component: 'RealTimeAnalyticsOptimizer',
         userStory: 'US-5.1',
@@ -361,7 +361,7 @@ export default function RealTimeAnalyticsOptimizer({
         componentMapping: COMPONENT_MAPPING,
       });
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to trigger optimization', {
+      handleAsyncError(error, 'Failed to trigger optimization', {
         context: 'RealTimeAnalyticsOptimizer.handleOptimization',
         component: 'RealTimeAnalyticsOptimizer',
         userStory: 'US-6.1',
@@ -396,7 +396,7 @@ export default function RealTimeAnalyticsOptimizer({
         componentMapping: COMPONENT_MAPPING,
       });
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to generate report', {
+      handleAsyncError(error, 'Failed to generate report', {
         context: 'RealTimeAnalyticsOptimizer.handleGenerateReport',
         component: 'RealTimeAnalyticsOptimizer',
         userStory: 'US-5.1',

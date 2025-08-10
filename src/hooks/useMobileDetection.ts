@@ -166,7 +166,7 @@ export const useMobileDetection = () => {
 
       return result;
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to detect mobile device capabilities', {
+      handleAsyncError(error, 'Failed to detect mobile device capabilities', {
         context: 'useMobileDetection.detectMobileDevice',
         component: 'useMobileDetection',
         userStory: 'US-8.1',
@@ -248,7 +248,7 @@ export const useMobileDetection = () => {
 
         return optimization;
       } catch (error) {
-        handleAsyncError(error as Error, 'Failed to optimize navigation for device', {
+        handleAsyncError(error, 'Failed to optimize navigation for device', {
           context: 'useMobileDetection.optimizeNavigation',
           component: 'useMobileDetection',
           userStory: 'US-8.4',
@@ -307,7 +307,7 @@ export const useMobileDetection = () => {
           'low'
         );
       } catch (error) {
-        handleAsyncError(error as Error, 'Failed to track device metrics', {
+        handleAsyncError(error, 'Failed to track device metrics', {
           context: 'useMobileDetection.trackDeviceMetrics',
           component: 'useMobileDetection',
           userStory: 'US-8.3',
@@ -346,7 +346,7 @@ export const useMobileDetection = () => {
         'low'
       );
     } catch (error) {
-      handleAsyncError(error as Error, 'Failed to handle screen change', {
+      handleAsyncError(error, 'Failed to handle screen change', {
         context: 'useMobileDetection.handleScreenChange',
         component: 'useMobileDetection',
         userStory: 'US-8.1',
@@ -375,7 +375,7 @@ export const useMobileDetection = () => {
 
         setIsLoading(false);
       } catch (error) {
-        handleAsyncError(error as Error, 'Failed to initialize mobile detection', {
+        handleAsyncError(error, 'Failed to initialize mobile detection', {
           context: 'useMobileDetection.initialization',
           component: 'useMobileDetection',
           userStory: 'US-8.1',

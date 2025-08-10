@@ -143,7 +143,7 @@ export default function MobilePerformanceDashboard() {
         }, 'medium');
       }
     } catch (error) {
-      errorHandlingService.processError(error as Error, 'Mobile optimization trigger failed');
+      errorHandlingService.processError(error, 'Mobile optimization trigger failed');
     } finally {
       setIsOptimizing(false);
     }

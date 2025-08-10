@@ -28,7 +28,7 @@ import {
   PlusIcon,
   TagIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -111,6 +111,9 @@ export interface CommunicationCenterProps {
   isCompact?: boolean;
 }
 
+// Strict priority union
+type Priority = 'low' | 'normal' | 'high' | 'urgent';
+
 export function CommunicationCenter({
   proposalId,
   currentUserId,
@@ -131,9 +134,7 @@ export function CommunicationCenter({
   const [newMessage, setNewMessage] = useState('');
   const [messageType, setMessageType] = useState<'message' | 'task'>('message');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPriority, setSelectedPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>(
-    'normal'
-  );
+  const [selectedPriority, setSelectedPriority] = useState<Priority>('normal');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showClientInsights, setShowClientInsights] = useState(false);
@@ -142,23 +143,46 @@ export function CommunicationCenter({
   // Refs for scroll management
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-compact based on container width (useful when embedded in right sidebar)
+  const [autoCompact, setAutoCompact] = useState(false);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width ?? el.clientWidth;
+      // Force compact below 420px container width
+      setAutoCompact(w < 420);
+    });
+    ro.observe(el);
+    // Initial check
+    setAutoCompact(el.clientWidth < 420);
+    return () => ro.disconnect();
+  }, []);
 
   // Component Traceability Matrix analytics
   const trackCommunicationMetrics = useCallback(
-    (action: string, metadata?: Record<string, any>) => {
+    (
+      action: string,
+      metadata?: Record<string, any>,
+      priority: 'low' | 'medium' | 'high' = 'medium'
+    ) => {
       try {
-        analytics('communication_center_interaction', {
-          component: 'CommunicationCenter',
-          action: 'filter_applied',
-          filterType: activeFilter,
-          proposalId,
-          userStory: 'US-2.2',
-          acceptanceCriteria: ['AC-2.2.3'],
-          hypothesis: 'H4',
-          targetReduction: 0.4, // 40% coordination effort reduction
-          timestamp: Date.now(),
-          ...metadata,
-        });
+        analytics(
+          'communication_center_interaction',
+          {
+            component: 'CommunicationCenter',
+            action,
+            proposalId,
+            userStory: 'US-2.2',
+            acceptanceCriteria: ['AC-2.2.3'],
+            hypothesis: 'H4',
+            targetReduction: 0.4, // 40% coordination effort reduction
+            ...metadata,
+          },
+          priority
+        );
       } catch (error) {
         handleAsyncError(error, 'Failed to track communication metrics', {
           action,
@@ -172,49 +196,93 @@ export function CommunicationCenter({
 
   const apiClient = useApiClient();
 
+  // Safely normalize API responses that may be an array or wrapped in an object
+  const normalizeApiList = <T,>(res: unknown, keys: string[] = ['data', 'messages', 'participants', 'items']): T[] => {
+    if (Array.isArray(res)) return res as T[];
+    if (res && typeof res === 'object') {
+      const obj = res as Record<string, unknown>;
+      for (const k of keys) {
+        const v = obj[k];
+        if (Array.isArray(v)) return v as T[];
+      }
+    }
+    return [] as T[];
+  };
+
+  // Coercion helpers to satisfy strict typing without using any
+  type IncomingActionItem = Omit<ActionItem, 'dueDate'> & { dueDate?: string | Date };
+  type IncomingMessage = Omit<CommunicationMessage, 'timestamp' | 'actionItems'> & {
+    timestamp?: string | Date;
+    actionItems?: IncomingActionItem[];
+  };
+  type IncomingParticipant = Omit<CommunicationParticipant, 'lastActive'> & {
+    lastActive?: string | Date;
+  };
+
+  const toDate = (v?: string | Date): Date => (v ? new Date(v) : new Date());
+
+  const coerceMessage = (m: IncomingMessage): CommunicationMessage => ({
+    id: m.id,
+    proposalId: m.proposalId,
+    from: m.from,
+    content: m.content,
+    type: m.type,
+    priority: m.priority,
+    timestamp: toDate(m.timestamp),
+    isRead: m.isRead,
+    mentions: m.mentions ?? [],
+    tags: m.tags ?? [],
+    actionItems: m.actionItems?.map((ai) => ({
+      ...ai,
+      dueDate: toDate(ai.dueDate),
+    })),
+    clientInsights: m.clientInsights ?? [],
+  });
+
+  const coerceParticipant = (p: IncomingParticipant): CommunicationParticipant => ({
+    ...p,
+    lastActive: toDate(p.lastActive),
+  });
+
   // Load communication data
   const loadCommunicationData = useCallback(async () => {
     setIsLoading(true);
     const startTime = Date.now();
 
+    // Guard: skip API calls if proposalId is missing/empty
+    if (!proposalId) {
+      setMessages([]);
+      setParticipants([]);
+      trackCommunicationMetrics('data_load_skipped', { reason: 'missing_proposalId' });
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const [messagesRes, participantsRes] = await Promise.all([
-        apiClient.get<{ success: boolean; data: CommunicationMessage[] }>(
+        apiClient.get<unknown>(
           `/communications?proposalId=${encodeURIComponent(proposalId)}`
         ),
-        apiClient.get<{ success: boolean; data: CommunicationParticipant[] }>(
+        apiClient.get<unknown>(
           `/communications/participants?proposalId=${encodeURIComponent(proposalId)}`
         ),
       ]);
 
-      // Normalize date fields from API (strings) → Date objects
-      const normalizedMessages: CommunicationMessage[] = (((messagesRes as any)?.data ?? []) as any[]).map(
-        (m: any) => ({
-          ...m,
-          timestamp: m?.timestamp ? new Date(m.timestamp) : new Date(),
-          actionItems: Array.isArray(m?.actionItems)
-            ? m.actionItems.map((ai: any) => ({
-                ...ai,
-                dueDate: ai?.dueDate ? new Date(ai.dueDate) : undefined,
-              }))
-            : m?.actionItems,
-        })
-      );
+      // Extract arrays regardless of whether API returns an array or a wrapped object
+      const rawMessages = normalizeApiList<IncomingMessage>(messagesRes, ['data', 'messages']);
+      const rawParticipants = normalizeApiList<IncomingParticipant>(participantsRes, ['data', 'participants']);
 
-      const normalizedParticipants: CommunicationParticipant[] = (((participantsRes as any)?.data ?? []) as any[]).map(
-        (p: any) => ({
-          ...p,
-          lastActive: p?.lastActive ? new Date(p.lastActive) : new Date(),
-        })
-      );
+      // Normalize dates and shapes
+      const normalizedMessages: CommunicationMessage[] = rawMessages.map(coerceMessage);
+      const normalizedParticipants: CommunicationParticipant[] = rawParticipants.map(coerceParticipant);
 
       setMessages(normalizedMessages);
       setParticipants(normalizedParticipants);
 
       const loadTime = Date.now() - startTime;
       trackCommunicationMetrics('data_loaded', {
-        messageCount: ((messagesRes as any)?.data ?? []).length,
-        participantCount: ((participantsRes as any)?.data ?? []).length,
+        messageCount: normalizedMessages.length,
+        participantCount: normalizedParticipants.length,
         loadTime,
       });
     } catch (error) {
@@ -226,13 +294,44 @@ export function CommunicationCenter({
 
       showToast(errorHandlingService.getUserFriendlyMessage(standardError), 'error');
 
-      trackCommunicationMetrics('data_load_error', {
-        error: standardError.message,
-      });
+      trackCommunicationMetrics('data_load_error', { error: standardError.message });
+      showToast('Failed to load communications. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
-  }, [proposalId, trackCommunicationMetrics, handleAsyncError, errorHandlingService]);
+  }, [proposalId, apiClient, analytics, handleAsyncError]);
+
+  // Filtered and searched messages
+  const filteredMessages = useMemo(() => {
+    let list = messages;
+    // Apply filter
+    switch (activeFilter) {
+      case 'unread':
+        list = list.filter(m => !m.isRead);
+        break;
+      case 'mentions':
+        // Heuristic: any @mention in content
+        list = list.filter(m => /@[A-Za-z0-9_\-.]+/.test(m.content));
+        break;
+      case 'tasks':
+        // If message type exists, prefer it; otherwise fallback to tag
+        list = list.filter(m => (m as any).type === 'task' || (m.tags || []).includes('task'));
+        break;
+      default:
+        break;
+    }
+    // Apply search
+    const q = searchTerm.trim().toLowerCase();
+    if (q) {
+      list = list.filter(m => {
+        const inContent = m.content.toLowerCase().includes(q);
+        const inAuthor = m.from?.name?.toLowerCase?.().includes(q);
+        const inTags = (m.tags || []).some(t => t.toLowerCase().includes(q));
+        return inContent || inAuthor || inTags;
+      });
+    }
+    return list;
+  }, [messages, activeFilter, searchTerm]);
 
   // Send message
   const sendMessage = useCallback(async () => {
@@ -345,7 +444,7 @@ export function CommunicationCenter({
   };
 
   // Get priority color
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: Priority) => {
     switch (priority) {
       case 'urgent':
         return 'bg-red-100 text-red-800 border-red-200';
@@ -358,6 +457,47 @@ export function CommunicationCenter({
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
+  };
+
+  // Helpers for grouping and date separators
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const formatDateLabel = (d: Date) => {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (isSameDay(d, today)) return 'Today';
+    if (isSameDay(d, yesterday)) return 'Yesterday';
+    return d.toLocaleDateString();
+  };
+
+  const shouldGroup = (prev: CommunicationMessage | null, curr: CommunicationMessage) => {
+    if (!prev) return false;
+    if (prev.from.id !== curr.from.id) return false;
+    const diff = Math.abs(curr.timestamp.getTime() - prev.timestamp.getTime());
+    // group if within 5 minutes
+    return isSameDay(prev.timestamp, curr.timestamp) && diff <= 5 * 60 * 1000;
+  };
+
+  const renderContentWithAccents = (content: string) => {
+    // Accents for @mentions and #tags
+    const parts = content.split(/([@#][A-Za-z0-9_\-.]+)/g);
+    return (
+      <span>
+        {parts.map((p, i) => {
+          if (p.startsWith('@'))
+            return (
+              <span key={i} className="text-blue-700 font-medium">{p}</span>
+            );
+          if (p.startsWith('#'))
+            return (
+              <span key={i} className="text-green-700 font-medium">{p}</span>
+            );
+          return <span key={i}>{p}</span>;
+        })}
+      </span>
+    );
   };
 
   // Load data on mount
@@ -377,8 +517,10 @@ export function CommunicationCenter({
   }, [messages]);
 
   // Render compact view for coordination hub
-  if (isCompact) {
+  const compact = isCompact || autoCompact;
+  if (compact) {
     return (
+      <div ref={containerRef}>
       <Card className={`p-4 ${className}`}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
@@ -390,16 +532,7 @@ export function CommunicationCenter({
               </Badge>
             )}
           </div>
-          <div className="flex space-x-1">
-            <Button size="sm" onClick={() => setMessageType('message')}>
-              <PlusIcon className="h-3 w-3 mr-1" />
-              Message
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setMessageType('task')}>
-              <PlusIcon className="h-3 w-3 mr-1" />
-              Task
-            </Button>
-          </div>
+          {/* Header quick actions removed for cleaner compact layout; use composer controls below */}
         </div>
 
         {isLoading ? (
@@ -407,33 +540,101 @@ export function CommunicationCenter({
             <LoadingSpinner size="sm" />
           </div>
         ) : (
-          <div className="space-y-2 max-h-32 overflow-y-auto">
-            {messages.slice(0, 3).map(message => (
-              <div
-                key={message.id}
-                className="p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-xs font-medium text-gray-900">{message.from.name}</span>
-                      <Badge size="sm" className={getPriorityColor(message.priority)}>
-                        {message.priority}
-                      </Badge>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+            {/* Left: Recent messages */}
+            <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+              {messages.slice(0, 3).map(message => (
+                <div
+                  key={message.id}
+                  className="px-2 py-1 border rounded-md hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <span className="text-[11px] font-medium text-gray-900 truncate max-w-[9rem]">
+                          {message.from.name}
+                        </span>
+                        <span className="text-[10px] capitalize text-gray-500">{message.priority}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-600 truncate">{message.content}</p>
                     </div>
-                    <p className="text-xs text-gray-600 truncate">{message.content}</p>
+                    <span className="text-[10px] text-gray-400 ml-2 whitespace-nowrap">
+                      {formatRelativeTime(message.timestamp)}
+                    </span>
                   </div>
-                  <span className="text-xs text-gray-400 ml-2">
-                    {formatRelativeTime(message.timestamp)}
-                  </span>
                 </div>
+              ))}
+            </div>
+
+            {/* Right: Compact composer */}
+            <div className="space-y-1">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1">
+                <div className="grid grid-cols-2 gap-1 w-full sm:w-auto sm:flex sm:space-x-1 sm:grid-cols-1">
+                  <Button
+                    size="sm"
+                    variant={messageType === 'message' ? 'primary' : 'outline'}
+                    onClick={() => setMessageType('message')}
+                    className="w-full sm:w-auto px-2"
+                  >
+                    <ChatBubbleLeftRightIcon className="h-3 w-3 mr-1" />
+                    Msg
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={messageType === 'task' ? 'primary' : 'outline'}
+                    onClick={() => setMessageType('task')}
+                    className="w-full sm:w-auto px-2"
+                  >
+                    <CheckCircleIcon className="h-3 w-3 mr-1" />
+                    Task
+                  </Button>
+                </div>
+                <select
+                  value={selectedPriority}
+                  onChange={e => setSelectedPriority(e.target.value as Priority)}
+                  className="hidden sm:block w-auto shrink-0 border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
               </div>
-            ))}
-            {messages.length > 3 && (
-              <Button variant="outline" size="sm" className="w-full text-xs">
-                View All Communications ({messages.length})
-              </Button>
-            )}
+              <Textarea
+                ref={textareaRef}
+                value={newMessage}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
+                placeholder={`Type ${messageType}… (@, #)`}
+                rows={1}
+                className="w-full resize-none text-sm leading-tight min-h-[36px] max-h-20 overflow-auto"
+                onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <div className="hidden sm:block text-xs text-gray-500">
+                  Ctrl+Enter to send • @name • #tag
+                </div>
+                <Button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim() || isSubmitting}
+                  size="sm"
+                  className="px-2"
+                >
+                  {isSubmitting ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <>
+                      <PaperAirplaneIcon className="h-3 w-3 mr-1" />
+                      Send
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -447,12 +648,13 @@ export function CommunicationCenter({
           </div>
         </div>
       </Card>
+      </div>
     );
   }
 
   // Full view implementation
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div ref={containerRef} className={`space-y-6 ${className}`}>
       <Card className="p-6">
         <div className="flex items-center space-x-3 mb-4">
           <ChatBubbleLeftRightIcon className="h-6 w-6 text-blue-600" />
@@ -467,95 +669,240 @@ export function CommunicationCenter({
             <LoadingSpinner />
           </div>
         ) : (
-          <div className="space-y-4">
-            {messages.map(message => (
-              <div
-                key={message.id}
-                className={`p-4 rounded-lg border ${
-                  !message.isRead ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <Avatar name={message.from.name} size="sm" />
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium text-gray-900">{message.from.name}</span>
-                        <Badge size="sm" variant="secondary">
-                          {message.from.role}
-                        </Badge>
-                        <Badge size="sm" className={getPriorityColor(message.priority)}>
-                          {message.priority}
-                        </Badge>
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Main Chat Area */}
+            <div className="md:col-span-2 min-w-0">
+              <div className={`relative ${isCompact ? 'h-[50vh]' : 'h-[60vh]'} border rounded-lg overflow-hidden bg-white`}>
+                {/* Unified container: only messages scroll */}
+                <div className="h-full flex flex-col bg-white">
+                  {/* Messages */}
+                  <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-4">
+                  {(() => {
+                    const sorted = [...filteredMessages].sort(
+                      (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+                    );
+                    let lastDate: Date | null = null;
+                    let prev: CommunicationMessage | null = null;
+                    return (
+                      <>
+                        {sorted.map((m, idx) => {
+                          const showDate = !lastDate || !isSameDay(lastDate, m.timestamp);
+                          if (showDate) lastDate = m.timestamp;
+                          const grouped = shouldGroup(prev, m);
+                          const isMine = m.from.id === currentUserId;
+                          const bubbleBase = `max-w-[80%] inline-block px-3 py-2 rounded-lg text-sm ${
+                            isMine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+                          }`;
+                          const container = `flex ${isMine ? 'justify-end' : 'justify-start'}`;
+                          const radius = grouped
+                            ? isMine
+                              ? 'rounded-tr-sm'
+                              : 'rounded-tl-sm'
+                            : '';
+                          const headerNeeded = !grouped;
+                          const content = (
+                            <div className={container}>
+                              <div className={`space-y-1 ${isMine ? 'items-end' : 'items-start'} flex flex-col`}>
+                                {headerNeeded && (
+                                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    {!isMine && <Avatar name={m.from.name} size="xs" />}
+                                    <span className="font-medium text-gray-700">{m.from.name}</span>
+                                    <span>• {formatRelativeTime(m.timestamp)}</span>
+                                    <Badge size="sm" className={getPriorityColor(m.priority)}>
+                                      {m.priority}
+                                    </Badge>
+                                  </div>
+                                )}
+                                <div className={`${bubbleBase} ${radius}`}>
+                                  <p className="whitespace-pre-wrap break-words">{renderContentWithAccents(m.content)}</p>
+                                  {m.tags && m.tags.length > 0 && (
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                      {m.tags.map((tag: string) => (
+                                        <Badge key={tag} size="sm" variant="outline">
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {showClientInsights && m.clientInsights && m.clientInsights.length > 0 && (
+                                    <div className="mt-2 bg-blue-50 border border-blue-200 rounded p-2">
+                                      <h5 className="text-xs font-medium text-blue-800 mb-1">Client Insights</h5>
+                                      <ul className="space-y-1">
+                                        {m.clientInsights.map((ci: { id: string; type: string; content: string }) => (
+                                          <li key={ci.id} className="text-xs text-blue-800">
+                                            <span className="font-medium">{ci.type}:</span> {ci.content}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                          const node = (
+                            <div key={m.id} className="space-y-2">
+                              {showDate && (
+                                <div className="flex items-center justify-center">
+                                  <div className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                    {formatDateLabel(m.timestamp)}
+                                  </div>
+                                </div>
+                              )}
+                              {content}
+                            </div>
+                          );
+                          prev = m;
+                          return node;
+                        })}
+                        <div ref={messagesEndRef} />
+                      </>
+                    );
+                  })()}
+                  </div>
+
+                  {/* Composer pinned to bottom of card */}
+                  <div className="z-10">
+                    <div className="p-3 border-t bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 shadow-sm">
+                      <div className="space-y-3">
+                        {/* Type and Priority Selection */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:space-x-2 sm:grid-cols-1">
+                            <Button
+                              size="sm"
+                              variant={messageType === 'message' ? 'primary' : 'outline'}
+                              onClick={() => setMessageType('message')}
+                              className="w-full sm:w-auto"
+                            >
+                              <ChatBubbleLeftRightIcon className="h-4 w-4 mr-1" />
+                              Message
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={messageType === 'task' ? 'primary' : 'outline'}
+                              onClick={() => setMessageType('task')}
+                              className="w-full sm:w-auto"
+                            >
+                              <CheckCircleIcon className="h-4 w-4 mr-1" />
+                              Task
+                            </Button>
+                          </div>
+
+                          <select
+                            value={selectedPriority}
+                            onChange={e => setSelectedPriority(e.target.value as Priority)}
+                            className="w-full sm:w-auto shrink-0 border border-gray-300 rounded-md px-3 py-1 text-sm focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="low">Low Priority</option>
+                            <option value="normal">Normal Priority</option>
+                            <option value="high">High Priority</option>
+                            <option value="urgent">Urgent</option>
+                          </select>
+                        </div>
+
+                        {/* Message Input */}
+                        <div className="space-y-2">
+                          <Textarea
+                            ref={textareaRef}
+                            value={newMessage}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                              setNewMessage(e.target.value)
+                            }
+                            placeholder={`Type your ${messageType}... Use @mentions and #tags`}
+                            rows={2}
+                            className="w-full resize-none"
+                            onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                e.preventDefault();
+                                sendMessage();
+                              }
+                            }}
+                          />
+
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                            <div className="text-xs text-gray-500 sm:flex-1">
+                              Ctrl+Enter to send • Use @name for mentions • Use #tag for tags
+                            </div>
+                            <Button
+                              onClick={sendMessage}
+                              disabled={!newMessage.trim() || isSubmitting}
+                              size="sm"
+                              className="self-end sm:self-auto"
+                            >
+                              {isSubmitting ? (
+                                <LoadingSpinner size="sm" />
+                              ) : (
+                                <>
+                                  <PaperAirplaneIcon className="h-4 w-4 mr-1" />
+                                  Send {messageType}
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-xs text-gray-500">
-                        {formatRelativeTime(message.timestamp)}
-                      </span>
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <div className="ml-11">
-                  <p className="text-gray-700 mb-2">{message.content}</p>
+            {/* Sidebar */}
+            <div className="hidden lg:block">
+              <div className="space-y-4">
+                {/* Filters */}
+                <div className="p-3 border rounded-lg">
+                  <div className="text-sm font-medium mb-2">Filters</div>
+                  <div className="flex flex-wrap gap-2">
+                    {(['all','unread','mentions','tasks'] as const).map(f => (
+                      <Button
+                        key={f}
+                        variant={activeFilter === f ? 'primary' : 'outline'}
+                        size="sm"
+                        onClick={() => setActiveFilter(f)}
+                      >
+                        {f}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
 
-                  {/* Tags */}
-                  {message.tags && message.tags.length > 0 && (
-                    <div className="flex items-center space-x-2 mb-2">
-                      <TagIcon className="h-3 w-3 text-gray-400" />
-                      <div className="flex space-x-1">
-                        {message.tags.map(tag => (
-                          <Badge key={tag} size="sm" variant="outline">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                {/* Search */}
+                <div className="p-3 border rounded-lg">
+                  <div className="text-sm font-medium mb-2">Search</div>
+                  <input
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Search messages"
+                    className="w-full border rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
 
-                  {/* Client Insights */}
-                  {showClientInsights &&
-                    message.clientInsights &&
-                    message.clientInsights.length > 0 && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-2">
-                        <h5 className="text-sm font-medium text-blue-800 mb-2">Client Insights:</h5>
-                        <div className="space-y-2">
-                          {message.clientInsights.map(insight => (
-                            <div key={insight.id}>
-                              <div className="flex items-center justify-between mb-1">
-                                <Badge size="sm" className="bg-blue-100 text-blue-800">
-                                  {insight.type}
-                                </Badge>
-                                <span className="text-xs text-blue-600">
-                                  {Math.round(insight.confidence * 100)}% confidence
-                                </span>
-                              </div>
-                              <p className="text-sm text-blue-700">{insight.content}</p>
-                              {insight.suggestedActions.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-xs font-medium text-blue-800">
-                                    Suggested Actions:
-                                  </p>
-                                  <ul className="text-xs text-blue-700 ml-4 list-disc">
-                                    {insight.suggestedActions.map((action, idx) => (
-                                      <li key={idx}>{action}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                {/* Participants */}
+                <div className="p-3 border rounded-lg">
+                  <div className="text-sm font-medium mb-2">Participants ({participants.length})</div>
+                  <div className="space-y-2">
+                    {participants.map(p => (
+                      <div key={p.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Avatar name={p.name} size="xs" />
+                          <div>
+                            <div className="text-sm font-medium">{p.name}</div>
+                            <div className="text-[11px] text-gray-500">{p.role}</div>
+                          </div>
                         </div>
+                        <span className={`h-2 w-2 rounded-full ${p.isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
                       </div>
-                    )}
+                    ))}
+                  </div>
                 </div>
               </div>
-            ))}
-            <div ref={messagesEndRef} />
+            </div>
           </div>
         )}
 
-        {/* Message Composer */}
-        <div className="mt-6 p-4 border rounded-lg bg-gray-50">
+        {/* Message Composer (kept for accessibility on small screens, hidden since sticky in main) */}
+        <div className="mt-6 p-4 border rounded-lg bg-gray-50 md:hidden">
           <div className="space-y-3">
             {/* Type and Priority Selection */}
             <div className="flex items-center space-x-4">
@@ -580,7 +927,7 @@ export function CommunicationCenter({
 
               <select
                 value={selectedPriority}
-                onChange={e => setSelectedPriority(e.target.value as any)}
+                onChange={e => setSelectedPriority(e.target.value as Priority)}
                 className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="low">Low Priority</option>

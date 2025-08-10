@@ -98,7 +98,7 @@ export class OptimizedSessionManager {
       });
     } catch (error) {
       this.errorHandlingService.processError(
-        error as Error,
+        error,
         'Failed to initialize optimized session manager',
         ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
         {
@@ -166,7 +166,7 @@ export class OptimizedSessionManager {
 
       return isValid;
     } catch (error) {
-      this.handleValidationError(error as Error);
+      this.handleValidationError(error);
       return false;
     }
   }
@@ -234,7 +234,7 @@ export class OptimizedSessionManager {
       this.saveSessionState();
       return success;
     } catch (error) {
-      this.handleRefreshError(error as Error);
+      this.handleRefreshError(error);
       return false;
     }
   }
@@ -328,8 +328,13 @@ export class OptimizedSessionManager {
         return false;
       }
 
-      const session = await response.json();
-      return !!(session && session.user);
+      const sessionData: unknown = await response.json();
+      const hasUser =
+        typeof sessionData === 'object' &&
+        sessionData !== null &&
+        'user' in sessionData &&
+        (sessionData as { user?: unknown }).user !== undefined;
+      return hasUser;
     } catch (error) {
       logger.warn('Session validation failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -384,7 +389,7 @@ export class OptimizedSessionManager {
   /**
    * Handle validation errors
    */
-  private handleValidationError(error: Error): void {
+  private handleValidationError(error: unknown): void {
     this.sessionState.isValid = false;
 
     // Activate cooldown on repeated errors
@@ -412,7 +417,7 @@ export class OptimizedSessionManager {
   /**
    * Handle refresh errors
    */
-  private handleRefreshError(error: Error): void {
+  private handleRefreshError(error: unknown): void {
     this.sessionState.refreshAttempts++;
 
     if (this.sessionState.refreshAttempts >= this.config.maxRefreshAttempts) {
@@ -515,13 +520,14 @@ export class OptimizedSessionManager {
     try {
       const saved = localStorage.getItem('posalpro_optimized_session_state');
       if (saved) {
-        const parsedState = JSON.parse(saved);
+        const parsed: unknown = JSON.parse(saved);
 
         // Validate saved state
-        if (parsedState && typeof parsedState === 'object') {
+        if (parsed && typeof parsed === 'object') {
+          const partial = parsed as Partial<SessionState>;
           this.sessionState = {
             ...this.sessionState,
-            ...parsedState,
+            ...partial,
           };
 
           // Check if cooldown has expired
