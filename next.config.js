@@ -26,8 +26,8 @@ const baseConfig = {
 
   // Keep strict checks; do not ignore errors during builds
   typescript: { ignoreBuildErrors: false },
-  // Allow analyzer builds to bypass ESLint so bundle reports can be generated
-  eslint: { ignoreDuringBuilds: process.env.ANALYZE === 'true' },
+  // Build without lint: explicitly ignore ESLint during builds per request
+  eslint: { ignoreDuringBuilds: true },
 
   // Do not use standalone to preserve Netlify/edge compatibility per deployment guide
   poweredByHeader: false,
