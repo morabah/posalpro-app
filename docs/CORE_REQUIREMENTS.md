@@ -73,6 +73,14 @@ useEffect(() => {
 - Multiple useEffect dependencies causing re-fetches
 - Any pattern that takes >1 second to load data
 
+### 🖼️ Image Optimization (Mandatory)
+
+- Use Next.js Image for all UI images. Replace `<img>` with `<Image />` and
+  provide `sizes`/`fill` or explicit `width`/`height` to improve LCP/CLS.
+- Do not introduce custom image loaders unless required. Follow Next.js
+  defaults.
+- Audit UI for `<img>` occurrences during cleanup and migrate them.
+
 ## 🔐 **AUTH & SESSION MANAGEMENT (MANDATORY UPDATES)**
 
 **✅ Unified Auth Context Usage**
@@ -135,6 +143,27 @@ useEffect(() => {
 - Do not use mock data in UI paths; always fetch from database via
   `useApiClient`.
 
+### 🪝 Hook Dependency Policy (Wizard & High-Frequency Components)
+
+- Mount-only effects: For initialization/cleanup that must run once (e.g.,
+  memory timers, initial hydration), use an empty dependency array `[]` with a
+  targeted ESLint disable comment on the line to document intent.
+- Timers/listeners: Keep callback references stable with `useCallback` and
+  prefer empty dependency arrays when behavior must not change across renders;
+  document with an ESLint disable on that line.
+- Do not include unstable objects/functions (e.g., apiClient instances,
+  analytics handlers) in dependency arrays when it causes infinite loops or
+  re-initialization. Instead, hoist guards or document mount-only semantics.
+- Always clear `setTimeout`/`setInterval` using refs in cleanup paths.
+
+### 🔧 Rendering Hygiene (Hot Paths)
+
+- Remove redundant optional chaining and always-true/always-false conditionals
+  in frequently rendered sections (e.g., ProposalWizard mapping/validation
+  blocks).
+- Avoid unsafe spreads that create new arrays in render paths. Prefer
+  `Array.from({ length: n })` over `[...Array(n)]` for skeletons.
+
 ### 🔁 Wizard Data Hydration (Multi-Source Merge – Mandatory)
 
 - Hydrate step data using a defensive, non-destructive merge across known
@@ -153,32 +182,38 @@ useEffect(() => {
 
 To guarantee edits persist and reload correctly across create/edit:
 
-1) PATCH Payload Requirements
+1. PATCH Payload Requirements
 
 - Mirror snapshots under both roots per step:
   - `metadata.wizardData.stepN.*` (canonical snapshot for hydration) and
   - `wizardData.stepN.*` (legacy fallback).
-- Include top-level scalars where API expects them (e.g., `priority`, `customerId`, `title`, `description`, `dueDate`, `estimatedValue`).
-  - Map enums to backend enum casing (often UPPERCASE) at top-level; keep UI values normalized (e.g., lowercase) inside `metadata.wizardData`.
+- Include top-level scalars where API expects them (e.g., `priority`,
+  `customerId`, `title`, `description`, `dueDate`, `estimatedValue`).
+  - Map enums to backend enum casing (often UPPERCASE) at top-level; keep UI
+    values normalized (e.g., lowercase) inside `metadata.wizardData`.
 - Relations:
-  - Products: use real `product.id` as `productId`; include `quantity`, `unitPrice` and mirror list under `metadata.wizardData.step4.products`.
-  - Content selections: persist at metadata root as structured entries; mirror within step if step-local UIs require it.
+  - Products: use real `product.id` as `productId`; include `quantity`,
+    `unitPrice` and mirror list under `metadata.wizardData.step4.products`.
+  - Content selections: persist at metadata root as structured entries; mirror
+    within step if step-local UIs require it.
 - Deep-merge by step when patching metadata; never replace the whole tree.
 
-2) GET/Hydration Requirements
+2. GET/Hydration Requirements
 
-- Unwrap Prisma-style update wrappers: if metadata is `{ set: ... }`, use `.set`.
+- Unwrap Prisma-style update wrappers: if metadata is `{ set: ... }`, use
+  `.set`.
 - Merge order per step (non-destructive):
   1. `metadata.wizardData.stepN`
   2. top-level convenience fields (e.g., `proposal.priority`, relations)
   3. `wizardData.stepN` (legacy)
   4. derived defaults (normalized title/ids, inferred assignments)
 - Normalize consistently:
-  - Priority: coerce to `ProposalPriority` ('high' | 'medium' | 'low') for UI; convert to backend enum casing on PATCH.
+  - Priority: coerce to `ProposalPriority` ('high' | 'medium' | 'low') for UI;
+    convert to backend enum casing on PATCH.
   - IDs: validate existence; drop unknowns; ensure `productId === product.id`.
 - Only fill missing keys; never overwrite explicit user values.
 
-3) Logging & Validation
+3. Logging & Validation
 
 - Log counts and key sets (not full payloads) to reduce noise/PII.
 - Validate referenced IDs on the server; drop stale client entries.
@@ -186,7 +221,8 @@ To guarantee edits persist and reload correctly across create/edit:
 
 ### 🚫 Do-Not (Persistence Pitfalls)
 
-- Do not rely on a single source (only metadata or only relations). Always merge across metadata, top-level, legacy `wizardData`, and derived defaults.
+- Do not rely on a single source (only metadata or only relations). Always merge
+  across metadata, top-level, legacy `wizardData`, and derived defaults.
 - Do not overwrite nested `metadata.wizardData` objects; deep-merge per step.
 - Do not send UI-cased enums to backend; map to backend enum casing for scalars.
 - Do not use SKU/display names as IDs; use database ids.
@@ -195,8 +231,10 @@ To guarantee edits persist and reload correctly across create/edit:
 
 ### ⛔ Deprecated (Removed) Strategies
 
-- Persisting only `wizardData.stepN` without mirroring under `metadata.wizardData`.
-- Hydrating from a single path (e.g., only metadata or only top-level); replaced by multi-source merge.
+- Persisting only `wizardData.stepN` without mirroring under
+  `metadata.wizardData`.
+- Hydrating from a single path (e.g., only metadata or only top-level); replaced
+  by multi-source merge.
 - Replacing entire `metadata` on PATCH; replaced by per-step deep merges.
 
 ## 🗃️ **API & DATABASE PERFORMANCE (MANDATORY)**
@@ -516,6 +554,13 @@ artifacts**
 - Use git tags and releases for milestone documentation instead of keeping files
   in main branch
 - Follow Documentation Lifecycle Management from Lesson #31
+
+### 🧷 Linting & Type Rules (Additions)
+
+- Use `Array<T>` syntax for non-simple array types instead of `T[]` to satisfy
+  repository lint rules.
+- Ensure no `any` in public interfaces and eliminate unsafe assignments in hot
+  code paths.
 
 ## 🔐 **AUTHENTICATION INFRASTRUCTURE VALIDATION (CRITICAL)**
 

@@ -6,10 +6,10 @@
 
 'use client';
 
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useAuth } from '@/components/providers/AuthProvider';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
@@ -65,10 +65,11 @@ interface ProposalsResponse {
   message?: string;
 }
 
+type UnknownRecord = Record<string, unknown>;
 interface ApiResponse<T> {
   success: boolean;
   data?: T;
-  error?: any;
+  error?: unknown;
   message?: string;
 }
 
@@ -77,13 +78,11 @@ type ProposalsApiResponse =
   | ApiResponse<ProposalsResponse>
   | {
       success: boolean;
-      data?: {
+      data?: UnknownRecord & {
         proposals?: Proposal[];
-        data?: {
-          proposals?: Proposal[];
-        };
+        data?: { proposals?: Proposal[] };
       };
-      error?: any;
+      error?: unknown;
       message?: string;
     };
 
@@ -134,7 +133,8 @@ export default function RecentProposals() {
         // make duplicate fetches inexpensive in development.
 
         // Fetch real data from lightweight list API to avoid heavy counts/selects
-        const response = await apiClient.get<any>('proposals/list');
+        // NOTE: Leading slash is required so baseURL '/api' resolves to '/api/proposals/list'
+        const response = await apiClient.get<ProposalsApiResponse>('/proposals/list');
 
         console.log('[RecentProposals] API response received:', {
           success: response.success,
@@ -143,12 +143,26 @@ export default function RecentProposals() {
           proposalCount: response.data?.data?.proposals?.length || 0,
         });
 
-        // Simple approach: just check if we have proposals data
-        const proposals =
-          response?.data?.data?.proposals ||
-          response?.data?.proposals ||
-          response?.data ||
-          [];
+        // Normalize response shapes:
+        // - API route returns { success, data: Proposal[] }
+        // - Older shapes might return { success, data: { proposals: Proposal[] } } or nested data.data
+        const dataAny = (response as unknown as { data?: unknown }).data as
+          | Proposal[]
+          | { proposals?: Proposal[]; data?: { proposals?: Proposal[] } }
+          | undefined;
+
+        let proposals: Proposal[] = [];
+        if (Array.isArray(dataAny)) {
+          proposals = dataAny as Proposal[];
+        } else if (dataAny && Array.isArray((dataAny as { proposals?: Proposal[] }).proposals)) {
+          proposals = (dataAny as { proposals?: Proposal[] }).proposals as Proposal[];
+        } else if (
+          dataAny &&
+          Array.isArray((dataAny as { data?: { proposals?: Proposal[] } }).data?.proposals)
+        ) {
+          proposals = ((dataAny as { data?: { proposals?: Proposal[] } }).data!.proposals ||
+            []) as Proposal[];
+        }
 
         if (proposals.length > 0) {
           setProposals(proposals);
@@ -157,7 +171,7 @@ export default function RecentProposals() {
           console.log('[RecentProposals] No proposals found - this is a valid scenario');
           setProposals([]);
         }
-      } catch (error) {
+      } catch {
         console.warn('[RecentProposals] API call failed - showing empty state');
         setProposals([]);
         setError(null); // Clear any previous errors
@@ -240,7 +254,7 @@ export default function RecentProposals() {
           </Button>
         </div>
         <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
+          {Array.from({ length: 3 }, (_, i) => (
             <div key={i} className="animate-pulse">
               <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
               <div className="h-3 bg-gray-200 rounded w-1/2"></div>

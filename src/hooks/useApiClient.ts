@@ -23,7 +23,7 @@ interface UseApiClientReturn {
 
 // ✅ NEW: Singleton API client instance
 class ApiClientSingleton {
-  private static instance: ApiClientSingleton;
+  private static instance: ApiClientSingleton | null = null;
   private baseUrl: string;
   private isInitialized: boolean = false;
   private initPromise: Promise<void> | null = null;
@@ -35,7 +35,7 @@ class ApiClientSingleton {
   }
 
   public static getInstance(): ApiClientSingleton {
-    if (!ApiClientSingleton.instance) {
+    if (ApiClientSingleton.instance === null) {
       ApiClientSingleton.instance = new ApiClientSingleton();
     }
     return ApiClientSingleton.instance;

@@ -66,6 +66,20 @@ interface ValidationMetrics {
   userEfficiencyGain: number;
 }
 
+// Minimal local types to avoid implicit any from ValidationEngine output
+interface EngineRuleResult {
+  ruleId: string;
+  severity: ValidationIssue['severity'];
+  message: string;
+  isValid: boolean;
+}
+interface EngineValidationSummary {
+  isValid: boolean;
+  results: EngineRuleResult[];
+  timestamp: Date;
+  metadata: { productId: string };
+}
+
 export function useValidation() {
   const [state, setState] = useState<ValidationState>({
     isValidating: false,
@@ -81,7 +95,7 @@ export function useValidation() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Real-time validation function (US-3.1, AC-3.1.1)
-  const validateConfiguration = async (request: ValidationRequest) => {
+  const validateConfiguration = useCallback(async (request: ValidationRequest) => {
     const startTime = Date.now();
     try {
       setState(prev => ({ ...prev, isValidating: true, error: null }));
@@ -92,7 +106,7 @@ export function useValidation() {
         configurationSize: request.products.length,
       }, 'medium');
 
-      const validationSummary = await validationEngine.validateProductConfiguration(
+      const validationSummary: EngineValidationSummary = await validationEngine.validateProductConfiguration(
         request.proposalId,
         {
           products: request.products,
@@ -102,7 +116,7 @@ export function useValidation() {
       const validationTime = endTime - startTime;
 
       // Transform ValidationSummary to ValidationResult
-      const issues: ValidationIssue[] = validationSummary.results.map(vr => ({
+      const issues: ValidationIssue[] = validationSummary.results.map((vr: EngineRuleResult) => ({
         id: vr.ruleId,
         type: 'configuration' as ValidationCategory,
         severity: vr.severity,
@@ -150,6 +164,7 @@ export function useValidation() {
         errorsDetected: result.issues.length,
         criticalErrors: result.issues.filter(i => i.severity === 'critical').length,
         fixSuggestionsGenerated: result.suggestions.length,
+        metrics,
       }, 'medium');
 
       setState(prev => ({
@@ -182,7 +197,7 @@ export function useValidation() {
 
       throw error;
     }
-  };
+  }, [analytics, validationEngine]);
 
   // Apply fix suggestion (US-3.1, AC-3.1.2)
   const applyFixSuggestion = useCallback(
@@ -340,7 +355,7 @@ export function useValidation() {
           } else {
             results.failed++;
           }
-        } catch (error) {
+        } catch {
           results.failed++;
         }
       }

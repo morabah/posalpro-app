@@ -92,7 +92,7 @@ const COMPONENT_MAPPING = {
  * Provides intelligent query optimization, caching, and performance monitoring
  */
 export class DatabaseOptimizationService {
-  private static instance: DatabaseOptimizationService;
+  private static instance: DatabaseOptimizationService | null = null;
   private errorHandlingService: ErrorHandlingService;
   private prisma: PrismaClient;
   // ✅ FIXED: Replace 'any' with specific interface
@@ -127,7 +127,7 @@ export class DatabaseOptimizationService {
     prisma: PrismaClient,
     config?: Partial<QueryOptimizationConfig>
   ): DatabaseOptimizationService {
-    if (!DatabaseOptimizationService.instance) {
+    if (DatabaseOptimizationService.instance === null) {
       DatabaseOptimizationService.instance = new DatabaseOptimizationService(prisma, config);
     }
     return DatabaseOptimizationService.instance;

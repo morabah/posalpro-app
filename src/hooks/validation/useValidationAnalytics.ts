@@ -133,7 +133,7 @@ export function useValidationAnalytics() {
     };
 
     initializeBaseline();
-  }, [isInitialized]); // Remove analytics dependency to prevent infinite loop
+  }, [isInitialized, analytics]);
 
   // Track validation performance for H8 hypothesis (AC-3.1.3)
   const trackValidationPerformance = useCallback(
@@ -172,7 +172,7 @@ export function useValidationAnalytics() {
         performanceMetrics: updatedMetrics,
       }, 'medium');
     },
-    [currentMetrics] // ✅ FIXED: Removed analytics dependency to prevent infinite loop
+    [currentMetrics, analytics]
   );
 
   // Measure error detection accuracy (TC-H8-001)
@@ -285,7 +285,7 @@ export function useValidationAnalytics() {
         efficiency: success ? (baseline?.manualFixTime || 15) / (fixTime / 60000) : 0,
       };
     },
-    [baseline, trackValidationPerformance] // Remove analytics dependency
+    [baseline, trackValidationPerformance, analytics]
   );
 
   // Generate H8 hypothesis progress report
@@ -326,7 +326,7 @@ export function useValidationAnalytics() {
     }, 'low');
 
     return report;
-  }, [baseline, currentMetrics]); // Remove analytics dependency
+  }, [baseline, currentMetrics, analytics]);
 
   // Get real-time H8 hypothesis status
   const getH8Status = useCallback(() => {
@@ -368,7 +368,7 @@ export function useValidationAnalytics() {
 
       return data;
     },
-    [baseline, currentMetrics, getH8Status, generateH8ProgressReport] // Remove analytics dependency
+    [baseline, currentMetrics, getH8Status, generateH8ProgressReport, analytics]
   );
 
   return {

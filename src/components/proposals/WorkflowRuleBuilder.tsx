@@ -889,7 +889,17 @@ export function WorkflowRuleBuilder({
                           <select
                             value={condition.operator}
                             onChange={e =>
-                              updateCondition(condition.id, { operator: e.target.value as any })
+                              updateCondition(condition.id, {
+                                operator: e.target.value as
+                                  | 'equals'
+                                  | 'not_equals'
+                                  | 'greater_than'
+                                  | 'less_than'
+                                  | 'contains'
+                                  | 'in'
+                                  | 'not_in'
+                                  | 'regex',
+                              })
                             }
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                           >
@@ -916,7 +926,7 @@ export function WorkflowRuleBuilder({
                             value={condition.logicalOperator || 'AND'}
                             onChange={e =>
                               updateCondition(condition.id, {
-                                logicalOperator: e.target.value as any,
+                                logicalOperator: e.target.value as 'AND' | 'OR',
                               })
                             }
                             className="px-2 py-1 border border-gray-300 rounded text-sm"
@@ -956,7 +966,18 @@ export function WorkflowRuleBuilder({
                         <div>
                           <select
                             value={action.type}
-                            onChange={e => updateAction(action.id, { type: e.target.value as any })}
+                            onChange={e =>
+                              updateAction(action.id, {
+                                type: e.target.value as
+                                  | 'route_to_stage'
+                                  | 'assign_user'
+                                  | 'send_notification'
+                                  | 'set_priority'
+                                  | 'escalate'
+                                  | 'add_comment'
+                                  | 'require_approval',
+                              })
+                            }
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                           >
                             <option value="route_to_stage">Route to Stage</option>
@@ -973,9 +994,29 @@ export function WorkflowRuleBuilder({
                             value={JSON.stringify(action.parameters)}
                             onChange={e => {
                               try {
-                                const params = JSON.parse(e.target.value);
-                                updateAction(action.id, { parameters: params });
-                              } catch {}
+                                const parsed = JSON.parse(e.target.value) as Record<
+                                  string,
+                                  unknown
+                                >;
+                                // Only accept flat string/number/boolean/string[] values as per type
+                                const sanitized: Record<
+                                  string,
+                                  string | number | boolean | string[]
+                                > = {};
+                                Object.entries(parsed).forEach(([k, v]) => {
+                                  if (
+                                    typeof v === 'string' ||
+                                    typeof v === 'number' ||
+                                    typeof v === 'boolean' ||
+                                    (Array.isArray(v) && v.every(item => typeof item === 'string'))
+                                  ) {
+                                    sanitized[k] = v as string | number | boolean | string[];
+                                  }
+                                });
+                                updateAction(action.id, { parameters: sanitized });
+                              } catch {
+                                /* no-op: ignore invalid JSON */
+                              }
                             }}
                             placeholder='{"key": "value"}'
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"

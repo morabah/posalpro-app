@@ -20,7 +20,6 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { ApiResponseOptimizer } from '@/lib/performance/ApiResponseOptimizer';
 import { getSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Component Traceability Matrix
@@ -88,7 +87,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
       setLocalSession(s);
     })();
   }, []);
-  const router = useRouter();
+  // Removed unused router
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
@@ -144,7 +143,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         'session_activity',
         {
           activityType,
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           sessionDuration: now - sessionStartTime.current,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
@@ -156,7 +155,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
 
       lastHeartbeat.current = now;
     },
-    [analytics, session?.user?.id]
+    [analytics, session?.user.id]
   );
 
   // Session refresh with optimization
@@ -166,7 +165,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
 
       // Use API optimizer for session refresh
       const optimizedResult = await apiOptimizer.optimizeResponse(
-        `session_refresh_${session?.user?.id}`,
+        `session_refresh_${session?.user.id}`,
         async () => {
           const updatedSession = await update();
           return updatedSession;
@@ -199,7 +198,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
           success: true,
           duration: refreshDuration,
           fromCache: optimizedResult.fromCache,
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           userStories: COMPONENT_MAPPING.userStories,
           hypotheses: COMPONENT_MAPPING.hypotheses,
           componentMapping: COMPONENT_MAPPING,
@@ -216,7 +215,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         {
           component: 'useEnhancedSessionManagement',
           operation: 'refreshSession',
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           userFriendlyMessage: 'Session refresh failed. Please sign in again.',
         }
       );
@@ -225,7 +224,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         'session_refresh_error',
         {
           error: standardError.code,
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           userStories: COMPONENT_MAPPING.userStories,
           componentMapping: COMPONENT_MAPPING,
         },
@@ -234,7 +233,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
 
       return false;
     }
-  }, [update, session?.user?.id, analytics, errorHandlingService, apiOptimizer]);
+  }, [update, session?.user.id, analytics, errorHandlingService, apiOptimizer]);
 
   // Session extension
   const extendSession = useCallback(async (): Promise<boolean> => {
@@ -244,7 +243,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         {
           reason: 'max_extensions_reached',
           extensionCount: extensionCount.current,
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           componentMapping: COMPONENT_MAPPING,
         },
         'medium'
@@ -267,7 +266,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         {
           extensionNumber: extensionCount.current,
           extensionDuration: sessionState.warningConfig.extendDuration,
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           userStories: COMPONENT_MAPPING.userStories,
           componentMapping: COMPONENT_MAPPING,
         },
@@ -276,7 +275,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
     }
 
     return success;
-  }, [refreshSession, sessionState.warningConfig, session?.user?.id, analytics]);
+  }, [refreshSession, sessionState.warningConfig, session?.user.id, analytics]);
 
   // Session logout with cleanup
   const logout = useCallback(
@@ -292,7 +291,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
             sessionDuration,
             activityCount: sessionState.metrics.activityCount,
             extensionCount: extensionCount.current,
-            sessionId: session?.user?.id,
+            sessionId: session?.user.id,
             userStories: COMPONENT_MAPPING.userStories,
             componentMapping: COMPONENT_MAPPING,
           },
@@ -319,7 +318,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         });
       }
     },
-    [sessionState.metrics, session?.user?.id, analytics, handleAsyncError]
+    [sessionState.metrics, session?.user.id, analytics, handleAsyncError]
   );
 
   // Session health monitoring
@@ -370,13 +369,13 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
           newHealth: health,
           idleTime,
           sessionDuration,
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           componentMapping: COMPONENT_MAPPING,
         },
         'medium'
       );
     }
-  }, [sessionState, session?.user?.id, analytics]);
+  }, [sessionState, session?.user.id, analytics]);
 
   // Activity monitoring setup
   useEffect(() => {
@@ -433,7 +432,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         'session_warning_triggered',
         {
           timeRemaining: sessionState.warningConfig.warningThreshold,
-          sessionId: session?.user?.id,
+          sessionId: session?.user.id,
           componentMapping: COMPONENT_MAPPING,
         },
         'medium'
@@ -450,7 +449,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
     sessionState.sessionHealth,
     sessionState.isWarning,
     sessionState.warningConfig,
-    session?.user?.id,
+    session?.user.id,
     analytics,
     logout,
   ]);
@@ -465,10 +464,9 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
         return false;
       }
 
-      // Validate session permissions and roles
-      const hasValidRoles = currentSession.user?.roles && currentSession.user.roles.length > 0;
-      const hasValidPermissions =
-        currentSession.user?.permissions && currentSession.user.permissions.length > 0;
+      // Validate session permissions and roles (values are guaranteed by auth layer typings)
+      const hasValidRoles = currentSession.user.roles.length > 0;
+      const hasValidPermissions = currentSession.user.permissions.length > 0;
 
       if (!hasValidRoles || !hasValidPermissions) {
         analytics(
@@ -477,7 +475,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
             reason: 'invalid_permissions',
             hasRoles: hasValidRoles,
             hasPermissions: hasValidPermissions,
-            sessionId: session?.user?.id,
+            sessionId: session?.user.id,
             componentMapping: COMPONENT_MAPPING,
           },
           'high'
@@ -503,7 +501,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
       });
       return false;
     }
-  }, [session?.user?.id, analytics, logout, handleAsyncError]);
+  }, [session?.user.id, analytics, logout, handleAsyncError]);
 
   // Performance monitoring
   const getSessionReport = useCallback(() => {
@@ -511,7 +509,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
     const sessionDuration = now - sessionStartTime.current;
 
     return {
-      sessionId: session?.user?.id,
+      sessionId: session?.user.id,
       duration: sessionDuration,
       metrics: sessionState.metrics,
       health: sessionState.sessionHealth,
@@ -522,7 +520,7 @@ export function useEnhancedSessionManagement(config: Partial<SessionWarningConfi
       componentMapping: COMPONENT_MAPPING,
       timestamp: now,
     };
-  }, [session?.user?.id, sessionState]);
+  }, [session?.user.id, sessionState]);
 
   return {
     // Session state

@@ -273,14 +273,17 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
 
   // ✅ PERFORMANCE HEAVILY OPTIMIZED: Analytics tracking with aggressive throttling
   const trackNavigation = useCallback(
-    (action: string, metadata: { itemName?: string; groupId?: string; from?: string; to?: string } = {}) => {
+    (
+      action: string,
+      metadata: { itemName?: string; groupId?: string; from?: string; to?: string } = {}
+    ) => {
       // ⚡ AGGRESSIVE THROTTLING: Prevent performance overhead
       const throttleKey = `${action}_${metadata.itemName || metadata.groupId || 'unknown'}`;
       const now = Date.now();
 
       // ⚡ INCREASED to 5 seconds to reduce violations
       const THROTTLE_DURATION = 5000;
-      
+
       // Only track if last event was more than 5 seconds ago
       if (
         !navigationThrottleRef.current.has(throttleKey) ||
@@ -306,7 +309,7 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
         return;
       }
     },
-    [user?.id, user?.role]
+    []
   );
 
   // Filter navigation items by user role - Make more permissive

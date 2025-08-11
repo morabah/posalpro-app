@@ -5,6 +5,12 @@ import { logger } from '@/utils/logger'; /**
 
 import { useCallback, useEffect, useRef } from 'react';
 
+type PerformanceWithMemory = Performance & {
+  memory?: {
+    usedJSHeapSize: number;
+  };
+};
+
 interface PerformanceViolation {
   type: 'long-task' | 'infinite-loop' | 'memory-leak' | 'render-cycle';
   duration: number;
@@ -120,8 +126,12 @@ export function usePerformanceMonitor(options: UsePerformanceMonitorOptions = {}
     }
 
     // Track memory usage if enabled
-    if (trackMemory && 'memory' in performance) {
-      metricsRef.current.memoryUsage = (performance as any).memory.usedJSHeapSize;
+    if (trackMemory) {
+      const perf = performance as unknown as PerformanceWithMemory;
+      const mem = perf.memory;
+      if (mem && typeof mem.usedJSHeapSize === 'number') {
+        metricsRef.current.memoryUsage = mem.usedJSHeapSize;
+      }
     }
   }, [componentName, maxRenderTime, maxRenderCount, trackMemory]);
 

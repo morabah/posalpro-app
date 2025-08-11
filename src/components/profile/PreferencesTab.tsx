@@ -24,6 +24,7 @@ import {
   Type,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import type { AuthUser } from '@/components/providers/AuthProvider';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -81,7 +82,7 @@ const LANGUAGES = [
 
 interface PreferencesTabProps {
   analytics: ReturnType<typeof useUserProfileAnalytics>;
-  user: any;
+  user: AuthUser | null;
 }
 
 export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
@@ -168,11 +169,12 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
     try {
       // Use centralized API client instead of direct fetch
-      const response = await apiClient.put<{
+      interface PreferencesApiResponse {
         success: boolean;
-        data?: any;
+        data?: PreferencesFormData;
         error?: string;
-      }>('/api/profile/preferences', data);
+      }
+      const response = await apiClient.put<PreferencesApiResponse>('/api/profile/preferences', data);
 
       if (!response.success) {
         // Log error but let the catch block handle it

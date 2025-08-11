@@ -214,7 +214,7 @@ export function useDashboardData(
    */
   const fetchDashboardData = useCallback(
     async (refresh = false) => {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+       
       if (!mountedRef.current) return;
 
       loadStartTimeRef.current = Date.now();
@@ -254,7 +254,7 @@ export function useDashboardData(
         // Notify callback
         options.onDataChange?.(data);
       } catch (error) {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Intentional guard to avoid state updates after unmount
         if (!mountedRef.current) return;
 
         const errorMessage =
@@ -264,7 +264,7 @@ export function useDashboardData(
 
         logger.error('Dashboard data fetch failed:', error);
       } finally {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Intentional guard to avoid state updates after unmount
         if (mountedRef.current) {
           updateLoadingState('overall', false);
         }
@@ -286,7 +286,7 @@ export function useDashboardData(
    */
   const refreshSection = useCallback(
     async (section: DashboardSection) => {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+       
       if (!mountedRef.current) return;
 
       const sectionKey = section as keyof DashboardDataState['loading'];
@@ -332,12 +332,12 @@ export function useDashboardData(
             break;
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!mountedRef.current) return;
 
         // Update specific section in state
         setState(prev => {
           if (!prev.data) return prev;
-
           const updatedData = { ...prev.data };
           switch (section) {
             case 'proposals':
@@ -372,6 +372,7 @@ export function useDashboardData(
         trackEvent('section_refresh', { section, loadTime, userRole: options.userRole });
         trackInteraction(section, 'refresh', { loadTime, success: true });
       } catch (error) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!mountedRef.current) return;
 
         const errorMessage =
@@ -381,6 +382,8 @@ export function useDashboardData(
 
         logger.error(`Failed to refresh ${section}:`, error);
       } finally {
+        // mountedRef guard: prevent state updates after unmount
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (mountedRef.current) {
           updateLoadingState(sectionKey, false);
         }

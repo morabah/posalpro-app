@@ -46,7 +46,7 @@ interface MemoryOptimizationConfig {
  */
 
 class MemoryOptimizationService {
-  private static instance: MemoryOptimizationService;
+  private static instance: MemoryOptimizationService | null = null;
   private isInitialized = false;
   private optimizationInterval: NodeJS.Timeout | null = null;
   private memoryHistory: MemoryMetrics[] = [];
@@ -69,7 +69,7 @@ class MemoryOptimizationService {
   }
 
   public static getInstance(): MemoryOptimizationService {
-    if (!MemoryOptimizationService.instance) {
+    if (MemoryOptimizationService.instance === null) {
       MemoryOptimizationService.instance = new MemoryOptimizationService();
     }
     return MemoryOptimizationService.instance;
@@ -117,8 +117,8 @@ class MemoryOptimizationService {
       if (memory) {
         return {
           rss: 0, // Not available in browser
-          heapTotal: memory.totalJSHeapSize || 0,
-          heapUsed: memory.usedJSHeapSize || 0,
+           heapTotal: memory.totalJSHeapSize ?? 0,
+           heapUsed: memory.usedJSHeapSize ?? 0,
           external: 0, // Not available in browser
           arrayBuffers: 0, // Not available in browser
           timestamp: Date.now(),
@@ -127,8 +127,8 @@ class MemoryOptimizationService {
         // Fallback for browsers without memory API
         return {
           rss: 0,
-          heapTotal: 0,
-          heapUsed: 0,
+           heapTotal: 0,
+           heapUsed: 0,
           external: 0,
           arrayBuffers: 0,
           timestamp: Date.now(),

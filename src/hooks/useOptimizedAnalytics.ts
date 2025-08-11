@@ -59,12 +59,11 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
   const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
   // State for batching and throttling
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline] = useState(true);
   const [lastFlush, setLastFlush] = useState(Date.now());
 
   // Refs for performance optimization
   const eventBuffer = useRef<AnalyticsEvent[]>([]);
-  const flushInterval = useRef<NodeJS.Timeout | null>(null);
   const throttleCounter = useRef<{ count: number; resetTime: number }>({
     count: 0,
     resetTime: Date.now() + 60000,

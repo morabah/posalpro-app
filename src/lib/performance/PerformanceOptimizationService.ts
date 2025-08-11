@@ -86,7 +86,7 @@ const DEFAULT_PHASE2_CONFIG: Phase2PerformanceConfig = {
  * Coordinates all performance optimization efforts with proper cleanup
  */
 export class PerformanceOptimizationService {
-  private static instance: PerformanceOptimizationService;
+  private static instance: PerformanceOptimizationService | null = null;
   private config: Phase2PerformanceConfig;
   private metrics: Phase2PerformanceMetrics;
   private errorHandlingService: ErrorHandlingService;
@@ -115,7 +115,7 @@ export class PerformanceOptimizationService {
   public static getInstance(
     config?: Partial<Phase2PerformanceConfig>
   ): PerformanceOptimizationService {
-    if (!PerformanceOptimizationService.instance) {
+    if (PerformanceOptimizationService.instance === null) {
       PerformanceOptimizationService.instance = new PerformanceOptimizationService(config);
     }
     return PerformanceOptimizationService.instance;

@@ -18,13 +18,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { PaginationInfo, SystemPermission, UsePermissionsResult } from './types';
 
 // Component Traceability Matrix
-const COMPONENT_MAPPING = {
+const _COMPONENT_MAPPING = {
   userStories: ['US-8.2'],
   acceptanceCriteria: ['AC-8.2.1', 'AC-8.2.2'],
   methods: ['managePermissions()'],
   hypotheses: ['H8'],
   testCases: ['TC-H8-003'],
 };
+void _COMPONENT_MAPPING;
 
 /**
  * Hook for managing admin permissions
@@ -40,7 +41,7 @@ export function usePermissions(
 ): UsePermissionsResult {
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [permissions, setPermissions] = useState<SystemPermission[]>([]);
@@ -91,7 +92,7 @@ export function usePermissions(
       const data = await apiClient.get<{
         permissions: SystemPermission[];
         pagination: PaginationInfo;
-        filters: any;
+        filters: { resources: string[]; actions: string[]; scopes: string[] };
       }>(`admin/permissions?${params}`);
 
       setPermissions(data.permissions);
@@ -169,7 +170,7 @@ export function usePermissions(
       resource: string;
       action: string;
       scope?: 'ALL' | 'TEAM' | 'OWN';
-      constraints?: Record<string, any>;
+      constraints?: Record<string, unknown>;
     }) => {
       try {
         analytics(
@@ -238,7 +239,7 @@ export function usePermissions(
         resource?: string;
         action?: string;
         scope?: 'ALL' | 'TEAM' | 'OWN';
-        constraints?: Record<string, any>;
+        constraints?: Record<string, unknown>;
       }
     ) => {
       try {

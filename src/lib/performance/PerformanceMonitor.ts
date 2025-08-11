@@ -37,7 +37,7 @@ interface PerformanceAlert {
 }
 
 export class PerformanceMonitor {
-  private static instance: PerformanceMonitor;
+  private static instance: PerformanceMonitor | null = null;
   private metrics: PerformanceMetric[] = [];
   private alerts: PerformanceAlert[] = [];
   private observers: PerformanceObserver[] = [];
@@ -57,7 +57,7 @@ export class PerformanceMonitor {
   }
 
   public static getInstance(): PerformanceMonitor {
-    if (!PerformanceMonitor.instance) {
+    if (PerformanceMonitor.instance === null) {
       PerformanceMonitor.instance = new PerformanceMonitor();
     }
     return PerformanceMonitor.instance;
@@ -384,9 +384,9 @@ export class PerformanceMonitor {
     window.addEventListener('load', () => {
       const navTiming = performance.getEntriesByType(
         'navigation'
-      )[0] as PerformanceNavigationTiming;
+      )[0] as PerformanceNavigationTiming | undefined;
 
-      if (navTiming) {
+      if (navTiming !== undefined) {
         // ✅ FIXED: Use correct PerformanceNavigationTiming properties
         const loadTime = navTiming.loadEventEnd - navTiming.startTime;
 

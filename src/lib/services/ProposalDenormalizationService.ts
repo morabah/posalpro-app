@@ -22,10 +22,10 @@ export interface ProposalDenormalizationStats {
 }
 
 export class ProposalDenormalizationService {
-  private static instance: ProposalDenormalizationService;
+  private static instance: ProposalDenormalizationService | null = null;
 
   static getInstance(): ProposalDenormalizationService {
-    if (!ProposalDenormalizationService.instance) {
+    if (ProposalDenormalizationService.instance === null) {
       ProposalDenormalizationService.instance = new ProposalDenormalizationService();
     }
     return ProposalDenormalizationService.instance;

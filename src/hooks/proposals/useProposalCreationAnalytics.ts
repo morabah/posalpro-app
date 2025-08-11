@@ -41,7 +41,7 @@ interface WizardStepMetrics {
 
 export function useProposalCreationAnalytics() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { user } = useAuth() || {};
+  const { user } = useAuth();
 
   const [wizardStartTime] = useState(Date.now());
   const stepMetrics = useRef<WizardStepMetrics[]>([]);
@@ -52,11 +52,14 @@ export function useProposalCreationAnalytics() {
     (metrics: ProposalCreationMetrics) => {
       const totalCreationTime = Date.now() - wizardStartTime;
 
+      const userId = user?.id;
+      const userRole = user ? user.roles[0] : undefined;
+
       analytics('proposal_creation_performance', {
         ...metrics,
         totalCreationTime,
-        userId: user?.id,
-        userRole: user?.roles?.[0],
+        userId,
+        userRole,
         userStories: COMPONENT_MAPPING.userStories,
         hypotheses: COMPONENT_MAPPING.hypotheses,
         componentTraceability: COMPONENT_MAPPING,
@@ -104,118 +107,111 @@ export function useProposalCreationAnalytics() {
     ) => {
       const now = Date.now();
 
-      if (action === 'start') {
-        // Complete previous step if exists
-        if (currentStepRef.current) {
-          currentStepRef.current.endTime = now;
-          currentStepRef.current.duration = now - currentStepRef.current.startTime;
-          stepMetrics.current.push({ ...currentStepRef.current });
-        }
-
-        // Start new step
-        currentStepRef.current = {
-          step,
-          stepName,
-          startTime: now,
-          errors: 0,
-          aiSuggestionsShown: 0,
-          aiSuggestionsAccepted: 0,
-          fieldInteractions: 0,
-        };
-      } else if (action === 'complete') {
-        if (currentStepRef.current) {
-          currentStepRef.current.endTime = now;
-          currentStepRef.current.duration = now - currentStepRef.current.startTime;
-          // Capture values before setting currentStepRef.current to null
-          const stepData = { ...currentStepRef.current };
-          stepMetrics.current.push(stepData);
-          currentStepRef.current = null;
-
-          // Track step completion
-          analytics('proposal_wizard_step_completed', {
+      switch (action) {
+        case 'start': {
+          if (currentStepRef.current) {
+            currentStepRef.current.endTime = now;
+            currentStepRef.current.duration = now - currentStepRef.current.startTime;
+            stepMetrics.current.push({ ...currentStepRef.current });
+          }
+          currentStepRef.current = {
             step,
             stepName,
-            duration: stepData.duration,
-            errors: stepData.errors,
-            aiSuggestionsShown: stepData.aiSuggestionsShown,
-            aiSuggestionsAccepted: stepData.aiSuggestionsAccepted,
-            fieldInteractions: stepData.fieldInteractions,
-            userStory: 'US-4.1',
-          }, 'medium');
+            startTime: now,
+            errors: 0,
+            aiSuggestionsShown: 0,
+            aiSuggestionsAccepted: 0,
+            fieldInteractions: 0,
+          };
+          break;
         }
-      } else if (action === 'error') {
-        if (currentStepRef.current) {
-          currentStepRef.current.errors += 1;
-
-          // Track step error
-          analytics('proposal_wizard_step_error', {
+        case 'complete': {
+          if (currentStepRef.current) {
+            currentStepRef.current.endTime = now;
+            currentStepRef.current.duration = now - currentStepRef.current.startTime;
+            const stepData = { ...currentStepRef.current };
+            stepMetrics.current.push(stepData);
+            currentStepRef.current = null;
+            analytics('proposal_wizard_step_completed', {
+              step,
+              stepName,
+              duration: stepData.duration,
+              errors: stepData.errors,
+              aiSuggestionsShown: stepData.aiSuggestionsShown,
+              aiSuggestionsAccepted: stepData.aiSuggestionsAccepted,
+              fieldInteractions: stepData.fieldInteractions,
+              userStory: 'US-4.1',
+            }, 'medium');
+          }
+          break;
+        }
+        case 'error': {
+          if (currentStepRef.current) {
+            currentStepRef.current.errors += 1;
+            analytics('proposal_wizard_step_error', {
+              step,
+              stepName,
+              errorType: metadata?.errorType || 'unknown',
+              errorMessage: 'Unknown error',
+              userStory: 'US-4.1',
+            }, 'medium');
+          }
+          break;
+        }
+        case 'field_interaction': {
+          if (currentStepRef.current) {
+            currentStepRef.current.fieldInteractions += 1;
+          }
+          break;
+        }
+        case 'validation_error': {
+          if (currentStepRef.current) {
+            currentStepRef.current.errors += 1;
+            analytics('proposal_wizard_validation_error', {
+              step,
+              stepName,
+              field: metadata?.fieldName || 'unknown',
+              errorType: metadata?.errorType || 'unknown',
+              errorMessage: 'Unknown error',
+              userStory: 'US-4.1',
+            }, 'medium');
+          }
+          break;
+        }
+        case 'customer_selected': {
+          analytics('proposal_wizard_customer_selected', {
             step,
             stepName,
-            errorType: metadata?.errorType || 'unknown',
-            errorMessage: 'Unknown error', // Using a default value since errorMessage isn't in the metadata type
+            customerId: metadata?.customerId || 'unknown',
+            customerName: metadata?.customerName || 'unknown',
             userStory: 'US-4.1',
           }, 'medium');
+          break;
         }
-      } else if (action === 'field_interaction') {
-        if (currentStepRef.current) {
-          currentStepRef.current.fieldInteractions += 1;
-        }
-      } else if (action === 'validation_error') {
-        if (currentStepRef.current) {
-          currentStepRef.current.errors += 1;
-
-          // Track validation error
-          analytics('proposal_wizard_validation_error', {
+        case 'future_date_selected': {
+          analytics('proposal_wizard_future_date_selected', {
             step,
             stepName,
-            field: metadata?.fieldName || 'unknown', // Using fieldName instead of field
-            errorType: metadata?.errorType || 'unknown',
-            errorMessage: 'Unknown error', // Using a default value since errorMessage isn't in the metadata type
+            selectedDate: metadata?.selectedDate || 'unknown',
             userStory: 'US-4.1',
           }, 'medium');
+          break;
         }
-      } else if (action === 'customer_selected') {
-        // Track customer selection
-        analytics('proposal_wizard_customer_selected', {
-          step,
-          stepName,
-          customerId: metadata?.customerId || 'unknown',
-          customerName: metadata?.customerName || 'unknown',
-          userStory: 'US-4.1',
-        }, 'medium');
-      } else if (action === 'future_date_selected') {
-        // Track future date selection
-        analytics('proposal_wizard_future_date_selected', {
-          step,
-          stepName,
-          selectedDate: metadata?.selectedDate || 'unknown',
-          userStory: 'US-4.1',
-        }, 'medium');
-      } else if (action === 'ai_suggestion_shown') {
-        if (currentStepRef.current) {
-          currentStepRef.current.aiSuggestionsShown += 1;
-
-          // Track AI suggestion shown
-          analytics('proposal_wizard_ai_suggestion_shown', {
-            step,
-            stepName,
-            suggestionType: 'unknown', // Using default value since suggestionType isn't in the metadata type
-            suggestionContent: 'unknown', // Using default value since suggestionContent isn't in the metadata type
-            userStory: 'US-4.1',
-          }, 'medium');
+        case 'ai_suggestion_shown': {
+          if (currentStepRef.current) {
+            currentStepRef.current.aiSuggestionsShown += 1;
+            analytics('proposal_wizard_ai_suggestion_shown', {
+              step,
+              stepName,
+              suggestionType: 'unknown',
+              suggestionContent: 'unknown',
+              userStory: 'US-4.1',
+            }, 'medium');
+          }
+          break;
         }
-      } else if (action === 'ai_suggestion_accepted') {
-        if (currentStepRef.current) {
-          currentStepRef.current.aiSuggestionsAccepted += 1;
-
-          // Track AI suggestion accepted
-          analytics('proposal_wizard_ai_suggestion_accepted', {
-            step,
-            stepName,
-            suggestionType: 'unknown', // Using default value since suggestionType isn't in the metadata type
-            suggestionContent: 'unknown', // Using default value since suggestionContent isn't in the metadata type
-            userStory: 'US-4.1',
-          }, 'medium');
+        default: {
+          // no-op
         }
       }
     },

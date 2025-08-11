@@ -139,7 +139,7 @@ export function useOptimizedDataFetch<T = unknown>(
         const queryString = buildQueryParams(cursor);
         const url = `${options.endpoint}?${queryString}`;
 
-        console.log('🚀 [OptimizedDataFetch] Fetching:', url);
+        // Fetching URL constructed above; removed debug console output for production code
 
         // ✅ CRITICAL: Use apiClient pattern (following Lesson #12)
         const response: ApiResponse<{
@@ -156,7 +156,7 @@ export function useOptimizedDataFetch<T = unknown>(
             responseData.data || responseData.customers || responseData.proposals || [];
 
           // Handle pagination response
-          if (append && data) {
+          if (append) {
             setData(prevData => [...prevData, ...newData]);
           } else {
             setData(newData);
@@ -201,7 +201,7 @@ export function useOptimizedDataFetch<T = unknown>(
         setLoading(false);
       }
     },
-    [apiClient, errorHandlingService, buildQueryParams, options.endpoint, data]
+    [apiClient, errorHandlingService, buildQueryParams, options.endpoint]
   );
 
   // ✅ PERFORMANCE: Fetch more data (cursor pagination)

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordWebVital } from '@/lib/observability/metricsStore';
 
-type MetricPayload = {
+interface MetricPayload {
   name: 'FCP' | 'LCP' | 'CLS' | 'TTFB' | 'INP';
   value: number;
   id?: string;
   label?: string;
-};
+}
 
 export async function POST(request: NextRequest) {
   try {

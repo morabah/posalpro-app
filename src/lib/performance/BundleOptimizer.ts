@@ -85,7 +85,7 @@ export interface ComponentOptimizationConfig {
  * Advanced Bundle Optimizer Service
  */
 export class BundleOptimizerService {
-  private static instance: BundleOptimizerService;
+  private static instance: BundleOptimizerService | null = null;
   private errorHandlingService: ErrorHandlingService;
   private analytics: any;
   private loadedChunks: Map<string, LazyExoticComponent<any>> = new Map();
@@ -102,8 +102,7 @@ export class BundleOptimizerService {
   }
 
   static getInstance(): BundleOptimizerService {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!BundleOptimizerService.instance) {
+    if (BundleOptimizerService.instance === null) {
       BundleOptimizerService.instance = new BundleOptimizerService();
     }
     return BundleOptimizerService.instance;
@@ -407,7 +406,7 @@ export class BundleOptimizerService {
     // Compile chunk metrics
     for (const [id, loadTime] of this.chunkLoadTimes.entries()) {
       loadTimes[id] = loadTime;
-      utilizationRates[id] = this.utilizationTracking.get(id) || 0;
+      utilizationRates[id] = this.utilizationTracking.get(id) ?? 0;
     }
 
     // Get navigation timing for bundle metrics
@@ -431,7 +430,7 @@ export class BundleOptimizerService {
       if (navigation) {
         bundleMetrics.criticalResourcesLoadTime =
           navigation.domContentLoadedEventEnd - navigation.fetchStart;
-        bundleMetrics.totalBundleSize = navigation.transferSize || 0;
+        bundleMetrics.totalBundleSize = navigation.transferSize;
       }
 
       // Get paint timing

@@ -8,6 +8,7 @@
 
 import { cn } from '@/lib/utils';
 import React, { forwardRef, useState } from 'react';
+import Image from 'next/image';
 
 export interface AvatarProps {
   /**
@@ -190,13 +191,15 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
         {showImage && (
           <>
             {imageLoading && <div className="absolute inset-0 bg-neutral-300 animate-pulse" />}
-            <img
+            <Image
               src={src}
               alt={avatarAlt}
-              className={cn('w-full h-full object-cover', shapeStyles[shape])}
-              onError={handleImageError}
+              fill
+              sizes="40px"
+              className={cn('object-cover', shapeStyles[shape])}
+              onError={handleImageError as unknown as () => void}
               onLoad={handleImageLoad}
-              loading="lazy"
+              priority={false}
             />
           </>
         )}

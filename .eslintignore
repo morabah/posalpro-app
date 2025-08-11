@@ -5,3 +5,4 @@
 **/*.spec.tsx
 **/__tests__/**
 **/__mocks__/**
+**/__snapshots__/**

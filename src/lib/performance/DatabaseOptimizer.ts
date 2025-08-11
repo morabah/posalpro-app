@@ -33,7 +33,7 @@ interface DatabaseOptimizationConfig {
 }
 
 export class DatabaseOptimizer {
-  private static instance: DatabaseOptimizer;
+  private static instance: DatabaseOptimizer | null = null;
   private errorHandlingService: ErrorHandlingService;
   private config: DatabaseOptimizationConfig;
   private queryCache = new Map<string, { data: any; timestamp: number }>();
@@ -51,7 +51,7 @@ export class DatabaseOptimizer {
   }
 
   public static getInstance(): DatabaseOptimizer {
-    if (!DatabaseOptimizer.instance) {
+    if (DatabaseOptimizer.instance === null) {
       DatabaseOptimizer.instance = new DatabaseOptimizer();
     }
     return DatabaseOptimizer.instance;

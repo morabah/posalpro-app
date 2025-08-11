@@ -87,7 +87,7 @@ export function MobileNavigationMenus({
     return MOBILE_NAV_ITEMS.filter(item => !item.role || item.role.includes(userRole)).map(
       item => ({
         ...item,
-        isActive: pathname?.startsWith(item.href) || false,
+        isActive: pathname.startsWith(item.href),
       })
     );
   }, [userRole, pathname]);

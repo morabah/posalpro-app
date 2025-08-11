@@ -74,7 +74,7 @@ interface ResponseOptimizationResult {
  * Advanced API Response Optimizer with Performance Monitoring
  */
 export class ApiResponseOptimizer {
-  private static instance: ApiResponseOptimizer;
+  private static instance: ApiResponseOptimizer | null = null;
   private cache = new Map<string, CacheEntry>();
   private metrics: ApiPerformanceMetrics;
   private config: ApiOptimizationConfig;
@@ -107,7 +107,7 @@ export class ApiResponseOptimizer {
   }
 
   public static getInstance(config?: Partial<ApiOptimizationConfig>): ApiResponseOptimizer {
-    if (!ApiResponseOptimizer.instance) {
+    if (ApiResponseOptimizer.instance === null) {
       ApiResponseOptimizer.instance = new ApiResponseOptimizer(config);
     }
     return ApiResponseOptimizer.instance;

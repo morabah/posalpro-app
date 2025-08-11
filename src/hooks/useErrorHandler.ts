@@ -14,7 +14,7 @@ export function useErrorHandler() {
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const handleAsyncError = useCallback(
-    (error: unknown, userMessage?: string, context?: Record<string, any>): StandardError => {
+    (error: unknown, userMessage?: string, context?: Record<string, unknown>): StandardError => {
       return errorHandlingService.processError(
         error,
         userMessage,
@@ -39,7 +39,7 @@ export function useErrorHandler() {
 
   // Add throwError method for compatibility
   const throwError = useCallback(
-    (error: unknown, userMessage?: string, context?: Record<string, any>): StandardError => {
+    (error: unknown, userMessage?: string, context?: Record<string, unknown>): StandardError => {
       const standardError = errorHandlingService.processError(
         error,
         userMessage,

@@ -5,7 +5,7 @@
  * Following Lesson #30: Performance Optimization - Memory Management
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface MemoryInfo {
   usedJSHeapSize: number;
@@ -28,8 +28,8 @@ const DEFAULT_CONFIG: MemoryOptimizationConfig = {
 };
 
 export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> = {}) {
-  const finalConfig = { ...DEFAULT_CONFIG, ...config };
-  const cleanupTimerRef = useRef<NodeJS.Timeout | number | null>(null);
+  const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
+  const cleanupTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCleanupRef = useRef<number>(0);
   const ENABLE_LOGS =
     typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ENABLE_MEMORY_LOGS === 'true';
@@ -56,25 +56,28 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
 
   // ✅ CRITICAL: Force garbage collection if available
   const forceGarbageCollection = useCallback((): void => {
-    if (typeof window !== 'undefined' && (window as any).gc) {
-      try {
-        (window as any).gc();
-        if (ENABLE_LOGS) {
-          console.log('🧹 [Memory Optimization] Forced garbage collection');
-        }
-      } catch (error) {
-        if (ENABLE_LOGS) {
-          console.warn('⚠️ [Memory Optimization] Failed to force garbage collection:', error);
+    if (typeof window !== 'undefined') {
+      const maybeGc = (window as unknown as { gc?: () => void }).gc;
+      if (typeof maybeGc === 'function') {
+        try {
+          maybeGc();
+          if (ENABLE_LOGS) {
+            console.log('🧹 [Memory Optimization] Forced garbage collection');
+          }
+        } catch (error) {
+          if (ENABLE_LOGS) {
+            console.warn('⚠️ [Memory Optimization] Failed to force garbage collection:', error);
+          }
         }
       }
     }
-  }, []);
+  }, [ENABLE_LOGS]);
 
   // ✅ CRITICAL: Cleanup event listeners and timers
   const cleanupResources = useCallback((): void => {
     // Clear any existing interval
     if (cleanupTimerRef.current) {
-      clearInterval(cleanupTimerRef.current as number);
+      clearInterval(cleanupTimerRef.current);
       cleanupTimerRef.current = null;
     }
 
@@ -106,7 +109,7 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
     }
 
     lastCleanupRef.current = Date.now();
-  }, [finalConfig.forceCleanupThreshold, getMemoryUsageMB]);
+  }, [finalConfig.forceCleanupThreshold, getMemoryUsageMB, ENABLE_LOGS]);
 
   // ✅ CRITICAL: Check memory usage and trigger cleanup if needed
   const checkMemoryUsage = useCallback((): void => {
@@ -142,7 +145,7 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
       }
       cleanupResources();
     }
-  }, [finalConfig, getMemoryUsageMB, cleanupResources, forceGarbageCollection]);
+  }, [finalConfig, getMemoryUsageMB, cleanupResources, forceGarbageCollection, ENABLE_LOGS]);
 
   // ✅ CRITICAL: Set up periodic memory monitoring
   useEffect(() => {
@@ -163,7 +166,7 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
     // Cleanup on unmount
     return () => {
       if (cleanupTimerRef.current) {
-        clearInterval(cleanupTimerRef.current as number);
+        clearInterval(cleanupTimerRef.current);
         cleanupTimerRef.current = null;
       }
     };
@@ -195,6 +198,7 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
     forceGarbageCollection,
     finalConfig.enableGarbageCollection,
     getMemoryUsageMB,
+    ENABLE_LOGS,
   ]);
 
   // ✅ CRITICAL: Component-specific memory optimization
@@ -215,7 +219,7 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
         );
       }
     },
-    [cleanupResources, getMemoryUsageMB]
+    [cleanupResources, getMemoryUsageMB, ENABLE_LOGS]
   );
 
   return {

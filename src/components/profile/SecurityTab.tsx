@@ -6,8 +6,14 @@
  */
 
 interface SecurityTabProps {
-  analytics: any;
-  user: any;
+  analytics: {
+    track?: (event: string, data?: Record<string, unknown>) => void;
+  };
+  user: {
+    id?: string;
+    email?: string;
+    name?: string;
+  } | null;
 }
 
 export function SecurityTab({ analytics, user }: SecurityTabProps) {

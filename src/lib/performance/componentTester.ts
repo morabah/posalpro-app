@@ -96,7 +96,7 @@ export class ComponentTester {
   private startTest(_testName: string): void {
     void _testName;
     this.startTime = performance.now();
-    this.memoryStart = (performance as any).memory?.usedJSHeapSize || 0;
+    this.memoryStart = (performance as any).memory?.usedJSHeapSize ?? 0;
   }
 
   private endTest(
@@ -108,7 +108,7 @@ export class ComponentTester {
     details: Record<string, any> = {}
   ): ComponentTestResult {
     const duration = performance.now() - this.startTime;
-    const memoryEnd = (performance as any).memory?.usedJSHeapSize || 0;
+    const memoryEnd = (performance as any).memory?.usedJSHeapSize ?? 0;
     const memoryUsage = memoryEnd - this.memoryStart;
 
     const result: ComponentTestResult = {
@@ -122,9 +122,9 @@ export class ComponentTester {
       metrics: {
         renderTime: duration,
         interactionTime: duration,
-        validationTime: details.validationTime || 0,
+        validationTime: details.validationTime ?? 0,
         memoryUsage,
-        eventCount: details.eventCount || 0,
+        eventCount: details.eventCount ?? 0,
         errorCount: errors.length,
       },
       details,

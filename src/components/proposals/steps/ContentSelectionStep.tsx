@@ -152,15 +152,50 @@ const enhancedContentSelectionSchema = z.object({
 
 type EnhancedContentSelectionFormData = z.infer<typeof enhancedContentSelectionSchema>;
 
+interface ContentAnalytics {
+  trackContentSelection?: (
+    action: string,
+    contentId: string,
+    metadata?: Record<string, unknown>
+  ) => void;
+}
+
+interface ProposalMetadata {
+  projectType?: string;
+}
+
+interface TeamData {
+  subjectMatterExperts?: Record<string, string>;
+  teamMembers?: unknown[];
+}
+
+interface RfpRequirement {
+  category?: string;
+  text?: string;
+  priority?: 'high' | 'medium' | 'low' | string;
+}
+
+interface RfpData {
+  parsedContent?: { requirements?: RfpRequirement[] };
+}
+
+interface ProductDataItem {
+  category?: string;
+}
+
+interface ProductData {
+  products?: ProductDataItem[];
+}
+
 interface ContentSelectionStepProps {
   data: Partial<ProposalWizardStep3Data>;
   onUpdate: (data: Partial<ProposalWizardStep3Data>) => void;
-  analytics: any;
+  analytics: ContentAnalytics;
   // Cross-step data for validation
-  proposalMetadata?: any;
-  teamData?: any;
-  rfpData?: any;
-  productData?: any;
+  proposalMetadata?: ProposalMetadata;
+  teamData?: TeamData;
+  rfpData?: RfpData;
+  productData?: ProductData;
 }
 
 export function ContentSelectionStep({
@@ -298,23 +333,23 @@ export function ContentSelectionStep({
 
   // Enhanced analytics tracking with cross-step context
   const trackContentSelection = useCallback(
-    (action: string, contentId: string, metadata: any = {}) => {
-      const enhancedMetadata = {
+    (action: string, contentId: string, metadata: Record<string, unknown> = {}) => {
+        const enhancedMetadata: Record<string, unknown> = {
         ...metadata,
         stepContext: 'content_selection',
         proposalType: proposalMetadata?.projectType,
-        teamSize: teamData?.teamMembers?.length || 0,
-        productCount: productData?.products?.length || 0,
-        rfpRequirements: rfpData?.parsedContent?.requirements?.length || 0,
+        teamSize: teamData?.teamMembers ? teamData.teamMembers.length : 0,
+        productCount: productData?.products ? productData.products.length : 0,
+        rfpRequirements: rfpData?.parsedContent?.requirements
+          ? rfpData.parsedContent.requirements.length
+          : 0,
         totalSelectedContent: selectedContentIds.size,
         sessionDuration: Date.now() - Date.now(), // Would be tracked properly
         crossStepValidationStatus:
           crossStepValidationResults.errors.length === 0 ? 'valid' : 'invalid',
       };
 
-      if (analytics?.trackContentSelection) {
-        analytics?.trackContentSelection?.(action, contentId, enhancedMetadata);
-      }
+      analytics.trackContentSelection?.(action, contentId, enhancedMetadata);
 
       // ✅ PERFORMANCE: Removed frequent analytics logging to prevent console spam
     },
@@ -335,21 +370,19 @@ export function ContentSelectionStep({
     const warnings: string[] = [];
     const suggestions: string[] = [];
 
-    const selectedContentArray = Array.from(selectedContentMap.values());
+      const selectedContentArray: SelectedContent[] = Array.from(selectedContentMap.values());
 
     // Validate against RFP requirements
-    if (rfpData?.parsedContent?.requirements) {
-      const rfpRequirements = rfpData.parsedContent.requirements;
-      const highPriorityRequirements = rfpRequirements.filter(
-        (req: any) => req.priority === 'high'
-      );
+    const rfpRequirements: RfpRequirement[] = rfpData?.parsedContent?.requirements ?? [];
+    if (rfpRequirements.length > 0) {
+      const highPriorityRequirements = rfpRequirements.filter(req => req.priority === 'high');
 
       const contentTags = selectedContentArray.flatMap(content => content.item.tags);
-      const uncoveredRequirements = highPriorityRequirements.filter((req: any) => {
+      const uncoveredRequirements = highPriorityRequirements.filter(req => {
         return !contentTags.some(
           tag =>
-            req.text.toLowerCase().includes(tag.toLowerCase()) ||
-            tag.toLowerCase().includes(req.category?.toLowerCase())
+            (req.text || '').toLowerCase().includes(tag.toLowerCase()) ||
+            tag.toLowerCase().includes((req.category || '').toLowerCase())
         );
       });
 
@@ -361,7 +394,7 @@ export function ContentSelectionStep({
           'Consider adding content that specifically addresses: ' +
             uncoveredRequirements
               .slice(0, 2)
-              .map((req: any) => req.category)
+              .map((req: RfpRequirement) => req.category || '')
               .join(', ')
         );
       }
@@ -370,13 +403,13 @@ export function ContentSelectionStep({
     // Validate against team expertise
     if (teamData?.subjectMatterExperts) {
       // subjectMatterExperts is an object where keys are expertise areas and values are expert IDs
-      const teamExpertise = Object.keys(teamData.subjectMatterExperts);
+      const teamExpertise: string[] = Object.keys(teamData.subjectMatterExperts);
       const contentAreas = selectedContentArray.map(content => content.item.tags).flat();
 
       const expertiseGaps = contentAreas.filter(
         area =>
           !teamExpertise.some(
-            (expertise: string) =>
+            expertise =>
               expertise.toLowerCase().includes(area.toLowerCase()) ||
               area.toLowerCase().includes(expertise.toLowerCase())
           )
@@ -397,7 +430,7 @@ export function ContentSelectionStep({
 
     // Validate against selected products
     if (productData?.products) {
-      const productCategories = productData.products.map((product: any) => product.category);
+      const productCategories = productData.products.map((p: ProductDataItem) => p.category || '');
       const contentTags = selectedContentArray.flatMap(content => content.item.tags);
 
       const alignedContent = productCategories.some((category: string) =>
@@ -426,7 +459,7 @@ export function ContentSelectionStep({
       selectedContentArray.reduce((sum, content) => {
         const item = content.item as EnhancedContentItem;
         return sum + (item.qualityScore || 0);
-      }, 0) / selectedContentArray.length;
+      }, 0) / (selectedContentArray.length || 1);
 
     if (averageQuality < 8.0 && selectedContentArray.length > 0) {
       warnings.push(
@@ -510,29 +543,42 @@ export function ContentSelectionStep({
         if (searchQuery.trim()) params.set('search', searchQuery.trim());
         // Request minimal fields; server enforces selective hydration
         // Use correct API route and support multiple response shapes
-        const res = await apiClient.get<any>(`/api/content?${params.toString()}`);
+        interface MinimalContent {
+          id: string;
+          title: string;
+          type?: string;
+          tags?: string[];
+          content?: string;
+          updatedAt?: string;
+          createdAt?: string;
+          createdBy?: string;
+          qualityScore?: number;
+        }
+        interface ContentListResponse {
+          data?: { items?: MinimalContent[]; content?: MinimalContent[] };
+          content?: MinimalContent[];
+        }
+        const res = await apiClient.get<ContentListResponse>(`/api/content?${params.toString()}`);
         if (isCancelled) return;
-        const rawList: any[] =
-          (res?.data?.items as any[]) ||
-          (res?.data?.content as any[]) ||
-          (res?.content as any[]) ||
-          [];
+        const rawList: MinimalContent[] =
+          res?.data?.items ?? res?.data?.content ?? res?.content ?? [];
 
-        const items: EnhancedContentItem[] = rawList.map((c: any) => ({
+        const items: EnhancedContentItem[] = rawList.map((c: MinimalContent) => ({
           id: c.id,
           title: c.title,
-          type: c.type,
+          // Map arbitrary API type strings to the constrained ContentItem union
+          type: ((c.type as string | undefined)?.toLowerCase() as ContentItem['type']) || 'reference',
           relevanceScore: 0,
           section: 'Executive Summary',
-          tags: c.tags || [],
-          content: c.content || '',
+          tags: c.tags ?? [],
+          content: c.content ?? '',
           successRate: 0,
-          lastUsed: new Date(c.updatedAt || c.createdAt),
-          createdBy: c.createdBy || 'Unknown',
+          lastUsed: new Date(c.updatedAt ?? c.createdAt ?? Date.now()),
+          createdBy: c.createdBy ?? 'Unknown',
           fileSize: '',
           documentUrl: `/content/${c.id}`,
           usageCount: 0,
-          qualityScore: (c.qualityScore as number) ?? 0,
+          qualityScore: c.qualityScore ?? 0,
           status: 'ACTIVE',
           isVisible: true,
           isFeatured: false,
@@ -584,7 +630,7 @@ export function ContentSelectionStep({
             resultsCount: filtered.length,
           });
         }
-      } catch (e) {
+      } catch {
         // In case of failure, show empty list (no mock data)
         if (!isCancelled) setFilteredContent([]);
       }
@@ -610,7 +656,8 @@ export function ContentSelectionStep({
         teamExpertise: teamData?.subjectMatterExperts
           ? Object.keys(teamData.subjectMatterExperts)
           : [],
-        productCategories: productData?.products?.map((product: any) => product.category) || [],
+        productCategories:
+          productData?.products?.map((product: ProductDataItem) => product.category || '') || [],
         currentSelections: Array.from(selectedContentIds),
       };
 
@@ -619,7 +666,7 @@ export function ContentSelectionStep({
         .filter((item: EnhancedContentItem) => !selectedContentIds.has(item.id))
         .filter((item: EnhancedContentItem) => {
           if (context.rfpRequirements.length > 0) {
-            return context.rfpRequirements.some((req: any) =>
+            return context.rfpRequirements.some((req: RfpRequirement) =>
               (item.tags as string[]).some(
                 (tag: string) =>
                   tag.toLowerCase().includes((req.category || '').toLowerCase()) ||

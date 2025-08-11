@@ -71,7 +71,7 @@ export const useContentSearchAnalytics = () => {
 
   // US-1.1: Semantic Search Analytics
   const trackSemanticSearch = useCallback(
-    async (searchQuery: string, sessionId: string, filters?: Record<string, any>) => {
+    async (searchQuery: string, sessionId: string, filters?: Record<string, unknown>) => {
       const searchId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const searchStartTime = Date.now();
 
@@ -350,7 +350,9 @@ export const useContentSearchAnalytics = () => {
   }, []);
 
   // Helper function to update performance metrics
-  const updatePerformanceMetrics = (searchMetrics: ContentSearchMetrics) => {
+  const updatePerformanceMetrics = (metrics: ContentSearchMetrics) => {
+    // Parameter acknowledged to satisfy strict linting; historical data is the source of truth
+    void metrics;
     const history = searchHistory.current;
     const totalSearches = history.length;
 
@@ -408,7 +410,7 @@ export const useContentSearchAnalytics = () => {
         | 'results_reviewed'
         | 'content_selected'
         | 'content_used',
-      context: Record<string, any>
+      context: Record<string, unknown>
     ) => {
       track(
         'content_search_journey',

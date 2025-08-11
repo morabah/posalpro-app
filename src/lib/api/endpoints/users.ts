@@ -91,15 +91,15 @@ export const usersApi = {
     options: { page?: number; limit?: number; fromDate?: Date; toDate?: Date } = {}
   ): Promise<PaginatedResponse<UserActivityLog>> {
     const queryParams = new URLSearchParams();
-    Object.entries(options).forEach(([key, value]) => {
-      if (value !== undefined) {
-        if (value instanceof Date) {
-          queryParams.set(key, value.toISOString());
-        } else {
-          queryParams.set(key, String(value));
-        }
+    for (const key of Object.keys(options) as Array<keyof typeof options>) {
+      const value = options[key];
+      if (value === undefined) continue;
+      if (key === 'fromDate' || key === 'toDate') {
+        queryParams.set(key, (value as Date).toISOString());
+      } else {
+        queryParams.set(key as string, String(value));
       }
-    });
+    }
 
     return apiClient.get<UserActivityLog[]>(
       `/users/${id}/activity?${queryParams.toString()}`
@@ -131,25 +131,29 @@ export const usersApi = {
    * Get users by role
    */
   async getUsersByRole(role: UserType): Promise<ApiResponse<UserProfile[]>> {
-    // Use the correct API endpoint with query parameter
-    const response = await apiClient.get<any>(`/users?role=${encodeURIComponent(role)}`);
+    // Endpoint may return either an array or an object with `users`
+    type RoleUsersPayload = UserProfile[] | { users: UserProfile[] } | { data: UserProfile[] };
+    const response = await apiClient.get<RoleUsersPayload>(
+      `/users?role=${encodeURIComponent(role)}`
+    );
 
-    // Extract users array from the response data structure
-    if (response.success) {
-      // The API client wraps the response, so we need to go deeper
-      const actualData = response.data.data || response.data;
-      const users = actualData.users || [];
-      return {
-        data: users,
-        success: true,
-        message: response.message || 'Role users retrieved successfully',
-      };
+    if (!response.success) {
+      return { data: [], success: false, message: 'Failed to retrieve users by role' };
     }
 
+    const raw = response.data;
+    const users: UserProfile[] = Array.isArray(raw)
+      ? raw
+      : 'users' in raw
+      ? raw.users
+      : 'data' in raw
+      ? raw.data
+      : [];
+
     return {
-      data: [],
-      success: false,
-      message: 'Failed to retrieve users by role',
+      data: users,
+      success: true,
+      message: response.message || 'Role users retrieved successfully',
     };
   },
 };

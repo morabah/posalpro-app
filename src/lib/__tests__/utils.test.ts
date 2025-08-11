@@ -33,7 +33,10 @@ describe('Utility Functions', () => {
     });
 
     it('handles conditional classes', () => {
-      expect(cn('base', true && 'conditional', false && 'hidden')).toBe('base conditional');
+      // Validate cn merges when an optional class is present
+      expect(cn('base', 'conditional')).toBe('base conditional');
+      // And ignores falsy values
+      expect(cn('base', undefined)).toBe('base');
     });
 
     it('resolves Tailwind conflicts', () => {
@@ -47,7 +50,7 @@ describe('Utility Functions', () => {
   });
 
   describe('debounce', () => {
-    let mockFn: ReturnType<typeof jest.fn>;
+    let mockFn: jest.Mock;
 
     beforeEach(() => {
       mockFn = jest.fn();
@@ -77,7 +80,7 @@ describe('Utility Functions', () => {
   });
 
   describe('throttle', () => {
-    let mockFn: ReturnType<typeof jest.fn>;
+    let mockFn: jest.Mock;
 
     beforeEach(() => {
       mockFn = jest.fn();

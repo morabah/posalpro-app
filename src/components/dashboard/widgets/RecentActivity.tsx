@@ -229,12 +229,12 @@ export const RecentActivity: React.FC<WidgetProps> = ({
         <div className="animate-pulse">
           <div className="h-6 bg-neutral-200 rounded mb-4"></div>
           <div className="flex space-x-2 mb-4">
-            {[...Array(4)].map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-6 w-16 bg-neutral-100 rounded-full"></div>
             ))}
           </div>
           <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
+            {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-20 bg-neutral-100 rounded"></div>
             ))}
           </div>

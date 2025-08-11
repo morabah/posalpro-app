@@ -153,7 +153,7 @@ export interface PerformanceThresholds {
  * Integrates all performance monitoring and optimization services
  */
 export class EnhancedPerformanceService {
-  private static instance: EnhancedPerformanceService;
+  private static instance: EnhancedPerformanceService | null = null;
   private errorHandlingService: ErrorHandlingService;
   private performanceMonitor: PerformanceMonitor;
   private bundleOptimizer: BundleOptimizerService;
@@ -178,7 +178,7 @@ export class EnhancedPerformanceService {
   }
 
   static getInstance(): EnhancedPerformanceService {
-    if (!EnhancedPerformanceService.instance) {
+    if (EnhancedPerformanceService.instance === null) {
       EnhancedPerformanceService.instance = new EnhancedPerformanceService();
     }
     return EnhancedPerformanceService.instance;
@@ -324,9 +324,9 @@ export class EnhancedPerformanceService {
       // Get navigation timing
       const navigation = performance.getEntriesByType(
         'navigation'
-      )[0] as PerformanceNavigationTiming;
+      )[0] as PerformanceNavigationTiming | undefined;
 
-      if (navigation) {
+      if (navigation !== undefined) {
         this.metrics.webVitals.ttfb = navigation.responseStart - navigation.requestStart;
         this.metrics.webVitals.tti = navigation.domInteractive - navigation.fetchStart;
       }

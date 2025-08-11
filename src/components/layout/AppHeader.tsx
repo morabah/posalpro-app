@@ -14,6 +14,7 @@ import {
   MagnifyingGlassIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
+import Image from 'next/image';
 import { useCallback, useState } from 'react';
 
 import { UserMenu } from './UserMenu';
@@ -37,7 +38,7 @@ export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
 
   // Analytics tracking for header interactions
   const trackHeaderAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: Record<string, unknown> = {}) => {
       console.log('Header Analytics:', {
         action,
         metadata,
@@ -163,7 +164,13 @@ export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
                 aria-haspopup="true"
               >
                 {user?.avatar ? (
-                  <img src={user.avatar} alt={user.name} className="w-6 h-6 rounded-full" />
+                  <Image
+                    src={user.avatar}
+                    alt={user?.name || 'User avatar'}
+                    width={24}
+                    height={24}
+                    className="rounded-full"
+                  />
                 ) : (
                   <UserCircleIcon className="w-6 h-6 text-gray-400" />
                 )}

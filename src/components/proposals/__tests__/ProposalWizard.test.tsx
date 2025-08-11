@@ -291,10 +291,10 @@ describe('ProposalWizard Component', () => {
     });
 
     // Verify analytics were tracked
-    await waitFor(() => {
-      const analyticsModule = require('@/hooks/proposals/useProposalCreationAnalytics');
-      const trackProposalCreation =
-        analyticsModule.useProposalCreationAnalytics().trackProposalCreation;
+    await waitFor(async () => {
+      const analyticsModule = await import('@/hooks/proposals/useProposalCreationAnalytics');
+      const { useProposalCreationAnalytics } = analyticsModule;
+      const trackProposalCreation = useProposalCreationAnalytics().trackProposalCreation;
       expect(trackProposalCreation).toHaveBeenCalledWith(
         expect.objectContaining({
           proposalId: expect.any(String),

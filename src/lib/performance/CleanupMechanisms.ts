@@ -46,7 +46,7 @@ export interface CleanupEntry {
 }
 
 export class CleanupMechanisms {
-  private static instance: CleanupMechanisms;
+  private static instance: CleanupMechanisms | null = null;
   private errorHandlingService: ErrorHandlingService;
   private config: CleanupConfig;
   private cleanupRegistry: Map<string, CleanupEntry> = new Map();
@@ -172,7 +172,7 @@ export class CleanupMechanisms {
   }
 
   public static getInstance(config?: Partial<CleanupConfig>): CleanupMechanisms {
-    if (!CleanupMechanisms.instance) {
+    if (CleanupMechanisms.instance === null) {
       CleanupMechanisms.instance = new CleanupMechanisms(config);
     }
     return CleanupMechanisms.instance;

@@ -7,7 +7,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 export interface ToastProps {
   /**
@@ -132,6 +132,11 @@ export const Toast: React.FC<ToastProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(true);
 
+  const handleDismiss = useCallback(() => {
+    setIsVisible(false);
+    onDismiss?.();
+  }, [onDismiss]);
+
   // Auto dismiss functionality
   useEffect(() => {
     if (duration > 0) {
@@ -141,12 +146,7 @@ export const Toast: React.FC<ToastProps> = ({
 
       return () => clearTimeout(timer);
     }
-  }, [duration]);
-
-  const handleDismiss = () => {
-    setIsVisible(false);
-    onDismiss?.();
-  };
+  }, [duration, handleDismiss]);
 
   // Don't render if not visible
   if (!isVisible) return null;

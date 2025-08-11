@@ -93,8 +93,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 
     // Auto-resize functionality
     useEffect(() => {
-      if (autoResize && textareaRef && 'current' in textareaRef && textareaRef.current) {
-        const textarea = textareaRef.current;
+      if (!autoResize) return;
+      const textarea = (textareaRef as React.RefObject<HTMLTextAreaElement> | null)?.current;
+      if (textarea) {
         const adjustHeight = () => {
           textarea.style.height = 'auto';
           textarea.style.height = `${textarea.scrollHeight}px`;

@@ -18,13 +18,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { PaginationInfo, SystemUser, UseUsersResult } from './types';
 
 // Component Traceability Matrix
-const COMPONENT_MAPPING = {
+const _COMPONENT_MAPPING = {
   userStories: ['US-8.1'],
   acceptanceCriteria: ['AC-8.1.1', 'AC-8.1.2'],
   methods: ['manageUsers()'],
   hypotheses: ['H8'],
   testCases: ['TC-H8-001'],
 };
+void _COMPONENT_MAPPING;
 
 /**
  * Hook for managing admin users
@@ -41,7 +42,7 @@ export function useUsers(
   // Infrastructure setup - MIGRATED from direct fetch
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [users, setUsers] = useState<SystemUser[]>([]);

@@ -52,7 +52,7 @@ export function MobileResponsiveWrapper({
   const getResponsiveClasses = () => {
     const classes = [];
 
-    if (enableMobilePadding && variantClasses[variant]) {
+    if (enableMobilePadding) {
       const variantClass = variantClasses[variant];
       classes.push(variantClass.mobile);
       classes.push(variantClass.tablet);

@@ -20,24 +20,31 @@ export function ProfileDataLoader() {
 
       try {
         console.log('📡 Fetching profile data...');
-        const response = await apiClient.get<{
+        interface ProfilePayload {
+          firstName?: string;
+          lastName?: string;
+          title?: string;
+          email?: string;
+        }
+        interface ProfileResponse {
           success: boolean;
-          data?: any;
+          data?: ProfilePayload;
           error?: string;
-        }>('/api/profile');
+        }
+        const response = await apiClient.get<ProfileResponse>('/api/profile');
 
         console.log('📊 Profile API Response:', response);
 
         if (response.success) {
           console.log('✅ SUCCESS: Profile data retrieved!');
-          console.log('📋 Job Title in database:', response.data.title);
+          console.log('📋 Job Title in database:', response.data?.title);
           console.log('📋 Full profile data:', response.data);
 
-          if (response.data.title === 'sales') {
+          if (response.data?.title === 'sales') {
             console.log('🎉 CONFIRMED: Job title "sales" found in API response!');
             console.log('✅ Backend persistence is working correctly');
           } else {
-            console.log('⚠️ Different job title found:', response.data.title);
+            console.log('⚠️ Different job title found:', response.data?.title);
           }
         } else {
           console.log('❌ Failed to get profile data:', response.error);

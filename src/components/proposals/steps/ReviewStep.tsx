@@ -94,11 +94,17 @@ interface ReviewStepProps {
   onUpdate: (data: Partial<ProposalWizardStep6Data>) => void;
   onNext?: () => void;
   analytics: ReturnType<typeof useProposalCreationAnalytics>;
-  allWizardData?: any; // Complete wizard data from all steps
-  proposalMetadata?: any; // Add proposalMetadata prop
-  teamData?: any; // Add teamData prop
-  contentData?: any; // Add contentData prop
-  productData?: any; // Add productData prop
+  allWizardData?: {
+    step1?: { client?: { name?: string }; details?: { title?: string; dueDate?: string | Date } };
+    step3?: { selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }> };
+    step4?: { products?: Array<{ id: string; quantity?: number; unitPrice?: number }> };
+    step5?: { sections?: Array<{ title?: string; assignedTo?: string | string[]; hours?: number; priority?: unknown; status?: unknown }> };
+    totalEstimatedHours?: number;
+  };
+  proposalMetadata?: { projectType?: string; budget?: number };
+  teamData?: { teamMembers?: Array<{ id?: string; name?: string; expertise?: string }> };
+  contentData?: { selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }> };
+  productData?: { products?: Array<{ id: string; quantity?: number; unitPrice?: number }> };
 }
 
 export function ReviewStep({

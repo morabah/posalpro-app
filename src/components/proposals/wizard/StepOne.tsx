@@ -7,12 +7,17 @@
 import { memo } from 'react';
 import { Card } from '@/components/ui/Card';
 
+type WizardData = Record<string, unknown>;
+
 interface StepOneProps {
-  onDataChange?: (data: any) => void;
-  formData?: any;
+  onDataChange?: (data: WizardData) => void;
+  formData?: WizardData;
 }
 
-const StepOne = memo(({ onDataChange, formData }: StepOneProps) => {
+const StepOne = memo(({ onDataChange: _onDataChange, formData: _formData }: StepOneProps) => {
+  // Silence unused props until implementation
+  void _onDataChange;
+  void _formData;
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Step One</h2>

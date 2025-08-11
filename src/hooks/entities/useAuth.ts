@@ -242,7 +242,7 @@ export const useAuth = (): UseAuthState & UseAuthActions => {
       const isValid = await authEntity.validateSession();
       setState(prev => ({ ...prev, isAuthenticated: isValid }));
       return isValid;
-    } catch (error) {
+    } catch {
       setState(prev => ({ ...prev, isAuthenticated: false }));
       return false;
     }

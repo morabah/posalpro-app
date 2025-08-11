@@ -24,11 +24,22 @@ interface WizardStep3 {
 }
 
 interface WizardData {
-  step1?: WizardStep1;
+  step1?: WizardStep1 & {
+    value?: number; // Estimated value from step 1
+  };
   step3?: WizardStep3;
-  // Optional steps used by summary rendering
+  // Enhanced step4 with actual product details
   step4?: {
-    products?: Array<{ quantity?: number; unitPrice?: number }>;
+    products?: Array<{ 
+      id: string;
+      name: string;
+      quantity?: number; 
+      unitPrice?: number;
+      totalPrice?: number;
+      category?: string;
+      included?: boolean;
+    }>;
+    totalValue?: number; // Actual calculated value from step 4
   };
   step5?: {
     sections?: Array<{ title?: string; description?: string }>;
@@ -41,14 +52,14 @@ interface TeamAssignments {
   subjectMatterExperts?: Record<string, string>;
 }
 
-type RawContent = {
+interface RawContent {
   item?: { id?: string; title?: string };
   contentId?: string;
   id?: string;
   title?: string;
   section?: string;
   assignedTo?: string;
-};
+}
 
 interface ValidationData {
   isValid?: boolean;
@@ -93,12 +104,12 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
   const [loading, setLoading] = useState(true);
 
   // Normalize and dedupe content selections
-  type ContentItem = {
+  interface ContentItem {
     id?: string;
     title?: string;
     section?: string;
     assignedTo?: string;
-  };
+  }
 
   const rawSelections: ContentItem[] = (wizardData?.step3?.selectedContent?.length
     ? wizardData.step3.selectedContent
@@ -319,12 +330,12 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
               Content Selections
             </h3>
             <div className="space-y-2 text-sm">
-              {dedupedSelections.map((c: any, index: number) => {
+              {dedupedSelections.map((c: { title?: string; section?: string; id?: string; count?: number; assignees?: string[] }, index: number) => {
                 const title = c.title || 'Selected Content';
                 const section = c.section || undefined;
                 const id = c.id;
-                const count = c.count as number;
-                const assignees: string[] = c.assignees || [];
+                const count = c.count ?? 0;
+                const assignees: string[] = c.assignees ?? [];
                 return (
                   <div key={`csel-${index}`} className="flex items-start justify-between">
                     <div>
@@ -363,7 +374,7 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
               Sections & Assignments
             </h3>
             <div className="space-y-2 text-sm">
-              {wizardData!.step5!.sections!.map((s: any, index: number) => {
+              {wizardData!.step5!.sections!.map((s: { title?: string; hours?: number; priority?: unknown; status?: unknown; assignedTo?: string | string[] }, index: number) => {
                 const assignee = s?.assignedTo;
                 const assignees: string[] = Array.isArray(assignee)
                   ? assignee.filter(Boolean)
@@ -379,8 +390,8 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
                       )}
                       <div className="flex gap-3 text-[11px] text-gray-500">
                         {typeof s?.hours === 'number' && <span>Hours: {s.hours}</span>}
-                        {s?.priority && <span>Priority: {String(s.priority)}</span>}
-                        {s?.status && <span>Status: {String(s.status)}</span>}
+                        {s?.priority !== undefined && <span>Priority: {String(s.priority)}</span>}
+                        {s?.status !== undefined && <span>Status: {String(s.status)}</span>}
                       </div>
                     </div>
                   </div>
@@ -392,25 +403,88 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-        {/* Step 4: Selected Products */}
+        {/* Step 4: Product Selections */}
         {wizardData?.step4?.products && wizardData.step4.products.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-gray-700 flex items-center">
-              <ShoppingCartIcon className="h-4 w-4 mr-2 text-orange-500" />
-              Selected Products
+              <ShoppingCartIcon className="h-4 w-4 mr-2 text-purple-500" />
+              Products Selected
             </h3>
             <div className="space-y-2 text-sm">
-              {wizardData.step4.products.map((product: any, index: number) => (
-                <div key={index}>
-                  <span className="font-medium">Product {index + 1}:</span>
-                  <span className="ml-1 text-gray-600">
-                    Qty: {product.quantity} x ${product.unitPrice}
-                  </span>
+              {wizardData.step4.products
+                .filter(product => product.included !== false) // Only show included products
+                .map((product, index) => (
+                <div key={product.id || index} className="flex justify-between items-center">
+                  <div>
+                    <span className="font-medium">{product.name || `Product ${index + 1}`}</span>
+                    {product.category && (
+                      <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        {product.category}
+                      </span>
+                    )}
+                    <div className="text-xs text-gray-600 mt-1">
+                      Qty: {product.quantity || 1} x ${(product.unitPrice || 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-900">
+                      ${(product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0)).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {/* Proposal Value Display Logic */}
+        {(() => {
+          const hasProducts = wizardData?.step4?.products?.some(p => p.included !== false) && 
+                             wizardData.step4.products.length > 0;
+          const step4Total = wizardData?.step4?.totalValue || 0;
+          const step1EstimatedValue = wizardData?.step1?.value || 0;
+          
+          // Logic: If no products and step4 total is 0, show estimated value from step1
+          // Otherwise, show actual value from step4
+          const shouldShowEstimated = !hasProducts && step4Total === 0 && step1EstimatedValue > 0;
+          const displayValue = shouldShowEstimated ? step1EstimatedValue : step4Total;
+          
+          if (displayValue > 0) {
+            return (
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700 flex items-center">
+                  <ChartBarIcon className="h-4 w-4 mr-2 text-green-500" />
+                  Proposal Value
+                </h3>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-sm font-medium text-green-800">
+                        {shouldShowEstimated ? 'Estimated Value' : 'Total Value'}
+                      </span>
+                      {shouldShowEstimated && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Based on initial estimate (no products selected)
+                        </p>
+                      )}
+                      {!shouldShowEstimated && hasProducts && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Calculated from selected products
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-green-700">
+                        ${displayValue.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Step 6: Validation Results */}
         {validationData && (

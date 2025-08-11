@@ -29,24 +29,7 @@ export interface ResponsiveState {
   prefersHighContrast: boolean;
 }
 
-const BREAKPOINTS = {
-  mobile: 768,
-  tablet: 1024,
-} as const;
-
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-8.1', 'US-1.1', 'US-2.2'],
-  acceptanceCriteria: ['AC-8.1.1', 'AC-8.1.2', 'AC-1.1.1'],
-  methods: [
-    'enhanceMobileResponsiveness()',
-    'optimizeTouchTargets()',
-    'implementMobileFirstDesign()',
-    'validateAccessibilityCompliance()',
-  ],
-  hypotheses: ['H9', 'H10'], // Mobile UX optimization
-  testCases: ['TC-H9-001', 'TC-H9-002', 'TC-H10-001'],
-};
+// Removed unused constants to reduce bundle and fix lint warnings
 
 export function useResponsive(): ResponsiveState {
   const [state, setState] = useState<ResponsiveState>({
@@ -111,7 +94,7 @@ export function useResponsive(): ResponsiveState {
       window.removeEventListener('orientationchange', throttledUpdateState);
       clearTimeout(timeoutId);
     };
-  }, []); // ✅ EMPTY DEPENDENCY ARRAY - Prevents infinite loop bottlenecks
+  }, [updateState]);
 
   return state;
 }

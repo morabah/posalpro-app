@@ -15,13 +15,13 @@ export interface NavigationPerformanceMetrics {
 }
 
 export class NavigationOptimizer {
-  private static instance: NavigationOptimizer;
+  private static instance: NavigationOptimizer | null = null;
   private routeCache = new Map<string, any>();
   private navigationTimes = new Map<string, number>();
   private preloadedRoutes = new Set<string>();
 
   static getInstance(): NavigationOptimizer {
-    if (!NavigationOptimizer.instance) {
+    if (NavigationOptimizer.instance === null) {
       NavigationOptimizer.instance = new NavigationOptimizer();
     }
     return NavigationOptimizer.instance;
@@ -69,7 +69,7 @@ export class NavigationOptimizer {
       '/admin': ['/admin/users', '/admin/settings', '/validation'],
     };
 
-    const routes = likelyRoutes[currentRoute] || [];
+    const routes = likelyRoutes[currentRoute] ?? [];
     routes.forEach(route => this.preloadRoute(route));
   }
 
@@ -140,12 +140,12 @@ export function useNavigationOptimization() {
  * Component load performance tracker
  */
 export class ComponentLoadTracker {
-  private static instance: ComponentLoadTracker;
+  private static instance: ComponentLoadTracker | null = null;
   private loadTimes = new Map<string, number>();
   private startTimes = new Map<string, number>();
 
   static getInstance(): ComponentLoadTracker {
-    if (!ComponentLoadTracker.instance) {
+    if (ComponentLoadTracker.instance === null) {
       ComponentLoadTracker.instance = new ComponentLoadTracker();
     }
     return ComponentLoadTracker.instance;
@@ -163,7 +163,7 @@ export class ComponentLoadTracker {
    */
   endLoad(componentName: string): number {
     const startTime = this.startTimes.get(componentName);
-    if (!startTime) {
+    if (startTime === undefined) {
       return 0;
     }
 
@@ -183,7 +183,7 @@ export class ComponentLoadTracker {
    * Get average load time for a component
    */
   getAverageLoadTime(componentName: string): number {
-    return this.loadTimes.get(componentName) || 0;
+    return this.loadTimes.get(componentName) ?? 0;
   }
 
   /**
@@ -210,13 +210,17 @@ export function useComponentLoadTracking(componentName: string) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   useEffect(() => {
-    tracker.current.startLoad(componentName);
+    // Capture refs/functions locally to avoid stale-ref warnings in cleanup
+    const localTracker = tracker.current;
+    const track = analytics;
+
+    localTracker.startLoad(componentName);
 
     return () => {
-      const loadTime = tracker.current.endLoad(componentName);
+      const loadTime = localTracker.endLoad(componentName);
 
       // ✅ ANALYTICS: Track component performance
-      analytics('component_load_performance', {
+      track('component_load_performance', {
         componentName,
         loadTime,
       }, 'low');

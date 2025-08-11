@@ -11,7 +11,7 @@ import { useCallback } from 'react';
 import { useOptimizedAnalytics } from '../useOptimizedAnalytics';
 
 interface ProductCreationMetrics {
-  productData: any;
+  productData: unknown;
   creationTime: number;
   useAIDescription: boolean;
   categoriesCount: number;
@@ -51,7 +51,7 @@ export function useProductAnalytics() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   
   // Create wrapper functions for different event types with appropriate priorities
-  const trackEvent = useCallback((event: string, data: Record<string, any>) => {
+  const trackEvent = useCallback((event: string, data: Record<string, unknown>) => {
     // Determine priority based on event type
     const priority: 'high' | 'medium' | 'low' = 
       event.includes('error') || event.includes('critical') ? 'high' : 
@@ -60,7 +60,7 @@ export function useProductAnalytics() {
     analytics(event, data, priority);
   }, [analytics]);
 
-  const trackPerformance = useCallback((metric: string, value: number, data: Record<string, any>) => {
+  const trackPerformance = useCallback((metric: string, value: number, data: Record<string, unknown>) => {
     const performanceData = {
       ...data,
       value,
@@ -68,7 +68,7 @@ export function useProductAnalytics() {
     analytics(`performance_${metric}`, performanceData, 'medium');
   }, [analytics]);
 
-  const trackHypothesis = useCallback((hypothesis: string, data: Record<string, any>) => {
+  const trackHypothesis = useCallback((hypothesis: string, data: Record<string, unknown>) => {
     analytics(`hypothesis_${hypothesis}`, data, 'medium');
   }, [analytics]);
 

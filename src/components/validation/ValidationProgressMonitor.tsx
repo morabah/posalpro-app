@@ -26,7 +26,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 
 // Component Traceability Matrix
-const COMPONENT_MAPPING = {
+const _COMPONENT_MAPPING = {
   userStories: ['US-3.1', 'US-3.2', 'US-3.3'],
   acceptanceCriteria: ['AC-3.1.3', 'AC-3.2.4', 'AC-3.3.2'],
   methods: [
@@ -38,6 +38,7 @@ const COMPONENT_MAPPING = {
   hypotheses: ['H8'],
   testCases: ['TC-H8-001', 'TC-H8-002', 'TC-H8-003'],
 };
+void _COMPONENT_MAPPING;
 
 interface ValidationProgressMonitorProps {
   proposalId?: string;
@@ -76,11 +77,22 @@ export function ValidationProgressMonitor({
 
   const [isMonitoring, setIsMonitoring] = useState(autoRefresh);
 
-  const { currentMetrics, getH8Status, measureValidationSpeed, trackValidationPerformance } =
-    useValidationAnalytics();
+  const {
+    currentMetrics,
+    getH8Status,
+    measureValidationSpeed: _measureValidationSpeed,
+    trackValidationPerformance: _trackValidationPerformance,
+  } = useValidationAnalytics();
+  void _measureValidationSpeed;
+  void _trackValidationPerformance;
 
-  const { isValidating, activeIssueCount, criticalIssueCount, getValidationSummary } =
-    useValidation();
+  const {
+    isValidating,
+    activeIssueCount,
+    criticalIssueCount,
+    getValidationSummary: _getValidationSummary,
+  } = useValidation();
+  void _getValidationSummary;
 
   // Update validation status
   useEffect(() => {

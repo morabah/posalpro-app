@@ -25,7 +25,7 @@ export interface ProductRelationship {
   targetProductId: string;
   type: RelationType;
   strength: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Form validation schema
@@ -34,7 +34,7 @@ const relationshipSchema = z.object({
   targetProductId: z.string().min(1, 'Target product is required'),
   type: z.enum(['requires', 'conflicts', 'enhances', 'replaces']),
   strength: z.number().min(0).max(1),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 type RelationshipFormData = z.infer<typeof relationshipSchema>;
@@ -47,7 +47,7 @@ interface ProductRelationshipManagerProps {
   }>;
   existingRelationships: ProductRelationship[];
   onUpdate: (relationships: ProductRelationship[]) => Promise<void>;
-  analytics: any;
+  analytics: { trackEvent: (eventName: string, payload?: Record<string, unknown>) => void };
 }
 
 /**
@@ -70,9 +70,27 @@ export function ProductRelationshipManager({
 }: ProductRelationshipManagerProps) {
   // State management
   const [relationships, setRelationships] = useState<ProductRelationship[]>(existingRelationships);
-  const [validationResults, setValidationResults] = useState<any>(null);
+  interface ValidationResultItem {
+    isValid: boolean;
+    message: string;
+    code?: string;
+  }
+  interface RelationshipValidationResponse {
+    metadata: { productId: string };
+    results: ValidationResultItem[];
+  }
+  const [validationResults, setValidationResults] = useState<
+    RelationshipValidationResponse[] | null
+  >(null);
   const [isValidating, setIsValidating] = useState(false);
-  const [predictions, setPredictions] = useState<any>(null);
+  interface PredictedIssue {
+    message: string;
+    confidence: number;
+  }
+  interface PredictiveValidationResult {
+    predictedIssues: PredictedIssue[];
+  }
+  const [predictions, setPredictions] = useState<PredictiveValidationResult | null>(null);
   const [selectedRelationship, setSelectedRelationship] = useState<string | null>(null);
 
   // Form handling
@@ -107,13 +125,13 @@ export function ProductRelationshipManager({
       const validationPromises = relationships.map(rel =>
         validationEngine.validateRelationships(rel.sourceProductId, [rel.targetProductId])
       );
-      const results = await Promise.all(validationPromises);
+      const results = (await Promise.all(validationPromises)) as RelationshipValidationResponse[];
 
       // Get predictive insights
-      const predictions = await predictiveValidation.predictValidationIssues({
+      const predictions = (await predictiveValidation.predictValidationIssues({
         productId: relationships[0]?.sourceProductId,
         relatedProductIds: relationships.map(r => r.targetProductId),
-      });
+      })) as PredictiveValidationResult;
 
       setValidationResults(results);
       setPredictions(predictions);
@@ -329,8 +347,8 @@ export function ProductRelationshipManager({
                 {validationResults && !isValidating && (
                   <div className="mt-2">
                     {validationResults
-                      .find((r: any) => r.metadata.productId === relationship.sourceProductId)
-                      ?.results.map((result: any, index: number) => (
+                      .find(r => r.metadata.productId === relationship.sourceProductId)
+                      ?.results.map((result, index: number) => (
                         <div
                           key={index}
                           className={cn(
@@ -371,7 +389,7 @@ export function ProductRelationshipManager({
               <div>
                 <h4 className="font-medium">Potential Issues Detected</h4>
                 <ul className="mt-2 list-disc list-inside">
-                  {predictions.predictedIssues.map((issue: any, index: number) => (
+                  {predictions.predictedIssues.map((issue, index: number) => (
                     <li key={index} className="text-sm">
                       {issue.message} (Confidence: {Math.round(issue.confidence * 100)}%)
                     </li>

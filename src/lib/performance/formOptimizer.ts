@@ -74,7 +74,7 @@ export function useOptimizedFormValidation<T>(
         }
 
         callback(isValid);
-      }, config.debounceDelay || 300),
+        }, config.debounceDelay ?? 300),
     [validationFn, config.debounceDelay, config.enableAnalytics]
   );
 
@@ -106,12 +106,12 @@ export function useOptimizedFormValidation<T>(
  * Form field performance optimizer
  */
 export class FormFieldOptimizer {
-  private static instance: FormFieldOptimizer;
+  private static instance: FormFieldOptimizer | null = null;
   private fieldUpdateTimes = new Map<string, number>();
   private validationCache = new Map<string, any>();
 
   static getInstance(): FormFieldOptimizer {
-    if (!FormFieldOptimizer.instance) {
+    if (FormFieldOptimizer.instance === null) {
       FormFieldOptimizer.instance = new FormFieldOptimizer();
     }
     return FormFieldOptimizer.instance;
@@ -122,7 +122,7 @@ export class FormFieldOptimizer {
    */
   shouldUpdateField(fieldName: string, value: any): boolean {
     const now = Date.now();
-    const lastUpdate = this.fieldUpdateTimes.get(fieldName) || 0;
+    const lastUpdate = this.fieldUpdateTimes.get(fieldName) ?? 0;
     const cacheKey = `${fieldName}_${JSON.stringify(value)}`;
 
     // ✅ PERFORMANCE: Skip if updated too recently

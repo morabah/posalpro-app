@@ -75,7 +75,7 @@ export interface EnhancedFetchResponse<T> {
  * Next.js Data Fetching Service with Infrastructure Integration
  */
 export class NextJSDataFetchingService {
-  private static instance: NextJSDataFetchingService;
+  private static instance: NextJSDataFetchingService | null = null;
   private errorHandlingService: ErrorHandlingService;
 
   // ✅ FIXED: Replace 'any' with specific interface
@@ -86,7 +86,7 @@ export class NextJSDataFetchingService {
   }
 
   static getInstance(): NextJSDataFetchingService {
-    if (!NextJSDataFetchingService.instance) {
+    if (NextJSDataFetchingService.instance === null) {
       NextJSDataFetchingService.instance = new NextJSDataFetchingService();
     }
     return NextJSDataFetchingService.instance;

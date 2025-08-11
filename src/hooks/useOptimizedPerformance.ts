@@ -81,29 +81,24 @@ export function useOptimizedPerformance() {
         // Track LCP (Largest Contentful Paint) - one-time observer
         const lcpObserver = new PerformanceObserver(list => {
           const entries = list.getEntries();
-          const lastEntry = entries[entries.length - 1];
-          if (lastEntry && isMounted) {
-            setMetrics(prev => ({
-              ...prev,
-              webVitals: { ...prev.webVitals, lcp: lastEntry.startTime },
-            }));
-          }
+          const lastEntry = entries[entries.length - 1] as PerformanceEntry | undefined;
+          const lcp = lastEntry?.startTime ?? 0;
+          setMetrics(prev => ({
+            ...prev,
+            webVitals: { ...prev.webVitals, lcp },
+          }));
         });
 
         lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
         performanceObserverRef.current = lcpObserver;
 
         // Get initial load time
-        const navigation = performance.getEntriesByType(
-          'navigation'
-        )[0] as PerformanceNavigationTiming;
-        if (navigation && isMounted) {
-          const loadTime = navigation.loadEventEnd - navigation.loadEventStart;
-          setMetrics(prev => ({
-            ...prev,
-            loadTime,
-          }));
-        }
+        const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+        const loadTime = navigation.loadEventEnd - navigation.loadEventStart;
+        setMetrics(prev => ({
+          ...prev,
+          loadTime,
+        }));
       } catch (error) {
         console.warn('[OptimizedPerformance] Setup failed:', error);
       }
@@ -123,11 +118,17 @@ export function useOptimizedPerformance() {
   /**
    * ✅ MANUAL: Collect current memory metrics (no automatic intervals)
    */
+  interface PerformanceMemory {
+    usedJSHeapSize: number;
+    jsHeapSizeLimit: number;
+  }
+
   const collectMemoryMetrics = useCallback(() => {
     try {
-      if ('memory' in performance) {
-        const memory = (performance as any).memory;
-        const memoryUsage = (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100;
+      const perf = performance as Performance & { memory?: unknown };
+      const mem = perf.memory as PerformanceMemory | undefined;
+      if (mem && typeof mem.usedJSHeapSize === 'number' && typeof mem.jsHeapSizeLimit === 'number') {
+        const memoryUsage = (mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100;
 
         setMetrics(prev => ({
           ...prev,

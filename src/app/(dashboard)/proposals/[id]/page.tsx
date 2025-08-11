@@ -164,10 +164,44 @@ export default function ProposalDetailPage() {
 
   // Helper: normalize priority to UI format
   const normalizePriority = (p?: string | null) => {
-    if (!p) return undefined;
-    const s = String(p).toLowerCase();
-    if (s === 'high' || s === 'medium' || s === 'low' || s === 'critical') return s;
-    return undefined;
+    if (!p) return 'MEDIUM';
+    return p.toLowerCase() === 'high' ? 'HIGH' : p.toLowerCase() === 'low' ? 'LOW' : 'MEDIUM';
+  };
+
+  // Helper: calculate correct proposal value based on wizard data
+  const calculateProposalValue = (proposal: any): { value: number; source: 'step4' | 'step1' | 'database' } => {
+    const md = unwrapSet(proposal?.metadata) || {};
+    const wd = md?.wizardData || proposal?.wizardData || {};
+    
+    // Check if we have products in step 4
+    const hasProducts = wd.step4?.products && 
+                       Array.isArray(wd.step4.products) &&
+                       wd.step4.products.some((p: any) => p.included !== false) && 
+                       wd.step4.products.length > 0;
+    
+    // Calculate step 4 total value
+    let step4TotalValue = 0;
+    if (hasProducts) {
+      const includedProducts = wd.step4.products.filter((p: any) => p.included !== false);
+      step4TotalValue = includedProducts.reduce((sum: number, product: any) => {
+        const productTotal = product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0);
+        return sum + productTotal;
+      }, 0);
+    }
+    
+    // Get step 1 estimated value
+    const step1EstimatedValue = wd.step1?.details?.estimatedValue || wd.step1?.value || 0;
+    
+    // Determine which value to use: step 4 total or step 1 estimate
+    const shouldUseEstimated = !hasProducts && step4TotalValue === 0 && step1EstimatedValue > 0;
+    
+    if (step4TotalValue > 0 && hasProducts) {
+      return { value: step4TotalValue, source: 'step4' };
+    } else if (step1EstimatedValue > 0 && shouldUseEstimated) {
+      return { value: step1EstimatedValue, source: 'step1' };
+    } else {
+      return { value: proposal.value || 0, source: 'database' };
+    }
   };
 
   // Enrich proposal with wizard summary friendly fields

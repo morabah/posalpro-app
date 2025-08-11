@@ -9,7 +9,7 @@ import { logger } from '@/utils/logger';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useState } from 'react';
-import { useForm, type FieldValues } from 'react-hook-form';
+import { useForm, type FieldValues, type DefaultValues } from 'react-hook-form';
 import type { ZodSchema } from 'zod';
 
 interface UseFormValidationOptions<T extends FieldValues> {
@@ -30,7 +30,7 @@ export function useFormValidation<T extends FieldValues>({
 }: UseFormValidationOptions<T>) {
   const form = useForm<T>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues as any,
+    defaultValues: defaultValues as DefaultValues<T> | undefined,
     mode: 'onChange',
   });
 

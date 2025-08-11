@@ -31,6 +31,8 @@ const COMPONENT_MAPPING = {
   hypotheses: ['H9', 'H10'], // Mobile UX optimization
   testCases: ['TC-H9-003', 'TC-H10-002'],
 };
+// Silence unused mapping maintained for traceability
+void COMPONENT_MAPPING;
 
 export interface MobileEnhancedButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /**
@@ -93,7 +95,7 @@ export const MobileEnhancedButton = forwardRef<HTMLButtonElement, MobileEnhanced
     },
     ref
   ) => {
-    const { isMobile, isTablet, isDesktop } = useResponsive();
+    const { isMobile, isTablet } = useResponsive();
     const { trackOptimized: analytics } = useOptimizedAnalytics();
     const { handleAsyncError } = useErrorHandler();
 
@@ -154,7 +156,7 @@ export const MobileEnhancedButton = forwardRef<HTMLButtonElement, MobileEnhanced
       if (enableHaptics && 'vibrate' in navigator && isMobile) {
         try {
           navigator.vibrate(10); // Subtle 10ms vibration
-        } catch (error) {
+        } catch {
           // Silently fail if haptics not supported
         }
       }

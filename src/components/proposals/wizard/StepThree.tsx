@@ -7,12 +7,17 @@
 import { memo } from 'react';
 import { Card } from '@/components/ui/Card';
 
+type WizardData = Record<string, unknown>;
+
 interface StepThreeProps {
-  onDataChange?: (data: any) => void;
-  formData?: any;
+  onDataChange?: (data: WizardData) => void;
+  formData?: WizardData;
 }
 
-const StepThree = memo(({ onDataChange, formData }: StepThreeProps) => {
+const StepThree = memo(({ onDataChange: _onDataChange, formData: _formData }: StepThreeProps) => {
+  // Silence unused props until implementation
+  void _onDataChange;
+  void _formData;
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Step Three</h2>

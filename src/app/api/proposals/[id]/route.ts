@@ -18,6 +18,29 @@ import { z } from 'zod';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
+// Shared interfaces for metadata shapes used in GET/PATCH handlers
+interface SectionAssignmentsMap {
+  [key: string]: unknown;
+}
+
+interface Step4Product {
+  included?: boolean;
+  totalPrice?: number;
+  quantity?: number;
+  unitPrice?: number;
+}
+
+export interface WizardData {
+  step1?: { details?: { estimatedValue?: number; rfpReferenceNumber?: string; contactPerson?: string; contactEmail?: string; contactPhone?: string }; value?: number; client?: { contactPerson?: string; contactEmail?: string; contactPhone?: string } };
+  step3?: { selectedContent?: Array<unknown> };
+  step4?: { products?: Array<Step4Product> };
+  step5?: { sectionAssignments?: SectionAssignmentsMap; sections?: Array<unknown> };
+}
+
+interface ProductRef { id?: string; name?: string; price?: number; currency?: string }
+interface ProposalProduct { productId?: string | null; product?: ProductRef | null; quantity?: number | null; unitPrice?: number | null; discount?: number | null }
+interface MetadataShape { wizardData?: WizardData; teamAssignments?: unknown; contentSelections?: unknown; validationData?: unknown; analyticsData?: unknown; crossStepValidation?: unknown; sectionAssignments?: SectionAssignmentsMap }
+
 /**
  * Standard API response wrapper
  */
@@ -177,56 +200,55 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       );
     }
 
-    // Transform proposal data for frontend consumption
+    // Transform proposal data for frontend consumption (typed, eslint-safe)
+
+    const md = (proposal.metadata as unknown as MetadataShape) || {};
+    const wd = md.wizardData;
+    const contactsFromCustomer = (proposal.customer as unknown as { contacts?: Array<{ name?: string; email?: string; phone?: string }> })?.contacts;
+    const firstContact: { name?: string; email?: string; phone?: string } | undefined = Array.isArray(contactsFromCustomer)
+      ? contactsFromCustomer[0]
+      : undefined;
+    const productsFromRelation: ProposalProduct[] = (proposal as unknown as { products?: ProposalProduct[] })
+      .products || [];
+
     const proposalDetail = {
       id: proposal.id,
       title: proposal.title,
       description: proposal.description,
       // Expose raw metadata for clients that expect it
-      metadata: (proposal as any).metadata || null,
+      metadata: proposal.metadata ?? null,
       status: proposal.status,
       priority: proposal.priority,
       projectType: proposal.projectType,
-      value: proposal.value || 0,
-      currency: proposal.currency || 'USD',
-      dueDate: proposal.dueDate?.toISOString(),
-      validUntil: proposal.validUntil?.toISOString(),
+      value: proposal.value ?? 0,
+      currency: proposal.currency ?? 'USD',
+      dueDate: proposal.dueDate ? proposal.dueDate.toISOString() : undefined,
+      validUntil: proposal.validUntil ? proposal.validUntil.toISOString() : undefined,
       createdAt: proposal.createdAt.toISOString(),
       updatedAt: proposal.updatedAt.toISOString(),
-      submittedAt: proposal.submittedAt?.toISOString(),
-      approvedAt: proposal.approvedAt?.toISOString(),
+      submittedAt: proposal.submittedAt ? proposal.submittedAt.toISOString() : undefined,
+      approvedAt: proposal.approvedAt ? proposal.approvedAt.toISOString() : undefined,
 
       // Convenience: expose RFP reference number if stored in metadata
-      rfpReferenceNumber: (proposal.metadata as any)?.wizardData?.step1?.details?.rfpReferenceNumber || null,
+      rfpReferenceNumber: wd?.step1?.details?.rfpReferenceNumber ?? null,
 
       // Customer information
       customerId: proposal.customerId,
-      customerName: proposal.customer?.name || 'Unknown Customer',
+      customerName: proposal.customer?.name ?? 'Unknown Customer',
       customerIndustry: proposal.customer?.industry,
       customerTier: proposal.customer?.tier,
       customerEmail: proposal.customer?.email,
       // Contact information: prefer metadata, then primary contact, then customer
-      contactPerson:
-        (proposal.metadata as any)?.wizardData?.step1?.client?.contactPerson ||
-        (proposal.customer as any)?.contacts?.[0]?.name ||
-        '',
-      contactEmail:
-        (proposal.metadata as any)?.wizardData?.step1?.client?.contactEmail ||
-        (proposal.customer as any)?.contacts?.[0]?.email ||
-        proposal.customer?.email ||
-        '',
-      contactPhone:
-        (proposal.metadata as any)?.wizardData?.step1?.client?.contactPhone ||
-        (proposal.customer as any)?.contacts?.[0]?.phone ||
-        (proposal.customer as any)?.phone ||
-        '',
+      contactPerson: wd?.step1?.client?.contactPerson ?? firstContact?.name ?? '',
+      contactEmail: wd?.step1?.client?.contactEmail ?? proposal.customer?.email ?? firstContact?.email ?? '',
+      contactPhone: wd?.step1?.client?.contactPhone ?? (proposal.customer as unknown as { phone?: string })?.phone ?? firstContact?.phone ?? '',
 
       // Creator information
-      createdBy: proposal.creator?.name || 'Unknown Creator',
+      createdBy: proposal.creator?.name ?? 'Unknown Creator',
       createdByEmail: proposal.creator?.email,
 
       // Sections
-      sections: proposal.sections.map(section => ({
+      sections: proposal.sections.map((section) => ({
         id: section.id,
         title: section.title,
         content: section.content,
@@ -235,31 +257,30 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       })),
 
       // Products
-      products:
-        (proposal as any).products?.map((pp: any) => ({
-          id: pp.product?.id,
-          productId: pp.productId || pp.product?.id,
-          name: pp.product?.name,
-          quantity: pp.quantity,
-          unitPrice: pp.unitPrice ?? pp.product?.price,
-          currency: pp.product?.currency || 'USD',
-          discount: pp.discount ?? 0,
-        })) || [],
+      products: productsFromRelation.map((pp) => ({
+        id: pp.product?.id,
+        productId: pp.productId ?? pp.product?.id,
+        name: pp.product?.name,
+        quantity: pp.quantity ?? 0,
+        unitPrice: (pp.unitPrice ?? pp.product?.price) ?? 0,
+        currency: pp.product?.currency ?? 'USD',
+        discount: pp.discount ?? 0,
+      })),
 
       // Assigned team members
-      assignedTo: proposal.assignedTo.map(user => ({
+      assignedTo: proposal.assignedTo.map((user) => ({
         id: user.id,
         name: user.name,
         email: user.email,
       })),
 
       // Approval executions
-      approvals: proposal.approvals.map(approval => ({
+      approvals: proposal.approvals.map((approval) => ({
         id: approval.id,
         currentStage: approval.currentStage,
         status: approval.status,
         startedAt: approval.startedAt.toISOString(),
-        completedAt: approval.completedAt?.toISOString(),
+        completedAt: approval.completedAt ? approval.completedAt.toISOString() : undefined,
       })),
 
       // Computed fields
@@ -274,29 +295,27 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         : null,
 
       // ✅ ENHANCED: Wizard data from metadata for comprehensive summary
-      wizardData: (proposal.metadata as any)?.wizardData || null,
-      teamAssignments: (proposal.metadata as any)?.teamAssignments || null,
-      contentSelections: (proposal.metadata as any)?.contentSelections || null,
-      validationData: (proposal.metadata as any)?.validationData || null,
-      analyticsData: (proposal.metadata as any)?.analyticsData || null,
-      crossStepValidation: (proposal.metadata as any)?.crossStepValidation || null,
+      wizardData: wd ?? null,
+      teamAssignments: md.teamAssignments ?? null,
+      contentSelections: md.contentSelections ?? null,
+      validationData: md.validationData ?? null,
+      analyticsData: md.analyticsData ?? null,
+      crossStepValidation: md.crossStepValidation ?? null,
     };
 
     // DEBUG: Log wizardData and sectionAssignments snapshot before returning
-    try {
-      const wd = (proposal.metadata as any)?.wizardData || null;
-      const sa =
-        wd?.step5?.sectionAssignments || (proposal.metadata as any)?.sectionAssignments || null;
+    if (process.env.NODE_ENV !== 'production') {
+      const sa = wd?.step5?.sectionAssignments || md.sectionAssignments || null;
       console.log('[ProposalDetailAPI][DEBUG] GET payload snapshot', {
         proposalId,
         wizardDataStep3Count: Array.isArray(wd?.step3?.selectedContent)
-          ? wd.step3.selectedContent.length
+          ? (wd!.step3!.selectedContent as unknown[]).length
           : 0,
-        wizardDataStep5Sections: Array.isArray(wd?.step5?.sections) ? wd.step5.sections.length : 0,
+        wizardDataStep5Sections: Array.isArray(wd?.step5?.sections) ? (wd!.step5!.sections as unknown[]).length : 0,
         sectionAssignmentsKeys: sa ? Object.keys(sa) : [],
         sectionAssignmentsType: sa ? typeof sa : 'null',
       });
-    } catch {}
+    }
 
     const duration = Date.now() - start;
     logger.info('ProposalDetailAPI GET success', {
@@ -766,22 +785,36 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         }
       }
       // Merge wizardData granularly across steps
-      const incomingWDFromTop = wizardData as any | undefined;
-      const incomingWDFromMeta =
+      type SectionAssignments = Record<string, unknown>;
+      type Step4Product = {
+        included?: boolean;
+        totalPrice?: number;
+        quantity?: number;
+        unitPrice?: number;
+      };
+      type WizardData = {
+        step1?: { details?: { estimatedValue?: number; rfpReferenceNumber?: string }; value?: number };
+        step4?: { products?: Step4Product[] };
+        step5?: { sectionAssignments?: SectionAssignments; sections?: unknown[] };
+        step3?: { selectedContent?: unknown[] };
+      };
+
+      const incomingWDFromTop: WizardData | undefined = wizardData as unknown as WizardData | undefined;
+      const incomingWDFromMeta: WizardData | undefined =
         incomingMetadata && typeof incomingMetadata === 'object'
-          ? (incomingMetadata as any).wizardData
+          ? (incomingMetadata as { wizardData?: WizardData }).wizardData
           : undefined;
-      const effectiveIncomingWD = incomingWDFromTop ?? incomingWDFromMeta;
+      const effectiveIncomingWD: WizardData | undefined = incomingWDFromTop ?? incomingWDFromMeta;
       if (effectiveIncomingWD !== undefined) {
-        const existingWD = (existingMeta.wizardData || {}) as any;
-        const incomingWD = effectiveIncomingWD as any;
+        const existingWD: WizardData = (existingMeta.wizardData || {}) as WizardData;
+        const incomingWD: WizardData = effectiveIncomingWD;
 
         // Start with a shallow merge of top-level wizardData
-        const mergedWD: any = { ...existingWD, ...incomingWD };
+        const mergedWD: WizardData = { ...existingWD, ...incomingWD };
 
         // Deep-merge step5 to avoid dropping persisted fields
-        const existingStep5 = (existingWD.step5 || {}) as any;
-        const incomingStep5 = (incomingWD.step5 || {}) as any;
+        const existingStep5 = (existingWD.step5 || {}) as NonNullable<WizardData['step5']>;
+        const incomingStep5 = (incomingWD.step5 || {}) as NonNullable<WizardData['step5']>;
         if (existingWD.step5 || incomingWD.step5) {
           mergedWD.step5 = {
             ...existingStep5,
@@ -794,27 +827,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           };
         }
 
-        mergedMeta.wizardData = mergedWD;
+        mergedMeta.wizardData = mergedWD as unknown as Record<string, unknown>;
       }
       // Merge RFP reference number into step1.details when provided explicitly (even if empty string)
-      if ('rfpReferenceNumber' in (validatedData as any)) {
-        const wd = (mergedMeta.wizardData || {}) as any;
-        const step1 = (wd.step1 || {}) as any;
-        const details = (step1.details || {}) as any;
+      if (Object.prototype.hasOwnProperty.call(validatedData as Record<string, unknown>, 'rfpReferenceNumber')) {
+        const wd: WizardData = (mergedMeta.wizardData || {}) as WizardData;
+        const step1 = wd.step1 || {};
+        const details = step1.details || {};
         mergedMeta.wizardData = {
-          ...wd,
+          ...(wd as Record<string, unknown>),
           step1: {
             ...step1,
             details: {
               ...details,
-              rfpReferenceNumber: (validatedData as any).rfpReferenceNumber,
+              rfpReferenceNumber: (validatedData as { rfpReferenceNumber?: string }).rfpReferenceNumber,
             },
           },
-        };
+        } as unknown as Record<string, unknown>;
         // DEBUG
-        try {
+        if (process.env.NODE_ENV !== 'production') {
           console.log('[ProposalPatchRoute][DEBUG] Applied rfpReferenceNumber to metadata.step1.details');
-        } catch {}
+        }
       }
       const effectiveSectionAssignments =
         sectionAssignments !== undefined
@@ -833,23 +866,24 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         } as any;
       }
       // DEBUG: Log merged metadata snapshot before saving
-      try {
-        const saKeys = mergedMeta?.wizardData?.step5?.sectionAssignments
-          ? Object.keys(mergedMeta.wizardData.step5.sectionAssignments)
-          : [];
+      if (process.env.NODE_ENV !== 'production') {
+        const saKeys = ((): string[] => {
+          const sa = (mergedMeta as { wizardData?: WizardData })?.wizardData?.step5?.sectionAssignments;
+          return sa ? Object.keys(sa) : [];
+        })();
         console.log('[ProposalPatchRoute][DEBUG] Merged metadata snapshot', {
           proposalId: id,
-          step3Count: Array.isArray(mergedMeta?.wizardData?.step3?.selectedContent)
-            ? mergedMeta.wizardData.step3.selectedContent.length
+          step3Count: Array.isArray((mergedMeta as { wizardData?: WizardData })?.wizardData?.step3?.selectedContent)
+            ? ((mergedMeta as { wizardData?: WizardData }).wizardData!.step3!.selectedContent as unknown[]).length
             : 0,
-          step5Sections: Array.isArray(mergedMeta?.wizardData?.step5?.sections)
-            ? mergedMeta.wizardData.step5.sections.length
+          step5Sections: Array.isArray((mergedMeta as { wizardData?: WizardData })?.wizardData?.step5?.sections)
+            ? ((mergedMeta as { wizardData?: WizardData }).wizardData!.step5!.sections as unknown[]).length
             : 0,
           step5SectionAssignmentsKeys: saKeys,
           rfpReferenceNumber:
-            mergedMeta?.wizardData?.step1?.details?.rfpReferenceNumber ?? null,
+            (mergedMeta as { wizardData?: WizardData })?.wizardData?.step1?.details?.rfpReferenceNumber ?? null,
         });
-      } catch {}
+      }
       updateData.metadata = { set: mergedMeta };
     }
 
@@ -859,6 +893,48 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     if (validatedData.validUntil) {
       updateData.validUntil = new Date(validatedData.validUntil);
+    }
+
+    // 🚀 VALUE CALCULATION: Recalculate proposal value based on step 4 products or step 1 estimate
+    const mdForCalc: { wizardData?: WizardData } = mergedMeta as { wizardData?: WizardData };
+    const wdCalc = mdForCalc.wizardData;
+    if (wdCalc) {
+      const products: Step4Product[] = Array.isArray(wdCalc.step4?.products)
+        ? (wdCalc.step4!.products as Step4Product[])
+        : [];
+
+      const includedProducts = products.filter((p) => p && p.included !== false);
+      const hasProducts = includedProducts.length > 0;
+
+      const step4TotalValue = includedProducts.reduce((sum, product) => {
+        const line = typeof product.totalPrice === 'number'
+          ? product.totalPrice
+          : (product.quantity ?? 1) * (product.unitPrice ?? 0);
+        return sum + line;
+      }, 0);
+
+      const step1EstimatedValue = wdCalc.step1?.details?.estimatedValue ?? wdCalc.step1?.value ?? 0;
+
+      const shouldUseEstimated = !hasProducts && step4TotalValue === 0 && step1EstimatedValue > 0;
+      const finalProposalValue = shouldUseEstimated ? step1EstimatedValue : step4TotalValue;
+
+      if (finalProposalValue > 0) {
+        updateData.value = finalProposalValue;
+        updateData.totalValue = finalProposalValue; // Keep denormalized field in sync
+      }
+
+      // DEBUG: Log value calculation
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[ProposalPatchRoute][DEBUG] Value calculation', {
+          proposalId: id,
+          hasProducts,
+          step4TotalValue,
+          step1EstimatedValue,
+          shouldUseEstimated,
+          finalProposalValue,
+          updatedValue: updateData.value,
+        });
+      }
     }
 
     // 🚀 DENORMALIZATION UPDATE: Update calculated fields if needed

@@ -134,10 +134,12 @@ export const ResponsiveBreakpointManager = React.memo(function ResponsiveBreakpo
   debounceMs = 150,
   trackAnalytics = true,
   enableOfflineDetection = true,
-  enableConnectionMonitoring = true,
+  enableConnectionMonitoring: _enableConnectionMonitoring = true,
 }: ResponsiveBreakpointManagerProps) {
   const { handleAsyncError } = useErrorHandler();
   const { trackOptimized } = useOptimizedAnalytics();
+  // mark as used to satisfy no-unused-vars for underscored prop
+  void _enableConnectionMonitoring;
 
   // ✅ MEMORY OPTIMIZATION: Use refs to prevent unnecessary re-renders
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -185,6 +187,11 @@ export const ResponsiveBreakpointManager = React.memo(function ResponsiveBreakpo
     const breakpoint = getBreakpointForWidth(width);
     const config = BREAKPOINT_CONFIGS.find(b => b.name === breakpoint)!;
 
+    // Type-safe access to Network Information API when available
+    interface NetworkInformation { effectiveType?: string }
+    interface NavigatorWithConnection extends Navigator { connection?: NetworkInformation }
+    const nav = navigator as NavigatorWithConnection;
+
     return {
       currentBreakpoint: breakpoint,
       screenWidth: width,
@@ -199,7 +206,7 @@ export const ResponsiveBreakpointManager = React.memo(function ResponsiveBreakpo
       prefersDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
       prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       prefersHighContrast: window.matchMedia('(prefers-contrast: high)').matches,
-      connectionType: (navigator as any).connection?.effectiveType || 'unknown',
+      connectionType: nav.connection?.effectiveType ?? 'unknown',
     };
   });
 
@@ -388,7 +395,7 @@ export const ResponsiveBreakpointManager = React.memo(function ResponsiveBreakpo
       listeners.forEach(({ mediaQueryList, listener }) => {
         try {
           mediaQueryList.removeEventListener('change', listener);
-        } catch (error) {
+        } catch {
           // Ignore cleanup errors
         }
       });

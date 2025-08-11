@@ -25,7 +25,7 @@ export interface ApiResponse {
 }
 
 class AuthInterceptor {
-  private static instance: AuthInterceptor;
+  private static instance: AuthInterceptor | undefined;
   private tokens: AuthTokens | null = null;
   private refreshPromise: Promise<AuthTokens> | null = null;
 

@@ -11,27 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-6.1', 'US-6.2', 'US-6.3', 'US-4.1'],
-  acceptanceCriteria: [
-    'AC-6.1.1', // Load time optimization
-    'AC-6.1.2', // Bundle size reduction
-    'AC-6.1.3', // Cache performance
-    'AC-6.2.1', // User experience preservation
-    'AC-6.3.1', // Data access efficiency
-    'AC-4.1.6', // Performance tracking
-  ],
-  methods: [
-    'optimizePerformance()',
-    'analyzeBundleSize()',
-    'implementCaching()',
-    'trackWebVitals()',
-    'generateOptimizationReports()',
-  ],
-  hypotheses: ['H8', 'H9', 'H11'],
-  testCases: ['TC-H8-005', 'TC-H9-002', 'TC-H11-001'],
-};
+// Removed unused COMPONENT_MAPPING to satisfy lint rules
 
 // Performance optimization configuration
 export interface PerformanceConfig {
@@ -140,10 +120,7 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
       if (!isMounted) return;
 
       try {
-        // Setup Web Vitals tracking
-        if (finalConfig.enableWebVitalsTracking) {
-          await setupWebVitalsTracking();
-        }
+        // Initialization moved: web vitals setup handled in separate effect
 
         // ✅ MEMORY OPTIMIZATION: Disabled automatic memory monitoring to prevent violations
         // memoryIntervalRef.current = setInterval(() => {
@@ -163,43 +140,47 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
         //   performAutomaticOptimization();
         // }, finalConfig.reportingInterval);
 
-        // Initial metrics collection (one-time only)
-        collectMetrics();
+        // Initial metrics collection handled in separate effect
       } catch (error) {
-        if (isMounted) {
-          console.warn('[Performance] Initialization failed:', error);
-        }
+        console.warn('[Performance] Initialization failed:', error);
       }
     };
 
     initializePerformanceOptimization();
 
+    // Capture current refs now; use in cleanup to avoid reading changing refs
+    const metricsInterval = metricsUpdateIntervalRef.current;
+    const memoryInterval = memoryIntervalRef.current;
+    const optimizationInterval = optimizationIntervalRef.current;
+    const perfObserver = performanceObserverRef.current;
+    const debounced = debouncedCallsRef.current;
+
     return () => {
       isMounted = false;
       // Cleanup all intervals
-      if (metricsUpdateIntervalRef.current) {
-        clearInterval(metricsUpdateIntervalRef.current);
+      if (metricsInterval) {
+        clearInterval(metricsInterval);
       }
-      if (memoryIntervalRef.current) {
-        clearInterval(memoryIntervalRef.current);
+      if (memoryInterval) {
+        clearInterval(memoryInterval);
       }
-      if (optimizationIntervalRef.current) {
-        clearInterval(optimizationIntervalRef.current);
+      if (optimizationInterval) {
+        clearInterval(optimizationInterval);
       }
       // Cleanup observers
-      if (performanceObserverRef.current) {
-        performanceObserverRef.current.disconnect();
+      if (perfObserver) {
+        perfObserver.disconnect();
       }
       // Cleanup debounced calls
-      debouncedCallsRef.current.forEach(timeout => clearTimeout(timeout));
-      debouncedCallsRef.current.clear();
+      debounced.forEach(timeout => clearTimeout(timeout));
+      debounced.clear();
     };
-  }, []); // ✅ FIXED: Empty dependency array to prevent re-initialization
+  }, []);
 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified Web Vitals tracking
    */
-  const setupWebVitalsTracking = async () => {
+  const setupWebVitalsTracking = useCallback(async () => {
     try {
       if ('PerformanceObserver' in window) {
         // ✅ MEMORY OPTIMIZATION: Only essential Web Vitals
@@ -222,11 +203,36 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
     } catch (error) {
       console.warn('[Performance] Web Vitals tracking setup failed:', error);
     }
-  };
+  }, []);
+
+  // ✅ Trigger web vitals setup when enabled
+  useEffect(() => {
+    if (finalConfig.enableWebVitalsTracking) {
+      void setupWebVitalsTracking();
+    }
+  }, [finalConfig.enableWebVitalsTracking, setupWebVitalsTracking]);
 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified metrics collection
    */
+  const calculateOptimizationScore = useCallback(() => {
+    try {
+      return 0; // Simplified score
+    } catch (error) {
+      console.warn('[Performance] Optimization score calculation failed:', error);
+      return 0;
+    }
+  }, []);
+
+  const generateRecommendations = useCallback(() => {
+    try {
+      return []; // Simplified recommendations
+    } catch (error) {
+      console.warn('[Performance] Recommendations generation failed:', error);
+      return [];
+    }
+  }, []);
+
   const collectMetrics = useCallback(() => {
     // Debounce metrics collection
     const debounceKey = 'collectMetrics';
@@ -253,10 +259,10 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
         };
 
         // ✅ MEMORY OPTIMIZATION: Simplified optimization score
-        const optimizationScore = calculateOptimizationScore(bundleMetrics, cacheMetrics);
+        const optimizationScore = calculateOptimizationScore();
 
         // ✅ MEMORY OPTIMIZATION: Simplified recommendations
-        const recommendations: string[] = [];
+        const recommendations: string[] = generateRecommendations();
 
         setMetrics(prev => ({
           ...prev,
@@ -273,7 +279,12 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
     }, DEBOUNCE_DELAY);
 
     debouncedCallsRef.current.set(debounceKey, timer);
-  }, []);
+  }, [calculateOptimizationScore, generateRecommendations]);
+
+  // ✅ One-time initial metrics collection (and when algorithm changes)
+  useEffect(() => {
+    collectMetrics();
+  }, [collectMetrics]);
 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified memory metrics collection
@@ -316,84 +327,19 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified bundle metrics collection
    */
-  const collectBundleMetrics = useCallback(() => {
-    try {
-      return {
-        totalSize: 0,
-        chunkSizes: {},
-        loadTimes: {},
-        compressionRatio: 1,
-      };
-    } catch (error) {
-      console.warn('[Performance] Bundle metrics collection failed:', error);
-      return {
-        totalSize: 0,
-        chunkSizes: {},
-        loadTimes: {},
-        compressionRatio: 1,
-      };
-    }
-  }, []);
+  // Removed unused collectBundleMetrics
 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified cache metrics collection
    */
-  const collectCacheMetrics = useCallback(() => {
-    try {
-      return {
-        hitRate: 0,
-        missRate: 0,
-        evictionRate: 0,
-        totalRequests: 0,
-      };
-    } catch (error) {
-      console.warn('[Performance] Cache metrics collection failed:', error);
-      return {
-        hitRate: 0,
-        missRate: 0,
-        evictionRate: 0,
-        totalRequests: 0,
-      };
-    }
-  }, []);
+  // Removed unused collectCacheMetrics
 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified optimization score calculation
    */
-  interface SimpleBundleMetrics {
-    totalSize: number;
-    chunkSizes: Record<string, number>;
-    loadTimes: Record<string, number>;
-    compressionRatio: number;
-  }
-
-  interface SimpleCacheMetrics {
-    hitRate: number;
-    missRate: number;
-    evictionRate: number;
-    totalRequests: number;
-  }
-
-  const calculateOptimizationScore = useCallback((bundleMetrics: SimpleBundleMetrics, cacheMetrics: SimpleCacheMetrics) => {
-    try {
-      return 0; // Simplified score
-    } catch (error) {
-      console.warn('[Performance] Optimization score calculation failed:', error);
-      return 0;
-    }
-  }, []);
-
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified recommendations generation
    */
-  const generateRecommendations = useCallback(() => {
-    try {
-      return []; // Simplified recommendations
-    } catch (error) {
-      console.warn('[Performance] Recommendations generation failed:', error);
-      return [];
-    }
-  }, []);
 
   /**
    * ✅ MEMORY OPTIMIZATION: Simplified automatic optimization

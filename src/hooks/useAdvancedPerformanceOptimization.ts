@@ -81,7 +81,7 @@ export interface PerformanceInsight {
   confidence: number; // 0-1
   impact: 'critical' | 'high' | 'medium' | 'low';
   timeframe: 'immediate' | 'short-term' | 'long-term';
-  data: any;
+  data: unknown;
   actionable: boolean;
   relatedMetrics: string[];
   hypotheses: string[];
@@ -97,8 +97,14 @@ export interface OptimizationEvent {
   improvement: number;
   duration: number; // ms
   success: boolean;
-  details: any;
+  details: OptimizationResult | null;
 }
+
+type OptimizationResult =
+  | { type: 'bundle'; optimizations: string[] }
+  | { type: 'memory'; optimizations: string[] }
+  | { type: 'mobile'; optimizations: string[] }
+  | { type: 'comprehensive'; results: Array<{ type: 'bundle' | 'memory' | 'mobile'; optimizations: string[] } | null>; optimizations: string[] };
 
 /**
  * Advanced Performance Optimization Hook
@@ -115,11 +121,9 @@ export function useAdvancedPerformanceOptimization(
     enableHypothesisValidation = true,
     optimizationThreshold = 70,
     enablePerformanceInsights = true,
-    enableCriticalAlerts = true,
     enableBundleOptimization = true,
     enableMemoryOptimization = true,
     enableMobileOptimization = true,
-    enableAccessibilityOptimization = true,
   } = options;
 
   // Hooks
@@ -142,9 +146,15 @@ export function useAdvancedPerformanceOptimization(
   });
 
   // Refs
-  const monitoringIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const optimizationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const insightsGenerationRef = useRef<NodeJS.Timeout | null>(null);
+  const monitoringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const optimizationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const insightsGenerationRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerOptimizationRef = useRef<
+    ((trigger: 'manual' | 'automatic' | 'threshold' | 'prediction', type: 'bundle' | 'memory' | 'cache' | 'mobile' | 'comprehensive') => Promise<OptimizationEvent | void>) | null
+  >(null);
+  const generatePerformanceInsightsRef = useRef<
+    ((metrics: EnhancedPerformanceMetrics) => Promise<void>) | null
+  >(null);
 
   /**
    * Initialize performance monitoring
@@ -172,12 +182,12 @@ export function useAdvancedPerformanceOptimization(
 
           // Check for automatic optimization
           if (enableAutomaticOptimization && metrics.optimizationScore < optimizationThreshold) {
-            await triggerOptimization('automatic');
+            await triggerOptimizationRef.current?.('automatic', 'comprehensive');
           }
 
           // Generate insights
           if (enablePerformanceInsights) {
-            await generatePerformanceInsights(metrics);
+            await generatePerformanceInsightsRef.current?.(metrics);
           }
         }, monitoringInterval);
       }
@@ -210,6 +220,56 @@ export function useAdvancedPerformanceOptimization(
     optimizationThreshold,
     enablePerformanceInsights,
     handleAsyncError,
+    enablePredictiveOptimization,
+  ]);
+
+  // Helper functions for optimization types (hoisted above usage)
+  const optimizeBundlePerformance = useCallback(
+    async (): Promise<{ type: 'bundle'; optimizations: string[] }> => {
+      return { type: 'bundle', optimizations: ['code-splitting', 'tree-shaking', 'compression'] };
+    },
+    []
+  );
+
+  const optimizeMemoryUsage = useCallback(
+    async (): Promise<{ type: 'memory'; optimizations: string[] }> => {
+      return {
+        type: 'memory',
+        optimizations: ['garbage-collection', 'memory-leak-detection', 'cache-cleanup'],
+      };
+    },
+    []
+  );
+
+  const optimizeMobilePerformance = useCallback(
+    async (): Promise<{ type: 'mobile'; optimizations: string[] }> => {
+      return {
+        type: 'mobile',
+        optimizations: ['touch-optimization', 'responsive-images', 'adaptive-loading'],
+      };
+    },
+    []
+  );
+
+  const performComprehensiveOptimization = useCallback(async (): Promise<OptimizationResult> => {
+    const results = await Promise.all([
+      enableBundleOptimization ? optimizeBundlePerformance() : null,
+      enableMemoryOptimization ? optimizeMemoryUsage() : null,
+      enableMobileOptimization ? optimizeMobilePerformance() : null,
+    ]);
+
+    return {
+      type: 'comprehensive',
+      results: results.filter(Boolean),
+      optimizations: ['bundle', 'memory', 'mobile', 'cache', 'accessibility'],
+    };
+  }, [
+    enableBundleOptimization,
+    enableMemoryOptimization,
+    enableMobileOptimization,
+    optimizeBundlePerformance,
+    optimizeMemoryUsage,
+    optimizeMobilePerformance,
   ]);
 
   /**
@@ -241,7 +301,7 @@ export function useAdvancedPerformanceOptimization(
         }, 'medium');
 
         // Perform optimization based on type
-        let optimizationResult: any = {};
+        let optimizationResult: OptimizationResult | null = null;
 
         switch (type) {
           case 'bundle':
@@ -350,8 +410,14 @@ export function useAdvancedPerformanceOptimization(
       enableMobileOptimization,
       enablePredictiveOptimization,
       handleAsyncError,
+      performComprehensiveOptimization,
+      optimizeBundlePerformance,
+      optimizeMemoryUsage,
+      optimizeMobilePerformance,
     ]
   );
+
+  // (moved ref-sync effects below generatePerformanceInsights)
 
   /**
    * Generate performance insights
@@ -424,16 +490,27 @@ export function useAdvancedPerformanceOptimization(
     ]
   );
 
+  // Keep refs in sync to avoid cyclic deps in initializeMonitoring (top-level, after declaration)
+  useEffect(() => {
+    triggerOptimizationRef.current = triggerOptimization;
+  }, [triggerOptimization]);
+  useEffect(() => {
+    generatePerformanceInsightsRef.current = generatePerformanceInsights;
+  }, [generatePerformanceInsights]);
+
   /**
    * Generate comprehensive performance report
    */
   const generateReport = useCallback(async () => {
     try {
-      const report = await enhancedPerformanceService.generateComprehensiveReport();
+      const reportUnknown = (await enhancedPerformanceService.generateComprehensiveReport()) as unknown;
+      const baseReport = (typeof reportUnknown === 'object' && reportUnknown !== null
+        ? (reportUnknown as Record<string, unknown>)
+        : {}) as Record<string, unknown>;
 
       // Add hook-specific data
-      const enhancedReport = {
-        ...report,
+      const enhancedReport: Record<string, unknown> = {
+        ...baseReport,
         hookData: {
           optimizationHistory: state.optimizationHistory,
           insights: state.insights,
@@ -523,56 +600,15 @@ export function useAdvancedPerformanceOptimization(
       }
 
       enhancedPerformanceService.stopMonitoring();
-      // 🚨 CRITICAL FIX: Don't call setState during cleanup to prevent infinite loops
-      // setState will be handled by component unmounting naturally
     };
-  }, [initializeMonitoring]); // 🚨 CRITICAL FIX: Removed stopMonitoring from dependencies
+  }, [initializeMonitoring]);
 
-  // Helper functions for optimization types
-  const optimizeBundlePerformance = async () => {
-    // Bundle optimization logic
-    return { type: 'bundle', optimizations: ['code-splitting', 'tree-shaking', 'compression'] };
-  };
-
-  const optimizeMemoryUsage = async () => {
-    // Memory optimization logic
-    return {
-      type: 'memory',
-      optimizations: ['garbage-collection', 'memory-leak-detection', 'cache-cleanup'],
-    };
-  };
-
-  const optimizeMobilePerformance = async () => {
-    // Mobile optimization logic
-    return {
-      type: 'mobile',
-      optimizations: ['touch-optimization', 'responsive-images', 'adaptive-loading'],
-    };
-  };
-
-  const performComprehensiveOptimization = async () => {
-    // Comprehensive optimization logic
-    const results = await Promise.all([
-      enableBundleOptimization ? optimizeBundlePerformance() : null,
-      enableMemoryOptimization ? optimizeMemoryUsage() : null,
-      enableMobileOptimization ? optimizeMobilePerformance() : null,
-    ]);
-
-    return {
-      type: 'comprehensive',
-      results: results.filter(Boolean),
-      optimizations: ['bundle', 'memory', 'mobile', 'cache', 'accessibility'],
-    };
-  };
-
-  // Helper functions for insights
-  const analyzeTrends = async (
+  async function analyzeTrends(
     metrics: EnhancedPerformanceMetrics,
     history: OptimizationEvent[]
-  ): Promise<PerformanceInsight[]> => {
+  ): Promise<PerformanceInsight[]> {
     const insights: PerformanceInsight[] = [];
 
-    // Performance score trend
     if (history.length >= 3) {
       const recentScores = history.slice(0, 3).map(h => h.afterScore);
       const trend = recentScores[0] > recentScores[2] ? 'improving' : 'declining';
@@ -594,11 +630,11 @@ export function useAdvancedPerformanceOptimization(
     }
 
     return insights;
-  };
+  }
 
-  const detectAnomalies = async (
+  async function detectAnomalies(
     metrics: EnhancedPerformanceMetrics
-  ): Promise<PerformanceInsight[]> => {
+  ): Promise<PerformanceInsight[]> {
     const insights: PerformanceInsight[] = [];
 
     // Memory usage anomaly
@@ -620,12 +656,13 @@ export function useAdvancedPerformanceOptimization(
     }
 
     return insights;
-  };
+  }
 
-  const generatePredictiveInsights = async (
+
+  async function generatePredictiveInsights(
     metrics: EnhancedPerformanceMetrics,
     history: OptimizationEvent[]
-  ): Promise<PerformanceInsight[]> => {
+  ): Promise<PerformanceInsight[]> {
     const insights: PerformanceInsight[] = [];
 
     // Predict performance degradation
@@ -652,11 +689,11 @@ export function useAdvancedPerformanceOptimization(
     }
 
     return insights;
-  };
+  }
 
-  const validateHypotheses = async (
+  async function validateHypotheses(
     metrics: EnhancedPerformanceMetrics
-  ): Promise<PerformanceInsight[]> => {
+  ): Promise<PerformanceInsight[]> {
     const insights: PerformanceInsight[] = [];
 
     // H8: Load Time Hypothesis
@@ -678,12 +715,12 @@ export function useAdvancedPerformanceOptimization(
     }
 
     return insights;
-  };
+  }
 
-  const predictNextOptimization = (
+  function predictNextOptimization(
     lastEvent: OptimizationEvent,
     history: OptimizationEvent[]
-  ): Date | null => {
+  ): Date | null {
     if (history.length < 3) return null;
 
     // Simple prediction based on average time between optimizations
@@ -700,7 +737,7 @@ export function useAdvancedPerformanceOptimization(
     const averageInterval =
       intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
     return new Date(lastEvent.timestamp.getTime() + averageInterval);
-  };
+  }
 
   return {
     // State

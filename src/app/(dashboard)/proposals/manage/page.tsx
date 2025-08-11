@@ -144,6 +144,46 @@ function ProposalManagementDashboardContent() {
     sortOrder: 'desc',
   });
 
+  // Narrowing helpers to safely handle unknown API responses
+  function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+  }
+
+  function extractProposalsResponse(raw: unknown): {
+    proposals: unknown[];
+    responseTimeMs?: number;
+  } {
+    let proposals: unknown[] = [];
+    let responseTimeMs: number | undefined;
+
+    if (isObject(raw)) {
+      // meta.responseTimeMs (optional)
+      if ('meta' in raw && isObject((raw as Record<string, unknown>).meta)) {
+        const m = (raw as Record<string, unknown>).meta as Record<string, unknown>;
+        const rt = m.responseTimeMs;
+        if (typeof rt === 'number') responseTimeMs = rt;
+      }
+
+      // shape A: { proposals: [...] }
+      const arrA = (raw as Record<string, unknown>).proposals;
+      if (Array.isArray(arrA)) {
+        proposals = arrA;
+        return { proposals, responseTimeMs };
+      }
+
+      // shape B: { data: { proposals: [...] } }
+      const data = (raw as Record<string, unknown>).data;
+      if (isObject(data)) {
+        const arrB = (data as Record<string, unknown>).proposals;
+        if (Array.isArray(arrB)) {
+          proposals = arrB;
+        }
+      }
+    }
+
+    return { proposals, responseTimeMs };
+  }
+
   const fetchProposals = useCallback(async () => {
     // ✅ FIXED: Don't fetch on server side
     if (typeof window === 'undefined') {
@@ -156,52 +196,102 @@ function ProposalManagementDashboardContent() {
     try {
       console.log('🚀 [PROPOSALS] Fetching proposals with apiClient...');
 
-      // Use denormalized fields; avoid heavy relation includes by default
-      const response = await apiClient.get<ProposalApiResponse>(
+      // Use denormalized fields; avoid heavy relation includes by default. Response may vary in shape.
+      const raw: unknown = await apiClient.get(
         '/proposals?page=1&limit=50&sortBy=updatedAt&sortOrder=desc&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName,customer(id,name),assignedTo(id,name)'
       );
 
-      // Handle the actual API response structure
-      const proposalsData = response.data?.proposals || response.proposals || [];
+      const { proposals: proposalsData, responseTimeMs } = extractProposalsResponse(raw);
 
-      if (proposalsData && Array.isArray(proposalsData)) {
-        const transformedProposals: Proposal[] = proposalsData.map(apiProposal => {
-          // ✅ ENHANCED: Better data mapping with fallbacks
-          const teamLead = (apiProposal as any).creatorName || apiProposal.createdBy || 'Unassigned';
-          const assignedTeam = Array.isArray((apiProposal as any).assignedTo)
-            ? (apiProposal as any).assignedTo
-            : [];
+      if (Array.isArray(proposalsData)) {
+        const transformedProposals: Proposal[] = proposalsData.map(
+          (apiProposalUnknown: unknown) => {
+            const p = isObject(apiProposalUnknown) ? apiProposalUnknown : {};
+            // ✅ ENHANCED: Better data mapping with fallbacks
+            const teamLead =
+              typeof p.creatorName === 'string'
+                ? p.creatorName
+                : typeof (p as Record<string, unknown>).createdBy === 'string'
+                  ? ((p as Record<string, unknown>).createdBy as string)
+                  : 'Unassigned';
+            const assignedRaw = (p as Record<string, unknown>).assignedTo;
+            const assignedTeam = Array.isArray(assignedRaw) ? assignedRaw : [];
 
-          // ✅ FIXED: Handle team data properly - assignedTo is an array of User objects
-          const teamMembers = Array.isArray(assignedTeam)
-            ? assignedTeam.map((member: any) => member.name || member.id || 'Unknown')
-            : [];
+            // ✅ FIXED: Handle team data properly - assignedTo is an array of User objects
+            const teamMembers = Array.isArray(assignedTeam)
+              ? assignedTeam.map((member: unknown) => {
+                  if (isObject(member)) {
+                    const name = member.name;
+                    const id = member.id;
+                    return (
+                      (typeof name === 'string' && name) ||
+                      (typeof id === 'string' ? id : 'Unknown')
+                    );
+                  }
+                  return 'Unknown';
+                })
+              : [];
 
-          // ✅ FIXED: Use correct field names from Proposal model with type assertion
-          const estimatedValue = (apiProposal as any).value || 0;
-          const dueDate = (apiProposal as any).dueDate || new Date();
+            // ✅ FIXED: Use correct field names from Proposal model with type assertion
+            const value = (p as Record<string, unknown>).value;
+            const estimatedValue = typeof value === 'number' ? value : 0;
+            const due = (p as Record<string, unknown>).dueDate;
+            const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
 
-          return {
-            id: apiProposal.id,
-            title: apiProposal.title,
-            client: (apiProposal as any).customerName || apiProposal.customer?.name || 'Unknown Client',
-            status: mapApiStatusToUIStatus(apiProposal.status),
-            priority: mapApiPriorityToUIPriority(apiProposal.priority),
-            dueDate: new Date(dueDate),
-            createdAt: new Date(apiProposal.createdAt),
-            updatedAt: new Date(apiProposal.updatedAt),
-            estimatedValue: estimatedValue,
-            teamLead: teamLead,
-            assignedTeam: teamMembers,
-            progress: calculateProgress(apiProposal.status),
-            stage: getStageFromStatus(apiProposal.status),
-            riskLevel: calculateRiskLevel(apiProposal),
-            tags: apiProposal.tags || [],
-            description: apiProposal.description,
-            lastActivity: `Created on ${new Date(apiProposal.createdAt).toLocaleDateString()}`,
-            customer: apiProposal.customer,
-          };
-        });
+            return {
+              id: String((p as Record<string, unknown>).id || ''),
+              title: String((p as Record<string, unknown>).title || ''),
+              client:
+                (typeof (p as Record<string, unknown>).customerName === 'string' &&
+                  ((p as Record<string, unknown>).customerName as string)) ||
+                (isObject((p as Record<string, unknown>).customer) &&
+                typeof ((p as Record<string, unknown>).customer as Record<string, unknown>).name ===
+                  'string'
+                  ? String(
+                      ((p as Record<string, unknown>).customer as Record<string, unknown>).name
+                    )
+                  : 'Unknown Client'),
+              status: mapApiStatusToUIStatus(
+                String((p as Record<string, unknown>).status || 'draft')
+              ),
+              priority: mapApiPriorityToUIPriority(
+                String((p as Record<string, unknown>).priority || 'medium')
+              ),
+              dueDate: new Date(dueDate),
+              createdAt: new Date(
+                String((p as Record<string, unknown>).createdAt || new Date().toISOString())
+              ),
+              updatedAt: new Date(
+                String((p as Record<string, unknown>).updatedAt || new Date().toISOString())
+              ),
+              estimatedValue: estimatedValue,
+              teamLead: teamLead,
+              assignedTeam: teamMembers,
+              progress: calculateProgress(String((p as Record<string, unknown>).status || 'draft')),
+              stage: getStageFromStatus(String((p as Record<string, unknown>).status || 'draft')),
+              riskLevel: calculateRiskLevel(p),
+              tags: Array.isArray((p as Record<string, unknown>).tags)
+                ? ((p as Record<string, unknown>).tags as string[])
+                : [],
+              description:
+                typeof (p as Record<string, unknown>).description === 'string'
+                  ? ((p as Record<string, unknown>).description as string)
+                  : undefined,
+              lastActivity: `Created on ${new Date(String((p as Record<string, unknown>).createdAt || new Date().toISOString())).toLocaleDateString()}`,
+              customer: isObject((p as Record<string, unknown>).customer)
+                ? {
+                    id: String(
+                      ((p as Record<string, unknown>).customer as Record<string, unknown>).id || ''
+                    ),
+                    name: String(
+                      ((p as Record<string, unknown>).customer as Record<string, unknown>).name ||
+                        ''
+                    ),
+                  }
+                : undefined,
+            };
+          }
+        );
 
         setProposals(transformedProposals);
 
@@ -210,7 +300,7 @@ function ProposalManagementDashboardContent() {
           'proposals_loaded',
           {
             count: transformedProposals.length,
-            responseTime: response.meta?.responseTimeMs || 0,
+            responseTime: typeof responseTimeMs === 'number' ? responseTimeMs : 0,
           },
           'medium'
         );
@@ -220,9 +310,9 @@ function ProposalManagementDashboardContent() {
         setProposals([]);
         trackAction('proposals_load_failed', { error: errorMsg }, 'high');
       }
-    } catch (error) {
-      console.error('❌ [PROPOSALS] Failed to fetch proposals:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    } catch (err) {
+      console.error('❌ [PROPOSALS] Failed to fetch proposals:', err);
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
       const fullErrorMsg = `Failed to load proposals: ${errorMessage}`;
       setError(fullErrorMsg);
       setProposals([]);

@@ -31,7 +31,7 @@ export function formatProposal(proposal: PrismaProposalWithRelations): ProposalD
       email: primaryContact.email,
       phone: primaryContact.phone ?? undefined,
     },
-    projectType: (proposal.projectType as ProposalData['projectType']) ?? 'consulting',
+    projectType: proposal.projectType as ProposalData['projectType'],
     estimatedValue: proposal.value ?? 0,
     currency: proposal.currency,
     deadline: proposal.dueDate ?? new Date(),

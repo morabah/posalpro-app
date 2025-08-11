@@ -9,8 +9,8 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import usePerformanceOptimization from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -75,28 +75,36 @@ export default function EnhancedPerformanceDashboard({
   });
 
   // Database optimization
-  const {
-    getMetrics: getDatabaseMetrics,
-    getConnectionPoolStats,
-  } = useDatabaseOptimizer();
+  const { getMetrics: getDatabaseMetrics, getConnectionPoolStats } = useDatabaseOptimizer();
 
   // Dashboard state
   const [selectedView, setSelectedView] = useState<
     'overview' | 'database' | 'api' | 'vitals' | 'memory' | 'reports'
   >('overview');
   const [realTimeEnabled, setRealTimeEnabled] = useState(enableRealTimeUpdates);
-  const [metricsData, setMetricsData] = useState({
-    database: null as any,
-    // Removed api property as part of custom caching removal
-    // api: null as any,
-    connectionPool: null as any,
-  });
+  interface DatabaseMetrics {
+    averageExecutionTime: number;
+    totalQueries: number;
+    slowQueries: number;
+    connectionPoolUtilization: number; // 0..1
+    topSlowQueries?: Array<{ query: string; executionTime: number }>;
+  }
+
+  interface ConnectionPoolStats {
+    maxConnections?: number;
+    activeConnections?: number;
+    idleConnections?: number;
+  }
+
+  const [metricsData, setMetricsData] = useState<{
+    database: DatabaseMetrics | null;
+    connectionPool: ConnectionPoolStats | null;
+  }>({ database: null, connectionPool: null });
 
   // Performance score calculation
   const overallPerformanceScore = useMemo(() => {
     const webVitalsWeight = 0.3;
     const databaseWeight = 0.25;
-    const apiWeight = 0.25;
     const memoryWeight = 0.2;
 
     const webVitalsScore = optimizationScore;
@@ -104,8 +112,6 @@ export default function EnhancedPerformanceDashboard({
       ? Math.max(0, 100 - metricsData.database.averageExecutionTime / 10)
       : 0;
     // Removed apiScore calculation as part of custom caching removal
-    // const apiScore = metricsData.api ? metricsData.api.cacheHitRate * 100 : 0;
-    const apiScore = 0;
     const memoryScore = Math.max(0, 100 - webVitalsMetrics.memoryMetrics.memoryUsagePercentage);
 
     return (
@@ -119,13 +125,17 @@ export default function EnhancedPerformanceDashboard({
 
   useEffect(() => {
     // Track dashboard access
-    analytics('enhanced_performance_dashboard_accessed', {
-      userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
-      hypotheses: ['H8', 'H11', 'H12', 'H13'],
-      userRole,
-      showAdvancedMetrics,
-      enableRealTimeUpdates,
-    }, 'medium');
+    analytics(
+      'enhanced_performance_dashboard_accessed',
+      {
+        userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
+        hypotheses: ['H8', 'H11', 'H12', 'H13'],
+        userRole,
+        showAdvancedMetrics,
+        enableRealTimeUpdates,
+      },
+      'medium'
+    );
 
     // Initial metrics collection
     collectAllMetrics();
@@ -139,7 +149,7 @@ export default function EnhancedPerformanceDashboard({
     }, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [realTimeEnabled, refreshInterval]);
+  }, [realTimeEnabled, refreshInterval]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const collectAllMetrics = async () => {
     try {
@@ -177,12 +187,16 @@ export default function EnhancedPerformanceDashboard({
     try {
       await triggerOptimization();
 
-      analytics('comprehensive_optimization_triggered', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H11', 'H12', 'H13'],
-        currentScore: overallPerformanceScore,
-        userRole,
-      }, 'high');
+      analytics(
+        'comprehensive_optimization_triggered',
+        {
+          userStories: ['US-6.1', 'US-6.2'],
+          hypotheses: ['H8', 'H11', 'H12', 'H13'],
+          currentScore: overallPerformanceScore,
+          userRole,
+        },
+        'high'
+      );
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -228,13 +242,17 @@ export default function EnhancedPerformanceDashboard({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      analytics('performance_report_generated', {
-        userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
-        hypotheses: ['H8', 'H11', 'H12', 'H13'],
-        reportSize: JSON.stringify(comprehensiveReport).length,
-        overallScore: overallPerformanceScore,
-        userRole,
-      }, 'medium');
+      analytics(
+        'performance_report_generated',
+        {
+          userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
+          hypotheses: ['H8', 'H11', 'H12', 'H13'],
+          reportSize: JSON.stringify(comprehensiveReport).length,
+          overallScore: overallPerformanceScore,
+          userRole,
+        },
+        'medium'
+      );
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -405,7 +423,11 @@ export default function EnhancedPerformanceDashboard({
           ].map(tab => (
             <button
               key={tab.key}
-              onClick={() => setSelectedView(tab.key as any)}
+              onClick={() =>
+                setSelectedView(
+                  tab.key as 'overview' | 'database' | 'api' | 'vitals' | 'memory' | 'reports'
+                )
+              }
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 selectedView === tab.key
                   ? 'border-blue-500 text-blue-600'
@@ -525,20 +547,18 @@ export default function EnhancedPerformanceDashboard({
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-3">Slowest Queries</h4>
                   <div className="space-y-2">
-                    {metricsData.database.topSlowQueries
-                      .slice(0, 5)
-                      .map((query: any, index: number) => (
-                        <div key={index} className="p-3 border border-gray-200 rounded bg-red-50">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium text-gray-900 truncate">
-                              {query.query}
-                            </span>
-                            <span className="text-sm font-medium text-red-600">
-                              {formatMs(query.executionTime)}
-                            </span>
-                          </div>
+                    {metricsData.database.topSlowQueries.slice(0, 5).map((query, index: number) => (
+                      <div key={index} className="p-3 border border-gray-200 rounded bg-red-50">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-900 truncate">
+                            {query.query}
+                          </span>
+                          <span className="text-sm font-medium text-red-600">
+                            {formatMs(query.executionTime)}
+                          </span>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -549,8 +569,9 @@ export default function EnhancedPerformanceDashboard({
         {process.env.NODE_ENV === 'development' && (
           <div className="px-6 py-3 bg-blue-50 border-t border-blue-200">
             <div className="text-xs text-blue-700">
-              <strong>Enhanced Development Mode:</strong> Comprehensive performance monitoring active.
-              User Role: {userRole} | Real-time Updates: {realTimeEnabled ? 'Enabled' : 'Disabled'}
+              <strong>Enhanced Development Mode:</strong> Comprehensive performance monitoring
+              active. User Role: {userRole} | Real-time Updates:{' '}
+              {realTimeEnabled ? 'Enabled' : 'Disabled'}
             </div>
           </div>
         )}

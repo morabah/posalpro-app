@@ -23,7 +23,10 @@ import Link from 'next/link';
 interface RoleBasedDashboardProps {
   userRole: UserType;
   userName: string;
-  dashboardData: any;
+  dashboardData: {
+    assignments?: unknown[];
+    contentItems?: unknown[];
+  };
   onQuickAction: (action: string, url: string) => void;
 }
 
@@ -43,8 +46,8 @@ export function RoleBasedDashboard({
             Welcome back, {userName.split(' ')[0]}
           </h1>
           <p className="text-gray-600">
-            {dashboardData.assignments?.length || 0} assignments •{' '}
-            {dashboardData.contentItems?.length || 0} content items
+            {(Array.isArray(dashboardData.assignments) ? dashboardData.assignments.length : 0)} assignments •{' '}
+            {(Array.isArray(dashboardData.contentItems) ? dashboardData.contentItems.length : 0)} content items
           </p>
         </div>
 

@@ -1,4 +1,5 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger';
+/**
  * PosalPro MVP2 - Real-time Dashboard Infrastructure
  * WebSocket-based real-time data synchronization and event management
  * Based on DASHBOARD_SCREEN.md wireframe specifications
@@ -186,7 +187,7 @@ export class RealtimeManager {
 
         this.socket = new WebSocket(this.config.url, this.config.protocols);
 
-        this.socket.onopen = _event => {
+        this.socket.onopen = () => {
           clearTimeout(timeoutId);
           this.handleConnectionOpen();
           resolve(true);
@@ -445,7 +446,7 @@ export class RealtimeManager {
    * Emit event to subscribers
    */
   private emit<T>(eventType: RealtimeEventType, data: T, originalEvent?: RealtimeEvent<T>): void {
-    const event: RealtimeEvent<T> = (originalEvent as RealtimeEvent<T>) || {
+    const event: RealtimeEvent<T> = originalEvent ?? {
       type: eventType,
       data,
       timestamp: Date.now(),

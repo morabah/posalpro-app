@@ -45,7 +45,7 @@ export interface LazyLoadingMetrics {
 }
 
 export class ComponentLazyLoading {
-  private static instance: ComponentLazyLoading;
+  private static instance: ComponentLazyLoading | null = null;
   private errorHandlingService: ErrorHandlingService;
   private loadedComponents: Map<string, LazyExoticComponent<ComponentType<any>>> = new Map();
   private preloadedComponents: Set<string> = new Set();
@@ -68,8 +68,7 @@ export class ComponentLazyLoading {
   }
 
   public static getInstance(config?: Partial<LazyLoadConfig>): ComponentLazyLoading {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!ComponentLazyLoading.instance) {
+    if (ComponentLazyLoading.instance === null) {
       ComponentLazyLoading.instance = new ComponentLazyLoading(config);
     }
     return ComponentLazyLoading.instance;

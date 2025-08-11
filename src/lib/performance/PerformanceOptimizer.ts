@@ -43,7 +43,7 @@ interface OptimizationRecommendation {
 }
 
 export class PerformanceOptimizer {
-  private static instance: PerformanceOptimizer;
+  private static instance: PerformanceOptimizer | null = null;
   private errorHandlingService: ErrorHandlingService;
   private isOptimizing = false;
   private lastOptimization = 0;
@@ -65,7 +65,7 @@ export class PerformanceOptimizer {
   }
 
   public static getInstance(): PerformanceOptimizer {
-    if (!PerformanceOptimizer.instance) {
+    if (PerformanceOptimizer.instance === null) {
       PerformanceOptimizer.instance = new PerformanceOptimizer();
     }
     return PerformanceOptimizer.instance;
@@ -643,12 +643,12 @@ export class PerformanceOptimizer {
 
   // Web Vitals metrics getters
   private getLCP(): number {
-    return this.getPerformanceEntry('largest-contentful-paint')?.startTime || 0;
+    return this.getPerformanceEntry('largest-contentful-paint')?.startTime ?? 0;
   }
 
   private getFID(): number {
     const entry = this.getPerformanceEntry('first-input') as any;
-    return entry?.processingStart || 0;
+    return entry?.processingStart ?? 0;
   }
 
   private getCLS(): number {
@@ -662,12 +662,14 @@ export class PerformanceOptimizer {
   }
 
   private getFCP(): number {
-    return this.getPerformanceEntry('first-contentful-paint')?.startTime || 0;
+    return this.getPerformanceEntry('first-contentful-paint')?.startTime ?? 0;
   }
 
   private getTTFB(): number {
-    const navigation = this.getPerformanceEntry('navigation') as PerformanceNavigationTiming;
-    return navigation ? navigation.responseStart - navigation.fetchStart : 0;
+    const navigation = this.getPerformanceEntry('navigation') as
+      | PerformanceNavigationTiming
+      | undefined;
+    return navigation !== undefined ? navigation.responseStart - navigation.fetchStart : 0;
   }
 
   private getMemoryUsage(): number {

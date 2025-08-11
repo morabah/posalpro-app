@@ -250,12 +250,12 @@ export const ProposalOverview: React.FC<WidgetProps> = ({
         <div className="animate-pulse">
           <div className="h-6 bg-neutral-200 rounded mb-4"></div>
           <div className="grid grid-cols-2 gap-4 mb-6">
-            {[...Array(4)].map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-20 bg-neutral-100 rounded"></div>
             ))}
           </div>
           <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
+            {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-16 bg-neutral-100 rounded"></div>
             ))}
           </div>

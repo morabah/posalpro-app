@@ -204,7 +204,9 @@ export default function PerformanceDashboard({
             ].map(tab => (
               <button
                 key={tab.key}
-                onClick={() => setSelectedMetricView(tab.key as any)}
+                onClick={() =>
+                  setSelectedMetricView(tab.key as 'overview' | 'bundle' | 'vitals' | 'memory')
+                }
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   selectedMetricView === tab.key
                     ? 'border-blue-500 text-blue-600'

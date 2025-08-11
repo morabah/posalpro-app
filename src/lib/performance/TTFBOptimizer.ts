@@ -15,7 +15,7 @@ export interface TTFBOptimizationConfig {
 }
 
 export class TTFBOptimizer {
-  private static instance: TTFBOptimizer;
+  private static instance: TTFBOptimizer | null = null;
   private errorHandlingService: ErrorHandlingService;
   private config: TTFBOptimizationConfig;
 
@@ -31,7 +31,7 @@ export class TTFBOptimizer {
   }
 
   static getInstance(): TTFBOptimizer {
-    if (!TTFBOptimizer.instance) {
+    if (TTFBOptimizer.instance === null) {
       TTFBOptimizer.instance = new TTFBOptimizer();
     }
     return TTFBOptimizer.instance;

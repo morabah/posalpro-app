@@ -11,27 +11,10 @@ import type {
   GridPosition,
 } from '@/lib/dashboard/types';
 import { UserType } from '@/types';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDashboardAnalytics } from './useDashboardAnalytics';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1', 'US-4.3', 'US-2.3'],
-  acceptanceCriteria: [
-    'AC-4.1.1', // Timeline visualization layout
-    'AC-4.3.1', // Priority visualization layout
-    'AC-2.3.1', // Role-based layout customization
-  ],
-  methods: [
-    'manageGridLayout()',
-    'handleResponsiveBreakpoints()',
-    'persistLayoutChanges()',
-    'optimizeWidgetPositioning()',
-    'trackLayoutInteractions()',
-  ],
-  hypotheses: ['H7', 'H4', 'H8'],
-  testCases: ['TC-H7-001', 'TC-H4-001', 'TC-LAYOUT-001'],
-};
+// (removed unused COMPONENT_MAPPING to satisfy no-unused-vars)
 
 // Layout configuration and breakpoints
 const LAYOUT_CONFIG = {
@@ -143,15 +126,19 @@ export function useDashboardLayout(
   widgets: DashboardWidget[] = [],
   initialOptions: UseDashboardLayoutOptions = {}
 ): UseDashboardLayoutReturn {
-  const options = {
-    enablePersistence: true,
-    enableResponsive: true,
-    enableDragDrop: true,
-    enableResize: true,
-    autoSave: true,
-    autoSaveDelay: 2000,
-    ...initialOptions,
-  };
+  const options = useMemo(
+    () => ({
+      enablePersistence: true,
+      enableResponsive: true,
+      enableDragDrop: true,
+      enableResize: true,
+      autoSave: true,
+      autoSaveDelay: 2000,
+      ...initialOptions,
+    }),
+    [initialOptions]
+  );
+  const userRole = options.userRole;
 
   // State management
   const [state, setState] = useState<LayoutState>({
@@ -194,7 +181,7 @@ export function useDashboardLayout(
   // Analytics integration
   const { trackEvent, trackInteraction } = useDashboardAnalytics(
     options.userId || 'unknown',
-    options.userRole || 'unknown',
+    userRole || 'unknown',
     `layout-${Date.now()}`
   );
 
@@ -205,8 +192,8 @@ export function useDashboardLayout(
 
   // Generate layout storage key
   const getLayoutStorageKey = useCallback(() => {
-    return `dashboard_layout_${options.userId || 'default'}_${options.userRole || 'user'}`;
-  }, [options.userId, options.userRole]);
+    return `dashboard_layout_${options.userId || 'default'}_${userRole || 'user'}`;
+  }, [options.userId, userRole]);
 
   // Generate default layout for role
   const generateDefaultLayout = useCallback((): GridPosition[] => {
@@ -242,8 +229,8 @@ export function useDashboardLayout(
       ],
     };
 
-    return roleBasedDefaults[options.userRole || UserType.PROPOSAL_MANAGER] || [];
-  }, [options.userRole]);
+    return roleBasedDefaults[userRole || UserType.PROPOSAL_MANAGER] || [];
+  }, [userRole]);
 
   // Calculate current breakpoint
   const getCurrentBreakpoint = useCallback(
@@ -277,11 +264,11 @@ export function useDashboardLayout(
           from: oldBreakpoint,
           to: newBreakpoint,
           width,
-          userRole: options.userRole,
+          userRole,
         });
       }
     },
-    [state.activeBreakpoint, getCurrentBreakpoint, trackEvent, options.userRole]
+    [state.activeBreakpoint, getCurrentBreakpoint, trackEvent, userRole]
   );
 
   // Update layout
@@ -331,21 +318,22 @@ export function useDashboardLayout(
       trackEvent('layout_grid_update', {
         positionCount: positions.length,
         breakpoint: state.activeBreakpoint,
-        userRole: options.userRole,
+        userRole,
       });
     },
-    [state.activeBreakpoint, trackEvent, options.userRole]
+    [state.activeBreakpoint, trackEvent, userRole]
   );
 
   // Add widget to layout
   const addWidget = useCallback(
     (widget: DashboardWidget, position?: Partial<GridPosition>) => {
+      const preset = WIDGET_SIZE_PRESETS[widget.size];
       const newPosition: GridPosition = {
         id: widget.id,
         x: position?.x ?? 0,
         y: position?.y ?? 0,
-        w: position?.w ?? WIDGET_SIZE_PRESETS[widget.size]?.w ?? 6,
-        h: position?.h ?? WIDGET_SIZE_PRESETS[widget.size]?.h ?? 3,
+        w: position?.w ?? preset.w,
+        h: position?.h ?? preset.h,
       };
 
       setState(prev => ({
@@ -361,10 +349,10 @@ export function useDashboardLayout(
         widgetId: widget.id,
         widgetType: widget.component.name,
         position: newPosition,
-        userRole: options.userRole,
+        userRole,
       });
     },
-    [trackEvent, options.userRole]
+    [trackEvent, userRole]
   );
 
   // Remove widget from layout
@@ -381,10 +369,10 @@ export function useDashboardLayout(
 
       trackEvent('widget_removed', {
         widgetId,
-        userRole: options.userRole,
+        userRole,
       });
     },
-    [trackEvent, options.userRole]
+    [trackEvent, userRole]
   );
 
   // Resize widget
@@ -403,10 +391,10 @@ export function useDashboardLayout(
       trackEvent('widget_resized', {
         widgetId,
         size,
-        userRole: options.userRole,
+        userRole,
       });
     },
-    [options, trackEvent]
+    [options, trackEvent, userRole]
   );
 
   // Move widget
@@ -425,10 +413,10 @@ export function useDashboardLayout(
       trackEvent('widget_moved', {
         widgetId,
         position,
-        userRole: options.userRole,
+        userRole,
       });
     },
-    [options, trackEvent]
+    [options, trackEvent, userRole]
   );
 
   // Toggle widget visibility
@@ -469,9 +457,9 @@ export function useDashboardLayout(
     trackEvent('layout_reset', {
       previousWidgetCount: state.layout.grid.length,
       newWidgetCount: defaultGrid.length,
-      userRole: options.userRole,
+      userRole,
     });
-  }, [generateDefaultLayout, state.layout.grid.length, trackEvent, options.userRole]);
+  }, [generateDefaultLayout, state.layout.grid.length, trackEvent, userRole]);
 
   // Save layout to storage
   const saveLayout = useCallback(async (): Promise<boolean> => {
@@ -492,7 +480,7 @@ export function useDashboardLayout(
 
       trackEvent('layout_saved', {
         widgetCount: state.layout.grid.length,
-        userRole: options.userRole,
+        userRole,
       });
 
       return true;
@@ -506,7 +494,7 @@ export function useDashboardLayout(
     state.settings,
     getLayoutStorageKey,
     trackEvent,
-    options.userRole,
+    userRole,
   ]);
 
   // Load layout from storage
@@ -515,21 +503,48 @@ export function useDashboardLayout(
       const stored = localStorage.getItem(getLayoutStorageKey());
       if (!stored) return false;
 
-      const layoutData = JSON.parse(stored);
+      const parsedUnknown = JSON.parse(stored) as unknown;
+      if (typeof parsedUnknown !== 'object' || parsedUnknown === null) {
+        throw new Error('Invalid stored layout data');
+      }
+      const layoutData = parsedUnknown as Record<string, unknown>;
 
-      setState(prev => ({
-        ...prev,
-        layout: layoutData.layout || prev.layout,
-        layouts: layoutData.layouts || prev.layouts,
-        settings: { ...prev.settings, ...layoutData.settings },
-        unsavedChanges: false,
-      }));
+      setState(prev => {
+        const next = { ...prev };
+
+        if ('layout' in layoutData) {
+          next.layout = layoutData.layout as typeof prev.layout;
+        }
+        if ('layouts' in layoutData) {
+          next.layouts = layoutData.layouts as typeof prev.layouts;
+        }
+        if (
+          'settings' in layoutData &&
+          typeof layoutData.settings === 'object' &&
+          layoutData.settings !== null &&
+          !Array.isArray(layoutData.settings)
+        ) {
+          next.settings = { ...prev.settings, ...(layoutData.settings as Record<string, unknown>) } as typeof prev.settings;
+        }
+
+        next.unsavedChanges = false;
+        return next;
+      });
 
       layoutCacheRef.current = stored;
 
+      // Safely compute widgetCount
+      const layoutValue = (layoutData.layout ?? null) as unknown;
+      const widgetCount =
+        layoutValue && typeof layoutValue === 'object' && 'grid' in (layoutValue as Record<string, unknown>)
+          ? Array.isArray((layoutValue as Record<string, unknown>).grid)
+            ? ((layoutValue as { grid: unknown[] }).grid.length)
+            : 0
+          : 0;
+
       trackEvent('layout_loaded', {
-        widgetCount: layoutData.layout?.grid?.length || 0,
-        userRole: options.userRole,
+        widgetCount,
+        userRole,
       });
 
       return true;
@@ -537,7 +552,7 @@ export function useDashboardLayout(
       logger.error('Failed to load layout:', error);
       return false;
     }
-  }, [getLayoutStorageKey, trackEvent, options.userRole]);
+  }, [getLayoutStorageKey, trackEvent, userRole]);
 
   // Export layout as JSON
   const exportLayout = useCallback((): string => {
@@ -547,36 +562,68 @@ export function useDashboardLayout(
       settings: state.settings,
       metadata: {
         exportedAt: new Date().toISOString(),
-        userRole: options.userRole,
+        userRole,
         version: '1.0',
       },
     };
 
     trackEvent('layout_exported', {
       widgetCount: state.layout.grid.length,
-      userRole: options.userRole,
+      userRole,
     });
 
     return JSON.stringify(exportData, null, 2);
-  }, [state.layout, state.layouts, state.settings, options.userRole, trackEvent]);
+  }, [state.layout, state.layouts, state.settings, userRole, trackEvent]);
 
   // Import layout from JSON
   const importLayout = useCallback(
     (layoutData: string): boolean => {
       try {
-        const imported = JSON.parse(layoutData);
+        const parsedUnknown = JSON.parse(layoutData) as unknown;
+        if (typeof parsedUnknown !== 'object' || parsedUnknown === null) {
+          throw new Error('Invalid layout data format');
+        }
+        const imported = parsedUnknown as Record<string, unknown>;
 
-        setState(prev => ({
-          ...prev,
-          layout: imported.layout || prev.layout,
-          layouts: imported.layouts || prev.layouts,
-          settings: { ...prev.settings, ...imported.settings },
-          unsavedChanges: true,
-        }));
+        setState(prev => {
+          const next = { ...prev };
+
+          // layout
+          if ('layout' in imported) {
+            next.layout = imported.layout as typeof prev.layout;
+          }
+
+          // layouts
+          if ('layouts' in imported) {
+            next.layouts = imported.layouts as typeof prev.layouts;
+          }
+
+          // settings (merge only if plain object)
+          if (
+            'settings' in imported &&
+            typeof imported.settings === 'object' &&
+            imported.settings !== null &&
+            !Array.isArray(imported.settings)
+          ) {
+            next.settings = { ...prev.settings, ...(imported.settings as Record<string, unknown>) } as typeof prev.settings;
+          }
+
+          next.unsavedChanges = true;
+          return next;
+        });
+
+        // Derive widgetCount safely
+        const layoutValue = (imported.layout ?? null) as unknown;
+        const widgetCount =
+          layoutValue && typeof layoutValue === 'object' && 'grid' in (layoutValue as Record<string, unknown>)
+            ? Array.isArray((layoutValue as Record<string, unknown>).grid)
+              ? ((layoutValue as { grid: unknown[] }).grid.length)
+              : 0
+            : 0;
 
         trackEvent('layout_imported', {
-          widgetCount: imported.layout?.grid?.length || 0,
-          userRole: options.userRole,
+          widgetCount,
+          userRole,
         });
 
         return true;
@@ -585,7 +632,7 @@ export function useDashboardLayout(
         return false;
       }
     },
-    [trackEvent, options.userRole]
+    [trackEvent, userRole]
   );
 
   // Update settings
@@ -599,10 +646,10 @@ export function useDashboardLayout(
 
       trackEvent('settings_updated', {
         settingsChanged: Object.keys(newSettings),
-        userRole: options.userRole,
+        userRole,
       });
     },
-    [trackEvent, options.userRole]
+    [trackEvent, userRole]
   );
 
   // Initialize layout on mount

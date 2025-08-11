@@ -150,13 +150,13 @@ export const Modal: React.FC<ModalProps> = ({
       // Set initial focus
       setTimeout(() => {
         if (initialFocus) {
-          const element = document.querySelector(initialFocus) as HTMLElement;
-          element?.focus();
+          const element = document.querySelector<HTMLElement>(initialFocus);
+          if (element) element.focus();
         } else if (modalRef.current) {
-          const firstFocusable = modalRef.current.querySelector(
+          const firstFocusable = modalRef.current.querySelector<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-          ) as HTMLElement;
-          firstFocusable?.focus();
+          );
+          if (firstFocusable) firstFocusable.focus();
         }
       }, animationDuration);
     } else {
@@ -183,18 +183,18 @@ export const Modal: React.FC<ModalProps> = ({
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
 
-        const firstElement = focusableElements[0] as HTMLElement;
-        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+        const firstElement = focusableElements[0] as HTMLElement | undefined;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
 
         if (event.shiftKey) {
-          if (document.activeElement === firstElement) {
+          if (firstElement && document.activeElement === firstElement) {
             event.preventDefault();
-            lastElement?.focus();
+            if (lastElement) lastElement.focus();
           }
         } else {
-          if (document.activeElement === lastElement) {
+          if (lastElement && document.activeElement === lastElement) {
             event.preventDefault();
-            firstElement?.focus();
+            if (firstElement) firstElement.focus();
           }
         }
       }

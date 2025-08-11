@@ -45,7 +45,7 @@ export interface ErrorHandlerOptions {
 }
 
 class ErrorInterceptor {
-  private static instance: ErrorInterceptor;
+  private static instance: ErrorInterceptor | undefined;
   private errorHandlers: Map<ErrorCategory, (error: ProcessedError) => void> = new Map();
 
   static getInstance(): ErrorInterceptor {
@@ -60,7 +60,9 @@ class ErrorInterceptor {
   }
 
   private categorizeError(status: number, _response: unknown): ErrorCategory {
-    if (status === 0 || status === undefined) {
+    // Intentionally unused in categorization for now
+    void _response;
+    if (status === 0) {
       return ErrorCategory.NETWORK;
     }
 
@@ -131,25 +133,11 @@ class ErrorInterceptor {
   processError(
     error: Error | ApiResponse,
     request: ApiRequest,
-    options: ErrorHandlerOptions = {}
+    options: ErrorHandlerOptions = { showUserNotification: true, logError: true, trackAnalytics: true }
   ): ProcessedError {
     let status: number;
     let responseData: unknown;
     let originalMessage: string;
-
-    // Add safety checks for error object
-    if (!error) {
-      error = new Error('Unknown error occurred');
-    }
-
-    // Add safety checks for request object
-    if (!request) {
-      request = {
-        url: 'unknown',
-        method: 'GET',
-        headers: {},
-      };
-    }
 
     if ('status' in error) {
       // API Response error
@@ -162,9 +150,10 @@ class ErrorInterceptor {
       originalMessage = msgFromMessage || msgFromError || `HTTP ${status}` || 'Unknown API error';
     } else {
       // Network or other error
+      const err = error as Error;
       status = 0;
       responseData = null;
-      originalMessage = error?.message || error?.toString() || 'Unknown error';
+      originalMessage = err.message || err.toString() || 'Unknown error';
     }
 
     const category = this.categorizeError(status, responseData);
@@ -184,8 +173,8 @@ class ErrorInterceptor {
       userMessage,
       details: {
         status,
-        url: request?.url || 'unknown',
-        method: request?.method || 'GET',
+        url: request.url,
+        method: request.method,
         responseData,
         requestId: requestIdMeta,
         originalError:
@@ -211,12 +200,12 @@ class ErrorInterceptor {
 
   private handleError(error: ProcessedError, options: ErrorHandlerOptions): void {
     // Log error if requested
-    if (options.logError !== false) {
+    if (options.logError === true) {
       this.logError(error);
     }
 
     // Track analytics if requested
-    if (options.trackAnalytics !== false) {
+    if (options.trackAnalytics === true) {
       this.trackError(error);
     }
 
@@ -227,29 +216,23 @@ class ErrorInterceptor {
     }
 
     // Show user notification if requested
-    if (options.showUserNotification !== false && typeof window !== 'undefined') {
+    if (options.showUserNotification === true && typeof window !== 'undefined') {
       this.showUserNotification(error);
     }
   }
 
   private logError(error: ProcessedError): void {
-    // Safety check for error object
-    if (!error) {
-      logger.error('[ErrorInterceptor] No error object provided to logError');
-      return;
-    }
-
-    const logLevel = this.getLogLevel(error.severity || 'low');
+    const logLevel = this.getLogLevel(error.severity);
 
     const logData = {
-      timestamp: error.timestamp?.toISOString() || new Date().toISOString(),
-      category: error.category || 'UNKNOWN',
-      code: error.code || 'UNKNOWN_ERROR',
-      message: error.message || 'No error message',
-      userMessage: error.userMessage || 'Unknown error occurred',
-      details: error.details || {},
-      severity: error.severity || 'low',
-      retryable: error.retryable || false,
+      timestamp: error.timestamp.toISOString(),
+      category: error.category,
+      code: error.code,
+      message: error.message,
+      userMessage: error.userMessage,
+      details: error.details ?? {},
+      severity: error.severity,
+      retryable: error.retryable,
       requestId: error.requestId,
     };
 

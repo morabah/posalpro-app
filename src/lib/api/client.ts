@@ -277,7 +277,7 @@ class EnhancedApiClient {
             throw new Error(`Invalid response format: Expected JSON, got ${contentType || 'unknown'}`);
           }
 
-          const data = await response.json();
+          const data: unknown = await response.json();
           logger.debug('[ApiClient] Parsed response data:', data);
 
           // Apply error interceptor

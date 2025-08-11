@@ -52,11 +52,11 @@ export interface TestReport {
 }
 
 export class ReportGenerator {
-  private static instance: ReportGenerator;
+  private static instance: ReportGenerator | null = null;
   private reports: TestReport[] = [];
 
   static getInstance(): ReportGenerator {
-    if (!ReportGenerator.instance) {
+    if (ReportGenerator.instance === null) {
       ReportGenerator.instance = new ReportGenerator();
     }
     return ReportGenerator.instance;
@@ -444,10 +444,10 @@ export class ReportGenerator {
         rows.push([
           result.name || 'N/A',
           category.category,
-          result.score?.toString() || 'N/A',
-          (result.duration || result.renderTime)?.toString() || 'N/A',
-          result.errors?.length?.toString() || '0',
-          result.warnings?.length?.toString() || '0',
+          result.score?.toString() ?? 'N/A',
+          (result.duration ?? result.renderTime)?.toString() ?? 'N/A',
+          result.errors?.length?.toString() ?? '0',
+          result.warnings?.length?.toString() ?? '0',
           result.score >= 70 ? 'PASS' : 'FAIL',
         ]);
       });

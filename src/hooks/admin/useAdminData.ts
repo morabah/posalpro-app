@@ -17,13 +17,15 @@ import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { useCallback, useEffect, useState } from 'react';
 
 // Component Traceability Matrix
-const COMPONENT_MAPPING = {
+const _COMPONENT_MAPPING = {
   userStories: ['US-8.1', 'US-8.2'],
   acceptanceCriteria: ['AC-8.1.1', 'AC-8.1.2', 'AC-8.2.1', 'AC-8.2.2'],
   methods: ['manageUsers()', 'manageRoles()', 'trackSystemMetrics()'],
   hypotheses: ['H8'],
   testCases: ['TC-H8-001', 'TC-H8-002', 'TC-H8-003'],
 };
+// Mark mapping as intentionally referenced to satisfy strict lint rules
+void _COMPONENT_MAPPING;
 
 // Interfaces for admin data
 export interface SystemUser {
@@ -66,7 +68,7 @@ interface SystemPermission {
   scope: 'ALL' | 'TEAM' | 'OWN';
   displayName: string;
   description: string;
-  constraints?: Record<string, any>;
+  constraints?: Record<string, unknown>;
   roles: Array<{
     id: string;
     name: string;
@@ -136,9 +138,9 @@ interface UseUsersResult {
     password: string;
     role: string;
     department: string;
-  }) => Promise<void>;
-  updateUser: (id: string, userData: Partial<SystemUser>) => Promise<void>;
-  deleteUser: (id: string) => Promise<void>;
+  }) => Promise<{ id: string }>;
+  updateUser: (id: string, userData: Partial<SystemUser>) => Promise<unknown>;
+  deleteUser: (id: string) => Promise<unknown>;
 }
 
 interface UseMetricsResult {
@@ -156,11 +158,11 @@ export function useUsers(
   role?: string,
   status?: string,
   department?: string
-) {
+): UseUsersResult {
   // Infrastructure setup - MIGRATED from direct fetch
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [users, setUsers] = useState<SystemUser[]>([]);
@@ -260,7 +262,7 @@ export function useUsers(
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, role, status, department]);
+  }, [page, limit, search, role, status, department, apiClient, analytics, clearError, errorHandlingService]);
 
   useEffect(() => {
     fetchUsers();
@@ -487,7 +489,7 @@ export function useRoles(
 ) {
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [roles, setRoles] = useState<SystemRole[]>([]);
@@ -811,7 +813,7 @@ export function usePermissions(
 ) {
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [permissions, setPermissions] = useState<SystemPermission[]>([]);
@@ -862,7 +864,7 @@ export function usePermissions(
       const data = await apiClient.get<{
         permissions: SystemPermission[];
         pagination: PaginationInfo;
-        filters: any;
+        filters: { resources: string[]; actions: string[]; scopes: string[] };
       }>(`admin/permissions?${params}`);
 
       setPermissions(data.permissions);
@@ -940,7 +942,7 @@ export function usePermissions(
       resource: string;
       action: string;
       scope?: 'ALL' | 'TEAM' | 'OWN';
-      constraints?: Record<string, any>;
+      constraints?: Record<string, unknown>;
     }) => {
       try {
         analytics(
@@ -1009,7 +1011,7 @@ export function usePermissions(
         resource?: string;
         action?: string;
         scope?: 'ALL' | 'TEAM' | 'OWN';
-        constraints?: Record<string, any>;
+        constraints?: Record<string, unknown>;
       }
     ) => {
       try {
@@ -1148,10 +1150,10 @@ export function usePermissions(
 }
 
 // ✅ MIGRATED: Hook for system metrics
-export function useSystemMetrics() {
+export function useSystemMetrics(): UseMetricsResult {
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);

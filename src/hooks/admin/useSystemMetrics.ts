@@ -18,13 +18,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { SystemMetrics, UseMetricsResult } from './types';
 
 // Component Traceability Matrix
-const COMPONENT_MAPPING = {
+const _COMPONENT_MAPPING = {
   userStories: ['US-8.1'],
   acceptanceCriteria: ['AC-8.1.1', 'AC-8.1.2'],
   methods: ['trackSystemMetrics()'],
   hypotheses: ['H8'],
   testCases: ['TC-H8-001'],
 };
+void _COMPONENT_MAPPING;
 
 /**
  * Hook for managing system metrics
@@ -33,7 +34,7 @@ const COMPONENT_MAPPING = {
 export function useSystemMetrics(): UseMetricsResult {
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);

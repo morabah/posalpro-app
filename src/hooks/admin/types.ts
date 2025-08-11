@@ -51,7 +51,7 @@ export interface SystemPermission {
   scope: 'ALL' | 'TEAM' | 'OWN';
   displayName: string;
   description: string;
-  constraints?: Record<string, any>;
+  constraints?: Record<string, unknown>;
   roles: Array<{
     id: string;
     name: string;
@@ -177,7 +177,7 @@ export interface UsePermissionsResult {
     resource: string;
     action: string;
     scope?: 'ALL' | 'TEAM' | 'OWN';
-    constraints?: Record<string, any>;
+    constraints?: Record<string, unknown>;
   }) => Promise<{ id: string }>;
   updatePermission: (
     id: string,
@@ -185,7 +185,7 @@ export interface UsePermissionsResult {
       resource?: string;
       action?: string;
       scope?: 'ALL' | 'TEAM' | 'OWN';
-      constraints?: Record<string, any>;
+      constraints?: Record<string, unknown>;
     }
   ) => Promise<unknown>;
   deletePermission: (id: string) => Promise<unknown>;

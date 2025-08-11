@@ -163,9 +163,8 @@ export class SimpleErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoun
 
   private async reportError(error: StandardError, errorInfo: ErrorInfo) {
     try {
-      // ✅ FIXED: Proper dynamic import and usage
-      const { useApiClient } = await import('@/hooks/useApiClient');
-      const apiClient = useApiClient();
+      // ✅ FIXED: Use non-hook API client inside class component
+      const { apiClient } = await import('@/lib/api/client');
 
       const errorData = {
         message: error.message,

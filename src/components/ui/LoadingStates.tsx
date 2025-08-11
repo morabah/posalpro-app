@@ -47,7 +47,7 @@ export const ProductsListSkeleton = memo(() => (
 
     {/* Products Grid Skeleton */}
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {[...Array(8)].map((_, i) => (
+      {Array.from({ length: 8 }).map((_, i) => (
         <Card key={i} className="p-6">
           <div className="flex items-start justify-between mb-3">
             <SkeletonLoader className="w-3/4" height="h-5" />
@@ -96,7 +96,7 @@ export const CustomersListSkeleton = memo(() => (
 
     {/* Customers Grid Skeleton */}
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {[...Array(8)].map((_, i) => (
+      {Array.from({ length: 8 }).map((_, i) => (
         <Card key={i} className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -156,7 +156,7 @@ export const DashboardSkeleton = memo(() => (
 
     {/* Stats Cards */}
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      {[...Array(4)].map((_, i) => (
+      {Array.from({ length: 4 }).map((_, i) => (
         <Card key={i} className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -203,7 +203,7 @@ export const AnalyticsSkeleton = memo(() => (
 
     {/* Analytics Charts */}
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-      {[...Array(4)].map((_, i) => (
+      {Array.from({ length: 4 }).map((_, i) => (
         <Card key={i} className="p-6">
           <SkeletonLoader className="w-40" height="h-6" />
           <SkeletonLoader className="w-full mt-4" height="h-48" />
@@ -215,7 +215,7 @@ export const AnalyticsSkeleton = memo(() => (
     <Card className="p-6">
       <SkeletonLoader className="w-32" height="h-6" />
       <div className="mt-6 space-y-3">
-        {[...Array(6)].map((_, i) => (
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="grid grid-cols-5 gap-4">
             <SkeletonLoader height="h-4" />
             <SkeletonLoader height="h-4" />

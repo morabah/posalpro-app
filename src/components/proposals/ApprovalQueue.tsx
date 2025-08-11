@@ -437,7 +437,7 @@ export function ApprovalQueue({
 
             <select
               value={sortBy}
-              onChange={e => handleSortChange(e.target.value as any)}
+              onChange={e => handleSortChange(e.target.value as 'priority' | 'deadline' | 'sla' | 'complexity')}
               className="px-3 py-1 border border-gray-200 rounded-md text-sm"
             >
               <option value="priority">Smart Priority</option>

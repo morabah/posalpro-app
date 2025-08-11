@@ -21,7 +21,7 @@ interface SearchResult<T> {
 }
 
 // Cache for search results
-const searchCache = new Map<string, any>();
+const searchCache: Map<string, { items: unknown[]; totalCount: number }> = new Map();
 const CACHE_SIZE_LIMIT = 100;
 
 // Optimized string matching with pre-computed lowercase versions
@@ -36,7 +36,7 @@ const createSearchMatcher = (query: string, caseSensitive: boolean = false) => {
 };
 
 // Advanced search with field weighting and relevance scoring
-const searchWithRelevance = <T extends Record<string, any>>(
+const searchWithRelevance = <T extends Record<string, unknown>>(
   items: T[],
   query: string,
   searchFields: string[],
@@ -78,7 +78,7 @@ const searchWithRelevance = <T extends Record<string, any>>(
   return results.sort((a, b) => b.score - a.score).map(result => result.item);
 };
 
-export function useOptimizedSearch<T extends Record<string, any>>(
+export function useOptimizedSearch<T extends Record<string, unknown>>(
   data: T[],
   options: SearchOptions = {}
 ): [string, (query: string) => void, SearchResult<T>] {
@@ -93,7 +93,7 @@ export function useOptimizedSearch<T extends Record<string, any>>(
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const debounceTimer = useRef<NodeJS.Timeout | undefined>(undefined);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Debounced query update
   const updateQuery = useCallback(
@@ -140,9 +140,10 @@ export function useOptimizedSearch<T extends Record<string, any>>(
     // Check cache first
     const cacheKey = `${debouncedQuery}-${searchFields.join(',')}-${caseSensitive}`;
     if (searchCache.has(cacheKey)) {
-      const cached = searchCache.get(cacheKey);
+      const cached = searchCache.get(cacheKey)!; // safe due to has(cacheKey)
       return {
-        ...cached,
+        items: cached.items as T[],
+        totalCount: cached.totalCount,
         searchTime: performance.now() - startTime,
         isLoading: false,
       };
@@ -166,7 +167,7 @@ export function useOptimizedSearch<T extends Record<string, any>>(
       }
     }
     searchCache.set(cacheKey, {
-      items: result.items,
+      items: result.items as unknown[],
       totalCount: result.totalCount,
     });
 
@@ -177,7 +178,7 @@ export function useOptimizedSearch<T extends Record<string, any>>(
 }
 
 // Specialized hook for multi-field search with custom scoring
-export function useAdvancedSearch<T extends Record<string, any>>(
+export function useAdvancedSearch<T extends Record<string, unknown>>(
   data: T[],
   fieldWeights: Record<string, number> = {},
   options: SearchOptions = {}

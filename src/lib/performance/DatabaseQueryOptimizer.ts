@@ -94,7 +94,7 @@ export interface ConnectionPoolStats {
  * Database Query Optimizer with intelligent caching and performance monitoring
  */
 export class DatabaseQueryOptimizer {
-  private static instance: DatabaseQueryOptimizer;
+  private static instance: DatabaseQueryOptimizer | null = null;
   private errorHandlingService: ErrorHandlingService;
   // Removed cacheManager field - using built-in caching only
   private analytics: any;
@@ -141,8 +141,7 @@ export class DatabaseQueryOptimizer {
   }
 
   static getInstance(config?: Partial<QueryOptimizerConfig>): DatabaseQueryOptimizer {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!DatabaseQueryOptimizer.instance) {
+    if (DatabaseQueryOptimizer.instance === null) {
       DatabaseQueryOptimizer.instance = new DatabaseQueryOptimizer(config);
     }
     return DatabaseQueryOptimizer.instance;
@@ -358,10 +357,10 @@ export class DatabaseQueryOptimizer {
     }
 
     // Track query by type
-    this.queryMetrics.queryByType[queryType] = (this.queryMetrics.queryByType[queryType] || 0) + 1;
+    this.queryMetrics.queryByType[queryType] = (this.queryMetrics.queryByType[queryType] ?? 0) + 1;
 
     // Update cache hit rate
-    const cacheableQueries = this.queryMetrics.queryByType['SELECT'] || 0;
+    const cacheableQueries = this.queryMetrics.queryByType['SELECT'] ?? 0;
     const cacheHits = Math.floor(cacheableQueries * this.queryMetrics.cacheHitRate);
     const newCacheHits = cacheHit ? cacheHits + 1 : cacheHits;
     this.queryMetrics.cacheHitRate = cacheableQueries > 0 ? newCacheHits / cacheableQueries : 0;

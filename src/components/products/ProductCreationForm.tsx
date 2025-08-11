@@ -16,7 +16,8 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Check, Loader2, Settings, Sparkles, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { FieldPath } from 'react-hook-form';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -258,14 +259,17 @@ export function ProductCreationForm({
     'US-4.3',
   ];
 
-  // Form steps for better UX
-  const formSteps = [
-    { id: 0, title: 'Basic Information', fields: ['name', 'sku', 'price'] }, // Removed optional 'description'
-    { id: 1, title: 'Categorization', fields: ['category'] }, // Removed optional 'tags', 'userStoryMappings'
-    { id: 2, title: 'Configuration', fields: ['priceModel'] }, // Removed optional 'attributes', 'customizationOptions'
-    { id: 3, title: 'Resources & Dependencies', fields: [] }, // All fields are optional
-    { id: 4, title: 'Settings & Review', fields: [] }, // All fields have defaults
-  ];
+  // Form steps for better UX (memoized to avoid re-creating on each render)
+  const formSteps = useMemo(
+    () => [
+      { id: 0, title: 'Basic Information', fields: ['name', 'sku', 'price'] }, // Removed optional 'description'
+      { id: 1, title: 'Categorization', fields: ['category'] }, // Removed optional 'tags', 'userStoryMappings'
+      { id: 2, title: 'Configuration', fields: ['priceModel'] }, // Removed optional 'attributes', 'customizationOptions'
+      { id: 3, title: 'Resources & Dependencies', fields: [] }, // All fields are optional
+      { id: 4, title: 'Settings & Review', fields: [] }, // All fields have defaults
+    ],
+    []
+  );
 
   // AI-assisted description generation (AC-2.1.2 equivalent for products)
   const generateAIDescription = useCallback(async () => {
@@ -348,10 +352,10 @@ export function ProductCreationForm({
           tags: data.tags,
           attributes: data.attributes?.reduce(
             (acc, attr) => {
-              acc[attr.key] = attr.value;
+              acc[attr.key] = attr.value as unknown as string;
               return acc;
             },
-            {} as Record<string, any>
+            {} as Record<string, unknown>
           ),
           images: data.images,
           userStoryMappings: data.userStoryMappings,
@@ -462,31 +466,31 @@ export function ProductCreationForm({
     const errors = form.formState.errors;
 
     switch (currentStep) {
-      case 0: // Basic Information
-        // Check if required fields have values and no errors
+      case 0: {
         const hasBasicData =
           values.name && values.sku && values.price !== undefined && values.price >= 0;
         const hasBasicErrors = errors.name || errors.sku || errors.price;
         return hasBasicData && !hasBasicErrors;
-
-      case 1: // Categorization
+      }
+      case 1: {
         const hasCategory = values.category && values.category.length > 0;
         const hasCategoryErrors = errors.category;
         return hasCategory && !hasCategoryErrors;
-
-      case 2: // Configuration
+      }
+      case 2: {
         const hasPriceModel = values.priceModel;
         const hasPriceModelErrors = errors.priceModel;
         return hasPriceModel && !hasPriceModelErrors;
-
-      case 3: // Resources & Dependencies
+      }
+      case 3: {
         return true; // This step is optional
-
-      case 4: // Settings & Review
+      }
+      case 4: {
         return true; // Final review step
-
-      default:
+      }
+      default: {
         return false;
+      }
     }
   }, [currentStep, form]);
 
@@ -1317,13 +1321,15 @@ export function ProductCreationForm({
                       );
 
                       // Force trigger validation
-                      const currentStepFields = formSteps[currentStep].fields;
+                      const currentStepFields = formSteps[currentStep].fields as Array<
+                        FieldPath<ProductCreationFormData>
+                      >;
                       console.log('Debug - Fields to validate:', currentStepFields);
 
                       currentStepFields.forEach(field => {
-                        form.trigger(field as any);
-                        const hasError =
-                          !!form.formState.errors[field as keyof typeof form.formState.errors];
+                        void form.trigger(field);
+                        const { error } = form.getFieldState(field);
+                        const hasError = Boolean(error);
                         console.log(`Debug - Field ${field} has error:`, hasError);
                       });
                     }}

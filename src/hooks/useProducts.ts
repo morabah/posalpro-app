@@ -4,7 +4,7 @@
  * Performance optimized with caching and pagination
  */
 
-import { Product as EntityProduct } from '@/types/entities/product';
+import { Product as EntityProduct, CreateProductData } from '@/types/entities/product';
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useApiClient } from './useApiClient';
 
@@ -16,7 +16,7 @@ export interface Product extends Omit<EntityProduct, 'createdAt' | 'updatedAt'> 
     proposalsCount: number;
     relationshipsCount: number;
   };
-  analytics?: Record<string, any>;
+  analytics?: Record<string, unknown>;
 }
 
 export interface ProductsResponse {
@@ -162,11 +162,9 @@ export function useProductSearch(
       const searchParams = new URLSearchParams();
       searchParams.set('search', searchTerm);
 
-      // Add other options
+      // Add other options (Object.entries won't include undefined values)
       Object.entries(options).forEach(([key, value]) => {
-        if (value !== undefined) {
-          searchParams.set(key, value.toString());
-        }
+        searchParams.set(key, String(value));
       });
 
       const response = await apiClient.get<{
@@ -203,8 +201,9 @@ export function useCreateProduct() {
   const apiClient = useApiClient();
 
   return {
-    mutate: (data: any) => console.warn('Use mutateAsync for proper async handling'),
-    mutateAsync: async (data: any): Promise<Product> => {
+    mutate: () =>
+      console.warn('Use mutateAsync for proper async handling'),
+    mutateAsync: async (data: CreateProductData): Promise<Product> => {
       const response = await apiClient.post<{
         success: boolean;
         data: Product;
@@ -232,8 +231,9 @@ export function useUpdateProduct() {
   const apiClient = useApiClient();
 
   return {
-    mutate: (data: any) => console.warn('Use mutateAsync for proper async handling'),
-    mutateAsync: async (data: { id: string; [key: string]: any }): Promise<Product> => {
+    mutate: () =>
+      console.warn('Use mutateAsync for proper async handling'),
+    mutateAsync: async (data: { id: string } & Partial<CreateProductData>): Promise<Product> => {
       const { id, ...updateData } = data;
       const response = await apiClient.put<{
         success: boolean;
@@ -262,7 +262,7 @@ export function useDeleteProduct() {
   const apiClient = useApiClient();
 
   return {
-    mutate: (id: string) => console.warn('Use mutateAsync for proper async handling'),
+    mutate: () => console.warn('Use mutateAsync for proper async handling'),
     mutateAsync: async (id: string): Promise<{ success: boolean; message: string }> => {
       const response = await apiClient.delete<{
         success: boolean;

@@ -18,13 +18,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { PaginationInfo, SystemRole, UseRolesResult } from './types';
 
 // Component Traceability Matrix
-const COMPONENT_MAPPING = {
+const _COMPONENT_MAPPING = {
   userStories: ['US-8.2'],
   acceptanceCriteria: ['AC-8.2.1', 'AC-8.2.2'],
   methods: ['manageRoles()'],
   hypotheses: ['H8'],
   testCases: ['TC-H8-002'],
 };
+void _COMPONENT_MAPPING;
 
 /**
  * Hook for managing admin roles
@@ -38,7 +39,7 @@ export function useRoles(
 ): UseRolesResult {
   const apiClient = useApiClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { handleAsyncError, clearError } = useErrorHandler();
+  const { clearError } = useErrorHandler();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [roles, setRoles] = useState<SystemRole[]>([]);

@@ -10,6 +10,7 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { AlertCircle, ChevronDown, ChevronRight, Clock, MoreVertical } from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
+import Image from 'next/image';
 
 // Enhanced Mobile Card Interfaces
 interface MobileCardAction {
@@ -76,7 +77,7 @@ interface EnhancedMobileCardProps {
   role?: string;
 
   // Analytics
-  trackingContext?: Record<string, any>;
+  trackingContext?: Record<string, unknown>;
 
   // Styling
   className?: string;
@@ -122,7 +123,7 @@ export function EnhancedMobileCard({
   const { handleAsyncError } = useErrorHandler();
 
   // Handle swipe gestures for actions
-  const handleSwipeGesture = useCallback(
+  const _handleSwipeGesture = useCallback(
     (direction: 'left' | 'right') => {
       try {
         if (swipeActions.length === 0) return;
@@ -154,6 +155,8 @@ export function EnhancedMobileCard({
     },
     [swipeActions, analytics, title, trackingContext, handleAsyncError]
   );
+  // Mark underscored gesture handler as used (not yet wired)
+  void _handleSwipeGesture;
 
   // Handle tap interactions
   const handleTap = useCallback(() => {
@@ -311,8 +314,8 @@ export function EnhancedMobileCard({
         <div className="flex-1 min-w-0">
           {/* Image */}
           {image && (
-            <div className="w-12 h-12 rounded-lg overflow-hidden mb-3 flex-shrink-0">
-              <img src={image} alt={imageAlt || title} className="w-full h-full object-cover" />
+            <div className="w-12 h-12 rounded-lg overflow-hidden mb-3 flex-shrink-0 relative">
+              <Image src={image} alt={imageAlt || title} fill sizes="48px" className="object-cover" />
             </div>
           )}
 

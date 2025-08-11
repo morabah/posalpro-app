@@ -13,11 +13,11 @@ export function useRealTimeAnalytics() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError } = useErrorHandler();
   
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
   const [optimizationScore] = useState(85);
 
   const trackRealTimeEvent = useCallback(
-    async (eventType: string, data: Record<string, any>) => {
+    async (eventType: string, data: Record<string, unknown>) => {
       try {
         analytics("real_time_analytics_event", {
           ...data,

@@ -45,6 +45,22 @@ interface PerformanceMetrics {
   };
 }
 
+// Local browser entry shaping to avoid `any` while reading PerformanceObserver entries
+interface LayoutShiftEntry extends PerformanceEntry {
+  value: number;
+  hadRecentInput: boolean;
+}
+
+// PerformanceEventTiming exists in DOM lib but we narrow to what's needed
+interface FirstInputEntry extends PerformanceEventTiming {
+  processingStart: number;
+}
+
+interface PerformanceMemoryInfo {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+}
+
 interface PerformanceAlert {
   id: string;
   type: 'info' | 'warning' | 'error';
@@ -82,11 +98,14 @@ export function PerformanceMonitor() {
     };
 
     // System Metrics
-    const memoryInfo = (performance as any).memory || {};
+    const memoryInfo = (performance as unknown as { memory?: PerformanceMemoryInfo }).memory;
     const system = {
-      memoryUsage: memoryInfo.usedJSHeapSize
-        ? Math.round((memoryInfo.usedJSHeapSize / memoryInfo.totalJSHeapSize) * 100)
-        : 0,
+      memoryUsage:
+        typeof memoryInfo?.usedJSHeapSize === 'number' &&
+        typeof memoryInfo?.totalJSHeapSize === 'number' &&
+        memoryInfo.totalJSHeapSize > 0
+          ? Math.round((memoryInfo.usedJSHeapSize / memoryInfo.totalJSHeapSize) * 100)
+          : 0,
       gcCount: getGarbageCollectionCount(),
       renderTime: performance.now() - startTime,
       bundleLoadTime: getBundleLoadTime(),
@@ -129,7 +148,29 @@ export function PerformanceMonitor() {
       }
 
       // Check for alerts
-      checkForAlerts(newMetrics);
+      // Inline call to avoid unstable dependency on checkForAlerts
+      (function inlineCheckForAlerts() {
+        // Critical alerts
+        if (newMetrics.system.memoryUsage > 90) {
+          addAlert('error', 'Critical: Memory usage above 90%', false);
+        }
+        if (newMetrics.performance.score < 60) {
+          addAlert('error', 'Critical: Performance score below 60%', false);
+        }
+
+        // Warning alerts
+        if (newMetrics.webVitals.lcp > 4000) {
+          addAlert('warning', 'Warning: LCP exceeds 4 seconds', false);
+        }
+        if (newMetrics.user.debugLogsCount > 0) {
+          addAlert('warning', 'Warning: Debug logging is enabled', false);
+        }
+
+        // Performance improvement alerts
+        if (newMetrics.performance.score > 95) {
+          addAlert('info', 'Excellent: Performance score above 95%', false);
+        }
+      })();
     } catch (error) {
       console.error('Performance monitoring error:', error);
       addAlert('error', 'Performance monitoring encountered an error', false);
@@ -165,8 +206,8 @@ export function PerformanceMonitor() {
 
   function getFirstInputDelay(): number {
     try {
-      const entries = performance.getEntriesByType('first-input');
-      return entries.length > 0 ? (entries[0] as any).processingStart - entries[0].startTime : 0;
+      const entries = performance.getEntriesByType('first-input') as FirstInputEntry[];
+      return entries.length > 0 ? entries[0].processingStart - entries[0].startTime : 0;
     } catch {
       return 0;
     }
@@ -174,10 +215,10 @@ export function PerformanceMonitor() {
 
   function getCumulativeLayoutShift(): number {
     try {
-      const entries = performance.getEntriesByType('layout-shift');
+      const entries = performance.getEntriesByType('layout-shift') as LayoutShiftEntry[];
       return entries.reduce((cls, entry) => {
-        if (!(entry as any).hadRecentInput) {
-          return cls + (entry as any).value;
+        if (!entry.hadRecentInput) {
+          return cls + entry.value;
         }
         return cls;
       }, 0);
@@ -240,7 +281,11 @@ export function PerformanceMonitor() {
     return process.env.NEXT_PUBLIC_DEBUG_FORMS === 'true' ? 1 : 0;
   }
 
-  function calculatePerformanceScore(webVitals: any, system: any, user: any): number {
+  function calculatePerformanceScore(
+    webVitals: PerformanceMetrics['webVitals'],
+    system: PerformanceMetrics['system'],
+    user: PerformanceMetrics['user']
+  ): number {
     const weights = {
       webVitals: 0.4,
       system: 0.3,
@@ -284,7 +329,11 @@ export function PerformanceMonitor() {
     return 'critical';
   }
 
-  function generateRecommendations(webVitals: any, system: any, user: any): string[] {
+  function generateRecommendations(
+    webVitals: PerformanceMetrics['webVitals'],
+    system: PerformanceMetrics['system'],
+    user: PerformanceMetrics['user']
+  ): string[] {
     const recommendations: string[] = [];
 
     if (webVitals.lcp > 2500) {
@@ -310,8 +359,6 @@ export function PerformanceMonitor() {
   }
 
   function checkForAlerts(newMetrics: PerformanceMetrics) {
-    const now = Date.now();
-
     // Critical alerts
     if (newMetrics.system.memoryUsage > 90) {
       addAlert('error', 'Critical: Memory usage above 90%', false);

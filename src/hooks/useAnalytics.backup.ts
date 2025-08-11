@@ -14,10 +14,13 @@ export interface AnalyticsEvent {
   methods?: string[];
   hypotheses?: string[];
   testCases?: string[];
-  measurementData?: Record<string, any>;
-  componentMapping?: Record<string, any>;
+  measurementData?: Record<string, unknown>;
+  componentMapping?: Record<string, unknown>;
+  component?: string;
+  userId?: string;
+  page?: string;
   timestamp?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // Batch configuration
@@ -48,20 +51,14 @@ interface EventBatch {
 
 class OptimizedAnalyticsManager {
   private batch: EventBatch;
-  private flushTimer: NodeJS.Timeout | null = null;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private throttleMap = new Map<string, number>();
   private config: BatchConfig;
   private isProcessing = false;
   private emergencyDisabled = false; // ✅ EMERGENCY: Instance-level disable
 
   constructor(config: Partial<BatchConfig> = {}) {
-    this.config = {
-      maxBatchSize: 200,
-      flushInterval: 300000, // ✅ EMERGENCY: 5 minutes to eliminate violations
-      throttleInterval: 30000, // ✅ EMERGENCY: 30 seconds to eliminate violations
-      maxStorageSize: 50, // ✅ EMERGENCY: Minimal size to eliminate violations
-      ...config,
-    };
+    this.config = { ...DEFAULT_CONFIG, ...config };
     this.batch = {
       events: [],
       lastFlush: Date.now(),
@@ -82,9 +79,8 @@ class OptimizedAnalyticsManager {
    */
   private checkPerformanceViolations(): void {
     try {
-      // Check for violation indicators in console
-      if (typeof window !== 'undefined' && window.console) {
-        // If we detect too many violations, disable analytics
+      // If we detect too many violations, disable analytics
+      if (typeof window !== 'undefined') {
         const violationCount = this.getViolationCount();
         if (violationCount > 5) {
           this.emergencyDisabled = true;
@@ -92,7 +88,7 @@ class OptimizedAnalyticsManager {
           console.warn('[Analytics] Emergency disabled due to performance violations');
         }
       }
-    } catch (error) {
+    } catch {
       // If check fails, disable to be safe
       this.emergencyDisabled = true;
     }
@@ -156,7 +152,7 @@ class OptimizedAnalyticsManager {
       if (this.throttleMap.size > 500) {
         this.cleanupThrottleMap();
       }
-    } catch (error) {
+    } catch {
       // ✅ EMERGENCY: Disable on any error
       this.emergencyDisabled = true;
     }
@@ -203,12 +199,19 @@ class OptimizedAnalyticsManager {
 
       // Reset batch immediately
       this.resetBatch();
-    } catch (error) {
+    } catch {
       // ✅ EMERGENCY: Disable on flush error
       this.emergencyDisabled = true;
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  /**
+   * Public method to force a flush safely
+   */
+  public forceFlush(): void {
+    this.flush();
   }
 
   /**
@@ -221,7 +224,7 @@ class OptimizedAnalyticsManager {
 
       // ✅ EMERGENCY: Minimal storage
       this.storeEventsOptimized(batchToFlush.events);
-    } catch (error) {
+    } catch {
       // Complete silent failure
     }
   }
@@ -247,7 +250,7 @@ class OptimizedAnalyticsManager {
 
       // ✅ EMERGENCY: Direct storage without reading existing
       localStorage.setItem('analytics_events', JSON.stringify(essentialEvents));
-    } catch (error) {
+    } catch {
       // ✅ EMERGENCY: Disable analytics on storage error
       this.emergencyDisabled = true;
       EMERGENCY_ANALYTICS_DISABLED = true;
@@ -283,7 +286,7 @@ class OptimizedAnalyticsManager {
     try {
       // ✅ EMERGENCY: Just clear everything to prevent violations
       this.throttleMap.clear();
-    } catch (error) {
+    } catch {
       // Silent failure
     }
   }
@@ -365,8 +368,7 @@ class OptimizedAnalyticsManager {
   }
 }
 
-// Global analytics manager instance
-let analyticsManager: OptimizedAnalyticsManager | null = null;
+// Removed unused global analytics manager to satisfy lint rules
 
 /**
  * ✅ PERFORMANCE OPTIMIZED: Analytics hook with batching and throttling
@@ -377,7 +379,6 @@ export const useAnalytics = () => {
   // Initialize manager once
   if (!managerRef.current) {
     managerRef.current = new OptimizedAnalyticsManager();
-    analyticsManager = managerRef.current;
   }
 
   // Cleanup on unmount
@@ -386,7 +387,6 @@ export const useAnalytics = () => {
       if (managerRef.current) {
         managerRef.current.cleanup();
         managerRef.current = null;
-        analyticsManager = null;
       }
     };
   }, []);
@@ -451,8 +451,8 @@ export const useAnalytics = () => {
       localStorage.removeItem('analytics_events');
       localStorage.removeItem('analytics_user');
       logger.info('[Analytics] Storage cleared successfully');
-    } catch (error) {
-      logger.warn('[Analytics] Failed to clear storage:', error);
+    } catch {
+      logger.warn('[Analytics] Failed to clear storage');
     }
   }, []);
 
@@ -461,7 +461,7 @@ export const useAnalytics = () => {
    */
   const flush = useCallback(() => {
     if (managerRef.current) {
-      (managerRef.current as any).flush();
+      managerRef.current.forceFlush();
     }
   }, []);
 

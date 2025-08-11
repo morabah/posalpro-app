@@ -10,12 +10,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Performance monitoring utilities
 export class PerformanceMonitor {
-  private static instance: PerformanceMonitor;
+  private static instance: PerformanceMonitor | null = null;
   private metrics: Map<string, number[]> = new Map();
   private observers: PerformanceObserver[] = [];
 
   static getInstance(): PerformanceMonitor {
-    if (!PerformanceMonitor.instance) {
+    if (PerformanceMonitor.instance === null) {
       PerformanceMonitor.instance = new PerformanceMonitor();
     }
     return PerformanceMonitor.instance;
@@ -243,7 +243,7 @@ export class BundleOptimizer {
       ) as PerformanceNavigationTiming[];
       if (navigationEntries.length > 0) {
         const entry = navigationEntries[0];
-        const transferSize = entry.transferSize || 0;
+        const transferSize = entry.transferSize ?? 0;
         resolve(transferSize);
       } else {
         resolve(0);
@@ -261,8 +261,8 @@ export class BundleOptimizer {
 
     resourceEntries.forEach(entry => {
       if (entry.name.includes('.js') || entry.name.includes('.css')) {
-        const chunkName = entry.name.split('/').pop() || 'unknown';
-        chunks[chunkName] = entry.transferSize || 0;
+        const chunkName = entry.name.split('/').pop() ?? 'unknown';
+        chunks[chunkName] = entry.transferSize ?? 0;
       }
     });
 

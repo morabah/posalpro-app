@@ -318,42 +318,7 @@ export const useMobileDetection = () => {
     [analytics, handleAsyncError]
   );
 
-  /**
-   * Screen Change Detection
-   * Monitors for orientation changes and screen size updates
-   */
-  const handleScreenChange = useCallback(() => {
-    try {
-      const updatedDevice = detectMobileDevice();
-      const updatedOptimization = optimizeNavigation(updatedDevice);
-
-      setDeviceInfo(updatedDevice);
-      setNavigationOptimization(updatedOptimization);
-
-      // Track screen change events
-      analytics(
-        'mobile_screen_change',
-        {
-          userStories: ['US-8.1'],
-          hypotheses: ['H9'],
-          measurementData: {
-            newOrientation: updatedDevice.screenSize.orientation,
-            newWidth: updatedDevice.screenSize.width,
-            newHeight: updatedDevice.screenSize.height,
-          },
-          componentMapping: COMPONENT_MAPPING,
-        },
-        'low'
-      );
-    } catch (error) {
-      handleAsyncError(error, 'Failed to handle screen change', {
-        context: 'useMobileDetection.handleScreenChange',
-        component: 'useMobileDetection',
-        userStory: 'US-8.1',
-        severity: 'low',
-      });
-    }
-  }, [detectMobileDevice, optimizeNavigation, analytics, handleAsyncError]);
+  // Screen change detection temporarily disabled to reduce memory usage
 
   /**
    * Initialization Effect
@@ -389,10 +354,10 @@ export const useMobileDetection = () => {
 
     // TEMPORARILY DISABLED TO REDUCE MEMORY USAGE
     // Set up screen change listeners
-    // const handleResize = () => handleScreenChange();
+    // const handleResize = () => _handleScreenChange();
     // const handleOrientationChange = () => {
     //   // Delay to allow screen dimensions to update
-    //   setTimeout(handleScreenChange, 100);
+    //   setTimeout(_handleScreenChange, 100);
     // };
 
     // window.addEventListener('resize', handleResize);
@@ -403,7 +368,7 @@ export const useMobileDetection = () => {
       // window.removeEventListener('resize', handleResize);
       // window.removeEventListener('orientationchange', handleOrientationChange);
     };
-  }, []); // ✅ FIXED: Empty dependency array to prevent infinite initialization loops
+  }, [detectMobileDevice, optimizeNavigation, trackDeviceMetrics, handleAsyncError]);
 
   /**
    * CSS Class Generation

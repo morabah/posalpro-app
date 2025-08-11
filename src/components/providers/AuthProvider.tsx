@@ -11,7 +11,8 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorHandlingService } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { SessionProvider, useSession } from 'next-auth/react';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { Session } from 'next-auth';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -57,7 +58,7 @@ interface AuthUser {
 
 interface AuthProviderProps {
   children: React.ReactNode;
-  session?: any;
+  session?: Session | null;
 }
 
 const AuthContext = createContext<AuthContextState | null>(null);
@@ -80,22 +81,23 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     setIsClient(true);
   }, []);
 
-  // Extract user data from session
-  const user: AuthUser | null = session?.user
-    ? {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        department: session.user.department,
-        roles: session.user.roles || [],
-        permissions: session.user.permissions || [],
-      }
-    : null;
+  // Extract user data from session (memoized to stabilize hook deps)
+  const user: AuthUser | null = useMemo(() => {
+    if (!session?.user) return null;
+    return {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.name,
+      department: session.user.department,
+      roles: Array.isArray(session.user.roles) ? session.user.roles : [],
+      permissions: Array.isArray(session.user.permissions) ? session.user.permissions : [],
+    };
+  }, [session?.user]);
 
   const isAuthenticated = status === 'authenticated' && !!user;
   const isLoading = status === 'loading';
-  const roles = user?.roles || [];
-  const permissions = user?.permissions || [];
+  const roles = useMemo(() => (user ? user.roles : []), [user]);
+  const permissions = useMemo(() => (user ? user.permissions : []), [user]);
 
   // Role checking utilities
   const hasRole = useCallback(
@@ -168,7 +170,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       // Log the error for debugging
       errorHandlingService.processError(standardError);
     }
-  }, [update, user?.id]); // Remove analytics dependency
+  }, [update, analytics, errorHandlingService, user?.id]);
 
   const logout = useCallback(async (): Promise<void> => {
     try {
@@ -232,7 +234,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         'high'
       );
     }
-  }, [user?.id, lastActivity, apiClient, errorHandlingService, analytics]);
+  }, [analytics, apiClient, errorHandlingService, lastActivity, user?.id]);
 
   // Activity tracking
   const trackActivity = useCallback(
@@ -253,7 +255,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         'low'
       );
     },
-    [user?.id, roles] // Remove analytics dependency
+    [analytics, user?.id, roles]
   );
 
   // Session monitoring and auto-refresh
@@ -284,10 +286,10 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
 
   // Track session start - ONLY ONCE per session
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!isAuthenticated) return;
 
     // Prevent duplicate session_start events by checking if we already tracked this session
-    const sessionKey = `session_tracked_${user.id}`;
+    const sessionKey = `session_tracked_${user!.id}`;
     const lastTrackedSession = localStorage.getItem(sessionKey);
     const currentSessionTime = Date.now();
 
@@ -296,7 +298,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       analytics(
         'session_start',
         {
-          userId: user.id,
+          userId: user!.id,
           userRoles: roles,
           userDepartment: user.department,
           timestamp: currentSessionTime,
@@ -309,7 +311,14 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       // Store the session tracking timestamp
       localStorage.setItem(sessionKey, currentSessionTime.toString());
     }
-  }, [isAuthenticated, user?.id]); // Only depend on authentication and user ID
+  }, [
+    isAuthenticated,
+    analytics,
+    user,
+    user?.id,
+    user?.department,
+    roles,
+  ]);
 
   // Track user activity on page interactions
   useEffect(() => {
@@ -393,7 +402,17 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         'medium'
       );
     }
-  }, [status, user?.id]); // Only depend on status and user ID
+  }, [
+    status,
+    analytics,
+    user,
+    user?.id,
+    user?.email,
+    user?.name,
+    user?.department,
+    roles,
+    permissions.length,
+  ]);
 
   const contextValue: AuthContextState = {
     isAuthenticated,

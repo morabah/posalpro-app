@@ -16,6 +16,12 @@ export { useRoles } from './useRoles';
 export { useSystemMetrics } from './useSystemMetrics';
 export { useUsers } from './useUsers';
 
+// Local imports for combined hook usage
+import { usePermissions as _usePermissions } from './usePermissions';
+import { useRoles as _useRoles } from './useRoles';
+import { useSystemMetrics as _useSystemMetrics } from './useSystemMetrics';
+import { useUsers as _useUsers } from './useUsers';
+
 // Type exports
 export type {
   PaginationInfo,
@@ -31,17 +37,13 @@ export type {
 
 // Optional: Combined hook for components needing multiple admin hooks
 export function useAdminData() {
-  // Dynamic imports to avoid circular dependencies
-  const { useUsers } = require('./useUsers');
-  const { useRoles } = require('./useRoles');
-  const { usePermissions } = require('./usePermissions');
-  const { useSystemMetrics } = require('./useSystemMetrics');
+  // Use direct imports to comply with ESM and lint rules
 
   return {
-    users: useUsers(),
-    roles: useRoles(),
-    permissions: usePermissions(),
-    metrics: useSystemMetrics(),
+    users: _useUsers(),
+    roles: _useRoles(),
+    permissions: _usePermissions(),
+    metrics: _useSystemMetrics(),
   };
 }
 

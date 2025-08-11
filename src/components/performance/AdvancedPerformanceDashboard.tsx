@@ -11,9 +11,9 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useMobileDetection } from '@/hooks/useMobileDetection';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { usePerformanceOptimization } from '@/hooks/usePerformanceOptimization';
 import {
   ArrowPathIcon,
@@ -123,16 +123,20 @@ export default function AdvancedPerformanceDashboard({
       };
 
       // Track report generation
-      analytics('performance_report_generated', {
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        reportType: 'comprehensive',
-        optimizationScore,
-        alertsCount: performanceAlerts.length,
-        recommendationsCount: performanceRecommendations.length,
-        deviceType: deviceInfo?.deviceType,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'medium');
+      analytics(
+        'performance_report_generated',
+        {
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          reportType: 'comprehensive',
+          optimizationScore,
+          alertsCount: performanceAlerts.length,
+          recommendationsCount: performanceRecommendations.length,
+          deviceType: deviceInfo?.deviceType,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'medium'
+      );
 
       // Download report as JSON
       const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
@@ -175,14 +179,18 @@ export default function AdvancedPerformanceDashboard({
       await triggerOptimization();
 
       // Track optimization trigger
-      analytics('system_optimization_triggered', {
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        triggerType: 'manual',
-        optimizationScore: optimizationScore,
-        deviceType: deviceInfo?.deviceType,
-        componentMapping: COMPONENT_MAPPING,
-      }, 'high');
+      analytics(
+        'system_optimization_triggered',
+        {
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+          triggerType: 'manual',
+          optimizationScore: optimizationScore,
+          deviceType: deviceInfo?.deviceType,
+          componentMapping: COMPONENT_MAPPING,
+        },
+        'high'
+      );
     } catch (error) {
       handleAsyncError(error, 'Failed to trigger system optimization', {
         context: 'AdvancedPerformanceDashboard.handleSystemOptimization',
@@ -201,11 +209,15 @@ export default function AdvancedPerformanceDashboard({
       await collectMetrics();
       setLastRefresh(Date.now());
 
-      analytics('performance_metrics_refreshed', {
-        userStories: ['US-6.1'],
-        hypotheses: ['H8'],
-        refreshType: 'manual',
-      }, 'low');
+      analytics(
+        'performance_metrics_refreshed',
+        {
+          userStories: ['US-6.1'],
+          hypotheses: ['H8'],
+          refreshType: 'manual',
+        },
+        'low'
+      );
     } catch (error) {
       handleAsyncError(error, 'Failed to refresh performance metrics', {
         context: 'AdvancedPerformanceDashboard.handleRefreshMetrics',
@@ -239,18 +251,22 @@ export default function AdvancedPerformanceDashboard({
    * Initialize performance tracking
    */
   useEffect(() => {
-    analytics('advanced_performance_dashboard_loaded', {
-      userStories: COMPONENT_MAPPING.userStories,
-      hypotheses: COMPONENT_MAPPING.hypotheses,
-      initialOptimizationScore: optimizationScore,
-      deviceType: deviceInfo?.deviceType,
-      enabledFeatures: {
-        realTimeUpdates: enableRealTimeUpdates,
-        mobileOptimization: enableMobileOptimization,
-        automaticOptimization: enableAutomaticOptimization,
+    analytics(
+      'advanced_performance_dashboard_loaded',
+      {
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        initialOptimizationScore: optimizationScore,
+        deviceType: deviceInfo?.deviceType,
+        enabledFeatures: {
+          realTimeUpdates: enableRealTimeUpdates,
+          mobileOptimization: enableMobileOptimization,
+          automaticOptimization: enableAutomaticOptimization,
+        },
+        componentMapping: COMPONENT_MAPPING,
       },
-      componentMapping: COMPONENT_MAPPING,
-    }, 'medium');
+      'medium'
+    );
   }, [
     analytics,
     optimizationScore,
@@ -346,7 +362,9 @@ export default function AdvancedPerformanceDashboard({
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setSelectedTab(tab.id as any)}
+              onClick={() =>
+                setSelectedTab(tab.id as 'overview' | 'bundle' | 'mobile' | 'insights')
+              }
               className={`
                 flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors
                 ${

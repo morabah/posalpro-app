@@ -1,4 +1,5 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger';
+/**
  * Proposals API Endpoints
  * Type-safe proposal management operations with live database integration
  */
@@ -32,10 +33,10 @@ export const proposalsApi = {
         customerId = proposalData.metadata.customerId;
         logger.info('🔍 [CLIENT DEBUG] Using existing customer ID:', customerId);
       } else {
-        // Find or create customer based on customerName (fallback to clientName for compatibility)
-        const customerName =
-          (proposalData.metadata as any).customerName || (proposalData.metadata as any).clientName;
-        customerId = await customerEntity.findOrCreate(customerName);
+        // Find or create customer based on customerName (fallback to legacy clientName for compatibility)
+        const meta = proposalData.metadata as { customerName?: string; clientName?: string };
+        const customerName = meta.customerName ?? meta.clientName;
+        customerId = await customerEntity.findOrCreate(customerName ?? '');
         logger.info('🔍 [CLIENT DEBUG] Customer ID resolved:', customerId);
       }
     } catch (error) {
@@ -44,16 +45,26 @@ export const proposalsApi = {
     }
 
     // Transform client-side format to server-side format
-    const serverData: any = {
+    interface CreateProposalPayload {
+      title: string;
+      description: string;
+      customerId: string;
+      priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+      dueDate?: string;
+      currency: string;
+      value?: number;
+    }
+
+    const serverData: CreateProposalPayload = {
       title: proposalData.metadata.title,
       description: proposalData.metadata.description,
       customerId,
-      priority: proposalData.metadata.priority?.toUpperCase() as
+      priority: proposalData.metadata.priority.toUpperCase() as
         | 'LOW'
         | 'MEDIUM'
         | 'HIGH'
         | 'URGENT',
-      dueDate: proposalData.metadata.deadline?.toISOString(),
+      dueDate: proposalData.metadata.deadline.toISOString(),
       currency: proposalData.metadata.currency || 'USD',
     };
 
@@ -114,7 +125,8 @@ export const proposalsApi = {
     if (options.createdBy) params.append('createdBy', options.createdBy);
     if (options.customerName) params.append('customerName', options.customerName);
     // Backward compatibility
-    if ((options as any).clientName) params.append('customerName', (options as any).clientName);
+    const legacy = options as Partial<{ clientName: string }>;
+    if (legacy.clientName) params.append('customerName', legacy.clientName);
     if (options.projectType) params.append('projectType', options.projectType);
 
     const queryString = params.toString();

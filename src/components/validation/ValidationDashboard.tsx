@@ -56,6 +56,8 @@ const COMPONENT_MAPPING = {
   hypotheses: ['H8'],
   testCases: ['TC-H8-001', 'TC-H8-002', 'TC-H8-003'],
 };
+// Prevent unused-const lint while keeping traceability mapping available
+void COMPONENT_MAPPING;
 
 interface ValidationDashboardProps {
   proposalId?: string;
@@ -73,7 +75,7 @@ export function ValidationDashboard({
   onNavigateToProposal,
 }: ValidationDashboardProps) {
   const [activeTab, setActiveTab] = useState('issues');
-  const [selectedProposal, setSelectedProposal] = useState<string | undefined>(proposalId);
+  const [selectedProposal] = useState<string | undefined>(proposalId);
 
   const {
     issues,
@@ -85,7 +87,6 @@ export function ValidationDashboard({
     applyFixSuggestion,
     batchApplyFix,
     getValidationSummary,
-    startRealTimeValidation,
   } = useValidation();
 
   const { currentMetrics, getH8Status, generateH8ProgressReport, exportAnalyticsData } =
@@ -166,7 +167,7 @@ export function ValidationDashboard({
           // Handle deferral logic
           console.log('Deferring issues:', issueIds);
           break;
-        default:
+        default: {
           // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
           const errorHandlingService = ErrorHandlingService.getInstance();
           const standardError = errorHandlingService.processError(
@@ -183,6 +184,8 @@ export function ValidationDashboard({
 
           // Log the error for debugging
           errorHandlingService.processError(standardError);
+          break;
+        }
       }
     },
     [batchApplyFix]
@@ -194,7 +197,7 @@ export function ValidationDashboard({
     const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
 
     try {
-      const data = await exportAnalyticsData(startDate, endDate);
+      await exportAnalyticsData(startDate, endDate);
 
       // Create and download report
       const reportData = {

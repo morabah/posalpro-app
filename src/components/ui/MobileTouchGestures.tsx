@@ -168,7 +168,7 @@ export function MobileTouchGestures({
   className = '',
   onSwipe,
   onPinch,
-  onRotation,
+  onRotation: _onRotation,
   onLongPress,
   onTap,
   onDoubleTap,
@@ -178,6 +178,8 @@ export function MobileTouchGestures({
   trackingContext = {},
   disabled = false,
 }: MobileTouchGesturesProps) {
+  // mark underscored prop as used to satisfy lints
+  void _onRotation;
   const containerRef = useRef<HTMLDivElement>(null);
   const touchState = useRef({
     startTouches: [] as TouchPoint[],
@@ -567,9 +569,11 @@ export function MobileTouchGestures({
 
   // Cleanup effect
   useEffect(() => {
+    // Capture current ref value to avoid stale access warning in cleanup
+    const stateAtMount = touchState.current;
     return () => {
-      if (touchState.current.longPressTimer) {
-        clearTimeout(touchState.current.longPressTimer);
+      if (stateAtMount.longPressTimer) {
+        clearTimeout(stateAtMount.longPressTimer);
       }
     };
   }, []);

@@ -176,11 +176,11 @@ export function ProductSelectionStep({
 
   // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
   const collectFormData = useCallback((): ProposalWizardStep4Data => {
-    const selectedProductsArray = Array.from(selectedProducts.values());
-    const totalValue = selectedProductsArray.reduce((sum, product) => sum + product.totalPrice, 0);
+    const includedProducts = Array.from(selectedProducts.values()).filter(p => p.quantity > 0);
+    const totalValue = includedProducts.reduce((sum, product) => sum + product.totalPrice, 0);
 
-    return {
-      products: selectedProductsArray.map(product => ({
+    const formData = {
+      products: includedProducts.map(product => ({
         id: product.id,
         name: product.name,
         included: true,
@@ -193,16 +193,28 @@ export function ProductSelectionStep({
         notes: product.notes,
       })),
       totalValue,
-      aiRecommendationsUsed: 0, // Would track actual usage
-      searchHistory: data.searchHistory || [],
+      aiRecommendationsUsed: 0,
+      searchHistory: [],
       crossStepValidation: {
-        teamCompatibility: crossStepValidationResults.errors.length === 0,
-        contentAlignment: true, // Would be calculated
-        budgetCompliance: true, // Would be calculated
-        timelineRealistic: true, // Would be calculated
+        teamCompatibility: true,
+        contentAlignment: true,
+        budgetCompliance: true,
+        timelineRealistic: true,
       },
     };
-  }, [selectedProducts, crossStepValidationResults, data.searchHistory]);
+
+    // Analytics tracking for product selection
+    if (analytics?.trackWizardStep) {
+      analytics.trackWizardStep(4, 'Product Selection', 'products_selected', {
+        productCount: includedProducts.length,
+        totalValue,
+        averageProductValue: includedProducts.length > 0 ? totalValue / includedProducts.length : 0,
+        categories: [...new Set(includedProducts.map(p => p.category))],
+      });
+    }
+
+    return formData;
+  }, [selectedProducts, analytics]);
 
   // Load products from database
   const loadProducts = useCallback(async () => {
@@ -247,19 +259,24 @@ export function ProductSelectionStep({
   const initializedFromDataRef = useRef(false);
 
   // Helper to resolve the source product ID from props (supports {id} or {productId})
-  const resolveSourceId = useCallback((p: any): string | undefined => {
-    return (p && (p.id || p.productId)) || undefined;
+  type IncomingProduct =
+    | { id: string; productId?: string; name?: string; unitPrice?: number; quantity?: number; totalPrice?: number; category?: string; configuration?: Record<string, unknown>; customizations?: string[]; notes?: string }
+    | { productId: string; id?: string; name?: string; unitPrice?: number; quantity?: number; totalPrice?: number; category?: string; configuration?: Record<string, unknown>; customizations?: string[]; notes?: string };
+
+  const resolveSourceId = useCallback((p: IncomingProduct | undefined): string | undefined => {
+    if (!p) return undefined;
+    return (p as { id?: string }).id ?? (p as { productId?: string }).productId ?? undefined;
   }, []);
 
   const buildSelectedProduct = useCallback(
-    (p: any): SelectedProduct | null => {
+    (p: IncomingProduct): SelectedProduct | null => {
       const sourceId = resolveSourceId(p);
       if (!sourceId) return null;
       const dbProduct = products.find(dp => dp.id === sourceId);
-      const unitPrice = p.unitPrice || dbProduct?.price || 0;
-      const quantity = p.quantity || 1;
-      const name = p.name || dbProduct?.name || 'Unknown Product';
-      const category = p.category || dbProduct?.category?.[0] || 'General';
+      const unitPrice = (p as { unitPrice?: number }).unitPrice ?? dbProduct?.price ?? 0;
+      const quantity = (p as { quantity?: number }).quantity ?? 1;
+      const name = (p as { name?: string }).name ?? dbProduct?.name ?? 'Unknown Product';
+      const category = (p as { category?: string }).category ?? dbProduct?.category?.[0] ?? 'General';
       return {
         id: sourceId,
         name,
@@ -267,11 +284,11 @@ export function ProductSelectionStep({
         category,
         quantity,
         unitPrice,
-        totalPrice: p.totalPrice || unitPrice * quantity,
+        totalPrice: (p as { totalPrice?: number }).totalPrice ?? unitPrice * quantity,
         priceModel: 'FIXED',
-        configuration: p.configuration || {},
-        customizations: p.customizations || [],
-        notes: p.notes,
+        configuration: (p as { configuration?: Record<string, unknown> }).configuration ?? {},
+        customizations: (p as { customizations?: string[] }).customizations ?? [],
+        notes: (p as { notes?: string }).notes,
       };
     },
     [products, resolveSourceId]

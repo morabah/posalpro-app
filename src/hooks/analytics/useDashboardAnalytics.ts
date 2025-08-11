@@ -1,10 +1,11 @@
-import { logger } from '@/utils/logger'; /**
+"use client";
+
+/**
  * PosalPro MVP2 - Dashboard Analytics Hook
  * Specialized analytics tracking for dashboard interactions with stability improvements
  */
 
-'use client';
-
+import { logger } from '@/utils/logger';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback, useMemo, useRef } from 'react';
 

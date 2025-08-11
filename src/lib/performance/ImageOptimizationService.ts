@@ -39,7 +39,7 @@ interface OptimizationResult {
  */
 
 class ImageOptimizationService {
-  private static instance: ImageOptimizationService;
+  private static instance: ImageOptimizationService | null = null;
   private isInitialized = false;
   private config: ImageOptimizationConfig;
 
@@ -55,8 +55,7 @@ class ImageOptimizationService {
   }
 
   public static getInstance(): ImageOptimizationService {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!ImageOptimizationService.instance) {
+    if (ImageOptimizationService.instance === null) {
       ImageOptimizationService.instance = new ImageOptimizationService();
     }
     return ImageOptimizationService.instance;

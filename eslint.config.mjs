@@ -93,6 +93,22 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },
+  // Broader test override: match common Jest patterns
+  {
+    files: ['**/__tests__/**', '**/*.test.*'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-namespace': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
   // Ensure JS files do not use TypeScript project parser (fixes parsing errors for root JS tests)
   {
     files: ['**/*.js', '**/*.cjs', '**/*.mjs', 'test-*.js'],

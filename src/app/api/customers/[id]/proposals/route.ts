@@ -1,4 +1,5 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger';
+/**
  * PosalPro MVP2 - Customer Proposals API Routes
  * Enhanced customer proposal history with analytics tracking
  * Component Traceability: US-4.2, H4, H6
@@ -9,6 +10,7 @@ import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 
 
 /**
@@ -52,14 +54,13 @@ const CustomerProposalsQuerySchema = z.object({
 /**
  * GET /api/customers/[id]/proposals - Get customer proposal history
  */
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
   try {
-    const params = await context.params;
-    const { id } = params;
+    const { id } = context.params;
 
     // Authentication check
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session || !session.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Build where clause for filtering proposals
-    const where: any = {
+    const where: Prisma.ProposalWhereInput = {
       customerId: id,
     };
 
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const skip = (validatedQuery.page - 1) * validatedQuery.limit;
 
     // Define proposal select fields
-    const proposalSelect = {
+    const baseSelect: Prisma.ProposalSelect = {
       id: true,
       title: true,
       description: true,
@@ -147,26 +148,29 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       },
     };
 
-    // Conditionally include products
-    if (validatedQuery.includeProducts) {
-      (proposalSelect as any).products = {
-        select: {
-          id: true,
-          quantity: true,
-          unitPrice: true,
-          discount: true,
-          total: true,
-          product: {
+    // Conditionally include products via derived select
+    const proposalSelect: Prisma.ProposalSelect = validatedQuery.includeProducts
+      ? {
+          ...baseSelect,
+          products: {
             select: {
               id: true,
-              name: true,
-              sku: true,
-              category: true,
+              quantity: true,
+              unitPrice: true,
+              discount: true,
+              total: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  sku: true,
+                  category: true,
+                },
+              },
             },
           },
-        },
-      };
-    }
+        }
+      : baseSelect;
 
     // Optimized transaction for proposals data and count
     const [proposals, total] = await prisma.$transaction([
@@ -179,7 +183,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         skip,
         take: validatedQuery.limit,
       }),
-      prisma.proposal.count({ where })
+      prisma.proposal.count({ where }),
     ]);
 
     // Calculate statistics if requested
@@ -193,6 +197,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           value: true,
           currency: true,
           createdAt: true,
+          approvedAt: true,
+          updatedAt: true,
           dueDate: true,
         },
       });
@@ -232,17 +238,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Transform proposals for frontend consumption
-    const transformedProposals = proposals.map(proposal => ({
-      ...proposal,
-      statistics: {
-        productsCount: proposal._count.products,
-        sectionsCount: proposal._count.sections,
-        approvalsCount: proposal._count.approvals,
-      },
-      daysActive: calculateDaysActive(proposal.createdAt, proposal.updatedAt),
-      // Remove _count as it's now in statistics
-      _count: undefined,
-    }));
+    type ProposalRow = Prisma.ProposalGetPayload<{ select: typeof proposalSelect }>;
+    const transformedProposals = (proposals as ProposalRow[]).map((p) => {
+      const { _count, ...base } = p as ProposalRow & {
+        _count: { products: number; sections: number; approvals: number };
+      };
+      return {
+        ...base,
+        statistics: {
+          productsCount: _count.products,
+          sectionsCount: _count.sections,
+          approvalsCount: _count.approvals,
+        },
+        daysActive: calculateDaysActive(base.createdAt as Date, base.updatedAt as Date),
+      };
+    });
 
     // Track customer proposals access for analytics
     await trackCustomerProposalsAccessEvent(session.user.id, id, customer.name, total);
@@ -273,8 +283,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       message: 'Customer proposals retrieved successfully',
     });
   } catch (error) {
-    const params = await context.params;
-    logger.error(`Failed to fetch proposals for customer ${params.id}:`, error);
+    logger.error(`Failed to fetch proposals for customer ${context.params.id}:`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -290,7 +299,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 /**
  * Calculate average days to completion for proposals
  */
-function calculateAverageDaysToCompletion(proposals: any[]): number {
+interface MinimalProposalForStats {
+  status: 'APPROVED' | 'ACCEPTED' | 'REJECTED' | 'DECLINED' | string;
+  approvedAt: Date | null;
+  updatedAt: Date;
+  createdAt: Date;
+}
+
+function calculateAverageDaysToCompletion(proposals: MinimalProposalForStats[]): number {
   const completedProposals = proposals.filter(p =>
     ['APPROVED', 'ACCEPTED', 'REJECTED', 'DECLINED'].includes(p.status)
   );

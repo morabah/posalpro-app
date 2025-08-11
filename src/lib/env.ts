@@ -115,12 +115,12 @@ class EnvironmentManager {
   public getCurrentEnvironment(): Environment {
     // Use browser-safe environment detection
     if (typeof window !== 'undefined') {
-      // Browser environment - check for build-time environment
-      return (process.env.NODE_ENV as Environment) || Environment.DEVELOPMENT;
+      // Browser environment - NODE_ENV is defined by Next.js at build time
+      return process.env.NODE_ENV as Environment;
     }
 
-    // Server environment
-    const env = process.env.NODE_ENV || 'development';
+    // Server environment - NODE_ENV is defined by Next.js runtime
+    const env = process.env.NODE_ENV as string;
     switch (env.toLowerCase()) {
       case 'production':
         return Environment.PRODUCTION;

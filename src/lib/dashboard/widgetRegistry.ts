@@ -22,7 +22,9 @@ const RecentActivity = lazy(() =>
 );
 
 // Simple component function for placeholders
-const createPlaceholderComponent = (title: string) => {
+const createPlaceholderComponent = (_title: string) => {
+  // Mark as used to satisfy lint without affecting runtime
+  void _title;
   return function PlaceholderComponent() {
     return null; // Will be replaced with actual widgets in Phase 2
   };
@@ -242,8 +244,8 @@ export const ROLE_WIDGET_MAP: RoleWidgetMap = {
  * Get widgets configured for a specific user role
  */
 export function getWidgetsForRole(userRole: UserType): DashboardWidget[] {
-  const widgetIds = ROLE_WIDGET_MAP[userRole] || [];
-  return widgetIds.map(id => WIDGET_REGISTRY[id]).filter(widget => widget !== undefined);
+  const widgetIds = ROLE_WIDGET_MAP[userRole];
+  return widgetIds.map(id => WIDGET_REGISTRY[id]!);
 }
 
 /**
@@ -294,17 +296,12 @@ export function getDashboardConfiguration(
  */
 export function validateWidgetConfiguration(widget: DashboardWidget): boolean {
   // Basic validation checks
-  if (!widget.id || !widget.component || !widget.title) {
+  if (!widget.id || !widget.title) {
     return false;
   }
 
   // Check if position is valid
   if (widget.position.row < 0 || widget.position.col < 0) {
-    return false;
-  }
-
-  // Check if size is valid
-  if (!['small', 'medium', 'large', 'full'].includes(widget.size)) {
     return false;
   }
 

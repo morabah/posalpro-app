@@ -11,12 +11,13 @@
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
-import usePerformanceOptimization from '@/hooks/usePerformanceOptimization';
+import usePerformanceOptimization, { type PerformanceMetrics } from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { LoggingService } from '@/lib/logging/LoggingService';
 import { useDatabaseOptimizer } from '@/lib/performance/DatabaseQueryOptimizer';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { QueryMetrics, ConnectionPoolStats } from '@/lib/performance/DatabaseQueryOptimizer';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -55,11 +56,11 @@ export interface PerformanceIntegrationConfig {
 
 export interface IntegratedPerformanceMetrics {
   overallScore: number;
-  webVitals: any;
-  database: any;
-  api?: any; // Made optional to comply with core requirements
-  cache: any;
-  memory: any;
+  webVitals: PerformanceMetrics | null;
+  database: QueryMetrics | null;
+  api?: { cacheHitRate?: number; averageResponseTime?: number } | null; // optional to comply with core requirements
+  cache: { database: ConnectionPoolStats } | null;
+  memory: PerformanceMetrics['memoryMetrics'] | null;
   trends: {
     improvement: number;
     degradation: number;
@@ -123,6 +124,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     [config]
   );
 
+  
+
   // Performance service hooks
   const {
     metrics: webVitalsMetrics,
@@ -138,6 +141,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     enableMemoryMonitoring: true,
     reportingInterval: integrationConfig.monitoringInterval,
   });
+
+  
 
   const {
     executeQuery: executeOptimizedQuery,
@@ -167,8 +172,15 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
   const [performanceHistory, setPerformanceHistory] = useState<number[]>([]);
   const [alerts, setAlerts] = useState<PerformanceAlert[]>([]);
 
+  // Refs to avoid cyclic deps and TDZ in callbacks
+  const calculateOverallScoreRef = useRef<((m: OverallScoreInput) => number) | null>(null);
+  const calculatePerformanceTrendsRef = useRef<((h: number[]) => { improvement: number; degradation: number; stability: number; }) | null>(null);
+  const generateIntegratedRecommendationsRef = useRef<((d: RecommendationInput) => string[]) | null>(null);
+  const checkPerformanceAlertsRef = useRef<((m: AlertsMetrics) => PerformanceAlert[]) | null>(null);
+  const triggerComprehensiveOptimizationRef = useRef<() => Promise<OptimizationResult> | null>(null);
+
   // Real-time monitoring
-  const collectIntegratedMetrics = useCallback(async () => {
+  const collectIntegratedMetrics = useCallback(async (): Promise<void> => {
     try {
       const startTime = performance.now();
 
@@ -182,7 +194,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       await collectWebVitalsMetrics();
 
       // Calculate overall performance score
-      const overallScore = calculateOverallScore({
+      const overallScore = (calculateOverallScoreRef.current ?? ((m: OverallScoreInput) => { void m; return 0; }))({
         webVitals: optimizationScore,
         database: dbMetrics,
         // Removed apiMetrics to comply with core requirements
@@ -197,10 +209,10 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       });
 
       // Calculate trends
-      const trends = calculatePerformanceTrends(performanceHistory);
+      const trends = (calculatePerformanceTrendsRef.current ?? ((h: number[]) => { void h; return { improvement: 0, degradation: 0, stability: 100 }; }))(performanceHistory);
 
       // Generate recommendations
-      const recommendations = generateIntegratedRecommendations({
+      const recommendations = (generateIntegratedRecommendationsRef.current ?? ((d: RecommendationInput) => { void d; return []; }))({
         webVitals: webVitalsRecommendations,
         database: dbMetrics,
         // Removed apiMetrics to comply with core requirements
@@ -209,7 +221,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       });
 
       // Check for alerts
-      const newAlerts = checkPerformanceAlerts({
+      const newAlerts = (checkPerformanceAlertsRef.current ?? ((m: AlertsMetrics) => { void m; return []; }))({
         webVitals: optimizationScore,
         database: dbMetrics,
         // Removed apiMetrics to comply with core requirements
@@ -267,7 +279,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
         integrationConfig.enableAutomaticOptimization &&
         overallScore < integrationConfig.optimizationThreshold
       ) {
-        await triggerComprehensiveOptimization();
+        await triggerComprehensiveOptimizationRef.current?.();
       }
     } catch (error) {
       const processedError = errorHandlingService.processError(
@@ -299,7 +311,12 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     loggingService,
     errorHandlingService,
     throwError,
+    // Intentionally excluded functions referenced via refs to avoid cyc deps
+    // calculateOverallScore, calculatePerformanceTrends, generateIntegratedRecommendations, checkPerformanceAlerts
+    lastAnalyticsLog,
   ]);
+
+  
 
   // Comprehensive optimization
   const triggerComprehensiveOptimization = useCallback(async (): Promise<OptimizationResult> => {
@@ -316,8 +333,9 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
       // 2. Database Cache Clearing (if needed)
       if (
-        integratedMetrics.database?.averageExecutionTime >
-        integrationConfig.alertThresholds.database
+        integratedMetrics.database &&
+        typeof integratedMetrics.database.averageExecutionTime === 'number' &&
+        integratedMetrics.database.averageExecutionTime > integrationConfig.alertThresholds.database
       ) {
         await invalidateDbCache(['proposals', 'customers', 'products']);
         actions.push('Database cache invalidated for slow queries');
@@ -332,7 +350,9 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
       // 4. Memory Optimization (if high usage)
       if (
-        integratedMetrics.memory?.memoryUsagePercentage > integrationConfig.alertThresholds.memory
+        integratedMetrics.memory &&
+        typeof integratedMetrics.memory.memoryUsagePercentage === 'number' &&
+        integratedMetrics.memory.memoryUsagePercentage > integrationConfig.alertThresholds.memory
       ) {
         // Trigger garbage collection hint
         if (window.gc) {
@@ -357,13 +377,17 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
           database: Math.max(
             0,
             integrationConfig.alertThresholds.database -
-              (integratedMetrics.database?.averageExecutionTime || 0)
+              (integratedMetrics.database && typeof integratedMetrics.database.averageExecutionTime === 'number'
+                ? integratedMetrics.database.averageExecutionTime
+                : 0)
           ),
           api: (integratedMetrics.api?.cacheHitRate || 0) - 0.7,
           memory: Math.max(
             0,
             integrationConfig.alertThresholds.memory -
-              (integratedMetrics.memory?.memoryUsagePercentage || 0)
+              (integratedMetrics.memory && typeof integratedMetrics.memory.memoryUsagePercentage === 'number'
+                ? integratedMetrics.memory.memoryUsagePercentage
+                : 0)
           ),
         },
         actions,
@@ -430,8 +454,20 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     errorHandlingService,
   ]);
 
+  // Keep optimization ref in sync after declaration
+  useEffect(() => {
+    triggerComprehensiveOptimizationRef.current = () => triggerComprehensiveOptimization();
+  }, [triggerComprehensiveOptimization]);
+
   // Helper functions
-  const calculateOverallScore = useCallback((metrics: any): number => {
+  interface OverallScoreInput {
+    webVitals?: number;
+    database?: { averageExecutionTime: number } | null;
+    api?: { cacheHitRate: number } | null;
+    memory?: { memoryUsagePercentage: number } | null;
+  }
+
+  const calculateOverallScore = useCallback((metrics: OverallScoreInput): number => {
     const weights = {
       webVitals: 0.3,
       database: 0.25,
@@ -439,12 +475,14 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       memory: 0.2,
     };
 
-    const webVitalsScore = metrics.webVitals || 0;
-    const databaseScore = metrics.database
+    const webVitalsScore = typeof metrics.webVitals === 'number' ? metrics.webVitals : 0;
+    const databaseScore = metrics.database && typeof metrics.database.averageExecutionTime === 'number'
       ? Math.max(0, 100 - metrics.database.averageExecutionTime / 10)
       : 0;
-    const apiScore = metrics.api ? metrics.api.cacheHitRate * 100 : 0;
-    const memoryScore = metrics.memory
+    const apiScore = metrics.api && typeof metrics.api.cacheHitRate === 'number'
+      ? metrics.api.cacheHitRate * 100
+      : 0;
+    const memoryScore = metrics.memory && typeof metrics.memory.memoryUsagePercentage === 'number'
       ? Math.max(0, 100 - metrics.memory.memoryUsagePercentage)
       : 0;
 
@@ -477,44 +515,63 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     };
   }, []);
 
-  const generateIntegratedRecommendations = useCallback((data: any): string[] => {
+  interface RecommendationInput {
+    webVitals?: string[];
+    database?: { averageExecutionTime?: number; slowQueries?: number } | null;
+    api?: { cacheHitRate?: number; averageResponseTime?: number } | null;
+    overallScore?: number;
+  }
+
+  const generateIntegratedRecommendations = useCallback((data: RecommendationInput): string[] => {
     const recommendations: string[] = [];
 
     // Web Vitals recommendations
-    recommendations.push(...(data.webVitals || []));
+    if (Array.isArray(data.webVitals)) {
+      recommendations.push(...data.webVitals);
+    }
 
     // Database recommendations
-    if (data.database?.averageExecutionTime > 500) {
+    if (data.database && typeof data.database.averageExecutionTime === 'number' && data.database.averageExecutionTime > 500) {
       recommendations.push('Consider adding database indexes for better query performance');
     }
-    if (data.database?.slowQueries > 5) {
+    if (data.database && typeof data.database.slowQueries === 'number' && data.database.slowQueries > 5) {
       recommendations.push('Optimize slow queries or implement query result caching');
     }
 
     // API recommendations
-    if (data.api?.cacheHitRate < 0.7) {
+    if (data.api && typeof data.api.cacheHitRate === 'number' && data.api.cacheHitRate < 0.7) {
       recommendations.push('Improve API caching strategy to increase hit rate');
     }
-    if (data.api?.averageResponseTime > 300) {
+    if (data.api && typeof data.api.averageResponseTime === 'number' && data.api.averageResponseTime > 300) {
       recommendations.push('Optimize API response times with compression or CDN');
     }
 
     // Overall score recommendations
-    if (data.overallScore < 70) {
+    if (typeof data.overallScore === 'number' && data.overallScore < 70) {
       recommendations.push('Consider enabling automatic performance optimization');
     }
 
     return recommendations;
   }, []);
 
+  interface AlertsMetrics {
+    webVitals?: number;
+    database?: { averageExecutionTime: number } | null;
+    api?: { averageResponseTime: number } | null;
+    memory?: { memoryUsagePercentage: number } | null;
+  }
+
   const checkPerformanceAlerts = useCallback(
-    (metrics: any): PerformanceAlert[] => {
+    (metrics: AlertsMetrics): PerformanceAlert[] => {
       if (!integrationConfig.enablePerformanceAlerts) return [];
 
       const newAlerts: PerformanceAlert[] = [];
 
       // Web Vitals alerts
-      if (metrics.webVitals < integrationConfig.alertThresholds.webVitals) {
+      if (
+        typeof metrics.webVitals === 'number' &&
+        metrics.webVitals < integrationConfig.alertThresholds.webVitals
+      ) {
         newAlerts.push({
           id: `webvitals-${Date.now()}`,
           type: 'warning',
@@ -529,7 +586,11 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       }
 
       // Database alerts
-      if (metrics.database?.averageExecutionTime > integrationConfig.alertThresholds.database) {
+      if (
+        metrics.database &&
+        typeof metrics.database.averageExecutionTime === 'number' &&
+        metrics.database.averageExecutionTime > integrationConfig.alertThresholds.database
+      ) {
         newAlerts.push({
           id: `database-${Date.now()}`,
           type:
@@ -547,7 +608,11 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       }
 
       // API alerts
-      if (metrics.api?.averageResponseTime > integrationConfig.alertThresholds.api) {
+      if (
+        metrics.api &&
+        typeof metrics.api.averageResponseTime === 'number' &&
+        metrics.api.averageResponseTime > integrationConfig.alertThresholds.api
+      ) {
         newAlerts.push({
           id: `api-${Date.now()}`,
           type: 'warning',
@@ -562,7 +627,11 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       }
 
       // Memory alerts
-      if (metrics.memory?.memoryUsagePercentage > integrationConfig.alertThresholds.memory) {
+      if (
+        metrics.memory &&
+        typeof metrics.memory.memoryUsagePercentage === 'number' &&
+        metrics.memory.memoryUsagePercentage > integrationConfig.alertThresholds.memory
+      ) {
         newAlerts.push({
           id: `memory-${Date.now()}`,
           type: metrics.memory.memoryUsagePercentage > 90 ? 'critical' : 'warning',
@@ -580,6 +649,23 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     },
     [integrationConfig]
   );
+
+  // Sync helper refs after declarations to avoid TDZ
+  useEffect(() => {
+    calculateOverallScoreRef.current = calculateOverallScore;
+  }, [calculateOverallScore]);
+
+  useEffect(() => {
+    calculatePerformanceTrendsRef.current = calculatePerformanceTrends;
+  }, [calculatePerformanceTrends]);
+
+  useEffect(() => {
+    generateIntegratedRecommendationsRef.current = generateIntegratedRecommendations;
+  }, [generateIntegratedRecommendations]);
+
+  useEffect(() => {
+    checkPerformanceAlertsRef.current = checkPerformanceAlerts;
+  }, [checkPerformanceAlerts]);
 
   const acknowledgeAlert = useCallback(
     (alertId: string) => {

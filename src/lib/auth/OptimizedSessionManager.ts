@@ -46,7 +46,7 @@ const COMPONENT_MAPPING = {
 };
 
 export class OptimizedSessionManager {
-  private static instance: OptimizedSessionManager;
+  private static instance: OptimizedSessionManager | undefined;
   private errorHandlingService: ErrorHandlingService;
   private config: SessionConfig;
   private sessionState: SessionState;

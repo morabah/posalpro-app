@@ -16,6 +16,7 @@
  */
 
 import { useToast } from '@/components/feedback/Toast/ToastProvider';
+import type { AuthUser } from '@/components/providers/AuthProvider';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
@@ -34,8 +35,10 @@ import {
   Shield,
   User,
 } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import type { FieldErrors, UseFormRegister, UseFormSetValue, UseFormWatch } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { NotificationsTab } from './NotificationsTab';
@@ -184,14 +187,30 @@ export function UserProfile({ className = '' }: UserProfileProps) {
 
       try {
         console.log('🔄 Loading existing profile data from database...');
-        const response = await apiClient.get<{
+        interface ProfileData {
+          firstName?: string;
+          lastName?: string;
+          title?: string;
+          email?: string;
+          phone?: string;
+          department?: string;
+          office?: string;
+          languages?: string[];
+          bio?: string;
+          expertiseAreas?: string[];
+          profileImage?: string | null;
+        }
+
+        interface ProfileApiResponse {
           success: boolean;
-          data?: any;
+          data?: ProfileData;
           error?: string;
-        }>('/api/profile');
+        }
+
+        const response = await apiClient.get<ProfileApiResponse>('/api/profile');
 
         if (response.success) {
-          const profileData = response.data;
+          const profileData: ProfileData = response.data ?? {};
           console.log('✅ Profile data loaded:', profileData);
           console.log('🔥 CRITICAL DEBUG: About to reset form with title:', profileData.title);
 
@@ -302,7 +321,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
       // Use centralized API client instead of direct fetch
       const result = await apiClient.put<{
         success: boolean;
-        data?: any;
+        data?: Partial<ProfileFormData> & { expertiseAreas?: string[]; profileImage?: string | null };
         error?: string;
       }>('/api/profile/update', requestData);
 
@@ -325,16 +344,16 @@ export function UserProfile({ className = '' }: UserProfileProps) {
       // Update form with new data from server response
       if (result.data) {
         reset({
-          firstName: result.data.firstName || data.firstName,
-          lastName: result.data.lastName || data.lastName,
-          title: result.data.title || data.title,
-          email: result.data.email || data.email,
-          phone: result.data.phone || data.phone,
-          department: result.data.department || data.department,
-          office: result.data.office || data.office,
-          languages: result.data.languages || data.languages,
-          bio: result.data.bio || data.bio,
-          expertiseAreas: result.data.expertiseAreas || expertiseAreas,
+          firstName: result.data.firstName ?? data.firstName,
+          lastName: result.data.lastName ?? data.lastName,
+          title: result.data.title ?? data.title,
+          email: result.data.email ?? data.email,
+          phone: result.data.phone ?? data.phone,
+          department: result.data.department ?? data.department,
+          office: result.data.office ?? data.office,
+          languages: result.data.languages ?? data.languages,
+          bio: result.data.bio ?? data.bio,
+          expertiseAreas: result.data.expertiseAreas ?? expertiseAreas,
         });
       } else {
         // Fallback to current form data if no server response
@@ -554,7 +573,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
 
               {activeTab === 'security' && (
                 <div className="p-8">
-                  <SecurityTab analytics={analytics} user={user} />
+                  <SecurityTab analytics={{}} user={user} />
                 </div>
               )}
             </div>
@@ -567,22 +586,22 @@ export function UserProfile({ className = '' }: UserProfileProps) {
 
 // Personal Tab Component
 interface PersonalTabProps {
-  register: any;
-  errors: any;
-  watch: any;
-  setValue: any;
+  register: UseFormRegister<ProfileFormData>;
+  errors: FieldErrors<ProfileFormData>;
+  watch: UseFormWatch<ProfileFormData>;
+  setValue: UseFormSetValue<ProfileFormData>;
   isEditing: boolean;
   setIsEditing: (editing: boolean) => void;
   isLoading: boolean;
   profileImage: string | null;
   expertiseAreas: string[];
-  onSubmit: () => void;
+  onSubmit: (e?: React.BaseSyntheticEvent) => void | Promise<void>;
   onImageUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onExpertiseToggle: (area: string) => void;
   onCancel: () => void;
-  user: any;
+  user: AuthUser | null;
   completeness: number;
-  showInfo: (message: string, options?: any) => void;
+  showInfo: (message: string, options?: { title?: string; duration?: number }) => void;
 }
 
 function PersonalTab({
@@ -639,7 +658,15 @@ function PersonalTab({
             <div className="relative">
               <div className="w-28 h-28 bg-white rounded-full overflow-hidden shadow-lg border-4 border-white">
                 {profileImage ? (
-                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                  <div className="relative w-28 h-28">
+                    <Image
+                      src={profileImage}
+                      alt="Profile"
+                      fill
+                      sizes="112px"
+                      className="object-cover"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-primary-600 bg-primary-50">
                     <User className="w-10 h-10" />

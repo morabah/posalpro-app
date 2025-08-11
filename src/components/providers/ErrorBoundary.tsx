@@ -202,9 +202,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
    */
   private async reportError(error: StandardError, errorInfo: ErrorInfo) {
     try {
-      // ✅ ENHANCED: Use proper API client instead of mock reporting
-      const { useApiClient } = await import('@/hooks/useApiClient');
-      const apiClient = useApiClient();
+      // ✅ FIXED: Use non-hook API client inside class component
+      const { apiClient } = await import('@/lib/api/client');
 
       const errorReport = {
         message: error.message,

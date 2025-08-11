@@ -410,25 +410,26 @@ export function DeadlineTracker({
       return true;
     })
     .sort((a, b) => {
-      switch (sortBy) {
-        case 'dueDate':
-          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-        case 'priority':
-          const priorityOrder = {
-            [DeadlinePriority.URGENT]: 5,
-            [DeadlinePriority.CRITICAL]: 4,
-            [DeadlinePriority.HIGH]: 3,
-            [DeadlinePriority.MEDIUM]: 2,
-            [DeadlinePriority.LOW]: 1,
-          };
-          return priorityOrder[b.priority] - priorityOrder[a.priority];
-        case 'status':
-          return a.status.localeCompare(b.status);
-        case 'title':
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
+      if (sortBy === 'dueDate') {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       }
+      if (sortBy === 'priority') {
+        const priorityOrder = {
+          [DeadlinePriority.URGENT]: 5,
+          [DeadlinePriority.CRITICAL]: 4,
+          [DeadlinePriority.HIGH]: 3,
+          [DeadlinePriority.MEDIUM]: 2,
+          [DeadlinePriority.LOW]: 1,
+        } as const;
+        return priorityOrder[b.priority] - priorityOrder[a.priority];
+      }
+      if (sortBy === 'status') {
+        return a.status.localeCompare(b.status);
+      }
+      if (sortBy === 'title') {
+        return a.title.localeCompare(b.title);
+      }
+      return 0;
     });
 
   // Get priority badge color

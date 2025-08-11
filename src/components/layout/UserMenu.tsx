@@ -11,6 +11,7 @@ import {
   Cog6ToothIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 
@@ -23,7 +24,7 @@ interface UserMenuProps {
     avatar?: string;
   };
   onClose: () => void;
-  onAction: (action: string, metadata?: any) => void;
+  onAction: (action: string, metadata?: Record<string, unknown>) => void;
 }
 
 export function UserMenu({ user, onClose, onAction }: UserMenuProps) {
@@ -84,7 +85,13 @@ export function UserMenu({ user, onClose, onAction }: UserMenuProps) {
       <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center space-x-3">
           {user?.avatar ? (
-            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+            <Image
+              src={user.avatar}
+              alt={user?.name || 'User'}
+              width={40}
+              height={40}
+              className="rounded-full"
+            />
           ) : (
             <UserCircleIcon className="w-10 h-10 text-gray-400" />
           )}

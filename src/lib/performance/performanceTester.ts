@@ -22,7 +22,7 @@ interface PerformanceTest {
 }
 
 class PerformanceTester {
-  private static instance: PerformanceTester;
+  private static instance: PerformanceTester | null = null;
   private testResults: PerformanceTestResult[] = [];
   private activeTests: Map<
     string,
@@ -35,8 +35,7 @@ class PerformanceTester {
   > = new Map();
 
   static getInstance(): PerformanceTester {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!PerformanceTester.instance) {
+    if (PerformanceTester.instance === null) {
       PerformanceTester.instance = new PerformanceTester();
     }
     return PerformanceTester.instance;

@@ -28,7 +28,13 @@ export function DatabasePerformanceDemo() {
   const apiClient = useApiClient();
   const [metrics, setMetrics] = useState<PerformanceMetrics[]>([]);
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [performanceStats, setPerformanceStats] = useState<any>(null);
+  interface PerformanceStats {
+    cacheSize: number;
+    cacheEnabled: boolean;
+    cacheTtlMs: number;
+    queryTimeoutMs: number;
+  }
+  const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
 
   useEffect(() => {
     // Get initial performance statistics
@@ -43,7 +49,7 @@ export function DatabasePerformanceDemo() {
       const { data, metrics: queryMetrics } = await databaseOptimizer.optimizeCustomerQuery(
         async () => {
           // This simulates the customer API call
-          const response = await apiClient.get<any>(
+          const response = await apiClient.get<unknown>(
             '/customers?page=1&limit=20&sortBy=name&sortOrder=asc'
           );
           return response;
@@ -70,7 +76,7 @@ export function DatabasePerformanceDemo() {
       // Demonstrate non-blocking analytics tracking
       await databaseOptimizer.optimizeAnalyticsTracking(async () => {
         logger.info('[Demo] Customer query analytics', {
-          recordCount: data?.length || 0,
+          recordCount: Array.isArray(data as unknown) ? (data as unknown[]).length : 0,
           queryTime: queryMetrics.queryTimeMs,
           cacheHit: queryMetrics.cacheHit,
         });

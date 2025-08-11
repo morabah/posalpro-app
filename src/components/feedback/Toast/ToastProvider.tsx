@@ -46,7 +46,7 @@ interface ToastState {
 }
 
 type ToastAction =
-  | { type: 'ADD_TOAST'; payload: ToastState }
+  | { type: 'ADD_TOAST'; payload: ToastState; limit: number }
   | { type: 'REMOVE_TOAST'; payload: string }
   | { type: 'CLEAR_ALL_TOASTS' }
   | { type: 'UPDATE_TOAST'; payload: { id: string; updates: Partial<ToastState> } };
@@ -67,18 +67,20 @@ const ToastContext = createContext<ToastContextType | null>(null);
 
 const toastReducer = (state: ToastState[], action: ToastAction): ToastState[] => {
   switch (action.type) {
-    case 'ADD_TOAST':
-      // Limit to maximum 5 toasts to prevent overflow
-      const newState = [action.payload, ...state].slice(0, 5);
+    case 'ADD_TOAST': {
+      // Limit to maximum number of toasts provided by provider prop
+      const newState = [action.payload, ...state].slice(0, action.limit);
       return newState;
+    }
 
-    case 'REMOVE_TOAST':
+    case 'REMOVE_TOAST': {
       // Find the toast and call onClose if it exists
       const toastToRemove = state.find(toast => toast.id === action.payload);
       if (toastToRemove?.onClose) {
         toastToRemove.onClose();
       }
       return state.filter(toast => toast.id !== action.payload);
+    }
 
     case 'CLEAR_ALL_TOASTS':
       return [];
@@ -140,10 +142,10 @@ export function ToastProvider({
         timestamp: Date.now(),
       };
 
-      dispatch({ type: 'ADD_TOAST', payload: toast });
+      dispatch({ type: 'ADD_TOAST', payload: toast, limit: maxToasts });
       return id;
     },
-    [generateId]
+    [generateId, maxToasts]
   );
 
   const removeToast = useCallback((id: string) => {
@@ -213,7 +215,13 @@ export function ToastProvider({
     if (!isMounted || !isClient) return;
 
     const handleAppError = (event: CustomEvent) => {
-      const { message, type, duration, action } = event.detail;
+      const detail = event.detail as {
+        message: string;
+        type?: ToastState['type'];
+        duration?: number;
+        action?: { label: string; onClick: () => void };
+      };
+      const { message, type, duration, action } = detail;
       addToast({
         message,
         type: type || 'error',

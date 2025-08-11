@@ -29,7 +29,7 @@ interface DeadlineTrackingSession {
 
 export function useDeadlineManagementAnalytics() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { user } = useAuth() || {};
+  const { user } = useAuth();
 
   const sessionData = useRef<DeadlineTrackingSession>({
     sessionId: `deadline-session-${Date.now()}`,

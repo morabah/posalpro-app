@@ -24,6 +24,7 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { useState } from 'react';
+import type { AuthUser } from '@/components/providers/AuthProvider';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -90,7 +91,7 @@ const TIME_OPTIONS = [
 
 interface NotificationsTabProps {
   analytics: ReturnType<typeof useUserProfileAnalytics>;
-  user: any;
+  user: AuthUser | null;
 }
 
 export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
@@ -183,7 +184,7 @@ export function NotificationsTab({ analytics, user }: NotificationsTabProps) {
 
     try {
       // Use apiClient instead of direct fetch
-      await apiClient.put('profile/notifications', data);
+      await apiClient.put<{ success: boolean; error?: string }>('profile/notifications', data);
 
       const updateTime = Date.now() - startTime;
 

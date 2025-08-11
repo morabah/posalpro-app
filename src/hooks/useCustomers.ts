@@ -170,11 +170,9 @@ export function useCustomerSearch(
       const searchParams = new URLSearchParams();
       searchParams.set('search', searchTerm);
 
-      // Add other options
+      // Add other options (entries only includes present keys)
       Object.entries(options).forEach(([key, value]) => {
-        if (value !== undefined) {
-          searchParams.set(key, value.toString());
-        }
+        searchParams.set(key, String(value));
       });
 
       const response = await apiClient.get<{

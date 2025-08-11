@@ -242,7 +242,7 @@ export const useUser = (): UseUserState & UseUserActions => {
           setState(prev => ({
             ...prev,
             users: response.data.users,
-            pagination: response.data.pagination || null,
+            pagination: response.data.pagination as typeof prev.pagination,
             loading: false,
           }));
           return response.data.users;
@@ -355,7 +355,7 @@ export const useUser = (): UseUserState & UseUserActions => {
           setState(prev => ({
             ...prev,
             activityLog: response.data,
-            pagination: response.pagination || null,
+            pagination: response.pagination as typeof prev.pagination,
             loading: false,
           }));
           return response.data;
@@ -429,14 +429,14 @@ export const useUser = (): UseUserState & UseUserActions => {
   );
 
   // Utility Operations
-  const clearCache = useCallback((id?: string) => {
+  const clearCache = useCallback(() => {
     // Cache clearing is handled automatically by apiClient
     // No manual cache management needed
   }, []);
 
   const refreshUser = useCallback(
     async (id: string): Promise<void> => {
-      clearCache(id);
+      clearCache();
       await getUserById(id);
     },
     [clearCache, getUserById]

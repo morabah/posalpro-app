@@ -5,7 +5,7 @@
  */
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface MobileOptimizationConfig {
   enableReducedAnalytics?: boolean;
@@ -18,8 +18,8 @@ interface MobileOptimizationConfig {
 
 interface MobileOptimizationResult {
   isMobileOptimized: boolean;
-  debouncedCallback: <T extends (...args: any[]) => any>(callback: T) => T;
-  throttledCallback: <T extends (...args: any[]) => any>(callback: T) => T;
+  debouncedCallback: <T extends (...args: unknown[]) => unknown>(callback: T) => T;
+  throttledCallback: <T extends (...args: unknown[]) => unknown>(callback: T) => T;
   optimizedAnalyticsTrack: (eventName: string, data?: Record<string, unknown>) => void;
   memoryPressureWarning: boolean;
 }
@@ -40,25 +40,25 @@ export function useMobileOptimization(
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
 
   // ✅ MEMORY OPTIMIZATION: Simplified mobile detection
-  const [isMobileOptimized, setIsMobileOptimized] = useState(() => {
+  const isMobileOptimized = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= 768;
-  });
+  }, []);
 
   // ✅ MEMORY OPTIMIZATION: Use refs to prevent memory leaks
-  const debounceTimeouts = useRef(new Map<string, NodeJS.Timeout>());
-  const throttleTimeouts = useRef(new Map<string, NodeJS.Timeout>());
+  const debounceTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const throttleTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const memoryPressureWarning = useRef(false);
 
   // ✅ MEMORY OPTIMIZATION: Simplified debounced callback
   const debouncedCallback = useCallback(
-    <T extends (...args: any[]) => any>(callback: T): T => {
-      return ((...args: any[]) => {
+    <T extends (...args: unknown[]) => unknown>(callback: T): T => {
+      return ((...args: Parameters<T>) => {
         const key = callback.toString();
         if (debounceTimeouts.current.has(key)) {
           clearTimeout(debounceTimeouts.current.get(key));
         }
-        const timeout = setTimeout(() => callback(...args), finalConfig.debounceDelay);
+        const timeout = setTimeout(() => (callback as (...a: Parameters<T>) => ReturnType<T>)(...args), finalConfig.debounceDelay);
         debounceTimeouts.current.set(key, timeout);
       }) as T;
     },
@@ -67,11 +67,11 @@ export function useMobileOptimization(
 
   // ✅ MEMORY OPTIMIZATION: Simplified throttled callback
   const throttledCallback = useCallback(
-    <T extends (...args: any[]) => any>(callback: T): T => {
-      return ((...args: any[]) => {
+    <T extends (...args: unknown[]) => unknown>(callback: T): T => {
+      return ((...args: Parameters<T>) => {
         const key = callback.toString();
         if (!throttleTimeouts.current.has(key)) {
-          callback(...args);
+          (callback as (...a: Parameters<T>) => ReturnType<T>)(...args);
           const timeout = setTimeout(() => {
             throttleTimeouts.current.delete(key);
           }, finalConfig.throttleDelay);
@@ -97,11 +97,11 @@ export function useMobileOptimization(
     if (!isMobileOptimized || !finalConfig.enableMemoryPressureDetection) return;
 
     const checkMemoryPressure = () => {
-      if ('memory' in performance) {
-        const memInfo = (performance as Performance & { memory?: { usedJSHeapSize: number } })
-          .memory;
-        const maxMemoryUsage = finalConfig.maxMemoryUsage ?? DEFAULT_CONFIG.maxMemoryUsage;
-        if (memInfo && memInfo.usedJSHeapSize > maxMemoryUsage) {
+      const perf = performance as Performance & { memory?: unknown };
+      const memInfo = perf.memory as { usedJSHeapSize: number } | undefined;
+      if (memInfo) {
+        const maxMemoryUsage = finalConfig.maxMemoryUsage;
+        if (memInfo.usedJSHeapSize > maxMemoryUsage) {
           memoryPressureWarning.current = true;
           console.warn('Memory pressure detected on mobile device');
         } else {
@@ -111,22 +111,23 @@ export function useMobileOptimization(
     };
 
     // ✅ MEMORY OPTIMIZATION: Reduced frequency of memory checks
-    const interval = setInterval(checkMemoryPressure, 60000); // Check every minute instead of 30 seconds
+    const interval = setInterval(checkMemoryPressure, 60000); // Check every minute
     checkMemoryPressure(); // Initial check
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [isMobileOptimized, finalConfig.enableMemoryPressureDetection, finalConfig.maxMemoryUsage]);
 
   // ✅ MEMORY OPTIMIZATION: Simplified cleanup
   useEffect(() => {
+    const debounces = debounceTimeouts.current;
+    const throttles = throttleTimeouts.current;
     return () => {
-      // Clear all debounce timeouts
-      debounceTimeouts.current.forEach(timeout => clearTimeout(timeout));
-      debounceTimeouts.current.clear();
-
-      // Clear all throttle timeouts
-      throttleTimeouts.current.forEach(timeout => clearTimeout(timeout));
-      throttleTimeouts.current.clear();
+      debounces.forEach(timeout => clearTimeout(timeout));
+      debounces.clear();
+      throttles.forEach(timeout => clearTimeout(timeout));
+      throttles.clear();
     };
   }, []);
 
