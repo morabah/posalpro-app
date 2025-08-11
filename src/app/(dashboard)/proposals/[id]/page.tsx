@@ -169,32 +169,36 @@ export default function ProposalDetailPage() {
   };
 
   // Helper: calculate correct proposal value based on wizard data
-  const calculateProposalValue = (proposal: any): { value: number; source: 'step4' | 'step1' | 'database' } => {
+  const calculateProposalValue = (
+    proposal: any
+  ): { value: number; source: 'step4' | 'step1' | 'database' } => {
     const md = unwrapSet(proposal?.metadata) || {};
     const wd = md?.wizardData || proposal?.wizardData || {};
-    
+
     // Check if we have products in step 4
-    const hasProducts = wd.step4?.products && 
-                       Array.isArray(wd.step4.products) &&
-                       wd.step4.products.some((p: any) => p.included !== false) && 
-                       wd.step4.products.length > 0;
-    
+    const hasProducts =
+      wd.step4?.products &&
+      Array.isArray(wd.step4.products) &&
+      wd.step4.products.some((p: any) => p.included !== false) &&
+      wd.step4.products.length > 0;
+
     // Calculate step 4 total value
     let step4TotalValue = 0;
     if (hasProducts) {
       const includedProducts = wd.step4.products.filter((p: any) => p.included !== false);
       step4TotalValue = includedProducts.reduce((sum: number, product: any) => {
-        const productTotal = product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0);
+        const productTotal =
+          product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0);
         return sum + productTotal;
       }, 0);
     }
-    
+
     // Get step 1 estimated value
     const step1EstimatedValue = wd.step1?.details?.estimatedValue || wd.step1?.value || 0;
-    
+
     // Determine which value to use: step 4 total or step 1 estimate
     const shouldUseEstimated = !hasProducts && step4TotalValue === 0 && step1EstimatedValue > 0;
-    
+
     if (step4TotalValue > 0 && hasProducts) {
       return { value: step4TotalValue, source: 'step4' };
     } else if (step1EstimatedValue > 0 && shouldUseEstimated) {
@@ -213,7 +217,8 @@ export default function ProposalDetailPage() {
     const step1 = {
       client: {
         name: wd?.step1?.client?.name ?? raw?.customerName ?? md?.step1?.client?.name,
-        industry: wd?.step1?.client?.industry ?? raw?.customerIndustry ?? md?.step1?.client?.industry,
+        industry:
+          wd?.step1?.client?.industry ?? raw?.customerIndustry ?? md?.step1?.client?.industry,
         contactPerson: wd?.step1?.client?.contactPerson ?? md?.step1?.client?.contactPerson,
         contactPhone: wd?.step1?.client?.contactPhone ?? md?.step1?.client?.contactPhone,
       },
@@ -238,25 +243,29 @@ export default function ProposalDetailPage() {
           section: c?.section,
           customizations: c?.customizations ?? [],
           assignedTo: c?.assignedTo,
-          item: c?.item ?? (c?.contentId || c?.id
-            ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title }
-            : undefined),
+          item:
+            c?.item ??
+            (c?.contentId || c?.id
+              ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title }
+              : undefined),
         }))
       : Array.isArray(md?.contentSelections)
-      ? md.contentSelections
-      : Array.isArray(wd?.step3?.selectedContent)
-      ? wd.step3.selectedContent.map((c: any) => ({
-          ...c,
-          contentId: c?.contentId ?? c?.id,
-          title: c?.title ?? c?.item?.title ?? c?.name,
-          section: c?.section,
-          customizations: c?.customizations ?? [],
-          assignedTo: c?.assignedTo,
-          item: c?.item ?? (c?.contentId || c?.id
-            ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title ?? c?.name }
-            : undefined),
-        }))
-      : [];
+        ? md.contentSelections
+        : Array.isArray(wd?.step3?.selectedContent)
+          ? wd.step3.selectedContent.map((c: any) => ({
+              ...c,
+              contentId: c?.contentId ?? c?.id,
+              title: c?.title ?? c?.item?.title ?? c?.name,
+              section: c?.section,
+              customizations: c?.customizations ?? [],
+              assignedTo: c?.assignedTo,
+              item:
+                c?.item ??
+                (c?.contentId || c?.id
+                  ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title ?? c?.name }
+                  : undefined),
+            }))
+          : [];
 
     // Step 4 (products)
     const productsFromRelation = Array.isArray(raw?.products)
@@ -271,8 +280,8 @@ export default function ProposalDetailPage() {
     const productsFromMd = Array.isArray(wd?.step4?.products)
       ? wd.step4.products
       : Array.isArray(md?.wizardData?.step4?.products)
-      ? md.wizardData.step4.products
-      : [];
+        ? md.wizardData.step4.products
+        : [];
     const step4 = {
       products: (productsFromRelation.length ? productsFromRelation : productsFromMd).filter(
         (p: any) => p && (p.id || p.productId)
@@ -281,12 +290,12 @@ export default function ProposalDetailPage() {
 
     // Step 5 (sections)
     const step5 = {
-      sections: Array.isArray(raw?.sections) ? raw.sections : wd?.step5?.sections ?? [],
+      sections: Array.isArray(raw?.sections) ? raw.sections : (wd?.step5?.sections ?? []),
     };
 
     // Team assignments
-    const teamAssignments =
-      raw?.teamAssignments || md?.teamAssignments || {
+    const teamAssignments = raw?.teamAssignments ||
+      md?.teamAssignments || {
         teamLead: undefined,
         salesRepresentative: undefined,
         subjectMatterExperts: undefined,
@@ -294,7 +303,8 @@ export default function ProposalDetailPage() {
       };
 
     // Validation/analytics/cross-step (best-effort from metadata)
-    const validationData = raw?.validationData || md?.validation || wd?.step6?.finalValidation || null;
+    const validationData =
+      raw?.validationData || md?.validation || wd?.step6?.finalValidation || null;
     const analyticsData = raw?.analyticsData || md?.analytics || null;
     const crossStepValidation = raw?.crossStepValidation || md?.crossStepValidation || null;
 
@@ -559,10 +569,9 @@ export default function ProposalDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Overview */}
+        <div className="grid grid-cols-12 gap-6 xl:gap-8">
+          {/* Overview spans full width for better visual balance */}
+          <div className="col-span-12">
             <Card className="p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Overview</h2>
               <div className="space-y-4">
@@ -587,7 +596,10 @@ export default function ProposalDetailPage() {
                 </div>
               </div>
             </Card>
+          </div>
 
+          {/* Left column content */}
+          <div className="col-span-12 lg:col-span-7 xl:col-span-8 space-y-6">
             {/* ✅ ENHANCED: Wizard Summary */}
             <WizardSummary
               wizardData={proposal.wizardData}
@@ -687,8 +699,15 @@ export default function ProposalDetailPage() {
           </div>
 
           {/* Communication Center Sidebar */}
-          <div className="lg:col-span-1">
-            <CommunicationCenter proposalId={proposalId} currentUserId="current-user-id" />
+          <div className="col-span-12 lg:col-span-5 xl:col-span-4 self-start">
+            <div className="sticky top-24">
+              <CommunicationCenter
+                proposalId={proposalId}
+                currentUserId="current-user-id"
+                isCompact
+                className="max-h-[calc(100vh-160px)]"
+              />
+            </div>
           </div>
         </div>
       </div>

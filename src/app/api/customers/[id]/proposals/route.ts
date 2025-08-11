@@ -54,9 +54,12 @@ const CustomerProposalsQuerySchema = z.object({
 /**
  * GET /api/customers/[id]/proposals - Get customer proposal history
  */
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = context.params;
+    const { id } = await params;
 
     // Authentication check
     const session = await getServerSession(authOptions);
@@ -283,7 +286,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
       message: 'Customer proposals retrieved successfully',
     });
   } catch (error) {
-    logger.error(`Failed to fetch proposals for customer ${context.params.id}:`, error);
+    logger.error(`Failed to fetch proposals for customer`, error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

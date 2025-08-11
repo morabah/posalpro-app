@@ -353,6 +353,35 @@ export function ProposalWizard({
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
+  // Workflow mode: controls which steps are visible
+  const [workflowMode, setWorkflowMode] = useState<'simple' | 'pro' | 'advanced'>('advanced');
+
+  const visibleSteps = useMemo<number[]>(() => {
+    switch (workflowMode) {
+      case 'simple':
+        return [1, 4, 6];
+      case 'pro':
+        return [1, 2, 4, 6];
+      case 'advanced':
+      default:
+        return [1, 2, 3, 4, 5, 6];
+    }
+  }, [workflowMode]);
+
+  const currentVisibleIndex = useMemo(() => {
+    return Math.max(0, visibleSteps.indexOf(currentStep));
+  }, [visibleSteps, currentStep]);
+
+  // Ensure currentStep always points to a visible step when mode changes
+  useEffect(() => {
+    if (!visibleSteps.includes(currentStep)) {
+      setCurrentStep(visibleSteps[0]);
+    }
+  }, [visibleSteps, currentStep]);
+
+  // Editing mode flag
+  const isEditingMode = Boolean(editingIdRef.current || editProposalId);
+
   // ✅ FIXED: Add missing refs for auto-save functionality
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
   const lastAutoSave = useRef<number>(Date.now());
@@ -374,34 +403,38 @@ export function ProposalWizard({
   }, []);
 
   // Proactively dispose previous heavy step component cache to reduce heap usage on step change
-  const goToStep = useCallback((stepNumber: number) => {
-    setCurrentStep(prev => {
-      try {
-        if (prev !== stepNumber) {
-          switch (prev) {
-            case 2:
-              disposeComponent(TeamAssignmentStep);
-              break;
-            case 3:
-              disposeComponent(ContentSelectionStep);
-              break;
-            case 4:
-              disposeComponent(ProductSelectionStep);
-              break;
-            case 5:
-              disposeComponent(SectionAssignmentStep);
-              break;
-            case 6:
-              disposeComponent(ReviewStep);
-              break;
+  const goToStep = useCallback(
+    (stepNumber: number) => {
+      if (!visibleSteps.includes(stepNumber)) return;
+      setCurrentStep(prev => {
+        try {
+          if (prev !== stepNumber) {
+            switch (prev) {
+              case 2:
+                disposeComponent(TeamAssignmentStep);
+                break;
+              case 3:
+                disposeComponent(ContentSelectionStep);
+                break;
+              case 4:
+                disposeComponent(ProductSelectionStep);
+                break;
+              case 5:
+                disposeComponent(SectionAssignmentStep);
+                break;
+              case 6:
+                disposeComponent(ReviewStep);
+                break;
+            }
           }
+        } catch {
+          /* no-op: dispose failures are safe to ignore */
         }
-      } catch {
-        /* no-op: dispose failures are safe to ignore */
-      }
-      return stepNumber;
-    });
-  }, []);
+        return stepNumber;
+      });
+    },
+    [visibleSteps]
+  );
 
   // ✅ FIXED: Add missing dependencies to useEffect
   useEffect(() => {
@@ -1535,6 +1568,11 @@ export function ProposalWizard({
           loadedWizardData.step6.finalValidation.isValid,
         ];
         setStepValidation(newStepValidation);
+
+        // In edit mode, show Step 4 first for quick product/total adjustments
+        if (isEditingMode && currentStep === 1) {
+          setCurrentStep(4);
+        }
       } catch (error) {
         console.error('[ProposalWizard] Failed to load existing proposal:', error);
 
@@ -1690,18 +1728,23 @@ export function ProposalWizard({
 
       // ✅ ENHANCED: Send all wizard data to database with proper value logic
       // Calculate actual value based on step 4 products
-      const hasProducts = wizardData.step4.products && 
-                         wizardData.step4.products.some(p => p.included !== false) && 
-                         wizardData.step4.products.length > 0;
-      
-      const step4TotalValue = hasProducts 
+      const hasProducts =
+        wizardData.step4.products &&
+        wizardData.step4.products.some(p => p.included !== false) &&
+        wizardData.step4.products.length > 0;
+
+      const step4TotalValue = hasProducts
         ? wizardData.step4.products
             .filter(p => p.included !== false)
-            .reduce((sum, product) => sum + (product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0)), 0)
+            .reduce(
+              (sum, product) =>
+                sum + (product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0)),
+              0
+            )
         : 0;
-      
+
       const step1EstimatedValue = wizardData.step1.details.estimatedValue || 0;
-      
+
       // Logic: If no products and step4 total is 0, use estimated value from step1
       // Otherwise, use actual value from step4
       const shouldUseEstimated = !hasProducts && step4TotalValue === 0 && step1EstimatedValue > 0;
@@ -2223,11 +2266,13 @@ export function ProposalWizard({
     console.log(
       '[handleNext] Called with currentStep:',
       currentStep,
-      'totalSteps:',
-      STEP_META.length
+      'visibleSteps:',
+      visibleSteps
     );
 
-    if (currentStep < STEP_META.length) {
+    const idx = visibleSteps.indexOf(currentStep);
+    const isLast = idx === visibleSteps.length - 1;
+    if (!isLast && idx >= 0) {
       // Dispose current step heavy component cache before moving on
       try {
         switch (currentStep) {
@@ -2251,7 +2296,7 @@ export function ProposalWizard({
         /* no-op: outer step3 hydration fallback block */
       }
       // Lazy-initialize next step's data on first navigation in
-      const nextStep = currentStep + 1;
+      const nextStep = visibleSteps[idx + 1];
       setWizardData(prev => {
         const updated: ProposalWizardData = { ...prev } as ProposalWizardData;
         switch (nextStep) {
@@ -2304,9 +2349,9 @@ export function ProposalWizard({
         }
         return updated;
       });
-      console.log('[handleNext] Moving to next step:', currentStep + 1);
-      setCurrentStep(currentStep + 1);
-    } else if (currentStep === STEP_META.length) {
+      console.log('[handleNext] Moving to next step:', nextStep);
+      setCurrentStep(nextStep);
+    } else if (isLast) {
       // Handle final step - create proposal
       console.log('[ProposalWizard] 🎯 Final step reached, calling handleCreateProposal');
       handleCreateProposal();
@@ -2314,17 +2359,69 @@ export function ProposalWizard({
       console.log(
         '[handleNext] Unexpected state - currentStep:',
         currentStep,
-        'totalSteps:',
-        STEP_META.length
+        'visibleSteps:',
+        visibleSteps
       );
     }
-  }, [currentStep, handleCreateProposal]);
+  }, [currentStep, handleCreateProposal, visibleSteps]);
 
   const handleBack = useCallback(() => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
   }, [currentStep]);
+
+  // Open preview template in a new tab using a serialized snapshot
+  const handlePreviewProposal = useCallback(() => {
+    try {
+      const step1 = wizardData.step1;
+      const step3 = wizardData.step3;
+      const step4 = wizardData.step4;
+
+      const selectedProducts = (step4.products || []).filter(p => p.included !== false);
+      const totals = selectedProducts.reduce(
+        (acc, p) => acc + (p.totalPrice || (p.quantity || 1) * (p.unitPrice || 0)),
+        0
+      );
+
+      const terms = (step3.selectedContent || [])
+        .filter(sc => typeof sc.section === 'string' && sc.section.toLowerCase().includes('term'))
+        .map(sc => ({
+          section: sc.section,
+          content: (sc.item as { content?: string })?.content || '',
+          title: (sc.item as { title?: string })?.title || 'Terms',
+        }));
+
+      const previewPayload = {
+        company: {
+          name: step1.client?.name || '',
+          industry: step1.client?.industry || '',
+          contactPerson: step1.client?.contactPerson || '',
+          contactEmail: step1.client?.contactEmail || '',
+          contactPhone: step1.client?.contactPhone || '',
+        },
+        proposal: {
+          title: step1.details?.title || '',
+          description: step1.details?.description || '',
+          dueDate: step1.details?.dueDate || null,
+          priority: step1.details?.priority || 'MEDIUM',
+          rfpReferenceNumber:
+            (step1.details as { rfpReferenceNumber?: string })?.rfpReferenceNumber || '',
+        },
+        products: selectedProducts,
+        totals: {
+          currency: 'USD',
+          amount: totals,
+        },
+        terms,
+      };
+
+      localStorage.setItem('proposal-preview-data', JSON.stringify(previewPayload));
+      window.open('/proposals/preview', '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      // Fallback: ignore preview errors silently
+    }
+  }, [wizardData]);
 
   // Removed unused helpers (handleNavigation, canProceed, canGoBack, stepTitle) to reduce bundle and fix lints
 
@@ -2517,7 +2614,6 @@ export function ProposalWizard({
 
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -2533,7 +2629,6 @@ export function ProposalWizard({
     }
 
     setTouchEnd(e.targetTouches[0].clientX);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTouchEnd = useCallback(() => {
@@ -2574,10 +2669,13 @@ export function ProposalWizard({
 
           <div className="flex-1 text-center">
             <h2 className="text-lg font-semibold text-gray-900">
-              Step {currentStep} of {STEP_META.length}
+              Step {currentVisibleIndex + 1} of {visibleSteps.length}
             </h2>
             <p className="text-sm text-gray-600">
-              {isMobile ? STEP_META[currentStep - 1].shortTitle : STEP_META[currentStep - 1].title}
+              {(() => {
+                const meta = STEP_META[(visibleSteps[currentVisibleIndex] ?? 1) - 1];
+                return isMobile ? meta.shortTitle : meta.title;
+              })()}
             </p>
           </div>
 
@@ -2588,31 +2686,34 @@ export function ProposalWizard({
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
             className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${(currentStep / STEP_META.length) * 100}%` }}
+            style={{ width: `${((currentVisibleIndex + 1) / visibleSteps.length) * 100}%` }}
           />
         </div>
 
         {/* Mobile step menu */}
         {isMobileMenuOpen && (
           <div className="mt-3 space-y-2">
-            {STEP_META.map(step => (
-              <button
-                key={step.number}
-                onClick={() => {
-                  setCurrentStep(step.number);
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] ${
-                  currentStep === step.number
-                    ? 'bg-blue-50 text-blue-700 font-medium'
-                    : currentStep > step.number
-                      ? 'bg-green-50 text-green-700'
-                      : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <span className="font-medium">{step.number}.</span> {step.title}
-              </button>
-            ))}
+            {visibleSteps.map(num => {
+              const step = STEP_META[num - 1];
+              return (
+                <button
+                  key={step.number}
+                  onClick={() => {
+                    setCurrentStep(step.number);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] ${
+                    currentStep === step.number
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : visibleSteps.indexOf(currentStep) > visibleSteps.indexOf(step.number)
+                        ? 'bg-green-50 text-green-700'
+                        : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="font-medium">{step.number}.</span> {step.title}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -2622,37 +2723,46 @@ export function ProposalWizard({
   // Desktop step stepper (existing component simplified)
   const DesktopStepStepper = () => (
     <div className="hidden sm:flex items-center justify-between mb-8">
-      {STEP_META.map((step, index) => (
-        <div key={step.number} className="flex items-center">
+      {visibleSteps.map((num, index) => {
+        const step = STEP_META[num - 1];
+        const currentIdx = visibleSteps.indexOf(currentStep);
+        return (
           <div
-            className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
-              currentStep === step.number
-                ? 'border-blue-600 bg-blue-600 text-white'
-                : currentStep > step.number
-                  ? 'border-green-600 bg-green-600 text-white'
-                  : 'border-gray-300 bg-white text-gray-500'
-            }`}
+            key={step.number}
+            className={`flex items-center ${isEditingMode ? 'cursor-pointer' : ''}`}
+            onClick={isEditingMode ? () => goToStep(step.number) : undefined}
+            role={isEditingMode ? 'button' : undefined}
+            aria-disabled={!isEditingMode}
+            tabIndex={isEditingMode ? 0 : -1}
           >
-            {step.number}
-          </div>
-          <div className="ml-3">
-            <p
-              className={`text-sm font-medium ${
-                currentStep >= step.number ? 'text-gray-900' : 'text-gray-500'
+            <div
+              className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
+                currentStep === step.number
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : currentIdx > index
+                    ? 'border-green-600 bg-green-600 text-white'
+                    : 'border-gray-300 bg-white text-gray-500'
               }`}
             >
-              {step.title}
-            </p>
+              {step.number}
+            </div>
+            <div className="ml-3">
+              <p
+                className={`text-sm font-medium ${
+                  currentIdx >= index ? 'text-gray-900' : 'text-gray-500'
+                }`}
+              >
+                {step.title}
+              </p>
+            </div>
+            {index < visibleSteps.length - 1 && (
+              <div
+                className={`w-16 h-0.5 ml-4 ${currentIdx > index ? 'bg-green-600' : 'bg-gray-300'}`}
+              />
+            )}
           </div>
-          {index < STEP_META.length - 1 && (
-            <div
-              className={`w-16 h-0.5 ml-4 ${
-                currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -2689,7 +2799,12 @@ export function ProposalWizard({
   const NavigationButtons = () => {
     // Add debugging to understand button state
     const isDisabled = loading || !isCurrentStepValid();
-    const isFinalStep = currentStep === STEP_META.length;
+    const isFinalStep = currentStep === visibleSteps[visibleSteps.length - 1];
+    const primaryActionLabel = isFinalStep
+      ? isEditingMode
+        ? 'Update Proposal'
+        : 'Create Proposal'
+      : 'Continue';
 
     // Debug logs removed for performance
 
@@ -2703,6 +2818,19 @@ export function ProposalWizard({
         )}
 
         <div className="flex gap-3 sm:gap-4 flex-1">
+          {/* Preview button available on step 4 */}
+          {currentStep === 4 && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePreviewProposal}
+              disabled={loading}
+              className="flex-1 sm:flex-initial min-h-[44px] px-6 py-3 text-base font-medium"
+              title="Preview proposal in a new tab"
+            >
+              Preview Proposal
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -2723,9 +2851,23 @@ export function ProposalWizard({
             className="flex-1 sm:flex-initial min-h-[44px] px-6 py-3 text-base font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
             title={!isCurrentStepValid() ? getRequiredFieldMessage() : ''}
           >
-            {isFinalStep ? 'Create Proposal' : 'Continue'}
+            {primaryActionLabel}
             <ChevronRightIcon className="w-4 h-4 ml-2" />
           </Button>
+
+          {/* In edit mode, allow updating from any step without navigating to the last step */}
+          {isEditingMode && !isFinalStep && (
+            <Button
+              type="button"
+              onClick={handleCreateProposal}
+              disabled={loading}
+              className="flex-1 sm:flex-initial min-h-[44px] px-6 py-3 text-base font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              aria-label="Update proposal"
+              title="Update the current proposal"
+            >
+              Update Proposal
+            </Button>
+          )}
         </div>
 
         <Button
@@ -3077,6 +3219,48 @@ export function ProposalWizard({
         <div className="max-w-4xl mx-auto">
           {/* Desktop step stepper */}
           <DesktopStepStepper />
+
+          {/* Workflow mode selection */}
+          <div className="mb-6">
+            <fieldset className="bg-white border border-gray-200 rounded-lg p-4">
+              <legend className="text-sm font-medium text-gray-900">Workflow Mode</legend>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="workflow-mode"
+                    value="simple"
+                    checked={workflowMode === 'simple'}
+                    onChange={() => setWorkflowMode('simple')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  Simple (Steps 1, 4, 6)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="workflow-mode"
+                    value="pro"
+                    checked={workflowMode === 'pro'}
+                    onChange={() => setWorkflowMode('pro')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  Pro (Steps 1, 2, 4, 6)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="workflow-mode"
+                    value="advanced"
+                    checked={workflowMode === 'advanced'}
+                    onChange={() => setWorkflowMode('advanced')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  Advanced (All steps)
+                </label>
+              </div>
+            </fieldset>
+          </div>
 
           {/* Session recovery notification */}
           {sessionRecovered && (

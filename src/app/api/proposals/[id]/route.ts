@@ -32,9 +32,9 @@ interface Step4Product {
 
 export interface WizardData {
   step1?: { details?: { estimatedValue?: number; rfpReferenceNumber?: string; contactPerson?: string; contactEmail?: string; contactPhone?: string }; value?: number; client?: { contactPerson?: string; contactEmail?: string; contactPhone?: string } };
-  step3?: { selectedContent?: Array<unknown> };
-  step4?: { products?: Array<Step4Product> };
-  step5?: { sectionAssignments?: SectionAssignmentsMap; sections?: Array<unknown> };
+  step3?: { selectedContent?: unknown[] };
+  step4?: { products?: Step4Product[] };
+  step5?: { sectionAssignments?: SectionAssignmentsMap; sections?: unknown[] };
 }
 
 interface ProductRef { id?: string; name?: string; price?: number; currency?: string }
@@ -786,18 +786,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
       // Merge wizardData granularly across steps
       type SectionAssignments = Record<string, unknown>;
-      type Step4Product = {
+      interface Step4Product {
         included?: boolean;
         totalPrice?: number;
         quantity?: number;
         unitPrice?: number;
-      };
-      type WizardData = {
+      }
+      interface WizardData {
         step1?: { details?: { estimatedValue?: number; rfpReferenceNumber?: string }; value?: number };
         step4?: { products?: Step4Product[] };
         step5?: { sectionAssignments?: SectionAssignments; sections?: unknown[] };
         step3?: { selectedContent?: unknown[] };
-      };
+      }
 
       const incomingWDFromTop: WizardData | undefined = wizardData as unknown as WizardData | undefined;
       const incomingWDFromMeta: WizardData | undefined =

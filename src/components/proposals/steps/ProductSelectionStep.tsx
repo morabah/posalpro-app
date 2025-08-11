@@ -11,7 +11,7 @@ import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ProposalWizardStep4Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, CheckCircle, Info, Search, Trash2 } from 'lucide-react';
+import { AlertCircle, Info, Plus, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -136,17 +136,26 @@ export function ProductSelectionStep({
     errors: string[];
     warnings: string[];
   }>({ errors: [], warnings: [] });
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
   // DEBUG: Log incoming props and selection size
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('[ProductSelectionStep][DEBUG] props.data.products:', Array.isArray(data.products) ? data.products.length : 0);
+      console.log(
+        '[ProductSelectionStep][DEBUG] props.data.products:',
+        Array.isArray(data.products) ? data.products.length : 0
+      );
     }
   }, [data.products]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('[ProductSelectionStep][DEBUG] selectedProducts size:', selectedProducts.size, 'ids:', Array.from(selectedProducts.keys()));
+      console.log(
+        '[ProductSelectionStep][DEBUG] selectedProducts size:',
+        selectedProducts.size,
+        'ids:',
+        Array.from(selectedProducts.keys())
+      );
     }
   }, [selectedProducts]);
 
@@ -216,6 +225,38 @@ export function ProductSelectionStep({
     return formData;
   }, [selectedProducts, analytics]);
 
+  // Helper to build form data from a provided selection map to avoid async state lag
+  const buildFormDataFrom = useCallback(
+    (map: Map<string, SelectedProduct>): ProposalWizardStep4Data => {
+      const includedProducts = Array.from(map.values()).filter(p => p.quantity > 0);
+      const totalValue = includedProducts.reduce((sum, product) => sum + product.totalPrice, 0);
+      return {
+        products: includedProducts.map(product => ({
+          id: product.id,
+          name: product.name,
+          included: true,
+          quantity: product.quantity,
+          unitPrice: product.unitPrice,
+          totalPrice: product.totalPrice,
+          category: product.category,
+          configuration: product.configuration,
+          customizations: product.customizations,
+          notes: product.notes,
+        })),
+        totalValue,
+        aiRecommendationsUsed: 0,
+        searchHistory: [],
+        crossStepValidation: {
+          teamCompatibility: true,
+          contentAlignment: true,
+          budgetCompliance: true,
+          timelineRealistic: true,
+        },
+      };
+    },
+    []
+  );
+
   // Load products from database
   const loadProducts = useCallback(async () => {
     try {
@@ -236,7 +277,10 @@ export function ProductSelectionStep({
         setProducts(response.data.products);
         setFilteredProducts(response.data.products);
         if (process.env.NODE_ENV === 'development') {
-          console.log('[ProductSelectionStep][DEBUG] loaded products count:', response.data.products.length);
+          console.log(
+            '[ProductSelectionStep][DEBUG] loaded products count:',
+            response.data.products.length
+          );
         }
       } else {
         throw new Error('Failed to load products');
@@ -260,8 +304,30 @@ export function ProductSelectionStep({
 
   // Helper to resolve the source product ID from props (supports {id} or {productId})
   type IncomingProduct =
-    | { id: string; productId?: string; name?: string; unitPrice?: number; quantity?: number; totalPrice?: number; category?: string; configuration?: Record<string, unknown>; customizations?: string[]; notes?: string }
-    | { productId: string; id?: string; name?: string; unitPrice?: number; quantity?: number; totalPrice?: number; category?: string; configuration?: Record<string, unknown>; customizations?: string[]; notes?: string };
+    | {
+        id: string;
+        productId?: string;
+        name?: string;
+        unitPrice?: number;
+        quantity?: number;
+        totalPrice?: number;
+        category?: string;
+        configuration?: Record<string, unknown>;
+        customizations?: string[];
+        notes?: string;
+      }
+    | {
+        productId: string;
+        id?: string;
+        name?: string;
+        unitPrice?: number;
+        quantity?: number;
+        totalPrice?: number;
+        category?: string;
+        configuration?: Record<string, unknown>;
+        customizations?: string[];
+        notes?: string;
+      };
 
   const resolveSourceId = useCallback((p: IncomingProduct | undefined): string | undefined => {
     if (!p) return undefined;
@@ -276,7 +342,8 @@ export function ProductSelectionStep({
       const unitPrice = (p as { unitPrice?: number }).unitPrice ?? dbProduct?.price ?? 0;
       const quantity = (p as { quantity?: number }).quantity ?? 1;
       const name = (p as { name?: string }).name ?? dbProduct?.name ?? 'Unknown Product';
-      const category = (p as { category?: string }).category ?? dbProduct?.category?.[0] ?? 'General';
+      const category =
+        (p as { category?: string }).category ?? dbProduct?.category?.[0] ?? 'General';
       return {
         id: sourceId,
         name,
@@ -298,7 +365,10 @@ export function ProductSelectionStep({
     if (initializedFromDataRef.current) return;
     if (data.products && data.products.length > 0) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('[ProductSelectionStep][DEBUG] initial hydration from props, count:', data.products.length);
+        console.log(
+          '[ProductSelectionStep][DEBUG] initial hydration from props, count:',
+          data.products.length
+        );
       }
       const productsMap = new Map<string, SelectedProduct>();
       data.products.forEach(product => {
@@ -314,23 +384,35 @@ export function ProductSelectionStep({
   }, [data.products, products, buildSelectedProduct]);
 
   // Backfill any missing items if props contain more products than the current map
+  const previousPropsHashRef = useRef<string | null>(null);
+  const computeProductsHash = useCallback(
+    (list?: IncomingProduct[]): string => {
+      if (!list || list.length === 0) return '';
+      const ids = list
+        .map(p => resolveSourceId(p))
+        .filter((id): id is string => Boolean(id))
+        .sort();
+      return ids.join('|');
+    },
+    [resolveSourceId]
+  );
+
   useEffect(() => {
     if (!data.products || data.products.length === 0) return;
+
+    // Only backfill when the incoming props list actually changes (external update)
+    const currentHash = computeProductsHash(data.products as IncomingProduct[]);
+    if (previousPropsHashRef.current === currentHash) {
+      return; // No external change; avoid re-adding locally removed items
+    }
+    previousPropsHashRef.current = currentHash;
+
     const existingIds = new Set(Array.from(selectedProducts.keys()));
-    const missing = data.products.filter(p => {
+    const missing = (data.products as IncomingProduct[]).filter(p => {
       const sid = resolveSourceId(p);
       return sid ? !existingIds.has(sid) : false;
     });
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        '[ProductSelectionStep][DEBUG] backfill check: props=',
-        data.products.length,
-        'map=',
-        selectedProducts.size,
-        'missing=',
-        missing.map(m => resolveSourceId(m))
-      );
-    }
+
     if (missing.length === 0) return;
 
     const newMap = new Map(selectedProducts);
@@ -338,11 +420,8 @@ export function ProductSelectionStep({
       const sp = buildSelectedProduct(product);
       if (sp) newMap.set(sp.id, sp);
     });
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ProductSelectionStep][DEBUG] backfill applied, new map size:', newMap.size);
-    }
     setSelectedProducts(newMap);
-  }, [data.products, selectedProducts, products, resolveSourceId, buildSelectedProduct]);
+  }, [data.products, selectedProducts, computeProductsHash, resolveSourceId, buildSelectedProduct]);
 
   // Enhanced analytics tracking with cross-step context
   const trackProductSelection = useCallback(
@@ -398,8 +477,14 @@ export function ProductSelectionStep({
       filtered = filtered.filter(product => product.category.includes(selectedCategory));
     }
 
+    // Apply selected-only filter
+    if (showSelectedOnly) {
+      const selectedIds = new Set(Array.from(selectedProducts.keys()));
+      filtered = filtered.filter(product => selectedIds.has(product.id));
+    }
+
     setFilteredProducts(filtered);
-  }, [products, searchQuery, selectedCategory]);
+  }, [products, searchQuery, selectedCategory, showSelectedOnly, selectedProducts]);
 
   // Update filters when dependencies change
   useEffect(() => {
@@ -428,9 +513,18 @@ export function ProductSelectionStep({
           totalPrice: (existingProduct.quantity + 1) * existingProduct.unitPrice,
         };
 
-        setSelectedProducts(prev => new Map(prev.set(product.id, updatedProduct)));
+        const next = new Map(selectedProducts);
+        next.set(product.id, updatedProduct);
+        setSelectedProducts(next);
+        // Immediate upstream update to keep props in sync
+        onUpdate(buildFormDataFrom(next));
         if (process.env.NODE_ENV === 'development') {
-          console.log('[ProductSelectionStep][DEBUG] increment quantity for', product.id, 'map size:', selectedProducts.size);
+          console.log(
+            '[ProductSelectionStep][DEBUG] increment quantity for',
+            product.id,
+            'map size:',
+            selectedProducts.size
+          );
         }
       } else {
         // Add new product
@@ -448,9 +542,18 @@ export function ProductSelectionStep({
           notes: '',
         };
 
-        setSelectedProducts(prev => new Map(prev.set(product.id, newProduct)));
+        const next = new Map(selectedProducts);
+        next.set(product.id, newProduct);
+        setSelectedProducts(next);
+        // Immediate upstream update to keep props in sync
+        onUpdate(buildFormDataFrom(next));
         if (process.env.NODE_ENV === 'development') {
-          console.log('[ProductSelectionStep][DEBUG] add new product', product.id, 'map size:', selectedProducts.size + 1);
+          console.log(
+            '[ProductSelectionStep][DEBUG] add new product',
+            product.id,
+            'map size:',
+            selectedProducts.size + 1
+          );
         }
       }
 
@@ -474,13 +577,13 @@ export function ProductSelectionStep({
         });
       }
 
-      setSelectedProducts(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(productId);
-        return newMap;
-      });
+      const next = new Map(selectedProducts);
+      next.delete(productId);
+      setSelectedProducts(next);
+      // Immediate upstream update to ensure product is removed from proposal and UI
+      onUpdate(buildFormDataFrom(next));
     },
-    [selectedProducts, trackProductSelection]
+    [selectedProducts, trackProductSelection, onUpdate, buildFormDataFrom]
   );
 
   // Handle quantity change
@@ -494,7 +597,11 @@ export function ProductSelectionStep({
           totalPrice: newQuantity * product.unitPrice,
         };
 
-        setSelectedProducts(prev => new Map(prev.set(productId, updatedProduct)));
+        const next = new Map(selectedProducts);
+        next.set(productId, updatedProduct);
+        setSelectedProducts(next);
+        // Immediate upstream update to keep totals in sync
+        onUpdate(buildFormDataFrom(next));
 
         trackProductSelection('quantity_changed', productId, {
           oldQuantity: product.quantity,
@@ -503,7 +610,7 @@ export function ProductSelectionStep({
         });
       }
     },
-    [selectedProducts, trackProductSelection]
+    [selectedProducts, trackProductSelection, onUpdate, buildFormDataFrom]
   );
 
   // Update form data when selections change
@@ -511,7 +618,10 @@ export function ProductSelectionStep({
     const formData = collectFormData();
     onUpdate(formData);
     if (process.env.NODE_ENV === 'development') {
-      console.log('[ProductSelectionStep][DEBUG] onUpdate sent products:', formData.products.length);
+      console.log(
+        '[ProductSelectionStep][DEBUG] onUpdate sent products:',
+        formData.products.length
+      );
     }
   }, [collectFormData, onUpdate]);
 
@@ -522,9 +632,9 @@ export function ProductSelectionStep({
 
     // Validate team compatibility
     if (teamData?.teamMembers) {
-        const hasTechnicalExpert = teamData.teamMembers.some(
-          (member: { expertise?: string }) => member.expertise === 'Technical'
-        );
+      const hasTechnicalExpert = teamData.teamMembers.some(
+        (member: { expertise?: string }) => member.expertise === 'Technical'
+      );
 
       if (!hasTechnicalExpert && selectedProducts.size > 0) {
         warnings.push('Consider adding a technical expert to the team for complex products');
@@ -666,6 +776,17 @@ export function ProductSelectionStep({
             </option>
           ))}
         </select>
+
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700 select-none">
+          <input
+            type="checkbox"
+            checked={showSelectedOnly}
+            onChange={e => setShowSelectedOnly(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            aria-label="Filter selected products"
+          />
+          Selected products
+        </label>
       </div>
 
       {/* Cross-step validation warnings */}
@@ -702,97 +823,89 @@ export function ProductSelectionStep({
         </div>
       )}
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredProducts.map(product => (
-          <div
-            key={`card-${product.id}`}
-            className={`p-4 border rounded-lg cursor-pointer transition-all ${
-              selectedProducts.has(product.id)
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-            }`}
-            onClick={() => handleProductSelect(product)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="font-medium text-gray-900">{product.name}</h3>
-                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{product.description}</p>
-                <div className="flex items-center justify-between mt-3">
-                  <span className="text-lg font-semibold text-gray-900">
-                    ${product.price.toLocaleString()}
-                  </span>
-                  <span className="text-sm text-gray-500">{product.category[0]}</span>
+      {/* Products List with inline selection controls */}
+      <div className="border border-gray-200 rounded-md divide-y divide-gray-200">
+        {filteredProducts.map(product => {
+          const isSelected = selectedProducts.has(product.id);
+          const selected = isSelected ? selectedProducts.get(product.id)! : null;
+          return (
+            <div
+              key={`row-${product.id}`}
+              className={`flex items-center justify-between p-3 sm:p-4 ${
+                isSelected ? 'bg-blue-50' : 'bg-white'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-medium text-gray-900">{product.name}</span>
+                  <span className="text-xs text-gray-500">{product.sku}</span>
+                </div>
+                <div className="text-sm text-gray-600 truncate">
+                  {product.category[0]}
+                  {product.description ? ` • ${product.description}` : ''}
                 </div>
               </div>
-
-              {selectedProducts.has(product.id) && (
-                <CheckCircle className="h-5 w-5 text-blue-500 ml-2" />
-              )}
+              <div className="flex items-center gap-4 pl-4">
+                {!isSelected ? (
+                  <>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900">
+                      ${product.price.toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleProductSelect(product)}
+                      className="inline-flex items-center justify-center p-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] min-w-[44px]"
+                      aria-label={`Add ${product.name} to proposal`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600" htmlFor={`qty-${product.id}`}>
+                        Qty
+                      </label>
+                      <input
+                        id={`qty-${product.id}`}
+                        type="number"
+                        min={1}
+                        value={selected?.quantity ?? 1}
+                        onChange={e =>
+                          handleQuantityChange(
+                            product.id,
+                            Math.max(1, parseInt(e.target.value) || 1)
+                          )
+                        }
+                        className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                      />
+                    </div>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900">
+                      $
+                      {(
+                        (selected?.quantity || 1) * (selected?.unitPrice || product.price)
+                      ).toLocaleString()}
+                    </span>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleProductRemove(product.id);
+                      }}
+                      className="p-2 rounded-md text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[36px]"
+                      aria-label={`Remove ${product.name} from proposal`}
+                      title="Remove"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Selected Products */}
-      {selectedProducts.size > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900">Selected Products</h3>
-
-          <div className="space-y-3">
-            {Array.from(selectedProducts.values()).map(product => (
-              <div
-                key={`sel-${product.id}`}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-              >
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900">{product.name}</h4>
-                  <p className="text-sm text-gray-600">{product.category}</p>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Qty:</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={product.quantity}
-                      onChange={e =>
-                        handleQuantityChange(product.id, parseInt(e.target.value) || 1)
-                      }
-                      className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-
-                  <span className="text-lg font-semibold text-gray-900">
-                    ${product.totalPrice.toLocaleString()}
-                  </span>
-
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleProductRemove(product.id);
-                    }}
-                    className="p-1 text-red-500 hover:text-red-700 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-            <span className="text-lg font-medium text-gray-900">Total Value</span>
-            <span className="text-2xl font-bold text-green-600">
-              $
-              {Array.from(selectedProducts.values())
-                .reduce((sum, product) => sum + product.totalPrice, 0)
-                .toLocaleString()}
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Selected Products summary section removed per new inline layout. Overall total remains in header. */}
 
       {/* No products found */}
       {filteredProducts.length === 0 && !loading && (

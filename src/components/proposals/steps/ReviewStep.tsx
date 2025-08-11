@@ -96,14 +96,26 @@ interface ReviewStepProps {
   analytics: ReturnType<typeof useProposalCreationAnalytics>;
   allWizardData?: {
     step1?: { client?: { name?: string }; details?: { title?: string; dueDate?: string | Date } };
-    step3?: { selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }> };
+    step3?: {
+      selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }>;
+    };
     step4?: { products?: Array<{ id: string; quantity?: number; unitPrice?: number }> };
-    step5?: { sections?: Array<{ title?: string; assignedTo?: string | string[]; hours?: number; priority?: unknown; status?: unknown }> };
+    step5?: {
+      sections?: Array<{
+        title?: string;
+        assignedTo?: string | string[];
+        hours?: number;
+        priority?: unknown;
+        status?: unknown;
+      }>;
+    };
     totalEstimatedHours?: number;
   };
   proposalMetadata?: { projectType?: string; budget?: number };
   teamData?: { teamMembers?: Array<{ id?: string; name?: string; expertise?: string }> };
-  contentData?: { selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }> };
+  contentData?: {
+    selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }>;
+  };
   productData?: { products?: Array<{ id: string; quantity?: number; unitPrice?: number }> };
 }
 
@@ -376,10 +388,72 @@ export function ReviewStep({
   const exportProposal = useCallback(
     (format: 'pdf' | 'docx' | 'html') => {
       trackReviewAction('complete');
-      // In production, this would trigger the export process
-      alert(`Exporting proposal as ${format.toUpperCase()}...`);
+
+      try {
+        const WIZARD_SESSION_KEY = 'proposal-wizard-session';
+        const PREVIEW_KEY = 'proposal-preview-data';
+
+        // Prefer full wizard data from localStorage to ensure latest snapshot
+        let wizardData: any | null = null;
+        try {
+          const raw =
+            typeof window !== 'undefined' ? localStorage.getItem(WIZARD_SESSION_KEY) : null;
+          wizardData = raw ? JSON.parse(raw) : null;
+        } catch {
+          wizardData = null;
+        }
+
+        // Fallback to props snapshot if localStorage missing
+        const step1 = wizardData?.step1 || allWizardData?.step1 || {};
+        const step3 = wizardData?.step3 || allWizardData?.step3 || {};
+        const step4 = wizardData?.step4 || productData || allWizardData?.step4 || {};
+
+        const selectedProducts = (step4?.products || []).filter((p: any) => p?.included !== false);
+        const totals = selectedProducts.reduce(
+          (acc: number, p: any) => acc + (p.totalPrice || (p.quantity || 1) * (p.unitPrice || 0)),
+          0
+        );
+
+        const terms = (step3?.selectedContent || [])
+          .filter(
+            (sc: any) => typeof sc.section === 'string' && sc.section.toLowerCase().includes('term')
+          )
+          .map((sc: any) => ({
+            section: sc.section,
+            content: sc.item?.content || '',
+            title: sc.item?.title || 'Terms',
+          }));
+
+        const previewPayload = {
+          company: {
+            name: step1?.client?.name || '',
+            industry: step1?.client?.industry || '',
+            contactPerson: step1?.client?.contactPerson || '',
+            contactEmail: step1?.client?.contactEmail || '',
+            contactPhone: step1?.client?.contactPhone || '',
+          },
+          proposal: {
+            title: step1?.details?.title || '',
+            description: step1?.details?.description || '',
+            dueDate: step1?.details?.dueDate || null,
+            priority: step1?.details?.priority || 'MEDIUM',
+            rfpReferenceNumber: step1?.details?.rfpReferenceNumber || '',
+          },
+          products: selectedProducts,
+          totals: { currency: 'USD', amount: totals },
+          terms,
+        };
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(PREVIEW_KEY, JSON.stringify(previewPayload));
+          const url = format === 'pdf' ? '/proposals/preview?print=1' : '/proposals/preview';
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      } catch (err) {
+        // Silent fallback to avoid blocking review step
+      }
     },
-    [trackReviewAction]
+    [trackReviewAction, allWizardData, productData]
   );
 
   // Summary statistics
