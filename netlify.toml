@@ -6,6 +6,9 @@
   NODE_VERSION = "20.15.1"
   # Configure specific Next.js flags for Netlify
   NEXT_USE_NETLIFY_EDGE = "true"
+  # Force Prisma to use native binary engines on Netlify (disable wasm/dataproxy)
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "binary"
+  PRISMA_CLIENT_ENGINE_TYPE = "binary"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
