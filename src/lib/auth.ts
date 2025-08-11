@@ -92,7 +92,9 @@ export const authOptions: NextAuthOptions = {
         secure: process.env.NODE_ENV === 'production',
         domain:
           process.env.NODE_ENV === 'production'
-            ? (process.env.NEXTAUTH_URL ? process.env.NEXTAUTH_URL.replace(/^https?:\/\//, '') : undefined)
+            ? process.env.NEXTAUTH_URL
+              ? process.env.NEXTAUTH_URL.replace(/^https?:\/\//, '')
+              : undefined
             : undefined,
       },
     },
@@ -118,7 +120,9 @@ export const authOptions: NextAuthOptions = {
           placeholder: 'Optional role selection',
         },
       },
-      async authorize(credentials: { email?: string; password?: string; role?: string } | undefined) {
+      async authorize(
+        credentials: { email?: string; password?: string; role?: string } | undefined
+      ) {
         const email = credentials?.email ?? '';
         const hasPassword = Boolean(credentials?.password);
         const role = credentials?.role;
@@ -161,15 +165,15 @@ export const authOptions: NextAuthOptions = {
             throw new Error('Account is not active');
           }
 
-          // ✅ CRITICAL FIX: Validate that the user has the selected role
+          // Align behavior with /api/auth/login: do not hard-fail on role mismatch
           const roles = user.roles.map(userRole => userRole.role.name);
           if (credentials.role && !roles.includes(credentials.role)) {
-            logger.error('❌ Role mismatch:', {
+            logger.warn('⚠️ Role mismatch (continuing without strict rejection):', {
               user: user.email,
               selectedRole: credentials.role,
               userRoles: roles,
             });
-            throw new Error('Invalid credentials or role selection.');
+            // Intentionally not throwing to align with permissive API verification
           }
 
           logger.info('🔑 Verifying password...');
