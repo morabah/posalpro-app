@@ -1,6 +1,8 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["fullTextIndex", "fullTextSearch"]
+  // Target Netlify's Debian-based build image
+  binaryTargets   = ["debian-openssl-3.0.x"]
 }
 
 datasource db {
