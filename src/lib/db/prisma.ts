@@ -19,21 +19,23 @@ declare global {
 }
 
 // Configure Prisma client with appropriate database URL based on environment
-const getDatabaseUrl = () => {
+const getDatabaseUrl = (): string => {
   // For Netlify production deployment, use NETLIFY_DATABASE_URL
-  if (process.env.NODE_ENV === 'production' && process.env.NETLIFY_DATABASE_URL) {
-    return process.env.NETLIFY_DATABASE_URL;
+  const netlifyUrl = process.env['NETLIFY_DATABASE_URL'] as string | undefined;
+  if (process.env.NODE_ENV === 'production' && netlifyUrl) {
+    return netlifyUrl;
   }
-  
+
   // For local development and other environments, use DATABASE_URL
-  if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
+  const databaseUrl = process.env['DATABASE_URL'] as string | undefined;
+  if (databaseUrl) {
+    return databaseUrl;
   }
-  
+
   throw new Error('DATABASE_URL or NETLIFY_DATABASE_URL environment variable is required');
 };
 
-const databaseUrl = getDatabaseUrl();
+const databaseUrl: string = getDatabaseUrl();
 
 const prisma =
   global.prisma ||
@@ -61,9 +63,7 @@ if (!globalThis.prismaMiddlewareRegistered) {
     const start = Date.now();
     try {
       // next has a return type of Promise<any>; cast to Promise<unknown> to satisfy strict lint rules
-      const safeNext = (next as unknown as (
-        p: Prisma.MiddlewareParams
-      ) => Promise<unknown>);
+      const safeNext = next as unknown as (p: Prisma.MiddlewareParams) => Promise<unknown>;
       const result = await safeNext(params);
       const ms = Date.now() - start;
       recordDbLatency(ms);
