@@ -166,7 +166,7 @@
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/lodash": "^4.17.19",
-    "@types/node": "^20.19.2",
+    "@types/node": "^20.19.1",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
