@@ -20,16 +20,26 @@ declare global {
 
 // Configure Prisma client with appropriate database URL based on environment
 const getDatabaseUrl = (): string => {
-  // For Netlify production deployment, use NETLIFY_DATABASE_URL
-  const netlifyUrl = process.env['NETLIFY_DATABASE_URL'] as string | undefined;
-  if (process.env.NODE_ENV === 'production' && netlifyUrl) {
-    return netlifyUrl;
-  }
-
-  // For local development and other environments, use DATABASE_URL
-  const databaseUrl = process.env['DATABASE_URL'] as string | undefined;
-  if (databaseUrl) {
-    return databaseUrl;
+  // Check if we're in a Netlify environment (has NETLIFY env var)
+  const isNetlify = process.env['NETLIFY'] === 'true';
+  
+  // For Netlify deployment, prioritize NETLIFY_DATABASE_URL, then DATABASE_URL
+  if (isNetlify) {
+    const netlifyUrl = process.env['NETLIFY_DATABASE_URL'] as string | undefined;
+    if (netlifyUrl) {
+      return netlifyUrl;
+    }
+    
+    const fallbackUrl = process.env['DATABASE_URL'] as string | undefined;
+    if (fallbackUrl) {
+      return fallbackUrl;
+    }
+  } else {
+    // For local development, use DATABASE_URL
+    const databaseUrl = process.env['DATABASE_URL'] as string | undefined;
+    if (databaseUrl) {
+      return databaseUrl;
+    }
   }
 
   throw new Error('DATABASE_URL or NETLIFY_DATABASE_URL environment variable is required');
