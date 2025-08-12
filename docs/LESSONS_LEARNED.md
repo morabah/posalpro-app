@@ -400,6 +400,57 @@ bugs.
 
 ---
 
+## Prisma Datasource URL: Avoid `prisma://` in Local Dev
+
+**Date**: 2025-08-12 • **Category**: Database / Config
+
+### Problem
+
+- API routes returned 500s with Prisma errors like: `the URL must start with the protocol 'prisma://'`.
+- Health checks showed Postgres reachable, but Prisma validated the datasource against an unexpected protocol.
+
+### Root Cause
+
+- Prisma client was conditionally using `CLOUD_DATABASE_URL` (prisma data proxy style `prisma://...`) in some environments.
+- Local `.env` had a correct Postgres `DATABASE_URL=postgresql://...`, but runtime configuration could still pick the cloud URL depending on `NODE_ENV` or residual env state during dev.
+
+### Fix
+
+1. Simplified Prisma client configuration to always use `DATABASE_URL` for the datasource in all environments we control.
+   - File: `src/lib/db/prisma.ts`
+   - Change: set `datasources.db.url` to `process.env.DATABASE_URL` and hard-require it at startup.
+2. Regenerated Prisma client: `npx prisma generate`.
+3. Restarted dev server to reload env and client.
+
+### Standard
+
+- In app code, always prefer `DATABASE_URL` for Prisma datasource unless explicitly deploying behind Prisma Data Proxy.
+- Keep any cloud-only URLs (e.g., `CLOUD_DATABASE_URL`) out of Prisma client initialization paths for local/dev.
+- Validate presence of required envs early and fail fast with clear messages.
+
+### Verification
+
+- `npm run dev:smart` passes DB health check and API health validation.
+- Admin APIs (e.g., `/api/admin/users`, `/api/admin/metrics`) return 200s.
+- Prisma logs show standard Postgres queries; no `prisma://` validation errors.
+
+### Snippet
+
+```ts
+// src/lib/db/prisma.ts (excerpt)
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
+
+const prisma = new PrismaClient({
+  datasources: { db: { url: databaseUrl } },
+  log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'warn'],
+});
+```
+
+---
+
 ## Database Transactions & Related Writes
 
 **Date**: 2025-07-xx • **Category**: Database / Consistency
