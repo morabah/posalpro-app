@@ -233,6 +233,9 @@ npm run db:seed            # Seed database
 npm run deploy:alpha       # Alpha deployment
 npm run deploy:beta        # Beta deployment
 npm run deploy:patch       # Production fixes
+
+# App CLI
+npm run app:cli            # Interactive authenticated API + DB CLI
 ```
 
 ---
@@ -281,6 +284,34 @@ posalpro-app/
 ├── docs/                     # Comprehensive documentation
 ├── scripts/                  # Development and deployment scripts
 └── test/                     # Test files and utilities
+```
+
+---
+
+## 🧪 Authenticated E2E via App CLI
+
+Use the App CLI for authenticated, database-backed API testing without opening the UI. It maintains a session cookie jar and supports RBAC checks.
+
+Guidelines
+- Start dev server: `npm run dev:smart`
+- Local base: use `--base http://127.0.0.1:3000`
+- Always use real DB IDs via `db` commands (no mock data)
+- Non-interactive mode: `npm run app:cli -- --command "..."`
+
+Examples
+```bash
+# Login (creates a session cookie jar for subsequent commands)
+npm run app:cli -- --base http://127.0.0.1:3000 --command "login admin@posalpro.com 'ProposalPro2024!' 'System Administrator'"
+
+# Get active product/customer IDs from the DB
+npm run app:cli -- --command "db product findFirst '{\"where\":{\"isActive\":true},\"select\":{\"id\":true,\"price\":true}}'"
+npm run app:cli -- --command "db customer findFirst '{\"where\":{\"status\":\"ACTIVE\"},\"select\":{\"id\":true,\"name\":true}}'"
+
+# Create a proposal (schema-compliant payload)
+npm run app:cli -- --command "post /api/proposals '{\"title\":\"CLI Test\",\"customerId\":\"<id>\",\"priority\":\"MEDIUM\",\"contactPerson\":\"Admin\",\"contactEmail\":\"admin@posalpro.com\",\"products\":[{\"productId\":\"<prodId\",\"quantity\":1,\"unitPrice\":15000,\"discount\":0}],\"sections\":[{\"title\":\"Intro\",\"content\":\"Hello\",\"type\":\"TEXT\",\"order\":1}]}'"
+
+# RBAC quick check
+npm run app:cli -- --command "rbac try GET /api/proposals"
 ```
 
 ---
