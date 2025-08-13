@@ -420,6 +420,51 @@ npm run deployment:info # Check deployment status
 
 ---
 
+## 🔌 API Endpoints (Recent Additions)
+
+These endpoints were added or enhanced for version history, analytics, and admin
+role management. All follow standardized error handling and selective hydration
+from CORE_REQUIREMENTS.md.
+
+- Proposals
+  - GET `/api/proposals` — cursor pagination, selective field selection via
+    `fields`, optional includes (`includeProducts`, `includeTeam`)
+  - GET `/api/proposals/stats` — lightweight KPIs (total, inProgress, overdue,
+    winRate, totalValue). In-memory TTL cache (dev disabled)
+  - GET `/api/proposals/versions` — latest versions across all proposals (limit)
+  - GET `/api/proposals/[id]/versions` — versions for a proposal (limit)
+  - GET `/api/proposals/[id]/versions?version=NUM&detail=1` — diff view with
+    `productsMap` and `customerName`
+  - POST `/api/proposals/[id]/versions` — create a snapshot (server-side)
+
+- Product Relationships
+  - GET `/api/products/relationships/versions?productId=...&limit=...` — version
+    entries involving a product
+
+- Admin Roles
+  - GET `/api/admin/users/roles?userId=... | email=...` — list active roles
+  - POST `/api/admin/users/roles` — assign role `{ userId, roleId | roleName }`
+  - DELETE `/api/admin/users/roles` — remove role
+    `{ userId, roleId | roleName }`
+
+UI Entry Points
+
+- Page: `/proposals/version-history` — explore proposal version history with
+  diff viewer
+
+Performance & Caching
+
+- Appropriate `Cache-Control` headers on read endpoints
+- In-memory cache used only where safe, TTL kept short, disabled in development
+
+Security & RBAC
+
+- Proposals route uses dev-only permission bypass to ease local diagnostics;
+  production performs checks and logs. Diagnostics logging is gated behind
+  `NODE_ENV !== 'production'`.
+
+---
+
 ## 🤝 Contributing
 
 ### **Before Contributing**
