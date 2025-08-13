@@ -105,7 +105,8 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       if (!roles.length) return false;
 
       const requiredRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-      return requiredRoles.some(role => roles.includes(role) || roles.includes('Administrator'));
+      const isSuperAdmin = roles.includes('Administrator') || roles.includes('System Administrator');
+      return requiredRoles.some(role => roles.includes(role) || isSuperAdmin);
     },
     [roles]
   );
@@ -117,11 +118,12 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       const requiredPermissions = Array.isArray(requiredPermission)
         ? requiredPermission
         : [requiredPermission];
+      const isSuperAdmin = roles.includes('Administrator') || roles.includes('System Administrator');
       return requiredPermissions.some(
         permission =>
           permissions.includes(permission) ||
           permissions.includes('*:*') ||
-          roles.includes('Administrator')
+          isSuperAdmin
       );
     },
     [permissions, roles]

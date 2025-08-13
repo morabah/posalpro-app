@@ -461,16 +461,21 @@ export function useAnalytics() {
         lastAnalyticsTime.current = currentTime;
 
         // Send to analytics service in production
-        if (process.env.NODE_ENV === 'production') {
-          // Integration with actual analytics service would go here
-          fetch('/api/analytics/events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ eventName, properties, timestamp: Date.now() }),
-          }).catch(error => {
-            console.warn('Failed to send analytics event:', error);
-          });
-        }
+          if (process.env.NODE_ENV === 'production') {
+            // Integration with actual analytics service via centralized API client
+            import('@/hooks/useApiClient')
+              .then(m => m.useApiClient())
+              .then(api =>
+                api.post('analytics/events', {
+                  eventName,
+                  properties,
+                  timestamp: Date.now(),
+                })
+              )
+              .catch(() => {
+                // Swallow errors silently per analytics optionality
+              });
+          }
       }
       // ✅ Silently ignore rapid-fire events to prevent rebuild triggers
     }

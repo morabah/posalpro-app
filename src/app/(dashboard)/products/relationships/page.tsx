@@ -227,13 +227,19 @@ export default function ProductRelationshipsManagement() {
   }, [trackRelationshipAction]);
 
   // Load version history for a product across proposals
+  const [nextCursor, setNextCursor] = useState<{
+    cursorCreatedAt: string;
+    cursorId: string;
+  } | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
   const loadVersionHistory = useCallback(
     async (productId: string) => {
       setHistoryLoading(true);
       setHistoryError(null);
       try {
         const res: any = await apiClient.get(
-          `/products/relationships/versions?productId=${encodeURIComponent(productId)}&limit=100`
+          `/products/relationships/versions?productId=${encodeURIComponent(productId)}&limit=50`
         );
         if (res && res.success && Array.isArray(res.data)) {
           const mapped: VersionHistoryEntry[] = res.data.map((c: any, idx: number) => ({
@@ -250,24 +256,22 @@ export default function ProductRelationshipsManagement() {
             rollbackAvailable: false,
           }));
           setVersionHistory(mapped);
+          if (res.pagination && res.pagination.nextCursor) {
+            setNextCursor(res.pagination.nextCursor);
+            setHasMore(Boolean(res.pagination.hasMore));
+          } else {
+            setNextCursor(null);
+            setHasMore(false);
+          }
           // Fetch proposal titles for headers (dedup)
-          const ids = Array.from(
-            new Set((res.data as any[]).map((x: any) => x.proposalId).filter(Boolean))
-          );
-          if (ids.length > 0) {
-            const entries: Record<string, string> = {};
-            await Promise.all(
-              ids.map(async (pid: string) => {
-                try {
-                  const pr: any = await apiClient.get(`/proposals/${pid}?fields=title`);
-                  const title = pr?.data?.title || pr?.data?.proposal?.title || pid;
-                  entries[pid] = title;
-                } catch {
-                  entries[pid] = pid;
-                }
-              })
-            );
-            setProposalTitles(prev => ({ ...prev, ...entries }));
+          // Prime proposalTitles from payload if available
+          const titleEntries: Record<string, string> = {};
+          for (const row of res.data as any[]) {
+            const pid = row.proposalId;
+            if (pid) titleEntries[pid] = row.proposalTitle || pid;
+          }
+          if (Object.keys(titleEntries).length > 0) {
+            setProposalTitles(prev => ({ ...prev, ...titleEntries }));
           }
         } else {
           setVersionHistory([]);
@@ -280,6 +284,44 @@ export default function ProductRelationshipsManagement() {
     },
     [apiClient]
   );
+
+  const loadMoreHistory = useCallback(async () => {
+    if (!nextCursor || !productIdQuery) return;
+    setHistoryLoading(true);
+    try {
+      const qp = new URLSearchParams({
+        productId: productIdQuery,
+        limit: '50',
+        cursorCreatedAt: nextCursor.cursorCreatedAt,
+        cursorId: nextCursor.cursorId,
+      }).toString();
+      const res: any = await apiClient.get(`/products/relationships/versions?${qp}`);
+      if (res && res.success && Array.isArray(res.data)) {
+        const mapped: VersionHistoryEntry[] = res.data.map((c: any) => ({
+          id: c.id,
+          version: c.version ?? 0,
+          timestamp: new Date(c.timestamp),
+          changeType: c.changeType ?? 'update',
+          changedBy: c.createdByName || c.changedBy || 'system',
+          description: `${c.title} • ${c.description}`,
+          ...(c.proposalId ? { proposalId: c.proposalId } : {}),
+          affectedRelationships: 1,
+          validationImpact: 0,
+          rollbackAvailable: false,
+        }));
+        setVersionHistory(prev => [...prev, ...mapped]);
+        if (res.pagination && res.pagination.nextCursor) {
+          setNextCursor(res.pagination.nextCursor);
+          setHasMore(Boolean(res.pagination.hasMore));
+        } else {
+          setNextCursor(null);
+          setHasMore(false);
+        }
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [apiClient, nextCursor, productIdQuery]);
 
   // Manual product history query input
   const [productIdQuery, setProductIdQuery] = useState<string>('');
@@ -429,13 +471,7 @@ export default function ProductRelationshipsManagement() {
         let pid: string | undefined =
           relationships[0]?.sourceProductId || relationships[0]?.targetProductId;
         // Fallback: derive from most recent proposal's first product
-        if (!pid) {
-          const res: any = await apiClient.get(
-            '/proposals?limit=1&includeProducts=true&fields=id,products'
-          );
-          const first = res?.data?.proposals?.[0];
-          pid = first?.products?.[0]?.productId;
-        }
+        // Do not perform extra proposals list fetches here per CORE_REQUIREMENTS
         if (!cancelled && pid) {
           await loadVersionHistory(pid);
         }
@@ -453,7 +489,6 @@ export default function ProductRelationshipsManagement() {
   const analyzePatterns = useCallback(() => {
     trackRelationshipAction('ai_pattern_analysis_started');
     // Trigger AI analysis
-    console.log('Running AI pattern analysis...');
   }, [trackRelationshipAction]);
 
   // Calculate system metrics
@@ -909,6 +944,13 @@ export default function ProductRelationshipsManagement() {
                       </div>
                     );
                   })}
+                {hasMore && !historyLoading && (
+                  <div className="flex justify-center pt-2">
+                    <Button onClick={loadMoreHistory} variant="secondary">
+                      Load More
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </Card>

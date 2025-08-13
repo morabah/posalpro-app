@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string) => {
-  console.log('Toast:', message);
+
   // In a real implementation, this would show a toast notification
 };
 
@@ -375,6 +375,8 @@ export default function CoordinationHub() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [priorityFilter, setPriorityFilter] = useState<string>('All');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
   // Load live proposals and insights
   useEffect(() => {
@@ -382,8 +384,8 @@ export default function CoordinationHub() {
     (async () => {
       try {
         const [proposalsRes, insightsRes] = await Promise.all([
-          apiClient.get<{ success: boolean; data: { proposals: Proposal[] } }>(
-            '/proposals?limit=20&sortBy=updatedAt&sortOrder=desc'
+          apiClient.get<{ success: boolean; data: { proposals: Proposal[]; pagination?: any } }>(
+            '/proposals?limit=50&sortBy=updatedAt&sortOrder=desc'
           ),
           apiClient.get<{ success: boolean; data: AIInsight[] }>('/analytics/insights?limit=10'),
         ]);
@@ -420,6 +422,14 @@ export default function CoordinationHub() {
         // Set state via local setters introduced below
         setLiveProposals(mapped);
         setAiInsights(insights as AIInsight[]);
+        const pg = (proposalsRes as any)?.data?.pagination;
+        if (pg && typeof pg === 'object') {
+          setNextCursor(pg.nextCursor || null);
+          setHasMore(Boolean(pg.hasNextPage));
+        } else {
+          setNextCursor(null);
+          setHasMore(false);
+        }
       } catch {
         if (!isCancelled) {
           setLiveProposals([]);
@@ -431,6 +441,51 @@ export default function CoordinationHub() {
       isCancelled = true;
     };
   }, [apiClient]);
+
+  const loadMoreProposals = useCallback(async () => {
+    if (!nextCursor) return;
+    const qp = new URLSearchParams({ limit: '50', cursor: nextCursor }).toString();
+    const res = await apiClient.get<{ success: boolean; data: { proposals: any[]; pagination?: any } }>(
+      `/proposals?${qp}`
+    );
+    if (res?.success) {
+      const mapped: Proposal[] = (res.data.proposals || []).map((p: any) => ({
+        id: p.id,
+        name: p.title ?? p.name ?? 'Untitled',
+        client: p.customerName ?? p.customer?.name ?? 'Unknown',
+        status: (p.status as any) ?? 'Draft',
+        progress: Math.min(100, Math.max(0, Math.round((p.completionRate ?? 0) * 100))),
+        deadline: new Date(p.dueDate ?? Date.now()),
+        priority: (p.priority as any) ?? 'Medium',
+        complexity: p.complexity ?? 5,
+        estimatedHours: p.estimatedHours ?? 0,
+        actualHours: p.actualHours ?? 0,
+        lastUpdate: new Date(p.updatedAt ?? Date.now()),
+        criticalPath: Boolean(p.criticalPath),
+        riskLevel: (p.riskLevel as any) ?? 'Low',
+        teamMembers: (p.teamMembers ?? []).map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          role: m.role ?? 'Member',
+          department: m.department ?? 'General',
+          assignedSections: m.assignedSections ?? [],
+          workload: m.workload ?? 0,
+          availability: m.availability ?? 'Available',
+          lastActive: new Date(m.lastActive ?? Date.now()),
+          completionRate: m.completionRate ?? 0,
+        })),
+      }));
+      setLiveProposals(prev => [...prev, ...mapped]);
+      const pg = (res as any)?.data?.pagination;
+      if (pg && typeof pg === 'object') {
+        setNextCursor(pg.nextCursor || null);
+        setHasMore(Boolean(pg.hasNextPage));
+      } else {
+        setNextCursor(null);
+        setHasMore(false);
+      }
+    }
+  }, [apiClient, nextCursor]);
 
   // Filter proposals based on search and filters
   const [liveProposals, setLiveProposals] = useState<Proposal[]>([]);
@@ -861,6 +916,13 @@ export default function CoordinationHub() {
                 </Card>
               ))}
             </div>
+            {hasMore && (
+              <div className="flex justify-center mt-4">
+                <Button onClick={loadMoreProposals} variant="secondary">
+                  Load More
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

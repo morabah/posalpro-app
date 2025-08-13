@@ -10,6 +10,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
 import { Customer, useCustomers } from '@/hooks/useCustomers';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { VirtualList } from '@/hooks/useVirtualScrolling';
@@ -22,7 +23,7 @@ import {
   TagIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 /**
  * Component Traceability Matrix:
@@ -184,8 +185,11 @@ const CustomerItem = memo(
 );
 
 const CustomerList = memo(() => {
+  const apiClient = useApiClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [tierFilter, setTierFilter] = useState<string>('');
@@ -204,7 +208,7 @@ const CustomerList = memo(() => {
   // Use React Query hook for data fetching with caching
   const { data, isLoading, error, refetch, isFetching, isError } = useCustomers({
     page: currentPage,
-    limit: 12,
+    limit: 50,
     search: debouncedSearch || undefined,
     status: statusFilter || undefined,
     tier: tierFilter || undefined,
@@ -260,24 +264,63 @@ const CustomerList = memo(() => {
     [analytics, debouncedSearch, statusFilter, tierFilter]
   );
 
-  // Handle error state
-  if (isError && !data?.customers?.length) {
-    return (
-      <Card className="p-6">
-        <div className="text-center">
-          <p className="text-red-600 mb-2">Failed to load customers</p>
-          <p className="text-gray-600 mb-4">{error?.message || 'Unknown error occurred'}</p>
-          <Button onClick={() => refetch()} variant="outline" size="sm">
-            Retry
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-
-  const customers = data?.customers || [];
+  const customers = useMemo(() => data?.customers || [], [data?.customers]);
   const totalPages = data?.pagination?.totalPages || 1;
   const totalCustomers = data?.pagination?.total || 0;
+
+  // Track cursor pagination capability
+  useEffect(() => {
+    if (data?.pagination) {
+      setNextCursor(data.pagination.nextCursor || null);
+      setHasMore(Boolean(data.pagination.hasMore));
+    }
+  }, [data?.pagination]);
+
+  interface LoadMoreResponse {
+    success: boolean;
+    data: {
+      customers: Customer[];
+      pagination?: { hasMore?: boolean; nextCursor?: string | null };
+    };
+  }
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    // Use the hook with cursor to fetch next page
+    const params = {
+      limit: 50,
+      search: debouncedSearch || undefined,
+      status: statusFilter || undefined,
+      tier: tierFilter || undefined,
+      sortBy: 'updatedAt' as const,
+      sortOrder: 'desc' as const,
+      cursor: nextCursor,
+    };
+    // Call the API directly for the additional page to append results
+    try {
+      const qp = new URLSearchParams();
+      qp.set('limit', '50');
+      if (params.search) qp.set('search', params.search);
+      if (params.status) qp.set('status', params.status);
+      if (params.tier) qp.set('tier', params.tier);
+      qp.set('sortBy', params.sortBy);
+      qp.set('sortOrder', params.sortOrder);
+      qp.set('cursor', params.cursor);
+      const res = await apiClient.get<LoadMoreResponse>(`customers?${qp.toString()}`);
+      if (res?.success) {
+        const newItems: Customer[] = res.data.customers ?? [];
+        setNextCursor(res.data.pagination?.nextCursor ?? null);
+        setHasMore(Boolean(res.data.pagination?.hasMore));
+        // Append via local state mutation pattern supported by VirtualList input
+        // We rebuild customers list locally for now by triggering a lightweight merge
+        // Since customers come from React Query, we can set page temporarily to append visually
+        setCurrentPage(p => p); // noop to trigger re-render
+        (customers as Customer[]).push(...newItems);
+      }
+    } catch {
+      // ignore load more failures
+    }
+  }, [nextCursor, debouncedSearch, statusFilter, tierFilter, customers, apiClient]);
 
   const getTierBadgeColor = (tier: string) => {
     switch (tier.toLowerCase()) {
@@ -317,6 +360,18 @@ const CustomerList = memo(() => {
 
   return (
     <div className="space-y-6">
+      {/* Error State */}
+      {isError && !data?.customers?.length && (
+        <Card className="p-6">
+          <div className="text-center">
+            <p className="text-red-600 mb-2">Failed to load customers</p>
+            <p className="text-gray-600 mb-4">{error?.message || 'Unknown error occurred'}</p>
+            <Button onClick={() => refetch()} variant="outline" size="sm">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      )}
       {/* Search and Filter Section */}
       <Card className="p-6">
         <div className="flex flex-col sm:flex-row gap-4">
@@ -421,28 +476,12 @@ const CustomerList = memo(() => {
         </Card>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Load More */}
+      {hasMore && (
         <div className="flex justify-center">
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <span className="px-4 py-2 text-sm text-gray-600">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </Button>
-          </div>
+          <Button onClick={loadMore} variant="secondary">
+            Load More
+          </Button>
         </div>
       )}
 

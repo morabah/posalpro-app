@@ -1,41 +1,41 @@
 {
-  "timestamp": "2025-08-11T11:09:13.950Z",
-  "testDuration": 38301,
+  "timestamp": "2025-08-13T10:45:58.246Z",
+  "testDuration": 24846,
   "webVitals": {
-    "TTFB": 30.599999994039536,
+    "TTFB": 66.5,
     "domContentLoaded": 0,
     "loadComplete": 0,
-    "memoryUsed": 239,
-    "memoryTotal": 277
+    "memoryUsed": 223,
+    "memoryTotal": 267
   },
   "pageLoadTimes": {
-    "Login": 104,
-    "Dashboard": 67,
-    "Proposals Manage": 49,
-    "Proposals Create": 72
+    "Login": 174,
+    "Dashboard": 69,
+    "Proposals Manage": 63,
+    "Proposals Create": 76
   },
   "memoryUsage": {
-    "Timestamp": 126585.211056,
-    "Documents": 5,
-    "Frames": 2,
-    "JSEventListeners": 1286,
-    "Nodes": 2149,
-    "LayoutCount": 80,
-    "RecalcStyleCount": 278,
-    "LayoutDuration": 0.049548,
-    "RecalcStyleDuration": 0.077592,
-    "ScriptDuration": 1.366721,
-    "TaskDuration": 2.324712,
-    "JSHeapUsedSize": 60447872,
-    "JSHeapTotalSize": 86900736,
-    "usedJSHeapSize": 311,
-    "totalJSHeapSize": 336,
+    "Timestamp": 271563.60611,
+    "Documents": 9,
+    "Frames": 4,
+    "JSEventListeners": 1567,
+    "Nodes": 2313,
+    "LayoutCount": 82,
+    "RecalcStyleCount": 308,
+    "LayoutDuration": 0.048473,
+    "RecalcStyleDuration": 0.077585,
+    "ScriptDuration": 1.522311,
+    "TaskDuration": 2.502291,
+    "JSHeapUsedSize": 69753436,
+    "JSHeapTotalSize": 98713600,
+    "usedJSHeapSize": 304,
+    "totalJSHeapSize": 332,
     "jsHeapSizeLimit": 2144
   },
   "apiPerformance": {
-    "totalCalls": 37,
-    "averageResponseTime": 76.29729729729729,
-    "slowCalls": 1
+    "totalCalls": 28,
+    "averageResponseTime": 16.642857142857142,
+    "slowCalls": 0
   },
   "violations": {
     "total": 0,
@@ -43,7 +43,7 @@
   },
   "compliance": {
     "webVitalsCompliant": true,
-    "apiPerformanceCompliant": false,
+    "apiPerformanceCompliant": true,
     "memoryUsageCompliant": false,
     "noViolations": true
   }

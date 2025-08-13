@@ -12,6 +12,7 @@ import { decidePaginationStrategy } from '@/lib/utils/selectiveHydration';
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -136,6 +137,8 @@ export async function GET(request: NextRequest) {
   let validatedQuery: SearchQuery | null = null;
 
   try {
+    // RBAC guard - general authenticated search
+    await validateApiPermission(request, { resource: 'search', action: 'read' });
     // Authentication check
     session = (await getServerSession(authOptions));
     if (!session?.user?.id) {

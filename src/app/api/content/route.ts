@@ -5,6 +5,7 @@ import { logger } from '@/utils/logger'; /**
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -159,6 +160,7 @@ interface ContentWhereClause {
 // GET /api/content - List content items with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'content', action: 'read' });
     logger.info('GET /api/content - Starting request processing');
 
     const session = await getServerSession(authOptions);
@@ -313,7 +315,7 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         content,
         pagination: {
           page: query.page,
@@ -322,6 +324,12 @@ export async function GET(request: NextRequest) {
           totalPages: Math.ceil(total / query.limit),
         },
       });
+      if (process.env.NODE_ENV === 'production') {
+        res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+      } else {
+        res.headers.set('Cache-Control', 'no-store');
+      }
+      return res;
     } catch (error) {
       errorHandlingService.processError(
         error,
@@ -392,6 +400,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'content', action: 'create' });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // Validate content creation data
@@ -430,27 +444,54 @@ export async function POST(request: NextRequest) {
     const sanitizedContent = sanitizeInput(content);
     const sanitizedTags = tags?.map(tag => sanitizeInput(tag)) || [];
 
-    // Create new content item (mock implementation)
-    const newContent = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: sanitizedTitle,
-      category: sanitizedCategory,
-      content: sanitizedContent,
-      tags: sanitizedTags,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    // Map category to DB enum type if applicable
+    const allowedTypes = new Set([
+      'TEMPLATE',
+      'SECTION',
+      'DOCUMENT',
+      'REFERENCE',
+      'CUSTOM',
+      'TEXT',
+      'IMAGE',
+      'MEDIA',
+    ]);
+    const dbType = allowedTypes.has(sanitizedCategory.toUpperCase())
+      ? sanitizedCategory.toUpperCase()
+      : 'DOCUMENT';
+
+    const created = await prisma.content.create({
+      data: {
+        title: sanitizedTitle,
+        type: dbType as any,
+        description: sanitizedContent.slice(0, 240),
+        content: sanitizedContent,
+        tags: sanitizedTags,
+        createdBy: session.user.id,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        description: true,
+        content: true,
+        tags: true,
+        createdAt: true,
+        updatedAt: true,
+        createdBy: true,
+      },
+    });
 
     logger.info('Content created successfully', {
-      contentId: newContent.id,
+      contentId: created.id,
       title: sanitizedTitle,
-      category: sanitizedCategory,
+      category: dbType,
     });
 
     return NextResponse.json(
       {
         success: true,
-        data: newContent,
+        data: created,
         message: 'Content created successfully',
       },
       { status: 201 }

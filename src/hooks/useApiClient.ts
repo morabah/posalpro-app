@@ -1,5 +1,6 @@
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 import { logError } from '@/lib/logger';
 import { getApiBaseUrl, logApiConfiguration, validateApiConnection } from '@/lib/utils/apiUrl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -98,18 +99,95 @@ class ApiClientSingleton {
       const response = await fetch(url, defaultOptions);
 
       if (!response.ok) {
-        console.warn('[useApiClient] API request failed:', {
+        // Build actionable, user-friendly error for common auth cases
+        const status = response.status;
+        let parsed: unknown = null;
+        try {
+          parsed = (await response.clone().json()) as unknown;
+        } catch {
+          // ignore parse errors
+        }
+
+        const method = String(defaultOptions.method || 'GET');
+        const baseMetadata = {
+          component: 'useApiClient',
+          operation: 'makeRequest',
+          endpoint,
           url,
-          status: response.status,
-          statusText: response.statusText,
+          method,
+          status,
+        } as Record<string, unknown>;
+
+        if (status === 401 || status === 403) {
+          const code = status === 401 ? ErrorCodes.AUTH.UNAUTHORIZED : ErrorCodes.AUTH.FORBIDDEN;
+          const std = new StandardError({
+            message:
+              (parsed &&
+              typeof parsed === 'object' &&
+              'error' in parsed &&
+              typeof (parsed as any).error === 'string'
+                ? (parsed as any).error
+                : undefined) || `Access denied (${status})`,
+            code,
+            metadata: {
+              ...baseMetadata,
+              serverMessage:
+                parsed && typeof parsed === 'object'
+                  ? typeof (parsed as any).error === 'string'
+                    ? (parsed as any).error
+                    : typeof (parsed as any).message === 'string'
+                      ? (parsed as any).message
+                      : undefined
+                  : undefined,
+            },
+          });
+          // Record and throw the standardized error so UIs can show friendly guidance
+          this.errorHandlingService.processError(std);
+          throw std;
+        }
+
+        // Fallback for other HTTP errors
+        const std = new StandardError({
+          message:
+            (parsed &&
+            typeof parsed === 'object' &&
+            'error' in parsed &&
+            typeof (parsed as any).error === 'string'
+              ? (parsed as any).error
+              : undefined) || `API request failed: ${status} ${response.statusText}`,
+          code: ErrorCodes.API.NETWORK_ERROR,
+          metadata: {
+            ...baseMetadata,
+            serverMessage:
+              parsed && typeof parsed === 'object'
+                ? typeof (parsed as any).error === 'string'
+                  ? (parsed as any).error
+                  : typeof (parsed as any).message === 'string'
+                    ? (parsed as any).message
+                    : undefined
+                : undefined,
+          },
         });
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        this.errorHandlingService.processError(std);
+        throw std;
       }
 
       const data = (await response.json()) as T;
       return data;
     } catch (error) {
-      // ✅ ENHANCED: Use proper logger instead of console.error
+      // If it's already a StandardError, bubble up after logging
+      if (error instanceof StandardError) {
+        logError('API request error', error, {
+          component: 'useApiClient',
+          operation: 'makeRequest',
+          endpoint,
+          method: options.method || 'GET',
+          errorCode: error.code,
+        });
+        throw error;
+      }
+
+      // Otherwise, convert to StandardError with friendly guidance
       const standardError = this.errorHandlingService.processError(
         error,
         'API request failed',

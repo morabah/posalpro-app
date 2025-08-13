@@ -311,7 +311,7 @@ export function WorkflowOrchestrator(props: WorkflowOrchestratorProps) {
         setSelectedTemplate(template);
 
       } catch (error) {
-        console.error('Workflow generation failed:', error);
+        // Standardized error handling should be applied by caller; keep silent here
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         analytics('workflow_generation_error', { proposalId, error: errorMessage }, 'high');
       } finally {

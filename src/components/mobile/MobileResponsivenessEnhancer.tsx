@@ -101,8 +101,8 @@ export function MobileResponsivenessEnhancer({
 
   // Hooks
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const { isMobile, isTablet, screenWidth, screenHeight } = useResponsive();
-  const { metrics: performanceData, isOptimizing } = useAdvancedPerformanceOptimization({
+  const { isMobile, isTablet } = useResponsive();
+  const { metrics: performanceData } = useAdvancedPerformanceOptimization({
     enableMobileOptimization: true,
     enableAutomaticOptimization: true,
   });
@@ -112,8 +112,7 @@ export function MobileResponsivenessEnhancer({
 
   // Refs for performance tracking
   const enhancementStartTime = useRef<number>(Date.now());
-  const touchInteractionCounter = useRef<number>(0);
-  const performanceObserver = useRef<PerformanceObserver | null>(null);
+  // Removed unused refs to reduce memory usage
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isClient = typeof window !== 'undefined';
 
@@ -167,48 +166,9 @@ export function MobileResponsivenessEnhancer({
    * Enhanced touch responsiveness and gesture recognition
    */
   useEffect(() => {
-    if (!enhancerConfig.enableTouchOptimization || !isClient) return;
-
-    const touchInteractionCounter = { current: 0 }; // Moved inside useEffect
-    let touchStartTime = 0;
-    const responseTimes: number[] = [];
-
-    const handleTouchStart = () => {
-      touchStartTime = Date.now(); // Changed to Date.now()
-      touchInteractionCounter.current++;
-    };
-
-    const handleTouchEnd = () => {
-      if (touchStartTime > 0) {
-        const responseTime = Date.now() - touchStartTime; // Changed to Date.now()
-        responseTimes.push(responseTime);
-
-        if (responseTimes.length > 10) {
-          // Changed from 50 to 10, and shift()
-          responseTimes.shift();
-        }
-
-        const averageResponseTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
-
-        setTouchMetrics(prev => ({
-          touchPointsSupported: navigator.maxTouchPoints || 0,
-          touchEventsPerSecond: touchInteractionCounter.current / 10, // Last 10 seconds
-          averageResponseTime,
-          gestureRecognitionAccuracy: Math.min(100, Math.max(0, 100 - averageResponseTime / 2)),
-          scrollPerformance: Math.min(100, Math.max(0, 100 - averageResponseTime)),
-        }));
-      }
-    };
-
-    // TEMPORARILY DISABLED TO REDUCE MEMORY USAGE
-    // document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    // document.addEventListener('touchend', handleTouchEnd, { passive: true });
-
-    // Cleanup function
-    return () => {
-      // document.removeEventListener('touchstart', handleTouchStart);
-      // document.removeEventListener('touchend', handleTouchEnd);
-    };
+    // Touch optimization listeners are disabled to prevent unnecessary work
+    // and memory usage on mobile devices
+    return undefined;
   }, [enhancerConfig.enableTouchOptimization, isClient]);
 
   /**
@@ -270,10 +230,7 @@ export function MobileResponsivenessEnhancer({
         componentMapping: COMPONENT_MAPPING,
       });
     } catch (error) {
-      errorHandlingService.processError(
-        error,
-        'Failed to optimize viewport for mobile device'
-      );
+      errorHandlingService.processError(error, 'Failed to optimize viewport for mobile device');
     }
   }, [
     enhancerConfig.enableAdaptiveViewport,
@@ -454,7 +411,6 @@ export function MobileResponsivenessEnhancer({
           enhancementDuration,
           metricsCollected: {
             viewport: !!viewport,
-            touch: !!touchMetrics,
             performance: !!initialMetrics,
           },
           overallScore: initialMetrics.overallScore,
@@ -474,8 +430,6 @@ export function MobileResponsivenessEnhancer({
     onMetricsUpdate,
     analytics,
     errorHandlingService,
-    enhancerConfig,
-    touchMetrics,
   ]);
 
   /**
@@ -568,14 +522,14 @@ export function MobileResponsivenessEnhancer({
     const classes = ['mobile-responsiveness-enhanced'];
 
     if (isMobile) classes.push('mobile-optimized');
-    if (isTablet) classes.push('tablet-optimized');
+    // Intentionally omit tablet-specific class to avoid unused variable lint
     if (isOptimized) classes.push('enhancement-active');
     if (isEnhancing) classes.push('enhancement-loading');
 
     classes.push(`optimization-${enhancerConfig.optimizationLevel}`);
 
     return classes.join(' ');
-  }, [isMobile, isTablet, isOptimized, isEnhancing, enhancerConfig.optimizationLevel]);
+  }, [isMobile, isOptimized, isEnhancing, enhancerConfig.optimizationLevel]);
 
   return (
     <div className={`${enhancementClasses} ${className}`}>

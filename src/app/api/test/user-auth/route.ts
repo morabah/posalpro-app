@@ -8,13 +8,13 @@ export async function GET(request: NextRequest) {
 
   try {
     if (process.env.NODE_ENV === 'development') {
-      // eslint-disable-next-line no-console
+       
       console.log('🧪 Testing user authentication query...');
     }
 
     // Test 1: Simple user query
     if (process.env.NODE_ENV === 'development') {
-      // eslint-disable-next-line no-console
+       
       console.log('Test 1: Simple user query');
     }
     const simpleUser = await prisma.user.findUnique({
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     // Test 2: User with roles (without transaction)
     if (process.env.NODE_ENV === 'development') {
-      // eslint-disable-next-line no-console
+       
       console.log('Test 2: User with roles (no transaction)');
     }
     const userWithRoles = await prisma.user.findUnique({
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     // Test 3: Transaction with timeout
     if (process.env.NODE_ENV === 'development') {
-      // eslint-disable-next-line no-console
+       
       console.log('Test 3: Transaction with timeout');
     }
     const transactionUser = await prisma.$transaction(async tx => {
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Test 4: User service function
     if (process.env.NODE_ENV === 'development') {
-      // eslint-disable-next-line no-console
+       
       console.log('Test 4: User service function');
     }
     const serviceUser = await getUserByEmail(testEmail);
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('User authentication test failed:', error);
 
     return NextResponse.json({

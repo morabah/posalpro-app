@@ -30,9 +30,17 @@ const ChartBarIcon = ({ className = 'h-5 w-5' }) => (
   </svg>
 );
 
+interface PerformanceOverview {
+  requestsPerSecond?: number;
+  avgResponseTimeMs?: number;
+  p95ResponseTimeMs?: number;
+  errorRatePercent?: number;
+  [key: string]: unknown;
+}
+
 interface PerformanceMetricsProps {
-  data: any;
-  timeRange: string;
+  data: PerformanceOverview;
+  timeRange: '7d' | '30d' | '90d' | 'all';
 }
 
 export const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ data, timeRange }) => {

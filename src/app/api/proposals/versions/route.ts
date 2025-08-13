@@ -1,16 +1,20 @@
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { getCache, setCache } from '@/lib/redis';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
-// GET /api/proposals/versions - list all proposal version entries (newest first)
+// GET /api/proposals/versions - list proposal version entries with cursor pagination (newest first)
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'proposals', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -18,13 +22,42 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const QuerySchema = z.object({
-      limit: z.coerce.number().int().positive().max(500).default(200),
+      limit: z.coerce.number().int().positive().max(200).default(50),
+      cursorCreatedAt: z.string().datetime().optional(),
+      cursorId: z.string().optional(),
     });
-    const { limit } = QuerySchema.parse({ limit: url.searchParams.get('limit') });
+    const { limit, cursorCreatedAt, cursorId } = QuerySchema.parse({
+      limit: url.searchParams.get('limit'),
+      cursorCreatedAt: url.searchParams.get('cursorCreatedAt') || undefined,
+      cursorId: url.searchParams.get('cursorId') || undefined,
+    });
 
-    const PrismaLocal = (require('@prisma/client') as any).Prisma;
+    // Short‑TTL caching (60–120s) to reduce DB load for frequent checks
+    const cacheKey = `proposalVersions:${session.user.id}:${cursorCreatedAt || 'first'}:${
+      cursorId || 'none'
+    }:${limit}`;
+    try {
+      const cachedRaw = await getCache(cacheKey);
+      if (cachedRaw && typeof cachedRaw === 'object') {
+        const res = NextResponse.json(cachedRaw as Record<string, unknown>);
+        res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
+        res.headers.set('Content-Type', 'application/json; charset=utf-8');
+        return res;
+      }
+    } catch {
+      // ignore cache errors
+    }
+
+    // Build optional cursor filter using tagged template
+    const cursorFilter =
+      cursorCreatedAt && cursorId
+        ? Prisma.sql`WHERE (pv."createdAt" < ${new Date(cursorCreatedAt)} OR (pv."createdAt" = ${new Date(
+            cursorCreatedAt
+          )} AND pv.id < ${cursorId}))`
+        : Prisma.sql``;
+
     const rows = (await prisma.$queryRaw(
-      PrismaLocal.sql`
+      Prisma.sql`
         SELECT pv.id,
                pv."proposalId",
                p.title as "proposalTitle",
@@ -34,34 +67,35 @@ export async function GET(request: NextRequest) {
                u.name as "createdByName",
                pv."changeType",
                COALESCE(pv."changesSummary", '') as "changesSummary",
-                COALESCE(
-                  (
-                    SELECT COALESCE(SUM(
-                      COALESCE((pjson->>'total')::numeric,
-                               (COALESCE((pjson->>'quantity')::numeric,0)) *
-                               (COALESCE((pjson->>'unitPrice')::numeric,0)) *
-                               (1 - COALESCE((pjson->>'discount')::numeric,0)/100))
-                    ), 0)
-                    FROM jsonb_array_elements(COALESCE(pv.snapshot->'products', '[]'::jsonb)) AS pjson
-                  ),
-                  (
-                    SELECT COALESCE(SUM(
-                      COALESCE((p2->>'total')::numeric,
-                               (COALESCE((p2->>'quantity')::numeric,0)) *
-                               (COALESCE((p2->>'unitPrice')::numeric,0)) *
-                               (1 - COALESCE((p2->>'discount')::numeric,0)/100))
-                    ), 0)
-                    FROM jsonb_array_elements(
-                      COALESCE(pv.snapshot->'metadata'->'wizardData'->'step4'->'products', '[]'::jsonb)
-                    ) AS p2
-                  ),
-                  0
-                ) AS "totalValue"
+               COALESCE(
+                 (
+                   SELECT COALESCE(SUM(
+                     COALESCE((pjson->>'total')::numeric,
+                              (COALESCE((pjson->>'quantity')::numeric,0)) *
+                              (COALESCE((pjson->>'unitPrice')::numeric,0)) *
+                              (1 - COALESCE((pjson->>'discount')::numeric,0)/100))
+                   ), 0)
+                   FROM jsonb_array_elements(COALESCE(pv.snapshot->'products', '[]'::jsonb)) AS pjson
+                 ),
+                 (
+                   SELECT COALESCE(SUM(
+                     COALESCE((p2->>'total')::numeric,
+                              (COALESCE((p2->>'quantity')::numeric,0)) *
+                              (COALESCE((p2->>'unitPrice')::numeric,0)) *
+                              (1 - COALESCE((p2->>'discount')::numeric,0)/100))
+                   ), 0)
+                   FROM jsonb_array_elements(
+                     COALESCE(pv.snapshot->'metadata'->'wizardData'->'step4'->'products', '[]'::jsonb)
+                   ) AS p2
+                 ),
+                 0
+               ) AS "totalValue"
         FROM proposal_versions pv
         LEFT JOIN proposals p ON p.id = pv."proposalId"
         LEFT JOIN users u ON u.id = pv."createdBy"
-        ORDER BY pv."createdAt" DESC
-        LIMIT ${limit}
+        ${cursorFilter}
+        ORDER BY pv."createdAt" DESC, pv.id DESC
+        LIMIT ${limit + 1}
       `
     )) as Array<{
       id: string;
@@ -76,7 +110,10 @@ export async function GET(request: NextRequest) {
       totalValue: any;
     }>;
 
-    const data = rows.map(r => ({
+    const hasNextPage = rows.length > limit;
+    const sliced = hasNextPage ? rows.slice(0, limit) : rows;
+
+    const data = sliced.map(r => ({
       id: r.id,
       proposalId: r.proposalId,
       proposalTitle: r.proposalTitle || 'Proposal',
@@ -92,9 +129,34 @@ export async function GET(request: NextRequest) {
           : undefined,
     }));
 
-    const res = NextResponse.json({ success: true, data, count: data.length });
-    res.headers.set('Cache-Control', 'public, max-age=30, s-maxage=120');
+    const next = hasNextPage
+      ? {
+          cursorCreatedAt: sliced[sliced.length - 1].createdAt.toISOString(),
+          cursorId: sliced[sliced.length - 1].id,
+        }
+      : null;
+
+    const payload = {
+      success: true,
+      data,
+      count: data.length,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: next,
+      },
+    };
+
+    const res = NextResponse.json(payload);
+    res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
     res.headers.set('Content-Type', 'application/json; charset=utf-8');
+
+    // Set cache
+    try {
+      await setCache(cacheKey, payload, 120);
+    } catch {
+      // ignore cache errors
+    }
     return res;
   } catch (error) {
     errorHandlingService.processError(

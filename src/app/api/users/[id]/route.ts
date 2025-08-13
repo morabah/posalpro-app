@@ -16,6 +16,7 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 /**
  * Component Traceability Matrix:
@@ -43,6 +44,7 @@ const ActivityQuerySchema = z.object({
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    await validateApiPermission(request, { resource: 'users', action: 'read' });
     const params = await context.params;
     const { id } = params;
 

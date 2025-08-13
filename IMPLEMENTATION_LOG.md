@@ -6100,22 +6100,28 @@ build system ✅ **Production-ready foundation** for continued development
 
 ## 2025-07-30 15:00 - 📊 RFP Parser Analytics Performance Optimization
 
-**Phase**: Analytics Infrastructure Optimization **Status**: ✅ Complete **Duration**: 30 minutes **Files Modified**:
+**Phase**: Analytics Infrastructure Optimization **Status**: ✅ Complete
+**Duration**: 30 minutes **Files Modified**:
 
 - src/app/rfp/parser/page.tsx
 - src/hooks/useOptimizedAnalytics.ts (usage)
 
 **Key Changes**:
 
-- **Analytics Batching Implementation**: Refactored RFP parser to use useOptimizedAnalytics hook with intelligent batching
-- **Extended Flush Intervals**: Increased from 30 seconds to 3 minutes to reduce frequency of network requests
+- **Analytics Batching Implementation**: Refactored RFP parser to use
+  useOptimizedAnalytics hook with intelligent batching
+- **Extended Flush Intervals**: Increased from 30 seconds to 3 minutes to reduce
+  frequency of network requests
 - **Event Throttling**: Implemented 20 events per minute limit to prevent spam
-- **Priority-Based Processing**: Medium priority for RFP events with smart buffering
-- **HMR Performance Fix**: Eliminated console.log statements that were triggering Fast Refresh rebuilds
+- **Priority-Based Processing**: Medium priority for RFP events with smart
+  buffering
+- **HMR Performance Fix**: Eliminated console.log statements that were
+  triggering Fast Refresh rebuilds
 
 **Performance Impact**:
 
-- Reduced Fast Refresh rebuild times from occasional 1635ms-3595ms spikes to consistent <500ms
+- Reduced Fast Refresh rebuild times from occasional 1635ms-3595ms spikes to
+  consistent <500ms
 - Eliminated analytics event spam that was triggering excessive rebuilds
 - Implemented proper batching with 3 events per batch for RFP parser
 - Added emergency disable functionality for performance violations
@@ -6129,11 +6135,75 @@ build system ✅ **Production-ready foundation** for continued development
 
 **Technical Architecture**:
 
-- **Optimized Analytics Hook**: Event batching (3 events/batch), intelligent throttling (20 events/min), extended flush intervals (3 minutes)
-- **Smart Event Processing**: Priority-based handling with requestIdleCallback processing
+- **Optimized Analytics Hook**: Event batching (3 events/batch), intelligent
+  throttling (20 events/min), extended flush intervals (3 minutes)
+- **Smart Event Processing**: Priority-based handling with requestIdleCallback
+  processing
 - **Performance Monitoring**: Built-in performance metrics tracking
 - **Error Handling**: Graceful degradation with localStorage persistence
 
 ---
 
 **Performance Optimization Team** _PosalPro MVP2 - 2025-06-29_
+
+## 2025-08-13 00:00 - RBAC Permission Caching & Async Audit Logging
+
+**Phase**: 2.2.0 - Security & Performance Hardening **Status**: ✅ Complete
+**Files Modified**:
+
+- `src/lib/auth/permissionValidator.ts`
+- `src/lib/auth/securityAudit.ts`
+
+**Key Changes**:
+
+- Added Redis-backed cross-instance cache for user permission lookups with
+  in-memory hot cache warmup.
+- Introduced non-blocking async audit queue to batch and process audit/security
+  writes off the request path.
+
+**Wireframe Reference**: `front end structure /wireframes/ADMIN_SCREEN.md` (RBAC
+access), `front end structure /wireframes/DASHBOARD_SCREEN.md` (secured widgets)
+
+**Component Traceability**:
+
+- userStories: [US-2.3, US-4.1]
+- acceptanceCriteria: [AC-2.3.4, AC-4.1.2]
+- methods: [`PermissionValidator.getUserPermissions()`,
+  `SecurityAuditManager.logAuditEvent()`]
+- hypotheses: [H8 performance impact]
+- testCases: [TC-H8-001]
+
+**Analytics Integration**:
+
+- Permission cache hits/misses leverage existing cache metrics via `lib/redis`.
+
+**Accessibility**: N/A (backend-only change)
+
+**Security**:
+
+- Maintains DB truth; cache invalidation via `clearUserCache()` and Redis key
+  `permissions:{userId}`.
+- Audit writes preserved with queued processing; request latency reduced.
+
+**Testing**:
+
+- Type-check clean. Some existing integration tests currently failing unrelated
+  to this change; no new failures introduced by these edits.
+
+**Performance Impact**:
+
+- Reduces repeated Prisma role/permission queries per request; audit logging
+  removed from critical path.
+
+**Wireframe Compliance**:
+
+- RBAC gates remain intact; only performance improvements applied.
+
+**Design Deviations**:
+
+- None.
+
+**Notes**:
+
+- Cache TTL governed by `AUTH_TTL` in `lib/redis`. In-memory TTL remains 5m for
+  hot reuse.

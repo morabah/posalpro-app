@@ -25,15 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-// Component Traceability Matrix
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const COMPONENT_MAPPING = {
-  userStories: ['US-2.2', 'US-4.1'],
-  acceptanceCriteria: ['AC-2.2.1', 'AC-2.2.2', 'AC-4.1.2'],
-  methods: ['suggestContributors()', 'criticalPath()', 'assignTeamMembers()'],
-  hypotheses: ['H4'],
-  testCases: ['TC-H4-001'],
-};
+// Removed unused COMPONENT_MAPPING to satisfy unused-vars
 
 // User interface for dropdowns (simplified)
 interface User {
@@ -180,16 +172,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
 
   // ✅ HYDRATION: When `data` changes (edit mode), reflect it into the form
   useEffect(() => {
-    console.log('[TeamAssignmentStep] Hydrating data:', data);
-    console.log('[TeamAssignmentStep] Raw subjectMatterExperts:', data.subjectMatterExperts);
-    console.log(
-      '[TeamAssignmentStep] typeof subjectMatterExperts:',
-      typeof data.subjectMatterExperts
-    );
-    console.log(
-      '[TeamAssignmentStep] JSON.stringify subjectMatterExperts:',
-      JSON.stringify(data.subjectMatterExperts)
-    );
+    /* dev logs removed */
 
     if (data.teamLead) setValue('teamLead', normalizeUserId(data.teamLead));
     if (data.salesRepresentative)
@@ -202,12 +185,10 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
       const smeData: Record<string, string> = Object.fromEntries(
         smeEntries.map(([key, value]) => [key, String(value ?? '')])
       );
-      console.log('[TeamAssignmentStep] Deep copied SMEs:', smeData);
       const entries = Object.entries(smeData);
-      console.log('[TeamAssignmentStep] SME entries:', entries);
       // Set the full object for completeness
       const normalized = Object.fromEntries(entries.map(([k, v]) => [k, normalizeUserId(v)]));
-      console.log('[TeamAssignmentStep] Normalized SMEs:', normalized);
+      /* dev log removed */
       setValue('subjectMatterExperts', normalized, { shouldValidate: false });
       // Ensure all expertise areas present
       const areas = Object.keys(normalized) as ExpertiseArea[];
@@ -235,7 +216,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
       setIsLoadingTeamData(true);
       setTeamDataError(null);
       try {
-        console.log('[TeamAssignmentStep] 🚀 Fetching team data via apiClient...');
+        /* dev log removed */
 
         // Fetch both user types in parallel using apiClient like customer selection
         type UsersPayload = { users?: User[] } | User[];
@@ -245,8 +226,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
           apiClient.get<ApiResponse<UsersPayload>>(`users`),
         ]);
 
-        console.log('[TeamAssignmentStep] ✅ Managers response:', managersResponse);
-        console.log('[TeamAssignmentStep] ✅ Executives response:', executivesResponse);
+        /* dev logs removed */
 
         // Handle response structure like customer selection
         const managers = managersResponse.success
@@ -268,10 +248,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
               : allUsersResponse.data?.users || []
             : [];
 
-        console.log('[TeamAssignmentStep] ✅ Setting data:', {
-          managers: managers.length,
-          executives: executives.length,
-        });
+        /* dev log removed */
 
         setTeamLeads(managers);
         setSalesReps(managers); // Same users for both roles
@@ -756,9 +733,7 @@ export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignment
                                   ) ||
                                   ''
                               ).trim();
-                              console.log(
-                                `[SME Debug] ${area}: field.value=${field.value}, data=${(data.subjectMatterExperts as Record<string, string> | undefined)?.[area]}, normalized=${fieldValue}`
-                              );
+                              // debug removed
                               return (
                                 <Select
                                   id={`sme-${area}`}

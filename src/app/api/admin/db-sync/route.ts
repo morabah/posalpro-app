@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 // Import auth options from the correct location
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
@@ -766,6 +767,8 @@ const syncTableData = async (
  */
 export async function POST(request: NextRequest) {
   try {
+    // RBAC guard - admin access required
+    await validateApiPermission(request, { resource: 'admin', action: 'access' });
     // 1. Authentication & Authorization check
     const isDevelopment = process.env.NODE_ENV === 'development';
     const session = await getServerSession(authOptions);

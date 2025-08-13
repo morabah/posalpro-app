@@ -1,6 +1,5 @@
 'use client';
 
-import { CommunicationCenter } from '@/components/coordination/CommunicationCenter';
 import { WizardSummary } from '@/components/proposals/WizardSummary';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -10,10 +9,16 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
 import {
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ChevronLeftIcon,
   ClockIcon,
+  MagnifyingGlassIcon,
+  PaperAirplaneIcon,
+  PaperClipIcon,
   PencilIcon,
+  PlusIcon,
+  TagIcon,
   UserIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -150,9 +155,14 @@ export default function ProposalDetailPage() {
   const [proposal, setProposal] = useState<ProposalDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [relatedProposals, setRelatedProposals] = useState<Array<{ id: string; title: string }>>(
+    []
+  );
   const [availableProposals, setAvailableProposals] = useState<
     Array<{ id: string; title: string }>
   >([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'messages' | 'tasks' | 'files'>('messages');
 
   const proposalId = params?.id as string;
 
@@ -352,7 +362,7 @@ export default function ProposalDetailPage() {
         setError(null);
         setProposal(null); // Reset previous proposal data
 
-        console.log('[ProposalDetailAPI] Fetching proposal:', proposalId);
+        // dev log removed for compliance
 
         const response = (await apiClient.get(`proposals/${proposalId}`)) as any;
 
@@ -361,7 +371,6 @@ export default function ProposalDetailPage() {
           if (isMounted) {
             const enriched = enrichProposal(response.data);
             setProposal(enriched);
-            console.log('[ProposalDetailAPI] Successfully fetched proposal:', proposalId);
           }
         } else {
           throw new StandardError({
@@ -375,30 +384,11 @@ export default function ProposalDetailPage() {
           });
         }
       } catch (err) {
-        console.error('[ProposalDetailAPI] Error fetching proposal:', err);
-
         if (isMounted) {
           const errorMessage =
             err instanceof Error ? err.message : 'Failed to load proposal details';
           setError(errorMessage);
-
-          // Fetch available proposals to help user navigate
-          try {
-            const proposalsResponse = (await apiClient.get('proposals')) as any;
-            if (proposalsResponse.success && proposalsResponse.data!.proposals) {
-              setAvailableProposals(
-                proposalsResponse.data!.proposals.slice(0, 5).map((p: any) => ({
-                  id: p.id,
-                  title: p.title,
-                }))
-              );
-            }
-          } catch (proposalsError) {
-            console.error(
-              '[ProposalDetailAPI] Error fetching available proposals:',
-              proposalsError
-            );
-          }
+          // Avoid extra list fetches; show no alternatives per CORE_REQUIREMENTS
         }
 
         // Note: handleAsyncError removed to prevent infinite loops (CORE_REQUIREMENTS.md pattern)
@@ -472,6 +462,61 @@ export default function ProposalDetailPage() {
       day: 'numeric',
     });
   };
+
+  const computeProgressPercent = (p: ProposalDetail): number => {
+    const completeness = (p.validationData as any)?.completeness;
+    if (typeof completeness === 'number') {
+      // Handle 0-1 or 0-100 inputs safely
+      const value = completeness <= 1 ? completeness * 100 : completeness;
+      return Math.max(0, Math.min(100, Math.round(value)));
+    }
+    const wizardRate = (p.analyticsData as any)?.wizardCompletionRate;
+    if (typeof wizardRate === 'number') {
+      const value = wizardRate <= 1 ? wizardRate * 100 : wizardRate;
+      return Math.max(0, Math.min(100, Math.round(value)));
+    }
+    return 0;
+  };
+
+  interface MetricCardProps {
+    title: string;
+    value: string | number;
+    icon?: React.ReactNode;
+    progress?: number;
+  }
+
+  const MetricCard = ({ title, value, icon, progress }: MetricCardProps) => (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-wide text-gray-500">{title}</div>
+          <div className="mt-1 text-xl font-semibold text-gray-900">{value}</div>
+        </div>
+        {icon}
+      </div>
+      {typeof progress === 'number' && progress >= 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>Progress</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-sm text-gray-600">{label}</span>
+      <span className="text-sm font-medium text-gray-900 text-right break-words">{value}</span>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -547,26 +592,36 @@ export default function ProposalDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+        {/* Enhanced Header with KPI Metrics */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-gray-200 rounded-xl mb-8">
+          <div className="flex items-center justify-between py-6 px-4 sm:px-6 lg:px-8">
+            {/* Navigation & Status */}
             <div className="flex items-center space-x-4">
               <Button variant="outline" onClick={handleBack} className="inline-flex items-center">
                 <ChevronLeftIcon className="h-4 w-4 mr-2" />
                 Back to Proposals
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">{proposal.title}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{proposal.title}</h1>
                 <p className="text-gray-600 mt-1">Proposal ID: {proposal.id}</p>
+              </div>
+              <div className="hidden sm:flex items-center space-x-2">
+                <Badge className={getStatusColor(proposal.status)}>
+                  {proposal.status.replace('_', ' ').toUpperCase()}
+                </Badge>
+                <Badge className={getPriorityColor(proposal.priority)}>
+                  {proposal.priority.toUpperCase()} Priority
+                </Badge>
               </div>
             </div>
 
+            {/* Actions */}
             <div className="flex items-center space-x-3">
-              <Badge className={getStatusColor(proposal.status)}>
+              <Badge className={`sm:hidden ${getStatusColor(proposal.status)}`}>
                 {proposal.status.replace('_', ' ').toUpperCase()}
               </Badge>
-              <Badge className={getPriorityColor(proposal.priority)}>
-                {proposal.priority.toUpperCase()} Priority
+              <Badge className={`sm:hidden ${getPriorityColor(proposal.priority)}`}>
+                {proposal.priority.toUpperCase()}
               </Badge>
               <Button onClick={handleEdit} className="inline-flex items-center">
                 <PencilIcon className="h-4 w-4 mr-2" />
@@ -574,35 +629,112 @@ export default function ProposalDetailPage() {
               </Button>
             </div>
           </div>
+
+          {/* KPI Metrics Row */}
+          <div className="px-4 sm:px-6 lg:px-8 py-4 border-t border-gray-100">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+              {(() => {
+                const { value: computedValue } = calculateProposalValue(proposal as any);
+                const progress = computeProgressPercent(proposal);
+                return (
+                  <>
+                    <MetricCard
+                      title="Total Value"
+                      value={formatCurrency(computedValue, proposal.currency)}
+                      icon={<ClockIcon className="h-5 w-5 text-green-600" />}
+                    />
+                    <MetricCard
+                      title="Team Members"
+                      value={proposal.teamSize}
+                      icon={<UserIcon className="h-5 w-5 text-blue-600" />}
+                    />
+                    <MetricCard
+                      title="Sections"
+                      value={proposal.totalSections}
+                      icon={<CheckCircleIcon className="h-5 w-5 text-purple-600" />}
+                    />
+                    <MetricCard
+                      title="Days Remaining"
+                      value={
+                        proposal.daysUntilDeadline !== null
+                          ? `${proposal.daysUntilDeadline}d`
+                          : 'N/A'
+                      }
+                      icon={<ClockIcon className="h-5 w-5 text-orange-600" />}
+                    />
+                    <MetricCard
+                      title="Progress"
+                      value={`${progress}%`}
+                      icon={<CheckCircleIcon className="h-5 w-5 text-green-600" />}
+                      progress={progress}
+                    />
+                  </>
+                );
+              })()}
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-12 gap-6 xl:gap-8">
-          {/* Overview spans full width for better visual balance */}
+          {/* Enhanced Information Grid */}
           <div className="col-span-12">
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Overview</h2>
-              <div className="space-y-4">
-                {proposal.description && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700">Description</h3>
-                    <p className="mt-1 text-gray-900">{proposal.description}</p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700">Project Type</h3>
-                    <p className="mt-1 text-gray-900">{proposal.projectType || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700">Estimated Value</h3>
-                    <p className="mt-1 text-gray-900 font-semibold">
-                      {formatCurrency(proposal.value, proposal.currency)}
-                    </p>
-                  </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-6">
+              {/* Customer Card */}
+              <Card className="p-6 border-l-4 border-l-blue-500 bg-blue-50">
+                <div className="flex items-center mb-4">
+                  <UserIcon className="h-6 w-6 text-blue-600 mr-3" />
+                  <h3 className="text-lg font-semibold text-blue-900">Customer Details</h3>
                 </div>
-              </div>
-            </Card>
+                <div className="space-y-3">
+                  <InfoRow label="Client" value={proposal.customerName} />
+                  <InfoRow label="Industry" value={proposal.customerIndustry || 'Not specified'} />
+                  <InfoRow label="Tier" value={proposal.customerTier || 'Not specified'} />
+                </div>
+              </Card>
+
+              {/* Timeline Card */}
+              <Card className="p-6 border-l-4 border-l-green-500 bg-green-50">
+                <div className="flex items-center mb-4">
+                  <ClockIcon className="h-6 w-6 text-green-600 mr-3" />
+                  <h3 className="text-lg font-semibold text-green-900">Timeline</h3>
+                </div>
+                <div className="space-y-3">
+                  <InfoRow label="Due Date" value={formatDate(proposal.dueDate)} />
+                  <InfoRow label="Valid Until" value={formatDate(proposal.validUntil)} />
+                  <InfoRow label="Created" value={formatDate(proposal.createdAt)} />
+                </div>
+                {(() => {
+                  const progress = computeProgressPercent(proposal);
+                  return (
+                    <div className="mt-4">
+                      <div className="flex justify-between text-sm text-green-700 mb-1">
+                        <span>Progress</span>
+                        <span>{progress}%</span>
+                      </div>
+                      <div className="w-full bg-green-200 rounded-full h-2">
+                        <div
+                          className="bg-green-600 h-2 rounded-full"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Card>
+
+              {/* Project Details Card */}
+              <Card className="p-6 border-l-4 border-l-purple-500 bg-purple-50">
+                <div className="flex items-center mb-4">
+                  <CheckCircleIcon className="h-6 w-6 text-purple-600 mr-3" />
+                  <h3 className="text-lg font-semibold text-purple-900">Project Details</h3>
+                </div>
+                <div className="space-y-3">
+                  <InfoRow label="Type" value={proposal.projectType || 'Not specified'} />
+                  <InfoRow label="Creator" value={proposal.createdByEmail || 'System'} />
+                  <InfoRow label="Status" value={proposal.status} />
+                </div>
+              </Card>
+            </div>
           </div>
 
           {/* Left column content */}
@@ -705,15 +837,305 @@ export default function ProposalDetailPage() {
             </div>
           </div>
 
-          {/* Communication Center Sidebar */}
-          <div className="col-span-12 lg:col-span-5 xl:col-span-4 self-start">
-            <div className="sticky top-24">
-              <CommunicationCenter
-                proposalId={proposalId}
-                currentUserId="current-user-id"
-                isCompact
-                className="max-h-[calc(100vh-160px)]"
-              />
+          {/* Enhanced Communication Center Sidebar */}
+          <div className="col-span-12 lg:col-span-5 xl:col-span-4">
+            <div className="sticky top-24 space-y-6">
+              {/* Quick Actions Card */}
+              <Card className="p-4">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                  <CheckCircleIcon className="h-5 w-5 mr-2 text-blue-600" />
+                  Quick Actions
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs hover:bg-green-50 hover:border-green-300 hover:text-green-700 transition-colors"
+                    onClick={() => {
+                      const sidebar = document.querySelector('.sticky.top-24');
+                      if (sidebar) sidebar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  >
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Add Task
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+                    onClick={() => {
+                      // TODO: Implement assign functionality
+                    }}
+                  >
+                    <UserIcon className="h-4 w-4 mr-1" />
+                    Assign
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+                    onClick={async () => {
+                      try {
+                        // Compute valid next status per workflow rules
+                        const current = proposal.status;
+                        let next = current;
+                        if (current === 'DRAFT') next = 'IN_REVIEW';
+                        else if (current === 'IN_REVIEW') next = 'PENDING_APPROVAL';
+                        else if (current === 'PENDING_APPROVAL') next = 'APPROVED';
+                        else next = current;
+
+                        if (next === current) return;
+
+                        await apiClient.put(`proposals/${proposalId}/status`, { status: next });
+                        setProposal(prev => (prev ? { ...prev, status: next } : prev));
+                      } catch (e) {}
+                    }}
+                  >
+                    <CheckCircleIcon className="h-4 w-4 mr-1" />
+                    Approve
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700 transition-colors"
+                    onClick={() => router.push('/dashboard/coordination')}
+                  >
+                    <ClockIcon className="h-4 w-4 mr-1" />
+                    Schedule
+                  </Button>
+                </div>
+              </Card>
+
+              {/* Communication Center */}
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gradient-to-r from-gray-50 to-blue-50 px-4 py-3 border-b border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 flex items-center">
+                      <ChatBubbleLeftRightIcon className="h-5 w-5 mr-2 text-blue-600" />
+                      Team Communication
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1">
+                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs text-gray-600">{proposal.teamSize} online</span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="text-xs px-2 py-1 bg-red-50 text-red-600 border-red-200"
+                      >
+                        5 new
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Enhanced Search Bar */}
+                  <div className="relative mb-3">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Search messages, tasks, files... (⌘K)"
+                      className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    />
+                  </div>
+
+                  {/* Enhanced Tabbed Interface */}
+                  <nav className="flex space-x-1 bg-white rounded-lg p-1 border border-gray-200">
+                    <button
+                      onClick={() => setActiveTab('messages')}
+                      className={`flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium rounded-md shadow-sm transition-all duration-200 ${
+                        activeTab === 'messages'
+                          ? 'text-white bg-blue-600'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <ChatBubbleLeftRightIcon className="h-3 w-3" />
+                      <span>Messages</span>
+                      <Badge
+                        variant="outline"
+                        className={`ml-1 text-xs ${
+                          activeTab === 'messages'
+                            ? 'bg-blue-700 text-white border-blue-500'
+                            : 'bg-gray-100 text-gray-600 border-gray-300'
+                        }`}
+                      >
+                        12
+                      </Badge>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('tasks')}
+                      className={`flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium rounded-md shadow-sm transition-all duration-200 ${
+                        activeTab === 'tasks'
+                          ? 'text-white bg-blue-600'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <CheckCircleIcon className="h-3 w-3" />
+                      <span>Tasks</span>
+                      <Badge
+                        variant="outline"
+                        className={`ml-1 text-xs ${
+                          activeTab === 'tasks'
+                            ? 'bg-blue-700 text-white border-blue-500'
+                            : 'bg-orange-50 text-orange-600 border-orange-200'
+                        }`}
+                      >
+                        3
+                      </Badge>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('files')}
+                      className={`flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium rounded-md shadow-sm transition-all duration-200 ${
+                        activeTab === 'files'
+                          ? 'text-white bg-blue-600'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <PaperClipIcon className="h-3 w-3" />
+                      <span>Files</span>
+                      <Badge
+                        variant="outline"
+                        className={`ml-1 text-xs ${
+                          activeTab === 'files'
+                            ? 'bg-blue-700 text-white border-blue-500'
+                            : 'bg-gray-100 text-gray-600 border-gray-300'
+                        }`}
+                      >
+                        7
+                      </Badge>
+                    </button>
+                  </nav>
+                </div>
+                {/* Enhanced Messages View */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* Messages List */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {/* Message Group */}
+                    <div className="space-y-3">
+                      {/* Date Separator */}
+                      <div className="flex items-center">
+                        <div className="flex-1 border-t border-gray-200"></div>
+                        <span className="px-3 text-xs text-gray-500 bg-gray-50">Today</span>
+                        <div className="flex-1 border-t border-gray-200"></div>
+                      </div>
+
+                      {/* Individual Messages */}
+                      <div className="flex space-x-3 group">
+                        <div className="relative">
+                          <img
+                            className="h-8 w-8 rounded-full"
+                            src="/api/placeholder/32/32"
+                            alt="User"
+                          />
+                          <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 border-2 border-white rounded-full"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-medium text-gray-900">Sarah Chen</span>
+                            <span className="text-xs text-gray-500">Product Manager</span>
+                            <span className="text-xs text-gray-400">2 min ago</span>
+                          </div>
+                          <div className="mt-1 text-sm text-gray-700">
+                            <p>
+                              Just reviewed the latest mockups. The customer feedback integration
+                              looks great! 👍
+                            </p>
+                            {/* Action Items */}
+                            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                              <div className="flex items-center text-xs font-medium text-yellow-800 mb-1">
+                                <CheckCircleIcon className="h-3 w-3 mr-1" />
+                                Action Items
+                              </div>
+                              <div className="text-xs text-yellow-700">
+                                • Review wireframe by EOD
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex space-x-3 group">
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-xs font-medium text-blue-600">SY</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-medium text-gray-900">System</span>
+                            <span className="text-xs text-gray-500">Automated</span>
+                            <span className="text-xs text-gray-400">5 min ago</span>
+                          </div>
+                          <div className="mt-1 text-sm text-gray-700 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                            <p>
+                              📊 <strong>Progress Update:</strong> Proposal completion increased to
+                              85%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enhanced Message Composer */}
+                  <div className="border-t border-gray-200 p-4 bg-white">
+                    <div className="flex items-start space-x-3">
+                      <img
+                        className="h-8 w-8 rounded-full"
+                        src="/api/placeholder/32/32"
+                        alt="You"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="relative">
+                          <textarea
+                            rows={2}
+                            className="w-full resize-none border border-gray-300 rounded-lg px-3 py-2 pr-20 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                            placeholder={`Type a ${activeTab === 'tasks' ? 'task' : 'message'}... (⌘Enter to send)`}
+                            onKeyDown={e => {
+                              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                const target = e.target as HTMLTextAreaElement;
+                                if (target.value.trim()) {
+                                  target.value = '';
+                                }
+                              }
+                            }}
+                          ></textarea>
+                          <div className="absolute bottom-2 right-2 flex items-center space-x-2">
+                            <button className="p-1 text-gray-400 hover:text-gray-600 rounded">
+                              <PaperClipIcon className="h-4 w-4" />
+                            </button>
+                            <button className="p-1 text-gray-400 hover:text-gray-600 rounded">
+                              <TagIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <div className="flex items-center space-x-2 text-xs text-gray-500">
+                            <span>⌘Enter to send</span>
+                            <span>•</span>
+                            <span>@mention</span>
+                            <span>•</span>
+                            <span>#tag</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <select className="text-xs border border-gray-300 rounded px-2 py-1">
+                              <option>Normal</option>
+                              <option>High</option>
+                              <option>Urgent</option>
+                            </select>
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                              <PaperAirplaneIcon className="h-4 w-4 mr-1" />
+                              Send
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

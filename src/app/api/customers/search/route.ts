@@ -5,6 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -39,6 +40,7 @@ const CustomerSearchSchema = z.object({
  * GET /api/customers/search - Search customers
  */
 export async function GET(request: NextRequest) {
+  await validateApiPermission(request, 'customers:read');
   const startTime = Date.now();
   const { requestId } = getRequestMeta(request.headers);
 
@@ -159,6 +161,11 @@ export async function GET(request: NextRequest) {
     });
     res.headers.set('Server-Timing', `app;dur=${searchDuration}`);
     if (requestId) res.headers.set('x-request-id', String(requestId));
+    if (process.env.NODE_ENV === 'production') {
+      res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+    } else {
+      res.headers.set('Cache-Control', 'no-store');
+    }
     return res;
   } catch (error) {
     const searchDuration = Date.now() - startTime;
@@ -227,6 +234,7 @@ export async function GET(request: NextRequest) {
     );
     res.headers.set('Server-Timing', `app;dur=${searchDuration}`);
     if (requestId) res.headers.set('x-request-id', String(requestId));
+    res.headers.set('Cache-Control', 'no-store');
     return res;
   }
 }

@@ -13,8 +13,8 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { cn } from '@/lib/utils';
 import React, { forwardRef, useCallback } from 'react';
@@ -177,15 +177,18 @@ export const MobileEnhancedButton = forwardRef<HTMLButtonElement, MobileEnhanced
             // Use requestIdleCallback if available, otherwise setTimeout
             const trackAnalytics = () => {
               try {
-                analytics('mobile_button_interaction', {
-                  buttonId: trackingId,
-                  variant,
-                  size,
-                  deviceType: isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop',
-                }, 'low');
-              } catch (error) {
+                analytics(
+                  'mobile_button_interaction',
+                  {
+                    buttonId: trackingId,
+                    variant,
+                    size,
+                    deviceType: isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop',
+                  },
+                  'low'
+                );
+              } catch {
                 // Silent analytics failure to prevent UI impact
-                console.warn('Analytics tracking failed silently:', error);
               }
             };
 
@@ -197,9 +200,12 @@ export const MobileEnhancedButton = forwardRef<HTMLButtonElement, MobileEnhanced
             }
           }
         } catch (error) {
-          // Log error but don't block user interaction
-          console.error('Button click error:', error);
-          
+          // Report via standardized handler but don't block user interaction
+          handleAsyncError(error, 'MobileEnhancedButton click failed', {
+            component: 'MobileEnhancedButton',
+            trackingId,
+          });
+
           // Still try to execute the original onClick if it wasn't called yet
           if (!event.defaultPrevented) {
             try {
@@ -213,7 +219,17 @@ export const MobileEnhancedButton = forwardRef<HTMLButtonElement, MobileEnhanced
           }
         }
       },
-      [onClick, triggerHapticFeedback, analytics, trackingId, variant, size, isMobile, isTablet, handleAsyncError]
+      [
+        onClick,
+        triggerHapticFeedback,
+        analytics,
+        trackingId,
+        variant,
+        size,
+        isMobile,
+        isTablet,
+        handleAsyncError,
+      ]
     );
 
     const currentSizeClass = sizeClasses[size];

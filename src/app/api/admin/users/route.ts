@@ -4,6 +4,7 @@
  * Based on DATA_MODEL.md and COMPONENT_STRUCTURE.md specifications
  */
 
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -51,6 +52,7 @@ const UpdateUserSchema = z.object({
 // GET /api/admin/users - Fetch users from database
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'users', action: 'read' });
     const url = new URL(request.url);
     const searchParams = Object.fromEntries(url.searchParams);
     const { page, limit, search, role, status, department } = GetUsersSchema.parse(searchParams);
@@ -170,6 +172,7 @@ export async function POST(request: NextRequest) {
   let userEmail: string | undefined;
 
   try {
+    await validateApiPermission(request, { resource: 'users', action: 'create' });
     const body = await request.json();
     const userData = CreateUserSchema.parse(body);
     userEmail = userData.email;
@@ -260,6 +263,7 @@ export async function PUT(request: NextRequest) {
   let updateUserId: string | undefined;
 
   try {
+    await validateApiPermission(request, { resource: 'users', action: 'update' });
     const body = await request.json();
     const { id, ...updateData } = body;
     updateUserId = id;
@@ -329,6 +333,7 @@ export async function DELETE(request: NextRequest) {
   let deleteUserId: string | undefined = undefined;
 
   try {
+    await validateApiPermission(request, { resource: 'users', action: 'delete' });
     const url = new URL(request.url);
     deleteUserId = url.searchParams.get('id') || undefined;
 

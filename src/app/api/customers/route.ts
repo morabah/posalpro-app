@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+/**
  * PosalPro MVP2 - Customers API Routes
  * Enhanced customer management with authentication and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
@@ -8,6 +8,7 @@ import { logger } from '@/utils/logger'; /**
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -15,11 +16,12 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { logError, logInfo } from '@/lib/logger';
+import { recordDbLatency, recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { recordLatency, recordError, recordDbLatency } from '@/lib/observability/metricsStore';
 
 // ✅ CRITICAL: Performance optimization - Customer cache
 const customerCache = new Map<string, { data: any; timestamp: number }>();
@@ -82,7 +84,7 @@ const databaseIdSchema = z
 const CustomerQuerySchema = z.object({
   cursor: z.preprocess(val => (val === '' ? undefined : val), databaseIdSchema.nullish()),
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  limit: z.coerce.number().min(1).max(100).default(50),
   search: z.string().optional(),
   status: z.string().optional(),
   tier: z.string().optional(),
@@ -149,6 +151,7 @@ interface CustomerPaginationResult {
  * GET /api/customers - Retrieve customers with filtering and pagination
  */
 export async function GET(request: NextRequest) {
+  await validateApiPermission(request, { resource: 'customers', action: 'read' });
   const queryStartTime = Date.now();
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -156,14 +159,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { searchParams } = new URL(request.url);
+    const url = new URL(request.url);
+    const searchParams = url.searchParams;
     const query = CustomerQuerySchema.parse(Object.fromEntries(searchParams));
 
     // ✅ CRITICAL: Check cache first for performance optimization
     const cacheKey = generateCacheKey(query);
     const cachedResult = getCachedCustomers(cacheKey);
     if (cachedResult) {
-      console.log(`📦 [Customer Cache] Cache hit for query: ${cacheKey}`);
+      await logInfo('Customer API cache hit', { cacheKey });
       return NextResponse.json(cachedResult, {
         headers: {
           'Cache-Control': 'public, max-age=300',
@@ -172,7 +176,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log(`🔍 [Customer API] Fetching from database: ${cacheKey}`);
+    await logInfo('Customer API fetching from database', { cacheKey });
 
     // Build where clause
     const where: CustomerWhereClause = {};
@@ -196,8 +200,8 @@ export async function GET(request: NextRequest) {
       where.industry = { contains: query.industry, mode: 'insensitive' };
     }
 
-    // Determine pagination strategy
-    const useCursorPagination = query.cursor !== undefined;
+    // Determine pagination strategy: prefer cursor when provided or when 'page' is absent (future-proof)
+    const useCursorPagination = query.cursor !== undefined || !searchParams.has('page');
 
     let customers: Customer[];
     let pagination: CustomerPaginationResult;
@@ -287,25 +291,37 @@ export async function GET(request: NextRequest) {
     cacheCustomers(cacheKey, response);
 
     const queryTime = Date.now() - queryStartTime;
-    console.log(`📊 [Customer API] Query completed in ${queryTime}ms`);
+    await logInfo('Customer API query completed', { durationMs: queryTime });
 
     const duration = Date.now() - queryStartTime;
     recordLatency(duration);
-    const res = NextResponse.json(response, {
-      headers: {
-        'Cache-Control': 'public, max-age=300',
-        'X-Cache': 'MISS',
-        'X-Query-Time': queryTime.toString(),
-      },
-    });
+    const res = NextResponse.json(response);
+    if (process.env.NODE_ENV === 'production') {
+      res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
+    } else {
+      res.headers.set('Cache-Control', 'no-store');
+    }
+    res.headers.set('X-Cache', 'MISS');
+    res.headers.set('X-Query-Time', queryTime.toString());
     res.headers.set('Server-Timing', `app;dur=${duration}`);
     return res;
   } catch (error) {
-    console.error('[Customer API] Error:', error);
-    recordError(ErrorCodes.SYSTEM.INTERNAL_ERROR);
+    errorHandlingService.processError(error, 'Customers GET failed', ErrorCodes.DATA.QUERY_FAILED, {
+      component: 'CustomersRoute',
+      operation: 'GET',
+    });
+    await logError('[Customer API] Error', error as unknown, { operation: 'GET' });
+    recordError(ErrorCodes.DATA.QUERY_FAILED);
     const duration = Date.now() - queryStartTime;
     recordLatency(duration);
-    return createApiErrorResponse(error);
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to retrieve customers',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        cause: error as unknown,
+        metadata: { component: 'CustomersRoute', operation: 'GET' },
+      })
+    );
   }
 }
 
@@ -314,11 +330,13 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Require customers:create permission
+    await validateApiPermission(request, { resource: 'customers', action: 'create' });
     // Check authentication
     const session = await getServerSession(authOptions);
 
     // [AUTH_FIX] Enhanced session validation with detailed logging
-    console.log('[AUTH_FIX] Session validation:', {
+    await logInfo('[AUTH_FIX] Session validation', {
       hasSession: !!session,
       hasUser: !!session?.user,
       hasUserId: !!session?.user?.id,
@@ -328,7 +346,7 @@ export async function POST(request: NextRequest) {
     });
 
     // [AUTH_FIX] Enhanced session validation with detailed logging
-    console.log('[AUTH_FIX] Session validation:', {
+    await logInfo('[AUTH_FIX] Session validation (dup)', {
       hasSession: !!session,
       hasUser: !!session?.user,
       hasUserId: !!session?.user?.id,
@@ -531,7 +549,7 @@ async function trackCustomerSearchEvent(userId: string, query: string, resultsCo
       },
     });
   } catch (error) {
-    logger.error('Failed to track customer search event:', error);
+    await logError('Failed to track customer search event', error as unknown);
     // Don't throw error as this is non-critical
   }
 }
@@ -592,7 +610,7 @@ async function trackCustomerCreationEvent(
       },
     });
   } catch (error) {
-    logger.error('Failed to track customer creation event:', error);
+    await logError('Failed to track customer creation event', error as unknown);
     // Don't throw error as this is non-critical
   }
 }

@@ -1,88 +1,71 @@
-import { withAuth } from 'next-auth/middleware';
-import { NextResponse } from 'next/server';
+import { rbacIntegration } from '@/lib/auth/rbacIntegration';
+import { logger } from '@/utils/logger';
+import { NextRequest, NextResponse } from 'next/server';
 
-export default withAuth(
-  function middleware(req) {
-    const { token } = req.nextauth;
-    const { pathname } = req.nextUrl;
+/**
+ * Enhanced RBAC Middleware
+ * Provides comprehensive security with granular permission checks,
+ * session validation, audit logging, and threat detection
+ */
+export async function middleware(request: NextRequest) {
+  const startTime = Date.now();
+  const { pathname } = request.nextUrl;
 
-    // Debug PATCH requests to proposals
-    if (process.env.NODE_ENV === 'development') {
-      if (req.method === 'PATCH' && pathname.includes('/api/proposals/')) {
-        // eslint-disable-next-line no-console
-        console.log(`🔍 [Middleware] PATCH request to: ${pathname}`);
-      }
-    }
-
-    // Allow auth endpoints and public pages
+  try {
+    // Allow access to static files and Next.js internals
     if (
-      pathname.startsWith('/api/auth') ||
-      ['/', '/auth/login', '/auth/register'].includes(pathname)
+      pathname.startsWith('/_next/') ||
+      pathname.startsWith('/favicon.ico') ||
+      pathname.startsWith('/public/') ||
+      pathname.includes('.') ||
+      pathname.startsWith('/api/auth/')
     ) {
       return NextResponse.next();
     }
 
-    // Fallback checks (should rarely run if authorized handles it)
-    if (!token) {
-      const loginUrl = new URL('/auth/login', req.url);
-      loginUrl.searchParams.set('callbackUrl', req.url);
-      return NextResponse.redirect(loginUrl);
+    // Use enhanced RBAC integration for authentication and authorization
+    const authResult = await rbacIntegration.authenticateAndAuthorize(request);
+
+    // If authResult is not null, it means access was denied or redirected
+    if (authResult) {
+      return authResult;
     }
 
-    if (pathname === '/admin' || pathname.startsWith('/admin') || pathname.includes('/admin')) {
-      const rawRoles = (token as any).roles;
-      const roles = Array.isArray(rawRoles)
-        ? rawRoles
-        : typeof rawRoles === 'string'
-          ? [rawRoles]
-          : [];
-      const hasAdminRole = roles.includes('System Administrator');
-      if (!hasAdminRole) {
-        const unauthorizedUrl = new URL('/auth/error?error=AccessDenied', req.url);
-        return NextResponse.redirect(unauthorizedUrl);
-      }
+    // Access granted - continue with request
+    const duration = Date.now() - startTime;
+
+    // Log slow middleware responses for monitoring
+    if (duration > 1000) {
+      logger.warn('[Middleware] Slow response', {
+        pathname,
+        duration,
+        method: request.method,
+      });
     }
 
     return NextResponse.next();
-  },
-  {
-    callbacks: {
-      // Enforce admin access decision as boolean. Redirects are handled in the main middleware logic above.
-      authorized: ({ token, req }) => {
-        const pathname = req.nextUrl.pathname;
+  } catch (error) {
+    logger.error('[Middleware] Unexpected error', {
+      pathname,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
 
-        // Always allow auth endpoints and public pages
-        if (
-          pathname.startsWith('/api/auth') ||
-          pathname === '/' ||
-          pathname === '/auth/login' ||
-          pathname === '/auth/register'
-        ) {
-          return true;
-        }
-
-        // Require authentication for everything else
-        if (!token) return false;
-
-        // Strict admin gate for /admin
-        if (pathname === '/admin' || pathname.startsWith('/admin') || pathname.includes('/admin')) {
-          const rawRoles = (token as any).roles;
-          const roles = Array.isArray(rawRoles)
-            ? rawRoles
-            : typeof rawRoles === 'string'
-              ? [rawRoles]
-              : [];
-
-          return roles.includes('System Administrator');
-        }
-
-        return true;
-      },
-    },
+    // Fail securely - redirect to error page
+    return NextResponse.redirect(new URL('/error', request.url));
   }
-);
+}
 
 export const config = {
-  // Match all routes except for static assets and special Next.js files
-  matcher: ['/((?!api/health|_next/static|_next/image|favicon.ico).*)', '/admin/:path*'],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     * - api/auth (NextAuth.js routes)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|public/|api/auth/).*)',
+  ],
 };

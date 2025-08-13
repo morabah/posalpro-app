@@ -4,6 +4,7 @@ import { logger } from '@/utils/logger';/**
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 import { ValidationEngine } from '../../../../lib/validation/ValidationEngine';
 
@@ -53,6 +54,7 @@ const validateRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  await validateApiPermission(request, 'products:read');
   try {
     logger.info('POST /api/products/validate - Starting validation request');
 

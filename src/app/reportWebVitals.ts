@@ -2,6 +2,7 @@
 // Sends Web Vitals metrics via Beacon to a local API for aggregation
 
 import type { NextWebVitalsMetric } from 'next/app';
+import { apiClient } from '@/lib/api/client';
 
 export function reportWebVitals(metric: NextWebVitalsMetric) {
   try {
@@ -15,8 +16,11 @@ export function reportWebVitals(metric: NextWebVitalsMetric) {
     if (navigator.sendBeacon) {
       navigator.sendBeacon(url, body);
     } else {
-      // Fallback to fetch in keepalive mode
-      fetch(url, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'application/json' } }).catch(() => {});
+      // Fallback to centralized API client
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      apiClient
+        .post<void>(url, JSON.parse(body))
+        .catch(() => {});
     }
   } catch {
     // no-op

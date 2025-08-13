@@ -4,6 +4,7 @@
  * Based on DATA_MODEL.md specifications
  */
 
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -25,6 +26,8 @@ const COMPONENT_MAPPING = {
 // GET /api/admin/metrics - Fetch system metrics from database
 export async function GET(request: NextRequest) {
   try {
+    // RBAC guard
+    await validateApiPermission(request, { resource: 'metrics', action: 'read' });
     // Get database health and statistics
     const startTime = Date.now();
 
@@ -33,39 +36,33 @@ export async function GET(request: NextRequest) {
     const dbResponseTime = Date.now() - startTime;
 
     // Optimized transaction for admin metrics
-    const [
-      totalUsers,
-      activeUsers,
-      totalProposals,
-      totalProducts,
-      totalContent,
-      recentAuditLogs
-    ] = await prisma.$transaction([
-      prisma.user.count(),
-      prisma.user.count({
-        where: {
-          status: 'ACTIVE',
-          lastLogin: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
-          },
-        },
-      }),
-      prisma.proposal.count(),
-      prisma.product.count(),
-      prisma.content.count(),
-      prisma.auditLog.findMany({
-        take: 10,
-        orderBy: { timestamp: 'desc' },
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
+    const [totalUsers, activeUsers, totalProposals, totalProducts, totalContent, recentAuditLogs] =
+      await prisma.$transaction([
+        prisma.user.count(),
+        prisma.user.count({
+          where: {
+            status: 'ACTIVE',
+            lastLogin: {
+              gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
             },
           },
-        },
-      })
-    ]);
+        }),
+        prisma.proposal.count(),
+        prisma.product.count(),
+        prisma.content.count(),
+        prisma.auditLog.findMany({
+          take: 10,
+          orderBy: { timestamp: 'desc' },
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        }),
+      ]);
 
     // System health check (separate as it's not a database operation)
     const systemHealth = await checkSystemHealth(dbResponseTime);

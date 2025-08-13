@@ -219,6 +219,8 @@ export default function WorkflowTemplateManager() {
   const apiClient = useApiClient();
   const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate | null>(null);
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
+  const [nextCursor, setNextCursor] = useState<{ cursorId: string } | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [activeTab, setActiveTab] = useState<
     'overview' | 'builder' | 'rules' | 'sla' | 'analytics'
   >('overview');
@@ -281,13 +283,12 @@ export default function WorkflowTemplateManager() {
           setShowTestModal(true);
           break;
         case 'clone':
-          console.log('Clone template:', template?.name);
           break;
         case 'deploy':
-          console.log('Deploy template:', template?.name);
+          // structured log handled by analytics services if enabled
           break;
         default:
-          console.log(`${action}:`, template?.name);
+          // no-op
       }
     },
     [trackTemplateAction]
@@ -370,6 +371,14 @@ export default function WorkflowTemplateManager() {
             approvers: [],
           }));
           setTemplates(mapped);
+          const pg = (res as any)?.data?.pagination;
+          if (pg && typeof pg === 'object') {
+            setNextCursor(pg.nextCursor || null);
+            setHasMore(Boolean(pg.hasMore));
+          } else {
+            setNextCursor(null);
+            setHasMore(false);
+          }
         } else {
           setTemplates([]);
         }
@@ -382,6 +391,78 @@ export default function WorkflowTemplateManager() {
       isCancelled = true;
     };
   }, [apiClient]);
+
+  const loadMoreTemplates = useCallback(async () => {
+    if (!nextCursor) return;
+    const qp = new URLSearchParams({ limit: '50', cursorId: nextCursor.cursorId }).toString();
+    const res = await apiClient.get<{ success: boolean; data: { workflows: any[]; pagination?: any } }>(
+      `/workflows?${qp}`
+    );
+    if (res?.success) {
+      const mapped: WorkflowTemplate[] = res.data.workflows.map(w => ({
+        id: w.id,
+        name: w.name,
+        description: w.description || '',
+        version: 1,
+        isActive: w.isActive,
+        entityType: 'proposal',
+        stages: (w.stages || []).map((s: any, idx: number) => ({
+          id: s.id || `stage-${idx}`,
+          name: s.name,
+          description: s.description || '',
+          order: s.order ?? idx + 1,
+          stageType: (s.isParallel ? 'parallel' : 'sequential') as any,
+          approvers: [],
+          roles: [],
+          slaHours: s.slaHours ?? 24,
+          conditions: [],
+          actions: [],
+          isRequired: true,
+          canSkip: false,
+          escalationRules: [],
+          dependsOn: [],
+        })),
+        conditionalRules: [],
+        slaSettings: {
+          defaultHours: 24,
+          conditionalSLAs: [],
+          escalationThresholds: [],
+          businessHoursOnly: true,
+          holidayHandling: 'extend',
+          timezoneHandling: 'approver',
+        },
+        parallelProcessing: {
+          enabled: false,
+          maxParallelStages: 1,
+          waitForAll: true,
+          failureHandling: 'continue',
+        },
+        createdAt: new Date(w.createdAt),
+        updatedAt: new Date(w.updatedAt),
+        createdBy: w.creator?.email || 'system',
+        usage: {
+          totalExecutions: w.statistics?.totalExecutions || 0,
+          activeWorkflows: 0,
+          averageCompletionTime: w.statistics?.averageCompletionTime || 0,
+          successRate: w.statistics?.successRate || 0,
+          lastUsed: new Date(),
+        },
+        performance: {
+          averageCompletionTime: w.statistics?.averageCompletionTime || 0,
+          slaCompliance: w.statistics?.slaCompliance || 0,
+          bottleneckStages: [],
+          userSatisfaction: 0,
+          performanceScore: 0,
+          timelinePredictionAccuracy: 0,
+        },
+        approvers: [],
+      }));
+      setTemplates(prev => [...prev, ...mapped]);
+      const pg = (res as any)?.data?.pagination;
+      setNextCursor(pg?.nextCursor || null);
+      setHasMore(Boolean(pg?.hasMore));
+    }
+  }, [apiClient, nextCursor]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -507,7 +588,7 @@ export default function WorkflowTemplateManager() {
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                      <div className="space-y-4">
                     {templates.map(template => (
                       <div
                         key={template.id}
@@ -588,7 +669,14 @@ export default function WorkflowTemplateManager() {
                         </div>
                       </div>
                     ))}
-                  </div>
+                      </div>
+                      {hasMore && (
+                        <div className="flex justify-center mt-4">
+                          <Button onClick={loadMoreTemplates} variant="secondary">
+                            Load More
+                          </Button>
+                        </div>
+                      )}
                 </div>
               </Card>
             </div>

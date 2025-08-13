@@ -1,4 +1,5 @@
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
   const start = Date.now();
   let session;
   try {
+    await validateApiPermission(request, 'proposals:read');
     session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

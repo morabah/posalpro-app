@@ -145,7 +145,7 @@ export function ValidationDashboard({
       const success = await applyFixSuggestion(issueId, fixId);
       if (success) {
         // Optionally trigger re-validation or refresh
-        console.log('Fix applied successfully');
+        // success toast already indicates result
       }
       return success;
     },
@@ -161,11 +161,11 @@ export function ValidationDashboard({
           break;
         case 'suppress':
           // Handle suppression logic
-          console.log('Suppressing issues:', issueIds);
+          // structured logs handled elsewhere
           break;
         case 'defer':
           // Handle deferral logic
-          console.log('Deferring issues:', issueIds);
+          // structured logs handled elsewhere
           break;
         default: {
           // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService

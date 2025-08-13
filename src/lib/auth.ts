@@ -14,8 +14,9 @@
  * - Optimized JWT strategy
  */
 
+import { secureSessionManager } from '@/lib/auth/secureSessionManager';
 import { logger } from '@/utils/logger';
-import { NextAuthOptions, type Session, type User as NextAuthUser } from 'next-auth';
+import { NextAuthOptions, type User as NextAuthUser, type Session } from 'next-auth';
 import type { JWT as NextAuthJWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { comparePassword } from './auth/passwordUtils';
@@ -56,6 +57,7 @@ declare module 'next-auth/jwt' {
     department: string;
     roles: string[];
     permissions: string[];
+    sessionId?: string;
   }
 }
 
@@ -231,6 +233,24 @@ export const authOptions: NextAuthOptions = {
         token.department = user.department;
         token.roles = user.roles;
         token.permissions = user.permissions;
+
+        // Ensure enhanced RBAC sessionId for middleware validation
+        try {
+          if (!token.sessionId) {
+            const sessionId = await secureSessionManager.createSession(
+              user.id,
+              Array.isArray(user.roles) ? user.roles : [],
+              Array.isArray(user.permissions) ? user.permissions : [],
+              'unknown',
+              'nextauth'
+            );
+            token.sessionId = sessionId;
+          }
+        } catch (err) {
+          logger.warn('[Auth] Failed to create secure session (continuing)', {
+            error: (err as Error)?.message,
+          });
+        }
       }
       return token;
     },
@@ -269,6 +289,8 @@ export const authOptions: NextAuthOptions = {
       session.user.department = token.department;
       session.user.roles = token.roles;
       session.user.permissions = token.permissions;
+      // Expose sessionId only if needed on client; keep server-side by default
+      // (Do not attach to session.user to avoid leaking internal IDs.)
 
       // Cache the session
       sessionCache.set(cacheKey, { session, timestamp: now });

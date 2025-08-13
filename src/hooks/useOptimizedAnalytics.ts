@@ -9,6 +9,7 @@
  * - Reduces memory pressure
  */
 
+import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -50,6 +51,7 @@ const COMPONENT_MAPPING = {
 export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> = {}) {
   const errorHandlingService = ErrorHandlingService.getInstance();
   const [isClient, setIsClient] = useState(false);
+  const apiClient = useApiClient();
 
   // ✅ FIXED: Ensure client-side only execution
   useEffect(() => {
@@ -131,11 +133,9 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
 
         // Send batch to analytics service
         if (process.env.NODE_ENV === 'production') {
-          fetch('/api/analytics/events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ events: batchEvents }),
-          }).catch(error => {
+          try {
+            await apiClient.post<{ success: boolean }>('analytics/events', { events: batchEvents });
+          } catch (error) {
             const standardError: StandardError = errorHandlingService.processError(
               error,
               'Failed to send analytics event batch',
@@ -143,7 +143,7 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
               { component: 'useOptimizedAnalytics' }
             );
             logError(standardError.message, standardError);
-          });
+          }
         } else {
           // Disabled debug logging to prevent performance overhead (Lesson #13)
         }
@@ -159,7 +159,7 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
     } finally {
       isProcessing.current = false;
     }
-  }, [finalConfig.batchSize, isClient, errorHandlingService]);
+  }, [finalConfig.batchSize, isClient, errorHandlingService, apiClient]);
 
   /**
    * Track optimized event with intelligent batching

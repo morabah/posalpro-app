@@ -21,6 +21,7 @@ import { statusUpdatePayloadSchema } from '@/lib/validation/schemas/proposal';
 import { ProposalStatus, StatusUpdatePayload } from '@/types/entities/proposal';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -28,6 +29,7 @@ import { z } from 'zod';
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    await validateApiPermission(request, { resource: 'proposals', action: 'update' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return createApiErrorResponse(

@@ -5,19 +5,21 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
-import { Prisma } from '@prisma/client';
 import {
   createApiErrorResponse,
   ErrorCodes,
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { recordError, recordLatency } from '@/lib/observability/metricsStore';
+import { logError, logInfo } from '@/lib/logger';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 
 /**
  * Component Traceability Matrix:
@@ -32,8 +34,9 @@ import { recordLatency, recordError } from '@/lib/observability/metricsStore';
  * Validation schemas
  */
 const ProductQuerySchema = z.object({
+  cursor: z.string().nullish(),
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  limit: z.coerce.number().min(1).max(100).default(50),
   search: z.string().optional(),
   category: z.string().optional(), // comma-separated categories
   tags: z.string().optional(), // comma-separated tags
@@ -63,6 +66,7 @@ const ProductCreateSchema = z.object({
 export async function GET(request: NextRequest) {
   const start = Date.now();
   try {
+    await validateApiPermission(request, { resource: 'products', action: 'read' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -83,7 +87,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse and validate query parameters
-    const { searchParams } = new URL(request.url);
+    const url = new URL(request.url);
+    const searchParams = url.searchParams;
     const queryParams = Object.fromEntries(searchParams);
     const validatedQuery = ProductQuerySchema.parse(queryParams);
 
@@ -130,7 +135,48 @@ export async function GET(request: NextRequest) {
       where.sku = { contains: validatedQuery.sku, mode: 'insensitive' };
     }
 
-    // Fetch products and total count in a single transaction for efficiency
+    // Cursor-first pagination when cursor provided or when 'page' is absent
+    const useCursor = Boolean(validatedQuery.cursor) || !searchParams.has('page');
+    if (useCursor) {
+      const take = validatedQuery.limit + 1;
+      const list = await prisma.product.findMany({
+        where,
+        orderBy: [{ [validatedQuery.sortBy]: validatedQuery.sortOrder }, { id: 'desc' }],
+        take,
+        cursor: validatedQuery.cursor ? { id: validatedQuery.cursor } : undefined,
+        skip: validatedQuery.cursor ? 1 : 0,
+      });
+      const hasMore = list.length > validatedQuery.limit;
+      const products = hasMore ? list.slice(0, -1) : list;
+      const res = NextResponse.json({
+        success: true,
+        data: {
+          products,
+          pagination: {
+            limit: validatedQuery.limit,
+            hasMore,
+            nextCursor: hasMore ? products[products.length - 1]?.id ?? null : null,
+          },
+          filters: {
+            search: validatedQuery.search,
+            category: validatedQuery.category?.split(','),
+            tags: validatedQuery.tags?.split(','),
+            priceRange: validatedQuery.priceRange,
+            isActive: validatedQuery.isActive,
+            sku: validatedQuery.sku,
+          },
+        },
+        message: 'Products retrieved successfully',
+      });
+      if (process.env.NODE_ENV === 'production') {
+        res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
+      } else {
+        res.headers.set('Cache-Control', 'no-store');
+      }
+      return res;
+    }
+
+    // Legacy offset path
     const [totalProducts, products] = await prisma.$transaction([
       prisma.product.count({ where }),
       prisma.product.findMany({
@@ -149,7 +195,7 @@ export async function GET(request: NextRequest) {
 
     const duration = Date.now() - start;
     recordLatency(duration);
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         products,
@@ -170,9 +216,19 @@ export async function GET(request: NextRequest) {
       },
       message: 'Products retrieved successfully',
     });
+    if (process.env.NODE_ENV === 'production') {
+      res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+    } else {
+      res.headers.set('Cache-Control', 'no-store');
+    }
+    return res;
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
+    await logError('Products GET failed', error as unknown, {
+      component: 'ProductsRoute',
+      operation: 'GET',
+    });
 
     if (error instanceof z.ZodError) {
       recordError(ErrorCodes.VALIDATION.INVALID_INPUT);
@@ -191,7 +247,8 @@ export async function GET(request: NextRequest) {
         ErrorCodes.VALIDATION.INVALID_INPUT,
         400,
         {
-          userFriendlyMessage: 'There was an issue with your request. Please check the filters and try again.',
+          userFriendlyMessage:
+            'There was an issue with your request. Please check the filters and try again.',
           details: error.errors,
         }
       );
@@ -217,8 +274,7 @@ export async function GET(request: NextRequest) {
         errorCode,
         500,
         {
-          userFriendlyMessage:
-            'An error occurred while fetching products. Please try again later.',
+          userFriendlyMessage: 'An error occurred while fetching products. Please try again later.',
         }
       );
     }
@@ -256,6 +312,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'products', action: 'create' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -347,6 +404,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
+    await logError('Products POST failed', error as unknown, {
+      component: 'ProductsRoute',
+      operation: 'POST',
+    });
 
     if (error instanceof z.ZodError) {
       return createApiErrorResponse(

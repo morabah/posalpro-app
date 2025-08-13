@@ -4,9 +4,11 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { getCache, setCache } from '@/lib/redis';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -14,6 +16,7 @@ const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'proposals', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -22,6 +25,27 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const productIdParam = url.searchParams.get('productId');
     const limit = Math.min(Number(url.searchParams.get('limit') || 50), 200);
+
+    // Cursor-based pagination: createdAt desc, id desc
+    const cursorCreatedAtParam = url.searchParams.get('cursorCreatedAt');
+    const cursorIdParam = url.searchParams.get('cursorId');
+    const cursorCreatedAt = cursorCreatedAtParam ? new Date(cursorCreatedAtParam) : null;
+    const cursorId = cursorIdParam || null;
+
+    // Short TTL cache key (per product + cursor + limit)
+    const cacheKey =
+      `products:relationships:versions:${resolvedProductId}:` +
+      `${cursorCreatedAt ? cursorCreatedAt.getTime() : 'start'}:${cursorId ?? 'none'}:${limit}`;
+    try {
+      const cached = await getCache(cacheKey);
+      if (cached && typeof cached === 'object') {
+        const res = NextResponse.json(cached as Record<string, unknown>);
+        res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
+        return res;
+      }
+    } catch {
+      // ignore cache errors
+    }
     if (!productIdParam) {
       return NextResponse.json({ success: false, error: 'productId is required' }, { status: 400 });
     }
@@ -40,6 +64,13 @@ export async function GET(request: NextRequest) {
     // Pull authoritative history from ProposalVersion snapshots (captures deletes too)
     // Use raw SQL to ensure compatibility across generated clients
     const PrismaLocal = (require('@prisma/client') as any).Prisma;
+
+    // Build cursor condition for stable pagination
+    const cursorCondition =
+      cursorCreatedAt && cursorId
+        ? PrismaLocal.sql`AND (pv."createdAt" < ${cursorCreatedAt} OR (pv."createdAt" = ${cursorCreatedAt} AND pv.id < ${cursorId}))`
+        : PrismaLocal.empty;
+
     const rows = (await prisma.$queryRaw(
       PrismaLocal.sql`
         SELECT pv.id,
@@ -50,7 +81,6 @@ export async function GET(request: NextRequest) {
                u.name as "createdByName",
                pv."changeType",
                pv."changesSummary",
-               -- compute total value from snapshot JSON (quantity * unitPrice * (1 - discount))
                (
                  SELECT COALESCE(SUM((COALESCE((p->>'quantity')::numeric,0)) *
                                     (COALESCE((p->>'unitPrice')::numeric,0)) *
@@ -60,8 +90,9 @@ export async function GET(request: NextRequest) {
         FROM proposal_versions pv
         LEFT JOIN users u ON u.id = pv."createdBy"
         WHERE ${resolvedProductId} = ANY (pv."productIds")
-        ORDER BY pv."createdAt" DESC
-        LIMIT ${limit}
+        ${cursorCondition}
+        ORDER BY pv."createdAt" DESC, pv.id DESC
+        LIMIT ${limit + 1}
       `
     )) as Array<{
       id: string;
@@ -75,7 +106,10 @@ export async function GET(request: NextRequest) {
       totalValue: any;
     }>;
 
-    const data = rows.map(
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, -1) : rows;
+
+    const data = pageRows.map(
       (r: {
         id: string;
         proposalId: string;
@@ -106,7 +140,37 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({ success: true, data, count: data.length });
+    const next = hasMore
+      ? {
+          cursorCreatedAt: pageRows[pageRows.length - 1]?.createdAt?.toISOString() || null,
+          cursorId: pageRows[pageRows.length - 1]?.id || null,
+        }
+      : null;
+
+    const payload = {
+      success: true,
+      data,
+      pagination: {
+        limit,
+        hasMore,
+        nextCursor: next,
+      },
+    } as const;
+
+    try {
+      // 120s Redis TTL inside setCache implementation
+      await setCache(cacheKey, payload, 120);
+    } catch {
+      // ignore cache errors
+    }
+
+    const response = NextResponse.json(payload);
+    if (process.env.NODE_ENV === 'production') {
+      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
+    } else {
+      response.headers.set('Cache-Control', 'no-store');
+    }
+    return response;
   } catch (error) {
     errorHandlingService.processError(
       error,

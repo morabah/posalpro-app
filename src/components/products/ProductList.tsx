@@ -8,11 +8,12 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { Product, useProducts } from '@/hooks/useProducts';
 import { debounce } from '@/lib/utils';
 import { EyeIcon, PencilIcon } from '@heroicons/react/24/outline';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 // ✅ FIXED: Remove unused COMPONENT_MAPPING
 
@@ -45,9 +46,12 @@ const ProductSkeleton = memo(() => (
 const ProductList = memo(() => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [appendedProducts, setAppendedProducts] = useState<Product[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const apiClient = useApiClient();
 
   // ✅ FIXED: Fix debounced search function with proper dependencies
   const debouncedSearchFunction = useCallback((term: string) => {
@@ -59,9 +63,9 @@ const ProductList = memo(() => {
   }, []);
 
   // Use React Query hook for data fetching with caching
-  const { data, isLoading, error, refetch, isFetching, isError } = useProducts({
+  const { data, isLoading, refetch, isFetching, isError } = useProducts({
     page: currentPage,
-    limit: 12,
+    limit: 50,
     search: debouncedSearch || undefined,
     sortBy: 'createdAt',
     sortOrder: 'desc',
@@ -89,21 +93,49 @@ const ProductList = memo(() => {
     [debouncedSearchFunction]
   );
 
-  const handlePageChange = useCallback(
-    (page: number) => {
-      setCurrentPage(page);
-      analytics('product_list_page_changed', {
-        page,
-        searchTerm: debouncedSearch,
-      });
-    },
-    [analytics, debouncedSearch]
-  );
+  // Removed unused handlePageChange to satisfy lint rules
 
   // ✅ FIXED: Remove unnecessary optional chaining
-  const products = data?.products || [];
+  const products = useMemo(() => data?.products || [], [data?.products]);
+  const displayProducts = useMemo(
+    () => [...products, ...appendedProducts],
+    [products, appendedProducts]
+  );
   const totalPages = data?.pagination?.totalPages || 1;
   const totalProducts = data?.pagination?.total || 0;
+
+  // Track cursor pagination
+  if (data?.pagination) {
+    // setSync inside render avoided; using derived values and button state from data
+  }
+
+  const loadMore = useCallback(async () => {
+    const cursor = data?.pagination?.nextCursor;
+    if (!cursor) return;
+    try {
+      const qp = new URLSearchParams();
+      qp.set('limit', '50');
+      if (debouncedSearch) qp.set('search', debouncedSearch);
+      qp.set('sortBy', 'createdAt');
+      qp.set('sortOrder', 'desc');
+      qp.set('cursor', cursor);
+      interface ProductsPage {
+        success: boolean;
+        data: {
+          products: Product[];
+          pagination?: { hasMore?: boolean; nextCursor?: string | null };
+        };
+      }
+      const res = await apiClient.get<ProductsPage>(`products?${qp.toString()}`);
+      if (res?.success) {
+        const newItems = Array.isArray(res.data.products) ? res.data.products : [];
+        setAppendedProducts(prev => [...prev, ...newItems]);
+        setHasMore(Boolean(res.data.pagination?.hasMore));
+      }
+    } catch {
+      // ignore
+    }
+  }, [data?.pagination?.nextCursor, debouncedSearch, apiClient]);
 
   if (isLoading) {
     return (
@@ -141,7 +173,7 @@ const ProductList = memo(() => {
 
       {/* Product Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {products.map((product: Product) => (
+        {displayProducts.map((product: Product) => (
           <Card key={product.id} className="h-64 hover:shadow-lg transition-shadow">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -200,28 +232,12 @@ const ProductList = memo(() => {
         ))}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Load More */}
+      {(data?.pagination?.hasMore || hasMore) && (
         <div className="flex justify-center">
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <span className="px-4 py-2 text-sm text-gray-600">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </Button>
-          </div>
+          <Button onClick={loadMore} variant="secondary">
+            Load More
+          </Button>
         </div>
       )}
 

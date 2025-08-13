@@ -3,10 +3,10 @@
  * Assign and remove roles for users
  */
 
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -24,31 +24,13 @@ const RoleRemovalSchema = z.object({
   roleName: z.string().min(1).optional(),
 });
 
+// Use standardized RBAC check
 async function ensureAdmin(req: NextRequest): Promise<{ ok: boolean; reason?: string }> {
   try {
-    const token = await getToken({ req });
-    if (!token) return { ok: false, reason: 'Unauthorized' };
-
-    const rawRoles = (token as any).roles;
-    const roles = Array.isArray(rawRoles)
-      ? rawRoles
-      : typeof rawRoles === 'string'
-        ? [rawRoles]
-        : [];
-
-    const isAdmin = roles.includes('System Administrator');
-    if (isAdmin) return { ok: true };
-
-    // Dev convenience: allow known admin emails in development
-    if (process.env.NODE_ENV !== 'production' && (token as any).email) {
-      const adminEmails = ['admin@posalpro.com', 'test@posalpro.com'];
-      if (adminEmails.includes(String((token as any).email).toLowerCase())) {
-        return { ok: true };
-      }
-    }
+    await validateApiPermission(req, 'roles:update');
+    return { ok: true };
+  } catch {
     return { ok: false, reason: 'Forbidden' };
-  } catch (err) {
-    return { ok: false, reason: 'Authorization error' };
   }
 }
 
@@ -61,13 +43,13 @@ function pickRoleIdentifier(input: { roleId?: string; roleName?: string }) {
 // GET /api/admin/users/roles?userId=... | email=...
 export async function GET(request: NextRequest) {
   try {
-    const auth = await ensureAdmin(request);
-    if (!auth.ok) {
-      return NextResponse.json(
-        { error: auth.reason || 'Forbidden' },
-        { status: auth.reason === 'Unauthorized' ? 401 : 403 }
-      );
+    // Require either roles:read or users:read via standardized API guard
+    try {
+      await validateApiPermission(request, 'roles:read');
+    } catch {
+      await validateApiPermission(request, 'users:read');
     }
+    // If validateApiPermission throws, request will already have been denied
 
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');

@@ -172,12 +172,10 @@ export class ProposalService {
         });
         if (!proposal) return;
 
-        const last = (await prisma.$queryRaw(
-          (prisma as any).$executeRaw?.constructor?.sql ||
-            (global as any).Prisma?.sql ||
-            (require('@prisma/client') as any).Prisma
-              .sql`SELECT COALESCE(MAX(version), 0) as v FROM proposal_versions WHERE "proposalId" = ${proposalId}`
-        )) as Array<{ v: number }>;
+        const PrismaLocal = (require('@prisma/client') as typeof import('@prisma/client')).Prisma;
+        const last = await prisma.$queryRaw<Array<{ v: number }>>(
+          PrismaLocal.sql`SELECT COALESCE(MAX(version), 0) as v FROM proposal_versions WHERE "proposalId" = ${proposalId}`
+        );
         const nextVersion = (last[0]?.v ?? 0) + 1;
 
         const snapshot = {
@@ -201,13 +199,20 @@ export class ProposalService {
           const step4 = md?.wizardData?.step4;
           if (Array.isArray(step4?.products)) {
             for (const p of step4.products) {
-              if (p?.productId && typeof p.productId === 'string') ids.add(p.productId);
+              if (p && (typeof p.productId === 'string' || typeof p.productId === 'number')) {
+                ids.add(String(p.productId));
+              }
             }
           }
           // From current link table snapshot
           if (Array.isArray((snapshot as any).products)) {
             for (const link of (snapshot as any).products) {
-              if (link?.productId && typeof link.productId === 'string') ids.add(link.productId);
+              if (
+                link &&
+                (typeof link.productId === 'string' || typeof link.productId === 'number')
+              ) {
+                ids.add(String(link.productId));
+              }
             }
           }
         } catch {
@@ -215,10 +220,10 @@ export class ProposalService {
         }
         for (const h of productIdHints) if (typeof h === 'string' && h) ids.add(h);
 
-        const PrismaLocal = (require('@prisma/client') as any).Prisma;
+        const productIds = Array.from(ids);
         await prisma.$queryRaw(
           PrismaLocal.sql`INSERT INTO proposal_versions (id, "proposalId", version, "createdBy", "changeType", "changesSummary", snapshot, "productIds")
-                           VALUES (gen_random_uuid()::text, ${proposalId}, ${nextVersion}, NULL, ${changeType}, ${changesSummary}, ${snapshot as any}, ${Array.from(ids)})`
+                           VALUES (gen_random_uuid()::text, ${proposalId}, ${nextVersion}, NULL, ${changeType}, ${changesSummary}, ${snapshot as unknown as Prisma.JsonObject}, ${productIds})`
         );
       } catch {
         // swallow background errors

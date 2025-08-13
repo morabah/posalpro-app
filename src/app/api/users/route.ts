@@ -22,6 +22,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -83,6 +84,8 @@ const CommunicationPreferencesUpdateSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
+    // RBAC guard
+    await validateApiPermission(request, { resource: 'users', action: 'read' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -303,6 +306,8 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    // RBAC guard
+    await validateApiPermission(request, { resource: 'users', action: 'update' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

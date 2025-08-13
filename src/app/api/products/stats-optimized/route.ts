@@ -3,6 +3,7 @@ import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { optimizedProductService } from '@/lib/services/OptimizedProductService';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 /**
  * Optimized Product Stats API Route
@@ -15,6 +16,8 @@ export async function GET(request: NextRequest) {
     console.log('🚀 [API] Starting optimized product stats request...');
     const requestStart = Date.now();
 
+    // RBAC guard
+    await validateApiPermission(request, { resource: 'products', action: 'read' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session) {

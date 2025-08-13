@@ -6,6 +6,7 @@
 
 import { ErrorHandlingService } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   try {
+    await validateApiPermission(request, { resource: 'validation', action: 'read' });
     // Simulate comprehensive validation metrics
     // In production, this would query actual validation data from the database
     const validationMetrics: ValidationMetrics = {

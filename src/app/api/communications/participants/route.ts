@@ -4,11 +4,13 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'communications', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -36,16 +38,32 @@ export async function GET(request: NextRequest) {
       take: 50,
     });
 
-    const participants = users.map(u => ({
-      id: u.id,
-      name: u.name ?? 'User',
-      role: 'Member',
-      department: (u as any).department ?? 'General',
-      email: u.email ?? '',
-      isOnline: false,
-      lastActive: new Date(),
-      permissions: ['read'],
-    }));
+    // Derive presence from active sessions in the last 5 minutes
+    const presenceWindowMs = 5 * 60 * 1000;
+    const activeSince = new Date(Date.now() - presenceWindowMs);
+    const sessions = await prisma.userSession.findMany({
+      where: {
+        userId: { in: users.map(u => u.id) },
+        isActive: true,
+        lastUsed: { gte: activeSince },
+      },
+      select: { userId: true, lastUsed: true },
+    });
+    const sessionByUserId = new Map(sessions.map(s => [s.userId, s.lastUsed]));
+
+    const participants = users.map(u => {
+      const lastUsed = sessionByUserId.get(u.id);
+      return {
+        id: u.id,
+        name: u.name ?? 'User',
+        role: 'Member',
+        department: (u as any).department ?? 'General',
+        email: u.email ?? '',
+        isOnline: !!lastUsed,
+        lastActive: lastUsed ?? new Date(0),
+        permissions: ['read'],
+      };
+    });
 
     return NextResponse.json({ success: true, data: participants });
   } catch (error) {

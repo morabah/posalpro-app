@@ -3,6 +3,7 @@ import { createApiErrorResponse, ErrorCodes } from '@/lib/errors';
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 // System configuration schema
@@ -62,6 +63,7 @@ const getSystemStats = () => ({
 
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'system', action: 'monitor' });
     const session = await getServerSession(authOptions);
 
     if (!session || !session.user) {

@@ -1,0 +1,7 @@
+{
+  "cookies": {
+    "next-auth.csrf-token": "238f53bcb14145472314583d99e57e879b22726140cbe7e30db5ab4dc0432332%7Cecae880892800ba0ba470d7a9eb48e82014d8f060c64571d37c2ceea15f0e49e",
+    "next-auth.callback-url": "http%3A%2F%2Flocalhost%3A3000%2Fdashboard",
+    "next-auth.session-token": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..Kw_WEdT1_e9Ay_pa.zdwKQyg0Tz5V4hEQltZcY94T7Wkj4dg8dVS1CaXPaNkrlSl1dAhDkHoVsaWDVMj4g-EHkqFFBGWJBStvpA5uq3XcxAabVyE1IIRft_W676s11qYTPgdPjIhESyEsr-HQHVJMO2KKh9dhznTcHbtdWkFaDCRLbYxLnfwH6Mbeje9iXuoGqF4sfyRvo3_dW7L4OlpisoO1gMQVLtVNAclBBZDALvKGu2GGQGShDpPTQeAvCbq3-AZkv1p0Mviigoc0G6g-XLyEvDdsnl3f13X6qszZOHvUawFoCavmZgaXQEZ0ZzwN1i1ayvdEf4VW-m7kjCM0gwbMV4M3qlCK1RCI3YGUWjts_lEE9CnzyHLcemJWwmzoJThjwOgTWk_dhdiXsqJAhm27l7iXs4W6-PGH7Jbo0c8b6wUvGugTaT0Ghv595jfIWzkc702HYvy2QCnxW9y9cdNnkd6Q6Zcw5w.uAXTU9yrZem2bkapPQrO_Q"
+  }
+}

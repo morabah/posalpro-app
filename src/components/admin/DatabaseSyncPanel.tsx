@@ -11,6 +11,7 @@
 
 'use client';
 
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
@@ -27,7 +28,6 @@ import {
   SignalIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { useAuth } from '@/components/providers/AuthProvider';
 import { useCallback, useEffect, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
@@ -122,12 +122,13 @@ export default function DatabaseSyncPanel({
     if (process.env.NODE_ENV === 'development') return true;
 
     // Check user roles for admin privileges
-    const u = user as any;
-    if (typeof u.roles === 'string') {
-      return u.roles.toLowerCase().includes('admin');
-    }
-    if (Array.isArray(u.roles)) {
-      return u.roles.some((role: string) => role.toLowerCase().includes('admin'));
+    const roles: Array<string> = Array.isArray(user.roles)
+      ? (user.roles as Array<string>)
+      : typeof user.roles === 'string'
+        ? [user.roles as string]
+        : [];
+    if (roles.length > 0) {
+      return roles.some(role => role.toLowerCase().includes('admin'));
     }
 
     return false;
@@ -152,11 +153,16 @@ export default function DatabaseSyncPanel({
         );
 
         // Use centralized API client instead of direct fetch
-        const response = await apiClient.post<{
+        interface DbStatusResponse {
           success: boolean;
-          data?: any;
+          data?: {
+            isOnline?: boolean;
+            latency?: number;
+            details?: Record<string, unknown>;
+          };
           error?: string;
-        }>('/api/admin/db-status', { type });
+        }
+        const response = await apiClient.post<DbStatusResponse>('/api/admin/db-status', { type });
 
         const latency = Date.now() - startTime;
         const isOnline = response.success;
@@ -276,11 +282,19 @@ export default function DatabaseSyncPanel({
         );
 
         // Use centralized API client instead of direct fetch
-        const response = await apiClient.post<{
+        interface DbSyncData {
+          itemsSynced?: number;
+          itemsFailed?: number;
+          tables?: Array<string>;
+          conflicts?: Array<unknown>;
+          errors?: Array<string>;
+        }
+        interface DbSyncResponse {
           success: boolean;
-          data?: any;
+          data?: DbSyncData;
           error?: string;
-        }>('/api/admin/db-sync', {
+        }
+        const response = await apiClient.post<DbSyncResponse>('/api/admin/db-sync', {
           direction,
           includeConflictDetection: true,
           generateReport: true,
@@ -477,7 +491,13 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('localToCloud')}
-            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline || isLoading || !isAdminUser()}
+            disabled={
+              isSyncing ||
+              !localDbStatus.isOnline ||
+              !cloudDbStatus.isOnline ||
+              isLoading ||
+              !isAdminUser()
+            }
           >
             <CloudArrowUpIcon className="w-4 h-4 mr-2" />
             Local → Cloud
@@ -488,7 +508,13 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('cloudToLocal')}
-            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline || isLoading || !isAdminUser()}
+            disabled={
+              isSyncing ||
+              !localDbStatus.isOnline ||
+              !cloudDbStatus.isOnline ||
+              isLoading ||
+              !isAdminUser()
+            }
           >
             <CloudArrowDownIcon className="w-4 h-4 mr-2" />
             Cloud → Local
@@ -499,7 +525,13 @@ export default function DatabaseSyncPanel({
             size="sm"
             className="flex items-center justify-center"
             onClick={() => performSync('bidirectional')}
-            disabled={isSyncing || !localDbStatus.isOnline || !cloudDbStatus.isOnline || isLoading || !isAdminUser()}
+            disabled={
+              isSyncing ||
+              !localDbStatus.isOnline ||
+              !cloudDbStatus.isOnline ||
+              isLoading ||
+              !isAdminUser()
+            }
           >
             <ArrowPathIcon className="w-4 h-4 mr-2" />
             Bi-directional

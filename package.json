@@ -83,7 +83,8 @@
     "performance:monitor": "node scripts/performance-monitor.js",
     "memory:optimization": "node scripts/memory-optimization-test.js",
     "ci:obs": "node scripts/check-observability-contract.js",
-    "ci:bundle": "ANALYZE=true next build && node scripts/check-bundle-budgets.js"
+    "ci:bundle": "ANALYZE=true next build && node scripts/check-bundle-budgets.js",
+    "app:cli": "tsx scripts/app-cli.ts"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,json,css,scss}": [

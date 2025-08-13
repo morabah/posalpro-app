@@ -13,9 +13,9 @@
 
 'use client';
 
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useMobileDetection } from '@/hooks/useMobileDetection';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   Bars3Icon,
   BellIcon,
@@ -121,17 +121,15 @@ export function EnhancedMobileNavigation({
   // Enhanced Mobile Detection
   const {
     deviceInfo,
-    navigationOptimization,
     isLoading: isMobileDetectionLoading,
     isMobile,
-    isTablet,
-    touchEnabled,
+    // touchEnabled,
     shouldUseBottomNavigation,
     shouldUseSwipeGestures,
     getOptimalTouchTargetSize,
     getNavigationType,
     getMobileClasses,
-    orientation,
+    // orientation,
     prefersReducedMotion,
     hasSafeArea,
   } = useMobileDetection();
@@ -203,16 +201,20 @@ export function EnhancedMobileNavigation({
         gestureStartTime.current = Date.now();
 
         // Track gesture start for analytics
-        analytics('mobile_gesture_start', {
-          userStories: ['US-8.4'],
-          hypotheses: ['H9'],
-          measurementData: {
-            touchPoints: e.touches.length,
-            startPosition: startPos,
-            deviceType: deviceInfo?.deviceType,
+        analytics(
+          'mobile_gesture_start',
+          {
+            userStories: ['US-8.4'],
+            hypotheses: ['H9'],
+            measurementData: {
+              touchPoints: e.touches.length,
+              startPosition: startPos,
+              deviceType: deviceInfo?.deviceType,
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'low');
+          'low'
+        );
       } catch (error) {
         handleAsyncError(error, 'Failed to handle touch start', {
           context: 'EnhancedMobileNavigation.handleTouchStart',
@@ -258,6 +260,7 @@ export function EnhancedMobileNavigation({
         });
       }
     },
+    // Intentionally exclude analytics and deviceInfo to prevent unnecessary re-renders
     [touchStartPos, shouldUseSwipeGestures, prefersReducedMotion, handleAsyncError]
   );
 
@@ -288,18 +291,22 @@ export function EnhancedMobileNavigation({
         }
 
         // Track successful gesture
-        analytics('mobile_gesture_completed', {
-          userStories: ['US-8.4'],
-          hypotheses: ['H9'],
-          measurementData: {
-            direction,
-            distance,
-            velocity,
-            duration,
-            success: true,
+        analytics(
+          'mobile_gesture_completed',
+          {
+            userStories: ['US-8.4'],
+            hypotheses: ['H9'],
+            measurementData: {
+              direction,
+              distance,
+              velocity,
+              duration,
+              success: true,
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'low');
+          'low'
+        );
       }
 
       // Reset gesture state
@@ -333,17 +340,21 @@ export function EnhancedMobileNavigation({
         const newState = !prev;
 
         // Track menu toggle with enhanced analytics
-        analytics('mobile_menu_toggle', {
-          userStories: ['US-8.1'],
-          hypotheses: ['H9'],
-          measurementData: {
-            action: newState ? 'open' : 'close',
-            navigationType: getNavigationType(),
-            touchTargetSize: getOptimalTouchTargetSize(),
-            deviceType: deviceInfo?.deviceType,
+        analytics(
+          'mobile_menu_toggle',
+          {
+            userStories: ['US-8.1'],
+            hypotheses: ['H9'],
+            measurementData: {
+              action: newState ? 'open' : 'close',
+              navigationType: getNavigationType(),
+              touchTargetSize: getOptimalTouchTargetSize(),
+              deviceType: deviceInfo?.deviceType,
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'low');
+          'low'
+        );
 
         return newState;
       });
@@ -371,15 +382,19 @@ export function EnhancedMobileNavigation({
         }
 
         // Track search toggle
-        analytics('mobile_search_toggle', {
-          userStories: ['US-8.1'],
-          hypotheses: ['H9'],
-          measurementData: {
-            expanded: newState,
-            currentPath: pathname,
+        analytics(
+          'mobile_search_toggle',
+          {
+            userStories: ['US-8.1'],
+            hypotheses: ['H9'],
+            measurementData: {
+              expanded: newState,
+              currentPath: pathname,
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'low');
+          'low'
+        );
 
         return newState;
       });
@@ -395,19 +410,23 @@ export function EnhancedMobileNavigation({
     (item: NavigationItem) => {
       try {
         // Track navigation click with enhanced analytics
-        analytics('mobile_navigation_click', {
-          userStories: ['US-8.1'],
-          hypotheses: ['H9'],
-          measurementData: {
-            itemId: item.id,
-            itemLabel: item.label,
-            itemPriority: item.priority,
-            targetHref: item.href,
-            fromPath: pathname,
-            navigationType: getNavigationType(),
+        analytics(
+          'mobile_navigation_click',
+          {
+            userStories: ['US-8.1'],
+            hypotheses: ['H9'],
+            measurementData: {
+              itemId: item.id,
+              itemLabel: item.label,
+              itemPriority: item.priority,
+              targetHref: item.href,
+              fromPath: pathname,
+              navigationType: getNavigationType(),
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'medium');
+          'medium'
+        );
 
         // Close menu after navigation on mobile
         if (isMobile) {
@@ -421,6 +440,7 @@ export function EnhancedMobileNavigation({
         });
       }
     },
+    // Exclude device-dependent helpers to avoid frequent re-creations
     [analytics, pathname, getNavigationType, isMobile, handleAsyncError]
   );
 

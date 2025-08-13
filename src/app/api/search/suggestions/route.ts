@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -33,6 +34,7 @@ const SuggestionsQuerySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'search', action: 'read' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

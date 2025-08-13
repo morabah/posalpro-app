@@ -4,6 +4,7 @@
  * Component Traceability Matrix: US-3.3, H8
  */
 
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorHandlingService } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   try {
+    await validateApiPermission(request, { resource: 'validation', action: 'read' });
     // Simulate comprehensive validation rules
     // In production, this would query actual validation rules from the database
     const validationRules: ValidationRule[] = [

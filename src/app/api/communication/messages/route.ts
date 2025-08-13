@@ -14,6 +14,7 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 // Initialize error handling service
 const errorHandlingService = ErrorHandlingService.getInstance();
@@ -59,6 +60,7 @@ function createApiErrorResponse(
  */
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'communications', action: 'read' });
     // Validate authentication
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -125,6 +127,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'communications', action: 'create' });
     // Validate authentication
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

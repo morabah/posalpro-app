@@ -38,7 +38,27 @@ export default function ProposalPreviewPage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('proposal-preview-data');
-      if (raw) setData(JSON.parse(raw));
+      if (!raw) {
+        setData(null);
+        return;
+      }
+      const parsed: unknown = JSON.parse(raw);
+      // Safe shape guard
+      const isPreviewData = (v: unknown): v is PreviewData => {
+        if (!v || typeof v !== 'object') return false;
+        const obj = v as Record<string, unknown>;
+        const companyOk = obj.company && typeof obj.company === 'object' && typeof (obj.company as any).name === 'string';
+        const proposalOk = obj.proposal && typeof obj.proposal === 'object' && typeof (obj.proposal as any).title === 'string';
+        const productsOk = Array.isArray(obj.products);
+        const totalsOk = obj.totals && typeof obj.totals === 'object';
+        const termsOk = Array.isArray(obj.terms);
+        return companyOk && proposalOk && productsOk && totalsOk && termsOk;
+      };
+      if (isPreviewData(parsed)) {
+        setData(parsed);
+      } else {
+        setData(null);
+      }
     } catch {
       setData(null);
     }
@@ -58,8 +78,9 @@ export default function ProposalPreviewPage() {
         await Promise.all(
           needsHydration.map(async p => {
             try {
-              const res = await apiClient.get<any>(`/api/products/${p.id}`);
-              const prod = (res?.data || res) as { id?: string; name?: string; price?: number; description?: string };
+              interface ProductPreviewHydrate { id?: string; name?: string; price?: number; description?: string }
+              const res = await apiClient.get<{ success?: boolean; data?: ProductPreviewHydrate }>(`/api/products/${p.id}`);
+              const prod: ProductPreviewHydrate = (res as any)?.data ?? (res as unknown as ProductPreviewHydrate);
               const idx = updated.findIndex(x => x.id === p.id);
               if (idx >= 0 && prod) {
                 updated[idx] = {

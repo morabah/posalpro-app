@@ -15,6 +15,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   try {
+    await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

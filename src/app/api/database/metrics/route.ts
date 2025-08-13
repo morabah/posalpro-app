@@ -11,6 +11,7 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService';
 import { PrismaClient } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 /**
  * Component Traceability Matrix
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
   initializeServices();
 
   try {
+    await validateApiPermission(request, { resource: 'metrics', action: 'read' });
     // Get optimization service metrics
     const optimizationMetrics = optimizationService.getPerformanceMetrics();
 
@@ -227,6 +229,7 @@ export async function POST(request: NextRequest) {
   initializeServices();
 
   try {
+    await validateApiPermission(request, { resource: 'metrics', action: 'update' });
     const body = await request.json();
     const { metric, value, hypothesis, metadata } = body;
 

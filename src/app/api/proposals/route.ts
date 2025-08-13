@@ -5,6 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -12,7 +13,7 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { logError } from '@/lib/logger';
+import { logError, logInfo, logWarn } from '@/lib/logger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getCache, setCache } from '@/lib/redis';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
@@ -253,30 +254,22 @@ async function checkUserPermissions(
   scope: string = 'ALL',
   bypassCheck: boolean = false
 ) {
-  // Development-only bypass to prevent local blocking during diagnostics
+  // Development-only diagnostics (do NOT bypass authorization)
   if (process.env.NODE_ENV !== 'production') {
     if (typeof console !== 'undefined') {
-      // Dev-only diagnostic log
-      // eslint-disable-next-line no-console
-      console.log(
-        `[ProposalsAPI-DEV] Permission bypass for user ${userId}, action: ${action}, scope: ${scope}`
-      );
+      await logInfo('[ProposalsAPI-DEV] Permission check', { userId, action, scope });
     }
-    return true;
   }
 
   // If bypass is enabled, immediately return true (for test/development purposes only)
   if (bypassCheck && process.env.NODE_ENV !== 'production') {
-    console.log(`[ProposalsAPI-DIAG] Permission check bypassed for ${action}:${scope}`);
+    await logInfo('[ProposalsAPI-DIAG] Permission check bypassed', { action, scope });
     return true;
   }
   try {
     // Log user ID for diagnostics
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[ProposalsAPI-DIAG] Checking permissions for user: ${userId}, action: ${action}, scope: ${scope}`
-      );
+      await logInfo('[ProposalsAPI-DIAG] Checking permissions', { userId, action, scope });
     }
 
     // Query user roles with error handling
@@ -297,8 +290,7 @@ async function checkUserPermissions(
         },
       });
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
-        console.log(`[ProposalsAPI-DIAG] Found ${userRoles.length} user roles`);
+        await logInfo('[ProposalsAPI-DIAG] Found user roles', { count: userRoles.length });
       }
     } catch (roleQueryError) {
       // ✅ ENHANCED: Use proper logger instead of console.error
@@ -327,13 +319,12 @@ async function checkUserPermissions(
       return true;
     }
 
-    // Handle empty user roles case explicitly - grant access instead of blocking
+    // Handle empty user roles case explicitly - deny in production, warn in development
     if (!userRoles || userRoles.length === 0) {
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
-        console.log('[ProposalsAPI-DIAG] No user roles found - granting access for compatibility');
+        await logInfo('[ProposalsAPI-DIAG] No user roles found');
       }
-      return true;
+      return false;
     }
 
     let hasPermission = false;
@@ -396,15 +387,14 @@ async function checkUserPermissions(
         errorCode: standardError.code,
       });
 
-      // PRODUCTION FIX: Return true instead of false to prevent blocking access
-      return true;
+      // Security: deny on permission evaluation failure
+      return false;
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[ProposalsAPI-DIAG] Permission check result: ${hasPermission ? 'GRANTED' : 'DENIED'}`
-      );
+      await logInfo('[ProposalsAPI-DIAG] Permission check result', {
+        result: hasPermission ? 'GRANTED' : 'DENIED',
+      });
     }
     return hasPermission;
   } catch (error) {
@@ -422,8 +412,8 @@ async function checkUserPermissions(
         scope,
       }
     );
-    // PRODUCTION FIX: Return true instead of false to prevent blocking access
-    return true;
+    // Security: deny on unexpected errors
+    return false;
   }
 }
 
@@ -431,9 +421,11 @@ async function checkUserPermissions(
 export async function GET(request: NextRequest) {
   const queryStartTime = Date.now();
   try {
+    // Standardized RBAC check: proposals:read
+    await validateApiPermission(request, 'proposals:read');
     // Reduced logging for performance
     if (process.env.NODE_ENV === 'development') {
-      console.log('[ProposalsAPI] Processing request:', request.url);
+      await logInfo('[ProposalsAPI] Processing request', { url: request.url });
     }
 
     // Get session from auth options with Netlify production fix
@@ -469,15 +461,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Optimized permission check - bypass for performance in development
-    let canRead = true;
-    if (process.env.NODE_ENV === 'production') {
-      try {
-        canRead = await checkUserPermissions(session.user.id, 'read', 'ALL');
-      } catch (permissionError) {
-        // Grant access if permission check fails to prevent blocking
-        canRead = true;
-      }
+    // Strict permission check (read)
+    let canRead = false;
+    try {
+      canRead = await checkUserPermissions(session.user.id, 'read', 'ALL');
+    } catch (permissionError) {
+      canRead = false;
     }
 
     if (!canRead) {
@@ -517,7 +506,7 @@ export async function GET(request: NextRequest) {
     let query;
     try {
       query = ProposalQuerySchema.parse(queryParams);
-      console.log('[ProposalsAPI] Parsed query:', query);
+      await logInfo('[ProposalsAPI] Parsed query', query as unknown as Record<string, unknown>);
     } catch (parseError) {
       // ✅ ENHANCED: Use proper logger instead of console.error
       const standardError = errorHandlingService.processError(
@@ -573,10 +562,9 @@ export async function GET(request: NextRequest) {
       // Query timing already captured at function start
 
       // 🚀 SELECTIVE HYDRATION: Dynamic field selection for performance
-      console.log(
-        '[ProposalsAPI-DIAG] Parsing field selection, fields param:',
-        query.fields || 'undefined'
-      );
+      await logInfo('[ProposalsAPI-DIAG] Parsing field selection', {
+        fields: query.fields || 'undefined',
+      });
 
       // Declare the variables outside the try block to make them accessible throughout the function
       let proposalSelect: Prisma.ProposalSelect;
@@ -632,7 +620,7 @@ export async function GET(request: NextRequest) {
       const cachedResult = await getCache(cacheKey);
 
       if (cachedResult) {
-        console.log('[ProposalsAPI] Cache hit for query');
+        await logInfo('[ProposalsAPI] Cache hit for query');
         return NextResponse.json(cachedResult, { status: 200 });
       }
 
@@ -667,7 +655,7 @@ export async function GET(request: NextRequest) {
             finalCursorSelect.customer = { select: { id: true, name: true } };
           }
           if (query.includeTeam) {
-            finalCursorSelect.assignedTo = { select: { id: true } };
+            finalCursorSelect.assignedTo = { select: { id: true, name: true } };
           }
 
           proposals = await prisma.proposal.findMany({
@@ -706,7 +694,7 @@ export async function GET(request: NextRequest) {
           const optimizedSelect: any = { ...proposalSelect };
           if (query.includeCustomer)
             optimizedSelect.customer = { select: { id: true, name: true } };
-          if (query.includeTeam) optimizedSelect.assignedTo = { select: { id: true } };
+          if (query.includeTeam) optimizedSelect.assignedTo = { select: { id: true, name: true } };
 
           const results = await prisma.proposal.findMany({
             where,
@@ -777,10 +765,10 @@ export async function GET(request: NextRequest) {
       // Cache the result for 5 minutes to reduce database load
       try {
         await setCache(cacheKey, responseData, 300);
-        console.log('[ProposalsAPI] Cached query result');
+        await logInfo('[ProposalsAPI] Cached query result');
       } catch (cacheError) {
         // Silent cache error to not impact performance
-        console.warn('[ProposalsAPI] Cache set failed:', cacheError);
+        await logWarn('[ProposalsAPI] Cache set failed', { error: cacheError as unknown });
       }
 
       // ✅ CRITICAL: Response optimization for TTFB reduction
@@ -1031,16 +1019,14 @@ export async function POST(request: NextRequest) {
       return { ...ta, subjectMatterExperts: normalized };
     };
 
-    console.log('[ProposalsRoute] Received request body:', JSON.stringify(body, null, 2));
-    console.log('[ProposalsRoute] Customer ID in request:', body.customerId);
-    console.log('[ProposalsRoute] Customer ID type:', typeof body.customerId);
-    console.log('[ProposalsRoute] Customer ID length:', body.customerId?.length);
+    await logInfo('[ProposalsRoute] Received request body');
+    await logInfo('[ProposalsRoute] Customer ID in request', { customerId: body.customerId });
 
     let validatedData: z.infer<typeof ProposalCreateSchema>;
     try {
       validatedData = ProposalCreateSchema.parse(body);
     } catch (validationError) {
-      console.error('[ProposalsRoute] Validation error:', validationError);
+      await logError('[ProposalsRoute] Validation error', validationError as unknown);
 
       if (validationError instanceof z.ZodError) {
         const errorDetails = validationError.errors.map(err => ({
@@ -1049,7 +1035,7 @@ export async function POST(request: NextRequest) {
           received: 'received' in err ? err.received : 'unknown',
         }));
 
-        console.error('[ProposalsRoute] Validation error details:', errorDetails);
+        await logError('[ProposalsRoute] Validation error details', undefined, { errorDetails });
 
         return createApiErrorResponse(
           new StandardError({
@@ -1076,7 +1062,7 @@ export async function POST(request: NextRequest) {
     }
 
     // DEBUG: Log normalized step payloads
-    console.log('[ProposalsRoute][DEBUG] Step1 details:', {
+    await logInfo('[ProposalsRoute][DEBUG] Step1 details', {
       title: validatedData.title,
       dueDate: validatedData.dueDate,
       value: validatedData.value,
@@ -1086,23 +1072,28 @@ export async function POST(request: NextRequest) {
       contactEmail: validatedData.contactEmail,
       contactPhone: validatedData.contactPhone,
     });
-    console.log('[ProposalsRoute][DEBUG] Step2 teamAssignments:', validatedData.teamAssignments);
-    console.log(
-      '[ProposalsRoute][DEBUG] Step3 contentSelections:',
-      Array.isArray(validatedData.contentSelections) ? validatedData.contentSelections.length : 0
-    );
-    console.log(
-      '[ProposalsRoute][DEBUG] Step4 products:',
-      Array.isArray(validatedData.products) ? validatedData.products.length : 0
-    );
-    console.log(
-      '[ProposalsRoute][DEBUG] Step5 sections:',
-      Array.isArray(validatedData.sections) ? validatedData.sections.length : 0
-    );
-    console.log('[ProposalsRoute][DEBUG] Step5 sectionAssignments:', sectionAssignmentsFromClient);
-    console.log('[ProposalsRoute][DEBUG] Step6 validationData:', validatedData.validationData);
-    console.log('[ProposalsRoute][DEBUG] analyticsData:', validatedData.analyticsData);
-    console.log('[ProposalsRoute][DEBUG] crossStepValidation:', validatedData.crossStepValidation);
+    await logInfo('[ProposalsRoute][DEBUG] Step2 teamAssignments');
+    await logInfo('[ProposalsRoute][DEBUG] Step3 contentSelections count', {
+      count: Array.isArray(validatedData.contentSelections)
+        ? validatedData.contentSelections.length
+        : 0,
+    });
+    await logInfo('[ProposalsRoute][DEBUG] Step4 products count', {
+      count: Array.isArray(validatedData.products) ? validatedData.products.length : 0,
+    });
+    await logInfo('[ProposalsRoute][DEBUG] Step5 sections count', {
+      count: Array.isArray(validatedData.sections) ? validatedData.sections.length : 0,
+    });
+    await logInfo('[ProposalsRoute][DEBUG] Step5 sectionAssignments');
+    await logInfo('[ProposalsRoute][DEBUG] Step6 validationData presence', {
+      present: Boolean(validatedData.validationData),
+    });
+    await logInfo('[ProposalsRoute][DEBUG] analyticsData presence', {
+      present: Boolean(validatedData.analyticsData),
+    });
+    await logInfo('[ProposalsRoute][DEBUG] crossStepValidation presence', {
+      present: Boolean(validatedData.crossStepValidation),
+    });
 
     // Verify customer exists
     const customer = await prisma.customer.findUnique({
@@ -1193,7 +1184,7 @@ export async function POST(request: NextRequest) {
 
     // Create proposal in transaction
     const proposal = await prisma.$transaction(async tx => {
-      console.log('[ProposalsRoute][DEBUG] Starting DB transaction for proposal creation');
+      await logInfo('[ProposalsRoute][DEBUG] Starting DB transaction for proposal creation');
       // ✅ FIXED: Ensure user exists in database before creating proposal
       let user = await tx.user.findUnique({
         where: { id: session.user.id },
@@ -1201,7 +1192,9 @@ export async function POST(request: NextRequest) {
       });
 
       if (!user) {
-        console.log('[ProposalsRoute] Creating user record for session user:', session.user.id);
+        await logInfo('[ProposalsRoute] Creating user record for session user', {
+          userId: session.user.id,
+        });
         // Use upsert to handle case where user with same email exists
         user = await tx.user.upsert({
           where: { email: session.user.email || 'admin@posalpro.com' },
@@ -1221,7 +1214,7 @@ export async function POST(request: NextRequest) {
           },
           select: { id: true, email: true, name: true },
         });
-        console.log('[ProposalsRoute] Created/Updated user record:', user);
+        await logInfo('[ProposalsRoute] Created/Updated user record');
       }
 
       // Create the proposal
@@ -1318,14 +1311,13 @@ export async function POST(request: NextRequest) {
           updatedAt: true,
         },
       });
-      console.log('[ProposalsRoute][DEBUG] Proposal created with ID:', newProposal.id);
+      await logInfo('[ProposalsRoute][DEBUG] Proposal created', { proposalId: newProposal.id });
 
       // Add products if provided
       if (validatedData.products && validatedData.products.length > 0) {
-        console.log(
-          '[ProposalsRoute][DEBUG] Creating proposal products:',
-          validatedData.products.length
-        );
+        await logInfo('[ProposalsRoute][DEBUG] Creating proposal products', {
+          count: validatedData.products.length,
+        });
         const productsData = validatedData.products.map(p => ({
           proposalId: newProposal.id,
           productId: p.productId,
@@ -1342,10 +1334,9 @@ export async function POST(request: NextRequest) {
 
       // Add sections if provided
       if (validatedData.sections && validatedData.sections.length > 0) {
-        console.log(
-          '[ProposalsRoute][DEBUG] Creating proposal sections:',
-          validatedData.sections.length
-        );
+        await logInfo('[ProposalsRoute][DEBUG] Creating proposal sections', {
+          count: validatedData.sections.length,
+        });
         const sectionsData = validatedData.sections.map(s => ({
           proposalId: newProposal.id,
           title: s.title,
@@ -1405,7 +1396,9 @@ export async function POST(request: NextRequest) {
     // Track proposal creation for analytics
     await trackProposalCreationEvent(session.user.id, proposal.id, proposal.title, customer.name);
 
-    console.log('[ProposalsRoute][DEBUG] Returning success response for proposal:', proposal.id);
+    await logInfo('[ProposalsRoute][DEBUG] Returning success response for proposal', {
+      proposalId: proposal.id,
+    });
     return NextResponse.json(
       {
         success: true,

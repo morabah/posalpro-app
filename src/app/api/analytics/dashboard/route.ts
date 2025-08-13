@@ -10,6 +10,7 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
   let session: Session | null = null;
 
   try {
+    await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     // Authentication check
     session = await getServerSession(authOptions);
     if (!session?.user?.id) {

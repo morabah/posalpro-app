@@ -1,10 +1,11 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Product Search API
  * Provides advanced search functionality for products
  * Supports H1 hypothesis (Content Discovery Efficiency)
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { productService } from '@/lib/services';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,7 +24,7 @@ const searchSchema = z.object({
  * Standard API response wrapper
  */
 function createApiResponse<T>(data: T, message: string, status = 200) {
-  return NextResponse.json(
+  const res = NextResponse.json(
     {
       success: true,
       data,
@@ -31,6 +32,12 @@ function createApiResponse<T>(data: T, message: string, status = 200) {
     },
     { status }
   );
+  if (process.env.NODE_ENV === 'production') {
+    res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+  } else {
+    res.headers.set('Cache-Control', 'no-store');
+  }
+  return res;
 }
 
 function createErrorResponse(message: string, details?: any, status = 400) {
@@ -48,6 +55,7 @@ function createErrorResponse(message: string, details?: any, status = 400) {
  * GET /api/products/search - Search products
  */
 export async function GET(request: NextRequest) {
+  await validateApiPermission(request, 'products:read');
   try {
     // Authentication check
     const session = await getServerSession(authOptions);

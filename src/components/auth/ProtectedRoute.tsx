@@ -87,12 +87,13 @@ export function ProtectedRoute({
       }
 
       const userRoles = user?.roles || [];
+      const isSuperAdmin = userRoles.includes('Administrator') || userRoles.includes('System Administrator');
       const userPermissions = user?.permissions || [];
 
       // Check role requirements
       if (requiredRoles.length > 0) {
         const hasRequiredRole = requiredRoles.some(
-          role => userRoles.includes(role) || userRoles.includes('Administrator')
+          role => userRoles.includes(role) || isSuperAdmin
         );
 
         if (!hasRequiredRole) {
@@ -120,7 +121,7 @@ export function ProtectedRoute({
           permission =>
             userPermissions.includes(permission) ||
             userPermissions.includes('*:*') ||
-            userRoles.includes('Administrator')
+            isSuperAdmin
         );
 
         if (!hasRequiredPermission) {

@@ -161,7 +161,7 @@ export default function ModernDashboard({
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   // Track mobile dashboard access (H9: Mobile UX optimization)
-  const handleMobileInteraction = (action: string, details?: any) => {
+  const handleMobileInteraction = (action: string, details?: Record<string, unknown>) => {
     try {
       analytics('mobile_dashboard_accessed', {
         userStories: COMPONENT_MAPPING.userStories,

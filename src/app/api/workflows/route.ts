@@ -5,7 +5,9 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
+import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { EntityType, Prisma } from '@prisma/client';
@@ -71,6 +73,7 @@ const WorkflowUpdateSchema = WorkflowCreateSchema.partial().extend({
  */
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'workflows', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -113,7 +116,52 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    const [total, workflows] = await prisma.$transaction([
+    // Optional cursor-based pagination: prefer when cursorId provided or when 'page' is missing in query
+    const url = new URL(request.url);
+    const cursorId = url.searchParams.get('cursorId');
+    const useCursor = Boolean(cursorId) || !url.searchParams.has('page');
+
+    let total = 0;
+    let workflows: Array<any> = [];
+    if (useCursor) {
+      const take = validatedQuery.limit + 1;
+      const list = await prisma.approvalWorkflow.findMany({
+        where,
+        include: workflowInclude,
+        orderBy: [{ id: 'desc' }],
+        take,
+        cursor: cursorId ? { id: cursorId } : undefined,
+        skip: cursorId ? 1 : 0,
+      });
+      const hasMore = list.length > validatedQuery.limit;
+      workflows = hasMore ? list.slice(0, -1) : list;
+
+      const response = NextResponse.json({
+        success: true,
+        data: {
+          workflows,
+          pagination: {
+            limit: validatedQuery.limit,
+            hasMore,
+            nextCursor: hasMore ? { cursorId: workflows[workflows.length - 1]?.id ?? null } : null,
+          },
+          filters: {
+            entityType: validatedQuery.entityType,
+            status: validatedQuery.status,
+            search: validatedQuery.search,
+          },
+        },
+        message: 'Workflows retrieved successfully',
+      });
+      if (process.env.NODE_ENV === 'production') {
+        response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+      } else {
+        response.headers.set('Cache-Control', 'no-store');
+      }
+      return response;
+    }
+
+    const tx = await prisma.$transaction([
       prisma.approvalWorkflow.count({ where }),
       prisma.approvalWorkflow.findMany({
         where,
@@ -125,6 +173,8 @@ export async function GET(request: NextRequest) {
         take: validatedQuery.limit,
       }),
     ]);
+    total = tx[0] as number;
+    workflows = tx[1] as any[];
 
     const transformedWorkflows = workflows.map(workflow => {
       const executionStats = (workflow.executionStats as any) || {};
@@ -149,7 +199,7 @@ export async function GET(request: NextRequest) {
       await trackWorkflowSearchEvent(session.user.id, validatedQuery.search, total);
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         workflows: transformedWorkflows,
@@ -167,7 +217,17 @@ export async function GET(request: NextRequest) {
       },
       message: 'Workflows retrieved successfully',
     });
+    if (process.env.NODE_ENV === 'production') {
+      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+    } else {
+      response.headers.set('Cache-Control', 'no-store');
+    }
+    return response;
   } catch (error) {
+    // Normalize thrown Response from validateApiPermission (401/403)
+    if (error instanceof Response) {
+      return error as unknown as NextResponse;
+    }
     errorHandlingService.processError(
       error,
       'Workflows fetch failed',
@@ -179,6 +239,10 @@ export async function GET(request: NextRequest) {
         hypotheses: ['H7'],
       }
     );
+
+    if (error instanceof StandardError) {
+      return createApiErrorResponse(error);
+    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -196,6 +260,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'workflows', action: 'create' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -242,6 +307,9 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Response) {
+      return error as unknown as NextResponse;
+    }
     errorHandlingService.processError(
       error,
       'Workflow creation failed',
@@ -270,6 +338,7 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'workflows', action: 'update' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -303,6 +372,9 @@ export async function PUT(request: NextRequest) {
       message: 'Workflow updated successfully',
     });
   } catch (error) {
+    if (error instanceof Response) {
+      return error as unknown as NextResponse;
+    }
     errorHandlingService.processError(
       error,
       'Workflow update failed',

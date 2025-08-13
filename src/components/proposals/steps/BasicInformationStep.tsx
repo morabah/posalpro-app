@@ -12,14 +12,13 @@ import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useApiClient } from '@/hooks/useApiClient';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { EnhancedProposalAnalytics } from '@/types/analytics';
 import { ProposalPriority, ProposalWizardStep1Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -33,14 +32,7 @@ interface Customer {
   status?: string;
 }
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1'],
-  acceptanceCriteria: ['AC-4.1.1'],
-  methods: ['complexityEstimation()', 'initializeTracking()'],
-  hypotheses: ['H7'],
-  testCases: ['TC-H7-001'],
-};
+// Removed unused COMPONENT_MAPPING to satisfy unused-vars
 
 // ✅ FIXED: Validation schema based on wireframe requirements
 const basicInformationSchema = z.object({
@@ -84,14 +76,13 @@ interface BasicInformationStepProps {
 export function BasicInformationStep({ data, onUpdate, analytics }: BasicInformationStepProps) {
   // ✅ MOBILE OPTIMIZATION: Use centralized responsive detection
   const { state } = useResponsive();
-  const { isMobile, isTablet } = state;
+  const { isMobile } = state;
 
   // ✅ FIXED: Use proper API client instead of direct fetch
   const apiClient = useApiClient();
 
   // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
   const errorHandlingService = ErrorHandlingService.getInstance();
-  const { handleAsyncError } = useErrorHandler();
 
   // State management
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -99,7 +90,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
   const [dateWarning, setDateWarning] = useState<string | null>(null);
-  const [fieldInteractions, setFieldInteractions] = useState(0);
+  // Removed unused fieldInteractions state
 
   // ✅ PERFORMANCE OPTIMIZATION: Refs for preventing excessive re-renders
   const onUpdateRef = useRef(onUpdate);
@@ -139,7 +130,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     getValues,
     trigger,
     reset,
-    formState: { errors, isValid, isValidating, touchedFields },
+    formState: { errors, isValid },
   } = useForm<BasicInformationFormData>({
     resolver: zodResolver(basicInformationSchema),
     mode: 'onBlur', // ✅ CRITICAL FIX: Changed from 'onChange' to 'onBlur' to prevent excessive validation
@@ -173,13 +164,13 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   const fetchCustomers = useCallback(async () => {
     // ✅ CRITICAL: Prevent duplicate requests
     if (isRequestInProgress.current) {
-      console.log('🔍 [BasicInformationStep] Request already in progress, skipping...');
+      // dev log removed
       return;
     }
 
     // ✅ CRITICAL: Check if we already have customers loaded
     if (customers.length > 0) {
-      console.log('🔍 [BasicInformationStep] Customers already loaded, skipping fetch...');
+      // dev log removed
       return;
     }
 
@@ -188,14 +179,14 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       setCustomersLoading(true);
       setCustomersError(null);
 
-      console.log('🔍 [BasicInformationStep] Fetching customers (limit=10, sortBy=name)...');
+      // dev log removed
       const response = await apiClient.get<{
         success: boolean;
         data?: { customers: Customer[] };
         message?: string;
       }>(`/customers?page=1&limit=10&sortBy=name&sortOrder=asc`);
 
-      console.log('🔍 [BasicInformationStep] Raw API response:', response);
+      // dev log removed
 
       // ✅ ENHANCED: Better response validation
       if (response && typeof response === 'object') {
@@ -205,7 +196,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
           Array.isArray(response.data!.customers)
         ) {
           const customerList = response.data!.customers;
-          console.log('✅ [BasicInformationStep] Loaded customers:', customerList.length);
+          // dev log removed
           setCustomers(customerList);
         } else if (response.success === false) {
           // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
@@ -282,6 +273,37 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       fetchCustomers();
     }
   }, [customers.length, customersLoading, fetchCustomers]);
+
+  // Performance: idle-time prefetch (small page) to reduce first-focus latency
+  // This complies with CORE_REQUIREMENTS by keeping the fetch lightweight (limit=10)
+  // and non-blocking; it only runs once and respects dedup guards in fetchCustomers
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (hasAttemptedFetch.current || customersLoading || customers.length > 0) return;
+    const prefetch = () => {
+      if (!hasAttemptedFetch.current && !customersLoading && customers.length === 0) {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        fetchCustomers();
+      }
+    };
+    // Prefer requestIdleCallback when available
+    const win = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let timerId: number | null = null;
+    if (typeof win.requestIdleCallback === 'function') {
+      timerId = win.requestIdleCallback(prefetch, { timeout: 1200 });
+      return () => {
+        if (timerId && typeof win.cancelIdleCallback === 'function') {
+          win.cancelIdleCallback(timerId);
+        }
+      };
+    }
+    const fallback = window.setTimeout(prefetch, 800);
+    return () => window.clearTimeout(fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only idle prefetch
 
   // ✅ PERFORMANCE OPTIMIZATION: Debounced update function - SIMPLIFIED
   const debouncedHandleUpdate = useCallback(
@@ -415,7 +437,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
 
         // ✅ CRITICAL FIX: Don't call debouncedHandleUpdate on initialization
         // This prevents immediate updates that conflict with user input
-        console.log('[BasicInformationStep] Pre-selected customer:', existingCustomer.name);
+        // dev log removed
       }
     }
   }, [data?.client, data?.details, customers, selectedCustomer, setValue, reset]); // ✅ Stable dependencies
@@ -540,26 +562,10 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   );
 
   // AI-powered suggestions for client information (placeholder)
-  const handleClientNameBlur = useCallback(
-    (clientName: string) => {
-      if (clientName.length > 2) {
-        // Simulate AI suggestions for industry and previous engagements
-        analytics?.trackWizardStep?.(1, 'Basic Information', 'start', {
-          aiSuggestionsShown: 1,
-          suggestedIndustry: true,
-        });
-      }
-    },
-    [analytics]
-  );
+  // Removed unused handleClientNameBlur
 
   // Create customer options for dropdown
-  const customerOptions = useMemo(() => {
-    return customers.map(customer => ({
-      value: customer.id,
-      label: `${customer.name}${customer.tier ? ` (${customer.tier})` : ''}${customer.industry ? ` - ${customer.industry}` : ''}`,
-    }));
-  }, [customers]);
+  // Removed unused customerOptions
 
   return (
     <div className="space-y-8 mobile-form-enhanced">

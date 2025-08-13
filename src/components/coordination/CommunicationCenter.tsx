@@ -25,14 +25,13 @@ import {
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   PaperAirplaneIcon,
-  PlusIcon,
-  TagIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  console.log(`Toast (${type}):`, message);
+  // Use app-level toast; avoid console noise in production
   // In a real implementation, this would show a toast notification
 };
 
@@ -109,6 +108,12 @@ export interface CommunicationCenterProps {
   onTaskCreated?: (task: ActionItem) => void;
   className?: string;
   isCompact?: boolean;
+  hideHeader?: boolean;
+  initialTab?: 'messages' | 'tasks' | 'files';
+  autofocusComposer?: boolean;
+  enableRealTimePresence?: boolean;
+  enableKeyboardShortcuts?: boolean;
+  onlineUsers?: string[];
 }
 
 // Strict priority union
@@ -121,6 +126,12 @@ export function CommunicationCenter({
   onTaskCreated,
   className = '',
   isCompact = false,
+  hideHeader = false,
+  initialTab = 'messages',
+  autofocusComposer = false,
+  enableRealTimePresence = true,
+  enableKeyboardShortcuts = true,
+  onlineUsers = [],
 }: CommunicationCenterProps) {
   // Initialize services
   const errorHandlingService = ErrorHandlingService.getInstance();
@@ -130,6 +141,13 @@ export function CommunicationCenter({
 
   // State management
   const [messages, setMessages] = useState<CommunicationMessage[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredMessages, setFilteredMessages] = useState<CommunicationMessage[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(enableKeyboardShortcuts);
+  const [realTimePresence, setRealTimePresence] = useState<Record<string, boolean>>({});
+  const [unreadCounts, setUnreadCounts] = useState({ messages: 0, tasks: 0, files: 0 });
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [participants, setParticipants] = useState<CommunicationParticipant[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [messageType, setMessageType] = useState<'message' | 'task'>('message');
@@ -137,13 +155,14 @@ export function CommunicationCenter({
   const [selectedPriority, setSelectedPriority] = useState<Priority>('normal');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showClientInsights, setShowClientInsights] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'mentions' | 'tasks'>('all');
-
-  // Refs for scroll management
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<'messages' | 'tasks' | 'files'>(initialTab);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   // Auto-compact based on container width (useful when embedded in right sidebar)
   const [autoCompact, setAutoCompact] = useState(false);
@@ -196,8 +215,120 @@ export function CommunicationCenter({
 
   const apiClient = useApiClient();
 
+  // Real-time presence simulation
+  useEffect(() => {
+    if (enableRealTimePresence) {
+      const updatePresence = () => {
+        const presence: Record<string, boolean> = {};
+        participants.forEach(p => {
+          presence[p.id] = onlineUsers.includes(p.id) || Math.random() > 0.3;
+        });
+        setRealTimePresence(presence);
+      };
+
+      updatePresence();
+      const interval = setInterval(updatePresence, 30000); // Update every 30s
+      return () => clearInterval(interval);
+    }
+  }, [enableRealTimePresence, participants, onlineUsers]);
+
+  // Enhanced search function
+  const performAdvancedSearch = useCallback(
+    (query: string) => {
+      if (!query.trim()) {
+        setFilteredMessages(messages);
+        return;
+      }
+
+      const searchTerms = query.toLowerCase().split(' ');
+      const filtered = messages.filter(msg => {
+        const searchableText = [
+          msg.content,
+          msg.from.name,
+          msg.from.role,
+          ...(msg.tags || []),
+          ...(msg.mentions || []),
+          ...(msg.actionItems?.map(item => item.description) || []),
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        return searchTerms.every(term => searchableText.includes(term));
+      });
+
+      setFilteredMessages(filtered);
+    },
+    [messages]
+  );
+
+  // Search functionality
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setIsSearching(true);
+      performAdvancedSearch(searchQuery);
+      setIsSearching(false);
+    } else {
+      setFilteredMessages(messages);
+    }
+  }, [searchQuery, messages]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!keyboardShortcutsEnabled) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K to focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      // Cmd/Ctrl + 1,2,3 to switch tabs
+      if ((e.metaKey || e.ctrlKey) && ['1', '2', '3'].includes(e.key)) {
+        e.preventDefault();
+        const tabs = ['messages', 'tasks', 'files'] as const;
+        setActiveTab(tabs[parseInt(e.key) - 1]);
+      }
+      // Cmd/Ctrl + Enter to send message (when textarea is focused)
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.key === 'Enter' &&
+        document.activeElement === textareaRef.current
+      ) {
+        e.preventDefault();
+        sendMessage();
+      }
+      // Escape to clear search
+      if (e.key === 'Escape' && searchQuery) {
+        setSearchQuery('');
+        searchInputRef.current?.blur();
+      }
+      // ? to show shortcuts help
+      if (
+        e.key === '?' &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        document.activeElement?.tagName !== 'INPUT' &&
+        document.activeElement?.tagName !== 'TEXTAREA'
+      ) {
+        e.preventDefault();
+        setShowShortcutsHelp(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [keyboardShortcutsEnabled, searchQuery]);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [filteredMessages]);
+
   // Safely normalize API responses that may be an array or wrapped in an object
-  const normalizeApiList = <T,>(res: unknown, keys: string[] = ['data', 'messages', 'participants', 'items']): T[] => {
+  const normalizeApiList = <T,>(
+    res: unknown,
+    keys: string[] = ['data', 'messages', 'participants', 'items']
+  ): T[] => {
     if (Array.isArray(res)) return res as T[];
     if (res && typeof res === 'object') {
       const obj = res as Record<string, unknown>;
@@ -210,39 +341,58 @@ export function CommunicationCenter({
   };
 
   // Coercion helpers to satisfy strict typing without using any
-  type IncomingActionItem = Omit<ActionItem, 'dueDate'> & { dueDate?: string | Date };
-  type IncomingMessage = Omit<CommunicationMessage, 'timestamp' | 'actionItems'> & {
+  type IncomingActionItem = Partial<ActionItem> & { dueDate?: string | Date };
+  type IncomingMessage = Partial<CommunicationMessage> & {
     timestamp?: string | Date;
     actionItems?: IncomingActionItem[];
   };
-  type IncomingParticipant = Omit<CommunicationParticipant, 'lastActive'> & {
-    lastActive?: string | Date;
-  };
+  type IncomingParticipant = Partial<CommunicationParticipant> & { lastActive?: string | Date };
 
   const toDate = (v?: string | Date): Date => (v ? new Date(v) : new Date());
 
   const coerceMessage = (m: IncomingMessage): CommunicationMessage => ({
-    id: m.id,
-    proposalId: m.proposalId,
-    from: m.from,
-    content: m.content,
-    type: m.type,
-    priority: m.priority,
+    id: String(m.id ?? Date.now()),
+    proposalId: String(m.proposalId ?? proposalId),
+    from: m.from ?? ({ id: 'system', name: 'System', role: 'System', department: 'System' } as any),
+    content: m.content ?? '',
+    type: (m.type as any) ?? 'message',
+    priority: (m.priority as any) ?? 'normal',
     timestamp: toDate(m.timestamp),
-    isRead: m.isRead,
+    isRead: m.isRead ?? true,
     mentions: m.mentions ?? [],
     tags: m.tags ?? [],
-    actionItems: m.actionItems?.map((ai) => ({
-      ...ai,
+    actionItems: m.actionItems?.map((ai, idx) => ({
+      id: String(ai.id ?? `${Date.now()}-${idx}`),
+      description: ai.description ?? '',
+      assignedTo: ai.assignedTo ?? currentUserId,
+      status: (ai.status as any) ?? 'pending',
+      priority: (ai.priority as any) ?? 'medium',
       dueDate: toDate(ai.dueDate),
     })),
-    clientInsights: m.clientInsights ?? [],
+    clientInsights: (m as any).clientInsights ?? [],
   });
 
   const coerceParticipant = (p: IncomingParticipant): CommunicationParticipant => ({
-    ...p,
+    id: String(p.id ?? ''),
+    name: p.name ?? 'User',
+    role: p.role ?? 'Member',
+    department: p.department ?? 'General',
+    email: p.email ?? '',
+    isOnline: Boolean(p.isOnline),
     lastActive: toDate(p.lastActive),
+    avatar: p.avatar,
+    permissions: p.permissions ?? ['read'],
   });
+
+  const extractLinks = (content: string): string[] => {
+    const urlRegex = /(https?:\/\/[^\s)]+)|\b\w+\.(?:pdf|docx?|xlsx?|pptx?)\b/gi;
+    const found: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = urlRegex.exec(content)) !== null) {
+      if (match[0]) found.push(match[0]);
+    }
+    return found;
+  };
 
   // Load communication data
   const loadCommunicationData = useCallback(async () => {
@@ -260,9 +410,7 @@ export function CommunicationCenter({
 
     try {
       const [messagesRes, participantsRes] = await Promise.all([
-        apiClient.get<unknown>(
-          `/communications?proposalId=${encodeURIComponent(proposalId)}`
-        ),
+        apiClient.get<unknown>(`/communications?proposalId=${encodeURIComponent(proposalId)}`),
         apiClient.get<unknown>(
           `/communications/participants?proposalId=${encodeURIComponent(proposalId)}`
         ),
@@ -270,11 +418,15 @@ export function CommunicationCenter({
 
       // Extract arrays regardless of whether API returns an array or a wrapped object
       const rawMessages = normalizeApiList<IncomingMessage>(messagesRes, ['data', 'messages']);
-      const rawParticipants = normalizeApiList<IncomingParticipant>(participantsRes, ['data', 'participants']);
+      const rawParticipants = normalizeApiList<IncomingParticipant>(participantsRes, [
+        'data',
+        'participants',
+      ]);
 
       // Normalize dates and shapes
       const normalizedMessages: CommunicationMessage[] = rawMessages.map(coerceMessage);
-      const normalizedParticipants: CommunicationParticipant[] = rawParticipants.map(coerceParticipant);
+      const normalizedParticipants: CommunicationParticipant[] =
+        rawParticipants.map(coerceParticipant);
 
       setMessages(normalizedMessages);
       setParticipants(normalizedParticipants);
@@ -302,7 +454,7 @@ export function CommunicationCenter({
   }, [proposalId, apiClient, analytics, handleAsyncError]);
 
   // Filtered and searched messages
-  const filteredMessages = useMemo(() => {
+  const computedFilteredMessages = useMemo(() => {
     let list = messages;
     // Apply filter
     switch (activeFilter) {
@@ -320,6 +472,10 @@ export function CommunicationCenter({
       default:
         break;
     }
+    // Apply tab-level filtering
+    if (activeTab === 'tasks') {
+      list = list.filter(m => (m as any).type === 'task' || (m.tags || []).includes('task'));
+    }
     // Apply search
     const q = searchTerm.trim().toLowerCase();
     if (q) {
@@ -331,7 +487,35 @@ export function CommunicationCenter({
       });
     }
     return list;
-  }, [messages, activeFilter, searchTerm]);
+  }, [messages, activeFilter, activeTab, searchTerm]);
+
+  const filesFromMessages = useMemo(() => {
+    const items: Array<{
+      id: string;
+      link: string;
+      from: CommunicationMessage['from'];
+      timestamp: Date;
+    }> = [];
+    for (const m of messages) {
+      const links = extractLinks(m.content);
+      links.forEach((link, idx) =>
+        items.push({ id: `${m.id}-${idx}`, link, from: m.from, timestamp: m.timestamp })
+      );
+    }
+    const q = searchTerm.trim().toLowerCase();
+    const filtered = q
+      ? items.filter(i => i.link.toLowerCase().includes(q) || i.from.name.toLowerCase().includes(q))
+      : items;
+    return filtered;
+  }, [messages, searchTerm]);
+
+  const unreadCount = useMemo(() => messages.filter(m => !m.isRead).length, [messages]);
+  const tasksCount = useMemo(
+    () =>
+      messages.filter(m => (m as any).type === 'task' || (m.tags || []).includes('task')).length,
+    [messages]
+  );
+  const filesCount = useMemo(() => filesFromMessages.length, [filesFromMessages]);
 
   // Send message
   const sendMessage = useCallback(async () => {
@@ -461,7 +645,9 @@ export function CommunicationCenter({
 
   // Helpers for grouping and date separators
   const isSameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
 
   const formatDateLabel = (d: Date) => {
     const today = new Date();
@@ -488,11 +674,15 @@ export function CommunicationCenter({
         {parts.map((p, i) => {
           if (p.startsWith('@'))
             return (
-              <span key={i} className="text-blue-700 font-medium">{p}</span>
+              <span key={i} className="text-blue-700 font-medium">
+                {p}
+              </span>
             );
           if (p.startsWith('#'))
             return (
-              <span key={i} className="text-green-700 font-medium">{p}</span>
+              <span key={i} className="text-green-700 font-medium">
+                {p}
+              </span>
             );
           return <span key={i}>{p}</span>;
         })}
@@ -511,6 +701,13 @@ export function CommunicationCenter({
     });
   }, [loadCommunicationData, trackCommunicationMetrics, proposalId, isCompact]);
 
+  // Optional autofocus for composer
+  useEffect(() => {
+    if (autofocusComposer) {
+      textareaRef.current?.focus();
+    }
+  }, [autofocusComposer]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -521,133 +718,194 @@ export function CommunicationCenter({
   if (compact) {
     return (
       <div ref={containerRef}>
-      <Card className={`p-4 ${className}`}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            <ChatBubbleLeftRightIcon className="h-5 w-5 text-blue-600" />
-            <h3 className="text-sm font-medium text-gray-900">Communication Center</h3>
-            {messages.filter(m => !m.isRead).length > 0 && (
-              <Badge className="bg-red-100 text-red-800">
-                {messages.filter(m => !m.isRead).length} unread
-              </Badge>
-            )}
-          </div>
-          {/* Header quick actions removed for cleaner compact layout; use composer controls below */}
-        </div>
+        <Card className={`p-4 ${className}`}>
+          {!hideHeader && (
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <ChatBubbleLeftRightIcon className="h-5 w-5 text-blue-600" />
+                <h3 className="text-sm font-medium text-gray-900">Team Communication</h3>
+                {unreadCount > 0 && (
+                  <Badge className="bg-red-100 text-red-800">{unreadCount} unread</Badge>
+                )}
+              </div>
+            </div>
+          )}
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-4">
-            <LoadingSpinner size="sm" />
+          {/* Tabs + Quick Search */}
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              <button
+                className={`text-xs px-2 py-1 rounded ${activeTab === 'messages' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                onClick={() => setActiveTab('messages')}
+              >
+                Messages
+              </button>
+              <button
+                className={`text-xs px-2 py-1 rounded ${activeTab === 'tasks' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                onClick={() => setActiveTab('tasks')}
+              >
+                Tasks ({tasksCount})
+              </button>
+              <button
+                className={`text-xs px-2 py-1 rounded ${activeTab === 'files' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                onClick={() => setActiveTab('files')}
+              >
+                Files ({filesCount})
+              </button>
+            </div>
+            <input
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search"
+              className="border rounded px-2 py-1 text-xs w-28"
+            />
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-            {/* Left: Recent messages */}
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <LoadingSpinner size="sm" />
+            </div>
+          ) : activeTab === 'files' ? (
             <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
-              {messages.slice(0, 3).map(message => (
-                <div
-                  key={message.id}
-                  className="px-2 py-1 border rounded-md hover:bg-gray-50"
+              {filesFromMessages.slice(0, 6).map(item => (
+                <a
+                  key={item.id}
+                  href={item.link.startsWith('http') ? item.link : undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center px-2 py-1 border rounded-md hover:bg-gray-50 text-[11px] text-gray-700"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 mb-0.5">
-                        <span className="text-[11px] font-medium text-gray-900 truncate max-w-[9rem]">
-                          {message.from.name}
-                        </span>
-                        <span className="text-[10px] capitalize text-gray-500">{message.priority}</span>
-                      </div>
-                      <p className="text-[11px] text-gray-600 truncate">{message.content}</p>
-                    </div>
-                    <span className="text-[10px] text-gray-400 ml-2 whitespace-nowrap">
-                      {formatRelativeTime(message.timestamp)}
-                    </span>
-                  </div>
-                </div>
+                  <PaperClipIcon className="h-3 w-3 mr-2 text-gray-500" />
+                  <span className="truncate">{item.link}</span>
+                  <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+                    {formatRelativeTime(item.timestamp)}
+                  </span>
+                </a>
               ))}
+              {filesFromMessages.length === 0 && (
+                <div className="text-[11px] text-gray-500 px-2 py-1">No files found</div>
+              )}
             </div>
-
-            {/* Right: Compact composer */}
-            <div className="space-y-1">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1">
-                <div className="grid grid-cols-2 gap-1 w-full sm:w-auto sm:flex sm:space-x-1 sm:grid-cols-1">
-                  <Button
-                    size="sm"
-                    variant={messageType === 'message' ? 'primary' : 'outline'}
-                    onClick={() => setMessageType('message')}
-                    className="w-full sm:w-auto px-2"
-                  >
-                    <ChatBubbleLeftRightIcon className="h-3 w-3 mr-1" />
-                    Msg
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={messageType === 'task' ? 'primary' : 'outline'}
-                    onClick={() => setMessageType('task')}
-                    className="w-full sm:w-auto px-2"
-                  >
-                    <CheckCircleIcon className="h-3 w-3 mr-1" />
-                    Task
-                  </Button>
-                </div>
-                <select
-                  value={selectedPriority}
-                  onChange={e => setSelectedPriority(e.target.value as Priority)}
-                  className="hidden sm:block w-auto shrink-0 border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+              {/* Left: Recent messages */}
+              <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                {(activeTab === 'messages'
+                  ? computedFilteredMessages
+                  : computedFilteredMessages.filter(
+                      m => (m as any).type === 'task' || (m.tags || []).includes('task')
+                    )
+                )
+                  .slice(0, 3)
+                  .map(message => (
+                    <div key={message.id} className="px-2 py-1 border rounded-md hover:bg-gray-50">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <span className="text-[11px] font-medium text-gray-900 truncate max-w-[9rem]">
+                              {message.from.name}
+                            </span>
+                            <span className="text-[10px] capitalize text-gray-500">
+                              {message.priority}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-600 truncate">{message.content}</p>
+                        </div>
+                        <span className="text-[10px] text-gray-400 ml-2 whitespace-nowrap">
+                          {formatRelativeTime(message.timestamp)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                {computedFilteredMessages.length === 0 && (
+                  <div className="text-[11px] text-gray-500 px-2 py-1">No messages</div>
+                )}
               </div>
-              <Textarea
-                ref={textareaRef}
-                value={newMessage}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
-                placeholder={`Type ${messageType}… (@, #)`}
-                rows={1}
-                className="w-full resize-none text-sm leading-tight min-h-[36px] max-h-20 overflow-auto"
-                onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    sendMessage();
+
+              {/* Right: Compact composer */}
+              <div className="space-y-1">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1">
+                  <div className="grid grid-cols-2 gap-1 w-full sm:w-auto sm:flex sm:space-x-1 sm:grid-cols-1">
+                    <Button
+                      size="sm"
+                      variant={messageType === 'message' ? 'primary' : 'outline'}
+                      onClick={() => setMessageType('message')}
+                      className="w-full sm:w-auto px-2"
+                    >
+                      <ChatBubbleLeftRightIcon className="h-3 w-3 mr-1" />
+                      Msg
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={messageType === 'task' ? 'primary' : 'outline'}
+                      onClick={() => setMessageType('task')}
+                      className="w-full sm:w-auto px-2"
+                    >
+                      <CheckCircleIcon className="h-3 w-3 mr-1" />
+                      Task
+                    </Button>
+                  </div>
+                  <select
+                    value={selectedPriority}
+                    onChange={e => setSelectedPriority(e.target.value as Priority)}
+                    className="hidden sm:block w-auto shrink-0 border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+                <Textarea
+                  ref={textareaRef}
+                  value={newMessage}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setNewMessage(e.target.value)
                   }
-                }}
-              />
-              <div className="flex items-center justify-between gap-2">
-                <div className="hidden sm:block text-xs text-gray-500">
-                  Ctrl+Enter to send • @name • #tag
+                  placeholder={`Type ${messageType}… (@, #)`}
+                  rows={1}
+                  className="w-full resize-none text-sm leading-tight min-h-[36px] max-h-20 overflow-auto"
+                  onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="hidden sm:block text-xs text-gray-500">
+                    Ctrl+Enter to send • @name • #tag
+                  </div>
+                  <Button
+                    onClick={sendMessage}
+                    disabled={!newMessage.trim() || isSubmitting}
+                    size="sm"
+                    className="px-2"
+                  >
+                    {isSubmitting ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <>
+                        <PaperAirplaneIcon className="h-3 w-3 mr-1" />
+                        Send
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim() || isSubmitting}
-                  size="sm"
-                  className="px-2"
-                >
-                  {isSubmitting ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    <>
-                      <PaperAirplaneIcon className="h-3 w-3 mr-1" />
-                      Send
-                    </>
-                  )}
-                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Component Traceability Matrix */}
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="text-xs text-blue-800 bg-blue-50 p-2 rounded">
+              <div className="font-semibold mb-1">H4 Tracking:</div>
+              <div>
+                Messages: {messages.length} | Participants: {participants.length}
               </div>
             </div>
           </div>
-        )}
-
-        {/* Component Traceability Matrix */}
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <div className="text-xs text-blue-800 bg-blue-50 p-2 rounded">
-            <div className="font-semibold mb-1">H4 Tracking:</div>
-            <div>
-              Messages: {messages.length} | Participants: {participants.length}
-            </div>
-          </div>
-        </div>
-      </Card>
+        </Card>
       </div>
     );
   }
@@ -656,13 +914,15 @@ export function CommunicationCenter({
   return (
     <div ref={containerRef} className={`space-y-6 ${className}`}>
       <Card className="p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <ChatBubbleLeftRightIcon className="h-6 w-6 text-blue-600" />
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Communication Center</h2>
-            <p className="text-sm text-gray-500">Centralized coordination and client insights</p>
+        {!hideHeader && (
+          <div className="flex items-center space-x-3 mb-4">
+            <ChatBubbleLeftRightIcon className="h-6 w-6 text-blue-600" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Communication Center</h2>
+              <p className="text-sm text-gray-500">Centralized coordination and client insights</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
@@ -672,93 +932,136 @@ export function CommunicationCenter({
           <div className="grid md:grid-cols-3 gap-6">
             {/* Main Chat Area */}
             <div className="md:col-span-2 min-w-0">
-              <div className={`relative ${isCompact ? 'h-[50vh]' : 'h-[60vh]'} border rounded-lg overflow-hidden bg-white`}>
+              <div
+                className={`relative ${isCompact ? 'h-[50vh]' : 'h-[60vh]'} border rounded-lg overflow-hidden bg-white`}
+              >
                 {/* Unified container: only messages scroll */}
                 <div className="h-full flex flex-col bg-white">
                   {/* Messages */}
                   <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-4">
-                  {(() => {
-                    const sorted = [...filteredMessages].sort(
-                      (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-                    );
-                    let lastDate: Date | null = null;
-                    let prev: CommunicationMessage | null = null;
-                    return (
-                      <>
-                        {sorted.map((m, idx) => {
-                          const showDate = !lastDate || !isSameDay(lastDate, m.timestamp);
-                          if (showDate) lastDate = m.timestamp;
-                          const grouped = shouldGroup(prev, m);
-                          const isMine = m.from.id === currentUserId;
-                          const bubbleBase = `max-w-[80%] inline-block px-3 py-2 rounded-lg text-sm ${
-                            isMine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
-                          }`;
-                          const container = `flex ${isMine ? 'justify-end' : 'justify-start'}`;
-                          const radius = grouped
-                            ? isMine
-                              ? 'rounded-tr-sm'
-                              : 'rounded-tl-sm'
-                            : '';
-                          const headerNeeded = !grouped;
-                          const content = (
-                            <div className={container}>
-                              <div className={`space-y-1 ${isMine ? 'items-end' : 'items-start'} flex flex-col`}>
-                                {headerNeeded && (
-                                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    {!isMine && <Avatar name={m.from.name} size="xs" />}
-                                    <span className="font-medium text-gray-700">{m.from.name}</span>
-                                    <span>• {formatRelativeTime(m.timestamp)}</span>
-                                    <Badge size="sm" className={getPriorityColor(m.priority)}>
-                                      {m.priority}
-                                    </Badge>
-                                  </div>
-                                )}
-                                <div className={`${bubbleBase} ${radius}`}>
-                                  <p className="whitespace-pre-wrap break-words">{renderContentWithAccents(m.content)}</p>
-                                  {m.tags && m.tags.length > 0 && (
-                                    <div className="mt-1 flex flex-wrap gap-1">
-                                      {m.tags.map((tag: string) => (
-                                        <Badge key={tag} size="sm" variant="outline">
-                                          {tag}
-                                        </Badge>
-                                      ))}
+                    {(() => {
+                      const sorted = [...computedFilteredMessages].sort(
+                        (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+                      );
+                      let lastDate: Date | null = null;
+                      let prev: CommunicationMessage | null = null;
+                      return (
+                        <>
+                          {sorted.map((m, idx) => {
+                            const showDate = !lastDate || !isSameDay(lastDate, m.timestamp);
+                            if (showDate) lastDate = m.timestamp;
+                            const grouped = shouldGroup(prev, m);
+                            const isMine = m.from.id === currentUserId;
+                            const bubbleBase = `max-w-[80%] inline-block px-3 py-2 rounded-lg text-sm ${
+                              isMine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+                            }`;
+                            const container = `flex ${isMine ? 'justify-end' : 'justify-start'}`;
+                            const radius = grouped
+                              ? isMine
+                                ? 'rounded-tr-sm'
+                                : 'rounded-tl-sm'
+                              : '';
+                            const headerNeeded = !grouped;
+                            const content = (
+                              <div className={container}>
+                                <div
+                                  className={`space-y-1 ${isMine ? 'items-end' : 'items-start'} flex flex-col`}
+                                >
+                                  {headerNeeded && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                      {!isMine && <Avatar name={m.from.name} size="xs" />}
+                                      <span className="font-medium text-gray-700">
+                                        {m.from.name}
+                                      </span>
+                                      <span>• {formatRelativeTime(m.timestamp)}</span>
+                                      <Badge size="sm" className={getPriorityColor(m.priority)}>
+                                        {m.priority}
+                                      </Badge>
                                     </div>
                                   )}
-                                  {showClientInsights && m.clientInsights && m.clientInsights.length > 0 && (
-                                    <div className="mt-2 bg-blue-50 border border-blue-200 rounded p-2">
-                                      <h5 className="text-xs font-medium text-blue-800 mb-1">Client Insights</h5>
-                                      <ul className="space-y-1">
-                                        {m.clientInsights.map((ci: { id: string; type: string; content: string }) => (
-                                          <li key={ci.id} className="text-xs text-blue-800">
-                                            <span className="font-medium">{ci.type}:</span> {ci.content}
-                                          </li>
+                                  <div className={`${bubbleBase} ${radius}`}>
+                                    <p className="whitespace-pre-wrap break-words">
+                                      {renderContentWithAccents(m.content)}
+                                    </p>
+                                    {m.tags && m.tags.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {m.tags.map((tag: string) => (
+                                          <Badge key={tag} size="sm" variant="outline">
+                                            {tag}
+                                          </Badge>
                                         ))}
-                                      </ul>
-                                    </div>
-                                  )}
+                                      </div>
+                                    )}
+                                    {showClientInsights &&
+                                      m.clientInsights &&
+                                      m.clientInsights.length > 0 && (
+                                        <div className="mt-2 bg-blue-50 border border-blue-200 rounded p-2">
+                                          <h5 className="text-xs font-medium text-blue-800 mb-1">
+                                            Client Insights
+                                          </h5>
+                                          <ul className="space-y-1">
+                                            {m.clientInsights.map(
+                                              (ci: {
+                                                id: string;
+                                                type: string;
+                                                content: string;
+                                              }) => (
+                                                <li key={ci.id} className="text-xs text-blue-800">
+                                                  <span className="font-medium">{ci.type}:</span>{' '}
+                                                  {ci.content}
+                                                </li>
+                                              )
+                                            )}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    {m.actionItems && m.actionItems.length > 0 && (
+                                      <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-200">
+                                        <div className="flex items-center text-xs font-medium text-yellow-800 mb-1">
+                                          <CheckCircleIcon className="h-4 w-4 mr-1" />
+                                          Action Items
+                                        </div>
+                                        <div className="space-y-1">
+                                          {m.actionItems.map(item => (
+                                            <div
+                                              key={item.id}
+                                              className="text-[11px] text-yellow-900 flex items-center justify-between"
+                                            >
+                                              <span className="truncate mr-2">
+                                                {item.description}
+                                              </span>
+                                              <span className="ml-auto whitespace-nowrap">
+                                                {item.status} •{' '}
+                                                {new Date(item.dueDate).toLocaleDateString()}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                          const node = (
-                            <div key={m.id} className="space-y-2">
-                              {showDate && (
-                                <div className="flex items-center justify-center">
-                                  <div className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                                    {formatDateLabel(m.timestamp)}
+                            );
+                            const node = (
+                              <div key={m.id} className="space-y-2">
+                                {showDate && (
+                                  <div className="flex items-center justify-center">
+                                    <div className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                      {formatDateLabel(m.timestamp)}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                              {content}
-                            </div>
-                          );
-                          prev = m;
-                          return node;
-                        })}
-                        <div ref={messagesEndRef} />
-                      </>
-                    );
-                  })()}
+                                )}
+                                {content}
+                              </div>
+                            );
+                            prev = m;
+                            return node;
+                          })}
+                          <div ref={messagesEndRef} />
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Composer pinned to bottom of card */}
@@ -854,7 +1157,7 @@ export function CommunicationCenter({
                 <div className="p-3 border rounded-lg">
                   <div className="text-sm font-medium mb-2">Filters</div>
                   <div className="flex flex-wrap gap-2">
-                    {(['all','unread','mentions','tasks'] as const).map(f => (
+                    {(['all', 'unread', 'mentions', 'tasks'] as const).map(f => (
                       <Button
                         key={f}
                         variant={activeFilter === f ? 'primary' : 'outline'}
@@ -880,7 +1183,9 @@ export function CommunicationCenter({
 
                 {/* Participants */}
                 <div className="p-3 border rounded-lg">
-                  <div className="text-sm font-medium mb-2">Participants ({participants.length})</div>
+                  <div className="text-sm font-medium mb-2">
+                    Participants ({participants.length})
+                  </div>
                   <div className="space-y-2">
                     {participants.map(p => (
                       <div key={p.id} className="flex items-center justify-between">
@@ -891,7 +1196,9 @@ export function CommunicationCenter({
                             <div className="text-[11px] text-gray-500">{p.role}</div>
                           </div>
                         </div>
-                        <span className={`h-2 w-2 rounded-full ${p.isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        <span
+                          className={`h-2 w-2 rounded-full ${p.isOnline ? 'bg-green-500' : 'bg-gray-300'}`}
+                        />
                       </div>
                     ))}
                   </div>

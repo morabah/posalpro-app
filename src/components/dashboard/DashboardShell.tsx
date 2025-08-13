@@ -78,7 +78,11 @@ interface DashboardShellProps {
   loading?: Record<string, boolean>;
   errors?: Record<string, string>;
   onWidgetRefresh?: (widgetId: string) => void;
-  onWidgetInteraction?: (widgetId: string, action: string, metadata?: any) => void;
+  onWidgetInteraction?: (
+    widgetId: string,
+    action: string,
+    metadata?: Record<string, unknown>
+  ) => void;
   onLayoutChange?: (layout: any) => void;
   className?: string;
 }
@@ -336,9 +340,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   // Handle widget interactions
   const handleWidgetInteraction = useCallback(
-    (widgetId: string, action: string, metadata?: any) => {
-      analytics.trackInteraction('widget', action, { widgetId, ...metadata });
-      onWidgetInteraction?.(widgetId, action, metadata);
+    (widgetId: string, action: string, metadata?: Record<string, unknown>) => {
+      const safeMetadata: Record<string, unknown> = metadata ?? {};
+      analytics.trackInteraction('widget', action, { widgetId, ...safeMetadata });
+      onWidgetInteraction?.(widgetId, action, safeMetadata);
     },
     [analytics, onWidgetInteraction]
   );

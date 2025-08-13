@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  
+
   try {
+    await validateApiPermission(request, { resource: 'performance', action: 'read' });
     const metrics = {
       timestamp: new Date().toISOString(),
       server: {
@@ -26,9 +28,9 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    return NextResponse.json({ 
-      status: 'error', 
-      error: error instanceof Error ? error.message : String(error) 
+    return NextResponse.json({
+      status: 'error',
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

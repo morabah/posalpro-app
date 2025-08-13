@@ -5,6 +5,7 @@ import { logger } from '@/utils/logger';/**
  */
 
 import prisma from '@/lib/db/prisma';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -46,6 +47,7 @@ function getAccessLevel(level: number): string {
 // GET /api/admin/roles - Fetch roles from database
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'roles', action: 'read' });
     const url = new URL(request.url);
     const searchParams = Object.fromEntries(url.searchParams);
     const { page, limit, search, accessLevel } = GetRolesSchema.parse(searchParams);
@@ -172,6 +174,7 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/roles - Create new role
 export async function POST(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'roles', action: 'create' });
     const body = await request.json();
     const roleData = CreateRoleSchema.parse(body);
 
@@ -268,6 +271,7 @@ export async function POST(request: NextRequest) {
 // PUT /api/admin/roles - Update role
 export async function PUT(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'roles', action: 'update' });
     const body = await request.json();
     const { id, ...updateData } = body;
 
@@ -381,6 +385,7 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/admin/roles - Delete role
 export async function DELETE(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'roles', action: 'delete' });
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
 

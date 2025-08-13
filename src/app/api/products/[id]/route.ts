@@ -1,17 +1,21 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/utils/logger'; /**
  * PosalPro MVP2 - Individual Product API Routes
  * Enhanced product operations with authentication and analytics
  * Component Traceability: US-3.1, US-3.2, H3, H4
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  errorHandlingService,
+  StandardError,
+} from '@/lib/errors';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createApiErrorResponse, ErrorCodes, StandardError, errorHandlingService } from '@/lib/errors';
-import { isPrismaError, getPrismaErrorMessage } from '@/lib/utils/errorUtils';
-
 
 /**
  * Component Traceability Matrix:
@@ -43,6 +47,7 @@ const ProductUpdateSchema = z.object({
  * GET /api/products/[id] - Get specific product with relationships
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  await validateApiPermission(request, { resource: 'products', action: 'read' });
   try {
     const params = await context.params;
     const { id } = params;
@@ -57,8 +62,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           metadata: {
             component: 'ProductsIdRoute',
             operation: 'getProductById',
-            productId: id
-          }
+            productId: id,
+          },
         }),
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
@@ -190,18 +195,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const params = await context.params;
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
-    
+
     return createApiErrorResponse(
-      error instanceof StandardError ? error : new StandardError({
-        message: `Failed to fetch product ${params.id}`,
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'ProductsIdRoute',
-          operation: 'getProductById',
-          productId: params.id
-        }
-      }),
+      error instanceof StandardError
+        ? error
+        : new StandardError({
+            message: `Failed to fetch product ${params.id}`,
+            code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+            cause: error instanceof Error ? error : undefined,
+            metadata: {
+              component: 'ProductsIdRoute',
+              operation: 'getProductById',
+              productId: params.id,
+            },
+          }),
       'Failed to fetch product',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500,
@@ -214,6 +221,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  * PUT /api/products/[id] - Update specific product
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  await validateApiPermission(request, { resource: 'products', action: 'update' });
   try {
     const params = await context.params;
     const { id } = params;
@@ -304,16 +312,43 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error) {
     const params = await context.params;
-    logger.error(`Failed to update product ${params.id}:`, error);
+    errorHandlingService.processError(
+      error,
+      'Failed to update product',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      { component: 'ProductsIdRoute', operation: 'updateProduct', productId: params.id }
+    );
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Validation failed',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          cause: error,
+          metadata: {
+            component: 'ProductsIdRoute',
+            operation: 'updateProduct',
+            productId: params.id,
+          },
+        }),
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
     }
 
-    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to update product',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductsIdRoute',
+          operation: 'updateProduct',
+          productId: params.id,
+        },
+      })
+    );
   }
 }
 
@@ -321,6 +356,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
  * DELETE /api/products/[id] - Archive/delete specific product
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  await validateApiPermission(request, { resource: 'products', action: 'delete' });
   try {
     const params = await context.params;
     const { id } = params;
@@ -403,8 +439,24 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
   } catch (error) {
     const params = await context.params;
-    logger.error(`Failed to delete product ${params.id}:`, error);
-    return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
+    errorHandlingService.processError(
+      error,
+      'Failed to delete product',
+      ErrorCodes.DATA.DELETE_FAILED,
+      { component: 'ProductsIdRoute', operation: 'deleteProduct', productId: params.id }
+    );
+    return createApiErrorResponse(
+      new StandardError({
+        message: 'Failed to delete product',
+        code: ErrorCodes.DATA.DELETE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductsIdRoute',
+          operation: 'deleteProduct',
+          productId: params.id,
+        },
+      })
+    );
   }
 }
 

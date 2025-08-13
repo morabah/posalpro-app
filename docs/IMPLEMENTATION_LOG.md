@@ -598,6 +598,47 @@ Netlify platform.
 
 ---
 
+## 2025-08-13 11:20 - CORE_REQUIREMENTS Compliance: Client Data Fetching & Analytics
+
+**Phase**: 2.1 - Standards Compliance Updates **Status**: ✅ COMPLETE
+**Duration**: 20 minutes **Files Modified**:
+
+- `src/app/(dashboard)/customers/[id]/CustomerProfileClient.tsx`
+- `src/app/observability/page.tsx`
+- `src/hooks/useAnalytics.ts`
+
+**Key Changes**:
+
+- Replaced direct `fetch()` calls with `useApiClient` in client components per
+  CORE_REQUIREMENTS.
+- Removed simulated save logic and wired real update via `useApiClient.put()` in
+  customer profile.
+- Routed production analytics event posting through `useApiClient.post()`
+  instead of raw `fetch()`.
+- Preserved `SessionProvider` flags: `refetchOnWindowFocus=false`,
+  `refetchInterval=600` already configured in `AuthProvider`.
+
+**Wireframe Reference**: `CUSTOMER_PROFILE_SCREEN.md` (data retrieval + edit)
+**Component Traceability**: US-2.3, AC-2.3.1/2.3.2; H4 **Analytics
+Integration**: `customer_profile_action`, `session_*` events unchanged;
+production posting via API client **Accessibility**: No UI changes; WCAG
+compliance preserved **Security**: Centralized error handling maintained via
+`ErrorHandlingService` **Testing**:
+
+- Lint on modified files: ✅ No new issues
+- Quality gates run; existing repository lint warnings remain unrelated to these
+  edits
+
+**Performance Impact**:
+
+- Client calls now benefit from request de-duplication and caching via API
+  client
+
+**Notes**:
+
+- Remaining codebase lint items are pre-existing and tracked separately. This
+  change focuses on CORE_REQUIREMENTS client data fetching compliance.
+
 ## 2025-08-08 14:05 - P3/P4 Complete: Dev Build & Bundle Performance + Observability Baseline
 
 **Phase**: P3 — Dev build and bundle performance; P4 — Observability baseline

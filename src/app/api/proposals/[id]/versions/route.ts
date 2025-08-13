@@ -1,4 +1,5 @@
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -10,6 +11,7 @@ const errorHandlingService = ErrorHandlingService.getInstance();
 // GET /api/proposals/[id]/versions - list versions
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
+    await validateApiPermission(request, { resource: 'proposals', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -80,8 +82,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       const prevMap = new Map(prevList.map(p => [p.productId, p]));
       const curMap = new Map(curList.map(p => [p.productId, p]));
 
-      const added: Array<string> = [];
-      const removed: Array<string> = [];
+      const added: string[] = [];
+      const removed: string[] = [];
       const updated: Array<{ productId: string; from: any; to: any }> = [];
 
       for (const p of curList) {
@@ -266,7 +268,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
 }
 
 // Helper to collect productIds from snapshot
-function extractProductIds(snapshot: any): Array<string> {
+function extractProductIds(snapshot: any): string[] {
   try {
     const md = snapshot?.metadata || snapshot;
     const step4 = md?.wizardData?.step4;
@@ -293,6 +295,7 @@ function extractProductIds(snapshot: any): Array<string> {
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   let proposalId: string | undefined;
   try {
+    await validateApiPermission(request, { resource: 'proposals', action: 'update' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

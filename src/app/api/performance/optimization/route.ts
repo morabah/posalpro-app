@@ -11,6 +11,7 @@ import MemoryOptimizationService from '@/lib/performance/MemoryOptimizationServi
 import { getCache, setCache } from '@/lib/redis';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 /**
  * Component Traceability Matrix:
@@ -23,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'performance', action: 'read' });
     // Get session for authentication
     const session = await getServerSession(authOptions);
 
@@ -116,6 +118,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'performance', action: 'update' });
     // Get session for authentication
     const session = await getServerSession(authOptions);
 

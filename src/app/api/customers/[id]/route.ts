@@ -15,6 +15,7 @@ import {
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -51,6 +52,7 @@ const CustomerUpdateSchema = z.object({
  * GET /api/customers/[id] - Get specific customer with comprehensive data
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  await validateApiPermission(request, { resource: 'customers', action: 'read' });
   try {
     const params = await context.params;
     const { id } = params;
@@ -241,6 +243,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  * PUT /api/customers/[id] - Update specific customer
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  await validateApiPermission(request, { resource: 'customers', action: 'update' });
   try {
     const params = await context.params;
     const { id } = params;
@@ -356,6 +359,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
  * DELETE /api/customers/[id] - Archive customer (soft delete)
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  await validateApiPermission(request, { resource: 'customers', action: 'delete' });
   try {
     const params = await context.params;
     const { id } = params;

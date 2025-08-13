@@ -174,8 +174,8 @@ export function DecisionInterface({
 
   // Temporary analytics stub until useAnalytics is available
   const analytics = {
-    track: (event: string, data: Record<string, unknown>) => {
-      console.log(`Analytics: ${event}`, data);
+    track: (_event: string, _data: Record<string, unknown>) => {
+      // no-op to avoid console noise; integrate with useOptimizedAnalytics if needed
     },
   };
 
@@ -218,15 +218,7 @@ export function DecisionInterface({
 
   // Track decision analytics for H7 hypothesis validation
   useEffect(() => {
-    console.log('Analytics: decision_interface_viewed', {
-      proposalId: context.proposalId,
-      stageType: context.stageType,
-      stageName: context.stageName,
-      priority: context.priority,
-      slaRemaining: context.slaRemaining,
-      overallProgress: completionMetrics.overallProgress,
-      timestamp: Date.now(),
-    });
+    // analytics event hook placeholder
   }, [context, completionMetrics.overallProgress]);
 
   const handleDecisionSubmit = useCallback(() => {
@@ -250,15 +242,7 @@ export function DecisionInterface({
     }
 
     // Track decision analytics
-    console.log('Analytics: approval_decision_submitted', {
-      proposalId: context.proposalId,
-      stageType: context.stageType,
-      decision: decisionForm.decision,
-      hasComments: decisionForm.comments.trim().length > 0,
-      processingTime: Date.now() - Date.now(), // Would track actual time spent
-      overallProgress: completionMetrics.overallProgress,
-      timestamp: Date.now(),
-    });
+    // analytics event placeholder
 
     onDecisionSubmit(decisionForm);
   }, [decisionForm, context, completionMetrics.overallProgress, onDecisionSubmit]);
@@ -268,13 +252,7 @@ export function DecisionInterface({
       onUpdateChecklist(itemId, completed, notes);
 
       // Track checklist progress for H7 hypothesis
-      console.log('Analytics: checklist_item_updated', {
-        proposalId: context.proposalId,
-        stageType: context.stageType,
-        itemCompleted: completed,
-        checklistProgress: completionMetrics.checklistProgress,
-        timestamp: Date.now(),
-      });
+      // analytics event placeholder
     },
     [context, completionMetrics.checklistProgress, onUpdateChecklist]
   );
@@ -285,13 +263,7 @@ export function DecisionInterface({
     onRequestCollaboration(selectedCollaborators);
     setSelectedCollaborators([]);
 
-    // Track collaboration request
-    console.log('Analytics: collaboration_requested', {
-      proposalId: context.proposalId,
-      stageType: context.stageType,
-      collaboratorCount: selectedCollaborators.length,
-      timestamp: Date.now(),
-    });
+    // analytics event placeholder
   }, [selectedCollaborators, context, onRequestCollaboration]);
 
   const getDecisionIcon = (decision: string) => {

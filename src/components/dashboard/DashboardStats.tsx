@@ -143,7 +143,8 @@ const DashboardStats = memo(() => {
         );
 
         // Fetch real data from API
-        const response = await apiClient.get<ApiResponse<DashboardStatsData>>('dashboard/stats?fresh=1');
+        const response =
+          await apiClient.get<ApiResponse<DashboardStatsData>>('dashboard/stats?fresh=1');
 
         if (response.success && response.data) {
           setStats(response.data);
@@ -169,7 +170,6 @@ const DashboardStats = memo(() => {
           });
         }
       } catch (error) {
-        console.warn('[DashboardStats] Error fetching stats:', error);
         setError('Failed to load dashboard statistics');
 
         handleAsyncError(
@@ -195,14 +195,22 @@ const DashboardStats = memo(() => {
         );
         // Fetch proposal KPIs for the top cards (consistent with manage dashboard)
         try {
-          const kpiRes: any = await apiClient.get('proposals/stats?fresh=1');
-          if (kpiRes && kpiRes.success && kpiRes.data) {
+          const kpiRes =
+            await apiClient.get<ApiResponse<Record<string, unknown>>>('proposals/stats?fresh=1');
+          if (kpiRes?.success && kpiRes.data) {
+            const data = kpiRes.data as {
+              total?: unknown;
+              inProgress?: unknown;
+              overdue?: unknown;
+              winRate?: unknown;
+              totalValue?: unknown;
+            };
             setProposalKpis({
-              total: Number(kpiRes.data.total) || 0,
-              inProgress: Number(kpiRes.data.inProgress) || 0,
-              overdue: Number(kpiRes.data.overdue) || 0,
-              winRate: Number(kpiRes.data.winRate) || 0,
-              totalValue: Number(kpiRes.data.totalValue) || 0,
+              total: Number(data.total) || 0,
+              inProgress: Number(data.inProgress) || 0,
+              overdue: Number(data.overdue) || 0,
+              winRate: Number(data.winRate) || 0,
+              totalValue: Number(data.totalValue) || 0,
             });
           }
         } catch (_) {
@@ -242,14 +250,7 @@ const DashboardStats = memo(() => {
     }).format(amount);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  // removed duplicate formatCurrency function (use formatCurrencyLocal)
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">

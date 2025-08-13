@@ -35,24 +35,70 @@ const UpdatePermissionSchema = z.object({
 // GET /api/admin/permissions - Fetch permissions from database
 export async function GET(request: NextRequest) {
   try {
-    // Mock permissions data for testing
-    const permissions = [
-      { id: 1, name: 'user:read', description: 'Read user data' },
-      { id: 2, name: 'user:write', description: 'Write user data' },
-      { id: 3, name: 'admin:read', description: 'Read admin data' },
-      { id: 4, name: 'admin:write', description: 'Write admin data' },
-    ];
+    const url = new URL(request.url);
+    const searchParams = Object.fromEntries(url.searchParams);
+    const { page, limit, search, resource, action, scope } =
+      GetPermissionsSchema.parse(searchParams);
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { resource: { contains: search, mode: 'insensitive' } },
+        { action: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    if (resource) where.resource = { contains: resource, mode: 'insensitive' };
+    if (action) where.action = { contains: action, mode: 'insensitive' };
+    if (scope) where.scope = scope;
+
+    const [permissions, totalCount] = await prisma.$transaction([
+      prisma.permission.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: [{ resource: 'asc' }, { action: 'asc' }],
+      }),
+      prisma.permission.count({ where }),
+    ]);
+
+    // Build filters for UI (unique lists)
+    const allPermissions = await prisma.permission.findMany({
+      select: { resource: true, action: true, scope: true },
+    });
+    const filters = {
+      resources: Array.from(new Set(allPermissions.map(p => p.resource))).sort(),
+      actions: Array.from(new Set(allPermissions.map(p => p.action))).sort(),
+      scopes: Array.from(new Set(allPermissions.map(p => p.scope))).sort(),
+    };
 
     return NextResponse.json({
-      success: true,
-      data: permissions,
-      meta: {
-        total: permissions.length,
-        timestamp: new Date().toISOString(),
+      permissions: permissions.map(p => ({
+        id: p.id,
+        resource: p.resource,
+        action: p.action,
+        scope: p.scope as 'ALL' | 'TEAM' | 'OWN',
+        displayName: `${p.resource}:${p.action}`,
+        description: (p as any).description ?? '',
+        constraints: p.constraints as Record<string, unknown> | undefined,
+        roles: [],
+        users: [],
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      })),
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
       },
+      filters,
     });
   } catch (error) {
-    console.error('[AdminPermissions] Error:', error);
+    logger.error('[AdminPermissions] Error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch permissions', code: 'PERMISSIONS_ERROR' },
       { status: 500 }

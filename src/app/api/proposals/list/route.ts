@@ -1,18 +1,20 @@
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
+import { recordDbLatency, recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { recordLatency, recordError, recordDbLatency } from '@/lib/observability/metricsStore';
 
 // Small in-memory cache for dashboard list to prevent repeated hits
 const proposalsListCache = new Map<string, { data: any; ts: number }>();
-  const PROPOSALS_LIST_TTL_MS = process.env.NODE_ENV === 'development' ? 5000 : 60 * 1000; // shorter TTL in dev to reflect changes
+const PROPOSALS_LIST_TTL_MS = process.env.NODE_ENV === 'development' ? 5000 : 60 * 1000; // shorter TTL in dev to reflect changes
 
 export async function GET(request: NextRequest) {
   const start = performance.now();
   try {
+    await validateApiPermission(request, 'proposals:read');
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -23,11 +25,17 @@ export async function GET(request: NextRequest) {
     const cacheKey = `list:${session.user.id}`;
     const cached = proposalsListCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < PROPOSALS_LIST_TTL_MS) {
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         data: cached.data,
         message: 'Proposals retrieved successfully (cache)',
       });
+      if (process.env.NODE_ENV === 'production') {
+        res.headers.set('Cache-Control', 'public, max-age=30, s-maxage=60');
+      } else {
+        res.headers.set('Cache-Control', 'no-store');
+      }
+      return res;
     }
 
     const dbStart = Date.now();
@@ -63,6 +71,11 @@ export async function GET(request: NextRequest) {
       message: 'Proposals retrieved successfully',
     });
     res.headers.set('Server-Timing', `app;dur=${duration}, db;dur=${dbMs}`);
+    if (process.env.NODE_ENV === 'production') {
+      res.headers.set('Cache-Control', 'public, max-age=30, s-maxage=60');
+    } else {
+      res.headers.set('Cache-Control', 'no-store');
+    }
     return res;
   } catch (error) {
     console.error('[ProposalListAPI] Error:', error);
@@ -80,7 +93,7 @@ export async function GET(request: NextRequest) {
     recordError(standardError.code);
     const duration = Math.round(performance.now() - start);
     recordLatency(duration);
-    return NextResponse.json(
+    const res = NextResponse.json(
       {
         success: false,
         error: standardError.message,
@@ -88,5 +101,7 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     );
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   }
 }

@@ -7,6 +7,7 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * GET /api/products/categories - Get all product categories with statistics
  */
 export async function GET(request: NextRequest) {
+  await validateApiPermission(request, 'products:read');
   const start = Date.now();
   const { requestId } = getRequestMeta(request.headers);
   try {
@@ -138,6 +140,11 @@ export async function GET(request: NextRequest) {
       });
       res.headers.set('Server-Timing', `app;dur=${duration}`);
       if (requestId) res.headers.set('x-request-id', String(requestId));
+      if (process.env.NODE_ENV === 'production') {
+        res.headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
+      } else {
+        res.headers.set('Cache-Control', 'no-store');
+      }
       return res;
     }
 
@@ -158,6 +165,11 @@ export async function GET(request: NextRequest) {
     });
     res.headers.set('Server-Timing', `app;dur=${duration}`);
     if (requestId) res.headers.set('x-request-id', String(requestId));
+    if (process.env.NODE_ENV === 'production') {
+      res.headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
+    } else {
+      res.headers.set('Cache-Control', 'no-store');
+    }
     return res;
   } catch (error) {
     const duration = Date.now() - start;

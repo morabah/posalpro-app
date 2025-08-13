@@ -6,7 +6,7 @@ import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
-import { ArrowPathIcon, DocumentArrowDownIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, EyeIcon } from '@heroicons/react/24/outline';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface VersionHistoryEntry {
@@ -37,10 +37,19 @@ export default function ProposalVersionHistoryPage() {
       setHistoryError(null);
       try {
         const endpoint = proposalId
-          ? `/proposals/${encodeURIComponent(proposalId)}/versions?limit=100`
-          : `/proposals/versions?limit=200`;
+          ? `/proposals/${encodeURIComponent(proposalId)}/versions?limit=50`
+          : `/proposals/versions?limit=50`;
         const res: any = await apiClient.get(endpoint);
         if (res && res.success && Array.isArray(res.data)) {
+          // Prime proposal titles directly from API payload (avoid N+1 lookups)
+          const titlesFromApi: Record<string, string> = {};
+          for (const row of res.data as any[]) {
+            const pid = row.proposalId;
+            if (pid && !titlesFromApi[pid]) {
+              titlesFromApi[pid] = row.proposalTitle || pid;
+            }
+          }
+
           const mapped: VersionHistoryEntry[] = res.data.map((c: any, idx: number) => {
             const tvRaw = (c as any).totalValue;
             const tv = tvRaw === null || tvRaw === undefined ? undefined : Number(tvRaw);
@@ -59,32 +68,16 @@ export default function ProposalVersionHistoryPage() {
             } as any;
           });
           setVersionHistory(mapped);
-          if (proposalId) {
-            try {
-              const pr: any = await apiClient.get(`/proposals/${proposalId}?fields=title`);
-              const title = pr?.data?.title || pr?.data?.proposal?.title || proposalId;
-              setProposalTitles(prev => ({ ...prev, [proposalId]: title }));
-            } catch {
-              setProposalTitles(prev => ({ ...prev, [proposalId]: proposalId }));
-            }
+          // store pagination cursor if present
+          if (res.pagination && res.pagination.nextCursor) {
+            setNextCursor(res.pagination.nextCursor);
+            setHasMore(Boolean(res.pagination.hasNextPage));
           } else {
-            const ids = Array.from(
-              new Set((res.data as any[]).map((x: any) => x.proposalId).filter(Boolean))
-            );
-            const entries: Record<string, string> = {};
-            await Promise.all(
-              ids.map(async (pid: string) => {
-                try {
-                  const pr: any = await apiClient.get(`/proposals/${pid}?fields=title`);
-                  const title = pr?.data?.title || pr?.data?.proposal?.title || pid;
-                  entries[pid] = title;
-                } catch {
-                  entries[pid] = pid;
-                }
-              })
-            );
-            setProposalTitles(prev => ({ ...prev, ...entries }));
+            setNextCursor(null);
+            setHasMore(false);
           }
+          // Use titles map derived from payload; no extra network calls
+          setProposalTitles(prev => ({ ...prev, ...titlesFromApi }));
         } else {
           setVersionHistory([]);
         }
@@ -107,6 +100,49 @@ export default function ProposalVersionHistoryPage() {
     },
     [apiClient, handleAsyncError]
   );
+
+  // Pagination state
+  const [nextCursor, setNextCursor] = useState<{
+    cursorCreatedAt: string;
+    cursorId: string;
+  } | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || !nextCursor) return;
+    setHistoryLoading(true);
+    try {
+      const qp = new URLSearchParams({
+        limit: '50',
+        cursorCreatedAt: nextCursor.cursorCreatedAt,
+        cursorId: nextCursor.cursorId,
+      }).toString();
+      const res: any = await apiClient.get(`/proposals/versions?${qp}`);
+      if (res && res.success && Array.isArray(res.data)) {
+        const more: VersionHistoryEntry[] = res.data.map((c: any, idx: number) => ({
+          id: c.id || String(idx),
+          version: c.version ?? 0,
+          timestamp: new Date(c.timestamp || c.createdAt || Date.now()),
+          changeType: c.changeType ?? 'update',
+          changedBy: c.createdByName || c.changedBy || 'system',
+          description: c.description ? String(c.description) : 'Proposal change',
+          affectedRelationships: 1,
+          validationImpact: 0,
+          rollbackAvailable: false,
+        })) as any;
+        setVersionHistory(prev => [...prev, ...more]);
+        if (res.pagination && res.pagination.nextCursor) {
+          setNextCursor(res.pagination.nextCursor);
+          setHasMore(Boolean(res.pagination.hasNextPage));
+        } else {
+          setNextCursor(null);
+          setHasMore(false);
+        }
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [apiClient, hasMore, nextCursor]);
 
   const groupedHistory = useMemo(() => {
     const map: Record<string, VersionHistoryEntry[]> = {} as any;
@@ -167,35 +203,8 @@ export default function ProposalVersionHistoryPage() {
       };
     }, [api, entry]);
 
-    useEffect(() => {
-      let cancelled = false;
-      async function resolveNames() {
-        if (!diff) return;
-        const ids = new Set<string>();
-        diff.added.forEach(id => ids.add(id));
-        diff.removed.forEach(id => ids.add(id));
-        diff.updated.forEach(u => ids.add(u.productId));
-        const missing = Array.from(ids).filter(id => !productNames[id]);
-        if (missing.length === 0) return;
-        const entries: Record<string, string> = {};
-        await Promise.all(
-          missing.map(async id => {
-            try {
-              const pr: any = await api.get(`/products/${id}?fields=name,sku`);
-              const name = pr?.data?.name || pr?.data?.product?.name || id;
-              entries[id] = name;
-            } catch {
-              entries[id] = id;
-            }
-          })
-        );
-        if (!cancelled) setProductNames(prev => ({ ...prev, ...entries }));
-      }
-      void resolveNames();
-      return () => {
-        cancelled = true;
-      };
-    }, [diff, productNames, api]);
+    // Rely on productsMap from the detail endpoint; avoid extra lookups per CORE_REQUIREMENTS
+    // No additional network requests to resolve product names
 
     if (loading) return <p className="text-gray-500">Loading change details...</p>;
     if (error) return <p className="text-red-600">{error}</p>;
@@ -297,17 +306,12 @@ export default function ProposalVersionHistoryPage() {
               >
                 Load
               </Button>
-              <Button
-                variant="secondary"
-                className="flex items-center"
-                onClick={() => {
-                  const anyPid = Object.keys(grouped)[0];
-                  if (anyPid) void 0;
-                }}
-              >
-                <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
-                Export History
-              </Button>
+              {hasMore && (
+                <Button variant="secondary" className="flex items-center" onClick={loadMore}>
+                  <ArrowPathIcon className="w-4 h-4 mr-2" />
+                  Load More
+                </Button>
+              )}
             </div>
 
             <div className="space-y-4">

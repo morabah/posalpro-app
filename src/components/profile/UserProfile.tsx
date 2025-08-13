@@ -22,6 +22,7 @@ import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logInfo } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertCircle,
@@ -128,13 +129,8 @@ export function UserProfile({ className = '' }: UserProfileProps) {
   const apiClient = useApiClient();
   const { success: showSuccess, info: showInfo } = useToast();
 
-  // Track component lifecycle for debugging
-  console.log(
-    '🎯 UserProfile component render, user:',
-    user?.email,
-    'authenticated:',
-    isAuthenticated
-  );
+  // Track component lifecycle with structured logs
+  void logInfo('UserProfile render', { email: user?.email, isAuthenticated });
 
   const [activeTab, setActiveTab] = useState<TabSection>('personal');
   const [isEditing, setIsEditing] = useState(false);
@@ -177,16 +173,16 @@ export function UserProfile({ className = '' }: UserProfileProps) {
 
   // Load existing profile data on component mount
   useEffect(() => {
-    console.log('🔍 UserProfile useEffect triggered, user:', user?.email);
+    void logInfo('UserProfile effect triggered', { email: user?.email });
 
     const loadProfileData = async () => {
       if (!user?.email) {
-        console.log('❌ No user email available, skipping profile data load');
+        void logInfo('UserProfile: no user email, skipping profile data load');
         return;
       }
 
       try {
-        console.log('🔄 Loading existing profile data from database...');
+        void logInfo('UserProfile: loading existing profile data from database');
         interface ProfileData {
           firstName?: string;
           lastName?: string;
@@ -211,8 +207,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
 
         if (response.success) {
           const profileData: ProfileData = response.data ?? {};
-          console.log('✅ Profile data loaded:', profileData);
-          console.log('🔥 CRITICAL DEBUG: About to reset form with title:', profileData.title);
+          void logInfo('UserProfile: profile data loaded');
 
           // Populate form with existing data
           const formData = {
@@ -228,8 +223,7 @@ export function UserProfile({ className = '' }: UserProfileProps) {
             expertiseAreas: profileData.expertiseAreas || [],
           };
 
-          console.log('🔄 Form data being reset with:', formData);
-          console.log('📋 Job title being set to:', formData.title);
+          void logInfo('UserProfile: resetting form with server data');
 
           reset(formData);
 
@@ -237,11 +231,14 @@ export function UserProfile({ className = '' }: UserProfileProps) {
           setExpertiseAreas(profileData.expertiseAreas || []);
           setProfileImage(profileData.profileImage || null);
 
-          console.log('✅ Form populated with existing data');
-          console.log('🎯 FINAL DEBUG: Form should now display title:', formData.title);
+          void logInfo('UserProfile: form populated with existing data');
         }
       } catch (error) {
-        console.error('❌ Failed to load profile data:', error);
+        const ehs = ErrorHandlingService.getInstance();
+        ehs.processError(error, 'Failed to load profile data', ErrorCodes.DATA.QUERY_FAILED, {
+          component: 'UserProfile',
+          operation: 'loadProfileData',
+        });
       }
     };
 
@@ -303,25 +300,26 @@ export function UserProfile({ className = '' }: UserProfileProps) {
     const errorHandlingService = ErrorHandlingService.getInstance();
 
     try {
-      // DEBUG: Log what data is being sent
+      // Log what data is being sent (structured)
       const requestData = {
         ...data,
         expertiseAreas, // Include from state since it's not in form data
         profileImage,
       };
 
-      console.log('🔍 DEBUG: Profile update request data:', {
-        formData: data,
-        requestData: requestData,
+      void logInfo('UserProfile: update request data', {
         dataKeys: Object.keys(requestData),
         expertiseAreas: requestData.expertiseAreas,
-        profileImage: requestData.profileImage,
+        hasProfileImage: Boolean(requestData.profileImage),
       });
 
       // Use centralized API client instead of direct fetch
       const result = await apiClient.put<{
         success: boolean;
-        data?: Partial<ProfileFormData> & { expertiseAreas?: string[]; profileImage?: string | null };
+        data?: Partial<ProfileFormData> & {
+          expertiseAreas?: string[];
+          profileImage?: string | null;
+        };
         error?: string;
       }>('/api/profile/update', requestData);
 
@@ -759,9 +757,6 @@ function PersonalTab({
                 {...register('title')}
                 type="text"
                 disabled={!isEditing}
-                onFocus={() =>
-                  console.log('🎯 Job Title Field Focus - Current Value:', watch('title'))
-                }
                 className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
                   !isEditing ? 'bg-neutral-50 cursor-not-allowed' : 'hover:border-neutral-400'
                 } ${errors.title ? 'border-red-300 bg-red-50' : 'border-neutral-300'}`}

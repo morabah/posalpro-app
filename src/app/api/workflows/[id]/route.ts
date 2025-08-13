@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -78,6 +79,7 @@ const WorkflowUpdateSchema = z.object({
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    await validateApiPermission(request, { resource: 'workflows', action: 'read' });
     const params = await context.params;
     const { id } = params;
 
@@ -183,6 +185,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    await validateApiPermission(request, { resource: 'workflows', action: 'update' });
     const params = await context.params;
     const { id } = params;
 
@@ -342,6 +345,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    await validateApiPermission(request, { resource: 'workflows', action: 'delete' });
     const params = await context.params;
     const { id } = params;
 

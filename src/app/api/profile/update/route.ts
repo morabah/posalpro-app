@@ -8,6 +8,7 @@ import {
 import { logger } from '@/utils/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 // Validation schema for profile updates
@@ -27,6 +28,7 @@ const profileUpdateSchema = z.object({
 
 export async function PUT(request: NextRequest) {
   try {
+    await validateApiPermission(request, { resource: 'profile', action: 'write' });
     // Get the current session
     const session = await getServerSession();
 

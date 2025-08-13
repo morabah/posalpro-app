@@ -183,7 +183,13 @@ export default function RealTimeAnalyticsOptimizer({
   >('overview');
   const [isLoading, setIsLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
-  const [optimizationResults, setOptimizationResults] = useState<any>(null);
+  interface OptimizationResultSummary {
+    timestamp: number;
+    actionsApplied: number;
+    scoreImprovement: number;
+    notes?: string;
+  }
+  const [optimizationResults, setOptimizationResults] = useState<OptimizationResultSummary | null>(null);
 
   /**
    * Generate comprehensive analytics data
@@ -192,7 +198,7 @@ export default function RealTimeAnalyticsOptimizer({
     // 🚨 CRITICAL FIX: Use stable timestamp to prevent infinite re-renders
     const currentTime = Date.now();
     const baseDate = new Date(currentTime);
-    
+
     // Mock comprehensive analytics data
     const hypothesesMetrics: HypothesisMetric[] = [
       {

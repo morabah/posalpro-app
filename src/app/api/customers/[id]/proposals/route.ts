@@ -6,12 +6,12 @@ import { logger } from '@/utils/logger';
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
-
 
 /**
  * Component Traceability Matrix:
@@ -54,11 +54,9 @@ const CustomerProposalsQuerySchema = z.object({
 /**
  * GET /api/customers/[id]/proposals - Get customer proposal history
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    await validateApiPermission(request, 'customers:read');
     const { id } = await params;
 
     // Authentication check
@@ -242,7 +240,7 @@ export async function GET(
 
     // Transform proposals for frontend consumption
     type ProposalRow = Prisma.ProposalGetPayload<{ select: typeof proposalSelect }>;
-    const transformedProposals = (proposals as ProposalRow[]).map((p) => {
+    const transformedProposals = (proposals as ProposalRow[]).map(p => {
       const { _count, ...base } = p as ProposalRow & {
         _count: { products: number; sections: number; approvals: number };
       };

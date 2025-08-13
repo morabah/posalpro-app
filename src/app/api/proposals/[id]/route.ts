@@ -6,6 +6,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { prisma } from '@/lib/db/prisma';
 import { createApiErrorResponse, ErrorCodes, StandardError } from '@/lib/errors';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -96,6 +97,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // Await params
     const params = await context.params;
 
+    // RBAC: proposals:read
+    await validateApiPermission(request, { resource: 'proposals', action: 'read' });
     // Validate authentication
     session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -439,6 +442,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     // Await params
     const params = await context.params;
 
+    // RBAC: proposals:update
+    await validateApiPermission(request, { resource: 'proposals', action: 'update' });
     // Validate authentication
     session = (await getServerSession(authOptions)) as any;
     if (!session || !(session as any).user || !(session as any).user.id) {
@@ -504,7 +509,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const { products: _omitProducts, ...proposalUpdateData } = body as Record<string, unknown>;
 
     let changedProducts = false;
-    let affectedProductIds: string[] = [];
+    const affectedProductIds: string[] = [];
 
     const updatedProposal = await prisma.$transaction(async tx => {
       // Update proposal basic fields first
@@ -760,6 +765,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     // Await params
     const params = await context.params;
 
+    // RBAC: proposals:delete
+    await validateApiPermission(request, { resource: 'proposals', action: 'delete' });
     // Validate authentication
     session = await getServerSession(authOptions);
     if (!session?.user?.id) {

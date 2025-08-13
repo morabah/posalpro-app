@@ -4,7 +4,7 @@
  * Performance optimized with caching and pagination
  */
 
-import { Product as EntityProduct, CreateProductData } from '@/types/entities/product';
+import { CreateProductData, Product as EntityProduct } from '@/types/entities/product';
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useApiClient } from './useApiClient';
 
@@ -22,10 +22,12 @@ export interface Product extends Omit<EntityProduct, 'createdAt' | 'updatedAt'> 
 export interface ProductsResponse {
   products: Product[];
   pagination: {
-    page: number;
+    page?: number;
     limit: number;
-    total: number;
-    totalPages: number;
+    total?: number;
+    totalPages?: number;
+    hasMore?: boolean;
+    nextCursor?: string | null;
   };
   filters: {
     search?: string;
@@ -48,6 +50,7 @@ export interface ProductsQueryParams {
   sku?: string;
   sortBy?: 'name' | 'price' | 'createdAt' | 'updatedAt';
   sortOrder?: 'asc' | 'desc';
+  cursor?: string;
 }
 
 // Query keys for React Query
@@ -85,6 +88,7 @@ export function useProducts(
       if (params.sku) searchParams.set('sku', params.sku);
       if (params.sortBy) searchParams.set('sortBy', params.sortBy);
       if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
+      if (params.cursor) searchParams.set('cursor', params.cursor);
 
       try {
         const response = await apiClient.get<{
@@ -129,11 +133,7 @@ export function useProduct(id: string): UseQueryResult<Product, Error> {
       }>(`products/${id}`);
 
       if (!response.success) {
-        // Log error but let React Query handle the error state
-        console.warn(
-          '[useProducts] Product fetch failed:',
-          response.message || 'Failed to fetch product'
-        );
+        // Let React Query handle the error state
         throw new Error(response.message || 'Failed to fetch product');
       }
 
@@ -174,11 +174,7 @@ export function useProductSearch(
       }>(`products?${searchParams.toString()}`);
 
       if (!response.success) {
-        // Log error but let React Query handle the error state
-        console.warn(
-          '[useProducts] Product search failed:',
-          response.message || 'Failed to search products'
-        );
+        // Surface error; React Query will manage the error state
         throw new Error(response.message || 'Failed to search products');
       }
 
@@ -201,8 +197,7 @@ export function useCreateProduct() {
   const apiClient = useApiClient();
 
   return {
-    mutate: () =>
-      console.warn('Use mutateAsync for proper async handling'),
+    mutate: () => undefined,
     mutateAsync: async (data: CreateProductData): Promise<Product> => {
       const response = await apiClient.post<{
         success: boolean;
@@ -211,11 +206,7 @@ export function useCreateProduct() {
       }>('products', data);
 
       if (!response.success) {
-        // Log error but let the mutation error handling manage it
-        console.warn(
-          '[useProducts] Product creation failed:',
-          response.message || 'Failed to create product'
-        );
+        // Surface error to caller; centralized error handling at UI layer
         throw new Error(response.message || 'Failed to create product');
       }
 
@@ -231,8 +222,7 @@ export function useUpdateProduct() {
   const apiClient = useApiClient();
 
   return {
-    mutate: () =>
-      console.warn('Use mutateAsync for proper async handling'),
+    mutate: () => undefined,
     mutateAsync: async (data: { id: string } & Partial<CreateProductData>): Promise<Product> => {
       const { id, ...updateData } = data;
       const response = await apiClient.put<{
@@ -242,11 +232,7 @@ export function useUpdateProduct() {
       }>(`products/${id}`, updateData);
 
       if (!response.success) {
-        // Log error but let the mutation error handling manage it
-        console.warn(
-          '[useProducts] Product update failed:',
-          response.message || 'Failed to update product'
-        );
+        // Surface error to caller; centralized error handling at UI layer
         throw new Error(response.message || 'Failed to update product');
       }
 
@@ -293,7 +279,6 @@ export function useDeleteProduct() {
 // Removed all mock product generation; all data must come from live API/database
 
 export function useProductsManager() {
-  console.warn('useProductsManager: Feature not implemented in performance-optimized version');
   return {
     products: [] as Product[],
     pagination: null,

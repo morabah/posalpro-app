@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { withApiTiming } from '@/lib/observability/apiTiming';
 import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 // Simple in-memory cache to reduce repeated heavy queries
 const dashboardStatsCache = new Map<string, { data: any; ts: number }>();
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
   let session;
   const start = performance.now();
   try {
+    await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -160,6 +162,9 @@ export async function GET(request: NextRequest) {
     recordLatency(duration);
     return response;
   } catch (error) {
+    if (error instanceof Response) {
+      return error as unknown as NextResponse;
+    }
     // ✅ ENHANCED: Use proper ErrorHandlingService singleton
     const errorHandlingService = ErrorHandlingService.getInstance();
     const standardError = errorHandlingService.processError(

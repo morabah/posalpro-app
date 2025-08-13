@@ -251,7 +251,7 @@ export function ValidationIssueList({
         }
         return success;
       } catch (error) {
-        console.error('Failed to apply fix:', error);
+        // Use standardized error handler upstream where available; keep silent here
         return false;
       }
     },
@@ -269,7 +269,7 @@ export function ValidationIssueList({
         }
         setSelectedIssues(new Set());
       } catch (error) {
-        console.error('Batch operation failed:', error);
+        // Use standardized error handler upstream where available; keep silent here
       }
     },
     [selectedIssues, onBatchOperation]

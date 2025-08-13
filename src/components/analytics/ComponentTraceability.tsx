@@ -8,9 +8,18 @@
 import { Card } from '@/components/ui/Card';
 import { CubeIcon, LinkIcon } from '@heroicons/react/24/outline';
 
+interface TraceabilityItem {
+  id?: string;
+  userStories?: Array<string>;
+  acceptanceCriteria?: Array<string>;
+  hypotheses?: Array<string>;
+  components?: Array<string>;
+  [key: string]: unknown;
+}
+
 interface ComponentTraceabilityProps {
-  data: any;
-  timeRange: string;
+  data: Array<TraceabilityItem> | Record<string, TraceabilityItem> | null | undefined;
+  timeRange: 'overview' | 'hypothesis' | 'metrics' | 'stories' | 'components' | string;
 }
 
 export const ComponentTraceability: React.FC<ComponentTraceabilityProps> = ({

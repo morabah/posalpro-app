@@ -1,0 +1,6 @@
+{
+  "cookies": {
+    "next-auth.csrf-token": "8c037decd191f4ce0e2183c243a025dc3bfd926b5066f7d91b6c10aaa89cd4c4%7Cfd4ed0ff6021e4e7ef3a54e9350756ac6932aa85b6ba7d9222b659533e49aa8c",
+    "next-auth.callback-url": "http%3A%2F%2Flocalhost%3A3000%2Fdashboard"
+  }
+}

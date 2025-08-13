@@ -28,21 +28,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-3.1', 'US-3.2', 'US-1.1'],
-  acceptanceCriteria: ['AC-3.1.1', 'AC-3.1.2', 'AC-3.2.1', 'AC-1.1.1'],
-  methods: [
-    'suggestContent()',
-    'filterByRelevance()',
-    'assignToSection()',
-    'integrateContentSearch()',
-    'validateCrossStepData()',
-    'trackContentAnalytics()',
-  ],
-  hypotheses: ['H5', 'H1'],
-  testCases: ['TC-H5-001', 'TC-H5-002', 'TC-H1-001'],
-};
+// Removed unused COMPONENT_MAPPING to satisfy unused-vars
 
 // Enhanced content type enum aligned with content search system
 enum ContentType {
@@ -303,19 +289,11 @@ export function ContentSelectionStep({
 
   // Initialize selected content from props (one-time hydration to avoid loops/overwrites)
   useEffect(() => {
-    console.log('[ContentSelectionStep] Hydration check:', {
-      hasHydrated: hasHydratedSelectedContentRef.current,
-      incomingCount: data.selectedContent?.length || 0,
-    });
     if (
       !hasHydratedSelectedContentRef.current &&
       data.selectedContent &&
       data.selectedContent.length > 0
     ) {
-      console.log(
-        '[ContentSelectionStep] Hydrating selectedContent from props:',
-        data.selectedContent.length
-      );
       const contentMap = new Map<string, SelectedContent>();
       const contentIds = new Set<string>();
 
@@ -327,14 +305,13 @@ export function ContentSelectionStep({
       setSelectedContentMap(contentMap);
       setSelectedContentIds(contentIds);
       hasHydratedSelectedContentRef.current = true;
-      console.log('[ContentSelectionStep] Hydration complete. Map size:', contentMap.size);
     }
   }, [data.selectedContent]);
 
   // Enhanced analytics tracking with cross-step context
   const trackContentSelection = useCallback(
     (action: string, contentId: string, metadata: Record<string, unknown> = {}) => {
-        const enhancedMetadata: Record<string, unknown> = {
+      const enhancedMetadata: Record<string, unknown> = {
         ...metadata,
         stepContext: 'content_selection',
         proposalType: proposalMetadata?.projectType,
@@ -370,7 +347,7 @@ export function ContentSelectionStep({
     const warnings: string[] = [];
     const suggestions: string[] = [];
 
-      const selectedContentArray: SelectedContent[] = Array.from(selectedContentMap.values());
+    const selectedContentArray: SelectedContent[] = Array.from(selectedContentMap.values());
 
     // Validate against RFP requirements
     const rfpRequirements: RfpRequirement[] = rfpData?.parsedContent?.requirements ?? [];
@@ -508,12 +485,7 @@ export function ContentSelectionStep({
     const timeoutId = setTimeout(() => {
       const selectedContentArray: SelectedContent[] = Array.from(selectedContentMap.values());
       // Only log if content actually changed to reduce noise
-      if (selectedContentArray.length > 0) {
-        console.log(
-          '[ContentSelectionStep] Debounced update fired. selectedContent size:',
-          selectedContentArray.length
-        );
-      }
+
       const validationResults = performCrossStepValidation();
 
       const formattedData: ProposalWizardStep3Data = {
@@ -567,7 +539,8 @@ export function ContentSelectionStep({
           id: c.id,
           title: c.title,
           // Map arbitrary API type strings to the constrained ContentItem union
-          type: ((c.type as string | undefined)?.toLowerCase() as ContentItem['type']) || 'reference',
+          type:
+            ((c.type as string | undefined)?.toLowerCase() as ContentItem['type']) || 'reference',
           relevanceScore: 0,
           section: 'Executive Summary',
           tags: c.tags ?? [],
@@ -686,7 +659,7 @@ export function ContentSelectionStep({
         processingTime: 2000,
       });
     } catch (error) {
-      console.error('AI suggestion error:', error);
+      // Use standardized handler upstream; keep silent here
     } finally {
       setIsLoadingSuggestions(false);
     }

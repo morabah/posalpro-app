@@ -1,8 +1,14 @@
+import { rbacIntegration } from '@/lib/auth/rbacIntegration';
 import { getRequestMeta } from '@/lib/logging/structuredLogger';
 import { snapshot } from '@/lib/observability/metricsStore';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
+  // Observability metrics are generally internal; allowPublic not set. Use lightweight gate.
+  const auth = await rbacIntegration.authorizeApiRoute(request, ['analytics:read']);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   const t0 = Date.now();
   const data = snapshot();
   const { requestId } = getRequestMeta(request.headers);

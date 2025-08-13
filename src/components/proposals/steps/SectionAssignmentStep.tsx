@@ -29,14 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-2.2', 'US-4.1'],
-  acceptanceCriteria: ['AC-2.2.1', 'AC-2.2.2', 'AC-4.1.1', 'AC-4.1.2'],
-  methods: ['assignSections()', 'estimateTimeline()', 'balanceWorkload()'],
-  hypotheses: ['H4', 'H7'],
-  testCases: ['TC-H4-001', 'TC-H7-001'],
-};
+// Removed unused COMPONENT_MAPPING to satisfy unused-vars
 
 // Section interface for the component
 interface ProposalSection {
@@ -303,7 +296,6 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
           if (analytics?.trackWizardStep) {
             analytics.trackWizardStep(5, 'Section Assignment', 'section_assignment_updated', {
               component: 'SectionAssignmentStep',
-              ...COMPONENT_MAPPING,
               hypothesisId: ['H4', 'H7'],
               metadata: {
                 totalSections: formData.sections.length,
@@ -331,13 +323,7 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
 
   // Initialize sections from props (hydrate assignments and hours)
   useEffect(() => {
-    console.log('[SectionAssignmentStep] Hydration check:', {
-      incomingSections: (data.sections && data.sections.length) || 0,
-      hasAssignments: Boolean(data.sectionAssignments),
-    });
-    console.log('[SectionAssignmentStep] Raw data received:', data);
-    console.log('[SectionAssignmentStep] sectionAssignments received:', data.sectionAssignments);
-    console.log('[SectionAssignmentStep] sectionAssignments keys:', Object.keys(data.sectionAssignments || {}));
+    // hydrate from incoming data
 
     const normalize = (s: string) =>
       (s || '')
@@ -382,7 +368,7 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
     // Merge sectionAssignments map (if provided) into assignedTo values
     const assignments: SectionAssignmentsMap = data.sectionAssignments || {};
     if (assignments && Object.keys(assignments).length > 0) {
-      console.log('[SectionAssignmentStep] Merging sectionAssignments:', assignments);
+      /* dev log removed */
       for (const s of mergedSections) {
         if (!s.assignedTo) {
           if (assignments[s.id]) s.assignedTo = assignments[s.id];
@@ -417,18 +403,18 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
         sections: mergedSections as ProposalSection[],
         sectionAssignments: buildSectionAssignments(mergedSections),
       });
-          } catch (e) {
-            /* no-op: RHF reset may fail if form unmounted */
-          }
+    } catch (e) {
+      /* no-op: RHF reset may fail if form unmounted */
+    }
 
-    console.log('[SectionAssignmentStep] Hydration complete. Sections:', mergedSections.length);
+    /* dev log removed */
   }, [data.sections, data.sectionAssignments, reset, buildSectionAssignments]);
 
   // Merge assignments even when no sections were provided (match by id or by title)
   useEffect(() => {
     const assignments: SectionAssignmentsMap = data.sectionAssignments || {};
     const keys = Object.keys(assignments || {});
-    console.log('[SectionAssignmentStep] Assignment keys:', keys);
+    /* dev log removed */
     if (!keys.length) return;
 
     const normalize = (s: string) =>
@@ -572,7 +558,10 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
               return { ...section, priority: v ?? section.priority };
             }
             case 'assignedTo':
-              return { ...section, assignedTo: typeof value === 'string' ? value : section.assignedTo };
+              return {
+                ...section,
+                assignedTo: typeof value === 'string' ? value : section.assignedTo,
+              };
             default:
               return { ...section, [key]: value } as ProposalSection;
           }
@@ -649,9 +638,7 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
   }, [sections, calculateCriticalPath]);
 
   // Debounced timeline recalculation
-  const recalculateTimeline = useCallback(() => {
-    // Implementation of recalculateTimeline function
-  }, []);
+  // Removed unused recalculateTimeline stub
 
   if (isLoadingUsers) {
     return (
@@ -793,11 +780,19 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
                         { value: 'medium', label: 'Medium' },
                         { value: 'low', label: 'Low' },
                       ]}
-          onChange={(value: string) => {
-                        updateSectionAssignment(section.id, 'priority', value as 'high' | 'medium' | 'low');
-            setValue(`sections.${index}.priority` as const, value as 'high' | 'medium' | 'low', {
-                          shouldDirty: true,
-                        });
+                      onChange={(value: string) => {
+                        updateSectionAssignment(
+                          section.id,
+                          'priority',
+                          value as 'high' | 'medium' | 'low'
+                        );
+                        setValue(
+                          `sections.${index}.priority` as const,
+                          value as 'high' | 'medium' | 'low',
+                          {
+                            shouldDirty: true,
+                          }
+                        );
                         handleFieldChange(`sections.${index}.priority`, value);
                       }}
                     />

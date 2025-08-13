@@ -1,3 +1,5 @@
+import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -15,8 +17,14 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(request: NextRequest) {
   try {
+    // Allow either profile:read (if defined) or users:read as a fallback for profile viewing
+    try {
+      await validateApiPermission(request, { resource: 'profile', action: 'read' });
+    } catch (e) {
+      await validateApiPermission(request, { resource: 'users', action: 'read' });
+    }
     // Get the current session
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
       return createApiErrorResponse(

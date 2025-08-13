@@ -7,6 +7,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { createApiErrorResponse } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -23,6 +24,8 @@ const errorHandlingService = ErrorHandlingService.getInstance();
  */
 export async function POST(request: NextRequest) {
   try {
+    // RBAC guard - admin privileged operation
+    await validateApiPermission(request, { resource: 'proposals', action: 'update' });
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -34,9 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Authorization check - only admins can run this
-    // Note: In a real app, you'd check user roles here
-    // For now, we'll allow any authenticated user for testing
+    // Authorization already enforced above via validateApiPermission
 
     const startTime = Date.now();
     let proposalsUpdated = 0;

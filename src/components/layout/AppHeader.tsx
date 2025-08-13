@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useCallback, useState } from 'react';
+import { logInfo } from '@/lib/logger';
 
 import { UserMenu } from './UserMenu';
 
@@ -39,10 +40,9 @@ export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
   // Analytics tracking for header interactions
   const trackHeaderAction = useCallback(
     (action: string, metadata: Record<string, unknown> = {}) => {
-      console.log('Header Analytics:', {
+      void logInfo('Header Analytics', {
         action,
         metadata,
-        timestamp: Date.now(),
         userId: user?.id,
         component: 'AppHeader',
       });
@@ -55,8 +55,8 @@ export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
       e.preventDefault();
       if (searchQuery.trim()) {
         trackHeaderAction('global_search', { query: searchQuery });
-        // Navigate to search results or trigger search
-        console.log('Searching for:', searchQuery);
+        // Navigate to search results or trigger search (structured log only)
+        void logInfo('Header Search', { query: searchQuery });
       }
     },
     [searchQuery, trackHeaderAction]
@@ -64,8 +64,8 @@ export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
 
   const handleNotificationClick = useCallback(() => {
     trackHeaderAction('notifications_clicked');
-    // Open notifications panel
-    console.log('Opening notifications');
+    // Open notifications panel (structured log only)
+    void logInfo('Notifications opened');
   }, [trackHeaderAction]);
 
   return (

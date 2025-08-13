@@ -32,14 +32,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-3.1', 'US-4.1'],
-  acceptanceCriteria: ['AC-3.1.1', 'AC-4.1.1', 'AC-4.1.3'],
-  methods: ['validateProposal()', 'generateInsights()', 'predictSuccess()'],
-  hypotheses: ['H7', 'H3'],
-  testCases: ['TC-H7-001', 'TC-H3-001'],
-};
+// Removed unused COMPONENT_MAPPING to satisfy unused-vars
 
 // Validation issue interface
 interface ValidationIssue {
@@ -341,7 +334,6 @@ export function ReviewStep({
   // Track analytics for review step
   const trackReviewAction = useCallback(
     (action: 'start' | 'complete' | 'error') => {
-      console.log('[ReviewStep] Tracking review action:', action);
       analytics?.trackWizardStep?.(6, 'review', action);
     },
     [analytics]
@@ -485,35 +477,18 @@ export function ReviewStep({
   ]);
 
   const handleCreateProposal = () => {
-    console.log('[ReviewStep][Bottom Button] Create Proposal button clicked');
-    console.log('[ReviewStep][Bottom Button] Current form values:', getValues());
-    console.log('[ReviewStep][Bottom Button] Current data:', data);
-    console.log('[ReviewStep][Bottom Button] All wizard data:', allWizardData);
-    console.log(
-      '[ReviewStep][Bottom Button] Final review complete:',
-      getValues().finalReviewComplete
-    );
-    console.log('[ReviewStep][Bottom Button] Overall valid:', summaryStats.overallValid);
-
     try {
-      console.log('[ReviewStep][Bottom Button] Starting proposal creation process');
-
-      // Track the review completion
-      console.log('[ReviewStep][Bottom Button] Tracking review completion');
       trackReviewAction('complete');
 
       // Prepare the update data
       const updateData = collectFormData();
-
-      console.log('[ReviewStep][Bottom Button] Updating step data with:', updateData);
       onUpdate(updateData);
 
       // Call onNext to trigger proposal creation
       if (onNext) {
-        console.log('[ReviewStep][Bottom Button] Calling onNext to trigger proposal creation');
         onNext();
       } else {
-        console.warn('[ReviewStep][Bottom Button] onNext callback is not provided');
+        // onNext is optional
       }
     } catch (error) {
       // ✅ ENHANCED: Use proper logger instead of console.error
@@ -878,12 +853,7 @@ export function ReviewStep({
                   type="checkbox"
                   {...register('finalReviewComplete')}
                   className="mr-2"
-                  onChange={e => {
-                    console.log(
-                      '[ReviewStep][Bottom Button] Final review checkbox changed:',
-                      e.target.checked
-                    );
-                  }}
+                  onChange={() => {}}
                 />
                 <span className="text-sm">I have reviewed all information</span>
               </label>
@@ -892,7 +862,6 @@ export function ReviewStep({
                 size="lg"
                 disabled={!getValues().finalReviewComplete || !summaryStats.overallValid}
                 onClick={() => {
-                  console.log('[ReviewStep][Bottom Button] Create Proposal button clicked');
                   handleCreateProposal();
                 }}
                 className="flex items-center"

@@ -12,6 +12,9 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError, logInfo } from '@/lib/logger';
 import {
   ArrowPathIcon,
   CalendarIcon,
@@ -130,8 +133,20 @@ function ProposalManagementDashboardContent() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [filteredProposals, setFilteredProposals] = useState<Proposal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  // DB-backed stats for summary cards
+  const [stats, setStats] = useState<{
+    total: number;
+    inProgress: number;
+    overdue: number;
+    winRate: number;
+    totalValue: number;
+  } | null>(null);
+  const [loadingStats, setLoadingStats] = useState<boolean>(false);
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
@@ -194,11 +209,11 @@ function ProposalManagementDashboardContent() {
     setError(null);
 
     try {
-      console.log('🚀 [PROPOSALS] Fetching proposals with apiClient...');
+      void logInfo('[PROPOSALS] Fetching proposals with apiClient');
 
-      // Use denormalized fields; avoid heavy relation includes by default. Response may vary in shape.
+      // Initial page load using offset-based (server infers hasNextPage). We'll synthesize nextCursor.
       const raw: unknown = await apiClient.get(
-        '/proposals?page=1&limit=50&sortBy=updatedAt&sortOrder=desc&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName,customer(id,name),assignedTo(id,name)'
+        '/proposals?limit=50&sortBy=updatedAt&sortOrder=desc&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName,customer(id,name),assignedTo(id,name)'
       );
 
       const { proposals: proposalsData, responseTimeMs } = extractProposalsResponse(raw);
@@ -295,6 +310,11 @@ function ProposalManagementDashboardContent() {
 
         setProposals(transformedProposals);
 
+        // Synthesize cursor for subsequent loads (use last id) and hasMore flag
+        const last = transformedProposals[transformedProposals.length - 1];
+        setNextCursor(last ? last.id : null);
+        setHasMore(transformedProposals.length === 50);
+
         // Track successful data load
         trackAction(
           'proposals_loaded',
@@ -311,7 +331,15 @@ function ProposalManagementDashboardContent() {
         trackAction('proposals_load_failed', { error: errorMsg }, 'high');
       }
     } catch (err) {
-      console.error('❌ [PROPOSALS] Failed to fetch proposals:', err);
+      void logError('[PROPOSALS] Failed to fetch proposals', err as unknown, {
+        component: 'ProposalManagementDashboardContent',
+        operation: 'fetchProposals',
+      });
+      const ehs = ErrorHandlingService.getInstance();
+      ehs.processError(err, 'Failed to load proposals', ErrorCodes.DATA.QUERY_FAILED, {
+        component: 'ProposalManagementDashboardContent',
+        operation: 'fetchProposals',
+      });
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
       const fullErrorMsg = `Failed to load proposals: ${errorMessage}`;
       setError(fullErrorMsg);
@@ -322,12 +350,138 @@ function ProposalManagementDashboardContent() {
     }
   }, [apiClient]); // ✅ PERFORMANCE: Removed trackAction to prevent re-renders
 
+  // Fetch canonical, database-backed stats for summary cards
+  const fetchStats = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    setLoadingStats(true);
+    try {
+      const raw: unknown = await apiClient.get('/proposals/stats?fresh=1');
+      const data = (raw as any)?.data ?? raw;
+      const total = Number((data as any)?.total ?? 0);
+      const inProgress = Number((data as any)?.inProgress ?? 0);
+      const overdue = Number((data as any)?.overdue ?? 0);
+      const winRate = Number((data as any)?.winRate ?? 0);
+      const totalValue = Number((data as any)?.totalValue ?? 0);
+      setStats({ total, inProgress, overdue, winRate, totalValue });
+    } catch (_e) {
+      // keep silent; UI will fall back to client-calculated values
+      setStats(null);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [apiClient]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const endpoint = `/proposals?limit=50&sortBy=updatedAt&sortOrder=desc&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName,customer(id,name),assignedTo(id,name)&cursor=${encodeURIComponent(
+        nextCursor
+      )}`;
+      const raw: unknown = await apiClient.get(endpoint);
+      const { proposals: proposalsData } = extractProposalsResponse(raw);
+      if (Array.isArray(proposalsData) && proposalsData.length > 0) {
+        const more = proposalsData.map((apiProposalUnknown: unknown) => {
+          const p = isObject(apiProposalUnknown) ? apiProposalUnknown : {};
+          const teamLead =
+            typeof p.creatorName === 'string'
+              ? p.creatorName
+              : typeof (p as Record<string, unknown>).createdBy === 'string'
+                ? ((p as Record<string, unknown>).createdBy as string)
+                : 'Unassigned';
+          const assignedRaw = (p as Record<string, unknown>).assignedTo;
+          const assignedTeam = Array.isArray(assignedRaw) ? assignedRaw : [];
+          const teamMembers = Array.isArray(assignedTeam)
+            ? assignedTeam.map((member: unknown) => {
+                if (isObject(member)) {
+                  const name = member.name;
+                  const id = member.id;
+                  return (
+                    (typeof name === 'string' && name) || (typeof id === 'string' ? id : 'Unknown')
+                  );
+                }
+                return 'Unknown';
+              })
+            : [];
+          const value = (p as Record<string, unknown>).value;
+          const estimatedValue = typeof value === 'number' ? value : 0;
+          const due = (p as Record<string, unknown>).dueDate;
+          const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
+
+          return {
+            id: String((p as Record<string, unknown>).id || ''),
+            title: String((p as Record<string, unknown>).title || ''),
+            client:
+              (typeof (p as Record<string, unknown>).customerName === 'string' &&
+                ((p as Record<string, unknown>).customerName as string)) ||
+              (isObject((p as Record<string, unknown>).customer) &&
+              typeof ((p as Record<string, unknown>).customer as Record<string, unknown>).name ===
+                'string'
+                ? String(((p as Record<string, unknown>).customer as Record<string, unknown>).name)
+                : 'Unknown Client'),
+            status: mapApiStatusToUIStatus(
+              String((p as Record<string, unknown>).status || 'draft')
+            ),
+            priority: mapApiPriorityToUIPriority(
+              String((p as Record<string, unknown>).priority || 'medium')
+            ),
+            dueDate: new Date(dueDate),
+            createdAt: new Date(
+              String((p as Record<string, unknown>).createdAt || new Date().toISOString())
+            ),
+            updatedAt: new Date(
+              String((p as Record<string, unknown>).updatedAt || new Date().toISOString())
+            ),
+            estimatedValue: estimatedValue,
+            teamLead: teamLead,
+            assignedTeam: teamMembers,
+            progress: calculateProgress(String((p as Record<string, unknown>).status || 'draft')),
+            stage: getStageFromStatus(String((p as Record<string, unknown>).status || 'draft')),
+            riskLevel: calculateRiskLevel(p),
+            tags: Array.isArray((p as Record<string, unknown>).tags)
+              ? ((p as Record<string, unknown>).tags as string[])
+              : [],
+            description:
+              typeof (p as Record<string, unknown>).description === 'string'
+                ? ((p as Record<string, unknown>).description as string)
+                : undefined,
+            lastActivity: `Created on ${new Date(
+              String((p as Record<string, unknown>).createdAt || new Date().toISOString())
+            ).toLocaleDateString()}`,
+            customer: isObject((p as Record<string, unknown>).customer)
+              ? {
+                  id: String(
+                    ((p as Record<string, unknown>).customer as Record<string, unknown>).id || ''
+                  ),
+                  name: String(
+                    ((p as Record<string, unknown>).customer as Record<string, unknown>).name || ''
+                  ),
+                }
+              : undefined,
+          } as Proposal;
+        });
+
+        setProposals(prev => [...prev, ...more]);
+        const last = more[more.length - 1];
+        setNextCursor(last ? last.id : null);
+        setHasMore(more.length === 50);
+      } else {
+        setHasMore(false);
+      }
+    } catch (_e) {
+      setHasMore(false);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [apiClient, nextCursor, isLoadingMore]);
+
   useEffect(() => {
     // ✅ FIXED: Only fetch on client side
     if (typeof window !== 'undefined') {
       fetchProposals();
+      fetchStats();
     }
-  }, [fetchProposals]);
+  }, [fetchProposals, fetchStats]);
 
   // Helper functions for data transformation
   const mapApiStatusToUIStatus = (apiStatus: string): ProposalStatus => {
@@ -573,47 +727,26 @@ function ProposalManagementDashboardContent() {
     );
   };
 
-  // Live total from dashboard stats API to avoid page-size caps
-  const [statsTotalProposals, setStatsTotalProposals] = useState<number | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res: any = await apiClient.get('dashboard/stats?fresh=1');
-        if (
-          mounted &&
-          res &&
-          res.success &&
-          res.data &&
-          typeof res.data.totalProposals === 'number'
-        ) {
-          setStatsTotalProposals(res.data.totalProposals);
-        }
-      } catch (_err) {
-        // Non-blocking; fall back to local count
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Calculate dashboard metrics
   const dashboardMetrics = useMemo(() => {
-    const total = typeof statsTotalProposals === 'number' ? statsTotalProposals : proposals.length;
+    // Prefer database-backed stats when available for top cards
+    const dbTotals = {
+      total: stats?.total ?? undefined,
+      inProgress: stats?.inProgress ?? undefined,
+      overdue: stats?.overdue ?? undefined,
+      totalValue: stats?.totalValue ?? undefined,
+      winRate: stats?.winRate ?? undefined,
+    };
+
+    const totalClient = proposals.length;
     const draft = proposals.filter(p => p.status === ProposalStatus.DRAFT).length;
-    const inProgress = proposals.filter(p => p.status === ProposalStatus.IN_PROGRESS).length;
     const review = proposals.filter(p => p.status === ProposalStatus.IN_REVIEW).length;
     const submitted = proposals.filter(p => p.status === ProposalStatus.SUBMITTED).length;
     const won = proposals.filter(p => p.status === ProposalStatus.WON).length;
-    const totalValue = proposals.reduce((sum, p) => sum + p.estimatedValue, 0);
-    const avgProgress = proposals.reduce((sum, p) => sum + p.progress, 0) / total;
-
-    // Calculate overdue proposals
+    const totalValueClient = proposals.reduce((sum, p) => sum + p.estimatedValue, 0);
+    const avgProgress = proposals.reduce((sum, p) => sum + p.progress, 0) / (totalClient || 1);
     const now = new Date();
-    const overdue = proposals.filter(
+    const overdueClient = proposals.filter(
       p =>
         p.dueDate < now &&
         ![
@@ -623,20 +756,21 @@ function ProposalManagementDashboardContent() {
           ProposalStatus.CANCELLED,
         ].includes(p.status)
     ).length;
+    const inProgressClient = proposals.filter(p => p.status === ProposalStatus.IN_PROGRESS).length;
 
     return {
-      total,
+      total: dbTotals.total ?? totalClient,
+      inProgress: dbTotals.inProgress ?? inProgressClient,
+      overdue: dbTotals.overdue ?? overdueClient,
+      totalValue: dbTotals.totalValue ?? totalValueClient,
+      winRate: dbTotals.winRate ?? (totalClient > 0 ? Math.round((won / totalClient) * 100) : 0),
       draft,
-      inProgress,
       review,
       submitted,
       won,
-      overdue,
-      totalValue,
       avgProgress: Math.round(avgProgress),
-      winRate: total > 0 ? Math.round((won / total) * 100) : 0,
     };
-  }, [proposals, statsTotalProposals]);
+  }, [proposals, stats]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -981,6 +1115,13 @@ function ProposalManagementDashboardContent() {
                 </div>
               </Card>
             ))
+          )}
+          {hasMore && !isLoading && (
+            <div className="flex justify-center mt-6">
+              <Button variant="secondary" onClick={loadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? 'Loading…' : 'Load More'}
+              </Button>
+            </div>
           )}
         </div>
       </div>

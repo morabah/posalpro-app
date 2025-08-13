@@ -172,7 +172,7 @@ export function PerformanceMonitor() {
         }
       })();
     } catch (error) {
-      console.error('Performance monitoring error:', error);
+      // Keep UI resilient; avoid console noise and surface alert instead
       addAlert('error', 'Performance monitoring encountered an error', false);
     }
   }, [isMonitoring, collectMetrics]);

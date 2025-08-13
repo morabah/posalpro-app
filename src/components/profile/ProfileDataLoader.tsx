@@ -2,24 +2,27 @@
 
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { logInfo } from '@/lib/logger';
 import { useEffect } from 'react';
 
 export function ProfileDataLoader() {
   const { user } = useAuth() || {};
   const apiClient = useApiClient();
+  const { handleAsyncError } = useErrorHandler();
 
   useEffect(() => {
-    console.log('🚀 NEW COMPONENT: ProfileDataLoader mounted');
-    console.log('🚀 User data:', user?.email);
+    logInfo('ProfileDataLoader mounted');
+    logInfo('ProfileDataLoader user context', { email: user?.email });
 
     const loadData = async () => {
       if (!user?.email) {
-        console.log('⚠️ No user email, skipping data load');
+        logInfo('ProfileDataLoader: no user email, skipping data load');
         return;
       }
 
       try {
-        console.log('📡 Fetching profile data...');
+        logInfo('ProfileDataLoader: fetching profile data');
         interface ProfilePayload {
           firstName?: string;
           lastName?: string;
@@ -33,24 +36,23 @@ export function ProfileDataLoader() {
         }
         const response = await apiClient.get<ProfileResponse>('/api/profile');
 
-        console.log('📊 Profile API Response:', response);
+        logInfo('ProfileDataLoader: profile API response');
 
         if (response.success) {
-          console.log('✅ SUCCESS: Profile data retrieved!');
-          console.log('📋 Job Title in database:', response.data?.title);
-          console.log('📋 Full profile data:', response.data);
+          logInfo('ProfileDataLoader: profile data retrieved');
 
           if (response.data?.title === 'sales') {
-            console.log('🎉 CONFIRMED: Job title "sales" found in API response!');
-            console.log('✅ Backend persistence is working correctly');
+            logInfo('ProfileDataLoader: job title sales confirmed');
           } else {
-            console.log('⚠️ Different job title found:', response.data?.title);
+            logInfo('ProfileDataLoader: different job title found');
           }
         } else {
-          console.log('❌ Failed to get profile data:', response.error);
+          logInfo('ProfileDataLoader: profile fetch failed');
         }
       } catch (error) {
-        console.error('❌ Error loading profile:', error);
+        handleAsyncError(error, 'Error loading profile', {
+          component: 'ProfileDataLoader',
+        });
       }
     };
 
@@ -58,7 +60,7 @@ export function ProfileDataLoader() {
   }, [user?.email, apiClient]);
 
   // Add dramatic visual alert to force visibility
-  console.log('🔥 PROFILE DATA LOADER RENDERING NOW!');
+  // Keep UI-only banner without console noise
 
   return (
     <div

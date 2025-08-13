@@ -10,6 +10,7 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -102,6 +103,7 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
+  const apiClient = useApiClient();
 
   // State management
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -218,20 +220,52 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
     return errors;
   }, []);
 
-  // Load customer from live API
+  // Load customer from live API (useApiClient per CORE_REQUIREMENTS)
   useEffect(() => {
     let isMounted = true;
     async function load() {
       try {
-        const res = await fetch(`/api/customers/${customerId}`, { cache: 'no-store' });
+        const response = await apiClient.get<{ success: boolean; data?: any }>(
+          `customers/${customerId}`
+        );
         if (!isMounted) return;
-        if (res.ok) {
-          const json = await res.json();
-          setCustomer(json.data as Customer);
+        if (response && (response as any).success && (response as any).data) {
+          const raw = (response as any).data as any;
+          const mapped: Customer = {
+            id: String(raw.id),
+            name: String(raw.name || ''),
+            industry: String(raw.industry || ''),
+            address: String(raw.address || ''),
+            phone: String(raw.phone || ''),
+            website: String(raw.website || ''),
+            email: String(raw.email || ''),
+            // Best-effort mapping; retain existing if missing
+            tier: (customer?.tier as CustomerTier) || CustomerTier.BRONZE,
+            annualRevenue:
+              typeof raw.revenue === 'number' ? raw.revenue : customer?.annualRevenue || 0,
+            employeeCount:
+              typeof raw.employeeCount === 'number'
+                ? raw.employeeCount
+                : customer?.employeeCount || 0,
+            healthScore:
+              typeof raw.statistics?.healthScore === 'number'
+                ? raw.statistics.healthScore
+                : customer?.healthScore || 0,
+            engagementLevel: (customer?.engagementLevel as any) || 'low',
+            lastContact: raw.lastContact
+              ? new Date(raw.lastContact)
+              : customer?.lastContact || new Date(),
+            nextActionDue: raw.nextActionDue
+              ? new Date(raw.nextActionDue)
+              : customer?.nextActionDue || new Date(),
+            tags: Array.isArray(raw.tags) ? (raw.tags as string[]) : customer?.tags || [],
+          };
+          setCustomer(mapped);
         } else {
           setCustomer(null);
         }
-      } catch {
+      } catch (error) {
+        handleError(error, 'load_customer', { customerId });
         setCustomer(null);
       }
     }
@@ -239,6 +273,7 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
   // Save customer changes
@@ -253,32 +288,69 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
         throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
       }
 
-      // Simulate API call - in real implementation, this would call an API endpoint
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Build payload aligned with server schema (send safe subset only)
+      const payload: Record<string, unknown> = {
+        name: editData.name,
+        email: editData.email,
+        phone: editData.phone,
+        website: editData.website,
+        address: editData.address,
+        industry: editData.industry,
+        tags: editData.tags,
+        // revenue/companySize/tier/status are optional on server; omit if unknown
+        revenue: typeof editData.annualRevenue === 'number' ? editData.annualRevenue : undefined,
+        // Use metadata to carry UI-only fields when server model differs
+        metadata: {
+          employeeCount: editData.employeeCount,
+          uiTier: editData.tier,
+        },
+      };
 
-      // Update customer state
+      const response = await apiClient.put<{ success: boolean; data?: any }>(
+        `customers/${customerId}`,
+        payload
+      );
+
+      if (!response || !(response as any).success || !(response as any).data) {
+        throw new Error('Failed to update customer');
+      }
+
+      const updated = (response as any).data as any;
+
+      // Merge server-updated fields back into local Customer shape
       if (!customer) throw new Error('Customer not loaded');
-      const updatedCustomer: Customer = {
+
+      const merged: Customer = {
         ...customer,
-        ...editData,
-        lastContact: new Date(), // Update last contact time
+        name: String(updated.name || customer.name),
+        email: String(updated.email || customer.email),
+        phone: String(updated.phone || customer.phone),
+        website: String(updated.website || customer.website),
+        address: String(updated.address || customer.address),
+        industry: String(updated.industry || customer.industry),
+        annualRevenue:
+          typeof updated.revenue === 'number' ? updated.revenue : customer.annualRevenue,
+        lastContact: updated.lastContact ? new Date(updated.lastContact) : customer.lastContact,
+        tags: Array.isArray(updated.tags) ? (updated.tags as string[]) : customer.tags,
       } as Customer;
 
-      setCustomer(updatedCustomer);
+      setCustomer(merged);
       setIsEditing(false);
       setEditData({} as CustomerEditData);
 
       toast.success('Customer profile updated successfully');
       trackAction('save_customer_success', {
         customerId,
-        updatedFields: Object.keys(editData),
+        updatedFields: Object.keys(payload).filter(
+          k => payload[k as keyof typeof payload] !== undefined
+        ),
       });
     } catch (error) {
       handleError(error, 'profile_update', { editData });
     } finally {
       setIsLoading(false);
     }
-  }, [editData, customer, validateEditData, trackAction, handleError, customerId]);
+  }, [editData, customer, validateEditData, trackAction, handleError, customerId, apiClient]);
 
   // Get tier display
   const getTierDisplay = (tier: CustomerTier) => {

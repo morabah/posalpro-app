@@ -14,6 +14,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useApiClient } from '@/hooks/useApiClient';
 import {
   CheckCircleIcon,
   CogIcon,
@@ -38,9 +39,9 @@ const showToast = (message: string, type: 'success' | 'error' | 'info' = 'succes
 import { SystemUser, useSystemMetrics, useUsers } from '@/hooks/admin';
 
 // Import date-fns with parseISO for string date handling
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns';
 import dynamic from 'next/dynamic';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 // Dynamic imports to reduce bundle size
 const RoleManager = dynamic(() => import('@/components/admin/RoleManager'), {
@@ -235,6 +236,14 @@ function AdminSystemInner() {
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [editUserData, setEditUserData] = useState<SystemUserEditData>({} as SystemUserEditData);
   const [isUserUpdateLoading, setIsUserUpdateLoading] = useState(false);
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  const [newUserData, setNewUserData] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+    department: string;
+  }>({ name: '', email: '', password: '', role: '', department: '' });
 
   // Use database hooks instead of mock data
   const {
@@ -264,6 +273,7 @@ function AdminSystemInner() {
   // Add error handling and analytics
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
+  const { makeRequest } = useApiClient();
 
   // Error handling with user feedback
   const handleError = useCallback(
@@ -309,23 +319,19 @@ function AdminSystemInner() {
    * User management operations
    * Following platform engineering patterns for CRUD operations
    */
-  const handleCreateUser = useCallback(
-    async (userData: {
-      name: string;
-      email: string;
-      password: string;
-      role: string;
-      department: string;
-    }) => {
-      try {
-        await createUser(userData);
-        handleSuccess('User created successfully');
-      } catch (error) {
-        handleError(error, 'create');
+  const handleCreateUser = useCallback(async () => {
+    try {
+      if (!newUserData.name.trim() || !newUserData.email.trim() || !newUserData.password.trim()) {
+        throw new Error('Name, email and password are required');
       }
-    },
-    [createUser, handleSuccess, handleError]
-  );
+      await createUser(newUserData);
+      handleSuccess('User created successfully');
+      setIsCreateUserModalOpen(false);
+      setNewUserData({ name: '', email: '', password: '', role: '', department: '' });
+    } catch (error) {
+      handleError(error, 'create', { userData: { ...newUserData, password: '[REDACTED]' } });
+    }
+  }, [createUser, handleSuccess, handleError, newUserData]);
 
   const handleUpdateUser = useCallback(async () => {
     if (!editingUser) return;
@@ -346,17 +352,41 @@ function AdminSystemInner() {
         throw new Error('Please enter a valid email address');
       }
 
-      // Simulate API call - in real implementation, call actual API
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Persist user basic fields
+      await updateUser(editingUser.id, {
+        name: editUserData.name,
+        status: editUserData.status,
+      });
 
-      // Update user in local state (in real app, this would come from API response)
-      const updatedUsers = users?.map(user =>
-        user.id === editingUser.id
-          ? { ...user, ...editUserData, lastModified: new Date().toISOString() }
-          : user
-      );
+      // Handle role change via role assignment endpoints
+      const currentRole = (editingUser.role || '').split(',')[0]?.trim() || '';
+      const desiredRole = (editUserData.role || '').trim();
+      if (desiredRole && desiredRole !== currentRole) {
+        try {
+          // Remove all current active roles
+          const rolesResp = await makeRequest<{ roles: Array<{ id: string; name: string }> }>(
+            `admin/users/roles?userId=${editingUser.id}`,
+            { method: 'GET' }
+          );
+          for (const r of rolesResp.roles || []) {
+            await makeRequest(`admin/users/roles`, {
+              method: 'DELETE',
+              body: JSON.stringify({ userId: editingUser.id, roleName: r.name }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+          // Assign desired role
+          await makeRequest(`admin/users/roles`, {
+            method: 'POST',
+            body: JSON.stringify({ userId: editingUser.id, roleName: desiredRole }),
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch (roleErr) {
+          handleError(roleErr, 'assignRole', { userId: editingUser.id, desiredRole });
+        }
+      }
 
-      // Force re-fetch to update data (in real implementation)
+      // Refresh users from server
       await refetchUsers();
 
       showToast('User updated successfully', 'success');
@@ -377,8 +407,7 @@ function AdminSystemInner() {
     } finally {
       setIsUserUpdateLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ CRITICAL FIX: Empty dependency array prevents infinite loops (CORE_REQUIREMENTS.md pattern)
+  }, [editingUser, editUserData, updateUser, refetchUsers, analytics, handleError, makeRequest]);
 
   const handleDeleteUser = useCallback(
     async (id: string) => {
@@ -732,10 +761,7 @@ function AdminSystemInner() {
                 </select>
               </div>
               <Button
-                onClick={() => {
-                  // In a real implementation, this would open a user creation modal
-                  showToast('User creation modal would open here', 'info');
-                }}
+                onClick={() => setIsCreateUserModalOpen(true)}
                 className="flex items-center space-x-2"
               >
                 <PlusIcon className="h-4 w-4" />
@@ -981,10 +1007,12 @@ function AdminSystemInner() {
                     onChange={e => setEditUserData(prev => ({ ...prev, role: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="USER">User</option>
-                    <option value="ADMIN">Admin</option>
-                    <option value="MANAGER">Manager</option>
-                    <option value="VIEWER">Viewer</option>
+                    <option value="System Administrator">System Administrator</option>
+                    <option value="Proposal Manager">Proposal Manager</option>
+                    <option value="Senior SME">Senior SME</option>
+                    <option value="SME">SME</option>
+                    <option value="Content Manager">Content Manager</option>
+                    <option value="Executive">Executive</option>
                   </select>
                 </div>
 
@@ -1036,8 +1064,14 @@ function AdminSystemInner() {
 
 export default function AdminSystem() {
   return (
-    <ProtectedRoute requiredRoles={['System Administrator']} fallbackUrl="/auth/error?error=AccessDenied">
+    <ProtectedRoute
+      requiredRoles={['System Administrator']}
+      fallbackUrl="/auth/error?error=AccessDenied"
+    >
       <AdminSystemInner />
     </ProtectedRoute>
   );
 }
+
+// Create User Modal
+// Injected below AdminSystem component in the same file for simplicity

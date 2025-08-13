@@ -25,10 +25,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { useCallback, useState } from 'react';
 
-// Simple toast function to replace react-hot-toast
-const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  console.log(`Toast (${type}):`, message);
-  // In a real implementation, this would show a toast notification
+// Simple toast shim (no console noise in production)
+const showToast = (message: string, _type: 'success' | 'error' = 'success') => {
+  // integrate with app ToastProvider if needed
 };
 
 interface RoleManagerProps {
@@ -47,7 +46,8 @@ interface RoleFormData {
   performanceExpectations?: Record<string, number>;
 }
 
-const PERMISSION_CATEGORIES = {
+// Fallback categories used only if server permissions cannot be fetched
+const FALLBACK_PERMISSION_CATEGORIES = {
   PROPOSALS: [
     'proposals:create',
     'proposals:read',
@@ -96,6 +96,11 @@ export default function RoleManager({
   const [editingRole, setEditingRole] = useState<string | null>(null);
   // ✅ FIXED: Remove unused variables
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [viewingRole, setViewingRole] = useState<{
+    id: string;
+    name: string;
+    permissions: string[];
+  } | null>(null);
 
   const {
     roles,
@@ -108,6 +113,26 @@ export default function RoleManager({
 
   // ✅ FIXED: Remove unused variables
   const { permissions, loading: permissionsLoading, error: permissionsError } = usePermissions();
+
+  // Build dynamic categories from server permissions to avoid saving non-existent permissions
+  const availablePermissionCategories: Record<string, string[]> = (() => {
+    if (permissions && permissions.length > 0) {
+      const groups: Record<string, string[]> = {};
+      for (const p of permissions) {
+        const key = (p.resource || 'GENERAL').toUpperCase();
+        const value = `${p.resource}:${p.action}`;
+        if (!groups[key]) groups[key] = [];
+        // Deduplicate by resource:action regardless of scope
+        if (!groups[key].includes(value)) {
+          groups[key].push(value);
+        }
+      }
+      // Sort for stable UI
+      Object.keys(groups).forEach(k => groups[k].sort());
+      return groups;
+    }
+    return FALLBACK_PERMISSION_CATEGORIES;
+  })();
 
   const [formData, setFormData] = useState<RoleFormData>({
     name: '',
@@ -201,6 +226,21 @@ export default function RoleManager({
       [category]: !prev[category],
     }));
   }, []);
+
+  // Select or deselect all permissions within a category
+  const toggleSelectAllInCategory = useCallback(
+    (category: string) => {
+      const perms = availablePermissionCategories[category] || [];
+      const allSelected = perms.every(p => formData.permissions.includes(p));
+      setFormData(prev => ({
+        ...prev,
+        permissions: allSelected
+          ? prev.permissions.filter(p => !perms.includes(p))
+          : Array.from(new Set([...prev.permissions, ...perms])),
+      }));
+    },
+    [availablePermissionCategories, formData.permissions]
+  );
 
   const handlePermissionToggle = useCallback((permission: string) => {
     setFormData(prev => ({
@@ -339,7 +379,8 @@ export default function RoleManager({
             <div className="space-y-4">
               <h4 className="text-md font-medium text-gray-900">Permissions</h4>
               <div className="border border-gray-200 rounded-md max-h-80 overflow-y-auto">
-                {Object.entries(PERMISSION_CATEGORIES).map(([category, perms]) => {
+                {Object.entries(availablePermissionCategories).map(([category, permsRaw]) => {
+                  const perms = Array.from(new Set(permsRaw));
                   const allSelected = perms.every(p => formData.permissions.includes(p));
                   const someSelected = perms.some(p => formData.permissions.includes(p));
                   const isExpanded = expandedCategories[category];
@@ -362,7 +403,7 @@ export default function RoleManager({
                           <span className="text-xs text-gray-500">({perms.length})</span>
                         </div>
                         <button
-                          onClick={() => toggleCategory(category)}
+                          onClick={() => toggleSelectAllInCategory(category)}
                           className={`w-4 h-4 border-2 rounded ${
                             allSelected
                               ? 'bg-blue-600 border-blue-600'
@@ -378,7 +419,7 @@ export default function RoleManager({
                         <div className="px-6 py-2 space-y-1">
                           {perms.map(permission => (
                             <label
-                              key={permission}
+                              key={`${category}-${permission}`}
                               className="flex items-center space-x-2 cursor-pointer"
                             >
                               <input
@@ -473,9 +514,9 @@ export default function RoleManager({
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{role.permissionsList.length}</div>
+                    <div className="text-sm text-gray-900">{role.userCount}</div>
                     <div className="text-sm text-gray-500">
-                      {role.permissionsList.length === 1 ? 'user' : 'users'}
+                      {role.userCount === 1 ? 'user' : 'users'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -522,6 +563,20 @@ export default function RoleManager({
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() =>
+                          setViewingRole({
+                            id: role.id,
+                            name: role.name,
+                            permissions: role.permissionsList,
+                          })
+                        }
+                        className="flex items-center space-x-1"
+                      >
+                        <span>View</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => handleEditRole(role)}
                         className="flex items-center space-x-1"
                       >
@@ -547,6 +602,43 @@ export default function RoleManager({
           </table>
         </div>
       </Card>
+      {/* View Permissions Modal */}
+      {viewingRole && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-medium text-gray-900">Permissions: {viewingRole.name}</h3>
+              <button
+                className="p-1 rounded hover:bg-gray-100"
+                aria-label="Close"
+                onClick={() => setViewingRole(null)}
+              >
+                <XMarkIcon className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="max-h-80 overflow-auto border rounded">
+              {viewingRole.permissions && viewingRole.permissions.length > 0 ? (
+                <ul className="divide-y divide-gray-100">
+                  {viewingRole.permissions.sort().map((perm, idx) => (
+                    <li key={idx} className="px-3 py-2 text-sm text-gray-800">
+                      {perm}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-3 py-6 text-sm text-gray-500 text-center">
+                  No permissions assigned.
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button variant="outline" onClick={() => setViewingRole(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

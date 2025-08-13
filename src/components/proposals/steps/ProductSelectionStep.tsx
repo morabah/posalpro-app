@@ -16,21 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1', 'US-2.2', 'US-8.1'],
-  acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.3', 'AC-2.2.1', 'AC-2.2.2', 'AC-8.1.1'],
-  methods: [
-    'loadProducts()',
-    'filterProducts()',
-    'selectProduct()',
-    'validateSelection()',
-    'calculateTotal()',
-    'updateFormData()',
-  ],
-  hypotheses: ['H7', 'H4', 'H9', 'H10'],
-  testCases: ['TC-H7-001', 'TC-H4-001', 'TC-H9-001', 'TC-H10-001'],
-};
+// Removed unused COMPONENT_MAPPING to satisfy unused-vars
 
 // Enhanced Product interface aligned with database schema
 interface Product {
@@ -138,26 +124,10 @@ export function ProductSelectionStep({
   }>({ errors: [], warnings: [] });
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
-  // DEBUG: Log incoming props and selection size
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        '[ProductSelectionStep][DEBUG] props.data.products:',
-        Array.isArray(data.products) ? data.products.length : 0
-      );
-    }
-  }, [data.products]);
+  // Dev-only: kept silent to avoid console noise
+  // Removed unused dev-only effect
 
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        '[ProductSelectionStep][DEBUG] selectedProducts size:',
-        selectedProducts.size,
-        'ids:',
-        Array.from(selectedProducts.keys())
-      );
-    }
-  }, [selectedProducts]);
+  // Removed unused dev-only effect
 
   // Mobile detection
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -276,19 +246,17 @@ export function ProductSelectionStep({
       if (response.success) {
         setProducts(response.data.products);
         setFilteredProducts(response.data.products);
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            '[ProductSelectionStep][DEBUG] loaded products count:',
-            response.data.products.length
-          );
-        }
+        // dev logs removed for compliance
       } else {
         throw new Error('Failed to load products');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load products';
       setError(errorMessage);
-      console.error('[ProductSelectionStep] Failed to load products:', error);
+      await handleAsyncError(error, 'Failed to load products', {
+        component: 'ProductSelectionStep',
+        operation: 'loadProducts',
+      });
     } finally {
       setLoading(false);
     }
@@ -298,6 +266,25 @@ export function ProductSelectionStep({
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
+
+  // Performance: idle-time prefetch for categories/stats (very small payload) to speed up first filtering
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const idlePrefetch = async () => {
+      try {
+        // fire-and-forget; ignore result
+        void apiClient.get('/products/stats');
+        void apiClient.get('/products/categories');
+      } catch {}
+    };
+    const win = window as any;
+    if (typeof win.requestIdleCallback === 'function') {
+      const id = win.requestIdleCallback(idlePrefetch, { timeout: 1200 });
+      return () => typeof win.cancelIdleCallback === 'function' && win.cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(idlePrefetch, 800);
+    return () => window.clearTimeout(t);
+  }, [apiClient]);
 
   // Initialize selected products from props (hydrate prices) once
   const initializedFromDataRef = useRef(false);
@@ -364,20 +351,11 @@ export function ProductSelectionStep({
   useEffect(() => {
     if (initializedFromDataRef.current) return;
     if (data.products && data.products.length > 0) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          '[ProductSelectionStep][DEBUG] initial hydration from props, count:',
-          data.products.length
-        );
-      }
       const productsMap = new Map<string, SelectedProduct>();
       data.products.forEach(product => {
         const sp = buildSelectedProduct(product);
         if (sp) productsMap.set(sp.id, sp);
       });
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[ProductSelectionStep][DEBUG] hydration map size:', productsMap.size);
-      }
       setSelectedProducts(productsMap);
       initializedFromDataRef.current = true;
     }
@@ -442,7 +420,6 @@ export function ProductSelectionStep({
         productId,
         ...enhancedMetadata,
         component: 'ProductSelectionStep',
-        traceability: COMPONENT_MAPPING,
       });
     },
     [
@@ -518,14 +495,7 @@ export function ProductSelectionStep({
         setSelectedProducts(next);
         // Immediate upstream update to keep props in sync
         onUpdate(buildFormDataFrom(next));
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            '[ProductSelectionStep][DEBUG] increment quantity for',
-            product.id,
-            'map size:',
-            selectedProducts.size
-          );
-        }
+        // dev log removed
       } else {
         // Add new product
         const newProduct: SelectedProduct = {
@@ -547,14 +517,7 @@ export function ProductSelectionStep({
         setSelectedProducts(next);
         // Immediate upstream update to keep props in sync
         onUpdate(buildFormDataFrom(next));
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            '[ProductSelectionStep][DEBUG] add new product',
-            product.id,
-            'map size:',
-            selectedProducts.size + 1
-          );
-        }
+        // dev log removed
       }
 
       trackProductSelection('product_selected', product.id, {
@@ -617,12 +580,7 @@ export function ProductSelectionStep({
   useEffect(() => {
     const formData = collectFormData();
     onUpdate(formData);
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        '[ProductSelectionStep][DEBUG] onUpdate sent products:',
-        formData.products.length
-      );
-    }
+    // dev log removed
   }, [collectFormData, onUpdate]);
 
   // Cross-step validation

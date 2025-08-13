@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useApiClient } from '@/hooks/useApiClient';
 
 interface MetricsData {
   requests: { count: number; p95: number; p99: number };
@@ -47,13 +48,19 @@ function isApiMetricsResponse(value: unknown): value is ApiMetricsResponse {
 
 export default function ObservabilityPage() {
   const [data, setData] = useState<MetricsData | null>(null);
+  const apiClient = useApiClient();
   useEffect(() => {
     const tick = async () => {
-      const res = await fetch('/api/observability/metrics', { cache: 'no-store' });
-      const json = (await res.json()) as unknown;
-      if (isApiMetricsResponse(json)) {
-        setData(json.data ?? null);
-      } else {
+      try {
+        const json = (await apiClient.get<{ data?: MetricsData }>('observability/metrics')) as {
+          data?: MetricsData;
+        };
+        if (isApiMetricsResponse(json)) {
+          setData(json.data ?? null);
+        } else {
+          setData(null);
+        }
+      } catch {
         setData(null);
       }
     };

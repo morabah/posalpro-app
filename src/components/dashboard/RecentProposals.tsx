@@ -126,7 +126,8 @@ export default function RecentProposals() {
           'low'
         );
 
-        console.log('[RecentProposals] Starting API call to fetch proposals...');
+        // Structured dev log
+        // void logInfo('[RecentProposals] Starting proposals fetch');
 
         // Note: Avoid global guard flags that can suppress legitimate retries
         // across auth/session changes. The lightweight API and server cache
@@ -136,12 +137,8 @@ export default function RecentProposals() {
         // NOTE: Leading slash is required so baseURL '/api' resolves to '/api/proposals/list'
         const response = await apiClient.get<ProposalsApiResponse>('/proposals/list');
 
-        console.log('[RecentProposals] API response received:', {
-          success: response.success,
-          hasData: !!response.data,
-          hasProposals: !!response.data?.data?.proposals,
-          proposalCount: response.data?.data?.proposals?.length || 0,
-        });
+        // Structured dev log
+        // void logInfo('[RecentProposals] Response received');
 
         // Normalize response shapes:
         // - API route returns { success, data: Proposal[] }
@@ -166,13 +163,10 @@ export default function RecentProposals() {
 
         if (proposals.length > 0) {
           setProposals(proposals);
-          console.log('[RecentProposals] Successfully loaded proposals:', proposals.length);
         } else {
-          console.log('[RecentProposals] No proposals found - this is a valid scenario');
           setProposals([]);
         }
       } catch {
-        console.warn('[RecentProposals] API call failed - showing empty state');
         setProposals([]);
         setError(null); // Clear any previous errors
       } finally {
