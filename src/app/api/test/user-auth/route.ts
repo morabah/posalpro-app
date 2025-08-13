@@ -7,17 +7,26 @@ export async function GET(request: NextRequest) {
   const testEmail = 'admin@posalpro.com';
 
   try {
-    console.log('🧪 Testing user authentication query...');
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log('🧪 Testing user authentication query...');
+    }
 
     // Test 1: Simple user query
-    console.log('Test 1: Simple user query');
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log('Test 1: Simple user query');
+    }
     const simpleUser = await prisma.user.findUnique({
       where: { email: testEmail },
       select: { id: true, email: true, name: true }
     });
 
     // Test 2: User with roles (without transaction)
-    console.log('Test 2: User with roles (no transaction)');
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log('Test 2: User with roles (no transaction)');
+    }
     const userWithRoles = await prisma.user.findUnique({
       where: { email: testEmail },
       include: {
@@ -31,7 +40,10 @@ export async function GET(request: NextRequest) {
     });
 
     // Test 3: Transaction with timeout
-    console.log('Test 3: Transaction with timeout');
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log('Test 3: Transaction with timeout');
+    }
     const transactionUser = await prisma.$transaction(async tx => {
       return await tx.user.findUnique({
         where: { email: testEmail },
@@ -49,7 +61,10 @@ export async function GET(request: NextRequest) {
     });
 
     // Test 4: User service function
-    console.log('Test 4: User service function');
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log('Test 4: User service function');
+    }
     const serviceUser = await getUserByEmail(testEmail);
 
     const results = {
@@ -93,6 +108,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('User authentication test failed:', error);
 
     return NextResponse.json({
@@ -104,12 +120,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
-
-
-
-
-
-
-
-
-

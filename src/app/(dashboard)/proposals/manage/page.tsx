@@ -573,9 +573,36 @@ function ProposalManagementDashboardContent() {
     );
   };
 
+  // Live total from dashboard stats API to avoid page-size caps
+  const [statsTotalProposals, setStatsTotalProposals] = useState<number | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res: any = await apiClient.get('dashboard/stats?fresh=1');
+        if (
+          mounted &&
+          res &&
+          res.success &&
+          res.data &&
+          typeof res.data.totalProposals === 'number'
+        ) {
+          setStatsTotalProposals(res.data.totalProposals);
+        }
+      } catch (_err) {
+        // Non-blocking; fall back to local count
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Calculate dashboard metrics
   const dashboardMetrics = useMemo(() => {
-    const total = proposals.length;
+    const total = typeof statsTotalProposals === 'number' ? statsTotalProposals : proposals.length;
     const draft = proposals.filter(p => p.status === ProposalStatus.DRAFT).length;
     const inProgress = proposals.filter(p => p.status === ProposalStatus.IN_PROGRESS).length;
     const review = proposals.filter(p => p.status === ProposalStatus.IN_REVIEW).length;
@@ -609,7 +636,7 @@ function ProposalManagementDashboardContent() {
       avgProgress: Math.round(avgProgress),
       winRate: total > 0 ? Math.round((won / total) * 100) : 0,
     };
-  }, [proposals]);
+  }, [proposals, statsTotalProposals]);
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -76,6 +76,12 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         href: '/proposals/create',
         icon: DocumentTextIcon,
       },
+      {
+        id: 'proposals-version-history',
+        name: 'Version History',
+        href: '/proposals/version-history',
+        icon: ClockIcon,
+      },
     ],
   },
   {

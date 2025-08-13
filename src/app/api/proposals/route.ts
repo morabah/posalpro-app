@@ -253,13 +253,17 @@ async function checkUserPermissions(
   scope: string = 'ALL',
   bypassCheck: boolean = false
 ) {
-  // CRITICAL FIX: Force bypass for ALL environments to fix 500 error for authenticated users
-  // The complex permission system is causing 500 errors even for authenticated System Administrators
-  // DEPLOYMENT TIMESTAMP: 2025-06-30T13:35:00Z - FORCE NETLIFY REBUILD
-  console.log(
-    `[ProposalsAPI-CRITICAL-FIX] FORCING permission bypass for authenticated user ${userId}, action: ${action}, scope: ${scope}`
-  );
-  return true;
+  // Development-only bypass to prevent local blocking during diagnostics
+  if (process.env.NODE_ENV !== 'production') {
+    if (typeof console !== 'undefined') {
+      // Dev-only diagnostic log
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ProposalsAPI-DEV] Permission bypass for user ${userId}, action: ${action}, scope: ${scope}`
+      );
+    }
+    return true;
+  }
 
   // If bypass is enabled, immediately return true (for test/development purposes only)
   if (bypassCheck && process.env.NODE_ENV !== 'production') {
@@ -268,9 +272,12 @@ async function checkUserPermissions(
   }
   try {
     // Log user ID for diagnostics
-    console.log(
-      `[ProposalsAPI-DIAG] Checking permissions for user: ${userId}, action: ${action}, scope: ${scope}`
-    );
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ProposalsAPI-DIAG] Checking permissions for user: ${userId}, action: ${action}, scope: ${scope}`
+      );
+    }
 
     // Query user roles with error handling
     let userRoles = [];
@@ -289,7 +296,10 @@ async function checkUserPermissions(
           },
         },
       });
-      console.log(`[ProposalsAPI-DIAG] Found ${userRoles.length} user roles`);
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.log(`[ProposalsAPI-DIAG] Found ${userRoles.length} user roles`);
+      }
     } catch (roleQueryError) {
       // ✅ ENHANCED: Use proper logger instead of console.error
       const standardError = errorHandlingService.processError(
@@ -319,7 +329,10 @@ async function checkUserPermissions(
 
     // Handle empty user roles case explicitly - grant access instead of blocking
     if (!userRoles || userRoles.length === 0) {
-      console.log('[ProposalsAPI-DIAG] No user roles found - granting access for compatibility');
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.log('[ProposalsAPI-DIAG] No user roles found - granting access for compatibility');
+      }
       return true;
     }
 
@@ -387,9 +400,12 @@ async function checkUserPermissions(
       return true;
     }
 
-    console.log(
-      `[ProposalsAPI-DIAG] Permission check result: ${hasPermission ? 'GRANTED' : 'DENIED'}`
-    );
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ProposalsAPI-DIAG] Permission check result: ${hasPermission ? 'GRANTED' : 'DENIED'}`
+      );
+    }
     return hasPermission;
   } catch (error) {
     errorHandlingService.processError(
@@ -777,7 +793,7 @@ export async function GET(request: NextRequest) {
             hasNextPage: pagination.hasNextPage,
             hasPrevPage: pagination.hasPrevPage,
             nextCursor: pagination.nextCursor,
-            previousCursor: pagination.nextCursor, // This seems like a typo, should be previousCursor
+            previousCursor: undefined,
             totalCount: pagination.total || 0,
             pageCount: Math.ceil((pagination.total || 0) / pagination.limit),
             currentPage: pagination.page,
@@ -1343,6 +1359,46 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // Create initial version snapshot (version 1)
+      try {
+        const PrismaLocal = (require('@prisma/client') as any).Prisma;
+        const productIds = Array.isArray(validatedData.products)
+          ? validatedData.products.map((p: any) => String(p.productId))
+          : [];
+        const snapshot = {
+          id: newProposal.id,
+          title: validatedData.title,
+          status: 'DRAFT',
+          priority: validatedData.priority,
+          value: totalValue,
+          currency: validatedData.currency,
+          customerId: validatedData.customerId,
+          products: Array.isArray(validatedData.products)
+            ? validatedData.products.map((p: any) => ({
+                productId: String(p.productId),
+                quantity: Number(p.quantity ?? 0),
+                unitPrice: Number(p.unitPrice ?? 0),
+                discount: Number(p.discount ?? 0),
+              }))
+            : [],
+          sections: Array.isArray(validatedData.sections)
+            ? validatedData.sections.map((s: any) => ({
+                title: s.title,
+                order: s.order,
+                type: s.type,
+              }))
+            : [],
+          updatedAt: new Date().toISOString(),
+        } as const;
+
+        await tx.$queryRaw(
+          PrismaLocal.sql`INSERT INTO proposal_versions (id, "proposalId", version, "createdBy", "changeType", "changesSummary", snapshot, "productIds")
+                           VALUES (gen_random_uuid()::text, ${newProposal.id}, 1, ${session.user.id}, ${'create'}, ${'Initial creation'}, ${snapshot as any}, ${productIds})`
+        );
+      } catch (e) {
+        // Do not fail creation if versioning insert fails
+      }
+
       return newProposal;
     });
 
@@ -1531,6 +1587,54 @@ export async function PUT(request: NextRequest) {
         },
       },
     });
+
+    // Create a version snapshot for the update
+    try {
+      const PrismaLocal = (require('@prisma/client') as any).Prisma;
+      // Determine next version
+      const last = (await prisma.$queryRaw(
+        PrismaLocal.sql`SELECT COALESCE(MAX(version), 0) as v FROM proposal_versions WHERE "proposalId" = ${data.id}`
+      )) as Array<{ v: number }>;
+      const nextVersion = (last[0]?.v ?? 0) + 1;
+
+      // Build snapshot from updated proposal
+      const snapshot = {
+        id: updatedProposal.id,
+        title: updatedProposal.title,
+        status: updatedProposal.status,
+        priority: updatedProposal.priority,
+        value: updatedProposal.value,
+        currency: updatedProposal.currency,
+        customerId: updatedProposal.customer?.id ?? undefined,
+        products: (updatedProposal.products || []).map((pp: any) => ({
+          productId: String(pp.productId),
+          quantity: Number(pp.quantity ?? 0),
+          unitPrice: Number(pp.unitPrice ?? 0),
+          discount: Number(pp.discount ?? 0),
+        })),
+        sections: (updatedProposal.sections || []).map((s: any) => ({
+          id: s.id,
+          title: s.title,
+          order: s.order,
+        })),
+        updatedAt: new Date().toISOString(),
+      } as const;
+
+      const productIds: string[] = (updatedProposal.products || []).map((pp: any) =>
+        String(pp.productId)
+      );
+
+      // Simple changes summary from payload keys
+      const changedFields = Object.keys(updateData || {}).join(', ');
+      const summary = changedFields ? `Updated fields: ${changedFields}` : 'Proposal updated';
+
+      await prisma.$queryRaw(
+        PrismaLocal.sql`INSERT INTO proposal_versions (id, "proposalId", version, "createdBy", "changeType", "changesSummary", snapshot, "productIds")
+                         VALUES (gen_random_uuid()::text, ${data.id}, ${nextVersion}, ${session.user.id}, ${'update'}, ${summary}, ${snapshot as any}, ${productIds})`
+      );
+    } catch (e) {
+      // Silent fail to avoid breaking update flow
+    }
 
     return NextResponse.json({
       proposal: updatedProposal,

@@ -40,6 +40,7 @@ import { SystemUser, useSystemMetrics, useUsers } from '@/hooks/admin';
 // Import date-fns with parseISO for string date handling
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns';
 import dynamic from 'next/dynamic';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 // Dynamic imports to reduce bundle size
 const RoleManager = dynamic(() => import('@/components/admin/RoleManager'), {
@@ -222,7 +223,7 @@ interface AuditLogEntry {
  * Implements comprehensive system administration interface
  * Follows platform engineering best practices for observability
  */
-export default function AdminSystem() {
+function AdminSystemInner() {
   // State management with TypeScript strict mode
   const [activeTab, setActiveTab] = useState<AdminTabType>('overview');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -1030,5 +1031,13 @@ export default function AdminSystem() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminSystem() {
+  return (
+    <ProtectedRoute requiredRoles={['System Administrator']} fallbackUrl="/auth/error?error=AccessDenied">
+      <AdminSystemInner />
+    </ProtectedRoute>
   );
 }

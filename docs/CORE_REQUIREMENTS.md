@@ -247,6 +247,36 @@ To guarantee edits persist and reload correctly across create/edit:
 - Maintain a documented per-entity minimal field whitelist for default selects.
   Any relation expansion must be explicitly requested via query parameters.
 
+**🧮 Single‑Query Resolution (General Rule – N+1 Elimination)**
+
+- Prefer a single round‑trip that returns all user‑visible labels and related
+  fields needed by the UI.
+- Techniques:
+  - Set‑based queries that join once (e.g., LEFT JOIN `users` to include
+    `createdByName`).
+  - Resolve many related names via one
+    `findMany({ where: { id: { in: [...] } } })` rather than per‑id queries.
+  - For complex aggregations or array containment, use parameterized `$queryRaw`
+    guarded by Zod validation.
+  - Use a single `$transaction` only when multiple statements must be
+    consistent; otherwise prefer one query.
+- Response contract:
+  - Include compact lookup maps in responses (e.g., `usersMap`, `productsMap`,
+    `customersMap`) so clients do not refetch names.
+  - UIs must render from these maps and only fall back to ad‑hoc lookups on rare
+    cache‑miss cases.
+- Indexing: add/verify indexes on join keys and array fields (e.g., GIN on
+  `productIds`).
+- Examples:
+  - Version history list: one query with LEFT JOIN `users` to return
+    `createdByName`.
+  - Version detail: one query that returns diff plus `productsMap` and
+    `customerName`.
+- Never: issue a second network call only to resolve display names after
+  fetching IDs.
+- Always combine selective hydration with single‑query resolution to keep
+  payloads minimal.
+
 **📄 Pagination Without COUNT(\*)**
 
 - Use `limit + 1` pattern to infer `hasMore` instead of `COUNT(*)` for offset

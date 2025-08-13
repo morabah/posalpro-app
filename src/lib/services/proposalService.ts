@@ -4,6 +4,7 @@
  * Uses standardized error handling for consistent error propagation
  */
 
+import { toPrismaJson } from '@/lib/utils/prismaUtils';
 import {
   Priority,
   Prisma,
@@ -23,7 +24,6 @@ import {
 } from '../../types/entities/proposal';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
-import { toPrismaJson } from '@/lib/utils/prismaUtils';
 
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
@@ -145,6 +145,86 @@ interface ProposalOrderByInput {
 }
 
 export class ProposalService {
+  // Schedules a non-blocking version snapshot for a proposal
+  private scheduleVersionSnapshot(
+    proposalId: string,
+    changeType: string,
+    changesSummary: string,
+    productIdHints: string[] = []
+  ): void {
+    // Fire-and-forget, create snapshot directly via Prisma (no auth dependency)
+    setTimeout(async () => {
+      try {
+        const proposal = await prisma.proposal.findUnique({
+          where: { id: proposalId },
+          include: {
+            products: {
+              select: {
+                productId: true,
+                quantity: true,
+                unitPrice: true,
+                total: true,
+                updatedAt: true,
+              },
+            },
+            sections: { select: { id: true, title: true, order: true, updatedAt: true } },
+          },
+        });
+        if (!proposal) return;
+
+        const last = (await prisma.$queryRaw(
+          (prisma as any).$executeRaw?.constructor?.sql ||
+            (global as any).Prisma?.sql ||
+            (require('@prisma/client') as any).Prisma
+              .sql`SELECT COALESCE(MAX(version), 0) as v FROM proposal_versions WHERE "proposalId" = ${proposalId}`
+        )) as Array<{ v: number }>;
+        const nextVersion = (last[0]?.v ?? 0) + 1;
+
+        const snapshot = {
+          id: proposal.id,
+          title: proposal.title,
+          status: proposal.status,
+          priority: proposal.priority,
+          value: proposal.value,
+          currency: proposal.currency,
+          customerId: proposal.customerId,
+          metadata: proposal.metadata,
+          products: proposal.products,
+          sections: proposal.sections,
+          updatedAt: proposal.updatedAt,
+        } as const;
+
+        const ids = new Set<string>();
+        try {
+          // From wizard metadata
+          const md: any = (snapshot as any).metadata || {};
+          const step4 = md?.wizardData?.step4;
+          if (Array.isArray(step4?.products)) {
+            for (const p of step4.products) {
+              if (p?.productId && typeof p.productId === 'string') ids.add(p.productId);
+            }
+          }
+          // From current link table snapshot
+          if (Array.isArray((snapshot as any).products)) {
+            for (const link of (snapshot as any).products) {
+              if (link?.productId && typeof link.productId === 'string') ids.add(link.productId);
+            }
+          }
+        } catch {
+          // ignore extract errors
+        }
+        for (const h of productIdHints) if (typeof h === 'string' && h) ids.add(h);
+
+        const PrismaLocal = (require('@prisma/client') as any).Prisma;
+        await prisma.$queryRaw(
+          PrismaLocal.sql`INSERT INTO proposal_versions (id, "proposalId", version, "createdBy", "changeType", "changesSummary", snapshot, "productIds")
+                           VALUES (gen_random_uuid()::text, ${proposalId}, ${nextVersion}, NULL, ${changeType}, ${changesSummary}, ${snapshot as any}, ${Array.from(ids)})`
+        );
+      } catch {
+        // swallow background errors
+      }
+    }, 0);
+  }
   // Proposal CRUD operations
   async createProposal(data: CreateProposalData): Promise<Proposal> {
     try {
@@ -919,16 +999,23 @@ export class ProposalService {
       // Recalculate total if relevant fields changed
       const updateData: Partial<CreateProposalProductData> & { total?: number } = { ...data };
 
+      // Read current record (also grab proposalId/productId for history)
+      const current = await prisma.proposalProduct.findUnique({
+        where: { id },
+        select: {
+          proposalId: true,
+          productId: true,
+          quantity: true,
+          unitPrice: true,
+          discount: true,
+        },
+      });
+
       if (
         data.quantity !== undefined ||
         data.unitPrice !== undefined ||
         data.discount !== undefined
       ) {
-        const current = await prisma.proposalProduct.findUnique({
-          where: { id },
-          select: { quantity: true, unitPrice: true, discount: true },
-        });
-
         if (current) {
           const quantity = data.quantity ?? current.quantity;
           const unitPrice = data.unitPrice ?? current.unitPrice;
@@ -938,13 +1025,25 @@ export class ProposalService {
       }
 
       const { configuration, ...restUpdateData } = updateData;
-      return await prisma.proposalProduct.update({
+      const updated = await prisma.proposalProduct.update({
         where: { id },
         data: {
           ...restUpdateData,
           configuration: configuration ? toPrismaJson(configuration) : undefined,
         },
       });
+
+      // Schedule version snapshot noting product update
+      if (current?.proposalId) {
+        const summaryParts: string[] = [];
+        if (data.quantity !== undefined) summaryParts.push(`qty=${data.quantity}`);
+        if (data.unitPrice !== undefined) summaryParts.push(`price=${data.unitPrice}`);
+        if (data.discount !== undefined) summaryParts.push(`discount=${data.discount}`);
+        const summary = `Product updated (${current.productId ?? 'unknown'}): ${summaryParts.join(', ')}`;
+        this.scheduleVersionSnapshot(current.proposalId, 'product_change', summary);
+      }
+
+      return updated;
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
@@ -996,9 +1095,19 @@ export class ProposalService {
 
   async removeProposalProduct(id: string): Promise<void> {
     try {
-      await prisma.proposalProduct.delete({
+      // Fetch to capture proposalId and productId for history before deletion
+      const existing = await prisma.proposalProduct.findUnique({
         where: { id },
+        select: { proposalId: true, productId: true, quantity: true },
       });
+
+      await prisma.proposalProduct.delete({ where: { id } });
+
+      // Schedule version snapshot noting product removal
+      if (existing?.proposalId) {
+        const summary = `Product removed (${existing.productId ?? 'unknown'}), qty=${existing.quantity ?? 0}`;
+        this.scheduleVersionSnapshot(existing.proposalId, 'product_change', summary);
+      }
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);

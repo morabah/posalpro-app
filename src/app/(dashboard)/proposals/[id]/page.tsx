@@ -156,6 +156,13 @@ export default function ProposalDetailPage() {
 
   const proposalId = params?.id as string;
 
+  // Lightweight client-side guard to avoid invalid API calls (e.g., '/proposals/admin')
+  const isLikelyProposalId = (id: unknown): boolean => {
+    if (typeof id !== 'string') return false;
+    // Accept typical Prisma cuid/cuid2-like ids (alphanumeric, length >= 20)
+    return /^[a-z0-9]{20,}$/i.test(id);
+  };
+
   // Helper: unwrap prisma-style { set: ... }
   const unwrapSet = (v: any) => {
     if (v && typeof v === 'object' && 'set' in v) return (v as any).set;
@@ -332,7 +339,7 @@ export default function ProposalDetailPage() {
 
     const fetchProposal = async () => {
       // Only fetch if we have a valid proposalId
-      if (!proposalId || typeof proposalId !== 'string') {
+      if (!proposalId || typeof proposalId !== 'string' || !isLikelyProposalId(proposalId)) {
         if (isMounted) {
           setError('Invalid proposal ID');
           setLoading(false);

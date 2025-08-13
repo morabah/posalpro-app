@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Simple in-memory cache to reduce repeated heavy queries
 const dashboardStatsCache = new Map<string, { data: any; ts: number }>();
-const DASHBOARD_STATS_TTL_MS = 60 * 1000; // 60 seconds
+// In development, keep TTL effectively disabled to avoid stale numbers during testing
+const DASHBOARD_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 60 * 1000 : 0;
 
 export async function GET(request: NextRequest) {
   let session;
@@ -23,15 +24,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Check cache first
+    const url = new URL(request.url);
+    const forceFresh = url.searchParams.get('fresh') === '1';
     const cacheKey = `stats:${session.user.id}`;
     const cached = dashboardStatsCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < DASHBOARD_STATS_TTL_MS) {
+    if (!forceFresh && cached && Date.now() - cached.ts < DASHBOARD_STATS_TTL_MS) {
       const response = NextResponse.json({
         success: true,
         data: cached.data,
         message: 'Dashboard statistics retrieved successfully (cache)'
       });
-      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+      // Avoid aggressive browser caching in development to keep data live
+      if (process.env.NODE_ENV === 'production') {
+        response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+      } else {
+        response.headers.set('Cache-Control', 'no-store');
+      }
       return response;
     }
 
@@ -136,7 +144,11 @@ export async function GET(request: NextRequest) {
     });
 
     // Add performance optimization headers
-    response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120'); // 1min client, 2min CDN
+    if (process.env.NODE_ENV === 'production') {
+      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120'); // 1min client, 2min CDN
+    } else {
+      response.headers.set('Cache-Control', 'no-store');
+    }
     response.headers.set('Content-Type', 'application/json; charset=utf-8');
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('X-Frame-Options', 'DENY');

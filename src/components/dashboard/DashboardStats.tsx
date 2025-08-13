@@ -111,6 +111,13 @@ StatCard.displayName = 'StatCard';
 
 const DashboardStats = memo(() => {
   const [stats, setStats] = useState<DashboardStatsData | null>(null);
+  const [proposalKpis, setProposalKpis] = useState<{
+    total: number;
+    inProgress: number;
+    overdue: number;
+    winRate: number;
+    totalValue: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,7 +143,7 @@ const DashboardStats = memo(() => {
         );
 
         // Fetch real data from API
-        const response = await apiClient.get<ApiResponse<DashboardStatsData>>('dashboard/stats');
+        const response = await apiClient.get<ApiResponse<DashboardStatsData>>('dashboard/stats?fresh=1');
 
         if (response.success && response.data) {
           setStats(response.data);
@@ -186,6 +193,21 @@ const DashboardStats = memo(() => {
           },
           'medium'
         );
+        // Fetch proposal KPIs for the top cards (consistent with manage dashboard)
+        try {
+          const kpiRes: any = await apiClient.get('proposals/stats?fresh=1');
+          if (kpiRes && kpiRes.success && kpiRes.data) {
+            setProposalKpis({
+              total: Number(kpiRes.data.total) || 0,
+              inProgress: Number(kpiRes.data.inProgress) || 0,
+              overdue: Number(kpiRes.data.overdue) || 0,
+              winRate: Number(kpiRes.data.winRate) || 0,
+              totalValue: Number(kpiRes.data.totalValue) || 0,
+            });
+          }
+        } catch (_) {
+          // Non-blocking; cards will use fallback from stats
+        }
       } finally {
         setLoading(false);
       }
@@ -211,6 +233,15 @@ const DashboardStats = memo(() => {
     );
   }
 
+  const formatCurrencyLocal = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -221,10 +252,10 @@ const DashboardStats = memo(() => {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
       <StatCard
         title="Total Proposals"
-        value={stats?.totalProposals || 0}
+        value={proposalKpis?.total ?? stats?.totalProposals ?? 0}
         change={stats?.recentGrowth.proposals}
         icon={<DocumentTextIcon className="h-6 w-6" />}
         color="blue"
@@ -232,28 +263,34 @@ const DashboardStats = memo(() => {
       />
 
       <StatCard
-        title="Active Proposals"
-        value={stats?.activeProposals || 0}
+        title="In Progress"
+        value={proposalKpis?.inProgress ?? 0}
         icon={<ChartBarIcon className="h-6 w-6" />}
+        color="yellow"
+        loading={loading}
+      />
+
+      <StatCard
+        title="Overdue"
+        value={proposalKpis?.overdue ?? 0}
+        icon={<ArrowTrendingDownIcon className="h-6 w-6" />}
+        color="blue"
+        loading={loading}
+      />
+
+      <StatCard
+        title="Win Rate"
+        value={`${proposalKpis?.winRate ?? 0}%`}
+        icon={<UsersIcon className="h-6 w-6" />}
         color="green"
         loading={loading}
       />
 
       <StatCard
-        title="Total Customers"
-        value={stats?.totalCustomers || 0}
-        change={stats?.recentGrowth.customers}
-        icon={<UsersIcon className="h-6 w-6" />}
-        color="purple"
-        loading={loading}
-      />
-
-      <StatCard
-        title="Total Revenue"
-        value={stats ? formatCurrency(stats.totalRevenue) : '$0'}
-        change={stats?.recentGrowth.revenue}
+        title="Total Value"
+        value={formatCurrencyLocal(proposalKpis?.totalValue ?? 0)}
         icon={<CurrencyDollarIcon className="h-6 w-6" />}
-        color="yellow"
+        color="purple"
         loading={loading}
       />
     </div>

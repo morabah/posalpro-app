@@ -317,6 +317,53 @@ Unthrottled analytics events triggered state changes and re-renders.
 
 ---
 
+## Single‑Query Resolution Pattern (Generalized N+1 Elimination)
+
+**Date**: 2025-08-13 • **Category**: Database / API Performance
+
+### Problem
+
+Endpoints and UIs often fetched IDs first and then issued extra calls to resolve
+names (users, products, customers). This created N+1 query patterns and doubled
+network round‑trips.
+
+### Solution
+
+- Design endpoints to return all user‑visible labels and related fields in one
+  query.
+- Use set‑based joins and in‑clauses to resolve many names at once.
+- For complex reads (array containment, denormalized snapshots), compute
+  everything in a single `$queryRaw` (parameterized) and return compact lookup
+  maps.
+
+### Standard
+
+- Prefer one database round‑trip per endpoint for the primary view.
+- Techniques:
+  - LEFT JOIN `users` once to include `createdByName` (version history list).
+  - Single detail query computes `diff` and returns `productsMap` and
+    `customerName` (version detail).
+  - Use `findMany({ where: { id: { in: ids } }, select: { id, name } })` to
+    resolve many labels at once.
+  - Only use `$transaction` when multiple statements must be consistent;
+    otherwise one query.
+- Response contract: include `usersMap`/`productsMap`/`customersMap` so the
+  client does not make follow‑up calls; UI uses these maps and falls back only
+  on rare misses.
+
+### Verification
+
+- Network panel shows a single request for the view; no extra name‑resolution
+  calls.
+- DB logs show set‑based queries (joins or IN lists), not per‑row selects.
+
+### Anti‑Patterns
+
+- Fetch IDs then call another endpoint just to get display names.
+- Per‑row `.findUnique()` inside loops.
+
+---
+
 ---
 
 ## Netlify Production Deployment Requirements (Next.js App Router)
@@ -406,26 +453,35 @@ bugs.
 
 ### Problem
 
-- API routes returned 500s with Prisma errors like: `the URL must start with the protocol 'prisma://'`.
-- Health checks showed Postgres reachable, but Prisma validated the datasource against an unexpected protocol.
+- API routes returned 500s with Prisma errors like:
+  `the URL must start with the protocol 'prisma://'`.
+- Health checks showed Postgres reachable, but Prisma validated the datasource
+  against an unexpected protocol.
 
 ### Root Cause
 
-- Prisma client was conditionally using `CLOUD_DATABASE_URL` (prisma data proxy style `prisma://...`) in some environments.
-- Local `.env` had a correct Postgres `DATABASE_URL=postgresql://...`, but runtime configuration could still pick the cloud URL depending on `NODE_ENV` or residual env state during dev.
+- Prisma client was conditionally using `CLOUD_DATABASE_URL` (prisma data proxy
+  style `prisma://...`) in some environments.
+- Local `.env` had a correct Postgres `DATABASE_URL=postgresql://...`, but
+  runtime configuration could still pick the cloud URL depending on `NODE_ENV`
+  or residual env state during dev.
 
 ### Fix
 
-1. Simplified Prisma client configuration to always use `DATABASE_URL` for the datasource in all environments we control.
+1. Simplified Prisma client configuration to always use `DATABASE_URL` for the
+   datasource in all environments we control.
    - File: `src/lib/db/prisma.ts`
-   - Change: set `datasources.db.url` to `process.env.DATABASE_URL` and hard-require it at startup.
+   - Change: set `datasources.db.url` to `process.env.DATABASE_URL` and
+     hard-require it at startup.
 2. Regenerated Prisma client: `npx prisma generate`.
 3. Restarted dev server to reload env and client.
 
 ### Standard
 
-- In app code, always prefer `DATABASE_URL` for Prisma datasource unless explicitly deploying behind Prisma Data Proxy.
-- Keep any cloud-only URLs (e.g., `CLOUD_DATABASE_URL`) out of Prisma client initialization paths for local/dev.
+- In app code, always prefer `DATABASE_URL` for Prisma datasource unless
+  explicitly deploying behind Prisma Data Proxy.
+- Keep any cloud-only URLs (e.g., `CLOUD_DATABASE_URL`) out of Prisma client
+  initialization paths for local/dev.
 - Validate presence of required envs early and fail fast with clear messages.
 
 ### Verification
@@ -445,7 +501,10 @@ if (!databaseUrl) {
 
 const prisma = new PrismaClient({
   datasources: { db: { url: databaseUrl } },
-  log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'warn'],
+  log:
+    process.env.NODE_ENV === 'production'
+      ? ['error']
+      : ['query', 'error', 'warn'],
 });
 ```
 
@@ -806,36 +865,48 @@ function hydrateStepData(proposal) {
 
 ### Persistence & Retrieval Contract (Generalized)
 
-This unified contract ensures edits persist across all wizard steps and reload reliably.
+This unified contract ensures edits persist across all wizard steps and reload
+reliably.
 
-1) PATCH Payload Rules
+1. PATCH Payload Rules
 
 - Mirror snapshots under both roots:
   - `metadata.wizardData.stepN.*` (UI-friendly, future-proof) and
   - `wizardData.stepN.*` (historic fallback)
-- Include top-level scalars where the backend expects them (e.g., `title`, `description`, `priority`, `rfpReferenceNumber`, `dueDate`, `value`).
-  - Enums to backend: send in expected enum case (e.g., `priority` as UPPERCASE if required by API), while storing UI-facing values in normalized form (e.g., lowercase) inside `metadata.wizardData`.
+- Include top-level scalars where the backend expects them (e.g., `title`,
+  `description`, `priority`, `rfpReferenceNumber`, `dueDate`, `value`).
+  - Enums to backend: send in expected enum case (e.g., `priority` as UPPERCASE
+    if required by API), while storing UI-facing values in normalized form
+    (e.g., lowercase) inside `metadata.wizardData`.
 - Relations (e.g., products in Step 4):
-  - Send relation-friendly shape the API can process (ids, quantities, prices), and also mirror under `metadata.wizardData.step4.products` for hydration.
+  - Send relation-friendly shape the API can process (ids, quantities, prices),
+    and also mirror under `metadata.wizardData.step4.products` for hydration.
 - Content selections and assignments:
-  - Mirror `contentSelections` at metadata root with `{ contentId, section, customizations, assignedTo }`.
-  - Persist `sectionAssignments` at `metadata.sectionAssignments` and within `metadata.wizardData.step5` as needed.
+  - Mirror `contentSelections` at metadata root with
+    `{ contentId, section, customizations, assignedTo }`.
+  - Persist `sectionAssignments` at `metadata.sectionAssignments` and within
+    `metadata.wizardData.step5` as needed.
 - Do not drop existing metadata: deep-merge by step; preserve previous keys.
 
-2) GET/Hydration Rules
+2. GET/Hydration Rules
 
-- Always unwrap Prisma-style wrappers: if metadata is `{ set: ... }`, use `.set`.
+- Always unwrap Prisma-style wrappers: if metadata is `{ set: ... }`, use
+  `.set`.
 - Merge order for each step:
   1. `metadata.wizardData.stepN` (latest canonical snapshot)
-  2. top-level convenience fields (e.g., `proposal.priority`, `proposal.sections`)
+  2. top-level convenience fields (e.g., `proposal.priority`,
+     `proposal.sections`)
   3. legacy `wizardData.stepN`
-  4. derived defaults (IDs from relations, normalized titles, inferred assignments)
+  4. derived defaults (IDs from relations, normalized titles, inferred
+     assignments)
 - Normalize and coerce types consistently:
-  - Priority: coerce to `ProposalPriority` ('high' | 'medium' | 'low') for UI; map to backend enum casing for PATCH.
+  - Priority: coerce to `ProposalPriority` ('high' | 'medium' | 'low') for UI;
+    map to backend enum casing for PATCH.
   - IDs: ensure `productId === product.id`; drop unknown IDs.
-- Non-destructive merges: only fill missing keys; never overwrite user-entered values.
+- Non-destructive merges: only fill missing keys; never overwrite user-entered
+  values.
 
-3) Logging & Validation
+3. Logging & Validation
 
 - Log counts and key sets only; avoid dumping full payloads (PII/noise).
 - Validate incoming IDs exist; silently drop stale entries.
@@ -843,18 +914,23 @@ This unified contract ensures edits persist across all wizard steps and reload r
 
 ### Do‑Not List (Persistence Pitfalls)
 
-- Do not rely on a single source (only metadata or only relations). Always merge across metadata, top-level, wizardData, and derived defaults.
+- Do not rely on a single source (only metadata or only relations). Always merge
+  across metadata, top-level, wizardData, and derived defaults.
 - Do not overwrite nested `metadata.wizardData` objects; deep-merge per step.
-- Do not persist only UI casing for enums to the backend; map to backend enum casing on PATCH.
+- Do not persist only UI casing for enums to the backend; map to backend enum
+  casing on PATCH.
 - Do not store SKU or display names as IDs; always use real database ids.
 - Do not assume metadata is raw; unwrap `{ set: ... }` before use.
-- Do not log entire metadata or PATCH bodies in development; log shapes and sizes only.
+- Do not log entire metadata or PATCH bodies in development; log shapes and
+  sizes only.
 
 ### Deprecated (Removed) Approaches
 
 - Storing only `wizardData.stepN` without mirroring under `metadata.wizardData`.
-- Hydrating strictly from a single path (e.g., only `metadata` or only top-level relations).
-- Sending PATCH bodies that overwrite entire `metadata` trees instead of merging per step.
+- Hydrating strictly from a single path (e.g., only `metadata` or only top-level
+  relations).
+- Sending PATCH bodies that overwrite entire `metadata` trees instead of merging
+  per step.
 - Relying on title-based keys without normalized fallback or stable ids.
 
 ### Do‑Not List (Common Failure Patterns and How to Avoid Them)
