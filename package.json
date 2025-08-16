@@ -22,7 +22,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:ci": "jest --ci --coverage",
-    "test:ci:unit": "jest --ci --coverage --testPathIgnorePatterns=src/test/integration/ --testPathIgnorePatterns=src/test/production/ --testPathIgnorePatterns=src/test/api/ --testPathIgnorePatterns=test/proposal-wizard-puppeteer.test.ts",
+    "test:ci:unit": "jest --ci --coverage --testPathIgnorePatterns=src/test/integration/ --testPathIgnorePatterns=src/test/production/ --testPathIgnorePatterns=src/test/api/ --testPathIgnorePatterns=src/test/api-routes/ --testPathIgnorePatterns=test/proposal-wizard-puppeteer.test.ts --testPathIgnorePatterns=\\.integration\\.test\\.",
     "test:e2e": "jest test/proposal-wizard-puppeteer.test.ts",
     "test:accessibility": "jest --testPathPattern=accessibility",
     "test:performance": "node scripts/test-optimizations.js",

@@ -1,0 +1,41 @@
+[
+  {
+    "url": "https://posalpro-mvp2.windsurf.build/",
+    "isRepresentativeRun": false,
+    "htmlPath": "/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/test-results/lhci/mobile/posalpro_mvp2_windsurf_build-_-2025_08_16_19_36_27.report.html",
+    "jsonPath": "/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/test-results/lhci/mobile/posalpro_mvp2_windsurf_build-_-2025_08_16_19_36_27.report.json",
+    "summary": {
+      "performance": 0.99,
+      "accessibility": 0.88,
+      "best-practices": 0.96,
+      "seo": 1,
+      "pwa": 0.38
+    }
+  },
+  {
+    "url": "https://posalpro-mvp2.windsurf.build/",
+    "isRepresentativeRun": false,
+    "htmlPath": "/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/test-results/lhci/mobile/posalpro_mvp2_windsurf_build-_-2025_08_16_19_36_40.report.html",
+    "jsonPath": "/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/test-results/lhci/mobile/posalpro_mvp2_windsurf_build-_-2025_08_16_19_36_40.report.json",
+    "summary": {
+      "performance": 1,
+      "accessibility": 0.88,
+      "best-practices": 0.96,
+      "seo": 1,
+      "pwa": 0.38
+    }
+  },
+  {
+    "url": "https://posalpro-mvp2.windsurf.build/",
+    "isRepresentativeRun": true,
+    "htmlPath": "/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/test-results/lhci/mobile/posalpro_mvp2_windsurf_build-_-2025_08_16_19_36_13.report.html",
+    "jsonPath": "/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/test-results/lhci/mobile/posalpro_mvp2_windsurf_build-_-2025_08_16_19_36_13.report.json",
+    "summary": {
+      "performance": 0.99,
+      "accessibility": 0.88,
+      "best-practices": 0.96,
+      "seo": 1,
+      "pwa": 0.38
+    }
+  }
+]

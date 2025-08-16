@@ -1,7 +1,15 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
-const withBundleAnalyzer = require('@next/bundle-analyzer')({
-  enabled: process.env.ANALYZE === 'true',
-});
+let withBundleAnalyzer = config => config;
+try {
+  // Make bundle analyzer optional in CI (e.g., Netlify) to avoid MODULE_NOT_FOUND
+  const analyzer = require('@next/bundle-analyzer')({
+    enabled: process.env.ANALYZE === 'true',
+  });
+  withBundleAnalyzer = analyzer;
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.log('[next.config] @next/bundle-analyzer not installed; proceeding without it');
+}
 
 /** @type {import('next').NextConfig} */
 const baseConfig = {
