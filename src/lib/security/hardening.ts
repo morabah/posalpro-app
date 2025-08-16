@@ -188,15 +188,15 @@ export class SecurityHeaders {
       // Content Security Policy
       'Content-Security-Policy': [
         "default-src 'self'",
-        // In dev, allow eval/inline for Next dev tooling; in prod, disallow
+        // Allow minimal inline script/style needed by Next.js runtime in production.
+        // Longer-term: migrate to nonce-based CSP and remove 'unsafe-inline'.
         isProd
-          ? "script-src 'self' https://cdnjs.cloudflare.com 'report-sample'"
+          ? "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com 'report-sample'"
           : "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com 'report-sample'",
-        // In dev, allow inline styles; in prod, migrate off inline gradually
         isProd
-          ? "style-src 'self' https://fonts.googleapis.com"
+          ? "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
           : "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' https://fonts.gstatic.com",
+        "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: https:",
         "connect-src 'self' https://api.posalpro.com",
         "frame-ancestors 'none'",

@@ -2,27 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auditLogger } from '@/lib/security/hardening';
 import { setCache } from '@/lib/redis';
 
-type LegacyCspReport = {
+interface LegacyCspReport {
   'csp-report'?: {
     'document-uri'?: string;
-    'referrer'?: string;
+    referrer?: string;
     'violated-directive'?: string;
     'effective-directive'?: string;
     'original-policy'?: string;
     'blocked-uri'?: string;
-    'disposition'?: string;
+    disposition?: string;
     'status-code'?: number;
     'source-file'?: string;
     'line-number'?: number;
     'column-number'?: number;
     'script-sample'?: string;
   };
-};
+}
 
-type ReportingApiEnvelope = {
+interface ReportingApiEnvelope {
   type?: string; // 'csp-violation'
   body?: Record<string, unknown>;
-};
+}
 
 function getClientIp(req: NextRequest): string {
   const xForwardedFor = req.headers.get('x-forwarded-for');
@@ -105,11 +105,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // No content response for report endpoints
-    return new NextResponse(null, { status: 204 });
+    // Acknowledge report with 200 OK and minimal body
+    return NextResponse.json({ status: 'ok' }, { status: 200 });
   } catch (error) {
-    // Fail closed but do not throw noisy errors to clients
-    return NextResponse.json({ status: 'error' }, { status: 204 });
+    // Return 200 to avoid noisy client errors; log handled above
+    return NextResponse.json({ status: 'error' }, { status: 200 });
   }
 }
-
