@@ -3,14 +3,51 @@
   # Let @netlify/plugin-nextjs handle the build output automatically
 
 [build.environment]
-  NODE_VERSION = "20.15.1"
+  # Align with production environment
+  NODE_VERSION = "20.19.1"
+  # Provide headroom for Next build while respecting CI memory budget
+  NODE_OPTIONS = "--max-old-space-size=1024"
+  NETLIFY_LINT = "false"
   # Configure specific Next.js flags for Netlify
-  NEXT_USE_NETLIFY_EDGE = "true"
+  NEXT_USE_NETLIFY_EDGE = "false"
+  # Disable Next.js telemetry in CI/build
+  NEXT_TELEMETRY_DISABLED = "1"
+  # Safe build-time toggles (non-secrets)
+  ANALYTICS_ENABLED = "true"
+  API_BASE_URL = "https://posalpro-mvp2.windsurf.build/api"
   # Force Prisma to use library (native) engines on Netlify (disable wasm/dataproxy)
   PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
   PRISMA_CLIENT_ENGINE_TYPE = "library"
   PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
+
+# Explicit production-context overrides (non-secrets only)
+[context.production.environment]
+  # Node & Next config
+  NODE_VERSION = "20.19.1"
+  NODE_OPTIONS = "--max-old-space-size=1024"
+  NEXT_USE_NETLIFY_EDGE = "false"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+  # Safe toggles
+  ANALYTICS_ENABLED = "true"
+  API_BASE_URL = "https://posalpro-mvp2.windsurf.build/api"
+
+  # Prisma engine settings
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
+  PRISMA_CLIENT_ENGINE_TYPE = "library"
+  PRISMA_GENERATE_DATAPROXY = "false"
+  PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
+
+  # Secrets required in Netlify Dashboard (do NOT commit values here):
+  # DATABASE_URL = "<set in Netlify UI>"
+  # DIRECT_URL = "<set in Netlify UI>"
+  # NEXTAUTH_URL = "https://posalpro-mvp2.windsurf.build"
+  # NEXTAUTH_SECRET = "<set in Netlify UI>"
+  # JWT_SECRET = "<set in Netlify UI>"
+  # CSRF_SECRET = "<set in Netlify UI>"
+  # NETLIFY_DATABASE_URL = "<optional: set in Netlify UI>"
+  # NETLIFY_DATABASE_URL_UNPOOLED = "<optional: set in Netlify UI>"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
