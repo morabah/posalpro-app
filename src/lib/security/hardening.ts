@@ -68,10 +68,10 @@ export class RateLimiter {
   }
 }
 
-// Global rate limiters for different endpoints
-export const authRateLimiter = new RateLimiter(60000, 5); // 5 requests per minute for auth
-export const apiRateLimiter = new RateLimiter(60000, 100); // 100 requests per minute for API
-export const strictRateLimiter = new RateLimiter(900000, 3); // 3 requests per 15 minutes for sensitive operations
+// Global in-memory rate limiters for edge middleware (Redis client is Node-only and not usable here)
+export const authRateLimiter = new RateLimiter(60000, 5); // 5 requests/min for auth
+export const apiRateLimiter = new RateLimiter(60000, 100); // 100 requests/min for API
+export const strictRateLimiter = new RateLimiter(900000, 3); // 3 req per 15 min for sensitive
 
 // Input validation and sanitization
 export class InputValidator {
@@ -183,16 +183,25 @@ export class InputValidator {
 // Security headers utility
 export class SecurityHeaders {
   static getSecurityHeaders(): Record<string, string> {
+    const isProd = process.env.NODE_ENV === 'production';
     return {
       // Content Security Policy
       'Content-Security-Policy': [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        // In dev, allow eval/inline for Next dev tooling; in prod, disallow
+        isProd
+          ? "script-src 'self' https://cdnjs.cloudflare.com 'report-sample'"
+          : "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com 'report-sample'",
+        // In dev, allow inline styles; in prod, migrate off inline gradually
+        isProd
+          ? "style-src 'self' https://fonts.googleapis.com"
+          : "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "img-src 'self' data: https:",
         "connect-src 'self' https://api.posalpro.com",
         "frame-ancestors 'none'",
+        // CSP violation reporting endpoint
+        'report-uri /api/security/csp-report',
       ].join('; '),
 
       // Prevent XSS attacks
@@ -203,6 +212,15 @@ export class SecurityHeaders {
 
       // Prevent clickjacking
       'X-Frame-Options': 'DENY',
+
+      // Cross-Origin Policies (enable strong isolation in production)
+      ...(isProd
+        ? {
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp',
+            'Cross-Origin-Resource-Policy': 'same-origin',
+          }
+        : {}),
 
       // Enforce HTTPS
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -217,6 +235,9 @@ export class SecurityHeaders {
         'geolocation=()',
         'interest-cohort=()',
       ].join(', '),
+
+      // DNS Prefetch Control
+      'X-DNS-Prefetch-Control': 'off',
 
       // Remove server information
       Server: 'PosalPro',
@@ -352,23 +373,34 @@ export function createSecurityMiddleware() {
     const ip = getClientIp(request);
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
-    // Apply rate limiting
-    let rateLimiter = apiRateLimiter;
+    // Apply rate limiting (with development relaxations for auth endpoints)
+    const isDev = process.env.NODE_ENV !== 'production';
+    const path = request.nextUrl.pathname;
 
-    if (request.nextUrl.pathname.startsWith('/api/auth')) {
-      rateLimiter = authRateLimiter;
-    } else if (
-      request.nextUrl.pathname.includes('admin') ||
-      request.nextUrl.pathname.includes('sensitive')
-    ) {
-      rateLimiter = strictRateLimiter;
+    // Allow certain NextAuth endpoints to bypass rate limiting in development to prevent false 429s
+    const bypassRateLimitInDev =
+      isDev &&
+      (path.startsWith('/api/auth/providers') ||
+        path.startsWith('/api/auth/_log') ||
+        path.startsWith('/api/auth/error'));
+
+    // Choose appropriate in-memory limiter (edge-safe)
+    let limiter = apiRateLimiter;
+
+    if (path.startsWith('/api/auth')) {
+      // Relax auth rate limit in development to accommodate NextAuth client calls
+      limiter = isDev ? new RateLimiter(60000, 60) : authRateLimiter;
+    } else if (path.includes('admin') || path.includes('sensitive')) {
+      // Use higher threshold in development to avoid noisy 429s during health checks
+      limiter = isDev ? new RateLimiter(60000, 60) : strictRateLimiter;
     }
 
-    if (!rateLimiter.isAllowed(ip)) {
+    // Check limiter
+    if (!bypassRateLimitInDev && !limiter.isAllowed(ip)) {
       auditLogger.log({
         action: 'rate_limit_exceeded',
-        resource: request.nextUrl.pathname,
-        details: { path: request.nextUrl.pathname },
+        resource: path,
+        details: { path },
         ipAddress: ip,
         userAgent,
         severity: 'medium',
@@ -376,10 +408,11 @@ export function createSecurityMiddleware() {
         error: 'Rate limit exceeded',
       });
 
+      const retryAfter = Math.ceil((limiter.getResetTime(ip) - Date.now()) / 1000);
       return new NextResponse('Rate limit exceeded', {
         status: 429,
         headers: {
-          'Retry-After': Math.ceil((rateLimiter.getResetTime(ip) - Date.now()) / 1000).toString(),
+          'Retry-After': retryAfter.toString(),
         },
       });
     }

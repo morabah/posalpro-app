@@ -10,7 +10,8 @@ import { useUserRegistrationAnalytics } from '@/hooks/auth/useUserRegistrationAn
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, ArrowLeft, ArrowRight, Check, Lightbulb, Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+// Removed lucide-react icons from initial bundle to reduce /auth/register first-load size
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -293,23 +294,22 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
   // Render step content
   const renderStepContent = () => {
     switch (currentStep) {
-      case 0:
-        return <UserInfoStep register={register} errors={errors} aiSuggestions={aiSuggestions} />;
-      case 1:
-        return (
-          <RoleAccessStep register={register} errors={errors} setValue={setValue} watch={watch} />
-        );
-      case 2:
-        return (
-          <NotificationsStep
-            register={register}
-            errors={errors}
-            setValue={setValue}
-            watch={watch}
-          />
-        );
-      case 3:
-        return <ConfirmationStep data={getValues()} />;
+      case 0: {
+        const Step = dynamic(() => import('./registration/StepUserInfo')) as any;
+        return <Step register={register} errors={errors} aiSuggestions={aiSuggestions} />;
+      }
+      case 1: {
+        const Step = dynamic(() => import('./registration/StepRoleAccess')) as any;
+        return <Step register={register} errors={errors} setValue={setValue} watch={watch} />;
+      }
+      case 2: {
+        const Step = dynamic(() => import('./registration/StepNotifications')) as any;
+        return <Step register={register} errors={errors} setValue={setValue} watch={watch} />;
+      }
+      case 3: {
+        const Step = dynamic(() => import('./registration/StepConfirmation')) as any;
+        return <Step data={getValues()} />;
+      }
       default:
         return null;
     }
@@ -351,7 +351,13 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                           : 'bg-neutral-300 text-neutral-600'
                     }`}
                   >
-                    {index < currentStep ? <Check className="w-5 h-5" /> : index + 1}
+                    {index < currentStep ? (
+                      <span className="w-5 h-5" aria-hidden>
+                        ✓
+                      </span>
+                    ) : (
+                      index + 1
+                    )}
                   </div>
                   <div className="hidden sm:block">
                     <div className="font-semibold">{step.title}</div>
@@ -359,7 +365,9 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                   </div>
                 </div>
                 {index < REGISTRATION_STEPS.length - 1 && (
-                  <ArrowRight className="w-4 h-4 mx-2 text-neutral-400" />
+                  <span className="w-4 h-4 mx-2 text-neutral-400" aria-hidden>
+                    ›
+                  </span>
                 )}
               </div>
             ))}
@@ -373,7 +381,9 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
           {/* Error Alert */}
           {submitError && (
             <div className="m-8 mb-0 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <span className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" aria-hidden>
+                !
+              </span>
               <div>
                 <p className="text-red-800 font-medium">Registration Failed</p>
                 <p className="text-red-700 text-sm mt-1">{submitError}</p>
@@ -392,7 +402,9 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                 disabled={currentStep === 0}
                 className="flex items-center space-x-2 px-6 py-3 text-neutral-700 bg-white border-2 border-neutral-300 rounded-lg hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <span className="w-5 h-5" aria-hidden>
+                  ←
+                </span>
                 <span>Previous</span>
               </button>
 
@@ -423,7 +435,9 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                   className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                 >
                   <span>Next</span>
-                  <ArrowRight className="w-5 h-5" />
+                  <span className="w-5 h-5" aria-hidden>
+                    →
+                  </span>
                 </button>
               ) : (
                 <button
@@ -433,12 +447,16 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span className="w-5 h-5 animate-spin" aria-hidden>
+                        ⏳
+                      </span>
                       <span>Creating Account...</span>
                     </>
                   ) : (
                     <>
-                      <Check className="w-5 h-5" />
+                      <span className="w-5 h-5" aria-hidden>
+                        ✓
+                      </span>
                       <span>Create Account</span>
                     </>
                   )}
@@ -550,7 +568,9 @@ function UserInfoStep({
           {aiSuggestions.department && (
             <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-start space-x-2">
-                <Lightbulb className="w-4 h-4 text-blue-500 mt-0.5" />
+                <span className="w-4 h-4 text-blue-500 mt-0.5" aria-hidden>
+                  💡
+                </span>
                 <p className="text-sm text-blue-700">{aiSuggestions.department}</p>
               </div>
             </div>
@@ -573,7 +593,9 @@ function UserInfoStep({
           {aiSuggestions.office && (
             <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-start space-x-2">
-                <Lightbulb className="w-4 h-4 text-blue-500 mt-0.5" />
+                <span className="w-4 h-4 text-blue-500 mt-0.5" aria-hidden>
+                  💡
+                </span>
                 <p className="text-sm text-blue-700">{aiSuggestions.office}</p>
               </div>
             </div>
@@ -875,7 +897,9 @@ function NotificationsStep({
       {/* AI Recommendation */}
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
         <div className="flex items-start space-x-2">
-          <Lightbulb className="w-5 h-5 text-blue-500 mt-0.5" />
+          <span className="w-5 h-5 text-blue-500 mt-0.5" aria-hidden>
+            💡
+          </span>
           <div>
             <p className="text-sm font-medium text-blue-800">AI Recommendation:</p>
             <p className="text-sm text-blue-700 mt-1">

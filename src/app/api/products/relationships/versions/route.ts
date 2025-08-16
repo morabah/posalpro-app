@@ -33,8 +33,9 @@ export async function GET(request: NextRequest) {
     const cursorId = cursorIdParam || null;
 
     // Short TTL cache key (per product + cursor + limit)
+    // Use param before resolution for cache scoping, then rebuild after resolution
     const cacheKey =
-      `products:relationships:versions:${resolvedProductId}:` +
+      `products:relationships:versions:${productIdParam || 'unknown'}:` +
       `${cursorCreatedAt ? cursorCreatedAt.getTime() : 'start'}:${cursorId ?? 'none'}:${limit}`;
     try {
       const cached = await getCache(cacheKey);
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Accept either Product.id (cuid) or Product.sku
-    let resolvedProductId = productIdParam;
+    let resolvedProductId = productIdParam as string;
     if (!/^[a-z0-9]{25,}$/i.test(productIdParam)) {
       // Likely SKU; try lookup
       const prod = await prisma.product.findUnique({

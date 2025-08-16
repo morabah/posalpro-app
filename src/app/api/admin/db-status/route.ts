@@ -4,30 +4,33 @@ import { logger } from '@/utils/logger';
  * Provides database connectivity and health status information
  */
 
+import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
-    // Simulate database status check
-    // In production, this would perform actual database connectivity tests
-    const status = {
+    await validateApiPermission(request, 'admin:read');
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Simulated database status (replace with real checks in production)
+    const data = {
       isOnline: true,
-      latency: Math.floor(Math.random() * 100) + 50, // Simulate 50-150ms latency
+      latency: Math.floor(Math.random() * 100) + 50,
       health: 'healthy',
       lastChecked: new Date().toISOString(),
       type: 'local',
-    };
+    } as const;
 
-    return NextResponse.json(status);
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     logger.error('Database status check error:', error);
     return NextResponse.json(
-      {
-        isOnline: false,
-        health: 'offline',
-        error: 'Database status check failed',
-        type: 'unknown',
-      },
+      { success: false, error: 'Database status check failed' },
       { status: 500 }
     );
   }
@@ -35,28 +38,28 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await validateApiPermission(request, 'admin:read');
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { type } = await request.json();
 
-    // Simulate database status check
-    // In production, this would perform actual database connectivity tests
-    const status = {
+    // Simulated database status (replace with real checks in production)
+    const data = {
       isOnline: true,
-      latency: Math.floor(Math.random() * 100) + 50, // Simulate 50-150ms latency
+      latency: Math.floor(Math.random() * 100) + 50,
       health: 'healthy',
       lastChecked: new Date().toISOString(),
       type: type || 'local',
-    };
+    } as const;
 
-    return NextResponse.json(status);
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     logger.error('Database status check error:', error);
     return NextResponse.json(
-      {
-        isOnline: false,
-        health: 'offline',
-        error: 'Database status check failed',
-        type: 'unknown',
-      },
+      { success: false, error: 'Database status check failed' },
       { status: 500 }
     );
   }

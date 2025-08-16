@@ -14,7 +14,7 @@
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 
 interface QueryProviderProps {
@@ -84,9 +84,10 @@ export function QueryProvider({ children }: QueryProviderProps) {
     <QueryClientProvider client={queryClient}>
       {children}
       {/* Show React Query DevTools in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <ReactQueryDevtools initialIsOpen={false} position="bottom" />
-      )}
+      {process.env.NODE_ENV === 'development' && (() => {
+        const Devtools = dynamic(() => import('@tanstack/react-query-devtools').then(m => m.ReactQueryDevtools), { ssr: false });
+        return <Devtools initialIsOpen={false} position="bottom" />;
+      })()}
     </QueryClientProvider>
   );
 }

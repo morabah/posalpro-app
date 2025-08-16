@@ -30,14 +30,15 @@ import {
   DeviceTabletIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
-import { Content } from '@prisma/client';
+// Avoid importing server-only prisma client types in client bundles
+interface ContentLite { id: string; title?: string }
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface MobileDashboardData {
   proposals: Proposal[];
   customers: Customer[];
   products: Product[];
-  content: Content[];
+  content: ContentLite[];
   metrics: {
     activeProposals: number;
     pendingTasks: number;

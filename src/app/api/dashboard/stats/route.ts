@@ -1,18 +1,17 @@
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError } from '@/lib/logger';
+import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { withApiTiming } from '@/lib/observability/apiTiming';
-import { recordLatency, recordError } from '@/lib/observability/metricsStore';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 // Simple in-memory cache to reduce repeated heavy queries
 const dashboardStatsCache = new Map<string, { data: any; ts: number }>();
-// In development, keep TTL effectively disabled to avoid stale numbers during testing
-const DASHBOARD_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 60 * 1000 : 0;
+// In development, keep a small TTL to avoid repeated recomputation during tests while staying fresh
+const DASHBOARD_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 60 * 1000 : 5 * 1000;
 
 export async function GET(request: NextRequest) {
   let session;
@@ -34,7 +33,7 @@ export async function GET(request: NextRequest) {
       const response = NextResponse.json({
         success: true,
         data: cached.data,
-        message: 'Dashboard statistics retrieved successfully (cache)'
+        message: 'Dashboard statistics retrieved successfully (cache)',
       });
       // Avoid aggressive browser caching in development to keep data live
       if (process.env.NODE_ENV === 'production') {
@@ -45,74 +44,35 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
-    // ✅ CRITICAL: Convert to single atomic transaction for TTFB optimization
-    // Following Lesson #30: Database Performance Optimization - Prisma Transaction Pattern
-    const [
-      totalProposals,
-      activeProposals,
-      totalCustomers,
-      totalRevenue,
-      approvedProposals,
-      totalProposalsForRate,
-      recentProposals,
-      previousProposals,
-    ] = await prisma.$transaction([
-      // Total proposals
-      prisma.proposal.count(),
-
-      // Active proposals (not draft, not rejected)
-      prisma.proposal.count({
-        where: {
-          status: {
-            notIn: ['DRAFT', 'REJECTED', 'DECLINED'],
-          },
-        },
-      }),
-
-      // Total customers
-      prisma.customer.count(),
-
-      // Total revenue (sum of all proposal values)
-      prisma.proposal.aggregate({
-        _sum: {
-          value: true,
-        },
-        where: {
-          status: {
-            in: ['APPROVED', 'SUBMITTED', 'ACCEPTED'],
-          },
-        },
-      }),
-
-      // Approved proposals count for completion rate
-      prisma.proposal.count({
-        where: {
-          status: 'APPROVED',
-        },
-      }),
-
-      // Total proposals count for completion rate
-      prisma.proposal.count(),
-
-      // Recent proposals (last 30 days)
-      prisma.proposal.count({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
-
-      // Previous period proposals (30-60 days ago)
-      prisma.proposal.count({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-            lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
+    // ✅ Optimized: Use a single SQL query to compute multiple metrics in one pass
+    // This significantly reduces roundtrips and planning overhead on large tables
+    const [proposalAgg, customersAgg]: any[] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT
+          COUNT(*)::int                                 AS total_proposals,
+          COUNT(*) FILTER (WHERE status NOT IN ('DRAFT','REJECTED','DECLINED'))::int AS active_proposals,
+          COUNT(*) FILTER (WHERE status = 'APPROVED')::int                          AS approved_proposals,
+          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '30 days')::int   AS recent_proposals,
+          COUNT(*) FILTER (
+            WHERE "createdAt" >= NOW() - INTERVAL '60 days'
+              AND "createdAt" <  NOW() - INTERVAL '30 days'
+          )::int                                                                    AS previous_proposals,
+          COALESCE(SUM(value) FILTER (WHERE status IN ('APPROVED','SUBMITTED','ACCEPTED')), 0)::bigint AS revenue_sum
+        FROM "public"."proposals";
+      `,
+      prisma.$queryRaw`SELECT COUNT(*)::int AS total_customers FROM "public"."customers";`,
     ]);
+
+    const totalProposals: number = proposalAgg[0]?.total_proposals ?? 0;
+    const activeProposals: number = proposalAgg[0]?.active_proposals ?? 0;
+    const approvedProposals: number = proposalAgg[0]?.approved_proposals ?? 0;
+    const recentProposals: number = proposalAgg[0]?.recent_proposals ?? 0;
+    const previousProposals: number = proposalAgg[0]?.previous_proposals ?? 0;
+    const totalRevenueSum: number = Number(proposalAgg[0]?.revenue_sum ?? 0);
+    const totalCustomers: number = customersAgg[0]?.total_customers ?? 0;
+
+    // Maintain old variable names used below
+    const totalProposalsForRate = totalProposals;
 
     // Calculate derived metrics outside transaction
     const completionRate =
@@ -128,7 +88,7 @@ export async function GET(request: NextRequest) {
       totalProposals,
       activeProposals,
       totalCustomers,
-      totalRevenue: totalRevenue._sum.value || 0,
+      totalRevenue: totalRevenueSum || 0,
       completionRate: Math.round(completionRate * 100) / 100,
       avgResponseTime,
       recentGrowth,

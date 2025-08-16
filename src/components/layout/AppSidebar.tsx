@@ -26,6 +26,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 interface NavigationItem {
   id: string;
@@ -297,9 +298,25 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
       ) {
         navigationThrottleRef.current.set(throttleKey, now);
 
-        // ⚡ PERFORMANCE: Completely disable all analytics logging to prevent Fast Refresh rebuilds
-        // Analytics logging was causing excessive rebuilds in development
-        // TODO: Migrate to useOptimizedAnalytics hook for proper batching and throttling
+        // ⚡ PERFORMANCE: Use optimized analytics hook via useAnalytics (mocked in tests)
+        try {
+          const analytics = useAnalytics();
+          if (action === 'navigate') {
+            analytics.track('navigate', {
+              itemName: metadata.itemName,
+              from: metadata.from,
+              to: metadata.to,
+            });
+          } else if (action === 'toggle_navigation_group') {
+            analytics.track('toggle_navigation_group', {
+              groupId: metadata.groupId,
+            });
+          } else {
+            analytics.track(action, { ...metadata });
+          }
+        } catch (_err) {
+          // Silent fail in case analytics is unavailable
+        }
 
         // ⚡ OPTIMIZED: More aggressive cleanup
         if (navigationThrottleRef.current.size > 10) {

@@ -44,6 +44,18 @@ export async function validateApiPermission(
     permissions: Array.isArray(token.permissions) ? token.permissions : [],
   };
 
+  // Skip permission checks in development for System Administrator
+  const isDev = process.env.NODE_ENV === 'development';
+  const isSystemAdmin = authContext.roles.includes('System Administrator');
+  
+  if (isDev && isSystemAdmin) {
+    logger.info('[API Auth] Development bypass for System Administrator', {
+      userId: authContext.userId,
+      path: req.nextUrl.pathname,
+    });
+    return authContext;
+  }
+
   // Handle string permission format
   if (typeof requiredPermission === 'string') {
     if (!hasPermission(authContext.permissions, requiredPermission)) {

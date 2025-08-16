@@ -15,23 +15,53 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError, logInfo } from '@/lib/logger';
-import {
-  ArrowPathIcon,
-  CalendarIcon,
-  CheckCircleIcon,
-  ClockIcon,
-  DocumentTextIcon,
-  ExclamationTriangleIcon,
-  EyeIcon,
-  FunnelIcon,
-  MagnifyingGlassIcon,
-  PencilIcon,
-  PlusIcon,
-  UserGroupIcon,
-} from '@heroicons/react/24/outline';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProposalData } from '../../../../lib/entities/proposal';
+const ArrowPathIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.ArrowPathIcon),
+  { ssr: false }
+);
+const CalendarIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.CalendarIcon),
+  { ssr: false }
+);
+const CheckCircleIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.CheckCircleIcon),
+  { ssr: false }
+);
+const ClockIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.ClockIcon), {
+  ssr: false,
+});
+const DocumentTextIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.DocumentTextIcon),
+  { ssr: false }
+);
+const ExclamationTriangleIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.ExclamationTriangleIcon),
+  { ssr: false }
+);
+const EyeIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.EyeIcon), {
+  ssr: false,
+});
+const FunnelIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.FunnelIcon), {
+  ssr: false,
+});
+const MagnifyingGlassIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.MagnifyingGlassIcon),
+  { ssr: false }
+);
+const PencilIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PencilIcon), {
+  ssr: false,
+});
+const PlusIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PlusIcon), {
+  ssr: false,
+});
+const UserGroupIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.UserGroupIcon),
+  { ssr: false }
+);
 
 // API Response interfaces
 interface ProposalApiResponse {
@@ -164,6 +194,15 @@ function ProposalManagementDashboardContent() {
     return typeof value === 'object' && value !== null;
   }
 
+  // Ensure unique proposals by id to avoid React key collisions when pages overlap
+  function dedupeProposalsById(items: Proposal[]): Proposal[] {
+    const map = new Map<string, Proposal>();
+    for (const p of items) {
+      if (!map.has(p.id)) map.set(p.id, p);
+    }
+    return Array.from(map.values());
+  }
+
   function extractProposalsResponse(raw: unknown): {
     proposals: unknown[];
     responseTimeMs?: number;
@@ -212,8 +251,9 @@ function ProposalManagementDashboardContent() {
       void logInfo('[PROPOSALS] Fetching proposals with apiClient');
 
       // Initial page load using offset-based (server infers hasNextPage). We'll synthesize nextCursor.
+      // Optimized: request minimal fields and avoid relation hydration
       const raw: unknown = await apiClient.get(
-        '/proposals?limit=50&sortBy=updatedAt&sortOrder=desc&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName,customer(id,name),assignedTo(id,name)'
+        '/proposals?limit=30&sortBy=updatedAt&sortOrder=desc&includeCustomer=false&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName'
       );
 
       const { proposals: proposalsData, responseTimeMs } = extractProposalsResponse(raw);
@@ -229,15 +269,14 @@ function ProposalManagementDashboardContent() {
                 : typeof (p as Record<string, unknown>).createdBy === 'string'
                   ? ((p as Record<string, unknown>).createdBy as string)
                   : 'Unassigned';
+            // Team members mapping (assignedTo relation when includeTeam=true)
             const assignedRaw = (p as Record<string, unknown>).assignedTo;
             const assignedTeam = Array.isArray(assignedRaw) ? assignedRaw : [];
-
-            // ✅ FIXED: Handle team data properly - assignedTo is an array of User objects
             const teamMembers = Array.isArray(assignedTeam)
               ? assignedTeam.map((member: unknown) => {
                   if (isObject(member)) {
-                    const name = member.name;
-                    const id = member.id;
+                    const name = (member as any).name;
+                    const id = (member as any).id;
                     return (
                       (typeof name === 'string' && name) ||
                       (typeof id === 'string' ? id : 'Unknown')
@@ -248,8 +287,14 @@ function ProposalManagementDashboardContent() {
               : [];
 
             // ✅ FIXED: Use correct field names from Proposal model with type assertion
-            const value = (p as Record<string, unknown>).value;
-            const estimatedValue = typeof value === 'number' ? value : 0;
+            const totalValueRaw = (p as Record<string, unknown>).totalValue;
+            const valueRaw = (p as Record<string, unknown>).value;
+            const estimatedValue =
+              typeof totalValueRaw === 'number'
+                ? (totalValueRaw as number)
+                : typeof valueRaw === 'number'
+                  ? (valueRaw as number)
+                  : 0;
             const due = (p as Record<string, unknown>).dueDate;
             const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
 
@@ -293,27 +338,18 @@ function ProposalManagementDashboardContent() {
                   ? ((p as Record<string, unknown>).description as string)
                   : undefined,
               lastActivity: `Created on ${new Date(String((p as Record<string, unknown>).createdAt || new Date().toISOString())).toLocaleDateString()}`,
-              customer: isObject((p as Record<string, unknown>).customer)
-                ? {
-                    id: String(
-                      ((p as Record<string, unknown>).customer as Record<string, unknown>).id || ''
-                    ),
-                    name: String(
-                      ((p as Record<string, unknown>).customer as Record<string, unknown>).name ||
-                        ''
-                    ),
-                  }
-                : undefined,
+              // Customer relation not hydrated; rely on client (denormalized customerName above)
+              customer: undefined,
             };
           }
         );
 
-        setProposals(transformedProposals);
+        setProposals(dedupeProposalsById(transformedProposals));
 
         // Synthesize cursor for subsequent loads (use last id) and hasMore flag
         const last = transformedProposals[transformedProposals.length - 1];
         setNextCursor(last ? last.id : null);
-        setHasMore(transformedProposals.length === 50);
+        setHasMore(transformedProposals.length === 30);
 
         // Track successful data load
         trackAction(
@@ -375,7 +411,7 @@ function ProposalManagementDashboardContent() {
     if (!nextCursor || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
-      const endpoint = `/proposals?limit=50&sortBy=updatedAt&sortOrder=desc&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName,customer(id,name),assignedTo(id,name)&cursor=${encodeURIComponent(
+      const endpoint = `/proposals?limit=30&sortBy=updatedAt&sortOrder=desc&includeCustomer=false&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName&cursor=${encodeURIComponent(
         nextCursor
       )}`;
       const raw: unknown = await apiClient.get(endpoint);
@@ -403,8 +439,14 @@ function ProposalManagementDashboardContent() {
                 return 'Unknown';
               })
             : [];
-          const value = (p as Record<string, unknown>).value;
-          const estimatedValue = typeof value === 'number' ? value : 0;
+          const totalValueRaw = (p as Record<string, unknown>).totalValue;
+          const valueRaw = (p as Record<string, unknown>).value;
+          const estimatedValue =
+            typeof totalValueRaw === 'number'
+              ? (totalValueRaw as number)
+              : typeof valueRaw === 'number'
+                ? (valueRaw as number)
+                : 0;
           const due = (p as Record<string, unknown>).dueDate;
           const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
 
@@ -461,10 +503,10 @@ function ProposalManagementDashboardContent() {
           } as Proposal;
         });
 
-        setProposals(prev => [...prev, ...more]);
+        setProposals(prev => dedupeProposalsById([...prev, ...more]));
         const last = more[more.length - 1];
         setNextCursor(last ? last.id : null);
-        setHasMore(more.length === 50);
+        setHasMore(more.length === 30);
       } else {
         setHasMore(false);
       }
@@ -984,137 +1026,289 @@ function ProposalManagementDashboardContent() {
               </div>
             </Card>
           ) : (
-            // Proposal cards
-            filteredProposals.map(proposal => (
-              <Card
-                key={proposal.id}
-                className={`hover:shadow-lg transition-shadow duration-200 ${
-                  selectedProposal === proposal.id ? 'ring-2 ring-blue-500' : ''
-                }`}
-              >
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3
-                          className="text-lg font-semibold text-gray-900 hover:text-blue-600 cursor-pointer"
-                          onClick={() => {
-                            trackAction('view_proposal', { proposalId: proposal.id });
-                            router.push(`/proposals/${proposal.id}`);
-                          }}
-                        >
-                          {proposal.title}
-                        </h3>
-                        <StatusBadge status={proposal.status} />
-                        <PriorityIndicator priority={proposal.priority} />
+            // Enhanced proposal cards with highlighted important info
+            filteredProposals.map(proposal => {
+              // Calculate if proposal is overdue
+              const isOverdue =
+                new Date(proposal.dueDate) < new Date() &&
+                !['submitted', 'won', 'lost', 'cancelled'].includes(proposal.status);
+
+              // Calculate days until due date
+              const daysUntilDue = Math.ceil(
+                (new Date(proposal.dueDate).getTime() - new Date().getTime()) /
+                  (1000 * 60 * 60 * 24)
+              );
+
+              // Get risk level styling
+              const getRiskStyling = () => {
+                if (isOverdue) return 'border-l-4 border-l-red-500 bg-red-50';
+                if (daysUntilDue <= 7 && daysUntilDue > 0)
+                  return 'border-l-4 border-l-yellow-500 bg-yellow-50';
+                if (proposal.priority === 'high') return 'border-l-4 border-l-orange-500';
+                return 'border-l-4 border-l-blue-500';
+              };
+
+              return (
+                <Card
+                  key={proposal.id}
+                  className={`hover:shadow-xl transition-all duration-200 ${getRiskStyling()} ${
+                    selectedProposal === proposal.id ? 'ring-2 ring-blue-500' : ''
+                  }`}
+                >
+                  <div className="p-6">
+                    {/* Header with enhanced status indicators */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <h3
+                            className="text-xl font-bold text-gray-900 hover:text-blue-600 cursor-pointer transition-colors"
+                            onClick={() => {
+                              trackAction('view_proposal', { proposalId: proposal.id });
+                              router.push(`/proposals/${proposal.id}`);
+                            }}
+                          >
+                            {proposal.title}
+                          </h3>
+                          <StatusBadge status={proposal.status} />
+                          <PriorityIndicator priority={proposal.priority} />
+
+                          {/* Risk indicators */}
+                          {isOverdue && (
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-red-100 text-red-800 rounded-full animate-pulse">
+                              <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                              OVERDUE
+                            </span>
+                          )}
+                          {!isOverdue && daysUntilDue <= 7 && daysUntilDue > 0 && (
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                              <ClockIcon className="w-3 h-3 mr-1" />
+                              {daysUntilDue}d left
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-4 mb-2">
+                          <p className="text-lg font-semibold text-gray-800">{proposal.client}</p>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                            {proposal.stage}
+                          </div>
+                        </div>
+
+                        {proposal.description && (
+                          <p className="text-sm text-gray-600 line-clamp-2">
+                            {proposal.description}
+                          </p>
+                        )}
                       </div>
-                      <p className="text-gray-600 mb-2">{proposal.client}</p>
-                      <p className="text-sm text-gray-500">{proposal.description}</p>
-                    </div>
-                    <div className="flex items-center space-x-2 ml-4">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          trackAction('view_proposal', { proposalId: proposal.id });
-                          router.push(`/proposals/${proposal.id}`);
-                        }}
-                      >
-                        <EyeIcon className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => router.push(`/proposals/create?edit=${proposal.id}`)}
-                      >
-                        <PencilIcon className="w-4 h-4" />
-                      </Button>
-                      {/* Debug: Show proposal ID for testing */}
-                      <span className="text-xs text-gray-400 font-mono">
-                        ID: {proposal.id.slice(0, 8)}...
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <CalendarIcon className="w-4 h-4 mr-2" />
-                      Due:{' '}
-                      {proposal.dueDate instanceof Date
-                        ? proposal.dueDate.toLocaleDateString()
-                        : new Date(proposal.dueDate).toLocaleDateString()}
+                      <div className="flex flex-col items-end space-y-2 ml-6">
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              trackAction('view_proposal', { proposalId: proposal.id });
+                              router.push(`/proposals/${proposal.id}`);
+                            }}
+                            className="hover:bg-blue-50"
+                          >
+                            <EyeIcon className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => router.push(`/proposals/create?edit=${proposal.id}`)}
+                            className="hover:bg-green-50"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-1 rounded">
+                          {proposal.id.slice(0, 8)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <UserGroupIcon className="w-4 h-4 mr-2" />
-                      Team: {proposal.assignedTeam.length} members
-                    </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <span className="w-4 h-4 mr-2 text-green-600">$</span>
-                      Value: ${proposal.estimatedValue.toLocaleString()}
-                    </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <ClockIcon className="w-4 h-4 mr-2" />
-                      Stage: {proposal.stage}
-                    </div>
-                  </div>
 
-                  {/* Progress Bar */}
-                  <div className="mb-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-gray-700">Progress</span>
-                      <span className="text-sm text-gray-600">{proposal.progress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    {/* Key metrics with enhanced styling */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                      {/* Due Date - highlighted if urgent */}
                       <div
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          proposal.progress >= 80
-                            ? 'bg-green-600'
-                            : proposal.progress >= 50
-                              ? 'bg-blue-600'
-                              : 'bg-yellow-600'
+                        className={`flex items-center p-3 rounded-lg ${
+                          isOverdue
+                            ? 'bg-red-100 text-red-800'
+                            : daysUntilDue <= 7 && daysUntilDue > 0
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-50 text-gray-700'
                         }`}
-                        style={{ width: `${proposal.progress}%` }}
-                      />
-                    </div>
-                  </div>
+                      >
+                        <CalendarIcon className="w-5 h-5 mr-3 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs font-medium opacity-75">Due Date</div>
+                          <div className="font-semibold">
+                            {proposal.dueDate instanceof Date
+                              ? proposal.dueDate.toLocaleDateString()
+                              : new Date(proposal.dueDate).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Tags and Team */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      {proposal.tags.slice(0, 3).map(tag => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                      {proposal.tags.length > 3 && (
-                        <span className="text-xs text-gray-500">
-                          +{proposal.tags.length - 3} more
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Lead: <span className="font-medium">{proposal.teamLead}</span>
-                    </div>
-                  </div>
+                      {/* Team Count - highlighted */}
+                      <div className="flex items-center p-3 rounded-lg bg-blue-50 text-blue-800">
+                        <UserGroupIcon className="w-5 h-5 mr-3 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs font-medium opacity-75">Team Size</div>
+                          <div className="font-bold text-lg">
+                            {proposal.assignedTeam.length}
+                            <span className="text-sm font-normal ml-1">members</span>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Last Activity */}
-                  {proposal.lastActivity && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Last activity:</span> {proposal.lastActivity}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Updated {proposal.updatedAt.toLocaleDateString()} at{' '}
-                        {proposal.updatedAt.toLocaleTimeString()}
-                      </p>
+                      {/* Value - prominently displayed */}
+                      <div className="flex items-center p-3 rounded-lg bg-green-50 text-green-800">
+                        <div className="w-5 h-5 mr-3 flex-shrink-0 flex items-center justify-center">
+                          <span className="text-green-600 font-bold text-lg">$</span>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium opacity-75">Est. Value</div>
+                          <div className="font-bold text-lg">
+                            ${(proposal.estimatedValue / 1000).toFixed(0)}K
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Progress - with visual indicator */}
+                      <div className="flex items-center p-3 rounded-lg bg-purple-50 text-purple-800">
+                        <div className="w-5 h-5 mr-3 flex-shrink-0 relative">
+                          <div className="w-5 h-5 rounded-full border-2 border-current opacity-25"></div>
+                          <div
+                            className="absolute inset-0 rounded-full border-2 border-current border-r-transparent animate-spin"
+                            style={{
+                              animation: 'none',
+                              transform: `rotate(${(proposal.progress / 100) * 360}deg)`,
+                            }}
+                          ></div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium opacity-75">Progress</div>
+                          <div className="font-bold text-lg">{proposal.progress}%</div>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </Card>
-            ))
+
+                    {/* Enhanced Progress Bar */}
+                    <div className="mb-6">
+                      <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            proposal.progress >= 80
+                              ? 'bg-gradient-to-r from-green-500 to-green-600'
+                              : proposal.progress >= 50
+                                ? 'bg-gradient-to-r from-blue-500 to-blue-600'
+                                : proposal.progress >= 25
+                                  ? 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+                                  : 'bg-gradient-to-r from-red-500 to-red-600'
+                          }`}
+                          style={{ width: `${proposal.progress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Team and Tags Section */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        {/* Team Lead */}
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-semibold text-blue-800">
+                              {proposal.teamLead
+                                .split(' ')
+                                .map(n => n[0])
+                                .join('')
+                                .slice(0, 2)}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500">Team Lead</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {proposal.teamLead}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Team Members Indicator */}
+                        {proposal.assignedTeam.length > 1 && (
+                          <div className="flex items-center space-x-1">
+                            {proposal.assignedTeam.slice(1, 4).map((member, index) => (
+                              <div
+                                key={index}
+                                className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center border-2 border-white"
+                                title={member}
+                              >
+                                <span className="text-xs font-medium text-gray-600">
+                                  {member
+                                    .split(' ')
+                                    .map(n => n[0])
+                                    .join('')
+                                    .slice(0, 1)}
+                                </span>
+                              </div>
+                            ))}
+                            {proposal.assignedTeam.length > 4 && (
+                              <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center border-2 border-white">
+                                <span className="text-xs font-bold text-gray-600">
+                                  +{proposal.assignedTeam.length - 4}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Tags */}
+                      <div className="flex items-center space-x-2">
+                        {proposal.tags.slice(0, 2).map(tag => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                        {proposal.tags.length > 2 && (
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                            +{proposal.tags.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Last Activity - Enhanced */}
+                    {proposal.lastActivity && (
+                      <div className="pt-4 border-t border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Last activity:</span>{' '}
+                              {proposal.lastActivity}
+                            </p>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {proposal.updatedAt.toLocaleDateString()} •{' '}
+                            {proposal.updatedAt.toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              );
+            })
           )}
           {hasMore && !isLoading && (
             <div className="flex justify-center mt-6">

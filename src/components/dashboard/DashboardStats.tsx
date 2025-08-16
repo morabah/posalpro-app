@@ -142,19 +142,21 @@ const DashboardStats = memo(() => {
           'low'
         );
 
-        // Fetch real data from API
-        const response =
-          await apiClient.get<ApiResponse<DashboardStatsData>>('dashboard/stats?fresh=1');
+        // Fetch real data from API (dashboard + proposal KPIs) in parallel
+        const [statsRes, kpisRes] = await Promise.all([
+          apiClient.get<ApiResponse<DashboardStatsData>>('dashboard/stats?fresh=1'),
+          apiClient.get<ApiResponse<Record<string, unknown>>>('proposals/stats?fresh=1'),
+        ]);
 
-        if (response.success && response.data) {
-          setStats(response.data);
+        if (statsRes.success && statsRes.data) {
+          setStats(statsRes.data);
 
           // Track successful fetch
           analytics(
             'dashboard_stats_fetch_success',
             {
               component: 'DashboardStats',
-              statsCount: response.data ? Object.keys(response.data).length : 0,
+              statsCount: statsRes.data ? Object.keys(statsRes.data).length : 0,
             },
             'low'
           );
@@ -165,8 +167,25 @@ const DashboardStats = memo(() => {
             metadata: {
               component: 'DashboardStats',
               operation: 'GET',
-              response: response || 'No response',
+              response: statsRes || 'No response',
             },
+          });
+        }
+
+        if (kpisRes?.success && kpisRes.data) {
+          const data = kpisRes.data as {
+            total?: unknown;
+            inProgress?: unknown;
+            overdue?: unknown;
+            winRate?: unknown;
+            totalValue?: unknown;
+          };
+          setProposalKpis({
+            total: Number(data.total) || 0,
+            inProgress: Number(data.inProgress) || 0,
+            overdue: Number(data.overdue) || 0,
+            winRate: Number(data.winRate) || 0,
+            totalValue: Number(data.totalValue) || 0,
           });
         }
       } catch (error) {
@@ -193,29 +212,6 @@ const DashboardStats = memo(() => {
           },
           'medium'
         );
-        // Fetch proposal KPIs for the top cards (consistent with manage dashboard)
-        try {
-          const kpiRes =
-            await apiClient.get<ApiResponse<Record<string, unknown>>>('proposals/stats?fresh=1');
-          if (kpiRes?.success && kpiRes.data) {
-            const data = kpiRes.data as {
-              total?: unknown;
-              inProgress?: unknown;
-              overdue?: unknown;
-              winRate?: unknown;
-              totalValue?: unknown;
-            };
-            setProposalKpis({
-              total: Number(data.total) || 0,
-              inProgress: Number(data.inProgress) || 0,
-              overdue: Number(data.overdue) || 0,
-              winRate: Number(data.winRate) || 0,
-              totalValue: Number(data.totalValue) || 0,
-            });
-          }
-        } catch (_) {
-          // Non-blocking; cards will use fallback from stats
-        }
       } finally {
         setLoading(false);
       }

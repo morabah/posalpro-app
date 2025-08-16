@@ -263,6 +263,16 @@ export function useOptimizedAnalytics(config: Partial<OptimizedAnalyticsConfig> 
 
   return {
     trackOptimized,
+    // Backwards-compat shim for older tests/components
+    trackInteraction: (category: string, action: string, properties?: Record<string, unknown>) => {
+      trackOptimized(`${category}_${action}`, properties ?? {}, 'low');
+    },
+    trackDashboardLoaded: (payload: Record<string, unknown>) => {
+      trackOptimized('dashboard_loaded', payload, 'low');
+    },
+    trackWidgetInteraction: (widgetId: string, action: string, metadata?: Record<string, unknown>) => {
+      trackOptimized('widget_interaction', { widgetId, action, ...(metadata ?? {}) }, 'low');
+    },
     isClient,
     isOnline,
     lastFlush,

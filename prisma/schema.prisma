@@ -42,6 +42,10 @@ model User {
   validationIssuesResolved ValidationIssue[]
   validationRules          ValidationRule[]
   assignedProposals        Proposal[]                  @relation("ProposalAssignees")
+  // Added for rule authoring
+  createdRules             ProductRelationshipRule[]       @relation("RuleCreator")
+  updatedRules             ProductRelationshipRule[]       @relation("RuleUpdater")
+  ruleVersionsCreated      ProductRelationshipRuleVersion[]
 
   @@index([name])
   @@index([department])
@@ -683,6 +687,8 @@ model Product {
   relatedFrom       ProductRelationship[] @relation("TargetProduct")
   proposalProducts  ProposalProduct[]
   validationRules   ValidationRule[]
+  // Added for rule authoring
+  relationshipRules ProductRelationshipRule[]
 
   @@index([isActive, createdAt(sort: Desc)])
   @@index([isActive, price])
@@ -714,6 +720,55 @@ model ProductRelationship {
   @@index([targetProductId], map: "idx_product_relationships_target_id")
   @@index([type], map: "idx_product_relationships_type")
   @@map("product_relationships")
+}
+
+/// Rule-based product relationship system (DSL-backed)
+model ProductRelationshipRule {
+  id                 String            @id @default(cuid())
+  productId          String
+  name               String
+  ruleType           RuleKind
+  status             RuleStatus        @default(DRAFT)
+  rule               Json              // DSL JSON per spec
+  precedence         Int               @default(0)
+  scope              Json?             // optional scoping (region/version/date/tier)
+  explain            String?
+  isPublished        Boolean           @default(false)
+  version            Int               @default(1)
+  effectiveFrom      DateTime?
+  effectiveTo        DateTime?
+  createdBy          String
+  updatedBy          String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  product            Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  creator            User              @relation("RuleCreator", fields: [createdBy], references: [id])
+  updater            User?             @relation("RuleUpdater", fields: [updatedBy], references: [id])
+  versions           ProductRelationshipRuleVersion[]
+
+  @@index([productId, status])
+  @@index([ruleType, status])
+  @@index([effectiveFrom, effectiveTo])
+  @@map("product_relationship_rules")
+}
+
+model ProductRelationshipRuleVersion {
+  id            String                  @id @default(cuid())
+  ruleId        String
+  version       Int
+  status        RuleStatus
+  rule          Json
+  explain       String?
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  createdBy     String
+  createdAt     DateTime                @default(now())
+  ruleEntity    ProductRelationshipRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  creator       User                    @relation(fields: [createdBy], references: [id])
+
+  @@unique([ruleId, version])
+  @@index([status, createdAt])
+  @@map("product_relationship_rule_versions")
 }
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
@@ -1127,6 +1182,26 @@ enum RelationshipType {
   INCOMPATIBLE
   ALTERNATIVE
   OPTIONAL
+}
+
+enum RuleStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  DEPRECATED
+}
+
+enum RuleKind {
+  REQUIRES
+  EXCLUDES
+  RECOMMENDS
+  AUTO_ADD
+  CHOOSE_ONE_OF
+  COMPAT_BY_ATTR
+  REPLACED_BY
+  CAPACITY_LINK
+  LICENSE_FOR
+  CONDITION
 }
 
 enum ContentType {

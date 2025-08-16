@@ -419,7 +419,13 @@ export async function POST(request: NextRequest) {
 
     // Track customer creation event for analytics (async, non-blocking)
     trackCustomerCreationEvent(session.user.id, customer.id, customer.name).catch(error => {
-      logger.warn('Analytics tracking failed but not blocking request:', error);
+      // use standardized logger from error handling service
+      errorHandlingService.processError(
+        error,
+        'Analytics tracking failed but not blocking request',
+        ErrorCodes.ANALYTICS.TRACKING_ERROR,
+        { component: 'CustomersRoute', operation: 'trackCustomerCreationEvent' }
+      );
     });
 
     return NextResponse.json({

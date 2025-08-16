@@ -36,7 +36,8 @@ import {
   CheckCircleIcon as CheckCircleIconSolid,
   FireIcon,
 } from '@heroicons/react/24/solid';
-import { Content } from '@prisma/client';
+// Avoid importing server-only prisma client types in client bundles
+interface ContentLite { id: string; title?: string }
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -44,7 +45,7 @@ interface DashboardData {
   proposals: Proposal[];
   customers: Customer[];
   products: Product[];
-  content: Content[];
+  content: ContentLite[];
   metrics: {
     activeProposals: number;
     pendingTasks: number;

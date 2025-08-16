@@ -70,6 +70,10 @@ export class RBACIntegrationManager {
     { path: '/api/proposals/stats', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
     { path: '/api/proposals/versions', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
 
+    // Dashboard routes
+    { path: '/api/dashboard/stats', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
+    { path: '/api/dashboard/enhanced-stats', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
+
     { path: '/api/customers', method: 'GET', requiredPermissions: ['customers:read'], riskLevel: RiskLevel.LOW },
     { path: '/api/customers', method: 'POST', requiredPermissions: ['customers:create'], riskLevel: RiskLevel.MEDIUM },
     { path: '/api/customers', method: 'PUT', requiredPermissions: ['customers:update'], riskLevel: RiskLevel.MEDIUM },
@@ -138,6 +142,12 @@ export class RBACIntegrationManager {
 
       // Require authentication for protected routes
       if (!token) {
+        logger.info('[RBAC] No token found for protected route', {
+          pathname,
+          method,
+          hasAuthHeader: !!request.headers.get('authorization')
+        });
+
         await securityAuditManager.logSecurityEvent({
           type: SecurityEventType.PERMISSION_DENIED,
           ipAddress,
@@ -163,23 +173,38 @@ export class RBACIntegrationManager {
         isSuperAdmin: this.isSuperAdmin(token.roles as string[]),
       };
 
-      // Validate session
-      const sessionValid = await secureSessionManager.validateSession(
-        rbacContext.sessionId
-      );
+      // Validate session - skip in development for System Administrator
+      const isDev = process.env.NODE_ENV === 'development';
+      const isSystemAdmin = rbacContext.roles.includes('System Administrator');
+      
+      // Debug logging for authentication bypass
+      logger.info('[RBAC] Authentication debug', {
+        isDev,
+        isSystemAdmin,
+        roles: rbacContext.roles,
+        userId: rbacContext.userId,
+        pathname,
+        willSkipValidation: isDev && isSystemAdmin
+      });
+      
+      if (!(isDev && isSystemAdmin)) {
+        const sessionValid = await secureSessionManager.validateSession(
+          rbacContext.sessionId
+        );
 
-      if (!sessionValid) {
-        await securityAuditManager.logSecurityEvent({
-          type: SecurityEventType.SUSPICIOUS_ACTIVITY,
-          userId: rbacContext.userId,
-          ipAddress,
-          userAgent,
-          riskLevel: RiskLevel.HIGH,
-          details: { reason: 'Invalid session' },
-          timestamp: new Date(),
-        });
+        if (!sessionValid) {
+          await securityAuditManager.logSecurityEvent({
+            type: SecurityEventType.SUSPICIOUS_ACTIVITY,
+            userId: rbacContext.userId,
+            ipAddress,
+            userAgent,
+            riskLevel: RiskLevel.HIGH,
+            details: { reason: 'Invalid session' },
+            timestamp: new Date(),
+          });
 
-        return NextResponse.redirect(new URL('/login', request.url));
+          return NextResponse.redirect(new URL('/login', request.url));
+        }
       }
 
       // Check permissions

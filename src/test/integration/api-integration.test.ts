@@ -70,6 +70,19 @@ describe('API Integration Tests - Type Safety Validation', () => {
   };
 
   beforeEach(async () => {
+    // Stub API authorization to bypass NextRequest pathname access in tests
+    jest.doMock('@/lib/auth/apiAuthorization', () => ({
+      __esModule: true,
+      authorizeApiRequest: jest.fn(async () => ({
+        authorized: true,
+        token: 'test-token',
+      })),
+      validateApiPermission: jest.fn(async () => ({
+        userId: 'test-user-id',
+        roles: ['Administrator'],
+        permissions: ['*:*'],
+      })),
+    }));
     // Mock the prisma import used by API routes
     jest.doMock('@/lib/db/prisma', () => ({
       __esModule: true,

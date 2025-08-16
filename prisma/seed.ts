@@ -3,7 +3,23 @@
  * Initializes production-ready data with comprehensive sample data
  */
 
-import { PrismaClient } from '@prisma/client';
+import { toPrismaJson } from '@/lib/utils/prismaUtils';
+import {
+  AccessType,
+  ContentType,
+  EntityType,
+  HypothesisType,
+  PermissionScope,
+  Priority,
+  PrismaClient,
+  ProposalStatus,
+  RelationshipType,
+  RuleKind,
+  RuleStatus,
+  SectionType,
+  Severity,
+  ValidationRuleType,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 // Platform compatibility: Using bcryptjs (pure JS) instead of bcrypt (native)
@@ -46,21 +62,21 @@ async function main() {
       const contentItems = [
         {
           title: 'Executive Summary Template',
-          type: 'TEMPLATE' as const,
+          type: ContentType.TEMPLATE,
           category: ['Executive'],
           content: 'Executive summary template for high-level proposal overview...',
           tags: ['executive', 'summary', 'overview'],
         },
         {
           title: 'Technical Architecture Overview',
-          type: 'TEMPLATE' as const,
+          type: ContentType.TEMPLATE,
           category: ['Technical'],
           content: 'Technical architecture template for system design proposals...',
           tags: ['technical', 'architecture', 'system-design'],
         },
         {
           title: 'Security Compliance Framework',
-          type: 'DOCUMENT' as const,
+          type: ContentType.DOCUMENT,
           category: ['Security'],
           content: 'Comprehensive security compliance framework and requirements...',
           tags: ['security', 'compliance', 'framework'],
@@ -74,6 +90,8 @@ async function main() {
             category: item.category,
             content: item.content,
             tags: item.tags,
+            keywords: item.tags,
+            allowedRoles: [],
             isActive: true,
             createdBy: fallbackUser?.id ?? 'unknown',
           },
@@ -84,7 +102,7 @@ async function main() {
 
     // Top-up templates if below minimum threshold
     const templateCount = await prisma.content.count({
-      where: { type: 'TEMPLATE', isActive: true },
+      where: { type: ContentType.TEMPLATE, isActive: true },
     });
     if (templateCount < 2) {
       console.log(`📄 TEMPLATE content low (${templateCount}) — topping up...`);
@@ -108,10 +126,12 @@ async function main() {
         await prisma.content.create({
           data: {
             title: templates[i].title,
-            type: 'TEMPLATE',
+            type: ContentType.TEMPLATE,
             category: templates[i].category,
             content: templates[i].content,
             tags: templates[i].tags,
+            keywords: templates[i].tags,
+            allowedRoles: [],
             isActive: true,
             createdBy: fallbackUser2?.id ?? 'unknown',
           },
@@ -158,6 +178,8 @@ async function main() {
             currency: 'USD',
             category: [pick(categories)],
             tags: [pick(['cloud', 'ai', 'security', 'etl', 'mobile', 'iot', 'ops'])],
+            images: [],
+            userStoryMappings: [],
             isActive: true,
           },
         });
@@ -193,7 +215,8 @@ async function main() {
       for (let i = 0; i < toCreate; i++) {
         const customer = pick(customers);
         const creatorId = pick(users).id;
-        const dueDate = new Date(Date.now() + randomInt(20, 120) * 24 * 60 * 60 * 1000);
+        // Spread dates across past and future to create overdue and upcoming
+        const dueDate = new Date(Date.now() + randomInt(-60, 120) * 24 * 60 * 60 * 1000);
         const rfp = `RFP-${new Date().getFullYear()}-${String(currentProposals + i + 1).padStart(3, '0')}`;
         const selectedProducts = Array.from({ length: randomInt(1, 3) }, () => pick(products));
         const value = selectedProducts.reduce((sum, p) => sum + p.price * randomInt(1, 3), 0);
@@ -201,6 +224,27 @@ async function main() {
         const teamLead = pickUserId(['pm1@posalpro.com', 'pm2@posalpro.com']);
         const salesRep = pickUserId(['pm2@posalpro.com', 'pm1@posalpro.com']);
         const sme = pickUserId(['sme1@posalpro.com', 'sme2@posalpro.com', 'sme3@posalpro.com']);
+
+        const status = pick([
+          ProposalStatus.DRAFT,
+          ProposalStatus.IN_REVIEW,
+          ProposalStatus.PENDING_APPROVAL,
+          ProposalStatus.APPROVED,
+          ProposalStatus.SUBMITTED,
+          ProposalStatus.ACCEPTED,
+          ProposalStatus.DECLINED,
+        ]);
+
+        const submittedAt =
+          status === ProposalStatus.SUBMITTED ||
+          status === ProposalStatus.ACCEPTED ||
+          status === ProposalStatus.DECLINED
+            ? new Date(Date.now() - randomInt(2, 30) * 24 * 60 * 60 * 1000)
+            : undefined;
+        const approvedAt =
+          status === ProposalStatus.APPROVED || status === ProposalStatus.ACCEPTED
+            ? new Date(Date.now() - randomInt(1, 10) * 24 * 60 * 60 * 1000)
+            : undefined;
 
         const newProposal = await prisma.proposal.create({
           data: {
@@ -212,13 +256,15 @@ async function main() {
               'Modernization',
             ])} for ${customer.name}`,
             description: 'Auto-generated realistic project with full metadata and assignments.',
-            status: pick(['DRAFT', 'IN_REVIEW', 'APPROVED', 'SUBMITTED']) as any,
-            priority: pick(['LOW', 'MEDIUM', 'HIGH']) as any,
+            status,
+            priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
             customerId: customer.id,
             createdBy: creatorId,
             dueDate,
+            submittedAt,
+            approvedAt,
             // Store RFP only in metadata wizardData to match current schema
-            metadata: {
+            metadata: toPrismaJson({
               wizardData: {
                 step1: {
                   client: {
@@ -274,10 +320,12 @@ async function main() {
                 salesRepresentative: salesRep,
                 subjectMatterExperts: { TECHNICAL: sme },
               },
-            },
+            }),
             value,
             currency: 'USD',
             tags: ['auto', 'seed', 'demo'],
+            creatorEmail: pick(users).email,
+            customerName: customer.name,
             assignedTo: { connect: [teamLead, salesRep, sme].filter(Boolean).map(id => ({ id })) },
           },
         });
@@ -296,12 +344,12 @@ async function main() {
         }
 
         // Add sections
-        const secDefs = [
-          { title: 'Executive Summary', type: 'TEXT', order: 1 },
-          { title: 'Technical Requirements', type: 'TEXT', order: 2 },
-          { title: 'Product Configuration', type: 'PRODUCTS', order: 3 },
-          { title: 'Implementation Plan', type: 'TEXT', order: 4 },
-          { title: 'Pricing and Terms', type: 'PRICING', order: 5 },
+        const secDefs: { title: string; type: SectionType; order: number }[] = [
+          { title: 'Executive Summary', type: SectionType.TEXT, order: 1 },
+          { title: 'Technical Requirements', type: SectionType.TEXT, order: 2 },
+          { title: 'Product Configuration', type: SectionType.PRODUCTS, order: 3 },
+          { title: 'Implementation Plan', type: SectionType.TEXT, order: 4 },
+          { title: 'Pricing and Terms', type: SectionType.PRICING, order: 5 },
         ];
         for (const s of secDefs) {
           await prisma.proposalSection.create({
@@ -309,7 +357,7 @@ async function main() {
               proposalId: newProposal.id,
               title: s.title,
               content: `${s.title} details for ${newProposal.title}`,
-              type: s.type as any,
+              type: s.type,
               order: s.order,
             },
           });
@@ -358,12 +406,13 @@ async function main() {
         data: {
           name: 'Standard Proposal Approval',
           description: 'Two-stage review and approval for proposals',
-          entityType: 'PROPOSAL',
+          entityType: EntityType.PROPOSAL,
           createdBy: creator?.id ?? 'unknown',
+          userStoryMappings: [],
           stages: {
             create: [
-              { name: 'Manager Review', order: 1, slaHours: 24 },
-              { name: 'Executive Approval', order: 2, slaHours: 48 },
+              { name: 'Manager Review', order: 1, slaHours: 24, approvers: [] },
+              { name: 'Executive Approval', order: 2, slaHours: 48, approvers: [] },
             ],
           },
         },
@@ -372,9 +421,12 @@ async function main() {
         data: {
           name: 'Content Quality Review',
           description: 'Quality and compliance review for content items',
-          entityType: 'CONTENT',
+          entityType: EntityType.CONTENT,
           createdBy: creator?.id ?? 'unknown',
-          stages: { create: [{ name: 'Content Manager Review', order: 1, slaHours: 12 }] },
+          userStoryMappings: [],
+          stages: {
+            create: [{ name: 'Content Manager Review', order: 1, slaHours: 12, approvers: [] }],
+          },
         },
       });
       console.log('✅ Created baseline ApprovalWorkflow templates:', proposalWorkflow.name);
@@ -397,7 +449,690 @@ async function main() {
       }
     }
 
+    // Additional baseline seeding for missing models (top-ups)
+    console.log(
+      '🧩 Performing additional top-ups for preferences, rules, relationships, versions, and logs...'
+    );
+
+    // User & Communication Preferences top-up
+    const usersAll = await prisma.user.findMany({ select: { id: true } });
+    for (const u of usersAll) {
+      await prisma.userPreferences.upsert({
+        where: { userId: u.id },
+        update: {},
+        create: {
+          userId: u.id,
+          theme: 'system',
+          language: 'en',
+          analyticsConsent: false,
+          performanceTracking: false,
+        },
+      });
+      await prisma.communicationPreferences.upsert({
+        where: { userId: u.id },
+        update: {},
+        create: {
+          userId: u.id,
+          language: 'en',
+          timezone: 'UTC',
+          quietHoursStart: null,
+          quietHoursEnd: null,
+          channels: toPrismaJson({ email: true, inApp: true }),
+          frequency: toPrismaJson({ general: 'daily' }),
+          categories: toPrismaJson({ proposals: true, content: true }),
+        },
+      });
+    }
+
+    // Validation rules baseline
+    const vrCount = await prisma.validationRule.count();
+    if (vrCount === 0) {
+      const creator = await prisma.user.findFirst({ select: { id: true } });
+      const anyProduct = await prisma.product.findFirst({ select: { id: true } });
+      await prisma.validationRule.createMany({
+        data: [
+          {
+            name: 'Basic Proposal Completeness',
+            description: 'Ensure proposals have at least one section and one product',
+            category: 'Proposal',
+            ruleType: ValidationRuleType.COMPLIANCE,
+            conditions: toPrismaJson({ minSections: 1, minProducts: 1 }),
+            actions: toPrismaJson({ severity: 'WARNING' }),
+            severity: Severity.WARNING,
+            isActive: true,
+            createdBy: creator?.id ?? 'unknown',
+            userStoryMappings: ['US-1.1'],
+            hypothesesSupported: ['H1'],
+          },
+          {
+            name: 'Product Active Compatibility',
+            description: 'If a product is inactive, warn about selection',
+            category: 'Product',
+            ruleType: ValidationRuleType.COMPATIBILITY,
+            conditions: toPrismaJson({ requireActive: true }),
+            actions: toPrismaJson({ warnIfInactive: true }),
+            severity: Severity.INFO,
+            isActive: true,
+            createdBy: creator?.id ?? 'unknown',
+            productId: anyProduct?.id,
+            userStoryMappings: ['US-2.3'],
+            hypothesesSupported: ['H3'],
+          },
+        ],
+      });
+    }
+
+    // Product relationships baseline
+    const prRelCount = await prisma.productRelationship.count();
+    if (prRelCount === 0) {
+      const creator = await prisma.user.findFirst({ select: { id: true } });
+      const prods = await prisma.product.findMany({ take: 2, select: { id: true } });
+      if (prods.length >= 2) {
+        await prisma.productRelationship.create({
+          data: {
+            sourceProductId: prods[0].id,
+            targetProductId: prods[1].id,
+            type: RelationshipType.RECOMMENDS,
+            createdBy: creator?.id ?? 'unknown',
+            condition: toPrismaJson({ minVersion: 1 }),
+          },
+        });
+      }
+    }
+
+    // Product relationship rules baseline
+    const prRuleCount = await prisma.productRelationshipRule.count();
+    if (prRuleCount === 0) {
+      const creator = await prisma.user.findFirst({ select: { id: true } });
+      const prod = await prisma.product.findFirst({ select: { id: true } });
+      if (prod) {
+        const rule = await prisma.productRelationshipRule.create({
+          data: {
+            productId: prod.id,
+            name: 'Recommend Security Monitoring',
+            ruleType: RuleKind.RECOMMENDS,
+            status: RuleStatus.PUBLISHED,
+            isPublished: true,
+            version: 1,
+            precedence: 1,
+            rule: toPrismaJson({
+              if: { category: 'Cloud Infrastructure' },
+              then: { recommends: 'Security Monitoring System' },
+            }),
+            scope: toPrismaJson({ region: 'global' }),
+            explain: 'Recommends security for cloud platform',
+            createdBy: creator?.id ?? 'unknown',
+          },
+        });
+        await prisma.productRelationshipRuleVersion.create({
+          data: {
+            ruleId: rule.id,
+            version: 1,
+            status: RuleStatus.PUBLISHED,
+            rule: toPrismaJson(rule.rule),
+            explain: rule.explain ?? undefined,
+            createdBy: creator?.id ?? 'unknown',
+          },
+        });
+      }
+    }
+
+    // Proposal versions baseline
+    const proposalsAll = await prisma.proposal.findMany({ select: { id: true, createdBy: true } });
+    for (const p of proposalsAll) {
+      const existing = await prisma.proposalVersion.count({ where: { proposalId: p.id } });
+      if (existing === 0) {
+        await prisma.proposalVersion.create({
+          data: {
+            proposalId: p.id,
+            version: 1,
+            createdBy: p.createdBy,
+            changeType: 'INITIAL',
+            changesSummary: 'Initial snapshot',
+            snapshot: toPrismaJson({ seeded: true }),
+            productIds: [],
+          },
+        });
+      }
+    }
+
+    // Content access logs baseline
+    const someContent = await prisma.content.findMany({ take: 2, select: { id: true } });
+    const someUsers = await prisma.user.findMany({ take: 2, select: { id: true } });
+    if (someContent.length && someUsers.length) {
+      for (const c of someContent) {
+        for (const u of someUsers) {
+          await prisma.contentAccessLog.create({
+            data: {
+              contentId: c.id,
+              userId: u.id,
+              accessType: AccessType.VIEW,
+              userStory: 'US-0.0',
+              performanceImpact: 0,
+            },
+          });
+        }
+      }
+    }
+
+    console.log('✅ Additional top-ups completed');
+
+    // Ensure we have some ACCEPTED (won) and overdue proposals for reporting
+    {
+      const [acceptedCount, overdueCount] = await Promise.all([
+        prisma.proposal.count({ where: { status: ProposalStatus.ACCEPTED } }),
+        prisma.proposal.count({
+          where: {
+            dueDate: { lt: new Date() },
+            status: {
+              in: [
+                ProposalStatus.DRAFT,
+                ProposalStatus.IN_REVIEW,
+                ProposalStatus.PENDING_APPROVAL,
+                ProposalStatus.SUBMITTED,
+              ],
+            },
+          },
+        }),
+      ]);
+
+      const customers = await prisma.customer.findMany({
+        select: { id: true, name: true, industry: true },
+      });
+      const products = await prisma.product.findMany({
+        select: { id: true, name: true, price: true },
+      });
+      const users = await prisma.user.findMany({ select: { id: true, email: true } });
+
+      const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+      const day = 24 * 60 * 60 * 1000;
+
+      if (acceptedCount === 0 && customers.length && products.length && users.length) {
+        for (let i = 0; i < 3; i++) {
+          const customer = pick(customers);
+          const creator = pick(users);
+          const dueDate = new Date(Date.now() - (i + 5) * day);
+          const selectedProducts = [pick(products)];
+          const value = selectedProducts.reduce((sum, p) => sum + p.price, 0);
+          await prisma.proposal.create({
+            data: {
+              title: `Won Proposal ${i + 1} for ${customer.name}`,
+              description: 'Seeded accepted proposal for reporting metrics.',
+              status: ProposalStatus.ACCEPTED,
+              priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
+              customerId: customer.id,
+              createdBy: creator.id,
+              dueDate,
+              submittedAt: new Date(Date.now() - (i + 10) * day),
+              approvedAt: new Date(Date.now() - (i + 3) * day),
+              value,
+              currency: 'USD',
+              tags: ['won', 'seed'],
+              creatorEmail: creator.email,
+              customerName: customer.name,
+              products: {
+                create: selectedProducts.map(p => ({
+                  productId: p.id,
+                  quantity: 1,
+                  unitPrice: p.price,
+                  total: p.price,
+                })),
+              },
+              assignedTo: {
+                connect: Array.from(new Set([creator.id, pick(users).id, pick(users).id]))
+                  .filter(Boolean)
+                  .map(id => ({ id })),
+              },
+            },
+          });
+        }
+      }
+
+      if (overdueCount === 0 && customers.length && products.length && users.length) {
+        for (let i = 0; i < 3; i++) {
+          const customer = pick(customers);
+          const creator = pick(users);
+          const dueDate = new Date(Date.now() - (i + 7) * day);
+          const selectedProducts = [pick(products)];
+          const value = selectedProducts.reduce((sum, p) => sum + p.price, 0);
+          await prisma.proposal.create({
+            data: {
+              title: `Overdue Proposal ${i + 1} for ${customer.name}`,
+              description: 'Seeded overdue proposal for reporting metrics.',
+              status: pick([
+                ProposalStatus.DRAFT,
+                ProposalStatus.IN_REVIEW,
+                ProposalStatus.PENDING_APPROVAL,
+                ProposalStatus.SUBMITTED,
+              ]),
+              priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
+              customerId: customer.id,
+              createdBy: creator.id,
+              dueDate,
+              submittedAt: new Date(Date.now() - (i + 12) * day),
+              value,
+              currency: 'USD',
+              tags: ['overdue', 'seed'],
+              creatorEmail: creator.email,
+              customerName: customer.name,
+              products: {
+                create: selectedProducts.map(p => ({
+                  productId: p.id,
+                  quantity: 1,
+                  unitPrice: p.price,
+                  total: p.price,
+                })),
+              },
+              assignedTo: {
+                connect: Array.from(new Set([creator.id, pick(users).id, pick(users).id]))
+                  .filter(Boolean)
+                  .map(id => ({ id })),
+              },
+            },
+          });
+        }
+      }
+    }
+
+    // Ensure balanced status distribution for funnel analytics
+    {
+      const statusCounts = await prisma.proposal.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      });
+      const statusMinTarget: Record<string, number> = {
+        DRAFT: 5,
+        IN_REVIEW: 5,
+        PENDING_APPROVAL: 5,
+        SUBMITTED: 5,
+        ACCEPTED: 3,
+        DECLINED: 3,
+      };
+      const statusToCreate: Array<{ status: ProposalStatus; missing: number }> = [];
+      for (const [key, min] of Object.entries(statusMinTarget)) {
+        const existing = statusCounts.find(s => String(s.status) === key)?._count._all || 0;
+        if (existing < min)
+          statusToCreate.push({
+            status: ProposalStatus[key as keyof typeof ProposalStatus],
+            missing: min - existing,
+          });
+      }
+      if (statusToCreate.length) {
+        const customers = await prisma.customer.findMany({
+          select: { id: true, name: true, industry: true },
+        });
+        const products = await prisma.product.findMany({
+          select: { id: true, name: true, price: true },
+        });
+        const users = await prisma.user.findMany({ select: { id: true, email: true } });
+        const pick = <T>(arr: Array<T>): T => arr[Math.floor(Math.random() * arr.length)];
+        const randomInt = (min: number, max: number) =>
+          Math.floor(Math.random() * (max - min + 1)) + min;
+        for (const entry of statusToCreate) {
+          for (let i = 0; i < entry.missing; i++) {
+            const customer = pick(customers);
+            const creator = pick(users);
+            const selectedProducts = Array.from({ length: 2 }, () => pick(products));
+            const value = selectedProducts.reduce((sum, p) => sum + p.price * randomInt(1, 2), 0);
+            const dueDate = new Date(Date.now() + randomInt(-30, 60) * 24 * 60 * 60 * 1000);
+            await prisma.proposal.create({
+              data: {
+                title: `${String(entry.status)} Proposal for ${customer.name}`,
+                description: 'Balanced status seed entry',
+                status: entry.status,
+                priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
+                customerId: customer.id,
+                createdBy: creator.id,
+                dueDate,
+                value,
+                currency: 'USD',
+                tags: ['seed', 'balanced'],
+                customerName: customer.name,
+                creatorEmail: creator.email,
+                products: {
+                  create: selectedProducts.map(p => ({
+                    productId: p.id,
+                    quantity: 1,
+                    unitPrice: p.price,
+                    total: p.price,
+                  })),
+                },
+                assignedTo: {
+                  connect: Array.from(new Set([creator.id, pick(users).id, pick(users).id]))
+                    .filter(Boolean)
+                    .map(id => ({ id })),
+                },
+              },
+            });
+          }
+        }
+        console.log('✅ Ensured balanced status distribution for funnel charts');
+      }
+    }
+
+    // Ensure overdue by priority coverage (at least one overdue per priority)
+    {
+      const priorities: Array<Priority> = [Priority.LOW, Priority.MEDIUM, Priority.HIGH];
+      const now = new Date();
+      for (const pr of priorities) {
+        const exists = await prisma.proposal.count({
+          where: {
+            priority: pr,
+            dueDate: { lt: now },
+            status: {
+              in: [
+                ProposalStatus.DRAFT,
+                ProposalStatus.IN_REVIEW,
+                ProposalStatus.PENDING_APPROVAL,
+                ProposalStatus.SUBMITTED,
+              ],
+            },
+          },
+        });
+        if (exists === 0) {
+          const customer = await prisma.customer.findFirst({ select: { id: true, name: true } });
+          const product = await prisma.product.findFirst({
+            select: { id: true, name: true, price: true },
+          });
+          const user = await prisma.user.findFirst({ select: { id: true, email: true } });
+          if (customer && product && user) {
+            await prisma.proposal.create({
+              data: {
+                title: `Overdue ${String(pr)} Priority for ${customer.name}`,
+                status: ProposalStatus.IN_REVIEW,
+                priority: pr,
+                customerId: customer.id,
+                createdBy: user.id,
+                dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+                value: product.price,
+                currency: 'USD',
+                customerName: customer.name,
+                creatorEmail: user.email,
+                products: {
+                  create: [
+                    {
+                      productId: product.id,
+                      quantity: 1,
+                      unitPrice: product.price,
+                      total: product.price,
+                    },
+                  ],
+                },
+                assignedTo: {
+                  connect: [{ id: user.id }],
+                },
+              },
+            });
+          }
+        }
+      }
+      console.log('✅ Ensured overdue-by-priority coverage');
+    }
+
+    // Ensure enough multi-product proposals for bundle analytics
+    {
+      const multiProductCount = await prisma.proposal.count({
+        where: { products: { some: {} } },
+      });
+      if (multiProductCount < 10) {
+        const customers = await prisma.customer.findMany({ select: { id: true, name: true } });
+        const products = await prisma.product.findMany({
+          select: { id: true, price: true, name: true },
+        });
+        const user = await prisma.user.findFirst({ select: { id: true, email: true } });
+        const pick = <T>(arr: Array<T>): T => arr[Math.floor(Math.random() * arr.length)];
+        for (let i = 0; i < 5; i++) {
+          const customer = pick(customers);
+          const selected = Array.from(
+            new Set([pick(products), pick(products), pick(products)])
+          ).slice(0, 3);
+          const value = selected.reduce((sum, p) => sum + p.price, 0);
+          const proposal = await prisma.proposal.create({
+            data: {
+              title: `Bundle Combo ${i + 1} for ${customer.name}`,
+              status: ProposalStatus.SUBMITTED,
+              priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
+              customerId: customer.id,
+              createdBy: user?.id || pick(await prisma.user.findMany({ select: { id: true } })).id,
+              dueDate: new Date(Date.now() + (i + 10) * 24 * 60 * 60 * 1000),
+              value,
+              currency: 'USD',
+              customerName: customer.name,
+              creatorEmail: user?.email,
+              assignedTo: user ? { connect: [{ id: user.id }] } : undefined,
+            },
+          });
+          for (const p of selected) {
+            await prisma.proposalProduct.create({
+              data: {
+                proposalId: proposal.id,
+                productId: p.id,
+                quantity: 1,
+                unitPrice: p.price,
+                total: p.price,
+              },
+            });
+          }
+        }
+        console.log('✅ Added multi-product proposals for bundle analytics');
+      }
+    }
+
     // Done with selective seeding
+    // Adjust win rate to ~70% by updating a portion of non-closed proposals to ACCEPTED
+    {
+      const total = await prisma.proposal.count();
+      const targetWon = Math.floor(total * 0.7);
+      const currentWon = await prisma.proposal.count({
+        where: { status: ProposalStatus.ACCEPTED },
+      });
+      if (currentWon < targetWon) {
+        const need = targetWon - currentWon;
+        const candidates = await prisma.proposal.findMany({
+          where: {
+            status: {
+              in: [
+                ProposalStatus.DRAFT,
+                ProposalStatus.IN_REVIEW,
+                ProposalStatus.PENDING_APPROVAL,
+                ProposalStatus.SUBMITTED,
+              ],
+            },
+          },
+          select: { id: true },
+          take: need,
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (candidates.length) {
+          for (const c of candidates) {
+            await prisma.proposal.update({
+              where: { id: c.id },
+              data: {
+                status: ProposalStatus.ACCEPTED,
+                approvedAt: new Date(),
+                submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+              },
+            });
+          }
+          console.log(`✅ Adjusted win rate: converted ${candidates.length} proposals to ACCEPTED`);
+        }
+      }
+    }
+
+    // Ensure near-due open proposals (next 14 days)
+    {
+      const now = new Date();
+      const upper = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const openStatuses = [
+        ProposalStatus.DRAFT,
+        ProposalStatus.IN_REVIEW,
+        ProposalStatus.PENDING_APPROVAL,
+        ProposalStatus.APPROVED,
+      ];
+      const countNear = await prisma.proposal.count({
+        where: { status: { in: openStatuses }, dueDate: { gte: now, lte: upper } },
+      });
+      if (countNear < 10) {
+        const need = 10 - countNear;
+        const candidates = await prisma.proposal.findMany({
+          where: { status: { in: openStatuses } },
+          select: { id: true },
+          take: need,
+          orderBy: { updatedAt: 'desc' },
+        });
+        for (const c of candidates) {
+          const offsetDays = Math.floor(Math.random() * 14) + 1;
+          await prisma.proposal.update({
+            where: { id: c.id },
+            data: { dueDate: new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000) },
+          });
+        }
+        if (candidates.length)
+          console.log(`✅ Ensured near-due coverage by updating ${candidates.length} proposals`);
+      }
+    }
+
+    // Normalize names to Arabic transliteration for existing users/customers and denormalized proposal labels
+    {
+      const renameUser: Record<string, string> = {
+        'Michael Chen': 'Ahmed Al-Farsi',
+        'Emma Rodriguez': 'Layla Hassan',
+        'David Kim': 'Youssef Mahmoud',
+        'Dr. James Wilson': 'Dr. Omar Khalid',
+        'Lisa Zhang': 'Fatima Al-Zahra',
+        'Sarah Johnson': 'Sara Ahmed',
+        'Maria Garcia': 'Mariam Nasser',
+        'Robert Taylor': 'Khalid Rahman',
+        'Demo User': 'Ayyub Demo',
+      };
+      for (const [from, to] of Object.entries(renameUser)) {
+        await prisma.user.updateMany({ where: { name: from }, data: { name: to } });
+      }
+
+      const renameCustomer: Record<string, string> = {
+        'TechCorp Solutions': 'Al Noor Technologies',
+        'Global Financial Services': 'Al Quds Financial',
+        'Healthcare Innovations Inc': 'Shifa Health Innovations',
+        'Manufacturing Excellence LLC': 'Al Hadid Manufacturing',
+        'EduTech Systems': 'Al Ilm Education Systems',
+      };
+      for (const [from, to] of Object.entries(renameCustomer)) {
+        await prisma.customer.updateMany({ where: { name: from }, data: { name: to } });
+      }
+
+      // Refresh denormalized creatorName/customerName on proposals
+      const batch = await prisma.proposal.findMany({
+        select: { id: true, createdBy: true, customerId: true },
+        take: 500,
+      });
+      for (const p of batch) {
+        const [u, c] = await Promise.all([
+          prisma.user.findUnique({ where: { id: p.createdBy }, select: { name: true } }),
+          prisma.customer.findUnique({ where: { id: p.customerId }, select: { name: true } }),
+        ]);
+        await prisma.proposal.update({
+          where: { id: p.id },
+          data: { creatorName: u?.name ?? undefined, customerName: c?.name ?? undefined },
+        });
+      }
+      console.log('✅ Updated names to Arabic transliteration and refreshed proposal labels');
+    }
+
+    // Ensure team assignment distribution (at least 2 members per proposal where possible)
+    {
+      const candidateUsers = await prisma.user.findMany({
+        where: {
+          email: {
+            in: [
+              'pm1@posalpro.com',
+              'pm2@posalpro.com',
+              'sme1@posalpro.com',
+              'sme2@posalpro.com',
+              'sme3@posalpro.com',
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      const ids = candidateUsers.map(u => u.id);
+      if (ids.length >= 2) {
+        const unassigned = await prisma.proposal.findMany({
+          where: { assignedTo: { none: {} } },
+          select: { id: true },
+          take: 2000,
+        });
+        for (const p of unassigned) {
+          const a = ids[Math.floor(Math.random() * ids.length)];
+          let b = ids[Math.floor(Math.random() * ids.length)];
+          if (b === a) b = ids[(ids.indexOf(a) + 1) % ids.length];
+          await prisma.proposal.update({
+            where: { id: p.id },
+            data: { assignedTo: { connect: [{ id: a }, { id: b }] } },
+          });
+        }
+        if (unassigned.length) console.log(`✅ Assigned teams to ${unassigned.length} proposals`);
+      }
+    }
+
+    // Backfill financials: ensure ProposalProduct totals and Proposal.value match sum of products
+    {
+      // Ensure every proposal has at least one product selection
+      const noProducts = await prisma.proposal.findMany({
+        where: { products: { none: {} } },
+        select: { id: true },
+        take: 5000,
+      });
+      if (noProducts.length) {
+        const prods = await prisma.product.findMany({
+          select: { id: true, price: true },
+          take: 50,
+        });
+        for (const p of noProducts) {
+          const pick = prods[Math.floor(Math.random() * prods.length)];
+          if (pick) {
+            await prisma.proposalProduct.create({
+              data: {
+                proposalId: p.id,
+                productId: pick.id,
+                quantity: 1,
+                unitPrice: pick.price,
+                total: pick.price,
+              },
+            });
+          }
+        }
+        console.log(`✅ Added at least one product to ${noProducts.length} proposals with none`);
+      }
+
+      const items = await prisma.proposalProduct.findMany({
+        select: { id: true, proposalId: true, quantity: true, unitPrice: true, total: true },
+        take: 100000,
+      });
+      const changed: Array<Promise<any>> = [];
+      const sumByProposal = new Map<string, number>();
+      for (const it of items) {
+        const correct = Number(it.unitPrice) * Number(it.quantity || 0);
+        if (Math.abs(Number(it.total) - correct) > 0.5) {
+          changed.push(
+            prisma.proposalProduct.update({ where: { id: it.id }, data: { total: correct } })
+          );
+        }
+        sumByProposal.set(it.proposalId, (sumByProposal.get(it.proposalId) || 0) + correct);
+      }
+      if (changed.length) await Promise.allSettled(changed);
+      const updates: Array<Promise<any>> = [];
+      for (const [pid, sum] of sumByProposal.entries()) {
+        updates.push(
+          prisma.proposal.update({ where: { id: pid }, data: { value: sum, totalValue: sum } })
+        );
+      }
+      if (updates.length) await Promise.allSettled(updates);
+      if (changed.length || updates.length)
+        console.log(
+          `✅ Financials backfilled (products updated: ${changed.length}, proposals updated: ${updates.length})`
+        );
+    }
+
     return;
   }
 
@@ -517,14 +1252,14 @@ async function main() {
         resource_action_scope: {
           resource: perm.resource,
           action: perm.action,
-          scope: perm.scope as 'ALL' | 'TEAM' | 'OWN',
+          scope: PermissionScope[perm.scope as keyof typeof PermissionScope],
         },
       },
       update: {},
       create: {
         resource: perm.resource,
         action: perm.action,
-        scope: perm.scope as 'ALL' | 'TEAM' | 'OWN',
+        scope: PermissionScope[perm.scope as keyof typeof PermissionScope],
       },
     });
     createdPermissions.push(permission);
@@ -544,68 +1279,68 @@ async function main() {
       description: 'Full system access with all administrative capabilities',
       level: 1,
       isSystem: true,
-      performanceExpectations: {
+      performanceExpectations: toPrismaJson({
         systemUptime: 99.9,
         responseTime: 2.0,
         securityIncidents: 0,
-      },
+      }),
     },
     {
       name: 'Executive',
       description: 'Executive-level access with strategic oversight capabilities',
       level: 2,
       isSystem: true,
-      performanceExpectations: {
+      performanceExpectations: toPrismaJson({
         proposalApprovalTime: 24.0,
         strategicDecisionQuality: 95.0,
         teamPerformance: 90.0,
-      },
+      }),
     },
     {
       name: 'Proposal Manager',
       description: 'Comprehensive proposal management with team coordination',
       level: 3,
       isSystem: true,
-      performanceExpectations: {
+      performanceExpectations: toPrismaJson({
         proposalCompletionRate: 95.0,
         teamCoordination: 90.0,
         qualityScore: 85.0,
         timelineAdherence: 88.0,
-      },
+      }),
     },
     {
       name: 'Senior SME',
       description: 'Senior subject matter expert with mentoring responsibilities',
       level: 4,
       isSystem: true,
-      performanceExpectations: {
+      performanceExpectations: toPrismaJson({
         expertiseAccuracy: 95.0,
         contentQuality: 90.0,
         mentoring: 85.0,
         responseTime: 4.0,
-      },
+      }),
     },
     {
       name: 'SME',
       description: 'Subject matter expert providing technical expertise',
       level: 5,
       isSystem: true,
-      performanceExpectations: {
+      performanceExpectations: toPrismaJson({
         expertiseAccuracy: 90.0,
         contentQuality: 85.0,
         responseTime: 6.0,
-      },
+      }),
     },
     {
       name: 'Content Manager',
       description: 'Content creation and management specialist',
       level: 6,
       isSystem: true,
-      performanceExpectations: {
+      performanceExpectations: toPrismaJson({
         contentQuality: 88.0,
         contentVolume: 75.0,
         turnaroundTime: 48.0,
-      },
+      }),
     },
   ];
 
@@ -715,7 +1450,7 @@ async function main() {
     },
     {
       email: 'ceo@posalpro.com',
-      name: 'Sarah Johnson',
+      name: 'Sara Ahmed',
       password: defaultPassword,
       department: 'Executive',
       status: 'ACTIVE',
@@ -723,7 +1458,7 @@ async function main() {
     },
     {
       email: 'pm1@posalpro.com',
-      name: 'Michael Chen',
+      name: 'Ahmed Al-Farsi',
       password: defaultPassword,
       department: 'Business Development',
       status: 'ACTIVE',
@@ -731,7 +1466,7 @@ async function main() {
     },
     {
       email: 'pm2@posalpro.com',
-      name: 'Emma Rodriguez',
+      name: 'Layla Hassan',
       password: defaultPassword,
       department: 'Business Development',
       status: 'ACTIVE',
@@ -739,7 +1474,7 @@ async function main() {
     },
     {
       email: 'sme1@posalpro.com',
-      name: 'Dr. James Wilson',
+      name: 'Dr. Omar Khalid',
       password: defaultPassword,
       department: 'Technology',
       status: 'ACTIVE',
@@ -747,7 +1482,7 @@ async function main() {
     },
     {
       email: 'sme2@posalpro.com',
-      name: 'Lisa Zhang',
+      name: 'Fatima Al-Zahra',
       password: defaultPassword,
       department: 'Engineering',
       status: 'ACTIVE',
@@ -755,7 +1490,7 @@ async function main() {
     },
     {
       email: 'sme3@posalpro.com',
-      name: 'David Kim',
+      name: 'Youssef Mahmoud',
       password: defaultPassword,
       department: 'Security',
       status: 'ACTIVE',
@@ -763,7 +1498,7 @@ async function main() {
     },
     {
       email: 'content1@posalpro.com',
-      name: 'Maria Garcia',
+      name: 'Mariam Nasser',
       password: defaultPassword,
       department: 'Marketing',
       status: 'ACTIVE',
@@ -771,7 +1506,7 @@ async function main() {
     },
     {
       email: 'content2@posalpro.com',
-      name: 'Robert Taylor',
+      name: 'Khalid Rahman',
       password: defaultPassword,
       department: 'Documentation',
       status: 'ACTIVE',
@@ -779,7 +1514,7 @@ async function main() {
     },
     {
       email: 'demo@posalpro.com',
-      name: 'Demo User',
+      name: 'Ayyub Demo',
       password: defaultPassword,
       department: 'Demo',
       status: 'ACTIVE',
@@ -814,6 +1549,37 @@ async function main() {
 
   console.log(`✅ Created ${Object.keys(createdUsers).length} users`);
 
+  // ----------------------------------------
+  // Baseline: User & Communication Preferences (for empty DB)
+  // ----------------------------------------
+  console.log('⚙️ Seeding user preferences and communication preferences...');
+  {
+    const usersAll = Object.values(createdUsers);
+    for (const u of usersAll) {
+      await prisma.userPreferences.create({
+        data: {
+          userId: u.id,
+          theme: 'system',
+          language: 'en',
+          analyticsConsent: false,
+          performanceTracking: false,
+        },
+      });
+      await prisma.communicationPreferences.create({
+        data: {
+          userId: u.id,
+          language: 'en',
+          timezone: 'UTC',
+          quietHoursStart: null,
+          quietHoursEnd: null,
+          channels: { email: true, inApp: true },
+          frequency: { general: 'daily' },
+          categories: { proposals: true, content: true },
+        },
+      });
+    }
+  }
+
   // ========================================
   // CUSTOMERS SETUP
   // ========================================
@@ -822,21 +1588,21 @@ async function main() {
 
   const customersData = [
     {
-      name: 'TechCorp Solutions',
+      name: 'Al Noor Technologies',
       industry: 'Technology',
       tier: 'ENTERPRISE',
       status: 'ACTIVE',
       description: 'Leading technology solutions provider',
       contacts: [
         {
-          name: 'Alice Johnson',
+          name: 'Aisha Saleh',
           email: 'alice.johnson@techcorp.com',
           phone: '+1-555-0101',
           title: 'CTO',
           isPrimary: true,
         },
         {
-          name: 'Bob Smith',
+          name: 'Bilal Hamdan',
           email: 'bob.smith@techcorp.com',
           phone: '+1-555-0102',
           title: 'Procurement Manager',
@@ -845,14 +1611,14 @@ async function main() {
       ],
     },
     {
-      name: 'Global Financial Services',
+      name: 'Al Quds Financial',
       industry: 'Financial Services',
       tier: 'ENTERPRISE',
       status: 'ACTIVE',
       description: 'International banking and financial services',
       contacts: [
         {
-          name: 'Carol Davis',
+          name: 'Carim Dawood',
           email: 'carol.davis@globalfin.com',
           phone: '+1-555-0201',
           title: 'VP of Technology',
@@ -861,14 +1627,14 @@ async function main() {
       ],
     },
     {
-      name: 'Healthcare Innovations Inc',
+      name: 'Shifa Health Innovations',
       industry: 'Healthcare',
       tier: 'PREMIUM',
       status: 'ACTIVE',
       description: 'Healthcare technology and innovation',
       contacts: [
         {
-          name: 'Dr. Emily Wilson',
+          name: 'Dr. Huda Mansour',
           email: 'emily.wilson@healthinnov.com',
           phone: '+1-555-0301',
           title: 'Chief Medical Officer',
@@ -877,14 +1643,14 @@ async function main() {
       ],
     },
     {
-      name: 'Manufacturing Excellence LLC',
+      name: 'Al Hadid Manufacturing',
       industry: 'Manufacturing',
       tier: 'STANDARD',
       status: 'ACTIVE',
       description: 'Advanced manufacturing solutions',
       contacts: [
         {
-          name: 'Frank Miller',
+          name: 'Faris Milad',
           email: 'frank.miller@manufexcel.com',
           phone: '+1-555-0401',
           title: 'Operations Director',
@@ -893,14 +1659,14 @@ async function main() {
       ],
     },
     {
-      name: 'EduTech Systems',
+      name: 'Al Ilm Education Systems',
       industry: 'Education',
       tier: 'STANDARD',
       status: 'ACTIVE',
       description: 'Educational technology solutions',
       contacts: [
         {
-          name: 'Grace Lee',
+          name: 'Ghada Ali',
           email: 'grace.lee@edutech.com',
           phone: '+1-555-0501',
           title: 'Technology Manager',
@@ -918,6 +1684,7 @@ async function main() {
         industry: customerData.industry,
         tier: customerData.tier as 'STANDARD' | 'PREMIUM' | 'ENTERPRISE' | 'VIP',
         status: customerData.status as 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'CHURNED',
+        tags: [customerData.industry],
         metadata: {
           description: customerData.description,
         },
@@ -951,7 +1718,7 @@ async function main() {
 
   const productsData = [
     {
-      name: 'Enterprise Cloud Platform',
+      name: 'Sahab Cloud Platform',
       description: 'Comprehensive cloud infrastructure and management platform',
       sku: 'ECP-3.0',
       price: 15000.0,
@@ -960,7 +1727,7 @@ async function main() {
       tags: ['cloud', 'infrastructure', 'enterprise', 'scalable'],
     },
     {
-      name: 'AI Analytics Suite',
+      name: 'Bayan Analytics Suite',
       description: 'Advanced AI-powered analytics and business intelligence platform',
       sku: 'AAS-2.1',
       price: 12000.0,
@@ -969,7 +1736,7 @@ async function main() {
       tags: ['ai', 'analytics', 'business-intelligence', 'machine-learning'],
     },
     {
-      name: 'Security Monitoring System',
+      name: 'Amn Security Monitoring',
       description: 'Real-time security monitoring and threat detection system',
       sku: 'SMS-4.2',
       price: 8000.0,
@@ -978,7 +1745,7 @@ async function main() {
       tags: ['security', 'monitoring', 'threat-detection', 'compliance'],
     },
     {
-      name: 'Data Integration Platform',
+      name: 'Rabt Data Integration',
       description: 'Enterprise data integration and ETL platform',
       sku: 'DIP-1.8',
       price: 10000.0,
@@ -987,7 +1754,7 @@ async function main() {
       tags: ['data-integration', 'etl', 'data-warehouse', 'enterprise'],
     },
     {
-      name: 'Mobile Development Framework',
+      name: 'Jawwal Mobile Framework',
       description: 'Cross-platform mobile application development framework',
       sku: 'MDF-5.0',
       price: 5000.0,
@@ -996,7 +1763,7 @@ async function main() {
       tags: ['mobile', 'development', 'cross-platform', 'framework'],
     },
     {
-      name: 'IoT Management Platform',
+      name: 'Raqib IoT Management',
       description: 'Internet of Things device management and analytics platform',
       sku: 'IMP-2.3',
       price: 7500.0,
@@ -1014,6 +1781,8 @@ async function main() {
         description: productData.description,
         sku: productData.sku,
         price: productData.price,
+        images: [],
+        userStoryMappings: [],
         category: productData.category,
         tags: productData.tags,
         isActive: productData.isActive,
@@ -1025,6 +1794,133 @@ async function main() {
 
   console.log(`✅ Created ${Object.keys(createdProducts).length} products`);
 
+  // ----------------------------------------
+  // Baseline: Approval Workflows
+  // ----------------------------------------
+  console.log('🧭 Creating baseline approval workflows...');
+  {
+    const creator = Object.values(createdUsers)[0];
+    await prisma.approvalWorkflow.create({
+      data: {
+        name: 'Standard Proposal Approval',
+        description: 'Two-stage review and approval for proposals',
+        entityType: 'PROPOSAL',
+        userStoryMappings: [],
+        createdBy: creator?.id ?? 'unknown',
+        stages: {
+          create: [
+            { name: 'Manager Review', order: 1, slaHours: 24, approvers: [] },
+            { name: 'Executive Approval', order: 2, slaHours: 48, approvers: [] },
+          ],
+        },
+      },
+    });
+    await prisma.approvalWorkflow.create({
+      data: {
+        name: 'Content Quality Review',
+        description: 'Quality and compliance review for content items',
+        entityType: 'CONTENT',
+        userStoryMappings: [],
+        createdBy: creator?.id ?? 'unknown',
+        stages: {
+          create: [{ name: 'Content Manager Review', order: 1, slaHours: 12, approvers: [] }],
+        },
+      },
+    });
+  }
+
+  // ----------------------------------------
+  // Baseline: Validation Rules
+  // ----------------------------------------
+  console.log('📏 Creating baseline validation rules...');
+  {
+    const creator = Object.values(createdUsers)[0];
+    const anyProduct = Object.values(createdProducts)[0];
+    await prisma.validationRule.createMany({
+      data: [
+        {
+          name: 'Basic Proposal Completeness',
+          description: 'Ensure proposals have at least one section and one product',
+          category: 'Proposal',
+          ruleType: ValidationRuleType.COMPLIANCE,
+          conditions: toPrismaJson({ minSections: 1, minProducts: 1 }),
+          actions: toPrismaJson({ severity: 'WARNING' }),
+          severity: Severity.WARNING,
+          isActive: true,
+          createdBy: creator?.id ?? 'unknown',
+          userStoryMappings: ['US-1.1'],
+          hypothesesSupported: ['H1'],
+        },
+        {
+          name: 'Product Active Compatibility',
+          description: 'If a product is inactive, warn about selection',
+          category: 'Product',
+          ruleType: ValidationRuleType.COMPATIBILITY,
+          conditions: toPrismaJson({ requireActive: true }),
+          actions: toPrismaJson({ warnIfInactive: true }),
+          severity: Severity.INFO,
+          isActive: true,
+          createdBy: creator?.id ?? 'unknown',
+          productId: anyProduct?.id,
+          userStoryMappings: ['US-2.3'],
+          hypothesesSupported: ['H3'],
+        },
+      ],
+    });
+  }
+
+  // ----------------------------------------
+  // Baseline: Product Relationships and Rules
+  // ----------------------------------------
+  console.log('🔗 Creating baseline product relationships and rules...');
+  {
+    const creator = Object.values(createdUsers)[0];
+    const productList = Object.values(createdProducts);
+    if (productList.length >= 2) {
+      await prisma.productRelationship.create({
+        data: {
+          sourceProductId: productList[0].id,
+          targetProductId: productList[1].id,
+          type: RelationshipType.RECOMMENDS,
+          createdBy: creator?.id ?? 'unknown',
+          condition: toPrismaJson({ minVersion: 1 }),
+        },
+      });
+    }
+
+    const prod = productList[0];
+    if (prod) {
+      const rule = await prisma.productRelationshipRule.create({
+        data: {
+          productId: prod.id,
+          name: 'Recommend Security Monitoring',
+          ruleType: RuleKind.RECOMMENDS,
+          status: RuleStatus.PUBLISHED,
+          isPublished: true,
+          version: 1,
+          precedence: 1,
+          rule: toPrismaJson({
+            if: { category: 'Cloud Infrastructure' },
+            then: { recommends: 'Security Monitoring System' },
+          }),
+          scope: toPrismaJson({ region: 'global' }),
+          explain: 'Recommends security for cloud platform',
+          createdBy: creator?.id ?? 'unknown',
+        },
+      });
+      await prisma.productRelationshipRuleVersion.create({
+        data: {
+          ruleId: rule.id,
+          version: 1,
+          status: RuleStatus.PUBLISHED,
+          rule: toPrismaJson(rule.rule),
+          explain: rule.explain ?? undefined,
+          createdBy: creator?.id ?? 'unknown',
+        },
+      });
+    }
+  }
+
   // ========================================
   // CONTENT SETUP
   // ========================================
@@ -1034,59 +1930,83 @@ async function main() {
   const contentData = [
     {
       title: 'Executive Summary Template',
-      type: 'TEMPLATE',
+      type: ContentType.TEMPLATE,
       category: ['Executive'],
       content: 'Executive summary template for high-level proposal overview...',
       tags: ['executive', 'summary', 'overview'],
     },
     {
       title: 'Technical Architecture Overview',
-      type: 'TEMPLATE',
+      type: ContentType.TEMPLATE,
       category: ['Technical'],
       content: 'Technical architecture template for system design proposals...',
       tags: ['technical', 'architecture', 'system-design'],
     },
     {
       title: 'Security Compliance Framework',
-      type: 'DOCUMENT',
+      type: ContentType.DOCUMENT,
       category: ['Security'],
       content: 'Comprehensive security compliance framework and requirements...',
       tags: ['security', 'compliance', 'framework'],
     },
     {
       title: 'Cost Benefit Analysis Template',
-      type: 'TEMPLATE',
+      type: ContentType.TEMPLATE,
       category: ['Financial'],
       content: 'Cost benefit analysis template for ROI calculations...',
       tags: ['financial', 'roi', 'cost-benefit'],
     },
     {
       title: 'Implementation Timeline Template',
-      type: 'TEMPLATE',
+      type: ContentType.TEMPLATE,
       category: ['Project Management'],
       content: 'Project implementation timeline and milestone template...',
       tags: ['timeline', 'implementation', 'milestones'],
     },
   ];
 
-  const createdContent: Record<string, any> = {};
+  const createdContent: Record<string, { id: string }> = {};
   for (const contentItem of contentData) {
     const content = await prisma.content.create({
       data: {
         title: contentItem.title,
-        type: contentItem.type as 'TEXT' | 'TEMPLATE' | 'IMAGE' | 'DOCUMENT' | 'MEDIA',
+        type: contentItem.type,
         category: contentItem.category,
         content: contentItem.content,
         tags: contentItem.tags,
+        keywords: contentItem.tags,
+        allowedRoles: [],
         isActive: true,
         createdBy: createdUsers['content1@posalpro.com'].id,
       },
     });
 
-    createdContent[contentItem.title] = content;
+    createdContent[contentItem.title] = { id: content.id };
   }
 
   console.log(`✅ Created ${Object.keys(createdContent).length} content items`);
+
+  // ----------------------------------------
+  // Baseline: Content Access Logs
+  // ----------------------------------------
+  console.log('📚 Creating baseline content access logs...');
+  {
+    const contentList = Object.values(createdContent).slice(0, 2);
+    const userList = Object.values(createdUsers).slice(0, 2);
+    for (const c of contentList) {
+      for (const u of userList) {
+        await prisma.contentAccessLog.create({
+          data: {
+            contentId: c.id,
+            userId: u.id,
+            accessType: AccessType.VIEW,
+            userStory: 'US-0.0',
+            performanceImpact: 0,
+          },
+        });
+      }
+    }
+  }
 
   // ========================================
   // PROPOSALS SETUP
@@ -1095,17 +2015,18 @@ async function main() {
   console.log('📋 Creating sample proposals...');
 
   const proposalsData = [
+    // Won Proposals (for revenue tracking)
     {
       title: 'TechCorp Cloud Migration Project',
       description: 'Complete cloud infrastructure migration for TechCorp Solutions',
-      status: 'IN_REVIEW',
-      priority: 'HIGH',
+      status: ProposalStatus.ACCEPTED,
+      priority: Priority.HIGH,
       customerName: 'TechCorp Solutions',
       creatorEmail: 'pm1@posalpro.com',
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      products: ['Enterprise Cloud Platform', 'Security Monitoring System'],
-      rfpReferenceNumber: 'RFP-2025-001',
-      value: 250000,
+      dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), // 15 days ago (completed)
+      products: ['Sahab Cloud Platform', 'Amn Security Monitoring'],
+      rfpReferenceNumber: 'RFP-2024-001',
+      value: 320000,
       currency: 'USD',
       tags: ['cloud', 'migration', 'enterprise'],
       team: {
@@ -1120,14 +2041,14 @@ async function main() {
     {
       title: 'Global Financial Analytics Implementation',
       description: 'AI-powered analytics solution for financial services',
-      status: 'DRAFT',
-      priority: 'HIGH',
+      status: ProposalStatus.ACCEPTED,
+      priority: Priority.HIGH,
       customerName: 'Global Financial Services',
       creatorEmail: 'pm2@posalpro.com',
-      dueDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000), // 45 days from now
-      products: ['AI Analytics Suite', 'Data Integration Platform'],
-      rfpReferenceNumber: 'RFP-2025-002',
-      value: 180000,
+      dueDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago (completed)
+      products: ['Bayan Analytics Suite', 'Rabt Data Integration'],
+      rfpReferenceNumber: 'RFP-2024-002',
+      value: 280000,
       currency: 'USD',
       tags: ['analytics', 'ai', 'finance'],
       team: {
@@ -1142,14 +2063,14 @@ async function main() {
     {
       title: 'Healthcare IoT Monitoring Solution',
       description: 'IoT platform for healthcare device monitoring',
-      status: 'APPROVED',
-      priority: 'MEDIUM',
-      customerName: 'Healthcare Innovations Inc',
+      status: ProposalStatus.ACCEPTED,
+      priority: Priority.MEDIUM,
+      customerName: 'Shifa Health Innovations',
       creatorEmail: 'sme1@posalpro.com',
-      dueDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
-      products: ['IoT Management Platform'],
-      rfpReferenceNumber: 'RFP-2025-003',
-      value: 90000,
+      dueDate: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000), // 45 days ago (completed)
+      products: ['Raqib IoT Management'],
+      rfpReferenceNumber: 'RFP-2024-003',
+      value: 150000,
       currency: 'USD',
       tags: ['healthcare', 'iot'],
       team: {
@@ -1160,17 +2081,18 @@ async function main() {
         },
       },
     },
+    // Active Proposals (in progress)
     {
       title: 'Manufacturing Process Optimization',
       description: 'Digital transformation for manufacturing processes',
-      status: 'SUBMITTED',
-      priority: 'MEDIUM',
-      customerName: 'Manufacturing Excellence LLC',
+      status: ProposalStatus.IN_REVIEW,
+      priority: Priority.HIGH,
+      customerName: 'Al Hadid Manufacturing',
       creatorEmail: 'pm1@posalpro.com',
-      dueDate: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000), // 35 days from now
-      products: ['Data Integration Platform', 'AI Analytics Suite'],
-      rfpReferenceNumber: 'RFP-2025-004',
-      value: 140000,
+      dueDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000), // 25 days from now
+      products: ['Rabt Data Integration', 'Bayan Analytics Suite'],
+      rfpReferenceNumber: 'RFP-2025-001',
+      value: 220000,
       currency: 'USD',
       tags: ['manufacturing', 'optimization'],
       team: {
@@ -1184,14 +2106,14 @@ async function main() {
     {
       title: 'EduTech Mobile Learning Platform',
       description: 'Mobile learning solution for educational institutions',
-      status: 'DRAFT',
-      priority: 'LOW',
-      customerName: 'EduTech Systems',
+      status: ProposalStatus.IN_REVIEW,
+      priority: Priority.MEDIUM,
+      customerName: 'Al Ilm Education Systems',
       creatorEmail: 'sme2@posalpro.com',
-      dueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
-      products: ['Mobile Development Framework'],
-      rfpReferenceNumber: 'RFP-2025-005',
-      value: 60000,
+      dueDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000), // 45 days from now
+      products: ['Jawwal Mobile Framework'],
+      rfpReferenceNumber: 'RFP-2025-002',
+      value: 95000,
       currency: 'USD',
       tags: ['education', 'mobile'],
       team: {
@@ -1199,6 +2121,72 @@ async function main() {
         salesRepresentative: 'pm1@posalpro.com',
         subjectMatterExperts: {
           TECHNICAL: 'sme2@posalpro.com',
+        },
+      },
+    },
+    // Overdue Proposals (for risk indicators)
+    {
+      title: 'Enterprise Security Audit',
+      description: 'Comprehensive security assessment and compliance audit',
+      status: ProposalStatus.IN_REVIEW,
+      priority: Priority.HIGH,
+      customerName: 'TechCorp Solutions',
+      creatorEmail: 'pm1@posalpro.com',
+      dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days overdue
+      products: ['Amn Security Monitoring'],
+      rfpReferenceNumber: 'RFP-2025-003',
+      value: 85000,
+      currency: 'USD',
+      tags: ['security', 'audit', 'compliance'],
+      team: {
+        teamLead: 'pm1@posalpro.com',
+        salesRepresentative: 'pm2@posalpro.com',
+        subjectMatterExperts: {
+          SECURITY: 'sme3@posalpro.com',
+        },
+      },
+    },
+    // Draft Proposals (pipeline)
+    {
+      title: 'Smart City IoT Infrastructure',
+      description: 'City-wide IoT infrastructure for smart city initiatives',
+      status: ProposalStatus.DRAFT,
+      priority: Priority.HIGH,
+      customerName: 'Global Financial Services',
+      creatorEmail: 'pm2@posalpro.com',
+      dueDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+      products: ['Raqib IoT Management', 'Sahab Cloud Platform'],
+      rfpReferenceNumber: 'RFP-2025-004',
+      value: 450000,
+      currency: 'USD',
+      tags: ['smart-city', 'iot', 'infrastructure'],
+      team: {
+        teamLead: 'pm2@posalpro.com',
+        salesRepresentative: 'pm1@posalpro.com',
+        subjectMatterExperts: {
+          TECHNICAL: 'sme1@posalpro.com',
+          SECURITY: 'sme3@posalpro.com',
+        },
+      },
+    },
+    {
+      title: 'Financial Risk Analytics Platform',
+      description: 'Advanced risk modeling and analytics for financial institutions',
+      status: ProposalStatus.DRAFT,
+      priority: Priority.MEDIUM,
+      customerName: 'Global Financial Services',
+      creatorEmail: 'pm1@posalpro.com',
+      dueDate: new Date(Date.now() + 75 * 24 * 60 * 60 * 1000), // 75 days from now
+      products: ['Bayan Analytics Suite'],
+      rfpReferenceNumber: 'RFP-2025-005',
+      value: 180000,
+      currency: 'USD',
+      tags: ['finance', 'risk', 'analytics'],
+      team: {
+        teamLead: 'pm1@posalpro.com',
+        salesRepresentative: 'pm2@posalpro.com',
+        subjectMatterExperts: {
+          TECHNICAL: 'sme1@posalpro.com',
         },
       },
     },
@@ -1224,23 +2212,15 @@ async function main() {
       data: {
         title: proposalData.title,
         description: proposalData.description,
-        status: proposalData.status as
-          | 'DRAFT'
-          | 'IN_REVIEW'
-          | 'PENDING_APPROVAL'
-          | 'APPROVED'
-          | 'REJECTED'
-          | 'SUBMITTED'
-          | 'ACCEPTED'
-          | 'DECLINED',
-        priority: proposalData.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
+        status: proposalData.status,
+        priority: proposalData.priority,
         customerId: customer.id,
         createdBy: creator.id,
         dueDate: proposalData.dueDate,
         value: proposalData.value,
         currency: proposalData.currency,
         tags: proposalData.tags,
-        metadata: {
+        metadata: toPrismaJson({
           createdBy: creator.id,
           createdAt: new Date().toISOString(),
           userStories: ['US-5.1', 'US-5.2'],
@@ -1309,7 +2289,7 @@ async function main() {
             },
             step6: { finalValidation: { isValid: false, completeness: 0, issues: [] } },
           },
-        },
+        }),
         assignedTo: {
           connect: [teamLeadId, salesRepId, ...Object.values(smeIds)]
             .filter(Boolean)
@@ -1336,11 +2316,11 @@ async function main() {
 
     // Add proposal sections
     const sections = [
-      { title: 'Executive Summary', type: 'TEXT', order: 1 },
-      { title: 'Technical Requirements', type: 'TEXT', order: 2 },
-      { title: 'Product Configuration', type: 'PRODUCTS', order: 3 },
-      { title: 'Implementation Plan', type: 'TEXT', order: 4 },
-      { title: 'Pricing and Terms', type: 'PRICING', order: 5 },
+      { title: 'Executive Summary', type: SectionType.TEXT, order: 1 },
+      { title: 'Technical Requirements', type: SectionType.TEXT, order: 2 },
+      { title: 'Product Configuration', type: SectionType.PRODUCTS, order: 3 },
+      { title: 'Implementation Plan', type: SectionType.TEXT, order: 4 },
+      { title: 'Pricing and Terms', type: SectionType.TERMS, order: 5 },
     ];
 
     for (const sectionData of sections) {
@@ -1349,7 +2329,7 @@ async function main() {
           proposalId: newProposal.id,
           title: sectionData.title,
           content: `${sectionData.title} content for ${proposalData.title}`,
-          type: sectionData.type as 'TEXT' | 'PRODUCTS' | 'TERMS' | 'PRICING' | 'CUSTOM',
+          type: sectionData.type,
           order: sectionData.order,
         },
       });
@@ -1372,6 +2352,26 @@ async function main() {
 
   console.log(`✅ Created ${Object.keys(createdProposals).length} proposals`);
 
+  // ----------------------------------------
+  // Baseline: Proposal Versions
+  // ----------------------------------------
+  console.log('🗂️ Creating baseline proposal versions...');
+  {
+    for (const proposal of Object.values(createdProposals)) {
+      await prisma.proposalVersion.create({
+        data: {
+          proposalId: proposal.id,
+          version: 1,
+          createdBy: proposal.createdBy,
+          changeType: 'INITIAL',
+          changesSummary: 'Initial snapshot',
+          snapshot: toPrismaJson({ seeded: true }),
+          productIds: [],
+        },
+      });
+    }
+  }
+
   // ========================================
   // OPTIONAL: COMMUNICATIONS SUPPORT SEEDING
   // ========================================
@@ -1380,13 +2380,13 @@ async function main() {
   const hvCount = await prisma.hypothesisValidationEvent.count();
   if (hvCount === 0) {
     console.log('🧪 Seeding hypothesis validation events...');
-    const hypotheses: Array<'H1' | 'H3' | 'H4' | 'H6' | 'H7' | 'H8'> = [
-      'H1',
-      'H3',
-      'H4',
-      'H6',
-      'H7',
-      'H8',
+    const hypotheses = [
+      HypothesisType.H1,
+      HypothesisType.H3,
+      HypothesisType.H4,
+      HypothesisType.H6,
+      HypothesisType.H7,
+      HypothesisType.H8,
     ];
     const eventUsers = [
       createdUsers['pm1@posalpro.com']?.id,
@@ -1403,7 +2403,7 @@ async function main() {
           userStoryId: `US-${(i % 7) + 1}.${(i % 3) + 1}`,
           componentId: 'CommunicationsSeed',
           action: 'seed_event',
-          measurementData: { source: 'seed', idx: i },
+          measurementData: toPrismaJson({ source: 'seed', idx: i }),
           targetValue: 100,
           actualValue: 100 + Math.random() * 20 - 10,
           performanceImprovement: Math.random() * 10,
@@ -1417,21 +2417,36 @@ async function main() {
   }
 
   // Assign a few users to proposals if none assigned to support participants API
-  console.log('👥 Assigning users to proposals for initial participants...');
-  const proposalList = await prisma.proposal.findMany({ select: { id: true } });
-  const assignableUsers = await prisma.user.findMany({
-    where: { email: { in: ['pm1@posalpro.com', 'sme1@posalpro.com'] } },
-    select: { id: true },
+  console.log('👥 Verifying proposal team assignments...');
+  const orphanProposals = await prisma.proposal.findMany({
+    where: { assignedTo: { none: {} } },
+    select: { id: true, title: true },
   });
-  for (const p of proposalList.slice(0, 3)) {
-    await prisma.proposal.update({
-      where: { id: p.id },
-      data: {
-        assignedTo: {
-          connect: assignableUsers.map(u => ({ id: u.id })),
-        },
-      },
+  console.log(`🔎 Proposals without team assignments: ${orphanProposals.length}`);
+  if (orphanProposals.length > 0) {
+    console.log(
+      '👥 Assigning default users to a subset of unassigned proposals to support participants API...'
+    );
+    const assignableUsers = await prisma.user.findMany({
+      where: { email: { in: ['pm1@posalpro.com', 'sme1@posalpro.com'] } },
+      select: { id: true },
     });
+    for (const p of orphanProposals.slice(0, 3)) {
+      await prisma.proposal.update({
+        where: { id: p.id },
+        data: {
+          assignedTo: {
+            connect: assignableUsers.map(u => ({ id: u.id })),
+          },
+        },
+      });
+    }
+    const remaining = await prisma.proposal.count({
+      where: { assignedTo: { none: {} } },
+    });
+    console.log(`✅ Safety net complete. Remaining unassigned proposals: ${remaining}`);
+  } else {
+    console.log('✅ All proposals already have assigned team members.');
   }
 
   // ========================================

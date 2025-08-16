@@ -2,13 +2,20 @@
 
 /**
  * PosalPro MVP2 - Login Page
- * Optimized with direct imports for better performance
- * Target: Reduce login page load time from 4798ms to <3000ms
+ * Further optimized with dynamic import to shrink initial JS
  */
 
-import { OptimizedLoginForm } from '@/components/auth/OptimizedLoginForm';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+
+const OptimizedLoginForm = dynamic(
+  () => import('@/components/auth/OptimizedLoginForm').then(m => m.OptimizedLoginForm),
+  {
+    ssr: false,
+    loading: () => <div className="min-h-screen flex items-center justify-center">Loading...</div>,
+  }
+);
 
 // Metadata is handled by layout.tsx for Client Components
 

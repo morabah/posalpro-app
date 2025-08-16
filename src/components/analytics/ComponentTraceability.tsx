@@ -17,8 +17,25 @@ interface TraceabilityItem {
   [key: string]: unknown;
 }
 
+type ComponentTraceabilityData =
+  | Array<TraceabilityItem>
+  | Record<string, TraceabilityItem>
+  | {
+      totalComponents?: number;
+      activeComponents?: number;
+      coverage?: number;
+      recentUpdates?: Array<{
+        component: string;
+        userStory: string;
+        lastUpdate: string;
+        status: 'active' | 'inactive';
+      }>;
+    }
+  | null
+  | undefined;
+
 interface ComponentTraceabilityProps {
-  data: Array<TraceabilityItem> | Record<string, TraceabilityItem> | null | undefined;
+  data: ComponentTraceabilityData;
   timeRange: 'overview' | 'hypothesis' | 'metrics' | 'stories' | 'components' | string;
 }
 

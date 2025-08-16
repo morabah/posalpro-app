@@ -111,13 +111,17 @@ export function useCustomers(
         throw error;
       }
     },
-    // ✅ PERFORMANCE: Optimized for speed (following BasicInformationStep.tsx pattern)
+    // ✅ PERFORMANCE: Optimized for speed with minimal resilience to dev rebuilds
     staleTime: 30 * 1000, // 30 seconds for fast updates
     gcTime: 2 * 60 * 1000, // 2 minutes
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false, // Prevent automatic refetches
-    retry: 0, // No retries for speed - fallback to mock data instead
-    retryDelay: 0, // No delay
+    refetchOnReconnect: false, // Keep disabled; use targeted retry below
+    retry: (failureCount, error) => {
+      // Only retry transient network errors (e.g., during Fast Refresh)
+      const isNetworkError = error instanceof TypeError || /Failed to fetch|load failed/i.test(String(error));
+      return isNetworkError && failureCount < 2;
+    },
+    retryDelay: 300,
   });
 }
 

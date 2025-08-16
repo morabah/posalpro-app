@@ -71,6 +71,15 @@ class RateLimiter {
     return Math.max(0, maxAttempts - record.count);
   }
 
+  static async getResetSecondsRemaining(identifier: string, windowMs: number): Promise<number> {
+    const record = await this.storage.getAttempts(identifier);
+    if (!record) {
+      return Math.ceil(windowMs / 1000);
+    }
+    const seconds = Math.ceil((record.resetTime - Date.now()) / 1000);
+    return Math.max(0, seconds);
+  }
+
   static async cleanup(): Promise<void> {
     await this.storage.cleanup();
   }
@@ -185,6 +194,12 @@ export function getSecurityHeaders(): Record<string, string> {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'Content-Security-Policy':
       "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'",
+    // Cross-Origin Policies (server utility; prefer same-origin isolation)
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    // DNS Prefetch Control
+    'X-DNS-Prefetch-Control': 'off',
   };
 }
 
@@ -250,4 +265,3 @@ setInterval(
   },
   5 * 60 * 1000
 ); // Every 5 minutes
-

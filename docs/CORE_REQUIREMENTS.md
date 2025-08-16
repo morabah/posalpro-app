@@ -43,6 +43,39 @@
 - Never: Custom caching systems, direct fetch() calls, complex loading states
 - Reference: [Lesson #12 in LESSONS_LEARNED.md][memory:3929430536446174589]]
 
+**⚡ List View Performance Optimization (CRITICAL)**
+
+- **Minimal Field Selection**: Always use `fields` parameter to request only
+  needed columns
+- **Disable Relation Hydration**: Set `includeCustomer=false&includeTeam=false`
+  for initial loads
+- **Use Denormalized Fields**: Prefer `customerName`, `creatorName` over
+  hydrated relations
+- **Optimized Page Size**: Use 30-50 items per page (not 100+) for faster TTFB
+- **Cursor Pagination**: Use `limit+1` pattern with `nextCursor` for large
+  datasets
+- **Client-Side Mapping**: Transform API data to UI format with fallbacks, not
+  server-side
+
+**📋 List View Optimization Checklist:**
+
+```typescript
+// ✅ CORRECT: Optimized list fetching pattern
+const endpoint = `/entities?limit=30&sortBy=updatedAt&sortOrder=desc&includeCustomer=false&includeTeam=false&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customerName,creatorName`;
+
+// ✅ CORRECT: Client-side transformation with fallbacks
+const transformedData = apiData.map(item => ({
+  id: String(item.id || ''),
+  title: String(item.title || ''),
+  client: item.customerName || 'Unknown Client',
+  status: mapApiStatusToUIStatus(String(item.status || 'draft')),
+  // ... other fields with fallbacks
+}));
+
+// ❌ FORBIDDEN: Heavy initial loads
+const endpoint = `/entities?limit=100&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customer,customer(id,name,industry),assignedTo(id,name,role),creator(id,name,email)`;
+```
+
 **⚡ Proven Performance Pattern:**
 
 ```typescript
@@ -72,6 +105,12 @@ useEffect(() => {
 - Complex loading state management
 - Multiple useEffect dependencies causing re-fetches
 - Any pattern that takes >1 second to load data
+- **Heavy initial loads**: Requesting 100+ items with full relation hydration
+- **Server-side UI transformation**: Complex data mapping on server instead of
+  client
+- **Over-fetching relations**: Including `includeCustomer=true&includeTeam=true`
+  for list views
+- **Large page sizes**: Using `limit=100+` instead of 30-50 for initial loads
 
 ### 🖼️ Image Optimization (Mandatory)
 
@@ -281,6 +320,19 @@ To guarantee edits persist and reload correctly across create/edit:
 
 - Use `limit + 1` pattern to infer `hasMore` instead of `COUNT(*)` for offset
   pagination on large tables.
+
+**📋 List View Performance Standards:**
+
+- **Initial Load**: 30-50 items maximum with minimal fields
+- **Pagination**: Cursor-based with `nextCursor` for large datasets
+- **Field Selection**: Always use `fields` parameter with minimal columns
+- **Relation Hydration**: Disabled for list views
+  (`includeCustomer=false&includeTeam=false`)
+- **Client Transformation**: Map API data to UI format with defensive fallbacks
+- **Loading States**: Single loading state per interaction (no parallel
+  requests)
+- **Error Handling**: Graceful fallbacks for missing data (e.g.,
+  `'Unknown Client'`)
 
 **▶ Cursor-Based Pagination & Load‑More Policy (Client Lists)**
 

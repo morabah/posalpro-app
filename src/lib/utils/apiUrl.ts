@@ -25,7 +25,7 @@ export function getApiBaseUrl(): string {
   }
 
   // Development: use current port or detect from Next.js
-  const port = process.env.PORT || getNextJsPort() || '3000';
+  const port = process.env.PORT || getNextJsPort() || '3001';
   return `http://localhost:${port}/api`;
 }
 
@@ -50,7 +50,7 @@ export function getNextAuthUrl(): string {
   }
 
   // Development: use current port
-  const port = process.env.PORT || getNextJsPort() || '3000';
+  const port = process.env.PORT || getNextJsPort() || '3001';
   return `http://localhost:${port}`;
 }
 

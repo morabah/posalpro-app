@@ -10,6 +10,7 @@
  */
 
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ResponsiveBreakpointManager } from '@/components/ui/ResponsiveBreakpointManager';
 import { UserType } from '@/types';
 import { render, RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -45,7 +46,11 @@ export const clearMockSession = () => {
 const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <SessionProvider session={mockSession as any}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        <ResponsiveBreakpointManager trackAnalytics={false} enableOfflineDetection={false}>
+          {children}
+        </ResponsiveBreakpointManager>
+      </AuthProvider>
     </SessionProvider>
   );
 };

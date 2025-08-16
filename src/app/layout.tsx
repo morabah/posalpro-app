@@ -4,13 +4,7 @@
  * 🚀 LCP OPTIMIZATION: Critical CSS, resource hints, font optimization
  */
 
-import { ToastProvider } from '@/components/feedback/Toast/ToastProvider';
-import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
-import { AuthProvider } from '@/components/providers/AuthProvider';
-import { QueryProvider } from '@/components/providers/QueryProvider';
-import { SharedAnalyticsProvider } from '@/components/providers/SharedAnalyticsProvider';
-import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizationProvider';
-import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
+// Providers moved to segment layouts (e.g., (dashboard)/layout) to reduce /auth/* bundle size
 import '@/styles/globals.css';
 import { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
@@ -148,21 +142,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="dns-prefetch" href="//localhost" />
         <link rel="dns-prefetch" href="//api.localhost" />
       </head>
-      <body className={`${inter.className} h-full antialiased`}>
-        <TTFBOptimizationProvider>
-          <WebVitalsProvider>
-            <SharedAnalyticsProvider>
-              <ClientLayoutWrapper>
-                <QueryProvider>
-                  <ToastProvider position="top-right" maxToasts={5}>
-                    <AuthProvider>{children}</AuthProvider>
-                  </ToastProvider>
-                </QueryProvider>
-              </ClientLayoutWrapper>
-            </SharedAnalyticsProvider>
-          </WebVitalsProvider>
-        </TTFBOptimizationProvider>
-      </body>
+      <body className={`${inter.className} h-full antialiased`}>{children}</body>
     </html>
   );
 }

@@ -14,7 +14,7 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
-import { logError, logInfo } from '@/lib/logger';
+import { logError } from '@/lib/logger';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
@@ -43,6 +43,8 @@ const ProductQuerySchema = z.object({
   priceRange: z.string().optional(), // "min,max" format
   isActive: z.coerce.boolean().optional(),
   sku: z.string().optional(),
+  // Batch lookup support: comma-separated product ids (cuid)
+  ids: z.string().optional(),
   sortBy: z.enum(['name', 'price', 'createdAt', 'updatedAt']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -96,6 +98,170 @@ export async function GET(request: NextRequest) {
     const where: Prisma.ProductWhereInput = {
       isActive: validatedQuery.isActive !== undefined ? validatedQuery.isActive : true,
     };
+
+    // Special case: batch lookup by ids (single request, no pagination)
+    // Optimized for proposal preview with selective field loading
+    if (validatedQuery.ids) {
+      const ids = validatedQuery.ids
+        .split(',')
+        .map(v => v.trim())
+        .filter(v => v.length > 0);
+      if (ids.length === 0) {
+        const res = NextResponse.json({ success: true, data: [] });
+        res.headers.set('Cache-Control', process.env.NODE_ENV === 'production' ? 'public, max-age=60, s-maxage=180' : 'no-store');
+        return res;
+      }
+
+      // Optimized batch fetch with selective field loading for proposal preview
+      try {
+        const urlParams = new URL(request.url).searchParams;
+        const fieldsParam = urlParams.get('fields');
+
+        // Selective field loading based on request
+        const selectFields = fieldsParam
+          ? fieldsParam.split(',').reduce((acc, field) => {
+              const trimmedField = field.trim();
+              if (['id', 'name', 'price', 'currency', 'category', 'sku', 'description'].includes(trimmedField)) {
+                acc[trimmedField] = true;
+              }
+              return acc;
+            }, {} as Record<string, boolean>)
+          : {
+              id: true,
+              name: true,
+              sku: true,
+              price: true,
+              currency: true,
+              category: true,
+              description: true,
+              images: true,
+              createdAt: true,
+              updatedAt: true,
+            };
+
+        // Use transaction for consistent data and better performance
+        const [products, productCount] = await prisma.$transaction([
+          prisma.product.findMany({
+            where: {
+              id: { in: ids },
+              isActive: true,
+            },
+            select: selectFields,
+            orderBy: {
+              name: 'asc',
+            },
+          }),
+          prisma.product.count({
+            where: {
+              id: { in: ids },
+              isActive: true,
+            },
+          })
+        ]);
+
+        // Track performance analytics
+        const latency = Date.now() - start;
+        recordLatency(latency);
+        const res = NextResponse.json({
+          success: true,
+          data: products,
+          meta: {
+            total: productCount,
+            requested: ids.length,
+            found: products.length,
+            latency: Math.round(latency)
+          }
+        });
+        if (process.env.NODE_ENV === 'production') {
+          res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
+        } else {
+          res.headers.set('Cache-Control', 'no-store');
+        }
+        return res;
+      } catch (error) {
+        // Log the error using ErrorHandlingService
+        errorHandlingService.processError(error);
+        await logError('Products GET failed', error as unknown, {
+          component: 'ProductsRoute',
+          operation: 'GET',
+        });
+
+        if (error instanceof z.ZodError) {
+          recordError(ErrorCodes.VALIDATION.INVALID_INPUT);
+          return createApiErrorResponse(
+            new StandardError({
+              message: 'Validation failed for product query parameters',
+              code: ErrorCodes.VALIDATION.INVALID_INPUT,
+              cause: error,
+              metadata: {
+                component: 'ProductsRoute',
+                operation: 'getProducts',
+                queryParameters: Object.fromEntries(new URL(request.url).searchParams),
+              },
+            }),
+            'Validation failed',
+            ErrorCodes.VALIDATION.INVALID_INPUT,
+            400,
+            {
+              userFriendlyMessage:
+                'There was an issue with your request. Please check the filters and try again.',
+              details: error.errors,
+            }
+          );
+        }
+
+        if (isPrismaError(error)) {
+          const errorCode = error.code.startsWith('P2')
+            ? ErrorCodes.DATA.DATABASE_ERROR
+            : ErrorCodes.DATA.NOT_FOUND;
+          recordError(ErrorCodes.DATA.DATABASE_ERROR);
+          return createApiErrorResponse(
+            new StandardError({
+              message: `Database error when fetching products: ${getPrismaErrorMessage(error.code)}`,
+              code: errorCode,
+              cause: error,
+              metadata: {
+                component: 'ProductsRoute',
+                operation: 'getProducts',
+                prismaErrorCode: error.code,
+              },
+            }),
+            'Database error',
+            errorCode,
+            500,
+            {
+              userFriendlyMessage: 'An error occurred while fetching products. Please try again later.',
+            }
+          );
+        }
+
+        if (error instanceof StandardError) {
+          return createApiErrorResponse(error);
+        }
+
+        recordError(ErrorCodes.SYSTEM.INTERNAL_ERROR);
+        const duration = Date.now() - start;
+        recordLatency(duration);
+        return createApiErrorResponse(
+          new StandardError({
+            message: 'Failed to fetch products',
+            code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+            cause: error instanceof Error ? error : undefined,
+            metadata: {
+              component: 'ProductsRoute',
+              operation: 'getProducts',
+            },
+          }),
+          'Internal error',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          500,
+          {
+            userFriendlyMessage:
+              'An unexpected error occurred while fetching products. Please try again later.',
+          }
+        );
+      }
+    }
 
     // Search functionality
     if (validatedQuery.search) {

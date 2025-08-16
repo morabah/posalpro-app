@@ -430,9 +430,40 @@ export const ResponsiveBreakpointManager = React.memo(function ResponsiveBreakpo
 const ResponsiveContext = createContext<ResponsiveContextType | null>(null);
 
 // ✅ MEMORY OPTIMIZATION: Optimized hooks
+// Safe default context to avoid crashes during transient dev states (e.g., Fast Refresh)
+const DEFAULT_RESPONSIVE_CONTEXT: ResponsiveContextType = {
+  state: {
+    currentBreakpoint: 'lg',
+    screenWidth: 1024,
+    screenHeight: 768,
+    isMobile: false,
+    isTablet: false,
+    isDesktop: true,
+    orientation: 'landscape',
+    pixelRatio: 1,
+    supportsTouch: false,
+    isOnline: true,
+    prefersDarkMode: false,
+    prefersReducedMotion: false,
+    prefersHighContrast: false,
+    connectionType: 'unknown',
+  },
+  config: [],
+  isBreakpoint: () => false,
+  isBreakpointOrLarger: () => true,
+  isBreakpointOrSmaller: () => true,
+  getBreakpointIndex: () => 0,
+  matchesMediaQuery: () => false,
+};
+
 export function useResponsive(): ResponsiveContextType {
   const context = useContext(ResponsiveContext);
   if (!context) {
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn('useResponsive called outside of ResponsiveBreakpointManager. Returning safe default context.');
+      return DEFAULT_RESPONSIVE_CONTEXT;
+    }
     throw new Error('useResponsive must be used within ResponsiveBreakpointManager');
   }
   return context;

@@ -19,6 +19,15 @@ const customJestConfig = {
   verbose: true,
   maxWorkers: '50%',
   testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+  // Phase 3: Establish baseline coverage thresholds (to be raised over time)
+  coverageThreshold: {
+    global: {
+      branches: 5,
+      functions: 10,
+      lines: 15,
+      statements: 15,
+    },
+  },
 };
 
 export default createJestConfig(customJestConfig);

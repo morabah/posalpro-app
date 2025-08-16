@@ -361,6 +361,20 @@ export function ProductSelectionStep({
     }
   }, [data.products, products, buildSelectedProduct]);
 
+  // Resilient hydration: if selection is still empty after products load, hydrate again from props
+  useEffect(() => {
+    if (selectedProducts.size === 0 && data.products && data.products.length > 0) {
+      const productsMap = new Map<string, SelectedProduct>();
+      (data.products as IncomingProduct[]).forEach(product => {
+        const sp = buildSelectedProduct(product);
+        if (sp) productsMap.set(sp.id, sp);
+      });
+      if (productsMap.size > 0) {
+        setSelectedProducts(productsMap);
+      }
+    }
+  }, [selectedProducts.size, data.products, products, buildSelectedProduct]);
+
   // Backfill any missing items if props contain more products than the current map
   const previousPropsHashRef = useRef<string | null>(null);
   const computeProductsHash = useCallback(

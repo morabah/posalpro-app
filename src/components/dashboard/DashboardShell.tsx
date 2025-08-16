@@ -295,7 +295,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         ...prev,
         [widgetId]: { ...prev[widgetId], visible },
       }));
-      analytics.trackInteraction('widget', visible ? 'show' : 'hide', { widgetId });
+      if (analytics?.trackInteraction) {
+        analytics.trackInteraction('widget', visible ? 'show' : 'hide', { widgetId });
+      }
     },
     [analytics]
   );
@@ -319,7 +321,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         ...prev,
         [widgetId]: { ...prev[widgetId], loading: true, error: undefined },
       }));
-      analytics.trackInteraction('widget', 'refresh', { widgetId });
+      if (analytics?.trackInteraction) {
+        analytics.trackInteraction('widget', 'refresh', { widgetId });
+      }
       onWidgetRefresh?.(widgetId);
     },
     [analytics, onWidgetRefresh]
@@ -342,7 +346,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const handleWidgetInteraction = useCallback(
     (widgetId: string, action: string, metadata?: Record<string, unknown>) => {
       const safeMetadata: Record<string, unknown> = metadata ?? {};
-      analytics.trackInteraction('widget', action, { widgetId, ...safeMetadata });
+      if (analytics?.trackInteraction) {
+        analytics.trackInteraction('widget', action, { widgetId, ...safeMetadata });
+      }
       onWidgetInteraction?.(widgetId, action, safeMetadata);
     },
     [analytics, onWidgetInteraction]
@@ -408,13 +414,21 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-700">{widget.title}</h3>
             <div className="flex items-center space-x-1">
-              {isLoading && <ArrowPathIcon className="w-4 h-4 text-blue-500 animate-spin" />}
+              {isLoading && (
+                <>
+                  <ArrowPathIcon className="w-4 h-4 text-blue-500 animate-spin" />
+                  <span data-testid={`widget-skeleton-${widget.id}`} className="sr-only">
+                    Loading {widget.title}
+                  </span>
+                </>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => handleWidgetVisibility(widget.id, !isVisible)}
                 className="p-1"
                 aria-label={isVisible ? 'Hide widget' : 'Show widget'}
+                data-testid={`toggle-visibility-${widget.id}`}
               >
                 {isVisible ? <EyeIcon className="w-4 h-4" /> : <EyeSlashIcon className="w-4 h-4" />}
               </Button>

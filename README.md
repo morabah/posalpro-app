@@ -290,15 +290,18 @@ posalpro-app/
 
 ## 🧪 Authenticated E2E via App CLI
 
-Use the App CLI for authenticated, database-backed API testing without opening the UI. It maintains a session cookie jar and supports RBAC checks.
+Use the App CLI for authenticated, database-backed API testing without opening
+the UI. It maintains a session cookie jar and supports RBAC checks.
 
 Guidelines
+
 - Start dev server: `npm run dev:smart`
 - Local base: use `--base http://127.0.0.1:3000`
 - Always use real DB IDs via `db` commands (no mock data)
 - Non-interactive mode: `npm run app:cli -- --command "..."`
 
 Examples
+
 ```bash
 # Login (creates a session cookie jar for subsequent commands)
 npm run app:cli -- --base http://127.0.0.1:3000 --command "login admin@posalpro.com 'ProposalPro2024!' 'System Administrator'"

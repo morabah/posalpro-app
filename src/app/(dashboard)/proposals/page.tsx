@@ -8,9 +8,23 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { ClockIcon, DocumentTextIcon, FolderOpenIcon, PlusIcon } from '@heroicons/react/24/outline';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+const ClockIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.ClockIcon), {
+  ssr: false,
+});
+const DocumentTextIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.DocumentTextIcon),
+  { ssr: false }
+);
+const FolderOpenIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.FolderOpenIcon),
+  { ssr: false }
+);
+const PlusIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PlusIcon), {
+  ssr: false,
+});
 
 /**
  * Type definitions for better type safety

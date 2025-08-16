@@ -69,7 +69,6 @@ const ProductFilters = memo(({ onFiltersChange, initialFilters }: ProductFilters
   const statuses = [
     { value: 'active', label: 'Active', color: 'text-green-600' },
     { value: 'inactive', label: 'Inactive', color: 'text-red-600' },
-    { value: 'draft', label: 'Draft', color: 'text-gray-600' },
   ];
 
   const priceRanges = [
@@ -232,7 +231,7 @@ const ProductFilters = memo(({ onFiltersChange, initialFilters }: ProductFilters
           {/* Status */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-3">Status</h4>
-            <div className="space-y-2">
+            <div className="space-y-2" role="group" aria-label="Status filters">
               {statuses.map(status => (
                 <button
                   key={status.value}
@@ -242,6 +241,7 @@ const ProductFilters = memo(({ onFiltersChange, initialFilters }: ProductFilters
                       ? 'bg-blue-50 border-blue-200 text-blue-700'
                       : 'bg-white border-gray-200 hover:bg-gray-50'
                   }`}
+                  aria-pressed={filters.status.includes(status.value)}
                 >
                   <div className="flex items-center justify-between">
                     <span className={status.color}>{status.label}</span>

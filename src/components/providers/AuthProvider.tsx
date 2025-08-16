@@ -502,11 +502,31 @@ export function AuthProvider({ children, session }: AuthProviderProps) {
   );
 }
 
-// Hook to use auth context
+// Safe default context to prevent crashes during transient dev states (e.g., Fast Refresh)
+const DEFAULT_AUTH_CONTEXT: AuthContextState = {
+  isAuthenticated: false,
+  isLoading: true,
+  user: null,
+  roles: [],
+  permissions: [],
+  hasRole: () => false,
+  hasPermission: () => false,
+  hasAnyRole: () => false,
+  hasAllRoles: () => false,
+  refreshSession: async () => {},
+  logout: async () => {},
+  trackActivity: () => {},
+};
+
+// Hook to use auth context (defensive fallback in dev)
 export function useAuth(): AuthContextState {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn('useAuth called outside of AuthProvider. Returning safe default context.');
+    }
+    return DEFAULT_AUTH_CONTEXT;
   }
   return context;
 }

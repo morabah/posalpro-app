@@ -12,7 +12,7 @@ import { AlertCircle, ChevronDown, CircleAlert, Eye, EyeOff, Loader2 } from 'luc
 import { getSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { FieldErrors, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 // Component Traceability Matrix
@@ -27,7 +27,7 @@ const COMPONENT_MAPPING = {
 // Validation schema
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters long'),
   role: z.string().min(1, 'Please select a role'),
   rememberMe: z.boolean().optional(),
 });
@@ -102,6 +102,8 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [loginStartTime, setLoginStartTime] = useState<number | null>(null);
+  const [passwordValue, setPasswordValue] = useState<string>('');
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     register,
@@ -129,6 +131,17 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
   const allValues = watch();
 
   const lastAnalyticsTime = useRef(0);
+  const isWeakPassword = passwordValue.length > 0 && passwordValue.length < 8;
+
+  useEffect(() => {
+    const el = passwordInputRef.current;
+    if (!el) return;
+    if (isWeakPassword) {
+      el.setCustomValidity('Password must be at least 8 characters');
+    } else {
+      el.setCustomValidity('');
+    }
+  }, [isWeakPassword]);
 
   // ✅ PERFORMANCE FIX: Removed debug logging to reduce console clutter
   // Debug logging was causing excessive console output in development
@@ -232,6 +245,18 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
     }
   };
 
+  // Handle invalid submission for accessibility analytics
+  const onInvalid = useCallback(
+    (formErrors: FieldErrors<LoginFormData>) => {
+      trackFieldInteraction('form', 'submit_invalid');
+      Object.entries(formErrors).forEach(([field, err]) => {
+        const errorType = (err as { type?: string } | undefined)?.type || 'validation_error';
+        trackFieldInteraction(field, 'error', errorType);
+      });
+    },
+    [trackFieldInteraction]
+  );
+
   const getDefaultRedirect = (roles: string[]): string => {
     if (roles.includes('Admin')) return '/admin/system';
     if (roles.includes('Executive')) return '/dashboard/overview';
@@ -294,7 +319,17 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
               </div>
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" aria-label="Login Form">
+            <form
+              onSubmit={handleSubmit(onSubmit, onInvalid)}
+              className="space-y-6"
+              aria-label="Login Form"
+              data-testid="login-form"
+            >
+              {isLoading && (
+                <div data-testid="loading-indicator" aria-live="polite" className="sr-only">
+                  Please wait while we log you in
+                </div>
+              )}
               {/* Email Field */}
               <div>
                 <label
@@ -319,6 +354,7 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                   id="email"
                   autoComplete="email"
                   placeholder="admin@posalpro.com"
+                  data-testid="email-input"
                   className={`w-full h-12 px-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
                     errors.email
                       ? 'border-red-300 bg-red-50'
@@ -349,21 +385,32 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                       register('password').onChange(e);
                       setAuthError(null);
                       trackFieldInteraction('password', 'change');
+                      setPasswordValue((e.target as HTMLInputElement).value);
                     }}
                     onBlur={e => {
                       register('password').onBlur(e);
                       trackFieldInteraction('password', 'blur');
+                      setPasswordValue((e.target as HTMLInputElement).value);
                     }}
-                    ref={register('password').ref}
+                    ref={node => {
+                      register('password').ref(node);
+                      passwordInputRef.current = node;
+                    }}
                     type={showPassword ? 'text' : 'password'}
                     id="password"
+                    data-testid="password-input"
                     autoComplete="current-password"
+                    minLength={8}
+                    pattern=".{8,}"
+                    title="Password must be at least 8 characters"
+                    required
                     placeholder="Enter your password"
                     className={`w-full h-12 px-4 pr-12 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 ${
                       errors.password
                         ? 'border-red-300 bg-red-50'
                         : 'border-neutral-300 hover:border-neutral-400'
                     }`}
+                    aria-invalid={isWeakPassword || !!errors.password}
                     onFocus={() => trackFieldInteraction('password', 'focus')}
                   />
                   <button
@@ -478,6 +525,10 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                 type="submit"
                 className={`w-full h-12 font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white`}
                 disabled={isLoading}
+                data-testid="login-button"
+                onClick={() => {
+                  trackFieldInteraction('form', 'click_submit');
+                }}
               >
                 {isLoading ? (
                   <>

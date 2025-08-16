@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   await validateApiPermission(request, 'products:read');
@@ -12,7 +15,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('🚀 [OPTIMIZED] Product stats request started');
+    // Lightweight diagnostic only in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🚀 [OPTIMIZED] Product stats request started');
+    }
     const startTime = Date.now();
 
     // Single optimized query instead of multiple slow queries
@@ -27,23 +33,37 @@ export async function GET(request: NextRequest) {
     `;
 
     const queryTime = Date.now() - startTime;
-    console.log(`✅ [OPTIMIZED] Product stats completed in ${queryTime}ms`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`✅ [OPTIMIZED] Product stats completed in ${queryTime}ms`);
+    }
 
     const result = Array.isArray(stats) ? stats[0] : stats;
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       total: Number(result.total) || 0,
       active: Number(result.active) || 0,
       inactive: Number(result.inactive) || 0,
       averagePrice: Number(result.averagePrice) || 0,
       queryTime,
-      optimized: true
+      optimized: true,
     });
-
+    if (process.env.NODE_ENV === 'production') {
+      res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+    } else {
+      res.headers.set('Cache-Control', 'no-store');
+    }
+    return res;
   } catch (error) {
-    console.error('❌ [OPTIMIZED] Product stats failed:', error);
+    const ehs = ErrorHandlingService.getInstance();
+    const standardError = ehs.processError(
+      error,
+      'Failed to retrieve product statistics',
+      ErrorCodes.DATA.FETCH_FAILED,
+      { component: 'ProductStatsAPI', operation: 'GET' }
+    );
+    logError('ProductStatsAPI error', error, { errorCode: standardError.code });
     return NextResponse.json(
-      { error: 'Failed to retrieve product statistics' },
+      { success: false, error: standardError.message, code: standardError.code },
       { status: 500 }
     );
   }

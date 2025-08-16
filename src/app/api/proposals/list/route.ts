@@ -1,7 +1,8 @@
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { StandardError } from '@/lib/errors/StandardError';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError } from '@/lib/logger';
 import { recordDbLatency, recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
     }
 
     const dbStart = Date.now();
+    // Optimized select with index-friendly ordering and minimal columns
     const proposals = await prisma.proposal.findMany({
       select: {
         id: true,
@@ -46,11 +48,9 @@ export async function GET(request: NextRequest) {
         status: true,
         priority: true,
         customerName: true,
-        // include minimal fields needed by dashboard cards
         value: true,
         dueDate: true,
         updatedAt: true,
-        createdAt: true,
       },
       orderBy: {
         updatedAt: 'desc',
@@ -78,16 +78,21 @@ export async function GET(request: NextRequest) {
     }
     return res;
   } catch (error) {
-    console.error('[ProposalListAPI] Error:', error);
-
-    const standardError = new StandardError({
-      message: 'Failed to retrieve proposals',
-      code: ErrorCodes.DATA.QUERY_FAILED,
-      metadata: {
+    const ehs = ErrorHandlingService.getInstance();
+    const standardError = ehs.processError(
+      error,
+      'Failed to retrieve proposals',
+      ErrorCodes.DATA.QUERY_FAILED,
+      {
         component: 'ProposalListAPI',
         operation: 'GET',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
+      }
+    );
+
+    logError('[ProposalListAPI] Error', error, {
+      component: 'ProposalListAPI',
+      operation: 'GET',
+      errorCode: standardError.code,
     });
 
     recordError(standardError.code);

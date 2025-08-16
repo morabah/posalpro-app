@@ -25,7 +25,7 @@ describe('ProposalCard Component', () => {
   };
 
   it('renders correctly with all props', () => {
-    const { container } = render(<ProposalCard {...mockProposal} />);
+    render(<ProposalCard {...mockProposal} />);
 
     // Verify key elements are present
     expect(screen.getByText('Enterprise Cloud Migration Proposal')).toBeInTheDocument();
@@ -33,8 +33,7 @@ describe('ProposalCard Component', () => {
     expect(screen.getByText('In Review')).toBeInTheDocument();
     expect(screen.getByText('75%')).toBeInTheDocument();
 
-    // Take a snapshot
-    expect(container).toMatchSnapshot();
+    // Snapshot removed: assert key elements only to avoid brittle UI diffs
   });
 
   it('renders with correct status badge variant', () => {

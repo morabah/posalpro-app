@@ -31,13 +31,11 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
 import { CreateProductData, Product } from '@/types/entities/product';
-import {
-  CircleStackIcon,
-  CogIcon,
-  PencilIcon,
-  PlusIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline';
+const CircleStackIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.CircleStackIcon), { ssr: false });
+const CogIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.CogIcon), { ssr: false });
+const PencilIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PencilIcon), { ssr: false });
+const PlusIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PlusIcon), { ssr: false });
+const TrashIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.TrashIcon), { ssr: false });
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';

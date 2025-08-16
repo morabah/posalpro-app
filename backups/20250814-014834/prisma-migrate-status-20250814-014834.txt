@@ -1,0 +1,21 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "posalpro_mvp2", schema "public" at "localhost:5432"
+
+12 migrations found in prisma/migrations
+Following migrations have not yet been applied:
+20240101000000_init_authentication_system
+20250108000000_add_performance_indexes
+20250603151053_add_core_data_models
+20250604120214_add_cloud_sync_fields
+20250604123129_add_analytics_testing_entities
+20250608204205_add_project_type_to_proposal
+20250623213855_add_proposal_denormalization_and_cursor_pagination
+20250801154738_add_product_indexes
+20250801155522_add_customer_indexes
+20250801155845_add_user_model_indexes
+20250801160213_optimized_queries_and_indexes
+20250803143905_added_user_role_indexes
+
+To apply migrations in development run prisma migrate dev.
+To apply migrations in production run prisma migrate deploy.

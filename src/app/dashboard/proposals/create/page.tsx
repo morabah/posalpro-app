@@ -1,7 +1,14 @@
 'use client';
 
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { QueryProvider } from '@/components/providers/QueryProvider';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { ProposalWizard } from '@/components/proposals/ProposalWizard';
+const ProposalWizard = dynamic(
+  () => import('@/components/proposals/ProposalWizard').then(m => m.ProposalWizard),
+  { ssr: false }
+);
 // import { ProposalWizardData } from '@/types/proposal';
 
 /**
@@ -24,17 +31,23 @@ export default function ProposalCreatePage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Proposal</h1>
-          <p className="text-gray-600">
-            Follow the guided workflow to create a comprehensive proposal for your client.
-          </p>
-        </div>
+    <ClientLayoutWrapper>
+      <QueryProvider>
+        <AuthProvider>
+          <div className="container mx-auto px-4 py-8">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Proposal</h1>
+                <p className="text-gray-600">
+                  Follow the guided workflow to create a comprehensive proposal for your client.
+                </p>
+              </div>
 
-        <ProposalWizard onComplete={handleComplete} onCancel={handleCancel} />
-      </div>
-    </div>
+              <ProposalWizard onComplete={handleComplete} onCancel={handleCancel} />
+            </div>
+          </div>
+        </AuthProvider>
+      </QueryProvider>
+    </ClientLayoutWrapper>
   );
 }
