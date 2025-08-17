@@ -290,10 +290,10 @@ function ProposalManagementDashboardContent() {
             const totalValueRaw = (p as Record<string, unknown>).totalValue;
             const valueRaw = (p as Record<string, unknown>).value;
             const estimatedValue =
-              typeof totalValueRaw === 'number'
-                ? (totalValueRaw as number)
-                : typeof valueRaw === 'number'
-                  ? (valueRaw as number)
+              typeof valueRaw === 'number'
+                ? (valueRaw as number)
+                : typeof totalValueRaw === 'number'
+                  ? (totalValueRaw as number)
                   : 0;
             const due = (p as Record<string, unknown>).dueDate;
             const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
@@ -442,10 +442,10 @@ function ProposalManagementDashboardContent() {
           const totalValueRaw = (p as Record<string, unknown>).totalValue;
           const valueRaw = (p as Record<string, unknown>).value;
           const estimatedValue =
-            typeof totalValueRaw === 'number'
-              ? (totalValueRaw as number)
-              : typeof valueRaw === 'number'
-                ? (valueRaw as number)
+            typeof valueRaw === 'number'
+              ? (valueRaw as number)
+              : typeof totalValueRaw === 'number'
+                ? (totalValueRaw as number)
                 : 0;
           const due = (p as Record<string, unknown>).dueDate;
           const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
@@ -1171,9 +1171,9 @@ function ProposalManagementDashboardContent() {
                           <span className="text-green-600 font-bold text-lg">$</span>
                         </div>
                         <div>
-                          <div className="text-xs font-medium opacity-75">Est. Value</div>
+                          <div className="text-xs font-medium opacity-75">Value</div>
                           <div className="font-bold text-lg">
-                            ${(proposal.estimatedValue / 1000).toFixed(0)}K
+                            ${Math.round((proposal.estimatedValue || 0) / 1000)}K
                           </div>
                         </div>
                       </div>

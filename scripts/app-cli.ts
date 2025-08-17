@@ -168,42 +168,124 @@ class ApiClient {
 
 function printHelp() {
   console.log(`
-PosalPro App CLI
+╭─────────────────────────────────────────────────────────────╮
+│                    PosalPro App CLI                        │
+╰─────────────────────────────────────────────────────────────╯
 
-Commands:
-  help
-  exit
-  base [url]                      # show or set base URL
-  login <email> <password> [role]
-  whoami                          # GET /api/profile
-  get <path>
-  post <path> <json>
-  put <path> <json>
-  delete <path>
-  db <model> <action> [json]      # e.g., db proposal findMany {"take":5}
-  logout                          # clear local CLI session cookies
-  use-session <tag>               # switch to a named session jar
-  login-as <email> <password> [role] [tag]
-  versions list [limit]           # GET /api/proposals/versions?limit=N
-  versions for <proposalId> [n]   # GET /api/proposals/[id]/versions?limit=n
-  versions diff <proposalId> <v>  # GET /api/proposals/[id]/versions?version=v&detail=1
-  versions assert [proposalId]    # assert each version has totalValue
-  products create <json>          # POST /api/products
-  products update <id> <json>     # PUT /api/products/[id]
-  products delete <id>            # DELETE /api/products/[id]
+🔐 AUTHENTICATION & SESSION MANAGEMENT
+  login <email> <password> [role]           # Login with credentials
+  login-as <email> <password> [role] [tag]  # Login and save as named session
+  whoami                                     # GET /api/profile - show current user
+  logout                                     # Clear session cookies
+  use-session <tag>                          # Switch to named session jar
+
+🌐 API REQUESTS
+  get <path>                                 # GET request (e.g., /api/products)
+  post <path> <json>                         # POST request with JSON body
+  put <path> <json>                          # PUT request with JSON body
+  delete <path>                              # DELETE request
+  base [url]                                 # Show or set base URL
+
+🗄️ DATABASE OPERATIONS
+  db <model> <action> [json]                 # Direct Prisma operations
+  Examples:
+    db proposal findMany '{"take":5}'
+    db customer findUnique '{"where":{"id":"..."}}'
+    db product create '{"name":"Test","price":100}'
+
+📋 PROPOSAL MANAGEMENT
+  proposals get <id>                         # Get proposal details
+  proposals patch-products <id> <jsonProducts>  # Update proposal products
+  proposals patch-manual-total <id> <value>     # Set manual total with flag
+  proposals backfill-step4 [limit] [--execute]  # Mirror DB products to metadata
   proposals add-product <proposalId> <productId> <qty> [unitPrice] [discount]
   proposals update-product <proposalId> <productId> <json>
   proposals remove-product <proposalId> <productId>
   proposals snapshot <proposalId> [changeType] [summary]
-  rbac try <method> <path> [json] # attempt a request and report Allowed/Denied
-  rbac run-set [file]             # run a JSON-defined set of RBAC checks
-  rbac test-roles [file]          # run API checks for multiple users/roles
 
-Examples:
+📦 PRODUCT MANAGEMENT
+  products create <json>                     # POST /api/products
+  products update <id> <json>                # PUT /api/products/[id]
+  products delete <id>                       # DELETE /api/products/[id]
+
+📚 VERSION CONTROL
+  versions list [limit]                      # List all proposal versions
+  versions for <proposalId> [limit]          # Get versions for specific proposal
+  versions diff <proposalId> <version>       # Show version differences
+  versions assert [proposalId]               # Assert version integrity
+
+🔒 RBAC TESTING
+  rbac try <method> <path> [json]            # Test RBAC permission
+  rbac run-set [file]                        # Run RBAC test suite from file
+  rbac test-roles [file]                     # Test multiple user roles
+
+⚙️ SYSTEM
+  help                                       # Show this help
+  exit                                       # Exit CLI
+
+╭─────────────────────────────────────────────────────────────╮
+│                        EXAMPLES                            │
+╰─────────────────────────────────────────────────────────────╯
+
+🔐 Authentication:
   login admin@posalpro.com 'ProposalPro2024!' 'System Administrator'
+  login-as user@company.com 'password123' 'Proposal Specialist' user1
+
+🌐 API Requests:
   get /api/products
-  post /api/customers '{"name":"ACME","email":"sales@acme.com"}'
-  db proposal findMany '{"take":3}'
+  post /api/customers '{"name":"ACME Corp","email":"sales@acme.com"}'
+  put /api/proposals/cme41x23600ajjjpts9yb1f1b '{"title":"Updated Title"}'
+
+🗄️ Database Operations:
+  db proposal findMany '{"take":3,"select":{"id":true,"title":true}}'
+  db customer findUnique '{"where":{"email":"admin@posalpro.com"}}'
+  db product count '{"where":{"active":true}}'
+
+📋 Proposal Operations:
+  proposals get cme41x23600ajjjpts9yb1f1b
+  proposals patch-products cme41x23600ajjjpts9yb1f1b '[{"productId":"prod123","quantity":2,"unitPrice":15000}]'
+  proposals patch-manual-total cme41x23600ajjjpts9yb1f1b 31500
+  proposals backfill-step4 100 --execute
+  proposals add-product cme41x23600ajjjpts9yb1f1b prod123 2 15000 10
+
+📦 Product Operations:
+  products create '{"name":"Premium Package","price":5000,"description":"Enterprise solution"}'
+  products update prod123 '{"price":5500}'
+  products delete prod123
+
+📚 Version Operations:
+  versions list 50
+  versions for cme41x23600ajjjpts9yb1f1b 10
+  versions diff cme41x23600ajjjpts9yb1f1b v2
+
+🔒 RBAC Testing:
+  rbac try GET /api/admin/metrics
+  rbac try POST /api/proposals '{"title":"Test"}'
+  rbac run-set rbac-tests.json
+
+╭─────────────────────────────────────────────────────────────╮
+│                    USAGE PATTERNS                          │
+╰─────────────────────────────────────────────────────────────╯
+
+🚀 One-liner execution:
+  npx tsx scripts/app-cli.ts --command "login admin@posalpro.com 'ProposalPro2024!'"
+  npx tsx scripts/app-cli.ts --command "get /api/products"
+  npx tsx scripts/app-cli.ts --command "db proposal findMany '{\"take\":5}'"
+
+🔧 Interactive mode:
+  npx tsx scripts/app-cli.ts
+  posalpro> login admin@posalpro.com 'ProposalPro2024!'
+  posalpro> get /api/admin/metrics
+
+📊 Batch operations:
+  npx tsx scripts/app-cli.ts --command "proposals backfill-step4 500 --execute"
+  npx tsx scripts/app-cli.ts --command "rbac test-roles roles-test.json"
+
+💡 Tips:
+  - Use single quotes around JSON to avoid shell escaping
+  - Session cookies are automatically saved between commands
+  - Database operations bypass API authentication
+  - Use --execute flag for destructive operations
 `);
 }
 
@@ -414,7 +496,143 @@ async function execute(tokens: string[], api: ApiClient) {
     }
     case 'proposals': {
       const sub = (tokens[1] || '').toLowerCase();
-      if (sub === 'add-product') {
+      if (sub === 'patch-products') {
+        // proposals patch-products <id> <jsonProducts>
+        const id = tokens[2];
+        const json = tokens.slice(3).join(' ');
+        if (!id || !json) {
+          console.log('Usage: proposals patch-products <id> <jsonProducts>');
+          break;
+        }
+        const products = JSON.parse(json);
+        const res = await api.request('PATCH', `/api/proposals/${id}`, { products });
+        console.log(await res.text());
+      } else if (sub === 'patch-manual-total') {
+        // proposals patch-manual-total <id> <value>
+        const id = tokens[2];
+        const val = Number(tokens[3]);
+        if (!id || !Number.isFinite(val)) {
+          console.log('Usage: proposals patch-manual-total <id> <value>');
+          break;
+        }
+        const res = await api.request('PATCH', `/api/proposals/${id}`, {
+          value: val,
+          manualTotal: true,
+          metadata: { wizardData: { step4: { products: [] } } },
+        });
+        console.log(await res.text());
+      } else if (sub === 'get') {
+        // proposals get <id>
+        const id = tokens[2];
+        if (!id) {
+          console.log('Usage: proposals get <id>');
+          break;
+        }
+        const res = await api.request('GET', `/api/proposals/${id}`);
+        console.log(await res.text());
+      } else if (sub === 'backfill-step4') {
+        // Usage: proposals backfill-step4 [limit] [--execute]
+        const limitArg = tokens[2];
+        const flag = tokens[3] || '';
+        const limit = limitArg && /^\d+$/.test(limitArg) ? Number(limitArg) : 1000;
+        const execute = flag.toLowerCase() === '--execute';
+
+        let processed = 0;
+        let updated = 0;
+        let skipped = 0;
+        let cursor: string | undefined = undefined;
+
+        console.log(
+          `🔎 Scanning proposals (limit=${limit}, mode=${execute ? 'execute' : 'dry-run'})...`
+        );
+
+        while (processed < limit) {
+          const page = await prisma.proposal.findMany({
+            select: {
+              id: true,
+              metadata: true,
+              value: true,
+              totalValue: true,
+              products: {
+                select: {
+                  productId: true,
+                  quantity: true,
+                  unitPrice: true,
+                  discount: true,
+                  total: true,
+                },
+                take: 200,
+              },
+            },
+            orderBy: { id: 'asc' },
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            take: Math.min(200, limit - processed),
+          });
+
+          if (page.length === 0) break;
+          for (const p of page) {
+            processed++;
+            cursor = p.id;
+
+            const rel = Array.isArray(p.products) ? p.products : [];
+            const hasRel = rel.length > 0;
+
+            // Check metadata wizardData.step4.products
+            const md: any = (p.metadata as any) || {};
+            const wd = (md.wizardData as any) || {};
+            const step4 = (wd.step4 as any) || {};
+            const mdProducts = Array.isArray(step4.products) ? step4.products : [];
+            const hasMd = mdProducts.length > 0;
+
+            if (!hasRel) {
+              skipped++;
+              continue;
+            }
+            if (hasMd) {
+              skipped++;
+              continue;
+            }
+
+            // Build mirrored products array
+            const mirrored = rel.map(link => ({
+              id: link.productId,
+              included: true,
+              quantity: Number(link.quantity ?? 1),
+              unitPrice: Number(link.unitPrice ?? 0),
+              totalPrice:
+                typeof link.total === 'number'
+                  ? Number(link.total)
+                  : Number(link.quantity ?? 1) *
+                    Number(link.unitPrice ?? 0) *
+                    (1 - Number(link.discount ?? 0) / 100),
+            }));
+
+            const computed = mirrored.reduce((s, m) => s + Number(m.totalPrice || 0), 0);
+
+            if (execute) {
+              const newMeta = { ...(md || {}) } as any;
+              newMeta.wizardData = { ...(wd || {}) } as any;
+              newMeta.wizardData.step4 = { ...(step4 || {}), products: mirrored } as any;
+
+              await prisma.proposal.update({
+                where: { id: p.id },
+                data: {
+                  metadata: newMeta as any,
+                  value: computed,
+                  totalValue: computed,
+                },
+              });
+            }
+
+            updated++;
+            if (processed >= limit) break;
+          }
+        }
+
+        console.log(
+          `${execute ? '✅ Backfill complete' : '🔎 Dry-run complete'}: processed=${processed}, updated=${updated}, skipped=${skipped}`
+        );
+      } else if (sub === 'add-product') {
         const proposalId = tokens[2];
         const productId = tokens[3];
         const qty = Number(tokens[4]);
@@ -503,7 +721,7 @@ async function execute(tokens: string[], api: ApiClient) {
         console.log(await res.text());
       } else {
         console.log(
-          'Usage:\n  proposals add-product <proposalId> <productId> <qty> [unitPrice] [discount]\n  proposals update-product <proposalId> <productId> <json>\n  proposals remove-product <proposalId> <productId>\n  proposals snapshot <proposalId> [changeType] [summary]'
+          'Usage:\n  proposals get <id>\n  proposals patch-products <id> <jsonProducts>\n  proposals patch-manual-total <id> <value>\n  proposals backfill-step4 [limit] [--execute]\n  proposals add-product <proposalId> <productId> <qty> [unitPrice] [discount]\n  proposals update-product <proposalId> <productId> <json>\n  proposals remove-product <proposalId> <productId>\n  proposals snapshot <proposalId> [changeType] [summary]'
         );
       }
       break;

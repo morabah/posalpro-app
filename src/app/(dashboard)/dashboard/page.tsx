@@ -1,6 +1,11 @@
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 
+// Executive Dashboard - High-end visualizations for managers and owners
+const ExecutiveDashboard = dynamic(() => import('@/components/dashboard/ExecutiveDashboard'), {
+  loading: () => <div className="animate-pulse bg-gradient-to-br from-blue-900 to-indigo-900 rounded-lg h-96" />,
+});
+
 // Enhanced Dashboard with business-priority layout and better charts
 const EnhancedDashboard = dynamic(() => import('@/components/dashboard/EnhancedDashboard'), {
   loading: () => <div className="animate-pulse bg-gray-200 rounded-lg h-96" />,
@@ -37,14 +42,35 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Enhanced Business-Priority Dashboard */}
-      <section aria-labelledby="enhanced-dashboard-heading">
-        <h2 id="enhanced-dashboard-heading" className="sr-only">
-          Enhanced Business Dashboard
+      {/* Executive Dashboard - High-End Visualizations */}
+      <section aria-labelledby="executive-dashboard-heading" className="mb-8">
+        <h2 id="executive-dashboard-heading" className="sr-only">
+          Executive Dashboard
         </h2>
-        <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-96"></div>}>
-          <EnhancedDashboard />
+        <Suspense fallback={<div className="animate-pulse bg-gradient-to-br from-blue-900 to-indigo-900 rounded-lg h-96"></div>}>
+          <ExecutiveDashboard />
         </Suspense>
+      </section>
+
+      {/* Enhanced Business-Priority Dashboard - Collapsible */}
+      <section aria-labelledby="enhanced-dashboard-heading">
+        <details className="group rounded-lg bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800">
+          <summary className="cursor-pointer list-none select-none px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t-lg">
+            <span id="enhanced-dashboard-heading" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Enhanced Analytics
+            </span>
+            <span className="flex items-center gap-2 text-sm text-gray-500">
+              <span className="group-open:inline hidden">Collapse</span>
+              <span className="group-open:hidden inline">Expand</span>
+              <span aria-hidden className="transition-transform group-open:rotate-180">▾</span>
+            </span>
+          </summary>
+          <div className="p-4">
+            <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-96"></div>}>
+              <EnhancedDashboard />
+            </Suspense>
+          </div>
+        </details>
       </section>
 
       {/* Additional Analytics (Collapsible) */}

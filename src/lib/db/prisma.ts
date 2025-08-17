@@ -47,6 +47,62 @@ const getDatabaseUrl = (): string => {
 
 const databaseUrl: string = getDatabaseUrl();
 
+// Safely redact secrets in URLs for logs: keep protocol and hostname only
+const redactUrl = (urlStr: string): string => {
+  try {
+    const u = new URL(urlStr);
+    return `${u.protocol}//${u.hostname}${u.port ? ':' + u.port : ''}/${u.pathname.replace(/^\//, '').split('/')[0] || ''}`;
+  } catch {
+    // Non-URL or malformed string; return protocol prefix or masked
+    if (urlStr.startsWith('prisma://')) return 'prisma://<redacted>';
+    if (urlStr.startsWith('postgres://')) return 'postgres://<redacted>';
+    if (urlStr.startsWith('postgresql://')) return 'postgresql://<redacted>';
+    return '<unparseable-url>';
+  }
+};
+
+// Detect Prisma engine mode flags possibly forcing Data Proxy behavior
+const prismaClientEngineType = (process.env['PRISMA_CLIENT_ENGINE_TYPE'] || '').toLowerCase();
+const prismaGenerateDataproxy = (process.env['PRISMA_GENERATE_DATAPROXY'] || '').toLowerCase();
+const prismaAccelerateUrl = process.env['PRISMA_ACCELERATE_URL'];
+const isDataProxyMode =
+  prismaClientEngineType === 'dataproxy' ||
+  prismaGenerateDataproxy === 'true' ||
+  !!prismaAccelerateUrl ||
+  databaseUrl.startsWith('prisma://');
+
+// Validate protocol vs engine expectations early with a clear, actionable error
+const isPrismaProtocol = databaseUrl.startsWith('prisma://');
+const isPostgresProtocol = databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://');
+
+if (process.env.NODE_ENV !== 'production') {
+  // Helpful diagnostics in dev only
+  logger.info('Prisma datasource diagnostics', {
+    engineTypeEnv: prismaClientEngineType || '<unset>',
+    generateDataproxyEnv: prismaGenerateDataproxy || '<unset>',
+    accelerateConfigured: Boolean(prismaAccelerateUrl),
+    urlProtocol: isPrismaProtocol ? 'prisma://' : isPostgresProtocol ? 'postgresql://' : 'unknown',
+    urlRedacted: redactUrl(databaseUrl),
+  });
+}
+
+if (isDataProxyMode && isPostgresProtocol) {
+  // Prisma client expects prisma:// in Data Proxy/Accelerate mode
+  throw new Error(
+    'Prisma configuration mismatch: Data Proxy/Accelerate appears enabled (via PRISMA_* env vars), but DATABASE_URL is a postgres URL. ' +
+      'Either disable Data Proxy for local dev (unset PRISMA_CLIENT_ENGINE_TYPE, PRISMA_GENERATE_DATAPROXY, PRISMA_ACCELERATE_URL) ' +
+      'or switch DATABASE_URL to a prisma:// connection string. See docs/CORE_REQUIREMENTS.md → Environment & Database.'
+  );
+}
+
+if (!isDataProxyMode && isPrismaProtocol) {
+  // Local/standard mode but prisma:// provided
+  throw new Error(
+    'Prisma configuration mismatch: DATABASE_URL uses prisma:// but Prisma Client is not in Data Proxy mode. ' +
+      'For local development, use a postgresql:// URL; if using Data Proxy, set PRISMA_CLIENT_ENGINE_TYPE=dataproxy or PRISMA_ACCELERATE_URL. '
+  );
+}
+
 const prisma =
   global.prisma ||
   new PrismaClient({

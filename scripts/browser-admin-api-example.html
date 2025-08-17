@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin API Browser Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .success { background: #d4edda; border-left: 4px solid #28a745; }
+        .error { background: #f8d7da; border-left: 4px solid #dc3545; }
+        .info { background: #d1ecf1; border-left: 4px solid #17a2b8; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        pre {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔐 Admin API Browser Authentication Example</h1>
+
+    <div class="container info">
+        <h3>ℹ️ Instructions</h3>
+        <p>This page demonstrates how to call admin APIs from the browser with session cookies.</p>
+        <ol>
+            <li>First, <a href="http://localhost:3000/auth/login" target="_blank">login to PosalPro</a> with admin credentials</li>
+            <li>Then return here and test the admin APIs</li>
+            <li>The session cookies will be automatically included in requests</li>
+        </ol>
+        <p><strong>Admin Credentials:</strong> admin@posalpro.com / ProposalPro2024!</p>
+    </div>
+
+    <div class="container">
+        <h3>🚀 Test Admin APIs</h3>
+        <button onclick="testAdminMetrics()">Test Admin Metrics</button>
+        <button onclick="testAdminUsers()">Test Admin Users</button>
+        <button onclick="testAllAPIs()">Test All APIs</button>
+        <div id="results"></div>
+    </div>
+
+    <div class="container">
+        <h3>📝 Code Examples</h3>
+
+        <h4>1. Simple Fetch (Session Cookies Automatic)</h4>
+        <pre><code>// Session cookies are automatically included
+const response = await fetch('/api/admin/metrics');
+if (response.ok) {
+    const data = await response.json();
+    console.log('Success:', data);
+} else {
+    console.error('Failed:', response.status);
+}</code></pre>
+
+        <h4>2. With Error Handling</h4>
+        <pre><code>async function fetchAdminData() {
+    try {
+        const response = await fetch('/api/admin/metrics');
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('API call failed:', error);
+        throw error;
+    }
+}</code></pre>
+
+        <h4>3. React Hook Example</h4>
+        <pre><code>import { useSession } from 'next-auth/react';
+
+function AdminDashboard() {
+    const { data: session, status } = useSession();
+    const [metrics, setMetrics] = useState(null);
+
+    const fetchMetrics = async () => {
+        if (status === 'authenticated') {
+            const response = await fetch('/api/admin/metrics');
+            if (response.ok) {
+                const data = await response.json();
+                setMetrics(data);
+            }
+        }
+    };
+
+    return (
+        &lt;div&gt;
+            {session ? (
+                &lt;button onClick={fetchMetrics}&gt;Load Metrics&lt;/button&gt;
+            ) : (
+                &lt;p&gt;Please log in&lt;/p&gt;
+            )}
+        &lt;/div&gt;
+    );
+}</code></pre>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+
+        function showResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            resultDiv.innerHTML = `
+                <strong>${new Date().toLocaleTimeString()}</strong><br>
+                ${message}
+            `;
+            resultsDiv.appendChild(resultDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        async function testAdminMetrics() {
+            try {
+                showResult('Testing /api/admin/metrics...', 'info');
+
+                const response = await fetch(`${API_BASE}/api/admin/metrics`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    showResult(`
+                        ✅ <strong>Admin Metrics API Success!</strong><br>
+                        Status: ${response.status}<br>
+                        Response keys: ${Object.keys(data).join(', ')}<br>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `, 'success');
+                } else {
+                    showResult(`
+                        ❌ <strong>Admin Metrics API Failed</strong><br>
+                        Status: ${response.status}<br>
+                        Error: ${data.error || 'Unknown error'}<br>
+                        Code: ${data.code || 'No code'}
+                    `, 'error');
+                }
+            } catch (error) {
+                showResult(`
+                    ❌ <strong>Network Error</strong><br>
+                    ${error.message}<br>
+                    Make sure the server is running at ${API_BASE}
+                `, 'error');
+            }
+        }
+
+        async function testAdminUsers() {
+            try {
+                showResult('Testing /api/admin/users...', 'info');
+
+                const response = await fetch(`${API_BASE}/api/admin/users`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    showResult(`
+                        ✅ <strong>Admin Users API Success!</strong><br>
+                        Status: ${response.status}<br>
+                        Users count: ${data.users?.length || 0}<br>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `, 'success');
+                } else {
+                    showResult(`
+                        ❌ <strong>Admin Users API Failed</strong><br>
+                        Status: ${response.status}<br>
+                        Error: ${data.error || 'Unknown error'}<br>
+                        Code: ${data.code || 'No code'}
+                    `, 'error');
+                }
+            } catch (error) {
+                showResult(`
+                    ❌ <strong>Network Error</strong><br>
+                    ${error.message}<br>
+                    Make sure the server is running at ${API_BASE}
+                `, 'error');
+            }
+        }
+
+        async function testAllAPIs() {
+            showResult('Testing all admin APIs...', 'info');
+            await testAdminMetrics();
+            await testAdminUsers();
+            showResult('✅ All API tests completed!', 'success');
+        }
+
+        // Test connection on page load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(`${API_BASE}/api/health`);
+                if (response.ok) {
+                    showResult('✅ Server connection successful', 'success');
+                } else {
+                    showResult('⚠️ Server responding but health check failed', 'error');
+                }
+            } catch (error) {
+                showResult(`
+                    ❌ <strong>Cannot connect to server</strong><br>
+                    Make sure the development server is running:<br>
+                    <code>npm run dev:smart</code>
+                `, 'error');
+            }
+        });
+    </script>
+</body>
+</html>

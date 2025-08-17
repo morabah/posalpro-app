@@ -1227,6 +1227,9 @@ export async function POST(request: NextRequest) {
           priority: validatedData.priority,
           dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : null,
           value: totalValue,
+          // Only set totalValue when products are provided; otherwise, leave null so UI treats it as estimate
+          totalValue:
+            validatedData.products && validatedData.products.length > 0 ? totalValue : null,
           currency: validatedData.currency,
           status: 'DRAFT',
           // ✅ FIXED: Connect team members to proposal
@@ -1329,6 +1332,17 @@ export async function POST(request: NextRequest) {
 
         await tx.proposalProduct.createMany({
           data: productsData,
+        });
+
+        // Recalculate and persist denormalized totalValue immediately for consistency
+        const agg = await tx.proposalProduct.aggregate({
+          where: { proposalId: newProposal.id },
+          _sum: { total: true },
+        });
+        const computed = agg._sum.total || totalValue || 0;
+        await tx.proposal.update({
+          where: { id: newProposal.id },
+          data: { value: computed, totalValue: computed },
         });
       }
 

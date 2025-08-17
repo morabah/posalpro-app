@@ -1128,6 +1128,13 @@ export function ProposalWizard({
               // Persist lightweight patch; ignore errors to avoid blocking UI
               await apiClient.patch(`/api/proposals/${editProposalId}`, {
                 metadata: { wizardData: { step4: { products: mirrored } } },
+                // Also sync canonical totals to prevent mismatches on next load
+                products: mirrored.map(p => ({
+                  productId: p.id,
+                  quantity: p.quantity || 1,
+                  unitPrice: p.unitPrice || 0,
+                  discount: 0,
+                })),
               });
             } catch {
               // no-op

@@ -33,7 +33,7 @@ export async function validateApiPermission(
   const token = await getToken({ req });
 
   if (!token) {
-    logger.warn('[API Auth] No valid token found', { path: req.nextUrl.pathname });
+    // Normalize: do not log missing token at WARN level; return clean 401
     const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     throw res;
   }
@@ -47,7 +47,7 @@ export async function validateApiPermission(
   // Skip permission checks in development for System Administrator
   const isDev = process.env.NODE_ENV === 'development';
   const isSystemAdmin = authContext.roles.includes('System Administrator');
-  
+
   if (isDev && isSystemAdmin) {
     logger.info('[API Auth] Development bypass for System Administrator', {
       userId: authContext.userId,

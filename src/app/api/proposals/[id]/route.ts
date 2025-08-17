@@ -629,7 +629,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
           });
           await tx.proposal.update({
             where: { id: proposalId as string },
-            data: { value: agg._sum.total || 0 },
+            data: { value: agg._sum.total || 0, totalValue: agg._sum.total || 0 },
           });
         }
       }
@@ -1190,6 +1190,44 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       updateData.metadata = { set: mergedMeta };
     }
 
+    // Keep metadata.step4.products synchronized with incoming top-level products array
+    if (Array.isArray((validatedData as any)?.products)) {
+      const normalizedProducts = (
+        (validatedData as any).products as Array<{
+          productId: string;
+          quantity: number;
+          unitPrice: number;
+          discount?: number;
+        }>
+      ).map(p => ({
+        id: p.productId,
+        productId: p.productId,
+        included: true,
+        quantity: Number(p.quantity ?? 1),
+        unitPrice: Number(p.unitPrice ?? 0),
+        totalPrice: Number(
+          ((p.quantity ?? 1) * (p.unitPrice ?? 0) * (1 - (p.discount ?? 0) / 100)).toFixed(2)
+        ),
+        discount: Number(p.discount ?? 0),
+      }));
+
+      const currentMeta = (updateData.metadata?.set as any) || mergedMeta || {};
+      const currentWD = (currentMeta.wizardData || {}) as any;
+      updateData.metadata = {
+        set: {
+          ...currentMeta,
+          wizardData: {
+            ...currentWD,
+            step4: {
+              ...(currentWD.step4 || {}),
+              products: normalizedProducts,
+            },
+          },
+        },
+      };
+      mergedMeta = (updateData.metadata as any).set;
+    }
+
     // Convert datetime strings to Date objects
     if (validatedData.dueDate) {
       updateData.dueDate = new Date(validatedData.dueDate);
@@ -1198,7 +1236,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       updateData.validUntil = new Date(validatedData.validUntil);
     }
 
-    // 🚀 VALUE CALCULATION: Recalculate proposal value based on step 4 products or step 1 estimate
+    // 🚀 VALUE CALCULATION & GUARD: Recalculate proposal value based on step 4 products or step 1 estimate
     const mdForCalc: { wizardData?: WizardData } = mergedMeta as { wizardData?: WizardData };
     const wdCalc = mdForCalc.wizardData;
     if (wdCalc) {
@@ -1220,7 +1258,62 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const step1EstimatedValue = wdCalc.step1?.details?.estimatedValue ?? wdCalc.step1?.value ?? 0;
 
       const shouldUseEstimated = !hasProducts && step4TotalValue === 0 && step1EstimatedValue > 0;
-      const finalProposalValue = shouldUseEstimated ? step1EstimatedValue : step4TotalValue;
+      let finalProposalValue = shouldUseEstimated ? step1EstimatedValue : step4TotalValue;
+
+      // Reconciliation guard: prevent value drift unless manualTotal is explicitly set
+      const incomingManualTotal: boolean | undefined = (validatedData as any)?.manualTotal;
+      const incomingValue: number | undefined = (validatedData as any)?.value;
+
+      // If there are products in payload/metadata, enforce value === sum(products) unless manualTotal AND no products
+      if (hasProducts) {
+        // If caller attempted to set a value different from computed total without allowing manual override, reject
+        if (
+          typeof incomingValue === 'number' &&
+          Number.isFinite(incomingValue) &&
+          Math.abs(incomingValue - step4TotalValue) > 0.0001 &&
+          !(incomingManualTotal === true && includedProducts.length === 0)
+        ) {
+          return createApiErrorResponse(
+            new StandardError({
+              message:
+                'Value must equal sum of products unless manualTotal is enabled with no products',
+              code: ErrorCodes.VALIDATION.INVALID_INPUT,
+              metadata: {
+                component: 'ProposalPatchRoute',
+                reason: 'value_products_mismatch',
+                incomingValue,
+                step4TotalValue,
+              },
+            }),
+            'Value reconciliation failed',
+            ErrorCodes.VALIDATION.INVALID_INPUT,
+            400,
+            {
+              userFriendlyMessage:
+                'Proposal total must match selected products unless you enable manual total with no products.',
+            }
+          );
+        }
+      } else {
+        // No products present: only allow setting value if manualTotal flag is true
+        if (typeof incomingValue === 'number' && Number.isFinite(incomingValue)) {
+          if (incomingManualTotal === true) {
+            finalProposalValue = incomingValue;
+          } else {
+            return createApiErrorResponse(
+              new StandardError({
+                message: 'Manual total requires manualTotal flag when no products are selected',
+                code: ErrorCodes.VALIDATION.INVALID_INPUT,
+                metadata: { component: 'ProposalPatchRoute', reason: 'manual_total_requires_flag' },
+              }),
+              'Manual total not allowed without flag',
+              ErrorCodes.VALIDATION.INVALID_INPUT,
+              400,
+              { userFriendlyMessage: 'Enable manual total to set value without products.' }
+            );
+          }
+        }
+      }
 
       if (finalProposalValue > 0) {
         updateData.value = finalProposalValue;
@@ -1621,7 +1714,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             where: { proposalId: id },
             _sum: { total: true },
           });
-          await tx.proposal.update({ where: { id }, data: { value: agg._sum.total || 0 } });
+          await tx.proposal.update({
+            where: { id },
+            data: { value: agg._sum.total || 0, totalValue: agg._sum.total || 0 },
+          });
         }
       }
 
@@ -1714,6 +1810,8 @@ const ProposalPatchSchema = z.object({
   // 🚀 DENORMALIZED UPDATES: Update calculated fields efficiently
   completionRate: z.number().min(0).max(100).optional(),
   totalValue: z.number().positive().optional(),
+  // Guard control: allow setting value without products when true
+  manualTotal: z.boolean().optional(),
 
   // Wizard-related metadata updates (will be merged into metadata JSON)
   teamAssignments: z
