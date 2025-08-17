@@ -22,6 +22,28 @@ import {
   TrophyIcon,
 } from '@heroicons/react/24/outline';
 import { memo, useEffect, useState } from 'react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip as ChartTooltip,
+  Legend as ChartLegend,
+  Filler,
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+import type { TooltipItem } from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ChartTooltip,
+  ChartLegend,
+  Filler
+);
 
 interface ExecutiveMetrics {
   // Revenue Performance
@@ -266,10 +288,8 @@ const ExecutiveSummaryCard = memo(
 );
 ExecutiveSummaryCard.displayName = 'ExecutiveSummaryCard';
 
-const AdvancedRevenueChart = memo(
+const InteractiveRevenueChart = memo(
   ({ data, loading }: { data: RevenueChart[]; loading: boolean }) => {
-    const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null);
-
     if (loading) {
       return (
         <Card className="p-6">
@@ -282,14 +302,65 @@ const AdvancedRevenueChart = memo(
     }
 
     const safe = Array.isArray(data) ? data : [];
-    const maxValue = Math.max(
-      1,
-      ...safe.flatMap(d => [d.actual || 0, d.target || 0, d.forecast || 0])
-    );
-    const ticks = 5;
+    const labels = safe.map(d => d.period);
+    const datasets = [
+      {
+        label: 'Actual',
+        data: safe.map(d => d.actual || 0),
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.3)',
+        tension: 0.4,
+        fill: 'start',
+      },
+      {
+        label: 'Target',
+        data: safe.map(d => d.target || 0),
+        borderColor: '#6b7280',
+        borderDash: [5, 5],
+        pointRadius: 0,
+        fill: false,
+      },
+    ];
 
-    const xFor = (i: number) => 60 + (i * 420) / (safe.length > 1 ? safe.length - 1 : 1);
-    const yFor = (v: number) => 250 - (v / maxValue) * 200;
+    if (safe.some(d => d.forecast != null)) {
+      datasets.push({
+        label: 'Forecast',
+        data: safe.map(d => d.forecast ?? null),
+        borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(139,92,246,0.3)',
+        borderDash: [2, 2],
+        tension: 0.4,
+        fill: false,
+      });
+    }
+
+    const chartData = { labels, datasets };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index' as const, intersect: false },
+      plugins: {
+        legend: { position: 'top' as const, labels: { usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            label: (ctx: TooltipItem<'line'>) =>
+              `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y as number)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: {
+            callback: (val: unknown) => formatCurrency(Number(val)),
+          },
+          grid: { color: '#f3f4f6' },
+        },
+        x: {
+          grid: { color: '#f3f4f6' },
+        },
+      },
+    };
 
     return (
       <Card className="p-6">
@@ -298,161 +369,15 @@ const AdvancedRevenueChart = memo(
             <h3 className="text-xl font-semibold">Revenue Analytics & Forecasting</h3>
             <p className="text-gray-600">Actual vs. target with forecast overlay</p>
           </div>
-          <div className="flex items-center space-x-4 text-sm">
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-blue-500 rounded" />
-              <span>Actual</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 border-2 border-gray-400 rounded" />
-              <span>Target</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-purple-500 rounded opacity-60" />
-              <span>Forecast</span>
-            </div>
-          </div>
         </div>
-
-        <div className="h-80 relative">
-          <svg
-            viewBox="0 0 500 300"
-            className="w-full h-full"
-            role="img"
-            aria-label="Revenue chart"
-          >
-            <defs>
-              <linearGradient id="revArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.18" />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-
-            {/* Grid */}
-            {Array.from({ length: ticks + 1 }).map((_, i) => (
-              <line
-                key={i}
-                x1="60"
-                y1={50 + i * (200 / ticks)}
-                x2="480"
-                y2={50 + i * (200 / ticks)}
-                stroke="#f3f4f6"
-                strokeWidth="1"
-              />
-            ))}
-
-            {/* Y-axis labels */}
-            {Array.from({ length: ticks + 1 }).map((_, i) => {
-              const val = Math.round((maxValue - (i * maxValue) / ticks) / 1000);
-              return (
-                <text
-                  key={i}
-                  x={50}
-                  y={55 + i * (200 / ticks)}
-                  textAnchor="end"
-                  fontSize="10"
-                  fill="#4b5563"
-                >
-                  ${val}K
-                </text>
-              );
-            })}
-
-            {/* Area under actual */}
-            {safe.length > 1 && (
-              <polygon
-                fill="url(#revArea)"
-                points={`60,250 ${safe
-                  .map((d, i) => `${xFor(i)},${yFor(d.actual || 0)}`)
-                  .join(' ')} ${60 + 420},250`}
-              />
-            )}
-
-            {/* Actual line */}
-            {safe.length > 1 && (
-              <polyline
-                fill="none"
-                stroke="#3b82f6"
-                strokeWidth={3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                points={safe.map((d, i) => `${xFor(i)},${yFor(d.actual || 0)}`).join(' ')}
-              />
-            )}
-
-            {/* Target line */}
-            {safe.length > 1 && (
-              <polyline
-                fill="none"
-                stroke="#6b7280"
-                strokeWidth={2}
-                strokeDasharray="8,4"
-                points={safe.map((d, i) => `${xFor(i)},${yFor(d.target || 0)}`).join(' ')}
-              />
-            )}
-
-            {/* Forecast line (only where present) */}
-            {safe.filter(d => d.forecast != null).length > 1 && (
-              <polyline
-                fill="none"
-                stroke="#8b5cf6"
-                strokeWidth={2}
-                strokeDasharray="4,4"
-                opacity={0.85}
-                points={safe
-                  .map((d, i) => (d.forecast != null ? `${xFor(i)},${yFor(d.forecast)}` : null))
-                  .filter(Boolean)
-                  .join(' ')}
-              />
-            )}
-
-            {/* Data points + native titles + interactive tooltip */}
-            {safe.map((d, i) => {
-              const x = xFor(i);
-              const y = yFor(d.actual || 0);
-              const content = `${d.period}: ${formatCurrency(d.actual || 0)} (tgt ${formatCurrency(d.target || 0)}${d.forecast != null ? `, fc ${formatCurrency(d.forecast)}` : ''})`;
-              return (
-                <g
-                  key={i}
-                  onMouseEnter={() => setTooltip({ x, y, content })}
-                  onMouseLeave={() => setTooltip(null)}
-                >
-                  <circle cx={x} cy={y} r={5} fill="#3b82f6" />
-                  <title>{content}</title>
-                  <text x={x} y={275} textAnchor="middle" fontSize="10" fill="#4b5563">
-                    {d.period}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Tooltip overlay rendered in SVG coords */}
-            {tooltip && (
-              <g
-                pointerEvents="none"
-                transform={`translate(${tooltip.x}, ${Math.max(60, tooltip.y)})`}
-              >
-                <rect
-                  x={-80}
-                  y={-40}
-                  width={160}
-                  height={26}
-                  rx={4}
-                  fill="#ffffff"
-                  stroke="#e5e7eb"
-                />
-                <text x={0} y={-24} textAnchor="middle" fontSize="10" fill="#111827">
-                  {tooltip.content}
-                </text>
-              </g>
-            )}
-          </svg>
+        <div className="h-80" role="img" aria-label="Revenue chart">
+          <Line data={chartData} options={options} />
         </div>
       </Card>
     );
   }
 );
-AdvancedRevenueChart.displayName = 'AdvancedRevenueChart';
+InteractiveRevenueChart.displayName = 'InteractiveRevenueChart';
 
 const TeamPerformanceHeatmap = memo(
   ({ data, loading }: { data: TeamPerformance[]; loading: boolean }) => {
@@ -769,7 +694,7 @@ export default function ExecutiveDashboard() {
       <ExecutiveSummaryCard metrics={metrics} revenueData={revenueData} loading={loading} />
 
       {/* Revenue Analytics */}
-      <AdvancedRevenueChart data={revenueData} loading={loading} />
+      <InteractiveRevenueChart data={revenueData} loading={loading} />
 
       {/* Team Performance & Pipeline Health */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
