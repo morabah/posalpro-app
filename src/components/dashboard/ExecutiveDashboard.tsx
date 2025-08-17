@@ -655,6 +655,8 @@ export default function ExecutiveDashboard() {
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<'3M' | '6M' | '12M'>('3M');
+  const [includeForecasts, setIncludeForecasts] = useState(true);
 
   const apiClient = useApiClient();
   const { handleAsyncError } = useErrorHandler();
@@ -665,7 +667,6 @@ export default function ExecutiveDashboard() {
         setLoading(true);
         setError(null);
 
-        // Following CORE_REQUIREMENTS: useApiClient pattern with simple useEffect
         const response = await apiClient.get<{
           success: boolean;
           data?: {
@@ -674,7 +675,7 @@ export default function ExecutiveDashboard() {
             teamPerformance: TeamPerformance[];
             pipelineStages: PipelineStage[];
           };
-        }>('/dashboard/executive?timeframe=3M&includeForecasts=true');
+        }>(`/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}`);
 
         if (response.success && response.data) {
           const {
@@ -707,9 +708,7 @@ export default function ExecutiveDashboard() {
     };
 
     fetchExecutiveData();
-    // Following CORE_REQUIREMENTS: Empty dependency array for mount-only effect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [apiClient, timeframe, includeForecasts]);
 
   // Error state with retry functionality
   if (error && !loading) {
@@ -744,6 +743,28 @@ export default function ExecutiveDashboard() {
 
   return (
     <div className="space-y-8 container mx-auto px-4">
+      <div className="flex justify-end gap-4">
+        <select
+          aria-label="Select timeframe"
+          value={timeframe}
+          onChange={e => setTimeframe(e.target.value as '3M' | '6M' | '12M')}
+          className="border rounded p-2 text-sm"
+        >
+          <option value="3M">Last 3 Months</option>
+          <option value="6M">Last 6 Months</option>
+          <option value="12M">Last 12 Months</option>
+        </select>
+        <label className="flex items-center text-sm">
+          <input
+            type="checkbox"
+            className="mr-2"
+            checked={includeForecasts}
+            onChange={e => setIncludeForecasts(e.target.checked)}
+          />
+          Show forecast
+        </label>
+      </div>
+
       {/* Executive Summary */}
       <ExecutiveSummaryCard metrics={metrics} revenueData={revenueData} loading={loading} />
 
