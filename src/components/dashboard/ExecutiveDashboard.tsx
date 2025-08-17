@@ -667,21 +667,21 @@ export default function ExecutiveDashboard() {
 
   return (
     <div className="space-y-8 container mx-auto px-4">
-      <div className="flex justify-end gap-4">
+      <div className="flex justify-end gap-4 items-center">
         <select
           aria-label="Select timeframe"
           value={timeframe}
           onChange={e => setTimeframe(e.target.value as '3M' | '6M' | '12M')}
-          className="border rounded p-2 text-sm"
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
         >
           <option value="3M">Last 3 Months</option>
           <option value="6M">Last 6 Months</option>
           <option value="12M">Last 12 Months</option>
         </select>
-        <label className="flex items-center text-sm">
+        <label className="flex items-center text-sm text-gray-700 cursor-pointer">
           <input
             type="checkbox"
-            className="mr-2"
+            className="mr-2 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
             checked={includeForecasts}
             onChange={e => setIncludeForecasts(e.target.checked)}
           />
