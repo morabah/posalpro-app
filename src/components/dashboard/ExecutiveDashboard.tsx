@@ -21,19 +21,19 @@ import {
   PresentationChartLineIcon,
   TrophyIcon,
 } from '@heroicons/react/24/outline';
-import { memo, useEffect, useState } from 'react';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip as ChartTooltip,
-  Legend as ChartLegend,
-  Filler,
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
 import type { TooltipItem } from 'chart.js';
+import {
+  CategoryScale,
+  Chart as ChartJS,
+  Legend as ChartLegend,
+  Tooltip as ChartTooltip,
+  Filler,
+  LinearScale,
+  LineElement,
+  PointElement,
+} from 'chart.js';
+import { memo, useEffect, useState } from 'react';
+import { Line } from 'react-chartjs-2';
 
 ChartJS.register(
   CategoryScale,
@@ -325,12 +325,11 @@ const InteractiveRevenueChart = memo(
     if (safe.some(d => d.forecast != null)) {
       datasets.push({
         label: 'Forecast',
-        data: safe.map(d => d.forecast ?? null),
+        data: safe.map(d => d.forecast ?? 0),
         borderColor: '#8b5cf6',
         backgroundColor: 'rgba(139,92,246,0.3)',
-        borderDash: [2, 2],
         tension: 0.4,
-        fill: false,
+        fill: 'false',
       });
     }
 
