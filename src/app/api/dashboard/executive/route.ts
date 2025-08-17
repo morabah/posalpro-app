@@ -396,15 +396,24 @@ function transformRevenueHistory(
     target: Number(item.revenue) * 1.2, // 20% above actual as target
   }));
 
-  // Add forecast data if requested
+  // Add forecast data if requested for truly future months
   if (includeForecasts && chartData.length > 0) {
-    const lastActual = chartData[chartData.length - 1];
-    const futureMonths = ['May', 'Jun', 'Jul'];
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
+    // Only add forecasts for months that are actually in the future
+    const futureMonths = [];
+    for (let i = 1; i <= 3; i++) {
+      const futureDate = new Date(currentYear, currentMonth + i, 1);
+      futureMonths.push(futureDate.toLocaleDateString('en-US', { month: 'short' }));
+    }
+
+    const lastActual = chartData[chartData.length - 1];
     futureMonths.forEach((month, index) => {
       chartData.push({
         period: month,
-        actual: 0,
+        actual: 0, // Future months have no actual data yet
         target: lastActual.target * (1 + (index + 1) * 0.05),
         forecast: lastActual.actual * (1 + (index + 1) * 0.08),
       });
