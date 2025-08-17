@@ -199,15 +199,30 @@ export async function GET(request: NextRequest) {
 
         // Historical revenue data for charts (PostgreSQL-compatible)
         prisma.$queryRaw<Array<{ month: string; revenue: number; count: number }>>`
+        WITH RECURSIVE months AS (
+          SELECT date_trunc('month', ${startDate}) AS month_date
+          UNION ALL
+          SELECT month_date + INTERVAL '1 month'
+          FROM months
+          WHERE month_date < date_trunc('month', NOW())
+        ),
+        revenue_data AS (
+          SELECT
+            date_trunc('month', "updatedAt") AS month_date,
+            COALESCE(SUM("totalValue"), 0) AS revenue,
+            COUNT(*) AS count
+          FROM "proposals"
+          WHERE "status" = 'ACCEPTED'
+            AND "updatedAt" >= ${startDate}
+          GROUP BY date_trunc('month', "updatedAt")
+        )
         SELECT
-          to_char(date_trunc('month', "updatedAt"), 'YYYY-MM') AS month,
-          COALESCE(SUM("totalValue"), 0) AS revenue,
-          COUNT(*) AS count
-        FROM "proposals"
-        WHERE "status" = 'ACCEPTED'
-          AND "updatedAt" >= ${startDate}
-        GROUP BY date_trunc('month', "updatedAt")
-        ORDER BY date_trunc('month', "updatedAt") ASC
+          to_char(m.month_date, 'YYYY-MM') AS month,
+          COALESCE(rd.revenue, 0) AS revenue,
+          COALESCE(rd.count, 0) AS count
+        FROM months m
+        LEFT JOIN revenue_data rd ON m.month_date = rd.month_date
+        ORDER BY m.month_date ASC
       `,
       ]);
 
