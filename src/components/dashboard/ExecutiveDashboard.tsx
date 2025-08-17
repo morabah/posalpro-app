@@ -579,7 +579,7 @@ export default function ExecutiveDashboard() {
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeframe, setTimeframe] = useState<'3M' | '6M' | '12M'>('3M');
+  const [timeframe, setTimeframe] = useState<'3M' | '6M' | '1Y'>('3M');
   const [includeForecasts, setIncludeForecasts] = useState(true);
 
   const apiClient = useApiClient();
@@ -671,12 +671,12 @@ export default function ExecutiveDashboard() {
         <select
           aria-label="Select timeframe"
           value={timeframe}
-          onChange={e => setTimeframe(e.target.value as '3M' | '6M' | '12M')}
+          onChange={e => setTimeframe(e.target.value as '3M' | '6M' | '1Y')}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
         >
           <option value="3M">Last 3 Months</option>
           <option value="6M">Last 6 Months</option>
-          <option value="12M">Last 12 Months</option>
+          <option value="1Y">Last 12 Months</option>
         </select>
         <label className="flex items-center text-sm text-gray-700 cursor-pointer">
           <input
