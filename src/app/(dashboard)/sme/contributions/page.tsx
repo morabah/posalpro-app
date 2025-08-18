@@ -183,7 +183,7 @@ export default function SMEContributionInterface() {
   const [searchQuery, setSearchQuery] = useState('');
   const [autosaveStatus, setAutosaveStatus] = useState('Saved');
 
-  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionStartTime = useRef(Date.now());
   const editingStartTime = useRef<number | null>(null);
   const activeEditingTime = useRef(0);
