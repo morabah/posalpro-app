@@ -1115,6 +1115,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         // Deep-merge step4 with product name resolution to fix "Unknown Product" issue
         const existingStep4 = (existingWD.step4 || {}) as NonNullable<WizardData['step4']>;
         const incomingStep4 = (incomingWD.step4 || {}) as NonNullable<WizardData['step4']>;
+
+        // Handle existing products that might be stored as object instead of array
+        let existingProductsArray: any[] = [];
+        if (existingStep4.products) {
+          if (Array.isArray(existingStep4.products)) {
+            existingProductsArray = existingStep4.products;
+          } else if (typeof existingStep4.products === 'object') {
+            // Convert object with numeric keys to array
+            existingProductsArray = Object.values(existingStep4.products);
+          }
+        }
+
         if (incomingStep4.products && Array.isArray(incomingStep4.products)) {
           // Resolve product names from database
           const productIds = incomingStep4.products
@@ -1151,9 +1163,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             };
           }
         } else {
+          // Ensure existing products are converted to array format
           mergedWD.step4 = {
             ...existingStep4,
             ...incomingStep4,
+            products: existingProductsArray.length > 0 ? existingProductsArray : undefined,
           };
         }
 
@@ -1277,7 +1291,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           ...currentWD,
           step4: {
             ...(currentWD.step4 || {}),
-            products: normalizedProducts,
+            products: normalizedProducts, // Ensure this is always an array
           },
         },
       };

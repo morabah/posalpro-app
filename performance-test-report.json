@@ -1,27 +1,27 @@
 {
-  "timestamp": "2025-08-18T11:10:37.230Z",
-  "testDuration": 49982,
+  "timestamp": "2025-08-18T11:14:32.890Z",
+  "testDuration": 41956,
   "webVitals": {
-    "LCP": 500,
-    "FCP": 132,
+    "LCP": 580,
+    "FCP": 164,
     "CLS": 0.004232779026031494,
-    "TTFB": 66.20000000298023
+    "TTFB": 95.20000000298023
   },
   "pageLoadTimes": {
-    "Login": 75,
-    "Dashboard": 74,
-    "Proposals Manage": 101,
-    "Proposals Create": 130
+    "Login": 52,
+    "Dashboard": 78,
+    "Proposals Manage": 57,
+    "Proposals Create": 75
   },
   "memoryUsage": {
-    "Timestamp": 1755515437230,
-    "Nodes": 1009,
-    "JSHeapUsedMB": 273,
-    "JSHeapTotalMB": 290
+    "Timestamp": 1755515672889,
+    "Nodes": 778,
+    "JSHeapUsedMB": 242,
+    "JSHeapTotalMB": 257
   },
   "apiPerformance": {
     "totalCalls": 38,
-    "averageResponseTime": 75.8157894736842,
+    "averageResponseTime": 83.78947368421052,
     "slowCalls": 1
   },
   "violations": {
