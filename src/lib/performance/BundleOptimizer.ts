@@ -97,8 +97,12 @@ export class BundleOptimizerService {
 
   private constructor() {
     this.errorHandlingService = ErrorHandlingService.getInstance();
-    if (typeof window !== "undefined") { this.setupPerformanceObservers(); }
-    if (typeof window !== "undefined") { this.setupIntersectionObserver(); }
+    if (typeof window !== 'undefined') {
+      this.setupPerformanceObservers();
+    }
+    if (typeof window !== 'undefined') {
+      this.setupIntersectionObserver();
+    }
   }
 
   static getInstance(): BundleOptimizerService {
@@ -142,14 +146,18 @@ export class BundleOptimizerService {
       }
 
       // Track component creation for analytics
-      this.analytics?.('component_optimized', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H9'],
-        componentId: id,
-        priority,
-        strategy,
-        chunkName,
-      }, 'medium');
+      this.analytics?.(
+        'component_optimized',
+        {
+          userStories: ['US-6.1', 'US-6.2'],
+          hypotheses: ['H8', 'H9'],
+          componentId: id,
+          priority,
+          strategy,
+          chunkName,
+        },
+        'medium'
+      );
 
       return lazyComponent;
     } catch (error) {
@@ -187,6 +195,7 @@ export class BundleOptimizerService {
       // Dynamic import with chunk name annotation
       const importedModule = await import(
         /* webpackChunkName: "[request]" */
+        /* webpackExclude: /(\\/__tests__\\/|__tests__|\\.(test|spec)\\.(t|j)sx?$)/ */
         `@/components/${id}`
       );
 
