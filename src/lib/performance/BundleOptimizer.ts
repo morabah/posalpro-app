@@ -14,6 +14,31 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import React, { ComponentType, lazy, LazyExoticComponent } from 'react';
 
+// Explicit component importers to avoid webpack context importing test files
+const COMPONENT_IMPORTERS: Record<string, () => Promise<{ default: ComponentType<any> }>> = {
+  'proposals/ProposalWizard': () =>
+    import(
+      /* webpackChunkName: "proposal-wizard" */
+      '@/components/proposals/ProposalWizard'
+    ) as unknown as Promise<{ default: ComponentType<any> }>,
+  'analytics/AnalyticsDashboard': () =>
+    import(
+      /* webpackChunkName: "analytics-dashboard" */
+      '@/components/analytics/AnalyticsDashboard'
+    ) as unknown as Promise<{ default: ComponentType<any> }>,
+  // Fallback mappings to existing sections/components
+  'admin/AdminPanel': () =>
+    import(
+      /* webpackChunkName: "admin-panel" */
+      '@/components/admin/RoleManager'
+    ) as unknown as Promise<{ default: ComponentType<any> }>,
+  'executive/ExecutiveReview': () =>
+    import(
+      /* webpackChunkName: "executive-review" */
+      '@/components/dashboard/sections/ExecutiveSummaryCard'
+    ) as unknown as Promise<{ default: ComponentType<any> }>,
+};
+
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
   userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
@@ -193,11 +218,11 @@ export class BundleOptimizerService {
       this.utilizationTracking.set(id, (this.utilizationTracking.get(id) || 0) + 1);
 
       // Dynamic import with chunk name annotation
-      const importedModule = await import(
-        /* webpackChunkName: "[request]" */
-        /* webpackExclude: /(\\/__tests__\\/|__tests__|\\.(test|spec)\\.(t|j)sx?$)/ */
-        `@/components/${id}`
-      );
+      const importer = COMPONENT_IMPORTERS[id];
+      if (!importer) {
+        throw new Error(`No importer configured for component id: ${id}`);
+      }
+      const importedModule = await importer();
 
       const loadTime = performance.now() - startTime;
       this.chunkLoadTimes.set(id, loadTime);
