@@ -1232,7 +1232,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
               ?.rfpReferenceNumber ?? null,
         });
       }
-      updateData.metadata = { set: mergedMeta };
+      updateData.metadata = mergedMeta;
     }
 
     // Keep metadata.step4.products synchronized with incoming top-level products array
@@ -1269,21 +1269,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         };
       });
 
-      const currentMeta = (updateData.metadata?.set as any) || mergedMeta || {};
-      const currentWD = (currentMeta.wizardData || {}) as any;
-      updateData.metadata = {
-        set: {
-          ...currentMeta,
-          wizardData: {
-            ...currentWD,
-            step4: {
-              ...(currentWD.step4 || {}),
-              products: normalizedProducts,
-            },
+      // Update metadata with normalized products (flat structure)
+      const currentWD = (mergedMeta.wizardData || {}) as any;
+      mergedMeta = {
+        ...mergedMeta,
+        wizardData: {
+          ...currentWD,
+          step4: {
+            ...(currentWD.step4 || {}),
+            products: normalizedProducts,
           },
         },
       };
-      mergedMeta = (updateData.metadata as any).set;
+      updateData.metadata = mergedMeta;
     }
 
     // Convert datetime strings to Date objects
