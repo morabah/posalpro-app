@@ -97,6 +97,7 @@
     ]
   },
   "dependencies": {
+    "@types/node": "^20.19.1",
     "@auth/prisma-adapter": "^2.9.1",
     "@headlessui/react": "^2.2.4",
     "@heroicons/react": "^2.0.18",
@@ -172,7 +173,6 @@
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/lodash": "^4.17.19",
-    "@types/node": "^20.19.1",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
