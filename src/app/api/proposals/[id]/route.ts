@@ -1112,6 +1112,51 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           };
         }
 
+        // Deep-merge step4 with product name resolution to fix "Unknown Product" issue
+        const existingStep4 = (existingWD.step4 || {}) as NonNullable<WizardData['step4']>;
+        const incomingStep4 = (incomingWD.step4 || {}) as NonNullable<WizardData['step4']>;
+        if (incomingStep4.products && Array.isArray(incomingStep4.products)) {
+          // Resolve product names from database
+          const productIds = incomingStep4.products
+            .map((p: any) => p.productId || p.id)
+            .filter((id: string) => id);
+
+          if (productIds.length > 0) {
+            const productDetails = await prisma.product.findMany({
+              where: { id: { in: productIds } },
+              select: { id: true, name: true, category: true },
+            });
+            const productMap = new Map(productDetails.map(p => [p.id, p]));
+
+            // Update products with resolved names
+            const resolvedProducts = incomingStep4.products.map((p: any) => {
+              const productId = p.productId || p.id;
+              const productDetail = productMap.get(productId);
+              return {
+                ...p,
+                name: productDetail?.name || 'Unknown Product',
+                category: productDetail?.category?.[0] || 'General',
+              };
+            });
+
+            mergedWD.step4 = {
+              ...existingStep4,
+              ...incomingStep4,
+              products: resolvedProducts,
+            };
+          } else {
+            mergedWD.step4 = {
+              ...existingStep4,
+              ...incomingStep4,
+            };
+          }
+        } else {
+          mergedWD.step4 = {
+            ...existingStep4,
+            ...incomingStep4,
+          };
+        }
+
         mergedMeta.wizardData = mergedWD as unknown as Record<string, unknown>;
       }
       // Merge RFP reference number into step1.details when provided explicitly (even if empty string)
@@ -1192,6 +1237,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     // Keep metadata.step4.products synchronized with incoming top-level products array
     if (Array.isArray((validatedData as any)?.products)) {
+      // Resolve product names from database to fix "Unknown Product" issue
+      const productIds = (validatedData as any).products.map((p: any) => p.productId);
+      const productDetails = await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, name: true, category: true },
+      });
+      const productMap = new Map(productDetails.map(p => [p.id, p]));
+
       const normalizedProducts = (
         (validatedData as any).products as Array<{
           productId: string;
@@ -1199,17 +1252,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           unitPrice: number;
           discount?: number;
         }>
-      ).map(p => ({
-        id: p.productId,
-        productId: p.productId,
-        included: true,
-        quantity: Number(p.quantity ?? 1),
-        unitPrice: Number(p.unitPrice ?? 0),
-        totalPrice: Number(
-          ((p.quantity ?? 1) * (p.unitPrice ?? 0) * (1 - (p.discount ?? 0) / 100)).toFixed(2)
-        ),
-        discount: Number(p.discount ?? 0),
-      }));
+      ).map(p => {
+        const productDetail = productMap.get(p.productId);
+        return {
+          id: p.productId,
+          productId: p.productId,
+          name: productDetail?.name || 'Unknown Product',
+          category: productDetail?.category?.[0] || 'General',
+          included: true,
+          quantity: Number(p.quantity ?? 1),
+          unitPrice: Number(p.unitPrice ?? 0),
+          totalPrice: Number(
+            ((p.quantity ?? 1) * (p.unitPrice ?? 0) * (1 - (p.discount ?? 0) / 100)).toFixed(2)
+          ),
+          discount: Number(p.discount ?? 0),
+        };
+      });
 
       const currentMeta = (updateData.metadata?.set as any) || mergedMeta || {};
       const currentWD = (currentMeta.wizardData || {}) as any;

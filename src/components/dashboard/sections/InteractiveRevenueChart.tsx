@@ -182,13 +182,13 @@ export const InteractiveRevenueChart = memo(
       datasets.push({
         label: 'Forecast',
         data: safe.map(d => d.forecast ?? 0),
-        borderColor: '#8b5cf6',
-        backgroundColor: 'rgba(139, 92, 246, 0.3)',
+        borderColor: '#ea580c',
+        backgroundColor: 'rgba(234, 88, 12, 0.3)',
         borderWidth: 2,
         borderDash: [3, 3],
         tension: 0.4,
         fill: false,
-        pointBackgroundColor: '#8b5cf6',
+        pointBackgroundColor: '#ea580c',
         pointBorderColor: '#ffffff',
         pointBorderWidth: 2,
         pointRadius: 4,
@@ -269,9 +269,9 @@ export const InteractiveRevenueChart = memo(
                     {formatCurrency(selectedPoint.target)}
                   </p>
                 </div>
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-purple-900">Forecast</h4>
-                  <p className="text-2xl font-bold text-purple-600">
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-orange-900">Forecast</h4>
+                  <p className="text-2xl font-bold text-orange-600">
                     {selectedPoint.forecast ? formatCurrency(selectedPoint.forecast) : 'N/A'}
                   </p>
                 </div>
@@ -301,7 +301,7 @@ export const InteractiveRevenueChart = memo(
                                 ? 'bg-blue-500'
                                 : index === 1
                                   ? 'bg-green-500'
-                                  : 'bg-purple-500'
+                                  : 'bg-orange-500'
                             }`}
                           ></div>
                           <div>
