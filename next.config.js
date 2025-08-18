@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 let withBundleAnalyzer = config => config;
+let TerserPlugin;
 try {
   // Make bundle analyzer optional in CI (e.g., Netlify) to avoid MODULE_NOT_FOUND
   const analyzer = require('@next/bundle-analyzer')({
@@ -9,6 +10,15 @@ try {
 } catch (err) {
   // eslint-disable-next-line no-console
   console.log('[next.config] @next/bundle-analyzer not installed; proceeding without it');
+}
+
+try {
+  // Make terser optional in CI (e.g., Netlify) to avoid MODULE_NOT_FOUND
+  // Next.js has its own minifier; this is only an enhancement when available
+  TerserPlugin = require('terser-webpack-plugin');
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.log('[next.config] terser-webpack-plugin not installed; proceeding without it');
 }
 
 /** @type {import('next').NextConfig} */
@@ -145,17 +155,21 @@ const baseConfig = {
         minimize: true,
         minimizer: [
           ...config.optimization.minimizer,
-          // Add TerserPlugin for better minification
-          new (require('terser-webpack-plugin'))({
-            terserOptions: {
-              compress: {
-                drop_console: true, // Remove console.log in production
-                drop_debugger: true,
-                pure_funcs: ['console.log', 'console.info', 'console.debug'],
-              },
-              mangle: true,
-            },
-          }),
+          // Add TerserPlugin for better minification when available
+          ...(TerserPlugin
+            ? [
+                new TerserPlugin({
+                  terserOptions: {
+                    compress: {
+                      drop_console: true, // Remove console.log in production
+                      drop_debugger: true,
+                      pure_funcs: ['console.log', 'console.info', 'console.debug'],
+                    },
+                    mangle: true,
+                  },
+                }),
+              ]
+            : []),
         ],
       };
     }
