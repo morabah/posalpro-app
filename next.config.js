@@ -56,6 +56,22 @@ const baseConfig = {
   webpack: (config, { dev, isServer }) => {
     // ✅ CRITICAL: Aggressive bundle splitting for memory reduction
     if (!dev && !isServer) {
+      // Exclude test files and testing libraries from production bundles
+      try {
+        const { IgnorePlugin } = require('webpack');
+        config.plugins = config.plugins || [];
+        config.plugins.push(new IgnorePlugin({ resourceRegExp: /(__tests__|\.test\.(t|j)sx?$)/ }));
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.log('[next.config] webpack not available for IgnorePlugin; skipping');
+      }
+      config.resolve = config.resolve || {};
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        '@testing-library/react': false,
+        '@testing-library/user-event': false,
+        msw: false,
+      };
       config.optimization.splitChunks = {
         chunks: 'all',
         maxInitialRequests: 25, // Increased for better splitting
