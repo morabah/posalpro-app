@@ -891,8 +891,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     console.log(`[ProposalAPI] 🚀 PATCH request received for proposal ${id}`);
 
-    // Parse and validate request body
-    const body = await request.json();
+    // Parse and normalize request body (pre-validate)
+    const rawBody = await request.json();
+    const body: any = { ...rawBody };
+    // Normalize common enum fields that UI may send in lowercase
+    if (typeof body.priority === 'string') {
+      body.priority = String(body.priority).toUpperCase();
+    }
+    if (typeof body.status === 'string') {
+      body.status = String(body.status).toUpperCase();
+    }
     console.log(`[ProposalAPI] Request body keys:`, Object.keys(body));
     console.log(`[ProposalAPI] Has products in request:`, !!body.products);
     console.log(`[ProposalAPI] Has wizardData in request:`, !!body.metadata?.wizardData);
@@ -917,7 +925,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         body.wizardData.step4.products.length
       );
     }
-    const validatedData = ProposalPatchSchema.parse(body);
+    let validatedData: z.infer<typeof ProposalPatchSchema>;
+    try {
+      validatedData = ProposalPatchSchema.parse(body);
+    } catch (e) {
+      // Log full validation errors to server console for diagnosis
+      if (e instanceof z.ZodError) {
+        console.warn('[ProposalPatchRoute][VALIDATION_ERROR]', JSON.stringify(e.errors, null, 2));
+      }
+      throw e;
+    }
 
     // Check if proposal exists and user has permission
     const existingProposal = await prisma.proposal.findUnique({
@@ -985,6 +1002,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       contactPerson, // UI convenience fields stored in metadata.step1.client
       contactEmail,
       contactPhone,
+      // Non-column guard flags (must NOT be forwarded to Prisma update)
+      manualTotal,
       // scalar fields
       ...scalarFields
     } = validatedData as any;
@@ -1004,12 +1023,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     } catch {}
 
     const normalizeSMEKeys = (ta: any) => {
-      if (!ta || !ta.subjectMatterExperts || typeof ta.subjectMatterExperts !== 'object') return ta;
-      const normalized: Record<string, string> = {};
-      for (const [key, val] of Object.entries(ta.subjectMatterExperts)) {
-        if (typeof val === 'string' && val) normalized[String(key).toUpperCase()] = val;
+      if (!ta || typeof ta !== 'object') return ta;
+      const next: any = { ...ta };
+      // Normalize SME keys
+      if (next.subjectMatterExperts && typeof next.subjectMatterExperts === 'object') {
+        const normalized: Record<string, string> = {};
+        for (const [key, val] of Object.entries(next.subjectMatterExperts)) {
+          if (typeof val === 'string' && val) normalized[String(key).toUpperCase()] = val;
+        }
+        next.subjectMatterExperts = normalized;
       }
-      return { ...ta, subjectMatterExperts: normalized };
+      // Normalize executiveReviewers map → array if needed
+      if (next.executiveReviewers && !Array.isArray(next.executiveReviewers)) {
+        try {
+          const vals = Object.values(next.executiveReviewers as Record<string, string>);
+          next.executiveReviewers = vals.filter(v => typeof v === 'string');
+        } catch {}
+      }
+      return next;
     };
 
     const updateData: any = {
@@ -1018,6 +1049,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       lastActivityAt: new Date(), // Always update activity timestamp
       statsUpdatedAt: new Date(), // Mark denormalized data as updated
     };
+
+    // Ensure non-column flags are never included in Prisma update payload
+    if (updateData && 'manualTotal' in updateData) {
+      delete (updateData as any).manualTotal;
+    }
 
     // Merge metadata updates safely
     const existingMeta =
@@ -1836,7 +1872,7 @@ const ProposalPatchSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
 
   // Financial
-  value: z.number().positive().optional(),
+  value: z.coerce.number().nonnegative().optional(),
   currency: z.string().length(3).optional(),
 
   // Dates
@@ -1848,11 +1884,11 @@ const ProposalPatchSchema = z.object({
   projectType: z.string().optional(),
 
   // Advanced fields
-  riskScore: z.number().min(0).max(100).optional(),
+  riskScore: z.coerce.number().min(0).max(100).optional(),
 
   // 🚀 DENORMALIZED UPDATES: Update calculated fields efficiently
-  completionRate: z.number().min(0).max(100).optional(),
-  totalValue: z.number().positive().optional(),
+  completionRate: z.coerce.number().min(0).max(100).optional(),
+  totalValue: z.coerce.number().nonnegative().optional(),
   // Guard control: allow setting value without products when true
   manualTotal: z.boolean().optional(),
 
@@ -1862,27 +1898,19 @@ const ProposalPatchSchema = z.object({
       teamLead: z.string().optional(),
       salesRepresentative: z.string().optional(),
       subjectMatterExperts: z.record(z.string()).optional(),
-      executiveReviewers: z.array(z.string()).optional(),
+      // UI may send object map or array
+      executiveReviewers: z.union([z.array(z.string()), z.record(z.string())]).optional(),
     })
     .optional(),
 
-  contentSelections: z
-    .array(
-      z.object({
-        contentId: z.string(),
-        section: z.string(),
-        customizations: z.array(z.string()).optional(),
-        assignedTo: z.string().optional(),
-      })
-    )
-    .optional(),
+  contentSelections: z.any().optional(),
 
   rfpReferenceNumber: z.string().optional(),
   wizardData: z.any().optional(),
   validationData: z.any().optional(),
   analyticsData: z.any().optional(),
   crossStepValidation: z.any().optional(),
-  sectionAssignments: z.record(z.string()).optional(),
+  sectionAssignments: z.record(z.unknown()).optional(),
 
   // Products (Step 4) - allow direct PATCH with products array
   products: z
