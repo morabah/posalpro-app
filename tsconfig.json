@@ -23,20 +23,15 @@
     },
     "target": "ES2017"
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    "src/lib/testing/testUtils.tsx",
-    "src/test/performance/authenticated-selective-hydration-test.js",
-    "src/test/performance/health-hydration-test.js",
-    "src/test/performance/selective-hydration-test.js",
-    "src/test/performance/simple-hydration-demo.js"
-  ],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": [
     "node_modules",
     "scripts/**",
+    "src/lib/testing/**",
+    "src/test/**",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
     "src/components/dashboard/analytics/**",
     "src/components/dashboard/integrations/**",
     "src/components/dashboard/personalization/**"
