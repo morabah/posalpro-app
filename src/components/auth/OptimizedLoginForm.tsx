@@ -161,6 +161,7 @@ export function OptimizedLoginForm({ callbackUrl, className = '' }: OptimizedLog
                 {...register('email')}
                 type="email"
                 id="email"
+                autoComplete="username"
                 className="w-full h-12 px-4 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                 placeholder="Enter your email"
               />
@@ -177,6 +178,7 @@ export function OptimizedLoginForm({ callbackUrl, className = '' }: OptimizedLog
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
                   id="password"
+                  autoComplete="current-password"
                   className="w-full h-12 px-4 pr-12 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                   placeholder="Enter your password"
                 />
