@@ -7,11 +7,12 @@
  * Supports component traceability and analytics integration for H1 & H8 hypothesis validation
  */
 
+import { Modal, useModal } from '@/components/ui/feedback/Modal';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ProposalWizardStep4Data } from '@/types/proposals';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Info, Plus, Search, Trash2 } from 'lucide-react';
+import { AlertCircle, Info, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -123,6 +124,27 @@ export function ProductSelectionStep({
     warnings: string[];
   }>({ errors: [], warnings: [] });
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+
+  // Detail modal state
+  const {
+    isOpen: isDetailOpen,
+    openModal: openDetailModal,
+    closeModal: closeDetailModal,
+  } = useModal(false);
+  const [detailProduct, setDetailProduct] = useState<SelectedProduct | null>(null);
+  const [detailQuantity, setDetailQuantity] = useState<number>(1);
+  const [detailNotes, setDetailNotes] = useState<string>('');
+
+  // Recommendations state
+  const [recommendationsOpen, setRecommendationsOpen] = useState(false);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
+  const [recommendedProducts, setRecommendedProducts] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [bundlePairs, setBundlePairs] = useState<
+    Array<{ aId: string; aName: string; bId: string; bName: string; count: number }>
+  >([]);
 
   // Dev-only: kept silent to avoid console noise
   // Removed unused dev-only effect
@@ -262,6 +284,45 @@ export function ProductSelectionStep({
     }
   }, [apiClient]);
 
+  // Load AI recommendations (top winning products, common bundles)
+  const loadRecommendations = useCallback(async () => {
+    try {
+      setRecommendationsLoading(true);
+      setRecommendationsError(null);
+
+      // Products analytics (top winning)
+      const productsRes = await apiClient.get<{
+        success: boolean;
+        data?: {
+          products?: Array<{ productId: string; name: string }>;
+          topWinning?: Array<{ productId: string; name: string }>;
+        };
+      }>('api/proposals/analytics/products');
+
+      const top = productsRes?.data?.topWinning || [];
+      const recs = top
+        .filter(p => typeof p.productId === 'string' && typeof p.name === 'string')
+        .map(p => ({ id: p.productId, name: p.name }));
+      setRecommendedProducts(recs);
+
+      // Common bundles
+      const bundlesRes = await apiClient.get<{
+        success: boolean;
+        data?: {
+          pairs?: Array<{ aId: string; aName: string; bId: string; bName: string; count: number }>;
+        };
+      }>('api/proposals/analytics/product-bundles');
+
+      const pairs = bundlesRes?.data?.pairs || [];
+      setBundlePairs(pairs);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load recommendations';
+      setRecommendationsError(msg);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  }, [apiClient]);
+
   // Load products on component mount
   useEffect(() => {
     loadProducts();
@@ -275,12 +336,31 @@ export function ProductSelectionStep({
         // fire-and-forget; ignore result
         void apiClient.get('/products/stats');
         void apiClient.get('/products/categories');
-      } catch {}
+      } catch {
+        // Intentionally ignore background prefetch errors to avoid user disruption
+        void 0;
+      }
     };
-    const win = window as any;
+    // Type-safe access to requestIdleCallback when available
+    interface IdleDeadline {
+      timeRemaining: () => number;
+      didTimeout: boolean;
+    }
+    interface WindowWithIdle {
+      requestIdleCallback?: (
+        callback: (deadline: IdleDeadline) => void,
+        options?: { timeout?: number }
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    }
+    const win = window as unknown as WindowWithIdle;
     if (typeof win.requestIdleCallback === 'function') {
       const id = win.requestIdleCallback(idlePrefetch, { timeout: 1200 });
-      return () => typeof win.cancelIdleCallback === 'function' && win.cancelIdleCallback(id);
+      return () => {
+        if (typeof win.cancelIdleCallback === 'function') {
+          win.cancelIdleCallback(id);
+        }
+      };
     }
     const t = window.setTimeout(idlePrefetch, 800);
     return () => window.clearTimeout(t);
@@ -543,6 +623,105 @@ export function ProductSelectionStep({
     [selectedProducts, trackProductSelection]
   );
 
+  // Open detail modal for product (new or existing)
+  const openProductDetail = useCallback(
+    (productOrId: Product | string) => {
+      let base: SelectedProduct | null = null;
+      if (typeof productOrId === 'string') {
+        const selected = selectedProducts.get(productOrId);
+        if (selected) base = selected;
+        else {
+          const p = products.find(pp => pp.id === productOrId);
+          if (p) {
+            base = {
+              id: p.id,
+              name: p.name,
+              productId: p.id,
+              category: p.category[0] || 'General',
+              quantity: 1,
+              unitPrice: p.price,
+              totalPrice: p.price,
+              priceModel: 'FIXED',
+              configuration: {},
+              customizations: [],
+              notes: '',
+            };
+          }
+        }
+      } else {
+        const existing = selectedProducts.get(productOrId.id);
+        if (existing) base = existing;
+        else {
+          base = {
+            id: productOrId.id,
+            name: productOrId.name,
+            productId: productOrId.id,
+            category: productOrId.category[0] || 'General',
+            quantity: 1,
+            unitPrice: productOrId.price,
+            totalPrice: productOrId.price,
+            priceModel: 'FIXED',
+            configuration: {},
+            customizations: [],
+            notes: '',
+          };
+        }
+      }
+
+      if (!base) return;
+      setDetailProduct(base);
+      setDetailQuantity(base.quantity);
+      setDetailNotes(base.notes || '');
+      openDetailModal();
+    },
+    [products, selectedProducts, openDetailModal]
+  );
+
+  const confirmDetail = useCallback(() => {
+    if (!detailProduct) return;
+    const updated: SelectedProduct = {
+      ...detailProduct,
+      quantity: Math.max(1, Number(detailQuantity) || 1),
+      totalPrice: Math.max(1, Number(detailQuantity) || 1) * detailProduct.unitPrice,
+      notes: detailNotes,
+    };
+    const next = new Map(selectedProducts);
+    next.set(updated.id, updated);
+    setSelectedProducts(next);
+    onUpdate(buildFormDataFrom(next));
+    trackProductSelection('product_detail_saved', updated.id, {
+      productName: updated.name,
+      quantity: updated.quantity,
+      subtotal: updated.totalPrice,
+    });
+    closeModal();
+  }, [
+    detailProduct,
+    detailQuantity,
+    detailNotes,
+    selectedProducts,
+    onUpdate,
+    buildFormDataFrom,
+    trackProductSelection,
+  ]);
+
+  const closeModal = useCallback(() => {
+    closeDetailModal();
+  }, [closeDetailModal]);
+
+  const handleAddFromRecommendation = useCallback(
+    (productId: string) => {
+      const p = products.find(pp => pp.id === productId);
+      if (p) {
+        handleProductSelect(p);
+        trackProductSelection('ai_recommendation_accepted', productId, {
+          productName: p.name,
+        });
+      }
+    },
+    [products, handleProductSelect, trackProductSelection]
+  );
+
   // Handle product removal
   const handleProductRemove = useCallback(
     (productId: string) => {
@@ -761,6 +940,95 @@ export function ProductSelectionStep({
         </label>
       </div>
 
+      {/* AI Recommendations Panel */}
+      <div className="border border-gray-200 rounded-md">
+        <div className="flex items-center justify-between p-3 sm:p-4">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium text-gray-900">AI Recommendations</h3>
+            {recommendationsOpen && (
+              <span className="text-xs text-gray-500">Based on proposal history</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !recommendationsOpen;
+              setRecommendationsOpen(next);
+              if (next) void loadRecommendations();
+            }}
+            className="text-sm text-blue-600 hover:text-blue-700"
+            aria-expanded={recommendationsOpen}
+          >
+            {recommendationsOpen ? 'Hide' : 'Show'}
+          </button>
+        </div>
+        {recommendationsOpen && (
+          <div className="p-3 sm:p-4 border-t border-gray-200 space-y-4">
+            {recommendationsLoading && (
+              <div className="text-sm text-gray-600">Loading recommendations...</div>
+            )}
+            {recommendationsError && (
+              <div className="text-sm text-red-600" role="alert">
+                {recommendationsError}
+              </div>
+            )}
+            {!recommendationsLoading && !recommendationsError && (
+              <>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-800 mb-2">Suggested Products</h4>
+                  {recommendedProducts.length === 0 ? (
+                    <p className="text-sm text-gray-600">No suggestions available</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {recommendedProducts.slice(0, 6).map(p => (
+                        <button
+                          key={`rec-${p.id}`}
+                          onClick={() => handleAddFromRecommendation(p.id)}
+                          className="px-3 py-1.5 text-xs rounded-md border border-blue-200 text-blue-700 hover:bg-blue-50"
+                          aria-label={`Add ${p.name} to proposal`}
+                        >
+                          Add {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-800 mb-2">Common Bundles</h4>
+                  {bundlePairs.length === 0 ? (
+                    <p className="text-sm text-gray-600">No bundle data available</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {bundlePairs.slice(0, 6).map(pair => (
+                        <button
+                          key={`bundle-${pair.aId}-${pair.bId}`}
+                          onClick={() => {
+                            handleAddFromRecommendation(pair.aId);
+                            handleAddFromRecommendation(pair.bId);
+                            trackProductSelection(
+                              'bundle_suggestion_accepted',
+                              `${pair.aId}+${pair.bId}`,
+                              {
+                                aName: pair.aName,
+                                bName: pair.bName,
+                              }
+                            );
+                          }}
+                          className="px-3 py-1.5 text-xs rounded-md border border-yellow-200 text-yellow-800 hover:bg-yellow-50"
+                          aria-label={`Add bundle ${pair.aName} + ${pair.bName}`}
+                        >
+                          {pair.aName} + {pair.bName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Cross-step validation warnings */}
       {crossStepValidationResults.warnings.length > 0 && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -809,7 +1077,14 @@ export function ProductSelectionStep({
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-medium text-gray-900">{product.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => openProductDetail(product)}
+                    className="truncate font-medium text-gray-900 text-left hover:underline"
+                    aria-label={`View details for ${product.name}`}
+                  >
+                    {product.name}
+                  </button>
                   <span className="text-xs text-gray-500">{product.sku}</span>
                 </div>
                 <div className="text-sm text-gray-600 truncate">
@@ -859,6 +1134,14 @@ export function ProductSelectionStep({
                       ).toLocaleString()}
                     </span>
                     <button
+                      onClick={() => openProductDetail(product.id)}
+                      className="p-2 rounded-md text-gray-600 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[36px]"
+                      aria-label={`Edit ${product.name}`}
+                      title="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={e => {
                         e.stopPropagation();
                         handleProductRemove(product.id);
@@ -877,7 +1160,147 @@ export function ProductSelectionStep({
         })}
       </div>
 
-      {/* Selected Products summary section removed per new inline layout. Overall total remains in header. */}
+      {/* Selected Products Panel */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-gray-900">
+          Selected Products ({selectedProducts.size})
+        </h3>
+        {selectedProducts.size === 0 ? (
+          <div className="p-4 border border-gray-200 rounded-md text-sm text-gray-600">
+            <p>No products selected yet.</p>
+            <div className="mt-3">
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => {
+                  setRecommendationsOpen(true);
+                  void loadRecommendations();
+                }}
+              >
+                Try AI Recommendations
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="hidden sm:block overflow-x-auto border border-gray-200 rounded-md">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-gray-700">
+                <tr>
+                  <th className="text-left px-4 py-2">Product</th>
+                  <th className="text-left px-4 py-2">Qty</th>
+                  <th className="text-left px-4 py-2">Unit Price</th>
+                  <th className="text-left px-4 py-2">Total</th>
+                  <th className="text-left px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {Array.from(selectedProducts.values()).map(sp => (
+                  <tr key={`sel-${sp.id}`} className="bg-white">
+                    <td className="px-4 py-2 text-gray-900 truncate">{sp.name}</td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
+                        min={1}
+                        value={sp.quantity}
+                        onChange={e =>
+                          handleQuantityChange(sp.id, Math.max(1, parseInt(e.target.value) || 1))
+                        }
+                        className="w-24 px-2 py-1 border border-gray-300 rounded"
+                        aria-label={`Quantity for ${sp.name}`}
+                      />
+                    </td>
+                    <td className="px-4 py-2">${sp.unitPrice.toLocaleString()}</td>
+                    <td className="px-4 py-2 font-medium">${sp.totalPrice.toLocaleString()}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openProductDetail(sp.id)}
+                          className="p-1.5 rounded-md text-gray-600 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          aria-label={`Edit ${sp.name}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleProductRemove(sp.id)}
+                          className="p-1.5 rounded-md text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          aria-label={`Remove ${sp.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Mobile cards */}
+        {selectedProducts.size > 0 && (
+          <div className="sm:hidden space-y-2">
+            {Array.from(selectedProducts.values()).map(sp => (
+              <div key={`selm-${sp.id}`} className="p-3 border border-gray-200 rounded-md bg-white">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{sp.name}</div>
+                    <div className="text-xs text-gray-500 truncate">
+                      ${sp.unitPrice.toLocaleString()} each
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold text-gray-900 ml-3">
+                    ${sp.totalPrice.toLocaleString()}
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-600" htmlFor={`mqty-${sp.id}`}>
+                      Qty
+                    </label>
+                    <input
+                      id={`mqty-${sp.id}`}
+                      type="number"
+                      min={1}
+                      value={sp.quantity}
+                      onChange={e =>
+                        handleQuantityChange(sp.id, Math.max(1, parseInt(e.target.value) || 1))
+                      }
+                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openProductDetail(sp.id)}
+                      className="p-2 rounded-md text-gray-600 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-label={`Edit ${sp.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleProductRemove(sp.id)}
+                      className="p-2 rounded-md text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      aria-label={`Remove ${sp.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedProducts.size > 0 && (
+          <div className="flex items-center justify-end pt-2">
+            <div className="text-sm font-medium text-blue-800">
+              Total: $
+              {Array.from(selectedProducts.values())
+                .reduce((sum, product) => sum + product.totalPrice, 0)
+                .toLocaleString()}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* No products found */}
       {filteredProducts.length === 0 && !loading && (
@@ -886,6 +1309,80 @@ export function ProductSelectionStep({
           <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
           <p className="text-gray-600">Try adjusting your search criteria or category filter</p>
         </div>
+      )}
+
+      {/* Product Detail Modal */}
+      {isDetailOpen && detailProduct && (
+        <Modal isOpen={isDetailOpen} onClose={closeModal} title="Product Details" size="lg">
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-base font-semibold text-gray-900">{detailProduct.name}</h4>
+              <p className="text-sm text-gray-600 mt-1">
+                {products.find(p => p.id === detailProduct.id)?.description ||
+                  'Configure quantity and notes.'}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                  htmlFor="detail-qty"
+                >
+                  Quantity
+                </label>
+                <input
+                  id="detail-qty"
+                  type="number"
+                  min={1}
+                  value={detailQuantity}
+                  onChange={e => setDetailQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Subtotal</label>
+                <div className="px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-900 font-medium">
+                  $
+                  {(
+                    Math.max(1, Number(detailQuantity) || 1) * detailProduct.unitPrice
+                  ).toLocaleString()}
+                </div>
+              </div>
+            </div>
+            <div>
+              <label
+                className="block text-sm font-medium text-gray-700 mb-1"
+                htmlFor="detail-notes"
+              >
+                Notes
+              </label>
+              <textarea
+                id="detail-notes"
+                rows={3}
+                value={detailNotes}
+                onChange={e => setDetailNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="Add any customization notes..."
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDetail}
+                className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {selectedProducts.has(detailProduct.id) ? 'Save Changes' : 'Add to Proposal'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

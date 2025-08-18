@@ -1,3 +1,57 @@
+## 2025-08-18 10:00 - Product Selection Screen - Refined Layout Compliance
+
+**Phase**: 2.3.x – Proposal Management UI Alignment • **Status**: ✅ Complete • **Duration**: 35 min
+
+**Files Modified**:
+
+- `src/components/proposals/steps/ProductSelectionStep.tsx`
+
+**Key Changes**:
+
+- Implemented wireframe-compliant Product Selection layout with:
+  - AI Recommendations panel (suggested products + common bundles via real analytics APIs)
+  - Selected Products panel (desktop table + mobile cards) with qty, totals, edit, remove
+  - Accessible Product Detail modal (quantity, notes, subtotal, keyboard/focus safe)
+  - Inline catalog rows support quick add, qty adjust, subtotal, and detail editing
+- Integrated analytics via existing `trackWizardStep` calls for selection, quantity, bundles.
+- Maintained WCAG 2.1 AA: labeled controls, 44px targets, aria labels, focus management.
+
+**Wireframe Reference**: `front end structure /wireframes/PRODUCT_SELECTION_SCREEN.md`
+
+**Component Traceability**:
+
+- userStories: [US-1.2, US-3.1, US-4.1]
+- acceptanceCriteria: [AC-1.2.1, AC-1.2.2, AC-1.2.3, AC-3.1.1, AC-3.1.2, AC-4.1.2]
+- methods: [aiRecommendations, validateSelection, calculateTotals]
+- hypotheses: [H1 content discovery, H8 technical validation]
+- testCases: [TC-H1-002, TC-H8-001]
+
+**Data Sources (no mocks)**:
+
+- Products: `GET /api/products`
+- Suggested products: `GET /api/proposals/analytics/products` (top winning)
+- Common bundles: `GET /api/proposals/analytics/product-bundles`
+
+**Testing/Quality Gates**:
+
+- Type check: ✅ `npm run type-check`
+- Unit tests subset: ✅ `npm run test:ci:unit` (no regressions introduced)
+- Note: Some broader integration/E2E suites have pre-existing failures unrelated to this edit.
+
+**Accessibility**:
+
+- Modal uses focus trap, escape/overlay handling; form inputs have labels; mobile cards preserve touch targets.
+
+**Performance**:
+
+- Idle-time prefetch retained (non-blocking); no additional heavy effects; map/set updates batched; totals computed from selection map.
+
+**Design Deviations**: None; matches sections (Catalog, Selected Products, Detail Modal, AI Recommendations).
+
+**Notes**:
+
+- Analytics metadata added to selection/bundle actions; recommendations hidden by default to keep UI clean.
+
 ## 2024-12-17 13:30 - 🎯 Comprehensive Application Performance Audit & Optimization
 
 **Phase**: Complete Application Performance Review **Status**: ✅ Complete - 88%

@@ -231,7 +231,6 @@ export function useDashboardData(
 
         const data = await dashboardAPI.getDashboardData(queryOptions);
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!mountedRef.current) return;
 
         setState(prev => ({
@@ -254,7 +253,6 @@ export function useDashboardData(
         // Notify callback
         options.onDataChange?.(data);
       } catch (error) {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Intentional guard to avoid state updates after unmount
         if (!mountedRef.current) return;
 
         const errorMessage =
@@ -264,7 +262,6 @@ export function useDashboardData(
 
         logger.error('Dashboard data fetch failed:', error);
       } finally {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Intentional guard to avoid state updates after unmount
         if (mountedRef.current) {
           updateLoadingState('overall', false);
         }
@@ -332,7 +329,6 @@ export function useDashboardData(
             break;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!mountedRef.current) return;
 
         // Update specific section in state
@@ -372,7 +368,6 @@ export function useDashboardData(
         trackEvent('section_refresh', { section, loadTime, userRole: options.userRole });
         trackInteraction(section, 'refresh', { loadTime, success: true });
       } catch (error) {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!mountedRef.current) return;
 
         const errorMessage =
@@ -382,8 +377,6 @@ export function useDashboardData(
 
         logger.error(`Failed to refresh ${section}:`, error);
       } finally {
-        // mountedRef guard: prevent state updates after unmount
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (mountedRef.current) {
           updateLoadingState(sectionKey, false);
         }

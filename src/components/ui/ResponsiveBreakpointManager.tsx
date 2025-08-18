@@ -460,7 +460,6 @@ export function useResponsive(): ResponsiveContextType {
   const context = useContext(ResponsiveContext);
   if (!context) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
       console.warn('useResponsive called outside of ResponsiveBreakpointManager. Returning safe default context.');
       return DEFAULT_RESPONSIVE_CONTEXT;
     }

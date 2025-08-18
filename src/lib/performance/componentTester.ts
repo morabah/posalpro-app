@@ -206,7 +206,6 @@ export class ComponentTester {
         }
 
         // Validate required properties
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!field.id || !field.type || !field.label) {
           errors.push(`Missing required properties for field: ${field.id}`);
           passed = false;
@@ -347,7 +346,6 @@ export class ComponentTester {
         }
 
         // Validate button properties
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!button.id || !button.type || !button.text) {
           errors.push(`Missing required properties for button: ${button.id}`);
           passed = false;

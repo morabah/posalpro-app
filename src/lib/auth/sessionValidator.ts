@@ -46,7 +46,6 @@ export class SessionValidator {
       return validation;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime safety guard for potentially undefined user
     if (!session.user) {
       validation.error = 'No user in session';
       console.log('[AUTH_FIX] Session validation failed: No user in session');

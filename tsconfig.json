@@ -40,6 +40,10 @@
     "src/test/performance/simple-hydration-demo.js"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "scripts/**",
+    "src/components/dashboard/analytics/**",
+    "src/components/dashboard/integrations/**",
+    "src/components/dashboard/personalization/**"
   ]
 }

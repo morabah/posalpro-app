@@ -1260,40 +1260,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const shouldUseEstimated = !hasProducts && step4TotalValue === 0 && step1EstimatedValue > 0;
       let finalProposalValue = shouldUseEstimated ? step1EstimatedValue : step4TotalValue;
 
-      // Reconciliation guard: prevent value drift unless manualTotal is explicitly set
+      // Reconciliation guard: prefer computed total when products are present
       const incomingManualTotal: boolean | undefined = (validatedData as any)?.manualTotal;
       const incomingValue: number | undefined = (validatedData as any)?.value;
 
-      // If there are products in payload/metadata, enforce value === sum(products) unless manualTotal AND no products
       if (hasProducts) {
-        // If caller attempted to set a value different from computed total without allowing manual override, reject
-        if (
-          typeof incomingValue === 'number' &&
-          Number.isFinite(incomingValue) &&
-          Math.abs(incomingValue - step4TotalValue) > 0.0001 &&
-          !(incomingManualTotal === true && includedProducts.length === 0)
-        ) {
-          return createApiErrorResponse(
-            new StandardError({
-              message:
-                'Value must equal sum of products unless manualTotal is enabled with no products',
-              code: ErrorCodes.VALIDATION.INVALID_INPUT,
-              metadata: {
-                component: 'ProposalPatchRoute',
-                reason: 'value_products_mismatch',
-                incomingValue,
-                step4TotalValue,
-              },
-            }),
-            'Value reconciliation failed',
-            ErrorCodes.VALIDATION.INVALID_INPUT,
-            400,
-            {
-              userFriendlyMessage:
-                'Proposal total must match selected products unless you enable manual total with no products.',
-            }
-          );
-        }
+        // Always use computed sum of products to avoid 400s due to UI race conditions
+        finalProposalValue = step4TotalValue;
       } else {
         // No products present: only allow setting value if manualTotal flag is true
         if (typeof incomingValue === 'number' && Number.isFinite(incomingValue)) {

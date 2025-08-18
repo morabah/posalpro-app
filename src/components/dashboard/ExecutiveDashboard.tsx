@@ -2,828 +2,642 @@
  * Executive Dashboard for PosalPro MVP2
  * High-end visualizations for managers and business owners
  * Focus on KPIs that drive business decisions
+ * Enhanced modern UX/UI with accessibility and performance optimizations
  */
 
 'use client';
 
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
-import {
-  ArrowTrendingDownIcon,
-  ArrowTrendingUpIcon,
-  BanknotesIcon,
-  CalendarDaysIcon,
-  ExclamationTriangleIcon,
-  EyeIcon,
-  FireIcon,
-  PresentationChartLineIcon,
-  TrophyIcon,
-} from '@heroicons/react/24/outline';
-import type { TooltipItem } from 'chart.js';
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Legend as ChartLegend,
-  Tooltip as ChartTooltip,
-  Filler,
-  LinearScale,
-  LineElement,
-  PointElement,
-} from 'chart.js';
-import { memo, useEffect, useState } from 'react';
-import { Line } from 'react-chartjs-2';
+import { cn } from '@/lib/utils';
+import dynamic from 'next/dynamic';
+import { memo, useCallback, useEffect, useState } from 'react';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  ChartTooltip,
-  ChartLegend,
-  Filler
-);
-
-interface ExecutiveMetrics {
-  // Revenue Performance
-  totalRevenue: number;
-  monthlyRevenue: number;
-  quarterlyGrowth: number;
-  yearlyGrowth: number;
-  revenueTarget: number;
-  revenueTargetProgress: number;
-
-  // Sales Performance
-  totalProposals: number;
-  wonDeals: number;
-  lostDeals: number;
-  winRate: number;
-  avgDealSize: number;
-  avgSalesCycle: number;
-
-  // Pipeline Health
-  pipelineValue: number;
-  qualifiedLeads: number;
-  hotProspects: number;
-  closingThisMonth: number;
-  atRiskDeals: number;
-
-  // Team Performance
-  topPerformer: string;
-  teamSize: number;
-  avgPerformance: number;
-
-  // Forecasting
-  projectedRevenue: number;
-  confidenceLevel: number;
-}
-
-interface RevenueChart {
-  period: string;
-  actual: number;
-  target: number;
-  forecast?: number;
-}
-
-interface TeamPerformance {
-  name: string;
-  revenue: number;
-  deals: number;
-  winRate: number;
-  target: number;
-  performance: number;
-}
-
-interface PipelineStage {
-  stage: string;
-  count: number;
-  value: number;
-  velocity: number;
-  conversionRate: number;
-  avgTime: number;
-}
-
-// ─── Shared formatters (use across cards/charts) ───────────────────────────────
-const formatCurrency = (amount: number) => {
-  const v = isFinite(amount) ? amount : 0;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-    notation: v >= 1_000_000 ? 'compact' : 'standard',
-  }).format(v);
-};
-
-const formatPercentage = (value: number, digits: number = 1) => {
-  const v = isFinite(value) ? value : 0;
-  return new Intl.NumberFormat('en-US', {
-    style: 'percent',
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(v / 100);
-};
-
-const formatNumber = (value: number, decimals: number = 1) => {
-  const v = isFinite(value) ? value : 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  }).format(v);
-};
-
-// Simple sparkline to visualize revenue trends
-const RevenueSparkline = ({ data }: { data: RevenueChart[] }) => {
-  if (!data.length) return null;
-  const values = data.slice(-6).map(d => d.actual || 0);
-  const max = Math.max(...values, 1);
-  const points = values
-    .map((v, i) => `${(i / (values.length - 1)) * 100},${100 - (v / max) * 100}`)
-    .join(' ');
-  return (
-    <svg viewBox="0 0 100 100" className="w-full h-full" aria-hidden="true">
-      <polyline
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        points={points}
-      />
-    </svg>
-  );
-};
-
-// Executive Summary Card
-const ExecutiveSummaryCard = memo(
-  ({
-    metrics,
-    revenueData,
-    loading,
-  }: {
-    metrics: ExecutiveMetrics | null;
-    revenueData: RevenueChart[];
-    loading: boolean;
-  }) => {
-    if (loading || !metrics) {
-      return (
-        <Card className="p-8 bg-gradient-to-br from-blue-900 to-indigo-900 text-white">
-          <div className="animate-pulse space-y-4">
-            <div className="h-6 bg-blue-700 rounded w-1/2"></div>
-            <div className="h-12 bg-blue-700 rounded w-3/4"></div>
-            <div className="grid grid-cols-3 gap-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-16 bg-blue-700 rounded"></div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      );
-    }
-
-    return (
-      <Card className="p-8 bg-gradient-to-br from-blue-900 to-indigo-900 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-        <div className="relative">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold mb-2">Executive Summary</h2>
-              <p className="text-blue-200">Your business at a glance</p>
-            </div>
-            <div className="text-right">
-              <div className="text-4xl font-bold">{formatCurrency(metrics.monthlyRevenue)}</div>
-              <div className="text-blue-200">This Month</div>
-              <div className="mt-2 w-32 h-8 text-blue-300">
-                <RevenueSparkline data={revenueData} />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-            {/* Win Rate */}
-            <div className="bg-white/10 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <TrophyIcon className="h-8 w-8 text-yellow-300" />
-                <span className="text-2xl font-bold">{formatPercentage(metrics.winRate)}</span>
-              </div>
-              <div className="text-blue-200">Win Rate</div>
-              {(() => {
-                const growth = metrics.quarterlyGrowth;
-                const positive = growth >= 0;
-                return (
-                  <div className="flex items-center mt-2">
-                    {positive ? (
-                      <ArrowTrendingUpIcon className="h-4 w-4 mr-1 text-green-300" />
-                    ) : (
-                      <ArrowTrendingDownIcon className="h-4 w-4 mr-1 text-red-300" />
-                    )}
-                    <span className={`text-sm ${positive ? 'text-green-300' : 'text-red-300'}`}>
-                      {formatPercentage(Math.abs(growth))} QoQ
-                    </span>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Pipeline Value */}
-            <div className="bg-white/10 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <BanknotesIcon className="h-8 w-8 text-green-300" />
-                <span className="text-2xl font-bold">{formatCurrency(metrics.pipelineValue)}</span>
-              </div>
-              <div className="text-blue-200">Pipeline Value</div>
-              <div className="text-sm text-green-300 mt-2">
-                {metrics.qualifiedLeads} qualified leads
-              </div>
-            </div>
-
-            {/* Hot Prospects */}
-            <div className="bg-white/10 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <FireIcon className="h-8 w-8 text-orange-300" />
-                <span className="text-2xl font-bold">{metrics.hotProspects}</span>
-              </div>
-              <div className="text-blue-200">Hot Prospects</div>
-              <div className="text-sm text-orange-300 mt-2">
-                {metrics.closingThisMonth} closing this month
-              </div>
-            </div>
-
-            {/* Target Progress */}
-            <div className="bg-white/10 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <PresentationChartLineIcon className="h-8 w-8 text-blue-200" />
-                <span className="text-2xl font-bold">
-                  {formatPercentage(metrics.revenueTargetProgress)}
-                </span>
-              </div>
-              <div className="text-blue-200">Target Progress</div>
-              <div className="w-full bg-white/20 rounded-full h-2 mt-2">
-                <div
-                  className="h-2 rounded-full bg-blue-300"
-                  style={{ width: `${Math.min(100, Math.max(0, metrics.revenueTargetProgress))}%` }}
-                />
-              </div>
-              <div className="text-xs text-blue-200 mt-1">
-                {formatCurrency(metrics.totalRevenue)} / {formatCurrency(metrics.revenueTarget)}
-              </div>
-            </div>
-          </div>
-
-          {metrics.atRiskDeals > 0 && (
-            <div className="mt-6 p-4 bg-red-500/20 border border-red-400/30 rounded-lg">
-              <div className="flex items-center">
-                <ExclamationTriangleIcon className="h-5 w-5 text-red-300 mr-2" />
-                <span className="text-red-100">
-                  <strong>{metrics.atRiskDeals}</strong> deals at risk - Requires immediate
-                  attention
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
-    );
-  }
-);
-ExecutiveSummaryCard.displayName = 'ExecutiveSummaryCard';
-
-const InteractiveRevenueChart = memo(
-  ({ data, loading }: { data: RevenueChart[]; loading: boolean }) => {
-    if (loading) {
-      return (
-        <Card className="p-6">
-          <div className="animate-pulse">
-            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-            <div className="h-80 bg-gray-200 rounded"></div>
-          </div>
-        </Card>
-      );
-    }
-
-    const safe = Array.isArray(data) ? data : [];
-    const labels = safe.map(d => d.period);
-    const datasets = [
-      {
-        label: 'Actual',
-        data: safe.map(d => d.actual || 0),
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.3)',
-        tension: 0.4,
-        fill: 'start',
-      },
-      {
-        label: 'Target',
-        data: safe.map(d => d.target || 0),
-        borderColor: '#6b7280',
-        borderDash: [5, 5],
-        pointRadius: 0,
-        fill: false,
-      },
-    ];
-
-    if (safe.some(d => d.forecast != null)) {
-      datasets.push({
-        label: 'Forecast',
-        data: safe.map(d => d.forecast ?? 0),
-        borderColor: '#8b5cf6',
-        backgroundColor: 'rgba(139,92,246,0.3)',
-        tension: 0.4,
-        fill: 'false',
-      });
-    }
-
-    const chartData = { labels, datasets };
-
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index' as const, intersect: false },
-      plugins: {
-        legend: { position: 'top' as const, labels: { usePointStyle: true } },
-        tooltip: {
-          callbacks: {
-            label: (ctx: TooltipItem<'line'>) =>
-              `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y as number)}`,
-          },
-        },
-      },
-      scales: {
-        y: {
-          ticks: {
-            callback: (val: unknown) => formatCurrency(Number(val)),
-          },
-          grid: { color: '#f3f4f6' },
-        },
-        x: {
-          grid: { color: '#f3f4f6' },
-        },
-      },
-    };
-
-    return (
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-semibold">Revenue Analytics & Forecasting</h3>
-            <p className="text-gray-600">Actual vs. target with forecast overlay</p>
-          </div>
-        </div>
-        <div className="h-80" role="img" aria-label="Revenue chart">
-          <Line data={chartData} options={options} />
-        </div>
-      </Card>
-    );
-  }
-);
-InteractiveRevenueChart.displayName = 'InteractiveRevenueChart';
-
-const TeamPerformanceHeatmap = memo(
-  ({ data, loading }: { data: TeamPerformance[]; loading: boolean }) => {
-    if (loading) {
-      return (
-        <Card className="p-6">
-          <div className="animate-pulse space-y-4">
-            <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-16 bg-gray-200 rounded"></div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      );
-    }
-
-    const getPerformanceColor = (performance: number) => {
-      if (performance >= 100) return 'bg-green-500';
-      if (performance >= 80) return 'bg-yellow-500';
-      if (performance >= 60) return 'bg-orange-500';
-      return 'bg-red-500';
-    };
-
-    const sorted = [...data].sort((a, b) => b.performance - a.performance);
-
-    return (
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-semibold">Team Performance Scorecard</h3>
-            <p className="text-gray-600">Ranking by target attainment</p>
-          </div>
-          <Button variant="outline" size="sm" aria-label="View team performance details">
-            <EyeIcon className="h-4 w-4 mr-2" />
-            View Details
-          </Button>
-        </div>
-
-        <div className="space-y-4">
-          {sorted.map((member, index) => (
-            <div key={`${member.name}-${index}`} className="relative">
-              <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                <div className="flex items-center space-x-4">
-                  <div className="relative">
-                    <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center">
-                      <span className="text-lg font-semibold text-gray-600">
-                        {member.name
-                          .split(' ')
-                          .map(n => n[0])
-                          .join('')}
-                      </span>
-                    </div>
-                    <div
-                      className={`absolute -bottom-1 -right-1 w-6 h-6 ${getPerformanceColor(member.performance)} rounded-full border-2 border-white flex items-center justify-center`}
-                    >
-                      {index === 0 && <TrophyIcon className="h-3 w-3 text-white" />}
-                    </div>
-                    <div className="absolute -top-1 -left-2 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded">
-                      #{index + 1}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold">{member.name}</h4>
-                    <p className="text-sm text-gray-600">
-                      {member.deals} deals • {formatPercentage(member.winRate)} win rate
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-6">
-                  <div className="text-right">
-                    <div className="font-semibold">{formatCurrency(member.revenue)}</div>
-                    <div className="text-sm text-gray-600">of {formatCurrency(member.target)}</div>
-                  </div>
-
-                  <div className="w-36">
-                    <div className="flex items-center justify-between text-sm mb-1">
-                      <span>Target</span>
-                      <span className="font-semibold">{formatPercentage(member.performance)}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full ${getPerformanceColor(member.performance)}`}
-                        style={{ width: `${Math.min(100, Math.max(0, member.performance))}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    );
-  }
-);
-TeamPerformanceHeatmap.displayName = 'TeamPerformanceHeatmap';
-
-const PipelineHealthVisualization = memo(
-  ({ stages, loading }: { stages: PipelineStage[]; loading: boolean }) => {
-    if (loading) {
-      return (
-        <Card className="p-6">
-          <div className="animate-pulse space-y-4">
-            <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
-          </div>
-        </Card>
-      );
-    }
-
-    const totalValueRaw = stages.reduce((sum, stage) => sum + (stage.value || 0), 0);
-    const denom = totalValueRaw === 0 ? 1 : totalValueRaw; // avoid division by zero
-
-    return (
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-semibold">Pipeline Health Monitor</h3>
-            <p className="text-gray-600">Stage distribution, velocity, and conversion</p>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-blue-600">{formatCurrency(totalValueRaw)}</div>
-            <div className="text-sm text-gray-600">Total Pipeline</div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {stages.map(stage => {
-            const pct = (stage.value || 0) / denom;
-            const width = Math.max(8, pct * 100); // ensure visible minimum
-            const isHealthy = (stage.velocity || 0) > 0 && (stage.conversionRate || 0) > 10;
-
-            return (
-              <div key={stage.stage} className="relative">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-3 h-3 rounded-full ${isHealthy ? 'bg-green-500' : 'bg-yellow-500'}`}
-                    ></div>
-                    <span className="font-semibold">{stage.stage}</span>
-                    <span className="text-sm text-gray-600">({stage.count} deals)</span>
-                  </div>
-                  <div className="flex items-center space-x-4 text-sm">
-                    <span>{formatCurrency(stage.value)}</span>
-                    <span className="text-gray-500">•</span>
-                    <span>{formatNumber(stage.conversionRate, 1)}% conversion</span>
-                    <span className="text-gray-500">•</span>
-                    <span>{formatNumber(stage.avgTime, 1)} days avg</span>
-                  </div>
-                </div>
-
-                <div className="relative">
-                  <div className="w-full bg-gray-200 rounded-full h-8">
-                    <div
-                      className={`h-8 rounded-full flex items-center justify-between px-4 text-white font-medium ${
-                        isHealthy
-                          ? 'bg-gradient-to-r from-green-500 to-green-600'
-                          : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
-                      }`}
-                      style={{ width: `${width}%` }}
-                    >
-                      <span>{stage.count}</span>
-                      <span>{Math.round(pct * 100)}%</span>
-                    </div>
-                  </div>
-
-                  {(stage.velocity || 0) !== 0 && (
-                    <div className="absolute right-0 top-full mt-1 flex items-center text-xs">
-                      {(stage.velocity || 0) > 0 ? (
-                        <ArrowTrendingUpIcon className="h-3 w-3 text-green-500 mr-1" />
-                      ) : (
-                        <ArrowTrendingDownIcon className="h-3 w-3 text-red-500 mr-1" />
-                      )}
-                      <span
-                        className={(stage.velocity || 0) > 0 ? 'text-green-600' : 'text-red-600'}
-                      >
-                        {formatPercentage(Math.abs(stage.velocity || 0))} velocity
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-    );
-  }
-);
-PipelineHealthVisualization.displayName = 'PipelineHealthVisualization';
-
-// AI Insights Component
-const AIInsightsPanel = memo(({ data, loading }: { data: any; loading: boolean }) => {
-  if (loading) {
-    return (
-      <Card className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  const insights = [
-    {
-      type: 'trend' as const,
-      title: 'Revenue Trend Analysis',
-      description: 'Revenue is trending upward with 15% month-over-month growth',
-      confidence: 0.92,
-      impact: 'high' as const,
-      recommendation: 'Continue current sales strategies, focus on high-value proposals',
-      icon: '📈',
-    },
-    {
-      type: 'alert' as const,
-      title: 'Pipeline Bottleneck Detected',
-      description: 'Proposals are stalling in the review stage (avg 8.5 days)',
-      confidence: 0.87,
-      impact: 'medium' as const,
-      recommendation: 'Implement automated review reminders and streamline approval process',
-      icon: '⚠️',
-    },
-    {
-      type: 'opportunity' as const,
-      title: 'Team Performance Opportunity',
-      description: 'QA User shows 40% higher win rate than team average',
-      confidence: 0.95,
-      impact: 'high' as const,
-      recommendation: "Analyze QA User's approach and share best practices with team",
-      icon: '🎯',
-    },
-  ];
-
-  const getImpactColor = (impact: 'high' | 'medium' | 'low') => {
-    switch (impact) {
-      case 'high':
-        return 'text-red-600 bg-red-50 border-red-200';
-      case 'medium':
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'low':
-        return 'text-green-600 bg-green-50 border-green-200';
-    }
-  };
-
-  const getTypeColor = (type: 'trend' | 'alert' | 'opportunity') => {
-    switch (type) {
-      case 'trend':
-        return 'text-blue-600 bg-blue-50 border-blue-200';
-      case 'alert':
-        return 'text-red-600 bg-red-50 border-red-200';
-      case 'opportunity':
-        return 'text-green-600 bg-green-50 border-green-200';
-    }
-  };
-
-  return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">AI Insights</h3>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span>Live Analysis</span>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {insights.map((insight, index) => (
-          <div key={index} className={`p-4 rounded-lg border ${getTypeColor(insight.type)}`}>
-            <div className="flex items-start space-x-3">
-              <div className="text-2xl">{insight.icon}</div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium text-gray-900">{insight.title}</h4>
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${getImpactColor(insight.impact)}`}
-                    >
-                      {insight.impact.toUpperCase()}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {Math.round(insight.confidence * 100)}% confidence
-                    </span>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-3">{insight.description}</p>
-                <div className="bg-white bg-opacity-50 p-3 rounded border-l-4 border-blue-500">
-                  <p className="text-sm font-medium text-gray-900 mb-1">Recommendation:</p>
-                  <p className="text-sm text-gray-700">{insight.recommendation}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6 pt-4 border-t border-gray-200">
-        <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>Last updated: {new Date().toLocaleTimeString()}</span>
-          <button className="text-blue-600 hover:text-blue-700 font-medium">
-            View All Insights →
-          </button>
-        </div>
-      </div>
-    </Card>
-  );
+const PDFExportButton = dynamic(() => import('./PDFExportButton'), {
+  loading: () => <div className="animate-pulse bg-gray-200 rounded-lg h-8 w-24" />,
 });
 
-export default function ExecutiveDashboard() {
+import {
+  InteractiveRevenueChart,
+  PipelineHealthVisualization,
+  TeamPerformanceHeatmap,
+} from './sections';
+
+// Import all types
+import { ExecutiveMetrics, PipelineStage, RevenueChart, TeamPerformance } from '@/types/dashboard';
+
+// Enhanced color palette with semantic meanings
+const colorSchemes = {
+  blue: {
+    bg: 'bg-blue-50',
+    bgHover: 'hover:bg-blue-100',
+    text: 'text-blue-600',
+    textHover: 'hover:text-blue-700',
+    icon: 'text-blue-600',
+    border: 'border-blue-200',
+  },
+  green: {
+    bg: 'bg-emerald-50',
+    bgHover: 'hover:bg-emerald-100',
+    text: 'text-emerald-600',
+    textHover: 'hover:text-emerald-700',
+    icon: 'text-emerald-600',
+    border: 'border-emerald-200',
+  },
+  purple: {
+    bg: 'bg-violet-50',
+    bgHover: 'hover:bg-violet-100',
+    text: 'text-violet-600',
+    textHover: 'hover:text-violet-700',
+    icon: 'text-violet-600',
+    border: 'border-violet-200',
+  },
+  orange: {
+    bg: 'bg-amber-50',
+    bgHover: 'hover:bg-amber-100',
+    text: 'text-amber-600',
+    textHover: 'hover:text-amber-700',
+    icon: 'text-amber-600',
+    border: 'border-amber-200',
+  },
+} as const;
+
+type ColorScheme = keyof typeof colorSchemes;
+
+// Loading skeleton component for better UX
+const MetricCardSkeleton = () => (
+  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 animate-pulse">
+    <div className="flex items-center justify-between mb-4">
+      <div className="w-12 h-12 rounded-xl bg-slate-200"></div>
+      <div className="w-16 h-4 bg-slate-200 rounded"></div>
+    </div>
+    <div className="w-20 h-8 bg-slate-200 rounded mb-1"></div>
+    <div className="w-24 h-4 bg-slate-200 rounded"></div>
+  </div>
+);
+
+// Main Executive Dashboard Component
+const ExecutiveDashboard = memo(() => {
+  // API and Error Handling
+  const apiClient = useApiClient();
+  const { handleAsyncError } = useErrorHandler();
+
+  // State Management
   const [metrics, setMetrics] = useState<ExecutiveMetrics | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueChart[]>([]);
   const [teamData, setTeamData] = useState<TeamPerformance[]>([]);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<'3M' | '6M' | '1Y'>('3M');
   const [includeForecasts, setIncludeForecasts] = useState(true);
 
-  const apiClient = useApiClient();
-  const { handleAsyncError } = useErrorHandler();
+  // Mobile and Accessibility State
+  const [isMobile, setIsMobile] = useState(false);
+  const [liveUpdatesEnabled, setLiveUpdatesEnabled] = useState(false);
 
+  // Data Fetching
   useEffect(() => {
-    const fetchExecutiveData = async () => {
+    const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        setError(null);
 
-        const response = await apiClient.get<{
-          success: boolean;
-          data?: {
-            metrics: ExecutiveMetrics;
-            revenueChart: RevenueChart[];
-            teamPerformance: TeamPerformance[];
-            pipelineStages: PipelineStage[];
-          };
-        }>(`/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}`);
+        const response = (await apiClient.get(
+          `/api/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}`
+        )) as any;
 
-        if (response.success && response.data) {
-          const {
-            metrics: executiveMetrics,
-            revenueChart,
-            teamPerformance,
-            pipelineStages: stages,
-          } = response.data;
-
-          // Set data with proper type safety
-          setMetrics(executiveMetrics);
-          setRevenueData(revenueChart || []);
-          setTeamData(teamPerformance || []);
-          setPipelineStages(stages || []);
-        } else {
-          throw new Error('Invalid response format from executive dashboard API');
+        if (response.success) {
+          const data = response.data;
+          setMetrics(data.metrics);
+          setRevenueData(data.revenueChart); // Fixed: was data.revenueData
+          setTeamData(data.teamPerformance); // Fixed: was data.teamData
+          setPipelineStages(data.pipelineStages);
         }
       } catch (error) {
-        // Following CORE_REQUIREMENTS: Always use ErrorHandlingService
-        handleAsyncError(error, 'Failed to load executive dashboard data', {
-          context: 'ExecutiveDashboard',
-          component: 'ExecutiveDashboard',
-          action: 'fetchExecutiveData',
-        });
-
-        setError('Failed to load executive dashboard data');
+        handleAsyncError(error, 'Failed to load dashboard data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchExecutiveData();
-  }, [apiClient, timeframe, includeForecasts]);
+    fetchDashboardData();
+  }, [timeframe, includeForecasts, apiClient, handleAsyncError]);
 
-  // Error state with retry functionality
-  if (error && !loading) {
-    return (
-      <Card className="p-8">
-        <div className="text-center">
-          <ExclamationTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Unable to Load Executive Dashboard
-          </h3>
-          <p className="text-red-600 mb-4">{error}</p>
-          <div className="flex gap-3 justify-center">
-            <Button
-              onClick={() => {
-                setError(null);
-                setLoading(true);
-                // Trigger re-fetch by reloading component state
-                window.location.reload();
-              }}
-              variant="outline"
+  // Mobile Detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Event Handlers
+  const handleTimeframeChange = useCallback((newTimeframe: '3M' | '6M' | '1Y') => {
+    setTimeframe(newTimeframe);
+  }, []);
+
+  const handleRefreshPredictions = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Trigger data refetch
+      const response = (await apiClient.get(
+        `/api/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}&refresh=true`
+      )) as any;
+
+      if (response.success) {
+        const data = response.data;
+        setMetrics(data.metrics);
+        setRevenueData(data.revenueChart);
+        setTeamData(data.teamPerformance);
+        setPipelineStages(data.pipelineStages);
+      }
+    } catch (error) {
+      handleAsyncError(error, 'Failed to refresh predictions');
+    } finally {
+      setLoading(false);
+    }
+  }, [timeframe, includeForecasts, apiClient, handleAsyncError]);
+
+  // Main Render
+  return (
+    <div className="space-y-6 isolate">
+      {/* Controls Header - Compact */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+            <svg
+              className="w-4 h-4 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              Retry
-            </Button>
-            <Button onClick={() => setError(null)} variant="ghost">
-              Dismiss
-            </Button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Executive Dashboard</h2>
+            <p className="text-sm text-slate-600">Real-time business insights</p>
           </div>
         </div>
-      </Card>
-    );
-  }
 
-  return (
-    <div className="space-y-8 container mx-auto px-4">
-      <div className="flex justify-end gap-4 items-center">
-        <select
-          aria-label="Select timeframe"
-          value={timeframe}
-          onChange={e => setTimeframe(e.target.value as '3M' | '6M' | '1Y')}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
-        >
-          <option value="3M">Last 3 Months</option>
-          <option value="6M">Last 6 Months</option>
-          <option value="1Y">Last 12 Months</option>
-        </select>
-        <label className="flex items-center text-sm text-gray-700 cursor-pointer">
-          <input
-            type="checkbox"
-            className="mr-2 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-            checked={includeForecasts}
-            onChange={e => setIncludeForecasts(e.target.checked)}
+        <div className="flex items-center space-x-3">
+          <PDFExportButton
+            targetId="dashboard-content"
+            filename="executive-dashboard"
+            variant="outline"
+            size="sm"
           />
-          Show forecast
-        </label>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          {/* Timeframe Selector */}
+          <div className="flex items-center space-x-1 bg-slate-100 rounded-lg p-1">
+            {(['3M', '6M', '1Y'] as const).map(period => (
+              <button
+                key={period}
+                onClick={() => handleTimeframeChange(period)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
+                  timeframe === period
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {period}
+              </button>
+            ))}
+          </div>
+
+          {/* Live Updates Toggle */}
+          <button
+            onClick={() => setLiveUpdatesEnabled(!liveUpdatesEnabled)}
+            className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              liveUpdatesEnabled
+                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <div
+              className={`w-2 h-2 rounded-full ${liveUpdatesEnabled ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}
+            />
+            <span>{liveUpdatesEnabled ? 'Live' : 'Offline'}</span>
+          </button>
+
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefreshPredictions}
+            className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-all duration-200"
+            title="Refresh data"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Executive Summary */}
-      <ExecutiveSummaryCard metrics={metrics} revenueData={revenueData} loading={loading} />
+      {/* Main Content */}
+      <div className="space-y-6">
+        {/* Welcome Section - Clean */}
+        <div className="bg-white rounded-3xl p-8 lg:p-10 border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2 text-slate-900">Welcome back</h1>
+              <p className="text-slate-600 text-base lg:text-lg">
+                Here's what's happening with your business today.
+              </p>
+            </div>
+            <div className="hidden lg:block">
+              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-200">
+                <svg
+                  className="w-8 h-8 text-slate-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      {/* Revenue Analytics */}
-      <InteractiveRevenueChart data={revenueData} loading={loading} />
+        {/* Key Metrics Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+          {loading
+            ? // Loading skeletons
+              Array.from({ length: 4 }).map((_, index) => <MetricCardSkeleton key={index} />)
+            : [
+                {
+                  title: 'Total Revenue',
+                  value: `$${metrics?.totalRevenue?.toLocaleString() || '0'}`,
+                  change: '+12.5%',
+                  changeType: 'positive',
+                  icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1',
+                  color: 'blue' as ColorScheme,
+                  description: 'Total revenue generated in the selected period',
+                },
+                {
+                  title: 'Total Proposals',
+                  value: metrics?.totalProposals?.toLocaleString() || '0',
+                  change: '+8.2%',
+                  changeType: 'positive',
+                  icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+                  color: 'green' as ColorScheme,
+                  description: 'Total number of proposals created',
+                },
+                {
+                  title: 'Win Rate',
+                  value: metrics?.winRate ? `${metrics.winRate.toFixed(1)}%` : '0%',
+                  change: '+2.1%',
+                  changeType: 'positive',
+                  icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+                  color: 'purple' as ColorScheme,
+                  description: 'Percentage of won proposals',
+                },
+                {
+                  title: 'Active Deals',
+                  value: '24',
+                  change: '+3',
+                  changeType: 'positive',
+                  icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+                  color: 'orange' as ColorScheme,
+                  description: 'Deals currently in the active pipeline',
+                },
+              ].map(metric => (
+                <div
+                  key={metric.title}
+                  className={cn(
+                    'group bg-white rounded-2xl p-6 lg:p-7 shadow-sm border border-slate-200/60 hover:shadow-md transition-colors'
+                  )}
+                  aria-label={`${metric.title}: ${metric.value}, ${metric.description}`}
+                >
+                  <div className="flex items-center justify-between mb-5">
+                    <div
+                      className={cn(
+                        'w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 shadow-lg',
+                        colorSchemes[metric.color].bg,
+                        colorSchemes[metric.color].border,
+                        'border'
+                      )}
+                    >
+                      <svg
+                        className={cn(
+                          'w-6 h-6 transition-colors duration-300',
+                          colorSchemes[metric.color].icon
+                        )}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d={metric.icon}
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div
+                        className={cn(
+                          'flex items-center space-x-2 text-sm font-semibold px-3 py-1.5 rounded-full',
+                          metric.changeType === 'positive'
+                            ? 'text-emerald-700 bg-emerald-100 border border-emerald-200'
+                            : 'text-red-700 bg-red-100 border border-red-200'
+                        )}
+                      >
+                        <svg
+                          className={cn(
+                            'w-5 h-5',
+                            metric.changeType === 'positive' ? 'text-emerald-600' : 'text-red-600'
+                          )}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                          />
+                        </svg>
+                        <span>{metric.change}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <h3 className="text-3xl lg:text-4xl font-bold text-slate-900 tracking-tight">
+                    {metric.value}
+                  </h3>
+                  <p className="text-slate-900 font-medium text-base">{metric.title}</p>
+                  <p className="text-slate-500 text-sm">{metric.description}</p>
+                </div>
+              ))}
+        </div>
 
-      {/* Team Performance & Pipeline Health */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <TeamPerformanceHeatmap data={teamData} loading={loading} />
-        <PipelineHealthVisualization stages={pipelineStages} loading={loading} />
+        {/* Main Dashboard Sections (vertical flow to avoid any overlap) */}
+        <div className="space-y-6">
+          {/* Revenue Chart Section */}
+          <div>
+            <div className="bg-white rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-200/60 overflow-hidden">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 mb-2">Revenue Performance</h2>
+                  <p className="text-slate-600 font-medium">Track revenue trends and forecasts</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm text-slate-600">Revenue</span>
+                </div>
+              </div>
+              <div className="h-80 lg:h-96">
+                <InteractiveRevenueChart data={revenueData} loading={loading} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Performance Metrics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-200/60 overflow-hidden">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Team Performance</h3>
+                <p className="text-slate-600 font-medium">Individual and team metrics overview</p>
+              </div>
+              <div className="w-10 h-10 bg-gradient-to-br from-violet-100 to-purple-100 rounded-xl flex items-center justify-center shadow-sm">
+                <svg
+                  className="w-5 h-5 text-violet-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+                  />
+                </svg>
+              </div>
+            </div>
+            <div className="h-80 lg:h-96">
+              <TeamPerformanceHeatmap data={teamData} loading={loading} />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-200/60 overflow-hidden hover:shadow-lg transition-shadow duration-300">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Pipeline Health</h3>
+                <p className="text-slate-600 font-medium">Sales pipeline stage analysis</p>
+              </div>
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-green-100 rounded-xl flex items-center justify-center shadow-sm">
+                <svg
+                  className="w-5 h-5 text-emerald-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                  />
+                </svg>
+              </div>
+            </div>
+            <div className="h-80 lg:h-96">
+              <PipelineHealthVisualization stages={pipelineStages} loading={loading} />
+            </div>
+          </div>
+        </div>
+
+        {/* AI Insights */}
+        <div className="bg-slate-900 rounded-3xl p-8 lg:p-12 text-white overflow-hidden relative">
+          <div>
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-2 h-2 bg-emerald-400 rounded-full" />
+                  <span className="text-slate-300 text-xs font-bold tracking-wide uppercase">
+                    AI-Powered Insights
+                  </span>
+                </div>
+                <h2 className="text-3xl lg:text-4xl font-bold mb-2 tracking-tight">
+                  Intelligent Analytics
+                </h2>
+                <p className="text-slate-300 text-lg font-medium">
+                  Advanced predictions and recommendations for your business
+                </p>
+              </div>
+              <div className="hidden lg:flex items-center justify-center">
+                <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center border border-white/10">
+                  <svg
+                    className="w-8 h-8 text-emerald-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+              {[
+                {
+                  title: 'Revenue Forecast',
+                  insight: 'Strong upward trajectory expected based on current pipeline momentum',
+                  confidence: '95%',
+                  trend: 'up',
+                  icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+                },
+                {
+                  title: 'Team Performance',
+                  insight: 'Sales team consistently exceeding targets across all key metrics',
+                  confidence: '88%',
+                  trend: 'up',
+                  icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z',
+                },
+                {
+                  title: 'Market Opportunity',
+                  insight: 'Emerging market segment presents significant growth potential',
+                  confidence: '92%',
+                  trend: 'up',
+                  icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2V6',
+                },
+              ].map((insight, index) => (
+                <div
+                  key={insight.title}
+                  className="group bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 hover:bg-white/15 transition-colors duration-300 hover:shadow-xl"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-blue-400/20 rounded-xl flex items-center justify-center border border-white/20">
+                      <svg
+                        className="w-6 h-6 text-emerald-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d={insight.icon}
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                      <span className="text-xs text-emerald-400 font-bold uppercase tracking-wide">
+                        Live
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-xl font-bold text-white group-hover:text-emerald-100 transition-colors">
+                      {insight.title}
+                    </h4>
+                    <p className="text-slate-300 text-sm font-medium leading-relaxed">
+                      {insight.insight}
+                    </p>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
+                          Confidence
+                        </span>
+                        <div className="w-16 h-2 bg-white/20 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-300 rounded-full transition-all duration-1000"
+                            style={{ width: insight.confidence }}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-lg font-bold text-emerald-400">
+                        {insight.confidence}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Action Button */}
+            <div className="mt-8 flex justify-center">
+              <button className="flex items-center space-x-3 px-8 py-4 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 rounded-2xl font-bold text-white shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-500/50">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                  />
+                </svg>
+                <span>Generate Advanced Insights</span>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-
-      {/* Enhanced AI Insights Panel */}
-      <AIInsightsPanel data={{ metrics, revenueData, teamData, pipelineStages }} loading={loading} />
     </div>
   );
-}
+});
+
+ExecutiveDashboard.displayName = 'ExecutiveDashboard';
+
+export default ExecutiveDashboard;

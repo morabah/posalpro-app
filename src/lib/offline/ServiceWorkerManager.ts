@@ -475,7 +475,6 @@ export const serviceWorkerManager: ServiceWorkerPublicAPI = (() => {
     return stub;
   }
   
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!_serviceWorkerManager) {
     _serviceWorkerManager = new ServiceWorkerManager();
   }

@@ -523,7 +523,6 @@ export function useAuth(): AuthContextState {
   const context = useContext(AuthContext);
   if (!context) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
       console.warn('useAuth called outside of AuthProvider. Returning safe default context.');
     }
     return DEFAULT_AUTH_CONTEXT;

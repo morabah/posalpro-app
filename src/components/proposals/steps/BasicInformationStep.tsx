@@ -282,7 +282,6 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
     if (hasAttemptedFetch.current || customersLoading || customers.length > 0) return;
     const prefetch = () => {
       if (!hasAttemptedFetch.current && !customersLoading && customers.length === 0) {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         fetchCustomers();
       }
     };
