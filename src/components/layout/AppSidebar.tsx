@@ -25,9 +25,8 @@ import {
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { usePlan } from '@/components/providers/PlanProvider';
 
 interface NavigationItem {
   id: string;
@@ -263,26 +262,6 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['dashboard']));
   const navigationThrottleRef = useRef(new Map<string, number>());
-  const { plan } = usePlan();
-  const analytics = useAnalytics();
-
-  const allowedNavIds = useMemo(() => {
-    switch (plan) {
-      case 'basic':
-        return new Set(['dashboard', 'proposals', 'products', 'customers']);
-      case 'advanced':
-        return new Set([
-          'dashboard',
-          'proposals',
-          'products',
-          'customers',
-          'coordination',
-          'validation',
-        ]);
-      default:
-        return new Set(NAVIGATION_ITEMS.map(item => item.id));
-    }
-  }, [plan]);
 
   // Auto-expand active group with null check
   useEffect(() => {
@@ -321,6 +300,7 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
 
         // ⚡ PERFORMANCE: Use optimized analytics hook via useAnalytics (mocked in tests)
         try {
+          const analytics = useAnalytics();
           if (action === 'navigate') {
             analytics.track('navigate', {
               itemName: metadata.itemName,
@@ -355,25 +335,26 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
     []
   );
 
-  // Filter navigation items by user role and selected plan
+  // Filter navigation items by user role - Make more permissive
   const getFilteredNavigation = useCallback(() => {
-    const roleFiltered = !user?.role
-      ? NAVIGATION_ITEMS
-      : NAVIGATION_ITEMS.filter(item => {
-          if (!item.roles) return true;
-          if (item.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
-          return true;
-        }).map(item => ({
-          ...item,
-          children: item.children?.filter(child => {
-            if (!child.roles) return true;
-            if (child.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
-            return true;
-          }),
-        }));
+    if (!user?.role) return NAVIGATION_ITEMS;
 
-    return roleFiltered.filter(item => allowedNavIds.has(item.id));
-  }, [user?.role, allowedNavIds]);
+    return NAVIGATION_ITEMS.filter(item => {
+      // If no roles specified, show to everyone
+      if (!item.roles) return true;
+      // Show admin items only to admin users
+      if (item.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+      // For other role restrictions, be more permissive
+      return true;
+    }).map(item => ({
+      ...item,
+      children: item.children?.filter(child => {
+        if (!child.roles) return true;
+        if (child.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+        return true;
+      }),
+    }));
+  }, [user?.role]);
 
   const toggleGroup = useCallback(
     (groupId: string) => {
