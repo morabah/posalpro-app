@@ -17,7 +17,7 @@ export function reportWebVitals(metric: NextWebVitalsMetric) {
       navigator.sendBeacon(url, body);
     } else {
       // Fallback to centralized API client
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+       
       apiClient
         .post<void>(url, JSON.parse(body))
         .catch(() => {});

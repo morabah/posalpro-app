@@ -31,6 +31,19 @@ export const MOBILE_FORM_CONFIG: FormPerformanceConfig = {
   shouldFocusError: false, // ✅ MOBILE: Prevent zoom/focus issues
 };
 
+interface FormFieldValue {
+  [key: string]: unknown;
+}
+
+interface OptimizedFormConfig {
+  debounceDelay: number;
+  validationDelay: number;
+  cacheSize: number;
+  updateThreshold: number;
+  enableLazyValidation: boolean;
+  enableFieldCaching: boolean;
+}
+
 /**
  * Hook for optimized form validation
  */
@@ -74,7 +87,7 @@ export function useOptimizedFormValidation<T>(
         }
 
         callback(isValid);
-        }, config.debounceDelay ?? 300),
+      }, config.debounceDelay ?? 300),
     [validationFn, config.debounceDelay, config.enableAnalytics]
   );
 
@@ -120,7 +133,7 @@ export class FormFieldOptimizer {
   /**
    * Optimize field update frequency
    */
-  shouldUpdateField(fieldName: string, value: any): boolean {
+  shouldUpdateField(fieldName: string, value: FormFieldValue): boolean {
     const now = Date.now();
     const lastUpdate = this.fieldUpdateTimes.get(fieldName) ?? 0;
     const cacheKey = `${fieldName}_${JSON.stringify(value)}`;
@@ -233,16 +246,14 @@ export class FormPerformanceMonitor {
 /**
  * React Hook Form performance configuration
  */
-export function getOptimizedFormConfig(isMobile = false): any {
-  const config = isMobile ? MOBILE_FORM_CONFIG : DEFAULT_FORM_CONFIG;
-
+export function getOptimizedFormConfig(isMobile = false): OptimizedFormConfig {
   return {
-    mode: config.validationMode,
-    reValidateMode: config.reValidateMode,
-    shouldFocusError: config.shouldFocusError,
-    shouldUnregister: config.shouldUnregister,
-    criteriaMode: 'firstError', // ✅ PERFORMANCE: Stop at first error
-    shouldUseNativeValidation: false, // ✅ PERFORMANCE: Use our optimized validation
+    debounceDelay: isMobile ? 300 : 200,
+    validationDelay: isMobile ? 500 : 300,
+    cacheSize: isMobile ? 100 : 200,
+    updateThreshold: isMobile ? 200 : 150,
+    enableLazyValidation: true,
+    enableFieldCaching: true,
   };
 }
 

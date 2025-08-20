@@ -30,7 +30,7 @@ export default function SMEAssignmentsPage() {
   const [selectedTab, setSelectedTab] = useState('active');
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: Record<string, unknown> = {}) => {
       console.log('SME Assignments Analytics:', {
         action,
         metadata,

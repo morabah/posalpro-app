@@ -136,11 +136,11 @@ export default function ProposalPreviewPage() {
       const startTime = performance.now();
       try {
         const ids = needsHydration.map(p => p.id).join(',');
-        type BatchProduct = { id: string; name?: string; price?: number; currency?: string };
-        const res = await apiClient.get<{ success?: boolean; data?: Array<BatchProduct>; meta?: any }>(
+        interface BatchProduct { id: string; name?: string; price?: number; currency?: string }
+        const res = await apiClient.get<{ success?: boolean; data?: BatchProduct[]; meta?: any }>(
           `/api/products?ids=${encodeURIComponent(ids)}&fields=id,name,price,currency`
         );
-        const list: Array<BatchProduct> = (res as any)?.data ?? (res as unknown as Array<BatchProduct>);
+        const list: BatchProduct[] = (res as any)?.data ?? (res as unknown as BatchProduct[]);
         const byId = new Map<string, BatchProduct>();
         for (const item of list || []) byId.set(item.id, item);
 

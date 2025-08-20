@@ -318,7 +318,7 @@ const CustomerList = memo(
           if (prefs.columns) setColumnVisibility(prefs.columns);
         }
       } catch {}
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+       
     }, []);
 
     useEffect(() => {
@@ -911,6 +911,23 @@ function QuickViewModal({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
+interface CustomerUpdatePayload {
+  name: string;
+  email?: string;
+  industry?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  tier?: string;
+  status?: string;
+}
+
+interface CustomerUpdateResponse {
+  success: boolean;
+  data: Customer;
+  message: string;
+}
+
 function EditCustomerModal({
   id,
   onClose,
@@ -973,7 +990,7 @@ function EditCustomerModal({
 
   const onSubmit = async (values: EditForm) => {
     try {
-      const payload: any = {
+      const payload: CustomerUpdatePayload = {
         ...values,
         email: values.email || undefined,
         industry: values.industry || undefined,
@@ -982,11 +999,7 @@ function EditCustomerModal({
         address: values.address || undefined,
       };
 
-      const res = await apiClient.put<{
-        success: boolean;
-        data: any;
-        message: string;
-      }>(`customers/${id}`, payload);
+      const res = await apiClient.put<CustomerUpdateResponse>(`customers/${id}`, payload);
 
       if (!res.success) {
         throw new Error(res.message || 'Failed to update customer');

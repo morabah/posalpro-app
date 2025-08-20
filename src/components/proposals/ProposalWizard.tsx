@@ -2196,7 +2196,7 @@ export function ProposalWizard({
   const dbg = useCallback(
     (message: string, data?: Record<string, unknown>) => {
       if (!WIZARD_DEBUG || process.env.NODE_ENV !== 'development') return;
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
       logDebug(`[ProposalWizard] ${message}`, data);
     },
     [WIZARD_DEBUG]

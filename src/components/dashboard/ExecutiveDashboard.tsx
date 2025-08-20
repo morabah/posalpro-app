@@ -76,6 +76,16 @@ const MetricCardSkeleton = () => (
   </div>
 );
 
+interface ExecutiveDashboardResponse {
+  success: boolean;
+  data: {
+    metrics: ExecutiveMetrics | null;
+    revenueChart: RevenueChart[];
+    teamPerformance: TeamPerformance[];
+    pipelineStages: PipelineStage[];
+  };
+}
+
 // Main Executive Dashboard Component
 const ExecutiveDashboard = memo(() => {
   // API and Error Handling
@@ -103,7 +113,7 @@ const ExecutiveDashboard = memo(() => {
 
         const response = (await apiClient.get(
           `/api/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}`
-        )) as any;
+        )) as ExecutiveDashboardResponse;
 
         if (response.success) {
           const data = response.data;
@@ -145,7 +155,7 @@ const ExecutiveDashboard = memo(() => {
       // Trigger data refetch
       const response = (await apiClient.get(
         `/api/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}&refresh=true`
-      )) as any;
+      )) as ExecutiveDashboardResponse;
 
       if (response.success) {
         const data = response.data;

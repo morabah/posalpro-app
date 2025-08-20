@@ -12,31 +12,31 @@
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import React, { ComponentType, lazy, LazyExoticComponent } from 'react';
+import React, { lazy, LazyExoticComponent, ComponentType as ReactComponentType } from 'react';
 
 // Explicit component importers to avoid webpack context importing test files
-const COMPONENT_IMPORTERS: Record<string, () => Promise<{ default: ComponentType<any> }>> = {
+const COMPONENT_IMPORTERS: Record<string, () => Promise<{ default: ReactComponentType<any> }>> = {
   'proposals/ProposalWizard': () =>
     import(
       /* webpackChunkName: "proposal-wizard" */
       '@/components/proposals/ProposalWizard'
-    ) as unknown as Promise<{ default: ComponentType<any> }>,
+    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
   'analytics/AnalyticsDashboard': () =>
     import(
       /* webpackChunkName: "analytics-dashboard" */
       '@/components/analytics/AnalyticsDashboard'
-    ) as unknown as Promise<{ default: ComponentType<any> }>,
+    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
   // Fallback mappings to existing sections/components
   'admin/AdminPanel': () =>
     import(
       /* webpackChunkName: "admin-panel" */
       '@/components/admin/RoleManager'
-    ) as unknown as Promise<{ default: ComponentType<any> }>,
+    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
   'executive/ExecutiveReview': () =>
     import(
       /* webpackChunkName: "executive-review" */
       '@/components/dashboard/sections/ExecutiveSummaryCard'
-    ) as unknown as Promise<{ default: ComponentType<any> }>,
+    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
 };
 
 // Component Traceability Matrix
@@ -106,15 +106,19 @@ export interface ComponentOptimizationConfig {
   cacheStrategy: 'aggressive' | 'normal' | 'minimal';
 }
 
+interface AnalyticsFunction {
+  (event: string, data: Record<string, unknown>, priority?: 'low' | 'medium' | 'high'): void;
+}
+
 /**
  * Advanced Bundle Optimizer Service
  */
 export class BundleOptimizerService {
   private static instance: BundleOptimizerService | null = null;
   private errorHandlingService: ErrorHandlingService;
-  private analytics: any;
-  private loadedChunks: Map<string, LazyExoticComponent<any>> = new Map();
-  private loadingChunks: Map<string, Promise<{ default: ComponentType<any> }>> = new Map();
+  private analytics: AnalyticsFunction | null = null;
+  private loadedChunks: Map<string, LazyExoticComponent<ReactComponentType>> = new Map();
+  private loadingChunks: Map<string, Promise<{ default: ReactComponentType }>> = new Map();
   private chunkLoadTimes: Map<string, number> = new Map();
   private utilizationTracking: Map<string, number> = new Map();
   private performanceObserver?: PerformanceObserver;
@@ -140,14 +144,16 @@ export class BundleOptimizerService {
   /**
    * Initialize analytics integration
    */
-  initializeAnalytics(analytics: any) {
+  initializeAnalytics(analytics: AnalyticsFunction) {
     this.analytics = analytics;
   }
 
   /**
    * Create optimized lazy component with performance tracking
    */
-  createOptimizedComponent(config: ComponentOptimizationConfig): LazyExoticComponent<any> {
+  createOptimizedComponent(
+    config: ComponentOptimizationConfig
+  ): LazyExoticComponent<ReactComponentType> {
     const { id, strategy, chunkName, priority } = config;
 
     if (this.loadedChunks.has(id)) {
@@ -209,7 +215,7 @@ export class BundleOptimizerService {
    */
   private async loadComponentWithMetrics(
     config: ComponentOptimizationConfig
-  ): Promise<{ default: ComponentType<any> }> {
+  ): Promise<{ default: ReactComponentType<any> }> {
     const startTime = performance.now();
     const { id, chunkName } = config;
 
@@ -317,7 +323,7 @@ export class BundleOptimizerService {
   private createFallbackComponent(
     config: ComponentOptimizationConfig,
     error: Error
-  ): ComponentType<any> {
+  ): ReactComponentType<any> {
     // mark error as used (analytics disabled for now)
     void error;
     const { id } = config;
@@ -567,7 +573,7 @@ export class BundleOptimizerService {
 /**
  * Higher-order component for bundle optimization
  */
-export function withBundleOptimization<T extends ComponentType<any>>(
+export function withBundleOptimization<T extends ReactComponentType<any>>(
   Component: T,
   config: ComponentOptimizationConfig
 ): LazyExoticComponent<T> {

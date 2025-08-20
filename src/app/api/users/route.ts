@@ -14,7 +14,7 @@ import {
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import {
-  createCursorQuery,
+  buildCursorPaginationQuery,
   decidePaginationStrategy,
   parseFieldsParam,
   processCursorResults,
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
 
     if (useCursorPagination) {
       // 🚀 CURSOR-BASED PAGINATION: Enterprise-scale performance
-      const cursorQuery = createCursorQuery(
+      const cursorQuery = buildCursorPaginationQuery(
         {
           cursor: validatedQuery.cursor,
           limit: validatedQuery.limit,

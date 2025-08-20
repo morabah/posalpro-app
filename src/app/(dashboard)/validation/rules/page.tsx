@@ -25,11 +25,15 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H16-001'],
 };
 
+interface ValidationMetadata {
+  [key: string]: string | number | boolean | Date;
+}
+
 export default function ValidationRulesPage() {
   const [sessionStartTime] = useState(Date.now());
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: ValidationMetadata = {}) => {
       console.log('Validation Rules Analytics:', {
         action,
         metadata,

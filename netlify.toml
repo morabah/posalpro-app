@@ -83,8 +83,3 @@
   to = "/.netlify/images"
   status = 200
 
-# Essential catch-all for Next.js App Router - MUST be last
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200

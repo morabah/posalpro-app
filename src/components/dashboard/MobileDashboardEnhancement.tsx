@@ -15,9 +15,9 @@
 
 import ModernDashboard from '@/components/dashboard/ModernDashboard';
 import { Button } from '@/components/ui/forms/Button';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useMobileDetection } from '@/hooks/useMobileDetection';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { UserType } from '@/types';
 import { Customer } from '@/types/entities/customer';
 import { Product } from '@/types/entities/product';
@@ -30,9 +30,12 @@ import {
   DeviceTabletIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
-// Avoid importing server-only prisma client types in client bundles
-interface ContentLite { id: string; title?: string }
 import { useCallback, useEffect, useMemo, useState } from 'react';
+// Avoid importing server-only prisma client types in client bundles
+interface ContentLite {
+  id: string;
+  title?: string;
+}
 
 interface MobileDashboardData {
   proposals: Proposal[];
@@ -211,21 +214,25 @@ export function MobileDashboardEnhancement({
     if (!deviceInfo) return;
 
     try {
-      analytics('mobile_dashboard_view', {
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: ['H9', 'H11'],
-        measurementData: {
-          deviceType: deviceInfo.deviceType,
-          screenSize: `${screenWidth}x${screenHeight}`,
-          orientation,
-          touchEnabled,
-          layoutMode: adaptiveLayoutConfig?.layout,
-          performanceMode: activePerformanceMode,
-          widgetColumns: adaptiveLayoutConfig?.widgetColumns,
-          touchTargetSize: adaptiveLayoutConfig?.touchTargetSize,
+      analytics(
+        'mobile_dashboard_view',
+        {
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: ['H9', 'H11'],
+          measurementData: {
+            deviceType: deviceInfo.deviceType,
+            screenSize: `${screenWidth}x${screenHeight}`,
+            orientation,
+            touchEnabled,
+            layoutMode: adaptiveLayoutConfig?.layout,
+            performanceMode: activePerformanceMode,
+            widgetColumns: adaptiveLayoutConfig?.widgetColumns,
+            touchTargetSize: adaptiveLayoutConfig?.touchTargetSize,
+          },
+          componentMapping: COMPONENT_MAPPING,
         },
-        componentMapping: COMPONENT_MAPPING,
-      }, 'medium');
+        'medium'
+      );
     } catch (error) {
       handleAsyncError(error, 'Failed to track mobile dashboard usage', {
         context: 'MobileDashboardEnhancement.trackMobileDashboardUsage',
@@ -257,16 +264,20 @@ export function MobileDashboardEnhancement({
         }
 
         // Track mobile action
-        analytics('mobile_dashboard_action', {
-          userStories: ['US-8.1'],
-          hypotheses: ['H9'],
-          measurementData: {
-            action,
-            deviceType: deviceInfo?.deviceType,
-            touchEnabled,
+        analytics(
+          'mobile_dashboard_action',
+          {
+            userStories: ['US-8.1'],
+            hypotheses: ['H9'],
+            measurementData: {
+              action,
+              deviceType: deviceInfo?.deviceType,
+              touchEnabled,
+            },
+            componentMapping: COMPONENT_MAPPING,
           },
-          componentMapping: COMPONENT_MAPPING,
-        }, 'medium');
+          'medium'
+        );
 
         // Execute original action
         onQuickAction?.(action);
@@ -292,16 +303,20 @@ export function MobileDashboardEnhancement({
       const nextMode = modes[(currentIndex + 1) % modes.length];
 
       // Track layout mode change
-      analytics('mobile_layout_mode_change', {
-        userStories: ['US-8.1'],
-        hypotheses: ['H9'],
-        measurementData: {
-          fromMode: prev,
-          toMode: nextMode,
-          deviceType: deviceInfo?.deviceType,
+      analytics(
+        'mobile_layout_mode_change',
+        {
+          userStories: ['US-8.1'],
+          hypotheses: ['H9'],
+          measurementData: {
+            fromMode: prev,
+            toMode: nextMode,
+            deviceType: deviceInfo?.deviceType,
+          },
+          componentMapping: COMPONENT_MAPPING,
         },
-        componentMapping: COMPONENT_MAPPING,
-      }, 'low');
+        'low'
+      );
 
       return nextMode;
     });
@@ -318,16 +333,20 @@ export function MobileDashboardEnhancement({
       const nextMode = modes[(currentIndex + 1) % modes.length];
 
       // Track performance mode change
-      analytics('mobile_performance_mode_change', {
-        userStories: ['US-8.3'],
-        hypotheses: ['H11'],
-        measurementData: {
-          fromMode: prev,
-          toMode: nextMode,
-          deviceType: deviceInfo?.deviceType,
+      analytics(
+        'mobile_performance_mode_change',
+        {
+          userStories: ['US-8.3'],
+          hypotheses: ['H11'],
+          measurementData: {
+            fromMode: prev,
+            toMode: nextMode,
+            deviceType: deviceInfo?.deviceType,
+          },
+          componentMapping: COMPONENT_MAPPING,
         },
-        componentMapping: COMPONENT_MAPPING,
-      }, 'low');
+        'low'
+      );
 
       return nextMode;
     });
@@ -447,12 +466,21 @@ export function MobileDashboardEnhancement({
         }
       >
         <ModernDashboard
-          user={user}
-          loading={loading}
-          error={error}
-          data={data}
-          proposals={proposals}
-          priorityItems={priorityItems}
+          user={
+            user
+              ? {
+                  id: String(user.id),
+                  name: String(user.name ?? ''),
+                  email: '',
+                  role: String(user.role),
+                }
+              : null
+          }
+          loading={Boolean(loading)}
+          error={error ?? null}
+          data={data as unknown as any}
+          proposals={proposals as unknown as any}
+          priorityItems={priorityItems as unknown as any}
           onQuickAction={handleMobileQuickAction}
           onRetry={onRetry}
         />

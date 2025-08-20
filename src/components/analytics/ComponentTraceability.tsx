@@ -10,15 +10,15 @@ import { CubeIcon, LinkIcon } from '@heroicons/react/24/outline';
 
 interface TraceabilityItem {
   id?: string;
-  userStories?: Array<string>;
-  acceptanceCriteria?: Array<string>;
-  hypotheses?: Array<string>;
-  components?: Array<string>;
+  userStories?: string[];
+  acceptanceCriteria?: string[];
+  hypotheses?: string[];
+  components?: string[];
   [key: string]: unknown;
 }
 
 type ComponentTraceabilityData =
-  | Array<TraceabilityItem>
+  | TraceabilityItem[]
   | Record<string, TraceabilityItem>
   | {
       totalComponents?: number;

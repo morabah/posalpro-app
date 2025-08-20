@@ -7,7 +7,7 @@
  * Creates a debounced function that delays invoking func until after wait milliseconds
  * have elapsed since the last time the debounced function was invoked.
  */
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number,
   options: {
@@ -17,9 +17,9 @@ export function debounce<T extends (...args: any[]) => any>(
   } = {}
 ): T & { cancel: () => void; flush: () => ReturnType<T> } {
   let lastArgs: Parameters<T> | undefined;
-  let lastThis: any;
+  let lastThis: unknown;
   let maxTimeoutId: NodeJS.Timeout | undefined;
-  let result: ReturnType<T>;
+  let result: ReturnType<T> | undefined;
   let timerId: NodeJS.Timeout | undefined;
   let lastCallTime: number | undefined;
   let lastInvokeTime = 0;
@@ -32,7 +32,7 @@ export function debounce<T extends (...args: any[]) => any>(
 
     lastArgs = lastThis = undefined;
     lastInvokeTime = time;
-    result = func.apply(thisArg, args);
+    result = func.apply(thisArg, args) as ReturnType<T>;
     return result;
   }
 
@@ -49,7 +49,7 @@ export function debounce<T extends (...args: any[]) => any>(
   function leadingEdge(time: number): ReturnType<T> {
     lastInvokeTime = time;
     timerId = startTimer(timerExpired, wait);
-    return leading ? invokeFunc(time) : result;
+    return leading ? invokeFunc(time) : result!;
   }
 
   function remainingWait(time: number): number {
@@ -89,7 +89,7 @@ export function debounce<T extends (...args: any[]) => any>(
       return invokeFunc(time);
     }
     lastArgs = lastThis = undefined;
-    return result;
+    return result!;
   }
 
   function cancel(): void {
@@ -104,14 +104,14 @@ export function debounce<T extends (...args: any[]) => any>(
   }
 
   function flush(): ReturnType<T> {
-    return timerId === undefined ? result : trailingEdge(Date.now());
+    return timerId === undefined ? result! : trailingEdge(Date.now());
   }
 
   function pending(): boolean {
     return timerId !== undefined;
   }
 
-  function debounced(this: any, ...args: Parameters<T>): ReturnType<T> {
+  function debounced(this: unknown, ...args: Parameters<T>): ReturnType<T> {
     const time = Date.now();
     const isInvoking = shouldInvoke(time);
 
@@ -131,7 +131,7 @@ export function debounce<T extends (...args: any[]) => any>(
     if (timerId === undefined) {
       timerId = startTimer(timerExpired, wait);
     }
-    return result;
+    return result!;
   }
 
   debounced.cancel = cancel;
@@ -144,7 +144,7 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Creates a throttled function that only invokes func at most once per every wait milliseconds.
  */
-export function throttle<T extends (...args: any[]) => any>(
+export function throttle<T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number,
   options: {
@@ -163,7 +163,7 @@ export function throttle<T extends (...args: any[]) => any>(
 /**
  * Performance-optimized debounce for form validation
  */
-export const debounceFormValidation = <T extends (...args: any[]) => any>(
+export const debounceFormValidation = <T extends (...args: unknown[]) => unknown>(
   func: T,
   delay: number = 300
 ) => debounce(func, delay, { leading: false, trailing: true });
@@ -171,7 +171,7 @@ export const debounceFormValidation = <T extends (...args: any[]) => any>(
 /**
  * Performance-optimized throttle for analytics
  */
-export const throttleAnalytics = <T extends (...args: any[]) => any>(
+export const throttleAnalytics = <T extends (...args: unknown[]) => unknown>(
   func: T,
   interval: number = 2000
 ) => throttle(func, interval, { leading: true, trailing: false });
@@ -179,5 +179,7 @@ export const throttleAnalytics = <T extends (...args: any[]) => any>(
 /**
  * Performance-optimized debounce for API calls
  */
-export const debounceApiCalls = <T extends (...args: any[]) => any>(func: T, delay: number = 500) =>
-  debounce(func, delay, { leading: false, trailing: true });
+export const debounceApiCalls = <T extends (...args: unknown[]) => unknown>(
+  func: T,
+  delay: number = 500
+) => debounce(func, delay, { leading: false, trailing: true });

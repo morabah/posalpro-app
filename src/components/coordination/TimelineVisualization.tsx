@@ -118,6 +118,13 @@ interface TimelineVisualizationProps {
   className?: string;
 }
 
+interface ErrorContext {
+  taskId?: string;
+  operation?: string;
+  component?: string;
+  [key: string]: unknown;
+}
+
 export function TimelineVisualization({
   proposalId,
   proposalName,
@@ -143,7 +150,7 @@ export function TimelineVisualization({
 
   // Error handling
   const handleError = useCallback(
-    (error: unknown, operation: string, context?: any) => {
+    (error: unknown, operation: string, context?: ErrorContext) => {
       const standardError =
         error instanceof Error
           ? new StandardError({
@@ -176,12 +183,16 @@ export function TimelineVisualization({
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       toast.error(userMessage);
 
-      analytics('timeline_visualization_error', {
-        error: userMessage,
-        proposalId,
-        component: 'TimelineVisualization',
-        traceability: COMPONENT_MAPPING,
-      }, 'medium');
+      analytics(
+        'timeline_visualization_error',
+        {
+          error: userMessage,
+          proposalId,
+          component: 'TimelineVisualization',
+          traceability: COMPONENT_MAPPING,
+        },
+        'medium'
+      );
     },
     [errorHandlingService, analytics, proposalId]
   );

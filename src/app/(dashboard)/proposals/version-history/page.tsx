@@ -65,34 +65,45 @@ export default function ProposalVersionHistoryPage() {
         const endpoint = proposalId
           ? `/proposals/${encodeURIComponent(proposalId)}/versions?limit=50`
           : `/proposals/versions?limit=50`;
-        const res: any = await apiClient.get(endpoint);
+        const res = (await apiClient.get(endpoint)) as {
+          success?: boolean;
+          data?: Array<Record<string, unknown>>;
+          pagination?: {
+            nextCursor?: { cursorCreatedAt: string; cursorId: string };
+            hasNextPage?: boolean;
+          };
+        };
         if (res && res.success && Array.isArray(res.data)) {
           // Prime proposal titles directly from API payload (avoid N+1 lookups)
           const titlesFromApi: Record<string, string> = {};
-          for (const row of res.data as any[]) {
-            const pid = row.proposalId;
+          for (const row of res.data as Array<Record<string, unknown>>) {
+            const pid = row.proposalId as string | undefined;
             if (pid && !titlesFromApi[pid]) {
-              titlesFromApi[pid] = row.proposalTitle || pid;
+              titlesFromApi[pid] = (row.proposalTitle as string) || pid;
             }
           }
 
-          const mapped: VersionHistoryEntry[] = res.data.map((c: any, idx: number) => {
-            const tvRaw = (c as any).totalValue;
-            const tv = tvRaw === null || tvRaw === undefined ? undefined : Number(tvRaw);
-            return {
-              id: c.id || String(idx),
-              version: c.version ?? 0,
-              timestamp: new Date(c.createdAt || c.timestamp || Date.now()),
-              changeType: c.changeType ?? 'update',
-              changedBy: c.createdByName || c.changedBy || 'system',
-              description: c.changesSummary ? String(c.changesSummary) : 'Proposal change',
-              proposalId: c.proposalId || proposalId,
-              ...(tv !== undefined && !Number.isNaN(tv) ? { totalValue: tv } : {}),
-              affectedRelationships: 1,
-              validationImpact: 0,
-              rollbackAvailable: false,
-            } as any;
-          });
+          const mapped: VersionHistoryEntry[] = res.data.map(
+            (c: Record<string, unknown>, idx: number) => {
+              const tvRaw = c.totalValue as unknown;
+              const tv = tvRaw === null || tvRaw === undefined ? undefined : Number(tvRaw);
+              return {
+                id: (c.id as string) || String(idx),
+                version: (c.version as number) ?? 0,
+                timestamp: new Date(
+                  (c.createdAt as string) || (c.timestamp as string) || Date.now()
+                ),
+                changeType: (c.changeType as string) ?? 'update',
+                changedBy: (c.createdByName as string) || (c.changedBy as string) || 'system',
+                description: c.changesSummary ? String(c.changesSummary) : 'Proposal change',
+                proposalId: (c.proposalId as string) || proposalId,
+                ...(tv !== undefined && !Number.isNaN(tv) ? { totalValue: tv } : {}),
+                affectedRelationships: 1,
+                validationImpact: 0,
+                rollbackAvailable: false,
+              };
+            }
+          );
           setVersionHistory(mapped);
           // store pagination cursor if present
           if (res.pagination && res.pagination.nextCursor) {
@@ -143,19 +154,28 @@ export default function ProposalVersionHistoryPage() {
         cursorCreatedAt: nextCursor.cursorCreatedAt,
         cursorId: nextCursor.cursorId,
       }).toString();
-      const res: any = await apiClient.get(`/proposals/versions?${qp}`);
+      const res = (await apiClient.get(`/proposals/versions?${qp}`)) as {
+        success?: boolean;
+        data?: Array<Record<string, unknown>>;
+        pagination?: {
+          nextCursor?: { cursorCreatedAt: string; cursorId: string };
+          hasNextPage?: boolean;
+        };
+      };
       if (res && res.success && Array.isArray(res.data)) {
-        const more: VersionHistoryEntry[] = res.data.map((c: any, idx: number) => ({
-          id: c.id || String(idx),
-          version: c.version ?? 0,
-          timestamp: new Date(c.timestamp || c.createdAt || Date.now()),
-          changeType: c.changeType ?? 'update',
-          changedBy: c.createdByName || c.changedBy || 'system',
-          description: c.description ? String(c.description) : 'Proposal change',
-          affectedRelationships: 1,
-          validationImpact: 0,
-          rollbackAvailable: false,
-        })) as any;
+        const more: VersionHistoryEntry[] = res.data.map(
+          (c: Record<string, unknown>, idx: number) => ({
+            id: (c.id as string) || String(idx),
+            version: (c.version as number) ?? 0,
+            timestamp: new Date((c.timestamp as string) || (c.createdAt as string) || Date.now()),
+            changeType: (c.changeType as string) ?? 'update',
+            changedBy: (c.createdByName as string) || (c.changedBy as string) || 'system',
+            description: c.description ? String(c.description) : 'Proposal change',
+            affectedRelationships: 1,
+            validationImpact: 0,
+            rollbackAvailable: false,
+          })
+        );
         setVersionHistory(prev => [...prev, ...more]);
         if (res.pagination && res.pagination.nextCursor) {
           setNextCursor(res.pagination.nextCursor);
@@ -171,11 +191,11 @@ export default function ProposalVersionHistoryPage() {
   }, [apiClient, hasMore, nextCursor]);
 
   const groupedHistory = useMemo(() => {
-    const map: Record<string, VersionHistoryEntry[]> = {} as any;
-    for (const e of versionHistory as any[]) {
-      const pid = (e as any).proposalId || 'unknown';
+    const map: Record<string, VersionHistoryEntry[]> = {};
+    for (const e of versionHistory) {
+      const pid = e.proposalId || 'unknown';
       if (!map[pid]) map[pid] = [];
-      map[pid].push(e as any);
+      map[pid].push(e);
     }
     Object.values(map).forEach(list => list.sort((a, b) => b.version - a.version));
     return map;
@@ -206,9 +226,9 @@ export default function ProposalVersionHistoryPage() {
       const inRange = now - e.timestamp.getTime() <= rangeMs;
       if (!inRange) return false;
       if (changeTypeFilter.length > 0) {
-        const normalized = (e.changeType || 'other') as any;
+        const normalized = (e.changeType || 'other').toString();
         const bucket = (['create', 'update', 'delete', 'batch_import'] as const).includes(
-          normalized as any
+          normalized as 'create' | 'update' | 'delete' | 'batch_import'
         )
           ? (normalized as 'create' | 'update' | 'delete' | 'batch_import')
           : 'other';
@@ -218,7 +238,7 @@ export default function ProposalVersionHistoryPage() {
         return false;
       }
       if (searchText) {
-        const pid = (e as any).proposalId || 'unknown';
+        const pid = e.proposalId || 'unknown';
         const title = proposalTitles[pid] || '';
         const hay = `${title} ${e.description}`.toLowerCase();
         if (!hay.includes(searchText.toLowerCase())) return false;
@@ -228,9 +248,9 @@ export default function ProposalVersionHistoryPage() {
 
     const map: Record<string, VersionHistoryEntry[]> = {};
     for (const e of entries) {
-      const pid = (e as any).proposalId || 'unknown';
+      const pid = e.proposalId || 'unknown';
       if (!map[pid]) map[pid] = [];
-      map[pid].push(e as any);
+      map[pid].push(e);
     }
     Object.values(map).forEach(list => list.sort((a, b) => b.version - a.version));
     return map;
@@ -247,7 +267,7 @@ export default function ProposalVersionHistoryPage() {
       const t = String(e.changeType);
       if (byType[t] !== undefined) byType[t] += 1;
       uniqueUsers.add(e.changedBy);
-      if (typeof (e as any).totalValue === 'number') totalValueDeltaCount += 1;
+      if (typeof e.totalValue === 'number') totalValueDeltaCount += 1;
     }
     return { total, byType, uniqueUsers: uniqueUsers.size, valueTagged: totalValueDeltaCount };
   }, [filteredGrouped]);
@@ -292,13 +312,17 @@ export default function ProposalVersionHistoryPage() {
     URL.revokeObjectURL(url);
   }, [filteredGrouped, proposalTitles]);
 
-  function DiffViewer({ entry }: { entry: any }) {
+  function DiffViewer({ entry }: { entry: VersionHistoryEntry }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [diff, setDiff] = useState<{
       added: string[];
       removed: string[];
-      updated: Array<{ productId: string; from: any; to: any }>;
+      updated: Array<{
+        productId: string;
+        from: Record<string, unknown>;
+        to: Record<string, unknown>;
+      }>;
     } | null>(null);
     const [productNames, setProductNames] = useState<Record<string, string>>({});
     const api = apiClient;
@@ -309,15 +333,29 @@ export default function ProposalVersionHistoryPage() {
         try {
           setLoading(true);
           setError(null);
-          const res: any = await api.get(
+          const res = (await api.get(
             `/proposals/${entry.proposalId}/versions?version=${entry.version}&detail=1`
-          );
+          )) as {
+            success?: boolean;
+            data?: {
+              diff?: {
+                added: string[];
+                removed: string[];
+                updated: Array<{
+                  productId: string;
+                  from: Record<string, unknown>;
+                  to: Record<string, unknown>;
+                }>;
+              };
+              productsMap?: Record<string, { name: string }>;
+            };
+          };
           if (!cancelled && res?.success && res?.data?.diff) {
             setDiff(res.data.diff);
             const pm: Record<string, string> | undefined = res?.data?.productsMap
               ? Object.fromEntries(
                   Object.entries(res.data.productsMap as Record<string, { name: string }>).map(
-                    ([id, obj]) => [id, (obj as any).name]
+                    ([id, obj]) => [id, obj.name]
                   )
                 )
               : undefined;
@@ -369,9 +407,10 @@ export default function ProposalVersionHistoryPage() {
             <ul className="list-disc list-inside text-gray-800">
               {diff.updated.map(u => (
                 <li key={`upd-${u.productId}`}>
-                  {productNames[u.productId] || u.productId}: qty {u.from.quantity} →{' '}
-                  {u.to.quantity}, price {u.from.unitPrice} → {u.to.unitPrice}, discount{' '}
-                  {u.from.discount}% → {u.to.discount}%
+                  {productNames[u.productId] || u.productId}: qty {String(u.from.quantity || 'N/A')}{' '}
+                  → {String(u.to.quantity || 'N/A')}, price {String(u.from.unitPrice || 'N/A')} →{' '}
+                  {String(u.to.unitPrice || 'N/A')}, discount {String(u.from.discount || 'N/A')}% →{' '}
+                  {String(u.to.discount || 'N/A')}%
                 </li>
               ))}
             </ul>
@@ -394,7 +433,7 @@ export default function ProposalVersionHistoryPage() {
           // Track page view once on first load
           try {
             // do not include analytics in deps to avoid loops
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
             analytics.page('version_history');
           } catch {}
         }
@@ -460,7 +499,7 @@ export default function ProposalVersionHistoryPage() {
               <div className="lg:col-span-2">
                 <Select
                   value={timeRange}
-                  onChange={v => setTimeRange(v as any)}
+                  onChange={v => setTimeRange(v as '7d' | '30d' | '90d' | 'all')}
                   options={[
                     { value: '7d', label: 'Last 7 days' },
                     { value: '30d', label: 'Last 30 days' },
@@ -511,23 +550,29 @@ export default function ProposalVersionHistoryPage() {
                   color: 'bg-purple-100 text-purple-800',
                 },
               ].map(cfg => {
-                const active = (changeTypeFilter as any[]).includes(cfg.key as any);
+                const active = changeTypeFilter.includes(
+                  cfg.key as 'create' | 'update' | 'delete' | 'batch_import' | 'other'
+                );
                 return (
                   <button
                     key={cfg.key}
                     onClick={() => {
                       setChangeTypeFilter(prev => {
-                        const exists = (prev as any[]).includes(cfg.key as any);
-                        const next = exists
-                          ? ((prev as any[]).filter(t => t !== (cfg.key as any)) as any)
-                          : ([...prev, cfg.key] as any);
+                        const key = cfg.key as
+                          | 'create'
+                          | 'update'
+                          | 'delete'
+                          | 'batch_import'
+                          | 'other';
+                        const exists = prev.includes(key);
+                        const next = exists ? prev.filter(t => t !== key) : [...prev, key];
                         try {
                           analytics.track('version_history_filter_toggled', {
                             type: cfg.key,
                             active: !exists,
                           });
                         } catch {}
-                        return next as any;
+                        return next;
                       });
                     }}
                     className={`px-2 py-1 text-xs rounded-full border ${
@@ -634,8 +679,8 @@ export default function ProposalVersionHistoryPage() {
                                     </div>
                                     <div>
                                       <span className="font-medium">Total Value:</span>{' '}
-                                      {typeof (entry as any).totalValue === 'number'
-                                        ? formatCurrency((entry as any).totalValue)
+                                      {typeof entry.totalValue === 'number'
+                                        ? formatCurrency(entry.totalValue)
                                         : '—'}
                                     </div>
                                   </div>
@@ -644,7 +689,7 @@ export default function ProposalVersionHistoryPage() {
                                       <div className="font-medium text-gray-900 mb-1">
                                         What changed
                                       </div>
-                                      <DiffViewer entry={entry as any} />
+                                      <DiffViewer entry={entry} />
                                     </div>
                                   )}
                                 </div>

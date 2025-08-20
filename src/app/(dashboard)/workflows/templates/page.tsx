@@ -81,14 +81,14 @@ interface WorkflowTemplate {
 interface StageCondition {
   field: string;
   operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'contains' | 'oneOf';
-  value: any;
+  value: string | number | boolean | string[];
   logicalOperator?: 'and' | 'or';
 }
 
 interface StageAction {
   type: 'notify' | 'escalate' | 'delegate' | 'autoApprove' | 'skip';
   target: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, string | number | boolean>;
 }
 
 interface EscalationRule {
@@ -128,7 +128,7 @@ interface ConditionalRule {
 interface RuleCondition {
   field: string;
   operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'contains' | 'oneOf';
-  value: any;
+  value: string | number | boolean | string[];
   logicalOperator?: 'and' | 'or';
   nestedConditions?: RuleCondition[];
 }
@@ -136,7 +136,7 @@ interface RuleCondition {
 interface RuleAction {
   type: 'addStage' | 'removeStage' | 'modifyStage' | 'changeApprover' | 'updateSLA' | 'autoApprove';
   target: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, string | number | boolean>;
 }
 
 interface SLASettings {
@@ -213,6 +213,41 @@ interface DelegationRule {
   autoDelegate: boolean;
 }
 
+// API response interfaces
+interface WorkflowApiResponse {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  stages?: WorkflowStageApiResponse[];
+  createdAt: string;
+  updatedAt: string;
+  creator?: { email: string };
+  statistics?: {
+    totalExecutions?: number;
+    averageCompletionTime?: number;
+    successRate?: number;
+    slaCompliance?: number;
+  };
+}
+
+interface WorkflowStageApiResponse {
+  id?: string;
+  name: string;
+  description?: string;
+  order?: number;
+  isParallel?: boolean;
+  slaHours?: number;
+}
+
+interface WorkflowApiData {
+  workflows: WorkflowApiResponse[];
+  pagination?: {
+    nextCursor?: string | null;
+    hasMore?: boolean;
+  };
+}
+
 // Removed MOCK_TEMPLATES; will load from /api/workflows
 
 export default function WorkflowTemplateManager() {
@@ -231,7 +266,7 @@ export default function WorkflowTemplateManager() {
   // Analytics tracking disabled to prevent Fast Refresh rebuilds
   // TODO: Migrate to useOptimizedAnalytics hook for proper batching
   const trackTemplateAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: Record<string, unknown> = {}) => {
       // No-op to prevent console.log rebuild triggers
     },
     [sessionStartTime]
@@ -288,7 +323,7 @@ export default function WorkflowTemplateManager() {
           // structured log handled by analytics services if enabled
           break;
         default:
-          // no-op
+        // no-op
       }
     },
     [trackTemplateAction]
@@ -307,7 +342,7 @@ export default function WorkflowTemplateManager() {
     let isCancelled = false;
     async function load() {
       try {
-        const res = await apiClient.get<{ success: boolean; data: { workflows: any[] } }>(
+        const res = await apiClient.get<{ success: boolean; data: WorkflowApiData }>(
           '/workflows?limit=50&sortBy=updatedAt&sortOrder=desc'
         );
         if (isCancelled) return;
@@ -319,12 +354,12 @@ export default function WorkflowTemplateManager() {
             version: 1,
             isActive: w.isActive,
             entityType: 'proposal',
-            stages: (w.stages || []).map((s: any, idx: number) => ({
+            stages: (w.stages || []).map((s: WorkflowStageApiResponse, idx: number) => ({
               id: s.id || `stage-${idx}`,
               name: s.name,
               description: s.description || '',
               order: s.order ?? idx + 1,
-              stageType: (s.isParallel ? 'parallel' : 'sequential') as any,
+              stageType: (s.isParallel ? 'parallel' : 'sequential') as 'parallel' | 'sequential',
               approvers: [],
               roles: [],
               slaHours: s.slaHours ?? 24,
@@ -371,9 +406,9 @@ export default function WorkflowTemplateManager() {
             approvers: [],
           }));
           setTemplates(mapped);
-          const pg = (res as any)?.data?.pagination;
+          const pg = res.data.pagination;
           if (pg && typeof pg === 'object') {
-            setNextCursor(pg.nextCursor || null);
+            setNextCursor(pg.nextCursor ? { cursorId: pg.nextCursor } : null);
             setHasMore(Boolean(pg.hasMore));
           } else {
             setNextCursor(null);
@@ -395,7 +430,7 @@ export default function WorkflowTemplateManager() {
   const loadMoreTemplates = useCallback(async () => {
     if (!nextCursor) return;
     const qp = new URLSearchParams({ limit: '50', cursorId: nextCursor.cursorId }).toString();
-    const res = await apiClient.get<{ success: boolean; data: { workflows: any[]; pagination?: any } }>(
+    const res = await apiClient.get<{ success: boolean; data: WorkflowApiData }>(
       `/workflows?${qp}`
     );
     if (res?.success) {
@@ -406,12 +441,12 @@ export default function WorkflowTemplateManager() {
         version: 1,
         isActive: w.isActive,
         entityType: 'proposal',
-        stages: (w.stages || []).map((s: any, idx: number) => ({
+        stages: (w.stages || []).map((s: WorkflowStageApiResponse, idx: number) => ({
           id: s.id || `stage-${idx}`,
           name: s.name,
           description: s.description || '',
           order: s.order ?? idx + 1,
-          stageType: (s.isParallel ? 'parallel' : 'sequential') as any,
+          stageType: (s.isParallel ? 'parallel' : 'sequential') as 'parallel' | 'sequential',
           approvers: [],
           roles: [],
           slaHours: s.slaHours ?? 24,
@@ -458,8 +493,8 @@ export default function WorkflowTemplateManager() {
         approvers: [],
       }));
       setTemplates(prev => [...prev, ...mapped]);
-      const pg = (res as any)?.data?.pagination;
-      setNextCursor(pg?.nextCursor || null);
+      const pg = res.data.pagination;
+      setNextCursor(pg?.nextCursor ? { cursorId: pg.nextCursor } : null);
       setHasMore(Boolean(pg?.hasMore));
     }
   }, [apiClient, nextCursor]);
@@ -553,7 +588,9 @@ export default function WorkflowTemplateManager() {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() =>
+                  setActiveTab(tab.id as 'overview' | 'builder' | 'rules' | 'sla' | 'analytics')
+                }
                 className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
@@ -588,7 +625,7 @@ export default function WorkflowTemplateManager() {
                     </div>
                   </div>
 
-                      <div className="space-y-4">
+                  <div className="space-y-4">
                     {templates.map(template => (
                       <div
                         key={template.id}
@@ -669,14 +706,14 @@ export default function WorkflowTemplateManager() {
                         </div>
                       </div>
                     ))}
-                      </div>
-                      {hasMore && (
-                        <div className="flex justify-center mt-4">
-                          <Button onClick={loadMoreTemplates} variant="secondary">
-                            Load More
-                          </Button>
-                        </div>
-                      )}
+                  </div>
+                  {hasMore && (
+                    <div className="flex justify-center mt-4">
+                      <Button onClick={loadMoreTemplates} variant="secondary">
+                        Load More
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </Card>
             </div>

@@ -30,7 +30,9 @@ function rateLimitAdmin(req: NextRequest): NextResponse | null {
   if (!(pathname.startsWith('/api/admin') || pathname.startsWith('/admin'))) return null;
 
   const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || (req as any).ip || 'local';
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    (req as { ip?: string }).ip ||
+    'local';
 
   const bucket = adminRateLimitMap.get(ip) || {
     count: 0,
@@ -87,9 +89,11 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
       }
 
       // Capability-based check preferred over raw role
-      const userRoles = Array.isArray((token as any).roles) ? (token as any).roles : [];
-      const userPermissions = Array.isArray((token as any).permissions)
-        ? (token as any).permissions
+      const userRoles = Array.isArray((token as { roles?: string[] }).roles)
+        ? (token as { roles?: string[] }).roles || []
+        : [];
+      const userPermissions = Array.isArray((token as { permissions?: string[] }).permissions)
+        ? (token as { permissions?: string[] }).permissions || []
         : [];
       const hasAdminCapability =
         userPermissions.includes('admin:*') || userPermissions.includes('admin:access');

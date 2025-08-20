@@ -30,7 +30,7 @@ export default function ProductSelectionPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: Record<string, unknown> = {}) => {
       console.log('Product Selection Analytics:', {
         action,
         metadata,

@@ -21,8 +21,8 @@ export function getPrismaSelect(
   const fieldsToSelect = requestedFields?.length
     ? requestedFields
     : config.defaultFields && config.defaultFields.length > 0
-    ? config.defaultFields
-    : config.allowedFields;
+      ? config.defaultFields
+      : config.allowedFields;
 
   fieldsToSelect.forEach(field => {
     if (config.allowedFields.includes(field)) {
@@ -33,13 +33,10 @@ export function getPrismaSelect(
         select[field] = relationConfig;
       } else {
         select[field] = {
-          select: (relationConfig as string[]).reduce<Record<string, boolean>>(
-            (acc, val) => {
-              acc[val] = true;
-              return acc;
-            },
-            {}
-          ),
+          select: (relationConfig as string[]).reduce<Record<string, boolean>>((acc, val) => {
+            acc[val] = true;
+            return acc;
+          }, {}),
         };
       }
     }
@@ -318,7 +315,10 @@ const FIELD_CONFIGS: Record<string, FieldConfig> = {
  * @param entityType - The type of the entity.
  * @returns A Prisma select object.
  */
-export function parseFields(url: URL, entityType: keyof typeof FIELD_CONFIGS): Record<string, unknown> {
+export function parseFields(
+  url: URL,
+  entityType: keyof typeof FIELD_CONFIGS
+): Record<string, unknown> {
   const fields = url.searchParams.get('fields');
   if (!fields) {
     return getPrismaSelect(entityType);
@@ -363,29 +363,35 @@ export function parseFieldsParam(
   return { select, optimizationMetrics };
 }
 
-/**
- * Creates a Prisma query object for cursor-based pagination.
- * @param options Pagination options including cursor, limit, sortBy, and sortOrder
- * @param baseWhere Base where conditions to apply
- * @returns A Prisma query object with proper where, take, and orderBy conditions
- */
-export function createCursorQuery(
-  options: {
-    cursor?: string;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    entityType: string;
-  },
-  baseWhere: any = {}
-): {
-  where: any;
+interface WhereClause {
+  [key: string]: unknown;
+}
+
+interface OrderByClause {
+  [key: string]: 'asc' | 'desc';
+}
+
+interface PaginationOptions {
+  cursor?: string;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  entityType: string;
+}
+
+interface PaginationResult {
+  where: WhereClause;
   take: number;
-  orderBy: any;
-} {
+  orderBy: OrderByClause;
+}
+
+export function buildCursorPaginationQuery(
+  options: PaginationOptions,
+  baseWhere: WhereClause = {}
+): PaginationResult {
   const { cursor, limit = 20, sortBy = 'id', sortOrder = 'desc' } = options;
 
-  const where = cursor
+  const where: WhereClause = cursor
     ? {
         ...baseWhere,
         [sortBy]: sortOrder === 'desc' ? { lt: cursor } : { gt: cursor },

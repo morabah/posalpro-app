@@ -32,3 +32,7 @@ declare module 'html2pdf.js' {
   export = html2pdf;
 }
 
+
+
+
+

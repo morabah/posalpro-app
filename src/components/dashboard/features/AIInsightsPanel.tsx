@@ -7,7 +7,22 @@ import { memo } from 'react';
 import { Card } from '@/components/ui/Card';
 
 // AI Insights Component
-export const AIInsightsPanel = memo(({ data, loading }: { data: any; loading: boolean }) => {
+interface AIInsight {
+  type: 'trend' | 'alert' | 'opportunity';
+  title: string;
+  description: string;
+  confidence: number;
+  impact: 'high' | 'medium' | 'low';
+  recommendation: string;
+  icon: string;
+}
+
+interface AIInsightsPanelProps {
+  data?: AIInsight[];
+  loading: boolean;
+}
+
+export const AIInsightsPanel = memo(({ data, loading }: AIInsightsPanelProps) => {
   if (loading) {
     return (
       <Card className="p-6">
@@ -23,35 +38,37 @@ export const AIInsightsPanel = memo(({ data, loading }: { data: any; loading: bo
     );
   }
 
-  const insights = [
+  const defaultInsights: AIInsight[] = [
     {
-      type: 'trend' as const,
+      type: 'trend',
       title: 'Revenue Trend Analysis',
       description: 'Revenue is trending upward with 15% month-over-month growth',
       confidence: 0.92,
-      impact: 'high' as const,
+      impact: 'high',
       recommendation: 'Continue current sales strategies, focus on high-value proposals',
       icon: '📈',
     },
     {
-      type: 'alert' as const,
+      type: 'alert',
       title: 'Pipeline Bottleneck Detected',
       description: 'Proposals are stalling in the review stage (avg 8.5 days)',
       confidence: 0.87,
-      impact: 'medium' as const,
+      impact: 'medium',
       recommendation: 'Implement automated review reminders and streamline approval process',
       icon: '⚠️',
     },
     {
-      type: 'opportunity' as const,
+      type: 'opportunity',
       title: 'Team Performance Opportunity',
       description: 'QA User shows 40% higher win rate than team average',
       confidence: 0.95,
-      impact: 'high' as const,
+      impact: 'high',
       recommendation: "Analyze QA User's approach and share best practices with team",
       icon: '🎯',
     },
   ];
+
+  const insights = data || defaultInsights;
 
   const getImpactColor = (impact: 'high' | 'medium' | 'low') => {
     switch (impact) {
@@ -128,4 +145,3 @@ export const AIInsightsPanel = memo(({ data, loading }: { data: any; loading: bo
 });
 
 AIInsightsPanel.displayName = 'AIInsightsPanel';
-

@@ -25,65 +25,154 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+interface WizardStep2 {
+  customerInfo?: {
+    name: string;
+    industry: string;
+    contactPerson: string;
+  };
+  projectDetails?: {
+    description: string;
+    objectives: string[];
+    constraints: string[];
+  };
+}
+
+interface ContentSelection {
+  contentId: string;
+  title: string;
+  type: string;
+  customizations: Array<{
+    field: string;
+    value: string;
+    type: 'text' | 'number' | 'boolean';
+  }>;
+}
+
+interface ProductSelection {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  included: boolean;
+}
+
+interface SectionAssignment {
+  sectionId: string;
+  title: string;
+  assignedTo: string[];
+  complexity: 'low' | 'medium' | 'high';
+}
+
+interface ValidationIssue {
+  id: string;
+  type: 'error' | 'warning' | 'info';
+  message: string;
+  field?: string;
+  severity: 'low' | 'medium' | 'high';
+}
+
+interface ComplianceCheck {
+  id: string;
+  name: string;
+  status: 'pass' | 'fail' | 'pending';
+  description: string;
+}
+
+interface StepCompletionTime {
+  step: number;
+  stepName: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+}
+
 interface ProposalDetail {
   id: string;
   title: string;
-  description: string | null;
   status: string;
-  priority: string;
-  projectType: string | null;
-  value: number;
-  currency: string;
-  dueDate: string | null;
-  validUntil: string | null;
   createdAt: string;
   updatedAt: string;
-  submittedAt: string | null;
-  approvedAt: string | null;
-
-  // Customer information
-  customerId: string;
-  customerName: string;
-  customerIndustry: string | null;
-  customerTier: string | null;
-  customerEmail: string | null;
-
-  // Creator information
-  createdBy: string;
-  createdByEmail: string | null;
-
-  // Related data
-  sections: Array<{
+  customerId?: string;
+  customerName?: string;
+  customerIndustry?: string;
+  customerTier?: string;
+  estimatedValue?: number;
+  priority?: string;
+  dueDate?: string;
+  validUntil?: string;
+  value?: number;
+  currency?: string;
+  projectType?: string;
+  createdByEmail?: string;
+  teamSize?: number;
+  totalSections?: number;
+  daysUntilDeadline?: number | null;
+  sections?: Array<{
     id: string;
     title: string;
     content: string;
     type: string;
     order: number;
   }>;
-
-  assignedTo: Array<{
+  assignedTo?: Array<{
     id: string;
     name: string;
     email: string;
   }>;
-
-  approvals: Array<{
+  approvals?: Array<{
     id: string;
     currentStage: string | null;
     status: string;
     startedAt: string;
     completedAt: string | null;
   }>;
-
-  // Computed fields
-  totalSections: number;
-  teamSize: number;
-  approvalStages: number;
-  isOverdue: boolean;
-  daysUntilDeadline: number | null;
-
-  // ✅ ENHANCED: Wizard data for comprehensive summary
-  wizardData: {
+  approvalStages?: number;
+  metadata?: {
+    wizardData?: {
+      step1?: {
+        client?: {
+          name?: string;
+          industry?: string;
+          contactPerson?: string;
+          contactPhone?: string;
+        };
+        details?: {
+          title?: string;
+          dueDate?: string;
+          estimatedValue?: number;
+          priority?: string;
+        };
+        value?: number;
+      };
+      step2?: WizardStep2;
+      step3?: {
+        selectedContent?: ContentSelection[];
+      };
+      step4?: {
+        products?: Array<{
+          id: string;
+          name: string;
+          quantity?: number;
+          unitPrice?: number;
+          totalPrice?: number;
+          category?: string;
+          included?: boolean;
+        }>;
+        totalValue?: number;
+      };
+      step5?: {
+        sections?: Array<{ title?: string; description?: string }>;
+      };
+      step6?: {
+        finalValidation?: {
+          isValid: boolean;
+          issues: ValidationIssue[];
+        };
+      };
+    };
+  };
+  wizardData?: {
     step1?: {
       client?: {
         name?: string;
@@ -97,19 +186,32 @@ interface ProposalDetail {
         estimatedValue?: number;
         priority?: string;
       };
+      value?: number;
     };
-    step2?: any;
+    step2?: WizardStep2;
     step3?: {
-      selectedContent?: any[];
+      selectedContent?: ContentSelection[];
     };
     step4?: {
-      products?: any[];
+      products?: Array<{
+        id: string;
+        name: string;
+        quantity?: number;
+        unitPrice?: number;
+        totalPrice?: number;
+        category?: string;
+        included?: boolean;
+      }>;
+      totalValue?: number;
     };
     step5?: {
-      sections?: any[];
+      sections?: Array<{ title?: string; description?: string }>;
     };
     step6?: {
-      finalValidation?: any;
+      finalValidation?: {
+        isValid: boolean;
+        issues: ValidationIssue[];
+      };
     };
   } | null;
   teamAssignments: {
@@ -121,17 +223,21 @@ interface ProposalDetail {
   contentSelections: Array<{
     contentId: string;
     section: string;
-    customizations: any[];
+    customizations: Array<{
+      field: string;
+      value: string;
+      type: 'text' | 'number' | 'boolean';
+    }>;
     assignedTo: string;
   }> | null;
   validationData: {
     isValid?: boolean;
     completeness?: number;
-    issues?: any[];
-    complianceChecks?: any[];
+    issues?: ValidationIssue[];
+    complianceChecks?: ComplianceCheck[];
   } | null;
   analyticsData: {
-    stepCompletionTimes?: any[];
+    stepCompletionTimes?: StepCompletionTime[];
     wizardCompletionRate?: number;
     complexityScore?: number;
     teamSize?: number;
@@ -174,8 +280,10 @@ export default function ProposalDetailPage() {
   };
 
   // Helper: unwrap prisma-style { set: ... }
-  const unwrapSet = (v: any) => {
-    if (v && typeof v === 'object' && 'set' in v) return (v as any).set;
+  const unwrapSet = (v: unknown) => {
+    if (v && typeof v === 'object' && v !== null && 'set' in v) {
+      return (v as { set: unknown }).set;
+    }
     return v;
   };
 
@@ -187,160 +295,119 @@ export default function ProposalDetailPage() {
 
   // Helper: calculate correct proposal value based on wizard data
   const calculateProposalValue = (
-    proposal: any
+    proposal: ProposalDetail
   ): { value: number; source: 'step4' | 'step1' | 'database' } => {
-    const md = unwrapSet(proposal?.metadata) || {};
+    const md = (unwrapSet(proposal?.metadata) as ProposalDetail['metadata']) || {};
     const wd = md?.wizardData || proposal?.wizardData || {};
 
-    // Check if we have products in step 4
-    const hasProducts =
-      wd.step4?.products &&
-      Array.isArray(wd.step4.products) &&
-      wd.step4.products.some((p: any) => p.included !== false) &&
-      wd.step4.products.length > 0;
-
-    // Calculate step 4 total value
-    let step4TotalValue = 0;
-    if (hasProducts) {
-      const includedProducts = wd.step4.products.filter((p: any) => p.included !== false);
-      step4TotalValue = includedProducts.reduce((sum: number, product: any) => {
-        const productTotal =
-          product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0);
-        return sum + productTotal;
-      }, 0);
-    }
+    // Get step 4 total value (most accurate)
+    const step4TotalValue =
+      wd.step4?.products?.reduce((sum: number, product) => {
+        const quantity = product.quantity || 0;
+        const unitPrice = product.unitPrice || 0;
+        return product.included !== false ? sum + quantity * unitPrice : sum;
+      }, 0) || 0;
 
     // Get step 1 estimated value
     const step1EstimatedValue = wd.step1?.details?.estimatedValue || wd.step1?.value || 0;
 
     // Determine which value to use: step 4 total or step 1 estimate
-    const shouldUseEstimated = !hasProducts && step4TotalValue === 0 && step1EstimatedValue > 0;
-
-    if (step4TotalValue > 0 && hasProducts) {
+    if (step4TotalValue > 0) {
       return { value: step4TotalValue, source: 'step4' };
-    } else if (step1EstimatedValue > 0 && shouldUseEstimated) {
+    } else if (step1EstimatedValue > 0) {
       return { value: step1EstimatedValue, source: 'step1' };
     } else {
       return { value: proposal.value || 0, source: 'database' };
     }
   };
 
-  // Enrich proposal with wizard summary friendly fields
-  const enrichProposal = (raw: any): ProposalDetail => {
-    const md = unwrapSet(raw?.metadata) || {};
+  // Helper: enrich proposal with wizard data
+  const enrichProposal = (raw: ProposalDetail): ProposalDetail => {
+    const md = (unwrapSet(raw?.metadata) as ProposalDetail['metadata']) || {};
     const wd = md?.wizardData || raw?.wizardData || {};
 
     // Step 1
     const step1 = {
       client: {
-        name: wd?.step1?.client?.name ?? raw?.customerName ?? md?.step1?.client?.name,
+        name: wd?.step1?.client?.name ?? raw?.customerName ?? md?.wizardData?.step1?.client?.name,
         industry:
-          wd?.step1?.client?.industry ?? raw?.customerIndustry ?? md?.step1?.client?.industry,
-        contactPerson: wd?.step1?.client?.contactPerson ?? md?.step1?.client?.contactPerson,
-        contactPhone: wd?.step1?.client?.contactPhone ?? md?.step1?.client?.contactPhone,
+          wd?.step1?.client?.industry ??
+          raw?.customerIndustry ??
+          md?.wizardData?.step1?.client?.industry,
+        contactPerson:
+          wd?.step1?.client?.contactPerson ?? md?.wizardData?.step1?.client?.contactPerson,
+        contactPhone:
+          wd?.step1?.client?.contactPhone ?? md?.wizardData?.step1?.client?.contactPhone,
       },
       details: {
-        title: wd?.step1?.details?.title ?? raw?.title ?? md?.step1?.details?.title,
-        dueDate: wd?.step1?.details?.dueDate ?? raw?.dueDate ?? md?.step1?.details?.dueDate,
+        title: wd?.step1?.details?.title ?? raw?.title ?? md?.wizardData?.step1?.details?.title,
+        dueDate:
+          wd?.step1?.details?.dueDate ?? raw?.dueDate ?? md?.wizardData?.step1?.details?.dueDate,
         estimatedValue:
-          wd?.step1?.details?.estimatedValue ?? raw?.value ?? md?.step1?.details?.estimatedValue,
+          wd?.step1?.details?.estimatedValue ??
+          raw?.value ??
+          md?.wizardData?.step1?.details?.estimatedValue,
         priority:
           normalizePriority(wd?.step1?.details?.priority) ||
           normalizePriority(raw?.priority) ||
-          normalizePriority(md?.step1?.details?.priority),
+          normalizePriority(md?.wizardData?.step1?.details?.priority),
       },
+      value: wd?.step1?.value ?? raw?.value ?? 0,
     };
 
-    // Step 3 (content selections)
-    const contentSelections = Array.isArray(raw?.contentSelections)
-      ? raw.contentSelections.map((c: any) => ({
-          ...c,
-          contentId: c?.contentId ?? c?.id,
-          title: c?.title ?? c?.item?.title,
-          section: c?.section,
-          customizations: c?.customizations ?? [],
-          assignedTo: c?.assignedTo,
-          item:
-            c?.item ??
-            (c?.contentId || c?.id
-              ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title }
-              : undefined),
-        }))
-      : Array.isArray(md?.contentSelections)
-        ? md.contentSelections
-        : Array.isArray(wd?.step3?.selectedContent)
-          ? wd.step3.selectedContent.map((c: any) => ({
-              ...c,
-              contentId: c?.contentId ?? c?.id,
-              title: c?.title ?? c?.item?.title ?? c?.name,
-              section: c?.section,
-              customizations: c?.customizations ?? [],
-              assignedTo: c?.assignedTo,
-              item:
-                c?.item ??
-                (c?.contentId || c?.id
-                  ? { id: c?.contentId ?? c?.id, title: c?.title ?? c?.item?.title ?? c?.name }
-                  : undefined),
-            }))
-          : [];
+    // Step 3
+    const step3 = {
+      selectedContent:
+        wd?.step3?.selectedContent?.map((c: ContentSelection) => ({
+          contentId: c.contentId,
+          title: c.title,
+          type: c.type,
+          customizations: c.customizations || [],
+        })) || [],
+    };
 
-    // Step 4 (products)
-    const productsFromRelation = Array.isArray(raw?.products)
-      ? raw.products.map((pp: any) => ({
-          id: pp?.product?.id,
-          name: pp?.product?.name,
-          quantity: pp?.quantity,
-          unitPrice: pp?.unitPrice ?? pp?.product?.price,
-          totalPrice: (pp?.unitPrice ?? pp?.product?.price) * (pp?.quantity ?? 0),
-        }))
-      : [];
-    const productsFromMd = Array.isArray(wd?.step4?.products)
-      ? wd.step4.products
-      : Array.isArray(md?.wizardData?.step4?.products)
-        ? md.wizardData.step4.products
-        : [];
+    // Step 4
     const step4 = {
-      products: (productsFromRelation.length ? productsFromRelation : productsFromMd).filter(
-        (p: any) => p && (p.id || p.productId)
-      ),
+      products:
+        wd?.step4?.products?.map(p => ({
+          id: p.id,
+          name: p.name,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          totalPrice: p.totalPrice,
+          category: p.category,
+          included: p.included,
+        })) || [],
+      totalValue: wd?.step4?.totalValue || 0,
     };
 
-    // Step 5 (sections)
+    // Step 5
     const step5 = {
-      sections: Array.isArray(raw?.sections) ? raw.sections : (wd?.step5?.sections ?? []),
+      sections:
+        wd?.step5?.sections?.map(s => ({
+          title: s.title,
+          description: s.description,
+        })) || [],
     };
-
-    // Team assignments
-    const teamAssignments = raw?.teamAssignments ||
-      md?.teamAssignments || {
-        teamLead: undefined,
-        salesRepresentative: undefined,
-        subjectMatterExperts: undefined,
-        executiveReviewers: undefined,
-      };
-
-    // Validation/analytics/cross-step (best-effort from metadata)
-    const validationData =
-      raw?.validationData || md?.validation || wd?.step6?.finalValidation || null;
-    const analyticsData = raw?.analyticsData || md?.analytics || null;
-    const crossStepValidation = raw?.crossStepValidation || md?.crossStepValidation || null;
 
     return {
       ...raw,
       wizardData: {
         step1,
-        step2: wd?.step2 || md?.teamAssignments || null,
-        step3: { selectedContent: contentSelections },
+        step2: wd?.step2,
+        step3,
         step4,
         step5,
-        step6: { finalValidation: validationData },
+        step6: wd?.step6,
       },
-      teamAssignments,
-      contentSelections,
-      validationData,
-      analyticsData,
-      crossStepValidation,
-    } as ProposalDetail;
+      contentSelections:
+        raw?.contentSelections?.map(cs => ({
+          contentId: cs.contentId,
+          section: cs.section,
+          customizations: cs.customizations,
+          assignedTo: cs.assignedTo,
+        })) || [],
+    };
   };
 
   // ✅ CRITICAL FIX: Single useEffect with proper dependency management
@@ -364,7 +431,10 @@ export default function ProposalDetailPage() {
 
         // dev log removed for compliance
 
-        const response = (await apiClient.get(`proposals/${proposalId}`)) as any;
+        const response = await apiClient.get<{
+          success: boolean;
+          data: ProposalDetail;
+        }>(`proposals/${proposalId}`);
 
         if (response.success) {
           // Only update state if component is still mounted
@@ -464,13 +534,22 @@ export default function ProposalDetailPage() {
   };
 
   const computeProgressPercent = (p: ProposalDetail): number => {
-    const completeness = (p.validationData as any)?.completeness;
+    const completeness =
+      typeof (p as { validationData?: { completeness?: number } }).validationData?.completeness ===
+      'number'
+        ? (p as { validationData?: { completeness?: number } }).validationData!.completeness
+        : undefined;
     if (typeof completeness === 'number') {
       // Handle 0-1 or 0-100 inputs safely
       const value = completeness <= 1 ? completeness * 100 : completeness;
       return Math.max(0, Math.min(100, Math.round(value)));
     }
-    const wizardRate = (p.analyticsData as any)?.wizardCompletionRate;
+    const wizardRate =
+      typeof (p as { analyticsData?: { wizardCompletionRate?: number } }).analyticsData
+        ?.wizardCompletionRate === 'number'
+        ? (p as { analyticsData?: { wizardCompletionRate?: number } }).analyticsData!
+            .wizardCompletionRate
+        : undefined;
     if (typeof wizardRate === 'number') {
       const value = wizardRate <= 1 ? wizardRate * 100 : wizardRate;
       return Math.max(0, Math.min(100, Math.round(value)));
@@ -609,8 +688,8 @@ export default function ProposalDetailPage() {
                 <Badge className={getStatusColor(proposal.status)}>
                   {proposal.status.replace('_', ' ').toUpperCase()}
                 </Badge>
-                <Badge className={getPriorityColor(proposal.priority)}>
-                  {proposal.priority.toUpperCase()} Priority
+                <Badge className={getPriorityColor(proposal.priority || 'medium')}>
+                  {(proposal.priority || 'medium').toUpperCase()} Priority
                 </Badge>
               </div>
             </div>
@@ -620,8 +699,8 @@ export default function ProposalDetailPage() {
               <Badge className={`sm:hidden ${getStatusColor(proposal.status)}`}>
                 {proposal.status.replace('_', ' ').toUpperCase()}
               </Badge>
-              <Badge className={`sm:hidden ${getPriorityColor(proposal.priority)}`}>
-                {proposal.priority.toUpperCase()}
+              <Badge className={`sm:hidden ${getPriorityColor(proposal.priority || 'medium')}`}>
+                {(proposal.priority || 'medium').toUpperCase()}
               </Badge>
               <Button onClick={handleEdit} className="inline-flex items-center">
                 <PencilIcon className="h-4 w-4 mr-2" />
@@ -634,23 +713,26 @@ export default function ProposalDetailPage() {
           <div className="px-4 sm:px-6 lg:px-8 py-4 border-t border-gray-100">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               {(() => {
-                const { value: computedValue } = calculateProposalValue(proposal as any);
+                const result = proposal
+                  ? calculateProposalValue(proposal)
+                  : { value: 0, source: 'database' as const };
+                const { value: computedValue } = result;
                 const progress = computeProgressPercent(proposal);
                 return (
                   <>
                     <MetricCard
                       title="Total Value"
-                      value={formatCurrency(computedValue, proposal.currency)}
+                      value={formatCurrency(computedValue, proposal.currency ?? 'USD')}
                       icon={<ClockIcon className="h-5 w-5 text-green-600" />}
                     />
                     <MetricCard
                       title="Team Members"
-                      value={proposal.teamSize}
+                      value={proposal.teamSize || 0}
                       icon={<UserIcon className="h-5 w-5 text-blue-600" />}
                     />
                     <MetricCard
                       title="Sections"
-                      value={proposal.totalSections}
+                      value={proposal.totalSections || 0}
                       icon={<CheckCircleIcon className="h-5 w-5 text-purple-600" />}
                     />
                     <MetricCard
@@ -699,9 +781,18 @@ export default function ProposalDetailPage() {
                   <h3 className="text-lg font-semibold text-green-900">Timeline</h3>
                 </div>
                 <div className="space-y-3">
-                  <InfoRow label="Due Date" value={formatDate(proposal.dueDate)} />
-                  <InfoRow label="Valid Until" value={formatDate(proposal.validUntil)} />
-                  <InfoRow label="Created" value={formatDate(proposal.createdAt)} />
+                  <InfoRow
+                    label="Due Date"
+                    value={proposal.dueDate ? formatDate(proposal.dueDate) : 'N/A'}
+                  />
+                  <InfoRow
+                    label="Valid Until"
+                    value={proposal.validUntil ? formatDate(proposal.validUntil) : 'N/A'}
+                  />
+                  <InfoRow
+                    label="Created"
+                    value={proposal.createdAt ? formatDate(proposal.createdAt) : 'N/A'}
+                  />
                 </div>
                 {(() => {
                   const progress = computeProgressPercent(proposal);
@@ -751,7 +842,7 @@ export default function ProposalDetailPage() {
             />
 
             {/* Sections */}
-            {proposal.sections.length > 0 && (
+            {Array.isArray(proposal.sections) && proposal.sections.length > 0 && (
               <Card className="p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                   Proposal Sections ({proposal.totalSections})
@@ -779,10 +870,10 @@ export default function ProposalDetailPage() {
               {/* Assigned Team */}
               <Card className="p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Assigned Team ({proposal.teamSize})
+                  Assigned Team ({proposal.teamSize || 0})
                 </h2>
                 <div className="space-y-3">
-                  {proposal.assignedTo.length > 0 ? (
+                  {Array.isArray(proposal.assignedTo) && proposal.assignedTo.length > 0 ? (
                     proposal.assignedTo.map(member => (
                       <div key={member.id} className="flex items-center space-x-3">
                         <UserIcon className="h-5 w-5 text-gray-400" />
@@ -801,10 +892,10 @@ export default function ProposalDetailPage() {
               {/* Approvals */}
               <Card className="p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Approvals ({proposal.approvalStages})
+                  Approvals ({proposal.approvalStages || 0})
                 </h2>
                 <div className="space-y-3">
-                  {proposal.approvals.length > 0 ? (
+                  {Array.isArray(proposal.approvals) && proposal.approvals.length > 0 ? (
                     proposal.approvals.map(approval => (
                       <div key={approval.id} className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">

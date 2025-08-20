@@ -16,12 +16,16 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
+interface WorkflowMetadata {
+  [key: string]: string | number | boolean | Date;
+}
+
 export default function WorkflowsPage() {
   const router = useRouter();
   const [sessionStartTime] = useState(Date.now());
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: WorkflowMetadata = {}) => {
       console.log('Workflows Analytics:', {
         action,
         metadata,

@@ -65,6 +65,15 @@ interface ProductRelationshipRuleDTO {
   createdAt: string;
 }
 
+interface GraphRuleData {
+  id: string;
+  name: string;
+  ruleType: string;
+  productId: string;
+  status: string;
+  rule?: Record<string, unknown>;
+}
+
 const STATUS_TO_BADGE: Record<string, { color: string; label: string }> = {
   Active: { color: 'bg-green-100 text-green-800', label: 'Active' },
   Draft: { color: 'bg-amber-100 text-amber-800', label: 'Draft' },
@@ -445,16 +454,7 @@ export default function RelationshipsWorkspacePage() {
                     </div>
                     <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 min-h-[400px] flex items-center justify-center">
                       <GraphMap
-                        rules={
-                          rules as unknown as Array<{
-                            id: string;
-                            name: string;
-                            ruleType: string;
-                            productId: string;
-                            status: string;
-                            rule?: any;
-                          }>
-                        }
+                        rules={rules as unknown as Array<GraphRuleData>}
                         onRuleSelected={ruleId => {
                           setSelectedRule(ruleId);
                           const found = rules.find(r => r.id === ruleId) || null;

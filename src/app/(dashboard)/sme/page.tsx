@@ -26,12 +26,25 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H13-001', 'TC-H14-001'],
 };
 
+interface SMEMetadata {
+  [key: string]: string | number | boolean | Date;
+}
+
+interface SMEAction {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  color: string;
+}
+
 export default function SMEPage() {
   const router = useRouter();
   const [sessionStartTime] = useState(Date.now());
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: SMEMetadata = {}) => {
       console.log('SME Analytics:', {
         action,
         metadata,
@@ -45,7 +58,7 @@ export default function SMEPage() {
     [sessionStartTime]
   );
 
-  const smeActions = [
+  const smeActions: SMEAction[] = [
     {
       id: 'contributions',
       title: 'My Contributions',
@@ -123,7 +136,7 @@ export default function SMEPage() {
   ];
 
   const handleActionClick = useCallback(
-    (action: any) => {
+    (action: SMEAction) => {
       trackAction('sme_action_clicked', {
         actionId: action.id,
         destination: action.href,

@@ -24,7 +24,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 // ✅ CRITICAL: Performance optimization - Customer cache
-const customerCache = new Map<string, { data: any; timestamp: number }>();
+interface CustomerCacheData {
+  success: boolean;
+  data: {
+    customers: Array<{
+      id: string;
+      name: string;
+      email: string | null;
+      status: string;
+      tier: string;
+      industry: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
+    pagination: {
+      total: number;
+      hasMore: boolean;
+      nextCursor: string | null;
+    };
+  };
+}
+
+const customerCache = new Map<string, { data: CustomerCacheData; timestamp: number }>();
 const CUSTOMER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const MAX_CACHE_SIZE = 50;
 
@@ -39,12 +60,12 @@ function cleanupCache() {
 }
 
 // ✅ CRITICAL: Generate cache key for customer queries
-function generateCacheKey(params: any): string {
+function generateCacheKey(params: Record<string, unknown>): string {
   return `customers:${JSON.stringify(params)}`;
 }
 
 // ✅ CRITICAL: Get cached customer data
-function getCachedCustomers(cacheKey: string): any | null {
+function getCachedCustomers(cacheKey: string): CustomerCacheData | null {
   const now = Date.now();
   const cached = customerCache.get(cacheKey);
 
@@ -56,7 +77,7 @@ function getCachedCustomers(cacheKey: string): any | null {
 }
 
 // ✅ CRITICAL: Cache customer data
-function cacheCustomers(cacheKey: string, data: any) {
+function cacheCustomers(cacheKey: string, data: CustomerCacheData) {
   customerCache.set(cacheKey, { data, timestamp: Date.now() });
   cleanupCache();
 }
@@ -92,7 +113,7 @@ const CustomerQuerySchema = z.object({
   fields: z.string().optional(),
   sortBy: z.enum(['name', 'createdAt', 'updatedAt', 'tier']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  segmentation: z.record(z.any()).optional(),
+  segmentation: z.record(z.unknown()).optional(),
 });
 
 const CustomerCreateSchema = z.object({
@@ -106,8 +127,8 @@ const CustomerCreateSchema = z.object({
   revenue: z.number().min(0).optional(),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
   tags: z.array(z.string()).default([]),
-  metadata: z.record(z.any()).optional(),
-  segmentation: z.record(z.any()).optional(),
+  metadata: z.any().optional(), // Prisma JSON type
+  segmentation: z.any().optional(), // Prisma JSON type
 });
 
 // Database query interfaces

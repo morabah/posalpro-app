@@ -79,6 +79,30 @@ interface Customer {
   tags: string[];
 }
 
+// API response interfaces
+interface CustomerStatistics {
+  healthScore?: number;
+  engagementLevel?: 'low' | 'medium' | 'high';
+  [key: string]: unknown;
+}
+
+interface CustomerApiResponse {
+  id?: string | number;
+  name?: string;
+  industry?: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  email?: string;
+  revenue?: number;
+  employeeCount?: number;
+  statistics?: CustomerStatistics;
+  lastContact?: string;
+  nextActionDue?: string;
+  tags?: string[];
+  [key: string]: unknown;
+}
+
 // Edit form data interface
 interface CustomerEditData {
   name: string;
@@ -116,7 +140,7 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
 
   // Analytics tracking
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
+    (action: string, metadata: Record<string, unknown> = {}) => {
       analytics(
         'customer_profile_action',
         {
@@ -138,7 +162,7 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
 
   // Error handling
   const handleError = useCallback(
-    (error: unknown, operation: string, context?: any) => {
+    (error: unknown, operation: string, context?: Record<string, unknown>) => {
       const standardError =
         error instanceof Error
           ? new StandardError({
@@ -194,12 +218,15 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
   }, [isEditing, trackAction, initializeEditData, customer]);
 
   // Handle form field changes
-  const handleFieldChange = useCallback((field: keyof CustomerEditData, value: any) => {
-    setEditData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  }, []);
+  const handleFieldChange = useCallback(
+    (field: keyof CustomerEditData, value: string | number | string[]) => {
+      setEditData(prev => ({
+        ...prev,
+        [field]: value,
+      }));
+    },
+    []
+  );
 
   // Validate edit data
   const validateEditData = useCallback((data: CustomerEditData): string[] => {
@@ -225,20 +252,21 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
     let isMounted = true;
     async function load() {
       try {
-        const response = await apiClient.get<{ success: boolean; data?: any }>(
-          `customers/${customerId}`
-        );
+        const response = await apiClient.get<{
+          success: boolean;
+          data?: Record<string, unknown>;
+        }>(`customers/${customerId}`);
         if (!isMounted) return;
-        if (response && (response as any).success && (response as any).data) {
-          const raw = (response as any).data as any;
+        if (response && response.success && response.data) {
+          const raw = response.data as CustomerApiResponse;
           const mapped: Customer = {
-            id: String(raw.id),
-            name: String(raw.name || ''),
-            industry: String(raw.industry || ''),
-            address: String(raw.address || ''),
-            phone: String(raw.phone || ''),
-            website: String(raw.website || ''),
-            email: String(raw.email || ''),
+            id: String(raw.id ?? ''),
+            name: String(raw.name ?? ''),
+            industry: String(raw.industry ?? ''),
+            address: String(raw.address ?? ''),
+            phone: String(raw.phone ?? ''),
+            website: String(raw.website ?? ''),
+            email: String(raw.email ?? ''),
             // Best-effort mapping; retain existing if missing
             tier: (customer?.tier as CustomerTier) || CustomerTier.BRONZE,
             annualRevenue:
@@ -251,14 +279,14 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
               typeof raw.statistics?.healthScore === 'number'
                 ? raw.statistics.healthScore
                 : customer?.healthScore || 0,
-            engagementLevel: (customer?.engagementLevel as any) || 'low',
+            engagementLevel: raw.statistics?.engagementLevel || customer?.engagementLevel || 'low',
             lastContact: raw.lastContact
               ? new Date(raw.lastContact)
               : customer?.lastContact || new Date(),
             nextActionDue: raw.nextActionDue
               ? new Date(raw.nextActionDue)
               : customer?.nextActionDue || new Date(),
-            tags: Array.isArray(raw.tags) ? (raw.tags as string[]) : customer?.tags || [],
+            tags: Array.isArray(raw.tags) ? raw.tags : customer?.tags || [],
           };
           setCustomer(mapped);
         } else {
@@ -306,31 +334,35 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
         },
       };
 
-      const response = await apiClient.put<{ success: boolean; data?: any }>(
-        `customers/${customerId}`,
-        payload
-      );
+      const response = await apiClient.put<{
+        success: boolean;
+        data?: Record<string, unknown>;
+      }>(`customers/${customerId}`, payload);
 
-      if (!response || !(response as any).success || !(response as any).data) {
+      if (!response || !response.success || !response.data) {
         throw new Error('Failed to update customer');
       }
 
-      const updated = (response as any).data as any;
+      const updated = response.data as Record<string, unknown>;
 
       // Merge server-updated fields back into local Customer shape
       if (!customer) throw new Error('Customer not loaded');
 
       const merged: Customer = {
         ...customer,
-        name: String(updated.name || customer.name),
-        email: String(updated.email || customer.email),
-        phone: String(updated.phone || customer.phone),
-        website: String(updated.website || customer.website),
-        address: String(updated.address || customer.address),
-        industry: String(updated.industry || customer.industry),
+        name: String(updated.name ?? customer.name),
+        email: String(updated.email ?? customer.email),
+        phone: String(updated.phone ?? customer.phone),
+        website: String(updated.website ?? customer.website),
+        address: String(updated.address ?? customer.address),
+        industry: String(updated.industry ?? customer.industry),
         annualRevenue:
-          typeof updated.revenue === 'number' ? updated.revenue : customer.annualRevenue,
-        lastContact: updated.lastContact ? new Date(updated.lastContact) : customer.lastContact,
+          typeof updated.revenue === 'number'
+            ? (updated.revenue as number)
+            : customer.annualRevenue,
+        lastContact: updated.lastContact
+          ? new Date(updated.lastContact as string)
+          : customer.lastContact,
         tags: Array.isArray(updated.tags) ? (updated.tags as string[]) : customer.tags,
       } as Customer;
 

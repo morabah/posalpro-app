@@ -17,7 +17,7 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError, logInfo } from '@/lib/logger';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProposalData } from '../../../../lib/entities/proposal';
 const ArrowPathIcon = dynamic(
   () => import('@heroicons/react/24/outline').then(m => m.ArrowPathIcon),
@@ -168,6 +168,8 @@ function ProposalManagementDashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(false);
+  // Infinite scroll sentinel
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   // DB-backed stats for summary cards
   const [stats, setStats] = useState<{
     total: number;
@@ -188,6 +190,17 @@ function ProposalManagementDashboardContent() {
     sortBy: 'updatedAt',
     sortOrder: 'desc',
   });
+
+  // Debounced search to reduce recomputations on every keypress
+  const [pendingSearch, setPendingSearch] = useState<string>('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters(prev =>
+        prev.search === pendingSearch ? prev : { ...prev, search: pendingSearch }
+      );
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [pendingSearch]);
 
   // Narrowing helpers to safely handle unknown API responses
   function isObject(value: unknown): value is Record<string, unknown> {
@@ -253,7 +266,7 @@ function ProposalManagementDashboardContent() {
       // Initial page load using offset-based (server infers hasNextPage). We'll synthesize nextCursor.
       // Optimized: request minimal fields and avoid relation hydration
       const raw: unknown = await apiClient.get(
-        '/proposals?limit=30&sortBy=updatedAt&sortOrder=desc&includeCustomer=false&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName'
+        '/proposals?limit=20&sortBy=updatedAt&sortOrder=desc&includeCustomer=false&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName'
       );
 
       const { proposals: proposalsData, responseTimeMs } = extractProposalsResponse(raw);
@@ -329,7 +342,15 @@ function ProposalManagementDashboardContent() {
               assignedTeam: teamMembers,
               progress: calculateProgress(String((p as Record<string, unknown>).status || 'draft')),
               stage: getStageFromStatus(String((p as Record<string, unknown>).status || 'draft')),
-              riskLevel: calculateRiskLevel(p),
+              riskLevel: calculateRiskLevel({
+                dueDate: new Date(dueDate),
+                status: mapApiStatusToUIStatus(
+                  String((p as Record<string, unknown>).status || 'draft')
+                ),
+                priority: mapApiPriorityToUIPriority(
+                  String((p as Record<string, unknown>).priority || 'medium')
+                ),
+              }),
               tags: Array.isArray((p as Record<string, unknown>).tags)
                 ? ((p as Record<string, unknown>).tags as string[])
                 : [],
@@ -349,7 +370,7 @@ function ProposalManagementDashboardContent() {
         // Synthesize cursor for subsequent loads (use last id) and hasMore flag
         const last = transformedProposals[transformedProposals.length - 1];
         setNextCursor(last ? last.id : null);
-        setHasMore(transformedProposals.length === 30);
+        setHasMore(transformedProposals.length === 20);
 
         // Track successful data load
         trackAction(
@@ -411,7 +432,7 @@ function ProposalManagementDashboardContent() {
     if (!nextCursor || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
-      const endpoint = `/proposals?limit=30&sortBy=updatedAt&sortOrder=desc&includeCustomer=false&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName&cursor=${encodeURIComponent(
+      const endpoint = `/proposals?limit=20&sortBy=updatedAt&sortOrder=desc&includeCustomer=false&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName&cursor=${encodeURIComponent(
         nextCursor
       )}`;
       const raw: unknown = await apiClient.get(endpoint);
@@ -479,7 +500,15 @@ function ProposalManagementDashboardContent() {
             assignedTeam: teamMembers,
             progress: calculateProgress(String((p as Record<string, unknown>).status || 'draft')),
             stage: getStageFromStatus(String((p as Record<string, unknown>).status || 'draft')),
-            riskLevel: calculateRiskLevel(p),
+            riskLevel: calculateRiskLevel({
+              dueDate: new Date(dueDate),
+              status: mapApiStatusToUIStatus(
+                String((p as Record<string, unknown>).status || 'draft')
+              ),
+              priority: mapApiPriorityToUIPriority(
+                String((p as Record<string, unknown>).priority || 'medium')
+              ),
+            }),
             tags: Array.isArray((p as Record<string, unknown>).tags)
               ? ((p as Record<string, unknown>).tags as string[])
               : [],
@@ -506,7 +535,7 @@ function ProposalManagementDashboardContent() {
         setProposals(prev => dedupeProposalsById([...prev, ...more]));
         const last = more[more.length - 1];
         setNextCursor(last ? last.id : null);
-        setHasMore(more.length === 30);
+        setHasMore(more.length === 20);
       } else {
         setHasMore(false);
       }
@@ -516,6 +545,50 @@ function ProposalManagementDashboardContent() {
       setIsLoadingMore(false);
     }
   }, [apiClient, nextCursor, isLoadingMore]);
+
+  // Infinite scroll: observe sentinel and auto-load when visible
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!hasMore || isLoading || isLoadingMore) return;
+    const el = loadMoreSentinelRef.current;
+    if (!el) return;
+
+    // Guard for environments without IntersectionObserver (older browsers/WebViews)
+    if (
+      typeof (window as unknown as { IntersectionObserver?: unknown }).IntersectionObserver ===
+      'undefined'
+    ) {
+      // Fallback: do nothing; user can click the Load More button
+      return;
+    }
+
+    let observer: IntersectionObserver | null = null;
+    try {
+      observer = new IntersectionObserver(
+        entries => {
+          const [entry] = entries;
+          if (entry && entry.isIntersecting) {
+            // Trigger next page load and disconnect to avoid rapid repeats
+            loadMore();
+            if (observer) observer.disconnect();
+          }
+        },
+        { rootMargin: '400px 0px' }
+      );
+
+      observer.observe(el);
+    } catch {
+      // Silently ignore observer errors; fallback remains the Load More button
+    }
+
+    return () => {
+      try {
+        if (observer) observer.disconnect();
+      } catch {
+        // ignore
+      }
+    };
+  }, [hasMore, isLoading, isLoadingMore, loadMore]);
 
   useEffect(() => {
     // ✅ FIXED: Only fetch on client side
@@ -595,9 +668,11 @@ function ProposalManagementDashboardContent() {
     }
   };
 
-  const calculateRiskLevel = (proposal: any): 'low' | 'medium' | 'high' => {
+  const calculateRiskLevel = (
+    proposal: Pick<Proposal, 'dueDate' | 'status' | 'priority'>
+  ): 'low' | 'medium' | 'high' => {
     const daysUntilDeadline = Math.ceil(
-      (new Date(proposal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      (new Date(proposal.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
     );
     if (daysUntilDeadline < 7) return 'high';
     if (daysUntilDeadline < 30) return 'medium';
@@ -694,6 +769,10 @@ function ProposalManagementDashboardContent() {
 
   // Filter handlers
   const handleFilterChange = useCallback((key: keyof FilterState, value: string) => {
+    if (key === 'search') {
+      setPendingSearch(value);
+      return;
+    }
     setFilters(prev => ({ ...prev, [key]: value }));
   }, []);
 
@@ -907,74 +986,185 @@ function ProposalManagementDashboardContent() {
           </Card>
         </div>
 
-        {/* Filters and Search */}
-        <Card className="mb-8">
+        {/* Enhanced Filters and Search */}
+        <Card className="mb-8 border-0 shadow-sm bg-gradient-to-r from-white to-gray-50/30">
           <div className="p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-              <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-4xl">
-                {/* Search */}
-                <div className="relative flex-1">
-                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search proposals, clients, or tags..."
-                    value={filters.search}
-                    onChange={e => handleFilterChange('search', e.target.value)}
-                    className="pl-10"
-                  />
+            <div className="flex flex-col space-y-6">
+              {/* Search Bar - Enhanced */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
+                </div>
+                <Input
+                  type="text"
+                  placeholder="Search proposals by title, client, tags, or team members..."
+                  value={pendingSearch}
+                  onChange={e => handleFilterChange('search', e.target.value)}
+                  className="pl-12 pr-4 py-3 text-base border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                  aria-label="Search proposals"
+                  aria-describedby="search-description"
+                />
+                <div id="search-description" className="sr-only">
+                  Search through proposals by title, client name, tags, or team member names
+                </div>
+                {pendingSearch && (
+                  <button
+                    onClick={() => handleFilterChange('search', '')}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center justify-center w-11 h-11 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md"
+                    aria-label="Clear search"
+                    type="button"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Controls */}
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                  {/* Status Filter - Enhanced */}
+                  <div className="flex-1 sm:flex-none">
+                    <label htmlFor="status-filter" className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                    <Select
+                      id="status-filter"
+                      value={filters.status}
+                      options={[
+                        { value: 'all', label: 'All Status' },
+                        { value: 'draft', label: '📝 Draft' },
+                        { value: 'in_progress', label: '🔄 In Progress' },
+                        { value: 'review', label: '👀 Review' },
+                        { value: 'approved', label: '✅ Approved' },
+                        { value: 'submitted', label: '📤 Submitted' },
+                        { value: 'won', label: '🏆 Won' },
+                        { value: 'lost', label: '❌ Lost' },
+                      ]}
+                      onChange={(value: string) => handleFilterChange('status', value)}
+                      className="min-w-[140px]"
+                      aria-label="Filter by proposal status"
+                    />
+                  </div>
+
+                  {/* Priority Filter - Enhanced */}
+                  <div className="flex-1 sm:flex-none">
+                    <label htmlFor="priority-filter" className="block text-xs font-medium text-gray-700 mb-1">Priority</label>
+                    <Select
+                      id="priority-filter"
+                      value={filters.priority}
+                      options={[
+                        { value: 'all', label: 'All Priority' },
+                        { value: 'high', label: '🔴 High' },
+                        { value: 'medium', label: '🟡 Medium' },
+                        { value: 'low', label: '🟢 Low' },
+                      ]}
+                      onChange={(value: string) => handleFilterChange('priority', value)}
+                      className="min-w-[140px]"
+                      aria-label="Filter by proposal priority"
+                    />
+                  </div>
+
+                  {/* Sort By - Enhanced */}
+                  <div className="flex-1 sm:flex-none">
+                    <label htmlFor="sort-filter" className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+                    <Select
+                      id="sort-filter"
+                      value={filters.sortBy}
+                      options={[
+                        { value: 'updatedAt', label: '🕒 Last Updated' },
+                        { value: 'dueDate', label: '📅 Due Date' },
+                        { value: 'priority', label: '⚡ Priority' },
+                        { value: 'estimatedValue', label: '💰 Value' },
+                        { value: 'title', label: '📄 Title' },
+                      ]}
+                      onChange={(value: string) => handleFilterChange('sortBy', value)}
+                      className="min-w-[140px]"
+                      aria-label="Sort proposals by"
+                    />
+                  </div>
                 </div>
 
-                {/* Status Filter */}
-                <Select
-                  value={filters.status}
-                  options={[
-                    { value: 'all', label: 'All Status' },
-                    { value: 'draft', label: 'Draft' },
-                    { value: 'in_progress', label: 'In Progress' },
-                    { value: 'review', label: 'Review' },
-                    { value: 'approved', label: 'Approved' },
-                    { value: 'submitted', label: 'Submitted' },
-                    { value: 'won', label: 'Won' },
-                    { value: 'lost', label: 'Lost' },
-                  ]}
-                  onChange={(value: string) => handleFilterChange('status', value)}
-                />
+                {/* Action Buttons and Results Count - Enhanced */}
+                <div className="flex items-center justify-between lg:justify-end space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="secondary"
+                      onClick={clearFilters}
+                      size="sm"
+                      className="px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm min-h-[44px]"
+                      aria-label="Clear all filters"
+                    >
+                      <FunnelIcon className="w-4 h-4 mr-2" />
+                      Clear Filters
+                    </Button>
+                  </div>
 
-                {/* Priority Filter */}
-                <Select
-                  value={filters.priority}
-                  options={[
-                    { value: 'all', label: 'All Priority' },
-                    { value: 'high', label: 'High' },
-                    { value: 'medium', label: 'Medium' },
-                    { value: 'low', label: 'Low' },
-                  ]}
-                  onChange={(value: string) => handleFilterChange('priority', value)}
-                />
-
-                {/* Sort By */}
-                <Select
-                  value={filters.sortBy}
-                  options={[
-                    { value: 'updatedAt', label: 'Last Updated' },
-                    { value: 'dueDate', label: 'Due Date' },
-                    { value: 'priority', label: 'Priority' },
-                    { value: 'estimatedValue', label: 'Value' },
-                    { value: 'title', label: 'Title' },
-                  ]}
-                  onChange={(value: string) => handleFilterChange('sortBy', value)}
-                />
+                  {/* Results Count - Enhanced */}
+                  <div className="flex items-center space-x-2 text-sm">
+                    <span className="text-gray-500">Showing</span>
+                    <span className="font-semibold text-gray-900">{filteredProposals.length}</span>
+                    <span className="text-gray-500">of</span>
+                    <span className="font-semibold text-gray-900">{proposals.length}</span>
+                    <span className="text-gray-500">proposals</span>
+                    {filters.search && (
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                        🔍 Filtered
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Button variant="secondary" onClick={clearFilters} size="sm">
-                  <FunnelIcon className="w-4 h-4 mr-1" />
-                  Clear
-                </Button>
-                <span className="text-sm text-gray-600">
-                  {filteredProposals.length} of {proposals.length} proposals
-                </span>
-              </div>
+              {/* Active Filters Display */}
+              {(filters.search || filters.status !== 'all' || filters.priority !== 'all') && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+                  <span className="text-xs font-medium text-gray-500">Active filters:</span>
+                  {filters.search && (
+                    <span className="inline-flex items-center px-3 py-2 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                      Search: "{filters.search}"
+                      <button
+                        onClick={() => handleFilterChange('search', '')}
+                        className="ml-2 w-5 h-5 flex items-center justify-center hover:text-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-full"
+                        aria-label="Remove search filter"
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                  {filters.status !== 'all' && (
+                    <span className="inline-flex items-center px-3 py-2 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                      Status: {filters.status.replace('_', ' ')}
+                      <button
+                        onClick={() => handleFilterChange('status', 'all')}
+                        className="ml-2 w-5 h-5 flex items-center justify-center hover:text-green-600 focus:outline-none focus:ring-1 focus:ring-green-500 rounded-full"
+                        aria-label="Remove status filter"
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                  {filters.priority !== 'all' && (
+                    <span className="inline-flex items-center px-3 py-2 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                      Priority: {filters.priority}
+                      <button
+                        onClick={() => handleFilterChange('priority', 'all')}
+                        className="ml-2 w-5 h-5 flex items-center justify-center hover:text-yellow-600 focus:outline-none focus:ring-1 focus:ring-yellow-500 rounded-full"
+                        aria-label="Remove priority filter"
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -1310,6 +1500,8 @@ function ProposalManagementDashboardContent() {
               );
             })
           )}
+          {/* Infinite scroll sentinel and fallback button */}
+          <div ref={loadMoreSentinelRef} />
           {hasMore && !isLoading && (
             <div className="flex justify-center mt-6">
               <Button variant="secondary" onClick={loadMore} disabled={isLoadingMore}>

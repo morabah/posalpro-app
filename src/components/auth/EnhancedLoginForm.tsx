@@ -76,10 +76,18 @@ const ROLE_REDIRECTION_MAP: Record<string, string> = {
   'Proposal Specialist': '/proposals/create',
 };
 
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  roles?: string[];
+  [key: string]: unknown;
+}
+
 interface EnhancedLoginFormProps {
   callbackUrl?: string;
   className?: string;
-  onSuccess?: (user: any) => void;
+  onSuccess?: (user: User) => void;
   onError?: (error: string) => void;
 }
 

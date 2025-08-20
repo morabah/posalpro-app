@@ -65,7 +65,10 @@ export const AdvancedFilters = memo(
       },
     ]);
 
-    const handleFilterChange = (key: keyof DashboardFilters, value: any) => {
+    const handleFilterChange = (
+      key: keyof DashboardFilters,
+      value: DashboardFilters[keyof DashboardFilters]
+    ) => {
       const newFilters = { ...filters, [key]: value };
       setFilters(newFilters);
       onFiltersChange(newFilters);
@@ -296,4 +299,3 @@ export const AdvancedFilters = memo(
 );
 
 AdvancedFilters.displayName = 'AdvancedFilters';
-

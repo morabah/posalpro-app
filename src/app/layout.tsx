@@ -5,6 +5,7 @@
  */
 
 // Providers moved to segment layouts (e.g., (dashboard)/layout) to reduce /auth/* bundle size
+import { ServiceWorkerRegistration } from '@/components/pwa/ServiceWorkerRegistration';
 import '@/styles/globals.css';
 import { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
@@ -20,9 +21,9 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'PosalPro MVP2',
-  description: 'Advanced proposal management platform',
+  description: 'Enterprise proposal management platform with AI-powered optimization',
   // ✅ CRITICAL: SEO and performance metadata
-  keywords: ['proposal management', 'business development', 'sales'],
+  keywords: ['proposal management', 'business development', 'sales', 'enterprise', 'AI'],
   authors: [{ name: 'PosalPro Team' }],
   creator: 'PosalPro',
   publisher: 'PosalPro',
@@ -43,6 +44,22 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
+  // ✅ CRITICAL: PWA metadata
+  manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' }],
+    shortcut: '/icons/icon-192x192.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'PosalPro',
+  },
+  applicationName: 'PosalPro',
 };
 
 export const viewport: Viewport = {
@@ -52,6 +69,7 @@ export const viewport: Viewport = {
   userScalable: false,
   // ✅ CRITICAL: Mobile optimization
   themeColor: '#2563EB',
+  colorScheme: 'light',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -141,8 +159,38 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* ✅ CRITICAL: DNS prefetch for external resources */}
         <link rel="dns-prefetch" href="//localhost" />
         <link rel="dns-prefetch" href="//api.localhost" />
+
+        {/* ✅ CRITICAL: PWA meta tags */}
+        <meta name="application-name" content="PosalPro" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="PosalPro" />
+        <meta
+          name="description"
+          content="Enterprise proposal management platform with AI-powered optimization"
+        />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="msapplication-config" content="/icons/browserconfig.xml" />
+        <meta name="msapplication-TileColor" content="#2563eb" />
+        <meta name="msapplication-tap-highlight" content="no" />
+        <meta name="theme-color" content="#2563eb" />
+
+        {/* ✅ CRITICAL: PWA icons */}
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-192x192.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-192x192.png" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="mask-icon" href="/icons/icon.svg" color="#2563eb" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+
+        {/* ✅ CRITICAL: PWA splash screens */}
+        <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
       </head>
-      <body className={`${inter.className} h-full antialiased`}>{children}</body>
+      <body className={`${inter.className} h-full antialiased`}>
+        {children}
+        <ServiceWorkerRegistration />
+      </body>
     </html>
   );
 }

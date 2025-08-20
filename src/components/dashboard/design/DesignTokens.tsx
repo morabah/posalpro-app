@@ -108,10 +108,18 @@ export const formatNumber = (value: number, decimals: number = 1) => {
   }).format(v);
 };
 
+interface SparklineDataPoint {
+  actual?: number;
+  period?: string;
+  target?: number;
+  forecast?: number;
+  [key: string]: unknown;
+}
+
 // Simple sparkline to visualize revenue trends
-export const RevenueSparkline = ({ data }: { data: any[] }) => {
+export const RevenueSparkline = ({ data }: { data: unknown[] }) => {
   if (!data || data.length === 0) return null;
-  const values = data.slice(-6).map(d => d.actual || 0);
+  const values = data.slice(-6).map(d => (d as { actual?: number }).actual || 0);
   const max = Math.max(...values, 1);
   const points = values
     .map((v, i) => `${(i / (values.length - 1)) * 100},${100 - (v / max) * 100}`)

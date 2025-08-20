@@ -195,7 +195,14 @@ export class ProposalService {
         const ids = new Set<string>();
         try {
           // From wizard metadata
-          const md: any = (snapshot as any).metadata || {};
+          const md =
+            (
+              snapshot as {
+                metadata?: {
+                  wizardData?: { step4?: { products?: Array<{ productId?: string | number }> } };
+                };
+              }
+            ).metadata || {};
           const step4 = md?.wizardData?.step4;
           if (Array.isArray(step4?.products)) {
             for (const p of step4.products) {
@@ -205,8 +212,11 @@ export class ProposalService {
             }
           }
           // From current link table snapshot
-          if (Array.isArray((snapshot as any).products)) {
-            for (const link of (snapshot as any).products) {
+          const snapshotWithProducts = snapshot as {
+            products?: Array<{ productId?: string | number }>;
+          };
+          if (Array.isArray(snapshotWithProducts.products)) {
+            for (const link of snapshotWithProducts.products) {
               if (
                 link &&
                 (typeof link.productId === 'string' || typeof link.productId === 'number')

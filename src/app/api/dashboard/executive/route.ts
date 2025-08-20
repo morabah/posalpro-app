@@ -350,7 +350,7 @@ function calculateGrowthRate(
   return ((Number(latest.revenue) - Number(compare.revenue)) / Number(compare.revenue)) * 100;
 }
 
-function calculateWinRate(proposalStats: Array<any>): number {
+function calculateWinRate(proposalStats: any[]): number {
   const wonCount =
     (proposalStats.find((stat: any) => stat.status === 'ACCEPTED')?._count as any)?.id || 0;
   const totalCount = proposalStats.reduce(
@@ -361,13 +361,13 @@ function calculateWinRate(proposalStats: Array<any>): number {
   return totalCount > 0 ? (wonCount / totalCount) * 100 : 0;
 }
 
-function getClosingThisMonth(pipelineData: Array<any>): number {
+function getClosingThisMonth(pipelineData: any[]): number {
   return (
     (pipelineData.find((stage: any) => stage.status === 'PENDING_APPROVAL')?._count as any)?.id || 0
   );
 }
 
-function getTopPerformer(teamMembers: Array<any>): string {
+function getTopPerformer(teamMembers: any[]): string {
   if (teamMembers.length === 0) return 'No data';
 
   const topMember = teamMembers.reduce((top, member) => {
@@ -377,7 +377,7 @@ function getTopPerformer(teamMembers: Array<any>): string {
   return topMember.name || 'Unknown';
 }
 
-function calculateAvgTeamPerformance(teamMembers: Array<any>): number {
+function calculateAvgTeamPerformance(teamMembers: any[]): number {
   if (teamMembers.length === 0) return 0;
 
   const totalProposals = teamMembers.reduce(
@@ -481,7 +481,7 @@ function transformRevenueHistory(
 }
 
 function transformTeamData(
-  teamMembers: Array<any>,
+  teamMembers: any[],
   revenueHistory: Array<{ month: string; revenue: number; count: number }>
 ): TeamPerformance[] {
   // If no real team data is available, generate sample data
@@ -513,7 +513,7 @@ function transformTeamData(
   });
 }
 
-function transformPipelineData(pipelineData: Array<any>): PipelineStage[] {
+function transformPipelineData(pipelineData: any[]): PipelineStage[] {
   // If no real pipeline data is available, generate sample data
   if (pipelineData.length === 0) {
     const samplePipelineStages = [

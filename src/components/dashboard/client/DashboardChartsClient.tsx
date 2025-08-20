@@ -7,39 +7,80 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { useEffect, useMemo, useState } from 'react';
 
-type NearDuePoint = { date: string; count: number };
-type EmployeeRow = {
-  userId: string;
+// Comprehensive interfaces for DashboardChartsClient
+interface ChartDataPoint {
+  date: string;
+  count: number;
+  value?: number;
+}
+
+interface EmployeePerformance {
+  id: string;
   name: string;
-  createdCount: number;
-  assignedCount: number;
-  total: number;
-};
-type ProductRow = {
-  productId: string;
+  proposals: number;
+  value: number;
+  completionRate: number;
+}
+
+interface ProductPerformance {
+  id: string;
   name: string;
-  category: string | null;
-  usage: number;
-  totalQuantity: number;
+  sales: number;
   revenue: number;
-  wins: number;
-};
-type BundleRow = { aId: string; bId: string; aName: string; bName: string; count: number };
+  conversionRate: number;
+}
+
+interface FunnelStage {
+  stage: string;
+  count: number;
+  conversionRate: number;
+}
+
+interface PriorityOverdue {
+  priority: string;
+  count: number;
+  value: number;
+}
+
+interface ProductBundle {
+  aId: string;
+  bId: string;
+  aName: string;
+  bName: string;
+  count: number;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
+interface NearDueResponse extends ApiResponse<{ nearDueByDay: ChartDataPoint[] }> {}
+
+interface EmployeeResponse extends ApiResponse<{ byEmployee: EmployeePerformance[] }> {}
+
+interface ProductResponse
+  extends ApiResponse<{ products: ProductPerformance[]; topWinning: ProductPerformance[] }> {}
+
+interface FunnelResponse extends ApiResponse<{ stages: FunnelStage[] }> {}
+
+interface OverduePriorityResponse extends ApiResponse<PriorityOverdue[]> {}
+
+interface BundleResponse extends ApiResponse<{ pairs: ProductBundle[] }> {}
 
 export default function DashboardChartsClient() {
   const apiClient = useApiClient();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [nearDue, setNearDue] = useState<NearDuePoint[]>([]);
-  const [byEmployee, setByEmployee] = useState<EmployeeRow[]>([]);
-  const [products, setProducts] = useState<ProductRow[]>([]);
-  const [topWinning, setTopWinning] = useState<ProductRow[]>([]);
-  const [funnel, setFunnel] = useState<Array<{ stage: string; count: number }>>([]);
-  const [overdueByPriority, setOverdueByPriority] = useState<
-    Array<{ priority: string; count: number }>
-  >([]);
-  const [bundles, setBundles] = useState<Array<BundleRow>>([]);
+  const [nearDue, setNearDue] = useState<ChartDataPoint[]>([]);
+  const [byEmployee, setByEmployee] = useState<EmployeePerformance[]>([]);
+  const [products, setProducts] = useState<ProductPerformance[]>([]);
+  const [topWinning, setTopWinning] = useState<ProductPerformance[]>([]);
+  const [funnel, setFunnel] = useState<FunnelStage[]>([]);
+  const [overdueByPriority, setOverdueByPriority] = useState<PriorityOverdue[]>([]);
+  const [bundles, setBundles] = useState<ProductBundle[]>([]);
 
   useEffect(() => {
     const run = async () => {
@@ -56,24 +97,23 @@ export default function DashboardChartsClient() {
             apiClient.get('/proposals/analytics/product-bundles'),
           ]);
 
-        const nd =
-          (nearDueRes as any)?.data?.nearDueByDay ?? (nearDueRes as any)?.nearDueByDay ?? [];
-        const be = (empRes as any)?.data?.byEmployee ?? (empRes as any)?.byEmployee ?? [];
-        const pr = (prodRes as any)?.data?.products ?? (prodRes as any)?.products ?? [];
-        const tw = (prodRes as any)?.data?.topWinning ?? (prodRes as any)?.topWinning ?? [];
+        const nd = (nearDueRes as NearDueResponse)?.data?.nearDueByDay ?? [];
+        const be = (empRes as EmployeeResponse)?.data?.byEmployee ?? [];
+        const pr = (prodRes as ProductResponse)?.data?.products ?? [];
+        const tw = (prodRes as ProductResponse)?.data?.topWinning ?? [];
 
         setNearDue(Array.isArray(nd) ? nd : []);
         setByEmployee(Array.isArray(be) ? be : []);
         setProducts(Array.isArray(pr) ? pr : []);
         setTopWinning(Array.isArray(tw) ? tw : []);
-        const stages = (funnelRes as any)?.data?.stages ?? (funnelRes as any)?.stages ?? [];
+        const stages = (funnelRes as FunnelResponse)?.data?.stages ?? [];
         setFunnel(Array.isArray(stages) ? stages : []);
-        const obp = (overduePrioRes as any)?.data ?? [];
+        const obp = (overduePrioRes as OverduePriorityResponse)?.data ?? [];
         setOverdueByPriority(Array.isArray(obp) ? obp : []);
-        const pb = (bundlesRes as any)?.data?.pairs ?? [];
+        const pb = (bundlesRes as BundleResponse)?.data?.pairs ?? [];
         setBundles(
           Array.isArray(pb)
-            ? pb.map((x: any) => ({
+            ? pb.map((x: ProductBundle) => ({
                 aId: String(x.aId),
                 bId: String(x.bId),
                 aName: String(x.aName),
@@ -93,7 +133,7 @@ export default function DashboardChartsClient() {
         setLoading(false);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     run();
   }, []);
 
@@ -165,7 +205,7 @@ export default function DashboardChartsClient() {
             </div>
             <div className="space-y-2">
               {topEmployees.map(row => (
-                <div key={row.userId} className="flex items-center gap-2">
+                <div key={row.id} className="flex items-center gap-2">
                   <div className="w-40 truncate" title={row.name}>
                     {row.name}
                   </div>
@@ -173,11 +213,11 @@ export default function DashboardChartsClient() {
                     <div
                       className="bg-indigo-500 h-4"
                       style={{
-                        width: `${Math.min(100, (row.total / (topEmployees[0]?.total || 1)) * 100)}%`,
+                        width: `${Math.min(100, (row.value / (topEmployees[0]?.value || 1)) * 100)}%`,
                       }}
                     />
                   </div>
-                  <div className="w-12 text-right text-sm text-gray-600">{row.total}</div>
+                  <div className="w-12 text-right text-sm text-gray-600">{row.value}</div>
                 </div>
               ))}
             </div>
@@ -232,7 +272,7 @@ export default function DashboardChartsClient() {
             </div>
             <div className="space-y-2">
               {topProducts.map(p => (
-                <div key={p.productId} className="flex items-center gap-2">
+                <div key={p.id} className="flex items-center gap-2">
                   <div className="w-40 truncate" title={p.name}>
                     {p.name}
                   </div>
@@ -240,11 +280,11 @@ export default function DashboardChartsClient() {
                     <div
                       className="bg-emerald-500 h-4"
                       style={{
-                        width: `${Math.min(100, (p.usage / (topProducts[0]?.usage || 1)) * 100)}%`,
+                        width: `${Math.min(100, (p.sales / (topProducts[0]?.sales || 1)) * 100)}%`,
                       }}
                     />
                   </div>
-                  <div className="w-12 text-right text-sm text-gray-600">{p.usage}</div>
+                  <div className="w-12 text-right text-sm text-gray-600">{p.sales}</div>
                 </div>
               ))}
             </div>
@@ -259,7 +299,7 @@ export default function DashboardChartsClient() {
             </div>
             <div className="space-y-2">
               {topWinning.map(p => (
-                <div key={p.productId} className="flex items-center gap-2">
+                <div key={p.id} className="flex items-center gap-2">
                   <div className="w-40 truncate" title={p.name}>
                     {p.name}
                   </div>
@@ -267,11 +307,11 @@ export default function DashboardChartsClient() {
                     <div
                       className="bg-amber-500 h-4"
                       style={{
-                        width: `${Math.min(100, (p.wins / (topWinning[0]?.wins || 1)) * 100)}%`,
+                        width: `${Math.min(100, (p.revenue / (topWinning[0]?.revenue || 1)) * 100)}%`,
                       }}
                     />
                   </div>
-                  <div className="w-12 text-right text-sm text-gray-600">{p.wins}</div>
+                  <div className="w-12 text-right text-sm text-gray-600">{p.revenue}</div>
                 </div>
               ))}
             </div>

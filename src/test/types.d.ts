@@ -5,13 +5,11 @@
  * and objects to ensure proper type checking in test files.
  */
 
-import { Mock } from 'jest';
-
 declare global {
   namespace NodeJS {
     interface Global {
-      mockTrackAnalytics: Mock;
-      fetch: jest.Mock;
+      mockTrackAnalytics: any; // Jest Mock type
+      fetch: any; // Jest Mock type
     }
   }
 }
@@ -25,11 +23,11 @@ declare namespace jest {
 }
 
 // Declare global jest functions to prevent TypeScript errors
-declare const jest: any;
+declare const jest: any; // Jest types are complex, using any for now
 declare const describe: (description: string, testsFunction: () => void) => void;
 declare const it: (description: string, testFunction: () => void | Promise<void>) => void;
 declare const test: (description: string, testFunction: () => void | Promise<void>) => void;
-declare const expect: any;
+declare const expect: any; // Jest expect types are complex, using any for now
 declare const beforeAll: (fn: () => void | Promise<void>) => void;
 declare const afterAll: (fn: () => void | Promise<void>) => void;
 declare const beforeEach: (fn: () => void | Promise<void>) => void;

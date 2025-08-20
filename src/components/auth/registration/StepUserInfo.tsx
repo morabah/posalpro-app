@@ -1,8 +1,21 @@
 'use client';
 
+import { FieldErrors, UseFormRegister } from 'react-hook-form';
+
+interface UserInfoFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  title: string;
+  department: string;
+  office: string;
+  phone: string;
+  passwordSetting: 'system' | 'first_login' | 'admin_set';
+}
+
 interface StepUserInfoProps {
-  register: any;
-  errors: any;
+  register: UseFormRegister<UserInfoFormData>;
+  errors: FieldErrors<UserInfoFormData>;
   aiSuggestions: Record<string, string>;
 }
 
@@ -76,7 +89,9 @@ export default function StepUserInfo({ register, errors, aiSuggestions }: StepUs
           {aiSuggestions.department && (
             <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-start space-x-2">
-                <span className="w-4 h-4 text-blue-500 mt-0.5" aria-hidden>💡</span>
+                <span className="w-4 h-4 text-blue-500 mt-0.5" aria-hidden>
+                  💡
+                </span>
                 <p className="text-sm text-blue-700">{aiSuggestions.department}</p>
               </div>
             </div>
@@ -93,7 +108,9 @@ export default function StepUserInfo({ register, errors, aiSuggestions }: StepUs
           {aiSuggestions.office && (
             <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-start space-x-2">
-                <span className="w-4 h-4 text-blue-500 mt-0.5" aria-hidden>💡</span>
+                <span className="w-4 h-4 text-blue-500 mt-0.5" aria-hidden>
+                  💡
+                </span>
                 <p className="text-sm text-blue-700">{aiSuggestions.office}</p>
               </div>
             </div>
@@ -116,15 +133,30 @@ export default function StepUserInfo({ register, errors, aiSuggestions }: StepUs
         </label>
         <div className="space-y-3">
           <label className="flex items-center">
-            <input {...register('passwordSetting')} type="radio" value="system" className="h-4 w-4 text-blue-600 focus:ring-blue-500" />
+            <input
+              {...register('passwordSetting')}
+              type="radio"
+              value="system"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
             <span className="ml-3 text-sm text-neutral-700">System Generated (Email)</span>
           </label>
           <label className="flex items-center">
-            <input {...register('passwordSetting')} type="radio" value="first_login" className="h-4 w-4 text-blue-600 focus:ring-blue-500" />
+            <input
+              {...register('passwordSetting')}
+              type="radio"
+              value="first_login"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
             <span className="ml-3 text-sm text-neutral-700">User Sets at First Login</span>
           </label>
           <label className="flex items-center">
-            <input {...register('passwordSetting')} type="radio" value="admin_set" className="h-4 w-4 text-blue-600 focus:ring-blue-500" />
+            <input
+              {...register('passwordSetting')}
+              type="radio"
+              value="admin_set"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
             <span className="ml-3 text-sm text-neutral-700">Admin Sets Password</span>
           </label>
         </div>

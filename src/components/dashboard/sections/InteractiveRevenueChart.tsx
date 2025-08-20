@@ -15,6 +15,12 @@ import {
   LinearScale,
   LineElement,
   PointElement,
+  type ActiveElement,
+  type ChartEvent,
+  type ChartData as ChartJSData,
+  type ChartOptions as ChartJSOptions,
+  type Chart as ChartType,
+  type TooltipItem,
 } from 'chart.js';
 import { memo, useState } from 'react';
 import { Line } from 'react-chartjs-2';
@@ -31,12 +37,72 @@ ChartJS.register(
   Filler
 );
 
+// Comprehensive interfaces for InteractiveRevenueChart
+interface RevenueDataPoint {
+  date: string;
+  revenue: number;
+  category: string;
+  count: number;
+}
+
+interface ChartDataset {
+  label: string;
+  data: number[];
+  backgroundColor: string;
+  borderColor: string;
+  borderWidth: number;
+}
+
+interface ChartData {
+  labels: string[];
+  datasets: ChartDataset[];
+}
+
+interface ChartOptions {
+  responsive: boolean;
+  maintainAspectRatio: boolean;
+  plugins: {
+    legend: {
+      display: boolean;
+      position: 'top' | 'bottom' | 'left' | 'right';
+    };
+    tooltip: {
+      enabled: boolean;
+      mode: 'index' | 'dataset' | 'point' | 'nearest' | 'x' | 'y';
+    };
+  };
+  scales: {
+    x: {
+      display: boolean;
+      title: {
+        display: boolean;
+        text: string;
+      };
+    };
+    y: {
+      display: boolean;
+      title: {
+        display: boolean;
+        text: string;
+      };
+    };
+  };
+}
+
+// Use Chart.js types via TooltipItem<'line'> for callbacks
+
+interface CategoryData {
+  category: string;
+  count: number;
+  value: number;
+}
+
 // Interactive Revenue Chart with Drill-down Capabilities
 export const InteractiveRevenueChart = memo(
   ({ data, loading }: { data: RevenueChart[]; loading: boolean }) => {
     const [selectedPoint, setSelectedPoint] = useState<RevenueChart | null>(null);
     const [showDetails, setShowDetails] = useState(false);
-    const [drillDownData, setDrillDownData] = useState<any[]>([]);
+    const [drillDownData, setDrillDownData] = useState<CategoryData[]>([]);
     const [isDrillingDown, setIsDrillingDown] = useState(false);
 
     if (loading) {
@@ -51,7 +117,7 @@ export const InteractiveRevenueChart = memo(
     }
 
     // Enhanced chart options with interactivity
-    const chartOptions = {
+    const chartOptions: ChartJSOptions<'line'> = {
       responsive: true,
       maintainAspectRatio: false,
       interaction: {
@@ -75,16 +141,16 @@ export const InteractiveRevenueChart = memo(
           cornerRadius: 8,
           displayColors: true,
           callbacks: {
-            title: (context: any) => {
-              return `Period: ${context[0].label}`;
+            title: (tooltipItems: TooltipItem<'line'>[]) => {
+              return `Period: ${tooltipItems[0]?.label ?? ''}`;
             },
-            label: (context: any) => {
-              const label = context.dataset.label || '';
-              const value = context.parsed.y;
+            label: (tooltipItem: TooltipItem<'line'>) => {
+              const label = tooltipItem.dataset?.label ?? '';
+              const value = (tooltipItem.parsed?.y as number) ?? 0;
               return `${label}: ${formatCurrency(value)}`;
             },
-            afterLabel: (context: any) => {
-              const dataPoint = data[context.dataIndex];
+            afterLabel: (tooltipItem: TooltipItem<'line'>) => {
+              const dataPoint = data[tooltipItem.dataIndex!];
               if (dataPoint) {
                 const variance = ((dataPoint.actual - dataPoint.target) / dataPoint.target) * 100;
                 return `Variance: ${variance > 0 ? '+' : ''}${formatPercentage(variance)}`;
@@ -109,12 +175,12 @@ export const InteractiveRevenueChart = memo(
           },
           ticks: {
             color: '#6b7280',
-            callback: (value: any) => formatCurrency(value),
+            callback: (value: string | number) => formatCurrency(Number(value)),
           },
         },
       },
-      onClick: (event: any, elements: any) => {
-        if (elements.length > 0) {
+      onClick: (event: ChartEvent, elements: ActiveElement[], _chart: ChartType<'line'>) => {
+        if (Array.isArray(elements) && elements.length > 0) {
           const dataIndex = elements[0].index;
           const dataPoint = data[dataIndex];
           setSelectedPoint(dataPoint);
@@ -196,7 +262,7 @@ export const InteractiveRevenueChart = memo(
       });
     }
 
-    const chartData = {
+    const chartData: ChartJSData<'line'> = {
       labels: safe.map(d => d.period),
       datasets,
     };

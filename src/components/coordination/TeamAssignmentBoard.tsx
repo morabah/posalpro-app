@@ -102,6 +102,13 @@ interface TeamAssignmentBoardProps {
   className?: string;
 }
 
+interface ErrorContext {
+  sectionId?: string;
+  memberId?: string;
+  operation?: string;
+  [key: string]: unknown;
+}
+
 export function TeamAssignmentBoard({
   proposalId,
   sections,
@@ -125,7 +132,7 @@ export function TeamAssignmentBoard({
 
   // Error handling
   const handleError = useCallback(
-    (error: unknown, operation: string, context?: any) => {
+    (error: unknown, operation: string, context?: ErrorContext) => {
       const standardError =
         error instanceof Error
           ? new StandardError({

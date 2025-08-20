@@ -17,7 +17,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string) => {
-
   // In a real implementation, this would show a toast notification
 };
 
@@ -384,45 +383,92 @@ export default function CoordinationHub() {
     (async () => {
       try {
         const [proposalsRes, insightsRes] = await Promise.all([
-          apiClient.get<{ success: boolean; data: { proposals: Proposal[]; pagination?: any } }>(
-            '/proposals?limit=50&sortBy=updatedAt&sortOrder=desc'
-          ),
+          apiClient.get<{
+            success: boolean;
+            data: {
+              proposals: Array<Record<string, unknown>>;
+              pagination?: { nextCursor?: string | null; hasNextPage?: boolean };
+            };
+          }>('/proposals?limit=50&sortBy=updatedAt&sortOrder=desc'),
           apiClient.get<{ success: boolean; data: AIInsight[] }>('/analytics/insights?limit=10'),
         ]);
         if (isCancelled) return;
-        const proposals = (proposalsRes as any)?.data?.proposals || [];
-        const insights = (insightsRes as any)?.data || [];
+        const proposals = proposalsRes?.data?.proposals ?? [];
+        const insights = insightsRes?.data ?? [];
         // Map proposals to UI shape if needed
-        const mapped: Proposal[] = proposals.map((p: any) => ({
-          id: p.id,
-          name: p.title ?? p.name ?? 'Untitled',
-          client: p.customerName ?? p.customer?.name ?? 'Unknown',
-          status: (p.status as any) ?? 'Draft',
-          progress: Math.min(100, Math.max(0, Math.round((p.completionRate ?? 0) * 100))),
-          deadline: new Date(p.dueDate ?? Date.now()),
-          priority: (p.priority as any) ?? 'Medium',
-          complexity: p.complexity ?? 5,
-          estimatedHours: p.estimatedHours ?? 0,
-          actualHours: p.actualHours ?? 0,
-          lastUpdate: new Date(p.updatedAt ?? Date.now()),
-          criticalPath: Boolean(p.criticalPath),
-          riskLevel: (p.riskLevel as any) ?? 'Low',
-          teamMembers: (p.teamMembers ?? []).map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            role: m.role ?? 'Member',
-            department: m.department ?? 'General',
-            assignedSections: m.assignedSections ?? [],
-            workload: m.workload ?? 0,
-            availability: m.availability ?? 'Available',
-            lastActive: new Date(m.lastActive ?? Date.now()),
-            completionRate: m.completionRate ?? 0,
-          })),
+        const mapped: Proposal[] = proposals.map(p => ({
+          id: String(p.id),
+          name: String((p as any).title ?? (p as any).name ?? 'Untitled'),
+          client: String((p as any).customerName ?? (p as any).customer?.name ?? 'Unknown'),
+          status: (() => {
+            const status = String((p as any).status ?? 'Draft');
+            if (
+              status === 'In Progress' ||
+              status === 'Completed' ||
+              status === 'Draft' ||
+              status === 'Review'
+            ) {
+              return status;
+            }
+            return 'Draft';
+          })(),
+          progress: Math.min(
+            100,
+            Math.max(0, Math.round((Number((p as any).completionRate ?? 0) || 0) * 100))
+          ),
+          deadline: new Date(((p as any).dueDate as string) ?? Date.now()),
+          priority: (() => {
+            const priority = String((p as any).priority ?? 'Medium');
+            if (priority === 'High' || priority === 'Medium' || priority === 'Low') {
+              return priority;
+            }
+            return 'Medium';
+          })(),
+          complexity: Number((p as any).complexity ?? 5),
+          estimatedHours: Number((p as any).estimatedHours ?? 0),
+          actualHours: Number((p as any).actualHours ?? 0),
+          lastUpdate: new Date(((p as any).updatedAt as string) ?? Date.now()),
+          criticalPath: Boolean((p as any).criticalPath),
+          riskLevel: (() => {
+            const riskLevel = String((p as any).riskLevel ?? 'Low');
+            if (
+              riskLevel === 'Low' ||
+              riskLevel === 'Medium' ||
+              riskLevel === 'High' ||
+              riskLevel === 'Critical'
+            ) {
+              return riskLevel;
+            }
+            return 'Low';
+          })(),
+          teamMembers: Array.isArray((p as any).teamMembers)
+            ? ((p as any).teamMembers as Array<Record<string, unknown>>).map(m => ({
+                id: String(m.id ?? ''),
+                name: String(m.name ?? ''),
+                role: String(m.role ?? 'Member'),
+                department: String(m.department ?? 'General'),
+                assignedSections: (m as any).assignedSections ?? [],
+                workload: Number((m as any).workload ?? 0),
+                availability: (() => {
+                  const availability = String((m as any).availability ?? 'Available');
+                  if (
+                    availability === 'Available' ||
+                    availability === 'Busy' ||
+                    availability === 'Unavailable'
+                  ) {
+                    return availability;
+                  }
+                  return 'Available';
+                })(),
+                lastActive: new Date(((m as any).lastActive as string) ?? Date.now()),
+                completionRate: Number((m as any).completionRate ?? 0),
+              }))
+            : [],
         }));
         // Set state via local setters introduced below
         setLiveProposals(mapped);
         setAiInsights(insights as AIInsight[]);
-        const pg = (proposalsRes as any)?.data?.pagination;
+        const pg = proposalsRes?.data?.pagination;
         if (pg && typeof pg === 'object') {
           setNextCursor(pg.nextCursor || null);
           setHasMore(Boolean(pg.hasNextPage));
@@ -445,38 +491,85 @@ export default function CoordinationHub() {
   const loadMoreProposals = useCallback(async () => {
     if (!nextCursor) return;
     const qp = new URLSearchParams({ limit: '50', cursor: nextCursor }).toString();
-    const res = await apiClient.get<{ success: boolean; data: { proposals: any[]; pagination?: any } }>(
-      `/proposals?${qp}`
-    );
+    const res = await apiClient.get<{
+      success: boolean;
+      data: {
+        proposals: Array<Record<string, unknown>>;
+        pagination?: { nextCursor?: string | null; hasNextPage?: boolean };
+      };
+    }>(`/proposals?${qp}`);
     if (res?.success) {
-      const mapped: Proposal[] = (res.data.proposals || []).map((p: any) => ({
-        id: p.id,
-        name: p.title ?? p.name ?? 'Untitled',
-        client: p.customerName ?? p.customer?.name ?? 'Unknown',
-        status: (p.status as any) ?? 'Draft',
-        progress: Math.min(100, Math.max(0, Math.round((p.completionRate ?? 0) * 100))),
-        deadline: new Date(p.dueDate ?? Date.now()),
-        priority: (p.priority as any) ?? 'Medium',
-        complexity: p.complexity ?? 5,
-        estimatedHours: p.estimatedHours ?? 0,
-        actualHours: p.actualHours ?? 0,
-        lastUpdate: new Date(p.updatedAt ?? Date.now()),
-        criticalPath: Boolean(p.criticalPath),
-        riskLevel: (p.riskLevel as any) ?? 'Low',
-        teamMembers: (p.teamMembers ?? []).map((m: any) => ({
-          id: m.id,
-          name: m.name,
-          role: m.role ?? 'Member',
-          department: m.department ?? 'General',
-          assignedSections: m.assignedSections ?? [],
-          workload: m.workload ?? 0,
-          availability: m.availability ?? 'Available',
-          lastActive: new Date(m.lastActive ?? Date.now()),
-          completionRate: m.completionRate ?? 0,
-        })),
+      const mapped: Proposal[] = (res.data.proposals || []).map(p => ({
+        id: String(p.id),
+        name: String((p as any).title ?? (p as any).name ?? 'Untitled'),
+        client: String((p as any).customerName ?? (p as any).customer?.name ?? 'Unknown'),
+        status: (() => {
+          const status = String((p as any).status ?? 'Draft');
+          if (
+            status === 'In Progress' ||
+            status === 'Completed' ||
+            status === 'Draft' ||
+            status === 'Review'
+          ) {
+            return status;
+          }
+          return 'Draft';
+        })(),
+        progress: Math.min(
+          100,
+          Math.max(0, Math.round((Number((p as any).completionRate ?? 0) || 0) * 100))
+        ),
+        deadline: new Date(((p as any).dueDate as string) ?? Date.now()),
+        priority: (() => {
+          const priority = String((p as any).priority ?? 'Medium');
+          if (priority === 'High' || priority === 'Medium' || priority === 'Low') {
+            return priority;
+          }
+          return 'Medium';
+        })(),
+        complexity: Number((p as any).complexity ?? 5),
+        estimatedHours: Number((p as any).estimatedHours ?? 0),
+        actualHours: Number((p as any).actualHours ?? 0),
+        lastUpdate: new Date(((p as any).updatedAt as string) ?? Date.now()),
+        criticalPath: Boolean((p as any).criticalPath),
+        riskLevel: (() => {
+          const riskLevel = String((p as any).riskLevel ?? 'Low');
+          if (
+            riskLevel === 'Low' ||
+            riskLevel === 'Medium' ||
+            riskLevel === 'High' ||
+            riskLevel === 'Critical'
+          ) {
+            return riskLevel;
+          }
+          return 'Low';
+        })(),
+        teamMembers: Array.isArray((p as any).teamMembers)
+          ? ((p as any).teamMembers as Array<Record<string, unknown>>).map(m => ({
+              id: String(m.id ?? ''),
+              name: String(m.name ?? ''),
+              role: String(m.role ?? 'Member'),
+              department: String(m.department ?? 'General'),
+              assignedSections: (m as any).assignedSections ?? [],
+              workload: Number((m as any).workload ?? 0),
+              availability: (() => {
+                const availability = String((m as any).availability ?? 'Available');
+                if (
+                  availability === 'Available' ||
+                  availability === 'Busy' ||
+                  availability === 'Unavailable'
+                ) {
+                  return availability;
+                }
+                return 'Available';
+              })(),
+              lastActive: new Date(((m as any).lastActive as string) ?? Date.now()),
+              completionRate: Number((m as any).completionRate ?? 0),
+            }))
+          : [],
       }));
       setLiveProposals(prev => [...prev, ...mapped]);
-      const pg = (res as any)?.data?.pagination;
+      const pg = res?.data?.pagination;
       if (pg && typeof pg === 'object') {
         setNextCursor(pg.nextCursor || null);
         setHasMore(Boolean(pg.hasNextPage));

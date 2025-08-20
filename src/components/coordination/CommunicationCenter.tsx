@@ -119,6 +119,60 @@ export interface CommunicationCenterProps {
 // Strict priority union
 type Priority = 'low' | 'normal' | 'high' | 'urgent';
 
+interface CommunicationMetadata {
+  component: string;
+  action: string;
+  proposalId?: string;
+  userStory: string;
+  acceptanceCriteria: string[];
+  hypothesis: string;
+  targetReduction: number;
+  [key: string]: unknown;
+}
+
+interface IncomingMessage {
+  id?: string | number;
+  proposalId?: string;
+  from?: {
+    id: string;
+    name: string;
+    role: string;
+    department: string;
+  };
+  content?: string;
+  type?: 'message' | 'notification' | 'action' | 'system';
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  timestamp?: string | Date;
+  isRead?: boolean;
+  mentions?: string[];
+  tags?: string[];
+  actionItems?: Array<{
+    id?: string | number;
+    description?: string;
+    assignedTo?: string;
+    status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+    priority?: 'low' | 'medium' | 'high';
+    dueDate?: string | Date;
+  }>;
+  clientInsights?: Array<{
+    type: string;
+    content: string;
+    confidence: number;
+  }>;
+}
+
+interface IncomingParticipant {
+  id?: string | number;
+  name?: string;
+  role?: string;
+  department?: string;
+  email?: string;
+  isOnline?: boolean;
+  lastActive?: string | Date;
+  avatar?: string;
+  permissions?: string[];
+}
+
 export function CommunicationCenter({
   proposalId,
   currentUserId,
@@ -184,7 +238,7 @@ export function CommunicationCenter({
   const trackCommunicationMetrics = useCallback(
     (
       action: string,
-      metadata?: Record<string, any>,
+      metadata?: Record<string, unknown>,
       priority: 'low' | 'medium' | 'high' = 'medium'
     ) => {
       try {
@@ -199,7 +253,7 @@ export function CommunicationCenter({
             hypothesis: 'H4',
             targetReduction: 0.4, // 40% coordination effort reduction
             ...metadata,
-          },
+          } as CommunicationMetadata,
           priority
         );
       } catch (error) {
@@ -353,10 +407,10 @@ export function CommunicationCenter({
   const coerceMessage = (m: IncomingMessage): CommunicationMessage => ({
     id: String(m.id ?? Date.now()),
     proposalId: String(m.proposalId ?? proposalId),
-    from: m.from ?? ({ id: 'system', name: 'System', role: 'System', department: 'System' } as any),
+    from: m.from ?? { id: 'system', name: 'System', role: 'System', department: 'System' },
     content: m.content ?? '',
-    type: (m.type as any) ?? 'message',
-    priority: (m.priority as any) ?? 'normal',
+    type: m.type ?? 'message',
+    priority: m.priority ?? 'normal',
     timestamp: toDate(m.timestamp),
     isRead: m.isRead ?? true,
     mentions: m.mentions ?? [],
@@ -365,11 +419,11 @@ export function CommunicationCenter({
       id: String(ai.id ?? `${Date.now()}-${idx}`),
       description: ai.description ?? '',
       assignedTo: ai.assignedTo ?? currentUserId,
-      status: (ai.status as any) ?? 'pending',
-      priority: (ai.priority as any) ?? 'medium',
+      status: ai.status ?? 'pending',
+      priority: ai.priority ?? 'medium',
       dueDate: toDate(ai.dueDate),
     })),
-    clientInsights: (m as any).clientInsights ?? [],
+    clientInsights: m.clientInsights ?? [],
   });
 
   const coerceParticipant = (p: IncomingParticipant): CommunicationParticipant => ({
@@ -1124,7 +1178,7 @@ export function CommunicationCenter({
 
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                             <div className="text-xs text-gray-500 sm:flex-1">
-                              Ctrl+Enter to send • Use @name for mentions • Use #tag for tags
+                              Ctrl+Enter to send • @name • #tag
                             </div>
                             <Button
                               onClick={sendMessage}

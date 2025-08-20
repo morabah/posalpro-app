@@ -1,10 +1,18 @@
 'use client';
 
+import { FieldErrors, UseFormRegister, UseFormSetValue, UseFormWatch } from 'react-hook-form';
+
+interface RoleAccessFormData {
+  primaryRole: string;
+  teamAssignments: string[];
+  accessLevel: 'standard' | 'power' | 'admin';
+}
+
 interface StepRoleAccessProps {
-  register: any;
-  errors: any;
-  setValue: any;
-  watch: any;
+  register: UseFormRegister<RoleAccessFormData>;
+  errors: FieldErrors<RoleAccessFormData>;
+  setValue: UseFormSetValue<RoleAccessFormData>;
+  watch: UseFormWatch<RoleAccessFormData>;
 }
 
 const AVAILABLE_TEAMS = [
@@ -14,7 +22,9 @@ const AVAILABLE_TEAMS = [
   'Financial Services Team',
 ];
 
-export default function StepRoleAccess({ register, errors, setValue }: StepRoleAccessProps) {
+export default function StepRoleAccess({ register, errors, setValue, watch }: StepRoleAccessProps) {
+  const currentTeamAssignments = watch('teamAssignments') || [];
+
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-neutral-900">Role & Access</h3>
@@ -40,12 +50,12 @@ export default function StepRoleAccess({ register, errors, setValue }: StepRoleA
             <label key={team} className="flex items-center">
               <input
                 type="checkbox"
+                checked={currentTeamAssignments.includes(team)}
                 onChange={e => {
-                  setValue('teamAssignments', (prev: string[] = []) =>
-                    e.currentTarget.checked
-                      ? [...prev, team]
-                      : prev.filter(t => t !== team)
-                  );
+                  const newAssignments = e.currentTarget.checked
+                    ? [...currentTeamAssignments, team]
+                    : currentTeamAssignments.filter(t => t !== team);
+                  setValue('teamAssignments', newAssignments);
                 }}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded"
               />
@@ -56,7 +66,9 @@ export default function StepRoleAccess({ register, errors, setValue }: StepRoleA
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-neutral-700 mb-4">System Access Level:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
+          System Access Level:
+        </label>
         <div className="space-y-3">
           {['standard', 'power', 'admin'].map(level => (
             <label key={level} className="flex items-center">

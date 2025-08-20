@@ -1,10 +1,18 @@
 'use client';
 
+import { FieldErrors, UseFormRegister, UseFormSetValue, UseFormWatch } from 'react-hook-form';
+
+interface NotificationFormData {
+  emailNotifications: string[];
+  mobileNotifications: string[];
+  digestPreferences: string[];
+}
+
 interface StepNotificationsProps {
-  register: any;
-  errors: any;
-  setValue: any;
-  watch: any;
+  register: UseFormRegister<NotificationFormData>;
+  errors: FieldErrors<NotificationFormData>;
+  setValue: UseFormSetValue<NotificationFormData>;
+  watch: UseFormWatch<NotificationFormData>;
 }
 
 export default function StepNotifications({ register }: StepNotificationsProps) {
@@ -13,7 +21,9 @@ export default function StepNotifications({ register }: StepNotificationsProps) 
       <h3 className="text-lg font-semibold text-neutral-900">Default Notification Settings</h3>
 
       <div>
-        <label className="block text-sm font-medium text-neutral-700 mb-4">Email Notifications:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
+          Email Notifications:
+        </label>
         <div className="space-y-3">
           {['proposals', 'approvals', 'tasks', 'announcements', 'teams'].map(value => (
             <label key={value} className="flex items-center">
@@ -30,7 +40,9 @@ export default function StepNotifications({ register }: StepNotificationsProps) 
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-neutral-700 mb-4">Mobile Push Notifications:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
+          Mobile Push Notifications:
+        </label>
         <div className="space-y-3">
           {['approvals', 'deadlines', 'announcements', 'teams'].map(value => (
             <label key={value} className="flex items-center">
@@ -47,7 +59,9 @@ export default function StepNotifications({ register }: StepNotificationsProps) 
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-neutral-700 mb-4">Default Digest Preferences:</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-4">
+          Default Digest Preferences:
+        </label>
         <div className="space-y-3">
           {['daily', 'weekly'].map(value => (
             <label key={value} className="flex items-center">

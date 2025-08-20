@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
     const useCursor = Boolean(cursorId) || !url.searchParams.has('page');
 
     let total = 0;
-    let workflows: Array<any> = [];
+    let workflows: any[] = [];
     if (useCursor) {
       const take = validatedQuery.limit + 1;
       const list = await prisma.approvalWorkflow.findMany({

@@ -36,7 +36,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-type RuleDTO = {
+interface RuleDTO {
   id: string;
   productId: string;
   name: string;
@@ -44,7 +44,7 @@ type RuleDTO = {
   rule: unknown;
   precedence: number;
   explain?: string | null;
-};
+}
 
 export default function RuleBuilder({
   productId,

@@ -112,7 +112,12 @@ export const MobileFilterPanel = memo(
                 aria-label="Close filters"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -131,8 +136,8 @@ export const MobileDataTable = memo(
     columns,
     isMobile,
   }: {
-    data: any[];
-    columns: Array<{ key: string; label: string; render?: (value: any) => React.ReactNode }>;
+    data: TableRow[];
+    columns: Array<{ key: string; label: string; render?: (value: unknown) => React.ReactNode }>;
     isMobile: boolean;
   }) => {
     if (isMobile) {
@@ -147,7 +152,7 @@ export const MobileDataTable = memo(
                 >
                   <span className="font-medium text-gray-700">{column.label}:</span>
                   <span className="text-gray-900">
-                    {column.render ? column.render(row[column.key]) : row[column.key]}
+                    {column.render ? column.render(row[column.key]) : String(row[column.key] || '')}
                   </span>
                 </div>
               ))}
@@ -180,7 +185,7 @@ export const MobileDataTable = memo(
                     key={column.key}
                     className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
                   >
-                    {column.render ? column.render(row[column.key]) : row[column.key]}
+                    {column.render ? column.render(row[column.key]) : String(row[column.key] || '')}
                   </td>
                 ))}
               </tr>
@@ -217,3 +222,50 @@ export const EnhancedLayoutGrid = memo(
   }
 );
 
+// Comprehensive interfaces for TouchFriendlyComponents
+interface TableColumn {
+  key: string;
+  label: string;
+  sortable?: boolean;
+  width?: string;
+  align?: 'left' | 'center' | 'right';
+}
+
+interface TableRow {
+  id: string;
+  [key: string]: string | number | boolean | Date | null | undefined;
+}
+
+interface TouchFriendlyTableProps {
+  data: TableRow[];
+  columns: TableColumn[];
+  onRowClick?: (row: TableRow) => void;
+  onSort?: (column: string, direction: 'asc' | 'desc') => void;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
+  loading?: boolean;
+  emptyMessage?: string;
+}
+
+interface TouchFriendlyCardProps {
+  title: string;
+  subtitle?: string;
+  content: React.ReactNode;
+  actions?: React.ReactNode;
+  onClick?: () => void;
+  variant?: 'default' | 'elevated' | 'outlined';
+  size?: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
+}
+
+interface TouchFriendlyButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  size?: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
+  loading?: boolean;
+  icon?: React.ComponentType<{ className?: string }>;
+  iconPosition?: 'left' | 'right';
+  fullWidth?: boolean;
+}

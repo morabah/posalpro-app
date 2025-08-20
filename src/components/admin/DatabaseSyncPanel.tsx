@@ -122,8 +122,8 @@ export default function DatabaseSyncPanel({
     if (process.env.NODE_ENV === 'development') return true;
 
     // Check user roles for admin privileges
-    const roles: Array<string> = Array.isArray(user.roles)
-      ? (user.roles as Array<string>)
+    const roles: string[] = Array.isArray(user.roles)
+      ? (user.roles as string[])
       : typeof user.roles === 'string'
         ? [user.roles as string]
         : [];
@@ -285,9 +285,9 @@ export default function DatabaseSyncPanel({
         interface DbSyncData {
           itemsSynced?: number;
           itemsFailed?: number;
-          tables?: Array<string>;
-          conflicts?: Array<unknown>;
-          errors?: Array<string>;
+          tables?: string[];
+          conflicts?: unknown[];
+          errors?: string[];
         }
         interface DbSyncResponse {
           success: boolean;

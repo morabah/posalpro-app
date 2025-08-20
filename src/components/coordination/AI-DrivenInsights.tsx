@@ -8,8 +8,8 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
@@ -39,17 +39,21 @@ const COMPONENT_MAPPING = {
 };
 
 // Types
+interface InsightMetadata {
+  [key: string]: string | number | boolean | Date;
+}
+
 interface Insight {
   id: string;
-  type: 'recommendation' | 'warning' | 'success' | 'info';
+  type: 'warning' | 'recommendation' | 'success' | 'error' | 'info';
   title: string;
   description: string;
-  impact: 'high' | 'medium' | 'low';
+  impact: 'low' | 'medium' | 'high' | 'critical';
   confidence: number;
-  category: 'coordination' | 'performance' | 'resource' | 'timeline';
+  category: 'coordination' | 'performance' | 'quality' | 'timeline' | 'budget';
   actionable: boolean;
   suggestedActions?: string[];
-  metadata?: Record<string, any>;
+  metadata?: InsightMetadata;
   createdAt: string;
 }
 
@@ -155,17 +159,22 @@ export const AIDrivenInsights: React.FC<AIDrivenInsightsProps> = ({
         {
           id: 'insight_4',
           type: 'info',
-          title: 'Resource Allocation Analysis',
+          title: 'Resource Allocation Optimization',
           description:
-            'Product management team capacity is optimally distributed. No immediate reallocation needed.',
+            'Current resource allocation shows 15% underutilization in design team. Consider redistributing workload.',
           impact: 'low',
-          confidence: 78,
-          category: 'resource',
-          actionable: false,
+          confidence: 76,
+          category: 'performance',
+          actionable: true,
+          suggestedActions: [
+            'Review design team capacity',
+            'Identify additional design tasks',
+            'Consider cross-training opportunities',
+          ],
           metadata: {
-            teamCapacity: '89%',
-            distribution: 'optimal',
-            nextReview: '1 week',
+            underutilization: 15,
+            teamSize: 8,
+            availableCapacity: '32 hours/week',
           },
           createdAt: new Date().toISOString(),
         },
@@ -223,8 +232,7 @@ export const AIDrivenInsights: React.FC<AIDrivenInsightsProps> = ({
         criticalWarnings: mockInsights.filter(i => i.type === 'warning' && i.impact === 'high')
           .length,
         averageConfidence: Math.round(
-          mockInsights.reduce((sum, insight) => sum + insight.confidence, 0) /
-            mockInsights.length
+          mockInsights.reduce((sum, insight) => sum + insight.confidence, 0) / mockInsights.length
         ),
         topCategory: insightMetrics.topCategory,
         component: 'AIDrivenInsights',

@@ -5,8 +5,26 @@
 
 import { memo, useEffect, useState } from 'react';
 
+interface RealTimeUpdate {
+  type: string;
+  timestamp: string;
+  data: {
+    metrics?: {
+      totalRevenue?: number;
+      winRate?: number;
+      activeProposals?: number;
+    };
+    alerts?: Array<{
+      id: number;
+      type: string;
+      message: string;
+      timestamp: string;
+    }>;
+  };
+}
+
 // Real-time Updates Hook
-export const useRealTimeUpdates = (enabled: boolean, onDataUpdate: (data: any) => void) => {
+export const useRealTimeUpdates = (enabled: boolean, onDataUpdate: (data: RealTimeUpdate) => void) => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
@@ -19,7 +37,7 @@ export const useRealTimeUpdates = (enabled: boolean, onDataUpdate: (data: any) =
       setLastUpdate(new Date());
 
       // Simulate real-time data updates
-      const mockUpdate = {
+      const mockUpdate: RealTimeUpdate = {
         type: 'dashboard_update',
         timestamp: new Date().toISOString(),
         data: {
@@ -69,4 +87,3 @@ export const LiveUpdatesIndicator = memo(
 );
 
 LiveUpdatesIndicator.displayName = 'LiveUpdatesIndicator';
-

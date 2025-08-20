@@ -114,9 +114,9 @@ export async function GET(request: NextRequest) {
     // Process and structure the data
     const proposalData = (Array.isArray(proposalMetrics) ? proposalMetrics[0] as Record<string, unknown> : {}) || {};
     const customerData = (Array.isArray(customerMetrics) ? customerMetrics[0] as Record<string, unknown> : {}) || {};
-    const revenueData = (Array.isArray(revenueMetrics) ? revenueMetrics as Record<string, unknown>[] : []) || [];
+    const revenueData = (Array.isArray(revenueMetrics) ? revenueMetrics as Array<Record<string, unknown>> : []) || [];
     const timeData = (Array.isArray(timeMetrics) ? timeMetrics[0] as Record<string, unknown> : {}) || {};
-    const riskData = (Array.isArray(riskMetrics) ? riskMetrics as Record<string, unknown>[] : []) || [];
+    const riskData = (Array.isArray(riskMetrics) ? riskMetrics as Array<Record<string, unknown>> : []) || [];
 
     // Calculate derived metrics
     const totalProposals = Number(proposalData.total_proposals) || 0;

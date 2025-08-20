@@ -55,6 +55,74 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H7-001', 'TC-H7-002', 'TC-H7-003', 'TC-H7-004'],
 };
 
+interface WorkflowCondition {
+  id: string;
+  type: 'field' | 'value' | 'date' | 'user' | 'role';
+  field: string;
+  operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';
+  value: string | number | boolean | Date | string[] | Record<string, unknown>;
+  dataType: 'string' | 'number' | 'boolean' | 'date' | 'array' | 'object';
+  logicalOperator?: 'AND' | 'OR';
+  parentGroup?: string;
+}
+
+interface WorkflowAction {
+  id: string;
+  type:
+    | 'route_to_stage'
+    | 'assign_user'
+    | 'send_notification'
+    | 'set_priority'
+    | 'escalate'
+    | 'add_comment'
+    | 'require_approval';
+  parameters: Record<string, string | number | boolean | string[]>;
+  delay?: number;
+  conditions?: string[];
+}
+
+interface WorkflowTrigger {
+  id: string;
+  event:
+    | 'proposal_created'
+    | 'stage_completed'
+    | 'deadline_approaching'
+    | 'value_threshold'
+    | 'manual_trigger';
+  timing: 'immediate' | 'delayed' | 'scheduled';
+  delay?: number;
+  schedule?: {
+    frequency: 'once' | 'daily' | 'weekly' | 'monthly';
+    time?: string;
+    days?: number[];
+  };
+}
+
+interface WorkflowException {
+  id: string;
+  condition: string;
+  action: 'skip_rule' | 'override_action' | 'escalate' | 'require_manual_review';
+  reason: string;
+}
+
+interface WorkflowComment {
+  id: string;
+  author: string;
+  content: string;
+  timestamp: Date;
+  type: 'comment' | 'approval' | 'rejection' | 'escalation';
+}
+
+interface WorkflowAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url: string;
+  uploadedBy: string;
+  uploadedAt: Date;
+}
+
 interface WorkflowRule {
   id: string;
   name: string;
@@ -62,10 +130,10 @@ interface WorkflowRule {
   isActive: boolean;
   priority: number;
   category: 'routing' | 'approval' | 'escalation' | 'notification' | 'validation';
-  conditions: any[];
-  actions: any[];
-  triggers: any[];
-  exceptions: any[];
+  conditions: WorkflowCondition[];
+  actions: WorkflowAction[];
+  triggers: WorkflowTrigger[];
+  exceptions: WorkflowException[];
   lastModified: Date;
   modifiedBy: string;
   isValid: boolean;
@@ -93,9 +161,9 @@ interface ApprovalTask {
   riskLevel: 'low' | 'medium' | 'high';
   currentStage: string;
   nextStage?: string;
-  comments: any[];
-  attachments: any[];
-  metadata: Record<string, any>;
+  comments: WorkflowComment[];
+  attachments: WorkflowAttachment[];
+  metadata: Record<string, unknown>;
 }
 
 export default function ApprovalWorkflowPage() {
@@ -191,7 +259,7 @@ export default function ApprovalWorkflowPage() {
   // Track page view analytics for H7 hypothesis validation
   const handleTabChange = useCallback(
     (tab: string) => {
-      setActiveTab(tab as any);
+      setActiveTab(tab as 'queue' | 'orchestrator' | 'visualization' | 'rules' | 'decision');
 
       analytics(
         'approval_workflow_tab_changed',
@@ -223,10 +291,13 @@ export default function ApprovalWorkflowPage() {
     [analytics]
   );
 
-  const handleTaskAction = useCallback((taskId: string, action: string, data?: any) => {
-    // Disabled console.log analytics to prevent Fast Refresh rebuilds
-    // TODO: migrate to optimized analytics hook
-  }, []);
+  const handleTaskAction = useCallback(
+    (taskId: string, action: string, data?: Record<string, unknown>) => {
+      // Disabled console.log analytics to prevent Fast Refresh rebuilds
+      // TODO: migrate to optimized analytics hook
+    },
+    []
+  );
 
   const handleRuleSave = useCallback((rule: WorkflowRule) => {
     setWorkflowRules(prev => {
@@ -257,19 +328,22 @@ export default function ApprovalWorkflowPage() {
     });
   }, []);
 
-  const handleRuleTest = useCallback(async (rule: WorkflowRule, testData: any) => {
-    // Mock rule testing for demonstration
-    return {
-      id: `test-${Date.now()}`,
-      testCase: 'Mock Test',
-      input: testData,
-      expectedOutput: 'success',
-      actualOutput: 'success',
-      passed: true,
-      executionTime: Math.random() * 100,
-      timestamp: new Date(),
-    };
-  }, []);
+  const handleRuleTest = useCallback(
+    async (rule: WorkflowRule, testData: Record<string, unknown>) => {
+      // Mock rule testing for demonstration
+      return {
+        id: `test-${Date.now()}`,
+        testCase: 'Mock Test',
+        input: testData,
+        expectedOutput: 'success',
+        actualOutput: 'success',
+        passed: true,
+        executionTime: Math.random() * 100,
+        timestamp: new Date(),
+      };
+    },
+    []
+  );
 
   const handleTemplateApply = useCallback((template: any) => {
     // Apply template rules to current workflow
@@ -489,7 +563,7 @@ export default function ApprovalWorkflowPage() {
               assignee: task.assignee,
               dueDate: task.dueDate,
               riskLevel: task.riskLevel,
-              metadata: task.metadata,
+              metadata: task.metadata as Record<string, string | number | boolean | Date>,
             }))}
             templates={[
               {
@@ -590,9 +664,14 @@ export default function ApprovalWorkflowPage() {
           <WorkflowRuleBuilder
             rules={workflowRules}
             availableFields={availableFields}
-            onRuleSave={handleRuleSave}
-            onRuleDelete={handleRuleDelete}
-            onRuleTest={handleRuleTest}
+            onRuleSave={handleRuleSave as unknown as (rule: any) => void}
+            onRuleDelete={handleRuleDelete as unknown as (rule: any) => void}
+            onRuleTest={
+              handleRuleTest as unknown as (
+                rule: any,
+                testData: Record<string, string | number | boolean | string[]>
+              ) => Promise<any>
+            }
             onTemplateApply={handleTemplateApply}
           />
         )}
@@ -603,7 +682,7 @@ export default function ApprovalWorkflowPage() {
             const decisionContextData: DecisionContext = {
               proposalId: selectedTask.proposalId,
               proposalName: selectedTask.proposalTitle,
-              client: selectedTask.metadata?.clientName || 'N/A', // Example: get client from metadata or default
+              client: (selectedTask.metadata?.clientName as string) || 'N/A', // Example: get client from metadata or default
               stageId: selectedTask.currentStage, // Assuming stageId is currentStage
               stageName: selectedTask.currentStage, // Assuming stageName is currentStage
               stageType: (() => {

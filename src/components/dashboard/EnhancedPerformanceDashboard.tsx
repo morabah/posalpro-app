@@ -107,6 +107,13 @@ interface EnhancedPerformanceDashboardProps {
   className?: string;
 }
 
+interface ErrorContext {
+  operation?: string;
+  component?: string;
+  userId?: string;
+  [key: string]: unknown;
+}
+
 export function EnhancedPerformanceDashboard({
   userId,
   userRole = 'user',
@@ -129,7 +136,7 @@ export function EnhancedPerformanceDashboard({
 
   // Error handling
   const handleError = useCallback(
-    (error: unknown, operation: string, context?: any) => {
+    (error: unknown, operation: string, context?: ErrorContext) => {
       const standardError =
         error instanceof Error
           ? new StandardError({
@@ -148,12 +155,16 @@ export function EnhancedPerformanceDashboard({
       const userMessage = errorHandlingService.getUserFriendlyMessage(standardError);
       toast.error(userMessage);
 
-      analytics('performance_dashboard_error', {
-        operation,
-        error: standardError.message,
-        context,
-        userId,
-      }, 'high');
+      analytics(
+        'performance_dashboard_error',
+        {
+          operation,
+          error: standardError.message,
+          context,
+          userId,
+        },
+        'high'
+      );
     },
     [errorHandlingService, analytics, userId]
   );
@@ -283,12 +294,16 @@ export function EnhancedPerformanceDashboard({
       setInsights(mockInsights);
       setSystemHealth(mockSystemHealth);
 
-      analytics('performance_dashboard_loaded', {
-        metricsCount: mockMetrics.length,
-        insightsCount: mockInsights.length,
-        timeRange,
-        userId,
-      }, 'medium');
+      analytics(
+        'performance_dashboard_loaded',
+        {
+          metricsCount: mockMetrics.length,
+          insightsCount: mockInsights.length,
+          timeRange,
+          userId,
+        },
+        'medium'
+      );
     } catch (error) {
       handleError(error, 'data_fetch', { timeRange });
     } finally {

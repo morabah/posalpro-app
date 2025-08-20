@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { ProductsListSkeleton } from '@/components/ui/LoadingStates';
-import dynamic from 'next/dynamic';
-import { Suspense, useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { Button } from '@/components/ui/forms/Button';
 import { ProductCreationForm } from '@/components/products/ProductCreationForm';
-import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/forms/Button';
+import { ProductsListSkeleton } from '@/components/ui/LoadingStates';
 import { useCreateProduct } from '@/hooks/useProducts';
-import { useQueryClient } from '@tanstack/react-query';
 import { useResponsive } from '@/hooks/useResponsive';
+import { useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Lazy load components for better performance
 const ProductList = dynamic(() => import('@/components/products/ProductList'), {
@@ -46,44 +46,56 @@ export default function ProductsPage() {
     }
   }, [isDesktop]);
 
-  const onFiltersChange = useCallback((f: {
-    categories: string[];
-    status: string[];
-    priceRange: { min: number | null; max: number | null };
-    tags: string[];
-  }) => {
-    // Map status -> isActive
-    const includesActive = f.status.includes('active');
-    const includesInactive = f.status.includes('inactive');
-    const mappedIsActive = includesActive && !includesInactive
-      ? true
-      : includesInactive && !includesActive
-        ? false
-        : undefined;
+  const onFiltersChange = useCallback(
+    (f: {
+      categories: string[];
+      status: string[];
+      priceRange: { min: number | null; max: number | null };
+      tags: string[];
+    }) => {
+      // Map status -> isActive
+      const includesActive = f.status.includes('active');
+      const includesInactive = f.status.includes('inactive');
+      const mappedIsActive =
+        includesActive && !includesInactive
+          ? true
+          : includesInactive && !includesActive
+            ? false
+            : undefined;
 
-    setFilters({
-      categories: f.categories,
-      tags: f.tags,
-      priceRange: { min: f.priceRange.min, max: f.priceRange.max },
-      isActive: mappedIsActive,
-    });
-  }, []);
+      setFilters({
+        categories: f.categories,
+        tags: f.tags,
+        priceRange: { min: f.priceRange.min, max: f.priceRange.max },
+        isActive: mappedIsActive,
+      });
+    },
+    []
+  );
 
   const categoryParam = useMemo(
     () => (filters.categories.length ? filters.categories : undefined),
     [filters.categories]
   );
-  const tagsParam = useMemo(
-    () => (filters.tags.length ? filters.tags : undefined),
-    [filters.tags]
-  );
+  const tagsParam = useMemo(() => (filters.tags.length ? filters.tags : undefined), [filters.tags]);
   const priceRangeParam = useMemo(() => {
     const { min, max } = filters.priceRange;
     return min !== null && max !== null ? { min, max } : undefined;
   }, [filters.priceRange]);
 
   const handleCreateSubmit = useCallback(
-    async (data: any) => {
+    async (data: {
+      name: string;
+      description?: string;
+      sku: string;
+      price: number;
+      currency?: string;
+      category?: string[];
+      tags?: string[];
+      attributes?: Record<string, unknown>;
+      images?: string[];
+      userStoryMappings?: string[];
+    }) => {
       await createProduct.mutateAsync(data);
       setIsCreateOpen(false);
       // Invalidate products queries to refresh list
@@ -135,7 +147,11 @@ export default function ProductsPage() {
             </select>
           </div>
           {/* View toggle */}
-          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden" role="group" aria-label="View mode">
+          <div
+            className="inline-flex rounded-lg border border-gray-300 overflow-hidden"
+            role="group"
+            aria-label="View mode"
+          >
             <button
               type="button"
               className={`px-3 py-2 text-sm min-h-[44px] ${viewMode === 'list' ? 'bg-gray-100 text-gray-900' : 'bg-white text-gray-700'}`}
@@ -182,7 +198,7 @@ export default function ProductsPage() {
               sortOrder={sortOrder}
               showSearch={false}
               viewMode={viewMode}
-              onView={(id) => router.push(`/products/management?id=${id}`)}
+              onView={id => router.push(`/products/management?id=${id}`)}
               onEdit={() => setIsCreateOpen(true)}
             />
           </Suspense>

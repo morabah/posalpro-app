@@ -70,20 +70,38 @@ const WIDGET_SIZE_MAP = {
   full: { w: 12, h: 4 },
 };
 
+interface DashboardData {
+  [key: string]: unknown;
+}
+
+interface DashboardLoading {
+  [key: string]: boolean;
+}
+
+interface DashboardErrors {
+  [key: string]: string;
+}
+
+interface LayoutChange {
+  widgetId: string;
+  position: { x: number; y: number };
+  size: { w: number; h: number };
+}
+
 interface DashboardShellProps {
   widgets: DashboardWidget[];
   userRole: UserType;
   userId?: string;
-  data?: Record<string, any>;
-  loading?: Record<string, boolean>;
-  errors?: Record<string, string>;
+  data?: DashboardData;
+  loading?: DashboardLoading;
+  errors?: DashboardErrors;
   onWidgetRefresh?: (widgetId: string) => void;
   onWidgetInteraction?: (
     widgetId: string,
     action: string,
     metadata?: Record<string, unknown>
   ) => void;
-  onLayoutChange?: (layout: any) => void;
+  onLayoutChange?: (layout: LayoutChange) => void;
   className?: string;
 }
 

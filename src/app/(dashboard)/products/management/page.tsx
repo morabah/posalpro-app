@@ -7,20 +7,12 @@
 'use client';
 
 import { Breadcrumbs } from '@/components/layout';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Card } from '@/components/ui/Card';
-import dynamic from 'next/dynamic';
-
-// Dynamic imports to reduce bundle size
-const ProductCreationForm = dynamic(
-  () => import('@/components/products/ProductCreationForm').then(mod => ({ default: mod.ProductCreationForm })),
-  {
-    loading: () => <div className="animate-pulse bg-gray-200 h-96 rounded-lg" />,
-    ssr: false
-  }
-);
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
+  Product,
   useCreateProduct,
   useDeleteProduct,
   useProductsManager,
@@ -30,17 +22,42 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
-import { CreateProductData, Product } from '@/types/entities/product';
-const CircleStackIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.CircleStackIcon), { ssr: false });
-const CogIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.CogIcon), { ssr: false });
-const PencilIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PencilIcon), { ssr: false });
-const PlusIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PlusIcon), { ssr: false });
-const TrashIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.TrashIcon), { ssr: false });
-import { useAuth } from '@/components/providers/AuthProvider';
+import { CreateProductData, Product as EntityProduct } from '@/types/entities/product';
+import dynamic from 'next/dynamic';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
+// Dynamic imports to reduce bundle size
+const ProductCreationForm = dynamic(
+  () =>
+    import('@/components/products/ProductCreationForm').then(mod => ({
+      default: mod.ProductCreationForm,
+    })),
+  {
+    loading: () => <div className="animate-pulse bg-gray-200 h-96 rounded-lg" />,
+    ssr: false,
+  }
+);
+const CircleStackIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.CircleStackIcon),
+  { ssr: false }
+);
+const CogIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.CogIcon), {
+  ssr: false,
+});
+const PencilIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PencilIcon), {
+  ssr: false,
+});
+const PlusIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PlusIcon), {
+  ssr: false,
+});
+const TrashIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.TrashIcon), {
+  ssr: false,
+});
+
 // Component Traceability Matrix - Enhanced with CRUD operations
+// Note: Used for analytics tracking and component traceability
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const COMPONENT_MAPPING = {
   userStories: ['US-6.4', 'US-6.5', 'US-3.2'],
   acceptanceCriteria: ['AC-6.4.1', 'AC-6.5.1', 'AC-3.2.1', 'AC-3.2.2'],
@@ -57,15 +74,18 @@ const COMPONENT_MAPPING = {
   ],
   hypotheses: ['H12', 'H8'],
   testCases: ['TC-H12-001', 'TC-H8-002'],
-};
+} as const;
 
 export default function ProductManagementPage() {
-  const { user, isAuthenticated } = useAuth();
+  // Note: user and isAuthenticated are available for future RBAC implementation
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { user: _user, isAuthenticated: _isAuthenticated } = useAuth();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
   const [sessionStartTime] = useState(Date.now());
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingProduct, setEditingProduct] = useState<EntityProduct | null>(null);
+  // Note: Modal states reserved for future feature implementation
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBulkOperationsModalOpen, setIsBulkOperationsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -87,24 +107,28 @@ export default function ProductManagementPage() {
   const deleteProductMutation = useDeleteProduct();
 
   const trackAction = useCallback(
-    (action: string, metadata: any = {}) => {
-      analytics('product_management_action', {
-        action,
-        metadata: {
-          ...metadata,
-          component: 'ProductManagementPage',
-          userStory: 'US-6.4',
-          hypothesis: 'H12',
-          sessionDuration: Date.now() - sessionStartTime,
+    (action: string, metadata: Record<string, unknown> = {}) => {
+      analytics(
+        'product_management_action',
+        {
+          action,
+          metadata: {
+            ...metadata,
+            component: 'ProductManagementPage',
+            userStory: 'US-6.4',
+            hypothesis: 'H12',
+            sessionDuration: Date.now() - sessionStartTime,
+          },
         },
-      }, 'low');
+        'low'
+      );
     },
     [sessionStartTime, analytics]
   );
 
   // Enhanced error handling for product operations
   const handleError = useCallback(
-    (error: unknown, operation: string, context?: any) => {
+    (error: unknown, operation: string, context?: Record<string, unknown>) => {
       const standardError =
         error instanceof Error
           ? new StandardError({
@@ -209,11 +233,11 @@ export default function ProductManagementPage() {
   }, [trackAction]);
 
   const handleEditProduct = useCallback(
-    (product: any) => {
+    (product: Product) => {
       // ✅ FIXED: Accept hook's Product type, convert as needed
       trackAction('edit_product_clicked', { productId: product.id });
       // Convert string dates to Date objects for entity compatibility
-      const entityProduct: Product = {
+      const entityProduct: EntityProduct = {
         ...product,
         createdAt: new Date(product.createdAt),
         updatedAt: new Date(product.updatedAt),
