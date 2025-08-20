@@ -11,18 +11,10 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { BellIcon, CogIcon, ShieldCheckIcon, UserIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
-import { Plan, usePlan } from '@/components/providers/PlanProvider';
 
 export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
-  const { plan, setPlan } = usePlan();
-
-  const planOptions: Array<{ id: Plan; label: string }> = [
-    { id: 'basic', label: 'Basic' },
-    { id: 'advanced', label: 'Advanced' },
-    { id: 'enterprise', label: 'Enterprise' },
-  ];
 
   const settingsCategories = [
     {
@@ -90,25 +82,6 @@ export default function SettingsPage() {
             </Card>
           );
         })}
-
-        {/* Plan Selection */}
-        <Card>
-          <div className="p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Select Plan</h2>
-            <div className="flex space-x-4">
-              {planOptions.map(option => (
-                <Button
-                  key={option.id}
-                  variant={plan === option.id ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => setPlan(option.id)}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </Card>
 
         {/* Quick Settings */}
         <Card>

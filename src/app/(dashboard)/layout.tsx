@@ -11,7 +11,6 @@ import { QueryProvider } from '@/components/providers/QueryProvider';
 import { SharedAnalyticsProvider } from '@/components/providers/SharedAnalyticsProvider';
 import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizationProvider';
 import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
-import { PlanProvider } from '@/components/providers/PlanProvider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,15 +18,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <WebVitalsProvider>
         <SharedAnalyticsProvider>
           <ClientLayoutWrapper>
-            <PlanProvider>
-              <QueryProvider>
-                <ToastProvider position="top-right" maxToasts={5}>
-                  <AuthProvider>
-                    <ProtectedLayout>{children}</ProtectedLayout>
-                  </AuthProvider>
-                </ToastProvider>
-              </QueryProvider>
-            </PlanProvider>
+            <QueryProvider>
+              <ToastProvider position="top-right" maxToasts={5}>
+                <AuthProvider>
+                  <ProtectedLayout>{children}</ProtectedLayout>
+                </AuthProvider>
+              </ToastProvider>
+            </QueryProvider>
           </ClientLayoutWrapper>
         </SharedAnalyticsProvider>
       </WebVitalsProvider>
