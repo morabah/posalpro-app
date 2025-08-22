@@ -421,6 +421,8 @@ export default tseslint.config(
       'templates/**', // Ignore scaffolding templates
       'docs/**', // Ignore documentation files
       '**/*.md', // Ignore markdown files
+      '**/*.backup.*', // Ignore backup files
+      '**/*backup*', // Ignore backup files
       '**/__snapshots__/**',
       '**/*.snap',
     ],

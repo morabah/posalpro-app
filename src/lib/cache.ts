@@ -56,11 +56,7 @@ class CacheService {
     );
   }
 
-  async cached<T>(
-    _key: string,
-    fn: () => Promise<T>,
-    _ttl: number
-  ): Promise<T> {
+  async cached<T>(_key: string, fn: () => Promise<T>, _ttl: number): Promise<T> {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     import('@/lib/logger').then(({ logWarn }) =>
       logWarn('CacheService.cached is deprecated. Use apiClient built-in caching instead.')

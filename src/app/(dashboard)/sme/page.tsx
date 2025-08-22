@@ -8,6 +8,7 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { logInfo } from '@/lib/logger';
 import {
   ChartBarIcon,
   CheckCircleIcon,
@@ -16,7 +17,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { logInfo } from '@/lib/logger';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {

@@ -1,3 +1,4 @@
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -8,7 +9,6 @@ import {
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 // Validation schema for profile updates
@@ -83,7 +83,9 @@ export async function PUT(request: NextRequest) {
         });
       }
       await logDebug('🔍 DEBUG: Received data (keys only)', { keys: Object.keys(body || {}) });
-      await logDebug('🔍 DEBUG: Expected schema keys', { keys: Object.keys(profileUpdateSchema.shape) });
+      await logDebug('🔍 DEBUG: Expected schema keys', {
+        keys: Object.keys(profileUpdateSchema.shape),
+      });
 
       logger.error('Profile update validation failed:', {
         userEmail: session.user.email,

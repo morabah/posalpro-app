@@ -188,8 +188,12 @@ export const ResponsiveBreakpointManager = React.memo(function ResponsiveBreakpo
     const config = BREAKPOINT_CONFIGS.find(b => b.name === breakpoint)!;
 
     // Type-safe access to Network Information API when available
-    interface NetworkInformation { effectiveType?: string }
-    interface NavigatorWithConnection extends Navigator { connection?: NetworkInformation }
+    interface NetworkInformation {
+      effectiveType?: string;
+    }
+    interface NavigatorWithConnection extends Navigator {
+      connection?: NetworkInformation;
+    }
     const nav = navigator as NavigatorWithConnection;
 
     return {
@@ -462,7 +466,9 @@ export function useResponsive(): ResponsiveContextType {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       import('@/lib/logger').then(({ logWarn }) =>
-        logWarn('useResponsive called outside of ResponsiveBreakpointManager. Returning safe default context.')
+        logWarn(
+          'useResponsive called outside of ResponsiveBreakpointManager. Returning safe default context.'
+        )
       );
       return DEFAULT_RESPONSIVE_CONTEXT;
     }

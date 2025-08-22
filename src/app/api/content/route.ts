@@ -1,4 +1,4 @@
-import { logDebug, logInfo, logWarn, logError } from '@/lib/logger'; /**
+import { logDebug, logError, logInfo, logWarn } from '@/lib/logger'; /**
  * PosalPro MVP2 - Content API Route
  * Content management with authentication and analytics
  * Component Traceability: US-6.1, US-6.2

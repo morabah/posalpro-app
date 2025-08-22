@@ -93,7 +93,9 @@ export function useOptimizedPerformance() {
         performanceObserverRef.current = lcpObserver;
 
         // Get initial load time
-        const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+        const navigation = performance.getEntriesByType(
+          'navigation'
+        )[0] as PerformanceNavigationTiming;
         const loadTime = navigation.loadEventEnd - navigation.loadEventStart;
         setMetrics(prev => ({
           ...prev,
@@ -132,7 +134,11 @@ export function useOptimizedPerformance() {
     try {
       const perf = performance as Performance & { memory?: unknown };
       const mem = perf.memory as PerformanceMemory | undefined;
-      if (mem && typeof mem.usedJSHeapSize === 'number' && typeof mem.jsHeapSizeLimit === 'number') {
+      if (
+        mem &&
+        typeof mem.usedJSHeapSize === 'number' &&
+        typeof mem.jsHeapSizeLimit === 'number'
+      ) {
         const memoryUsage = (mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100;
 
         setMetrics(prev => ({
@@ -244,11 +250,15 @@ export function useOptimizedPerformance() {
       const now = Date.now();
       if (now - lastAnalyticsLog > 600000) {
         // 10 minutes
-        analytics('performance_analysis_completed', {
-          ...COMPONENT_MAPPING,
-          memoryUsage,
-          score,
-        }, 'low');
+        analytics(
+          'performance_analysis_completed',
+          {
+            ...COMPONENT_MAPPING,
+            memoryUsage,
+            score,
+          },
+          'low'
+        );
         setLastAnalyticsLog(now);
       }
 

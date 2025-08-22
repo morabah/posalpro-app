@@ -1,8 +1,8 @@
 'use client';
 
+import { logInfo } from '@/lib/logger';
 import dynamic from 'next/dynamic';
 import { Suspense, useEffect } from 'react';
-import { logInfo } from '@/lib/logger';
 
 // Lazy load the UserProfile component for better performance
 const UserProfile = dynamic(() => import('@/components/profile/UserProfile'), {

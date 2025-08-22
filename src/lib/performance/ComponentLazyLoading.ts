@@ -213,13 +213,13 @@ export class ComponentLazyLoading {
 
           await logDebug('ComponentLazyLoading: Preloaded step component', {
             step: nextStep,
-            componentName
+            componentName,
           });
         } catch (error) {
           // Preload failures shouldn't break the app
           await logWarn('ComponentLazyLoading: Preload failed for step', {
             step: nextStep,
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
           });
         }
       }, this.config.preloadDelay);
@@ -267,7 +267,7 @@ export class ComponentLazyLoading {
       if (cleanupCount > 0) {
         void logDebug('ComponentLazyLoading: Cleaned up unused components', {
           cleanupCount,
-          cleanupTimeMs: Number(cleanupTime.toFixed(2))
+          cleanupTimeMs: Number(cleanupTime.toFixed(2)),
         });
       }
     } catch (error) {

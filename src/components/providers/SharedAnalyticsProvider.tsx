@@ -130,7 +130,7 @@ export const SharedAnalyticsProvider = React.memo(function SharedAnalyticsProvid
           const { logDebug } = await import('@/lib/logger');
           await logDebug('Analytics event tracked', {
             eventName: event.eventName,
-            eventData: event.eventData
+            eventData: event.eventData,
           });
 
           // Track to error handling service for monitoring

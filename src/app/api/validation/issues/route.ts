@@ -4,10 +4,10 @@
  * Component Traceability Matrix: US-3.1, US-3.2, H8
  */
 
-import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
-import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { NextRequest, NextResponse } from 'next/server';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {

@@ -5,7 +5,7 @@
  * Follows the same architecture as useProducts.ts
  */
 
-import { useMutation, useQuery, useQueryClient, UseQueryResult } from '@tanstack/react-query';
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useApiClient } from './useApiClient';
 
 // Proposal interfaces matching the API response structure
@@ -125,8 +125,10 @@ export function useProposals(
       if (params.sortBy) searchParams.set('sortBy', params.sortBy);
       if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
       if (params.cursor) searchParams.set('cursor', params.cursor);
-      if (params.includeCustomer !== undefined) searchParams.set('includeCustomer', params.includeCustomer.toString());
-      if (params.includeTeam !== undefined) searchParams.set('includeTeam', params.includeTeam.toString());
+      if (params.includeCustomer !== undefined)
+        searchParams.set('includeCustomer', params.includeCustomer.toString());
+      if (params.includeTeam !== undefined)
+        searchParams.set('includeTeam', params.includeTeam.toString());
       if (params.fields) searchParams.set('fields', params.fields);
 
       try {
@@ -141,7 +143,10 @@ export function useProposals(
           pagination: data.pagination || {
             limit: params.limit || 20,
             hasMore: transformedProposals.length === (params.limit || 20),
-            nextCursor: transformedProposals.length > 0 ? transformedProposals[transformedProposals.length - 1].id : null,
+            nextCursor:
+              transformedProposals.length > 0
+                ? transformedProposals[transformedProposals.length - 1].id
+                : null,
           },
           filters: {
             search: params.search,
@@ -218,9 +223,10 @@ export function useProposal(id: string): UseQueryResult<Proposal, Error> {
 
       const raw = response as unknown;
       if (isObject(raw) && 'success' in raw && (raw as any).success === false) {
-        const message = (isObject(raw) && typeof (raw as any).message === 'string')
-          ? (raw as any).message
-          : 'Failed to fetch proposal';
+        const message =
+          isObject(raw) && typeof (raw as any).message === 'string'
+            ? (raw as any).message
+            : 'Failed to fetch proposal';
         throw new Error(message);
       }
 
@@ -269,11 +275,12 @@ function transformApiProposal(apiProposal: unknown): Proposal {
   const p = isObject(apiProposal) ? apiProposal : {};
 
   // Extract team lead
-  const teamLead = typeof p.creatorName === 'string'
-    ? p.creatorName
-    : typeof (p as Record<string, unknown>).createdBy === 'string'
-      ? ((p as Record<string, unknown>).createdBy as string)
-      : 'Unassigned';
+  const teamLead =
+    typeof p.creatorName === 'string'
+      ? p.creatorName
+      : typeof (p as Record<string, unknown>).createdBy === 'string'
+        ? ((p as Record<string, unknown>).createdBy as string)
+        : 'Unassigned';
 
   // Extract team members
   const assignedRaw = (p as Record<string, unknown>).assignedTo;
@@ -290,11 +297,8 @@ function transformApiProposal(apiProposal: unknown): Proposal {
   // Extract estimated value
   const totalValueRaw = (p as Record<string, unknown>).totalValue;
   const valueRaw = (p as Record<string, unknown>).value;
-  const estimatedValue = typeof valueRaw === 'number'
-    ? valueRaw
-    : typeof totalValueRaw === 'number'
-      ? totalValueRaw
-      : 0;
+  const estimatedValue =
+    typeof valueRaw === 'number' ? valueRaw : typeof totalValueRaw === 'number' ? totalValueRaw : 0;
 
   // Extract due date
   const due = (p as Record<string, unknown>).dueDate;
@@ -303,17 +307,24 @@ function transformApiProposal(apiProposal: unknown): Proposal {
   return {
     id: String((p as Record<string, unknown>).id || ''),
     title: String((p as Record<string, unknown>).title || ''),
-    client: (typeof (p as Record<string, unknown>).customerName === 'string' &&
-      ((p as Record<string, unknown>).customerName as string)) ||
+    client:
+      (typeof (p as Record<string, unknown>).customerName === 'string' &&
+        ((p as Record<string, unknown>).customerName as string)) ||
       (isObject((p as Record<string, unknown>).customer) &&
       typeof ((p as Record<string, unknown>).customer as Record<string, unknown>).name === 'string'
         ? String(((p as Record<string, unknown>).customer as Record<string, unknown>).name)
         : 'Unknown Client'),
     status: mapApiStatusToUIStatus(String((p as Record<string, unknown>).status || 'draft')),
-    priority: mapApiPriorityToUIPriority(String((p as Record<string, unknown>).priority || 'medium')),
+    priority: mapApiPriorityToUIPriority(
+      String((p as Record<string, unknown>).priority || 'medium')
+    ),
     dueDate: new Date(dueDate),
-    createdAt: new Date(String((p as Record<string, unknown>).createdAt || new Date().toISOString())),
-    updatedAt: new Date(String((p as Record<string, unknown>).updatedAt || new Date().toISOString())),
+    createdAt: new Date(
+      String((p as Record<string, unknown>).createdAt || new Date().toISOString())
+    ),
+    updatedAt: new Date(
+      String((p as Record<string, unknown>).updatedAt || new Date().toISOString())
+    ),
     estimatedValue,
     teamLead,
     assignedTeam: teamMembers,
@@ -322,19 +333,24 @@ function transformApiProposal(apiProposal: unknown): Proposal {
     riskLevel: calculateRiskLevel({
       dueDate: new Date(dueDate),
       status: mapApiStatusToUIStatus(String((p as Record<string, unknown>).status || 'draft')),
-      priority: mapApiPriorityToUIPriority(String((p as Record<string, unknown>).priority || 'medium')),
+      priority: mapApiPriorityToUIPriority(
+        String((p as Record<string, unknown>).priority || 'medium')
+      ),
     }),
     tags: Array.isArray((p as Record<string, unknown>).tags)
       ? ((p as Record<string, unknown>).tags as string[])
       : [],
-    description: typeof (p as Record<string, unknown>).description === 'string'
-      ? ((p as Record<string, unknown>).description as string)
-      : undefined,
+    description:
+      typeof (p as Record<string, unknown>).description === 'string'
+        ? ((p as Record<string, unknown>).description as string)
+        : undefined,
     lastActivity: `Created on ${new Date(String((p as Record<string, unknown>).createdAt || new Date().toISOString())).toLocaleDateString()}`,
     customer: isObject((p as Record<string, unknown>).customer)
       ? {
           id: String(((p as Record<string, unknown>).customer as Record<string, unknown>).id || ''),
-          name: String(((p as Record<string, unknown>).customer as Record<string, unknown>).name || ''),
+          name: String(
+            ((p as Record<string, unknown>).customer as Record<string, unknown>).name || ''
+          ),
         }
       : undefined,
   };

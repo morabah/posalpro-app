@@ -205,7 +205,7 @@ export class CleanupMechanisms {
         type,
         id,
         priority,
-        component
+        component,
       });
     } catch (error) {
       this.errorHandlingService.processError(
@@ -290,7 +290,7 @@ export class CleanupMechanisms {
         void logDebug('CleanupMechanisms: Cleaned up event listeners', {
           cleanedCount,
           componentId,
-          cleanupTimeMs: Number(cleanupTime.toFixed(2))
+          cleanupTimeMs: Number(cleanupTime.toFixed(2)),
         });
       }
     } catch (error) {
@@ -353,7 +353,7 @@ export class CleanupMechanisms {
 
       void logDebug('CleanupMechanisms: Memory cleanup completed', {
         memoryFreedKB: Number((memoryFreed / 1024).toFixed(2)),
-        cleanupTimeMs: Number(cleanupTime.toFixed(2))
+        cleanupTimeMs: Number(cleanupTime.toFixed(2)),
       });
     } catch (error) {
       this.errorHandlingService.processError(
@@ -413,7 +413,7 @@ export class CleanupMechanisms {
           operationsCancelled,
           timeoutsCleaned,
           intervalsCleaned,
-          cleanupTimeMs: Number(cleanupTime.toFixed(2))
+          cleanupTimeMs: Number(cleanupTime.toFixed(2)),
         });
       }
     } catch (error) {

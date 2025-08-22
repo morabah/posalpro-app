@@ -4,8 +4,8 @@
  * Implements exponential backoff and circuit breaker pattern
  */
 
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logInfo, logWarn } from '@/lib/logger';
 
 interface CircuitBreakerConfig {
@@ -43,14 +43,17 @@ export class AuthCircuitBreaker {
       ...config,
     };
 
-    this.sessionStorage = typeof window !== 'undefined' ? window.sessionStorage : {
-      getItem: () => null,
-      setItem: () => {},
-      removeItem: () => {},
-      clear: () => {},
-      key: () => null,
-      length: 0,
-    } as unknown as Storage;
+    this.sessionStorage =
+      typeof window !== 'undefined'
+        ? window.sessionStorage
+        : ({
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {},
+            clear: () => {},
+            key: () => null,
+            length: 0,
+          } as unknown as Storage);
 
     // Load state from session storage
     this.loadState();

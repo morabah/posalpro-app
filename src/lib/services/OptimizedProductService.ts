@@ -4,10 +4,10 @@
  * Target: Reduce 18+ second response times to <200ms
  */
 
+import { logDebug, logInfo, logWarn } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
-import { logDebug, logInfo, logWarn } from '@/lib/logger';
 
 export interface OptimizedProductStats {
   total: number;
@@ -348,7 +348,10 @@ export class OptimizedProductService {
    */
   async batchProductOperations(
     operations: Array<
-      | { type: 'stats'; params?: { dateFrom?: Date; dateTo?: Date; category?: string[]; isActive?: boolean } }
+      | {
+          type: 'stats';
+          params?: { dateFrom?: Date; dateTo?: Date; category?: string[]; isActive?: boolean };
+        }
       | {
           type: 'search';
           params: {

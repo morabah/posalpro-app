@@ -7,7 +7,7 @@
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
-import { logError, logDebug, logWarn } from '@/lib/logger';
+import { logDebug, logError, logWarn } from '@/lib/logger';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -77,7 +77,7 @@ class ImageOptimizationService {
       } catch {
         await fs.mkdir(optimizedDir, { recursive: true });
         await logDebug('ImageOptimizationService: Created optimized assets directory', {
-          directory: optimizedDir
+          directory: optimizedDir,
         });
       }
 
@@ -149,7 +149,7 @@ class ImageOptimizationService {
         imagePath,
         originalSize,
         optimizedSize,
-        compressionRatio
+        compressionRatio,
       });
 
       return {
@@ -215,7 +215,7 @@ class ImageOptimizationService {
       totalFiles = imageFiles.length;
 
       await logDebug('ImageOptimizationService: Found image files to optimize', {
-        totalFiles
+        totalFiles,
       });
 
       // Process each image
@@ -258,7 +258,7 @@ class ImageOptimizationService {
         totalFiles,
         successCount,
         errorCount,
-        sizeReductionMB: Number((totalSizeReduction / 1024 / 1024).toFixed(2))
+        sizeReductionMB: Number((totalSizeReduction / 1024 / 1024).toFixed(2)),
       });
 
       return {
@@ -327,7 +327,7 @@ class ImageOptimizationService {
     } catch (error) {
       await logWarn('ImageOptimizationService: Error reading directory', {
         directory: dir,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
 
@@ -392,7 +392,7 @@ class ImageOptimizationService {
         } catch (error) {
           await logWarn('ImageOptimizationService: Error reading image file', {
             imagePath,
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
           });
         }
       }
@@ -438,7 +438,7 @@ class ImageOptimizationService {
   public updateConfig(newConfig: Partial<ImageOptimizationConfig>): void {
     this.config = { ...this.config, ...newConfig };
     void logDebug('ImageOptimizationService: Configuration updated', {
-      newConfig
+      newConfig,
     });
   }
 

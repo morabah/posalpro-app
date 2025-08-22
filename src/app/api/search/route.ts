@@ -5,14 +5,14 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError, logInfo } from '@/lib/logger';
 import { decidePaginationStrategy } from '@/lib/utils/selectiveHydration';
-import { logDebug, logInfo, logWarn, logError } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
     // RBAC guard - general authenticated search
     await validateApiPermission(request, { resource: 'search', action: 'read' });
     // Authentication check
-    session = (await getServerSession(authOptions));
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -293,8 +293,8 @@ async function performEnhancedSearch(
       ...contentResults.map((item: any) => ({
         ...item,
         entityType: 'content',
-        metadata: (item).metadata || null,
-        tags: (item).tags || null,
+        metadata: item.metadata || null,
+        tags: item.tags || null,
       }))
     );
     totalCount += contentResults.length;
@@ -306,8 +306,8 @@ async function performEnhancedSearch(
       ...proposalResults.map((item: any) => ({
         ...item,
         entityType: 'proposal',
-        metadata: (item).metadata || null,
-        tags: (item).tags || null,
+        metadata: item.metadata || null,
+        tags: item.tags || null,
       }))
     );
     totalCount += proposalResults.length;
@@ -319,8 +319,8 @@ async function performEnhancedSearch(
       ...productResults.map((item: any) => ({
         ...item,
         entityType: 'product',
-        metadata: (item).metadata || null,
-        tags: (item).tags || null,
+        metadata: item.metadata || null,
+        tags: item.tags || null,
       }))
     );
     totalCount += productResults.length;
@@ -332,8 +332,8 @@ async function performEnhancedSearch(
       ...customerResults.map((item: any) => ({
         ...item,
         entityType: 'customer',
-        metadata: (item).metadata || null,
-        tags: (item).tags || null,
+        metadata: item.metadata || null,
+        tags: item.tags || null,
       }))
     );
     totalCount += customerResults.length;
@@ -345,8 +345,8 @@ async function performEnhancedSearch(
       ...userResults.map((item: any) => ({
         ...item,
         entityType: 'user',
-        metadata: (item).metadata || null,
-        tags: (item).tags || null,
+        metadata: item.metadata || null,
+        tags: item.tags || null,
       }))
     );
     totalCount += userResults.length;
@@ -715,8 +715,8 @@ function sortByField(results: SearchResult[], field: string, order: 'asc' | 'des
 
     // Handle missing values for title/name
     if (field === 'title') {
-      valueA = (a.title || a.name || '');
-      valueB = (b.title || b.name || '');
+      valueA = a.title || a.name || '';
+      valueB = b.title || b.name || '';
     }
 
     if (valueA < valueB) return order === 'asc' ? -1 : 1;

@@ -1,14 +1,14 @@
-import { logDebug, logInfo, logError } from '@/lib/logger';/**
+import { logError, logInfo } from '@/lib/logger'; /**
  * PosalPro MVP2 - Search Suggestions API Routes
  * Auto-complete and search suggestions functionality
  * Component Traceability: US-1.1, US-1.2, H1
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
