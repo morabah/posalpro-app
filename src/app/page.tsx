@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/forms/Button';
 import Link from 'next/link';
 
 export default function HomePage() {
@@ -17,11 +18,10 @@ export default function HomePage() {
               >
                 Sign In
               </Link>
-              <Link
-                href="/auth/register"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-              >
-                Start Free Trial
+              <Link href="/auth/register">
+                <Button variant="primary" size="sm">
+                  Start Free Trial
+                </Button>
               </Link>
             </div>
           </div>
@@ -42,33 +42,45 @@ export default function HomePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-              <Link
-                href="/auth/register"
-                className="inline-flex items-center px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all transform hover:scale-105 shadow-lg"
-              >
-                Start Free 14-Day Trial
-                <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 7l5 5m0 0l-5 5m5-5H6"
-                  />
-                </svg>
+              <Link href="/auth/register">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="px-8 py-4 transform hover:scale-105 shadow-lg"
+                >
+                  Start Free 14-Day Trial
+                  <svg
+                    className="ml-2 w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 7l5 5m0 0l-5 5m5-5H6"
+                    />
+                  </svg>
+                </Button>
               </Link>
-              <Link
-                href="#demo"
-                className="inline-flex items-center px-8 py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:border-blue-600 hover:text-blue-600 transition-all"
-              >
-                Watch Demo
-                <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8"
-                  />
-                </svg>
+              <Link href="#demo">
+                <Button variant="outline" size="lg" className="px-8 py-4">
+                  Watch Demo
+                  <svg
+                    className="ml-2 w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8"
+                    />
+                  </svg>
+                </Button>
               </Link>
             </div>
 

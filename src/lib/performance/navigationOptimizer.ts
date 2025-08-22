@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logWarn } from '@/lib/logger';
 
 export interface NavigationPerformanceMetrics {
   navigationTime: number;
@@ -173,7 +174,7 @@ export class ComponentLoadTracker {
 
     // ✅ PERFORMANCE: Warn about slow components
     if (loadTime > 500) {
-      console.warn(`Slow component load detected: ${componentName} took ${loadTime.toFixed(2)}ms`);
+      logWarn(`Slow component load detected: ${componentName} took ${loadTime.toFixed(2)}ms`);
     }
 
     return loadTime;

@@ -6,6 +6,8 @@
  * Component Traceability: TW-001 (Testing Workflow)
  */
 
+import { logDebug } from '@/lib/logger';
+
 interface LoggingTestEvent {
   eventType: 'workflow_test' | 'documentation_validation' | 'system_check';
   timestamp: string;
@@ -38,7 +40,7 @@ export class LoggingWorkflowTest {
     ];
 
     // In a real implementation, this would check file existence
-    console.log(`✅ Validating documentation structure for ${this.testId}`);
+    logDebug(`✅ Validating documentation structure for ${this.testId}`);
 
     return true;
   }
@@ -48,7 +50,7 @@ export class LoggingWorkflowTest {
    * Component Traceability: AC-TW-001.2
    */
   logTestEvent(event: LoggingTestEvent): void {
-    console.log('📊 Analytics Event:', {
+    logDebug('📊 Analytics Event:', {
       testId: this.testId,
       duration: Date.now() - this.startTime.getTime(),
       ...event,
@@ -77,7 +79,7 @@ export class LoggingWorkflowTest {
 
     await this.validateDocumentationStructure();
 
-    console.log('✅ Logging workflow test completed successfully');
+    logDebug('✅ Logging workflow test completed successfully');
   }
 }
 

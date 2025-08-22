@@ -74,6 +74,24 @@ interface GraphRuleData {
   rule?: Record<string, unknown>;
 }
 
+// RuleDTO interface for RuleBuilder component
+interface RuleDTO {
+  id: string;
+  productId: string;
+  name: string;
+  ruleType:
+    | 'REQUIRES'
+    | 'EXCLUDES'
+    | 'RECOMMENDS'
+    | 'AUTO_ADD'
+    | 'CHOOSE_ONE_OF'
+    | 'LICENSE_FOR'
+    | 'CAPACITY_LINK';
+  rule: unknown;
+  precedence: number;
+  explain?: string | null;
+}
+
 const STATUS_TO_BADGE: Record<string, { color: string; label: string }> = {
   Active: { color: 'bg-green-100 text-green-800', label: 'Active' },
   Draft: { color: 'bg-amber-100 text-amber-800', label: 'Draft' },
@@ -430,7 +448,7 @@ export default function RelationshipsWorkspacePage() {
                   onRefresh();
                   setCanvasView('graph');
                 }}
-                initialRule={builderInitial ? (builderInitial as unknown as any) : undefined}
+                initialRule={builderInitial ? (builderInitial as any) : undefined}
                 onCancel={() => setCanvasView('graph')}
               />
             ) : null}
@@ -454,7 +472,7 @@ export default function RelationshipsWorkspacePage() {
                     </div>
                     <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 min-h-[400px] flex items-center justify-center">
                       <GraphMap
-                        rules={rules as unknown as Array<GraphRuleData>}
+                        rules={rules as unknown as GraphRuleData[]}
                         onRuleSelected={ruleId => {
                           setSelectedRule(ruleId);
                           const found = rules.find(r => r.id === ruleId) || null;

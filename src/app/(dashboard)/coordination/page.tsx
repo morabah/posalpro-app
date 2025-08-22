@@ -16,7 +16,7 @@ import { useApiClient } from '@/hooks/useApiClient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
-const showToast = (message: string) => {
+const showToast = (_message: string) => {
   // In a real implementation, this would show a toast notification
 };
 
@@ -307,6 +307,7 @@ const COMPONENT_MAPPING = {
 };
 
 // Types for coordination management
+
 interface Proposal {
   id: string;
   name: string;
@@ -329,25 +330,11 @@ interface TeamMember {
   name: string;
   role: string;
   department: string;
-  assignedSections: string[];
+  assignedSections: unknown[];
   workload: number;
   availability: 'Available' | 'Busy' | 'Unavailable';
   lastActive: Date;
   completionRate: number;
-}
-
-interface Task {
-  id: string;
-  proposalId: string;
-  title: string;
-  assignee: string;
-  priority: 'High' | 'Medium' | 'Low';
-  status: 'Not Started' | 'In Progress' | 'Review' | 'Completed';
-  deadline: Date;
-  dependencies: string[];
-  estimatedHours: number;
-  actualHours: number;
-  section: string;
 }
 
 interface AIInsight {
@@ -361,9 +348,7 @@ interface AIInsight {
   teamMemberId?: string;
 }
 
-// Live data only – initialize empty and load from APIs
-const MOCK_PROPOSALS: Proposal[] = [];
-const MOCK_AI_INSIGHTS: AIInsight[] = [];
+// Live data loaded from APIs - no mock data needed
 
 export default function CoordinationHub() {
   const apiClient = useApiClient();
@@ -396,12 +381,16 @@ export default function CoordinationHub() {
         const proposals = proposalsRes?.data?.proposals ?? [];
         const insights = insightsRes?.data ?? [];
         // Map proposals to UI shape if needed
-        const mapped: Proposal[] = proposals.map(p => ({
-          id: String(p.id),
-          name: String((p as any).title ?? (p as any).name ?? 'Untitled'),
-          client: String((p as any).customerName ?? (p as any).customer?.name ?? 'Unknown'),
+        const mapped: Proposal[] = proposals.map((p: Record<string, unknown>) => ({
+          id: String(p.id ?? ''),
+          name: String((p.title as string) ?? (p.name as string) ?? 'Untitled'),
+          client: String(
+            (p.customerName as string) ??
+              ((p.customer as Record<string, unknown>)?.name as string) ??
+              'Unknown'
+          ),
           status: (() => {
-            const status = String((p as any).status ?? 'Draft');
+            const status = String(p.status ?? 'Draft');
             if (
               status === 'In Progress' ||
               status === 'Completed' ||
@@ -412,25 +401,22 @@ export default function CoordinationHub() {
             }
             return 'Draft';
           })(),
-          progress: Math.min(
-            100,
-            Math.max(0, Math.round((Number((p as any).completionRate ?? 0) || 0) * 100))
-          ),
-          deadline: new Date(((p as any).dueDate as string) ?? Date.now()),
+          progress: Math.min(100, Math.max(0, Math.round((Number(p.progress ?? 0) || 0) * 100))),
+          deadline: new Date((p.dueDate as string | number | Date) ?? Date.now()),
           priority: (() => {
-            const priority = String((p as any).priority ?? 'Medium');
+            const priority = String(p.priority ?? 'Medium');
             if (priority === 'High' || priority === 'Medium' || priority === 'Low') {
               return priority;
             }
             return 'Medium';
           })(),
-          complexity: Number((p as any).complexity ?? 5),
-          estimatedHours: Number((p as any).estimatedHours ?? 0),
-          actualHours: Number((p as any).actualHours ?? 0),
-          lastUpdate: new Date(((p as any).updatedAt as string) ?? Date.now()),
-          criticalPath: Boolean((p as any).criticalPath),
+          complexity: Number(p.complexity ?? 5),
+          estimatedHours: Number(p.estimatedHours ?? 0),
+          actualHours: Number(p.actualHours ?? 0),
+          lastUpdate: new Date((p.updatedAt as string | number | Date) ?? Date.now()),
+          criticalPath: Boolean(p.criticalPath),
           riskLevel: (() => {
-            const riskLevel = String((p as any).riskLevel ?? 'Low');
+            const riskLevel = String(p.riskLevel ?? 'Low');
             if (
               riskLevel === 'Low' ||
               riskLevel === 'Medium' ||
@@ -441,16 +427,16 @@ export default function CoordinationHub() {
             }
             return 'Low';
           })(),
-          teamMembers: Array.isArray((p as any).teamMembers)
-            ? ((p as any).teamMembers as Array<Record<string, unknown>>).map(m => ({
+          teamMembers: Array.isArray(p.teamMembers)
+            ? (p.teamMembers as Array<Record<string, unknown>>).map(m => ({
                 id: String(m.id ?? ''),
                 name: String(m.name ?? ''),
                 role: String(m.role ?? 'Member'),
                 department: String(m.department ?? 'General'),
-                assignedSections: (m as any).assignedSections ?? [],
-                workload: Number((m as any).workload ?? 0),
+                assignedSections: (m.assignedSections as unknown[]) ?? [],
+                workload: Number(m.workload ?? 0),
                 availability: (() => {
-                  const availability = String((m as any).availability ?? 'Available');
+                  const availability = String(m.availability ?? 'Available');
                   if (
                     availability === 'Available' ||
                     availability === 'Busy' ||
@@ -460,8 +446,8 @@ export default function CoordinationHub() {
                   }
                   return 'Available';
                 })(),
-                lastActive: new Date(((m as any).lastActive as string) ?? Date.now()),
-                completionRate: Number((m as any).completionRate ?? 0),
+                lastActive: new Date((m.lastActive as string | number | Date) ?? Date.now()),
+                completionRate: Number(m.completionRate ?? 0),
               }))
             : [],
         }));
@@ -499,12 +485,16 @@ export default function CoordinationHub() {
       };
     }>(`/proposals?${qp}`);
     if (res?.success) {
-      const mapped: Proposal[] = (res.data.proposals || []).map(p => ({
-        id: String(p.id),
-        name: String((p as any).title ?? (p as any).name ?? 'Untitled'),
-        client: String((p as any).customerName ?? (p as any).customer?.name ?? 'Unknown'),
+      const mapped: Proposal[] = (res.data.proposals || []).map((p: Record<string, unknown>) => ({
+        id: String(p.id ?? ''),
+        name: String((p.title as string) ?? (p.name as string) ?? 'Untitled'),
+        client: String(
+          (p.customerName as string) ??
+            ((p.customer as Record<string, unknown>)?.name as string) ??
+            'Unknown'
+        ),
         status: (() => {
-          const status = String((p as any).status ?? 'Draft');
+          const status = String(p.status ?? 'Draft');
           if (
             status === 'In Progress' ||
             status === 'Completed' ||
@@ -517,23 +507,23 @@ export default function CoordinationHub() {
         })(),
         progress: Math.min(
           100,
-          Math.max(0, Math.round((Number((p as any).completionRate ?? 0) || 0) * 100))
+          Math.max(0, Math.round((Number(p.completionRate ?? 0) || 0) * 100))
         ),
-        deadline: new Date(((p as any).dueDate as string) ?? Date.now()),
+        deadline: new Date((p.dueDate as string | number | Date) ?? Date.now()),
         priority: (() => {
-          const priority = String((p as any).priority ?? 'Medium');
+          const priority = String(p.priority ?? 'Medium');
           if (priority === 'High' || priority === 'Medium' || priority === 'Low') {
             return priority;
           }
           return 'Medium';
         })(),
-        complexity: Number((p as any).complexity ?? 5),
-        estimatedHours: Number((p as any).estimatedHours ?? 0),
-        actualHours: Number((p as any).actualHours ?? 0),
-        lastUpdate: new Date(((p as any).updatedAt as string) ?? Date.now()),
-        criticalPath: Boolean((p as any).criticalPath),
+        complexity: Number(p.complexity ?? 5),
+        estimatedHours: Number(p.estimatedHours ?? 0),
+        actualHours: Number(p.actualHours ?? 0),
+        lastUpdate: new Date((p.updatedAt as string | number | Date) ?? Date.now()),
+        criticalPath: Boolean(p.criticalPath),
         riskLevel: (() => {
-          const riskLevel = String((p as any).riskLevel ?? 'Low');
+          const riskLevel = String(p.riskLevel ?? 'Low');
           if (
             riskLevel === 'Low' ||
             riskLevel === 'Medium' ||
@@ -544,16 +534,16 @@ export default function CoordinationHub() {
           }
           return 'Low';
         })(),
-        teamMembers: Array.isArray((p as any).teamMembers)
-          ? ((p as any).teamMembers as Array<Record<string, unknown>>).map(m => ({
+        teamMembers: Array.isArray(p.teamMembers)
+          ? (p.teamMembers as Array<Record<string, unknown>>).map(m => ({
               id: String(m.id ?? ''),
               name: String(m.name ?? ''),
               role: String(m.role ?? 'Member'),
               department: String(m.department ?? 'General'),
-              assignedSections: (m as any).assignedSections ?? [],
-              workload: Number((m as any).workload ?? 0),
+              assignedSections: (m.assignedSections as unknown[]) ?? [],
+              workload: Number(m.workload ?? 0),
               availability: (() => {
-                const availability = String((m as any).availability ?? 'Available');
+                const availability = String(m.availability ?? 'Available');
                 if (
                   availability === 'Available' ||
                   availability === 'Busy' ||
@@ -563,8 +553,8 @@ export default function CoordinationHub() {
                 }
                 return 'Available';
               })(),
-              lastActive: new Date(((m as any).lastActive as string) ?? Date.now()),
-              completionRate: Number((m as any).completionRate ?? 0),
+              lastActive: new Date((m.lastActive as string | number | Date) ?? Date.now()),
+              completionRate: Number(m.completionRate ?? 0),
             }))
           : [],
       }));

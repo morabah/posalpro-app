@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -49,7 +50,17 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Database health check failed:', error);
+    // Use standardized error handling for health checks
+    errorHandlingService.processError(
+      error,
+      'Database health check failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'DatabaseHealthRoute',
+        operation: 'healthCheck',
+        responseTime: Date.now() - startTime,
+      }
+    );
 
     return NextResponse.json(
       {
@@ -62,12 +73,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
-
-
-
-
-
-
-

@@ -12,6 +12,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug } from '@/lib/logger';
 import {
   ArrowRightIcon,
   ChartBarIcon,
@@ -286,7 +287,7 @@ export const AIDrivenInsights: React.FC<AIDrivenInsightsProps> = ({
       });
 
       // In a real implementation, this would trigger actual system actions
-      console.log(`Taking action: ${action} for insight: ${insight.title}`);
+      logDebug(`Taking action: ${action} for insight: ${insight.title}`);
     },
     [analytics]
   );

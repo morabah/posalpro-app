@@ -6,6 +6,7 @@
 
 import { debounce } from 'lodash';
 import { useCallback, useMemo, useRef } from 'react';
+import { logWarn } from '@/lib/logger';
 
 export interface FormPerformanceConfig {
   validationMode?: 'onChange' | 'onBlur' | 'onSubmit';
@@ -83,7 +84,7 @@ export function useOptimizedFormValidation<T>(
 
         // ✅ ANALYTICS: Track slow validations
         if (config.enableAnalytics && validationTime > 100) {
-          console.warn(`Slow form validation detected: ${validationTime.toFixed(2)}ms`);
+          logWarn(`Slow form validation detected: ${validationTime.toFixed(2)}ms`);
         }
 
         callback(isValid);

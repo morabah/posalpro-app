@@ -12,10 +12,10 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
  */
 
 export async function GET(request: NextRequest) {
-  try {
-    console.log('🚀 [API] Starting optimized product stats request...');
-    const requestStart = Date.now();
+  const requestStart = Date.now();
+  let filters: any = {};
 
+  try {
     // RBAC guard
     await validateApiPermission(request, { resource: 'products', action: 'read' });
     // Authentication check
@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
     const isActiveParam = searchParams.get('isActive');
 
     // Build filters
-    const filters: any = {};
 
     if (dateFromParam) {
       filters.dateFrom = new Date(dateFromParam);
@@ -50,13 +49,12 @@ export async function GET(request: NextRequest) {
       filters.isActive = isActiveParam === 'true';
     }
 
-    console.log('📊 [API] Filters applied:', JSON.stringify(filters));
+
 
     // Get optimized stats
     const stats = await optimizedProductService.getOptimizedProductStats(filters);
 
     const totalTime = Date.now() - requestStart;
-    console.log(`✅ [API] Optimized product stats completed in ${totalTime}ms`);
 
     // Add performance metadata
     const response = {
@@ -71,9 +69,18 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('❌ [API] Optimized product stats failed:', error);
-
-    errorHandlingService.processError(error);
+    // Use standardized error handling
+    errorHandlingService.processError(
+      error,
+      'Optimized product stats failed',
+      ErrorCodes.DATA.QUERY_FAILED,
+      {
+        component: 'ProductStatsOptimizedRoute',
+        operation: 'getOptimizedProductStats',
+        filters: filters,
+        requestTime: Date.now() - requestStart,
+      }
+    );
 
     if (error instanceof StandardError) {
       return NextResponse.json(

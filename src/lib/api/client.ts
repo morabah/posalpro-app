@@ -212,7 +212,7 @@ class EnhancedApiClient {
     }
 
     // Log the actual URL being called for debugging
-    console.log(`[ApiClient] Final URL: ${fullUrl}`);
+    logger.debug('[ApiClient] Final URL:', { fullUrl });
 
     const config = { ...this.defaultConfig, ...options };
     logger.debug('[ApiClient] Request config:', config);
@@ -328,7 +328,7 @@ class EnhancedApiClient {
   ): Promise<ApiResponse<T>> {
     // Use request deduplication for GET requests to prevent duplicate calls
     const deduplicationKey = requestDeduplicator.generateKey('GET', url, config);
-    
+
     return requestDeduplicator.deduplicate(
       deduplicationKey,
       () => this.makeRequest<T>(url, {

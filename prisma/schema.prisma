@@ -1,25 +1,24 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["fullTextIndex", "fullTextSearch"]
-  // Target Netlify's Debian-based build image
   binaryTargets   = ["debian-openssl-3.0.x", "darwin-arm64"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id                       String                      @id @default(cuid())
-  email                    String                      @unique
+  id                       String                           @id @default(cuid())
+  email                    String                           @unique
   name                     String
   password                 String
   department               String
-  status                   UserStatus                  @default(ACTIVE)
-  createdAt                DateTime                    @default(now())
-  updatedAt                DateTime                    @updatedAt
+  status                   UserStatus                       @default(ACTIVE)
+  createdAt                DateTime                         @default(now())
+  updatedAt                DateTime                         @updatedAt
   lastLogin                DateTime?
   accessibilityConfig      AccessibilityConfiguration?
   approvalDecisions        ApprovalDecision[]
@@ -30,8 +29,11 @@ model User {
   contentAccessLogs        ContentAccessLog[]
   hypothesisEvents         HypothesisValidationEvent[]
   notificationDeliveries   NotificationDelivery[]
+  ruleVersionsCreated      ProductRelationshipRuleVersion[]
+  createdRules             ProductRelationshipRule[]        @relation("RuleCreator")
+  updatedRules             ProductRelationshipRule[]        @relation("RuleUpdater")
   productRelationships     ProductRelationship[]
-  createdProposals         Proposal[]                  @relation("ProposalCreator")
+  createdProposals         Proposal[]                       @relation("ProposalCreator")
   securityEvents           SecurityEvent[]
   temporaryAccess          TemporaryAccess[]
   analyticsProfile         UserAnalyticsProfile?
@@ -42,11 +44,7 @@ model User {
   validationExecutions     ValidationExecution[]
   validationIssuesResolved ValidationIssue[]
   validationRules          ValidationRule[]
-  assignedProposals        Proposal[]                  @relation("ProposalAssignees")
-  // Added for rule authoring
-  createdRules             ProductRelationshipRule[]       @relation("RuleCreator")
-  updatedRules             ProductRelationshipRule[]       @relation("RuleUpdater")
-  ruleVersionsCreated      ProductRelationshipRuleVersion[]
+  assignedProposals        Proposal[]                       @relation("ProposalAssignees")
 
   @@index([name])
   @@index([department])
@@ -590,11 +588,11 @@ model Proposal {
   approvals         ApprovalExecution[]
   products          ProposalProduct[]
   sections          ProposalSection[]
+  versions          ProposalVersion[]
   creator           User                @relation("ProposalCreator", fields: [createdBy], references: [id])
   customer          Customer            @relation(fields: [customerId], references: [id])
   validationIssues  ValidationIssue[]
   assignedTo        User[]              @relation("ProposalAssignees")
-  versions          ProposalVersion[]
 
   @@index([status, dueDate])
   @@index([customerId, status])
@@ -616,8 +614,7 @@ model ProposalVersion {
   changesSummary String?
   snapshot       Json
   productIds     String[]
-
-  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposal       Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([proposalId, version])
   @@index([createdAt, proposalId])
@@ -668,28 +665,27 @@ model ProposalProduct {
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Product {
-  id                String                @id @default(cuid())
+  id                String                    @id @default(cuid())
   name              String
   description       String?
-  sku               String                @unique
+  sku               String                    @unique
   price             Float
-  currency          String                @default("USD")
+  currency          String                    @default("USD")
   category          String[]
   tags              String[]
   attributes        Json?
   images            String[]
-  isActive          Boolean               @default(true)
-  version           Int                   @default(1)
+  isActive          Boolean                   @default(true)
+  version           Int                       @default(1)
   usageAnalytics    Json?
   userStoryMappings String[]
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  relationships     ProductRelationship[] @relation("SourceProduct")
-  relatedFrom       ProductRelationship[] @relation("TargetProduct")
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  relationshipRules ProductRelationshipRule[]
+  relationships     ProductRelationship[]     @relation("SourceProduct")
+  relatedFrom       ProductRelationship[]     @relation("TargetProduct")
   proposalProducts  ProposalProduct[]
   validationRules   ValidationRule[]
-  // Added for rule authoring
-  relationshipRules ProductRelationshipRule[]
 
   @@index([isActive, createdAt(sort: Desc)])
   @@index([isActive, price])
@@ -725,27 +721,27 @@ model ProductRelationship {
 
 /// Rule-based product relationship system (DSL-backed)
 model ProductRelationshipRule {
-  id                 String            @id @default(cuid())
-  productId          String
-  name               String
-  ruleType           RuleKind
-  status             RuleStatus        @default(DRAFT)
-  rule               Json              // DSL JSON per spec
-  precedence         Int               @default(0)
-  scope              Json?             // optional scoping (region/version/date/tier)
-  explain            String?
-  isPublished        Boolean           @default(false)
-  version            Int               @default(1)
-  effectiveFrom      DateTime?
-  effectiveTo        DateTime?
-  createdBy          String
-  updatedBy          String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  product            Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  creator            User              @relation("RuleCreator", fields: [createdBy], references: [id])
-  updater            User?             @relation("RuleUpdater", fields: [updatedBy], references: [id])
-  versions           ProductRelationshipRuleVersion[]
+  id            String                           @id @default(cuid())
+  productId     String
+  name          String
+  ruleType      RuleKind
+  status        RuleStatus                       @default(DRAFT)
+  rule          Json
+  precedence    Int                              @default(0)
+  scope         Json?
+  explain       String?
+  isPublished   Boolean                          @default(false)
+  version       Int                              @default(1)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  createdBy     String
+  updatedBy     String?
+  createdAt     DateTime                         @default(now())
+  updatedAt     DateTime                         @updatedAt
+  versions      ProductRelationshipRuleVersion[]
+  creator       User                             @relation("RuleCreator", fields: [createdBy], references: [id])
+  product       Product                          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  updater       User?                            @relation("RuleUpdater", fields: [updatedBy], references: [id])
 
   @@index([productId, status])
   @@index([ruleType, status])
@@ -764,8 +760,8 @@ model ProductRelationshipRuleVersion {
   effectiveTo   DateTime?
   createdBy     String
   createdAt     DateTime                @default(now())
-  ruleEntity    ProductRelationshipRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   creator       User                    @relation(fields: [createdBy], references: [id])
+  ruleEntity    ProductRelationshipRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@unique([ruleId, version])
   @@index([status, createdAt])

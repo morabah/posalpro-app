@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 
 /**
  * Service Worker Registration Component
@@ -43,7 +45,15 @@ export function ServiceWorkerRegistration() {
             console.log('[PWA] Service worker activated');
           });
         } catch (error) {
-          console.error('[PWA] Service Worker registration failed:', error);
+          ErrorHandlingService.getInstance().processError(
+            error as Error,
+            'Service Worker registration failed',
+            ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
+            {
+              component: 'ServiceWorkerRegistration',
+              operation: 'registerServiceWorker',
+            }
+          );
         }
       };
 

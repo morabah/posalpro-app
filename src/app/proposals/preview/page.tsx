@@ -1,19 +1,10 @@
 'use client';
 
+import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  DocumentIcon, 
-  PrinterIcon, 
-  ShareIcon, 
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  ArrowDownTrayIcon,
-  EyeIcon
-} from '@heroicons/react/24/outline';
-import { toast } from 'react-hot-toast';
+import { CheckCircleIcon, DocumentIcon } from '@heroicons/react/24/outline';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
 import './print-styles.css';
 
 interface PreviewData {
@@ -54,21 +45,23 @@ interface LoadingState {
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -20 }
+  exit: { opacity: 0, y: -20 },
 };
 
 const staggerChildren = {
   animate: {
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 // Loading skeleton component with shimmer animation
 const SkeletonLoader = ({ className = '' }: { className?: string }) => (
-  <div className={`animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] rounded ${className}`} 
-       style={{ animation: 'shimmer 1.5s ease-in-out infinite' }} />
+  <div
+    className={`animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] rounded ${className}`}
+    style={{ animation: 'shimmer 1.5s ease-in-out infinite' }}
+  />
 );
 
 // Add shimmer keyframes to document
@@ -136,7 +129,12 @@ export default function ProposalPreviewPage() {
       const startTime = performance.now();
       try {
         const ids = needsHydration.map(p => p.id).join(',');
-        interface BatchProduct { id: string; name?: string; price?: number; currency?: string }
+        interface BatchProduct {
+          id: string;
+          name?: string;
+          price?: number;
+          currency?: string;
+        }
         const res = await apiClient.get<{ success?: boolean; data?: BatchProduct[]; meta?: any }>(
           `/api/products?ids=${encodeURIComponent(ids)}&fields=id,name,price,currency`
         );
@@ -183,10 +181,7 @@ export default function ProposalPreviewPage() {
 
   const totalAmount = useMemo(() => {
     if (!data?.products) return 0;
-    return data.products.reduce(
-      (sum, p) => sum + (p.totalPrice || p.quantity * p.unitPrice),
-      0
-    );
+    return data.products.reduce((sum, p) => sum + (p.totalPrice || p.quantity * p.unitPrice), 0);
   }, [data]);
 
   const productsSummary = useMemo(() => {
@@ -233,20 +228,20 @@ export default function ProposalPreviewPage() {
               )}
             </div>
             <div className="flex items-center gap-2 print:hidden">
-              <button
+              <Button
                 type="button"
                 onClick={() => window.print()}
-                className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                variant="primary"
                 aria-label="Print or save as PDF"
                 title="Print or save as PDF"
               >
                 Print / Save PDF
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* Company / Contact */}
-          <motion.div 
+          <motion.div
             className="rounded-xl border border-gray-200 bg-white p-8 mb-6 print:shadow-none shadow-sm"
             variants={fadeInUp}
             initial="initial"
@@ -291,7 +286,7 @@ export default function ProposalPreviewPage() {
           </motion.div>
 
           {/* Enhanced Products Section */}
-          <motion.div 
+          <motion.div
             className="rounded-xl border border-gray-200 bg-white p-8 mb-6 print:shadow-none shadow-sm"
             variants={fadeInUp}
             initial="initial"
@@ -307,25 +302,35 @@ export default function ProposalPreviewPage() {
                 {data.products?.length || 0} items • {productsSummary.categories.size} categories
               </div>
             </div>
-              {data.products?.length ? (
+            {data.products?.length ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="bg-gradient-to-r from-gray-50 to-gray-100 print:bg-white">
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700 rounded-tl-lg">#</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Part Number</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Description</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700 rounded-tl-lg">
+                        #
+                      </th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                        Part Number
+                      </th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                        Description
+                      </th>
                       <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700">Unit Price</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700 rounded-tr-lg">Total</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700">
+                        Unit Price
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 rounded-tr-lg">
+                        Total
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {data.products.map((p, idx) => {
                       const lineTotal = p.totalPrice ?? p.quantity * p.unitPrice;
                       return (
-                        <motion.tr 
-                          key={p.id} 
+                        <motion.tr
+                          key={p.id}
                           className="hover:bg-gray-50 transition-colors duration-150 align-top"
                           variants={fadeInUp}
                           initial="initial"
@@ -333,7 +338,9 @@ export default function ProposalPreviewPage() {
                           transition={{ delay: 0.1 * idx }}
                         >
                           <td className="px-4 py-4 text-gray-900 font-medium">{idx + 1}</td>
-                          <td className="px-4 py-4 text-gray-700 font-mono text-xs break-all">{p.id}</td>
+                          <td className="px-4 py-4 text-gray-700 font-mono text-xs break-all">
+                            {p.id}
+                          </td>
                           <td className="px-4 py-4">
                             <div className="text-gray-900 font-medium">{p.name}</div>
                             {p.category && (
@@ -370,7 +377,7 @@ export default function ProposalPreviewPage() {
           </motion.div>
 
           {/* Enhanced Totals Section */}
-          <motion.div 
+          <motion.div
             className="rounded-xl border-2 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-8 mb-6 shadow-sm"
             variants={fadeInUp}
             initial="initial"
@@ -381,31 +388,36 @@ export default function ProposalPreviewPage() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">Proposal Total</h3>
                 <div className="text-sm text-gray-600">
-                  {productsSummary.totalItems} items • Avg: ${productsSummary.avgPrice.toLocaleString()}/item
+                  {productsSummary.totalItems} items • Avg: $
+                  {productsSummary.avgPrice.toLocaleString()}/item
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-green-700">
                   ${totalAmount.toLocaleString()}
                 </div>
-                <div className="text-sm text-gray-600">
-                  {data.totals?.currency || 'USD'}
-                </div>
+                <div className="text-sm text-gray-600">{data.totals?.currency || 'USD'}</div>
               </div>
             </div>
-            
+
             {/* Additional metrics */}
             <div className="grid grid-cols-3 gap-4 pt-4 border-t border-green-200">
               <div className="text-center">
-                <div className="text-lg font-semibold text-gray-900">{data.products?.length || 0}</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {data.products?.length || 0}
+                </div>
                 <div className="text-sm text-gray-600">Products</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-semibold text-gray-900">{productsSummary.totalItems}</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {productsSummary.totalItems}
+                </div>
                 <div className="text-sm text-gray-600">Total Qty</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-semibold text-gray-900">{productsSummary.categories.size}</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {productsSummary.categories.size}
+                </div>
                 <div className="text-sm text-gray-600">Categories</div>
               </div>
             </div>
@@ -413,7 +425,7 @@ export default function ProposalPreviewPage() {
 
           {/* Enhanced Terms and Conditions */}
           {data.terms?.length ? (
-            <motion.div 
+            <motion.div
               className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm"
               variants={fadeInUp}
               initial="initial"
@@ -426,7 +438,7 @@ export default function ProposalPreviewPage() {
               </h2>
               <div className="space-y-6">
                 {data.terms.map((t, idx) => (
-                  <motion.div 
+                  <motion.div
                     key={`${t.title}-${idx}`}
                     className="border-l-4 border-blue-200 pl-4 py-2"
                     variants={fadeInUp}

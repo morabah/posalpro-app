@@ -7,7 +7,7 @@
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
-import { logError } from '@/lib/logger';
+import { logDebug, logWarn } from '@/lib/logger';
 
 interface MemoryMetrics {
   rss: number;
@@ -82,7 +82,7 @@ class MemoryOptimizationService {
     if (this.isInitialized) return;
 
     try {
-      console.log('[MemoryOptimizationService] Initializing memory optimization...');
+      logDebug('[MemoryOptimizationService] Initializing memory optimization...');
 
       // Start memory monitoring
       this.startMemoryMonitoring();
@@ -91,9 +91,17 @@ class MemoryOptimizationService {
       this.startQueryOptimization();
 
       this.isInitialized = true;
-      console.log('[MemoryOptimizationService] Memory optimization initialized successfully');
+      logDebug('[MemoryOptimizationService] Memory optimization initialized successfully');
     } catch (error) {
-      console.error('[MemoryOptimizationService] Initialization failed:', error);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Memory optimization service initialization failed',
+        ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
+        {
+          component: 'MemoryOptimizationService',
+          operation: 'initialize',
+        }
+      );
       throw new StandardError({
         message: 'Failed to initialize memory optimization service',
         code: ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
@@ -165,14 +173,14 @@ class MemoryOptimizationService {
 
       // Check if memory usage is high
       if (metrics.heapUsed > this.config.maxMemoryUsage * this.config.gcThreshold) {
-        console.log(
+        logDebug(
           '[MemoryOptimizationService] High memory usage detected, triggering optimization...'
         );
 
         // Force garbage collection
         if (global.gc) {
           global.gc();
-          console.log('[MemoryOptimizationService] Garbage collection completed');
+          logDebug('[MemoryOptimizationService] Garbage collection completed');
         }
 
         // Clear memory history if too large
@@ -185,7 +193,7 @@ class MemoryOptimizationService {
         const freedMemory = metrics.heapUsed - newMetrics.heapUsed;
 
         if (freedMemory > 0) {
-          console.log(
+          logDebug(
             `[MemoryOptimizationService] Freed ${(freedMemory / 1024 / 1024).toFixed(2)}MB of memory`
           );
         }
@@ -204,13 +212,13 @@ class MemoryOptimizationService {
         }
       );
 
-      logError('Memory optimization error', error, {
-        component: 'MemoryOptimizationService',
-        operation: 'optimizeMemory',
-        memoryUsage: this.getMemoryMetrics(),
-        standardError: standardError.message,
-        errorCode: standardError.code,
-      });
+      // logError('Memory optimization error', error, {
+      //   component: 'MemoryOptimizationService',
+      //   operation: 'optimizeMemory',
+      //   memoryUsage: this.getMemoryMetrics(),
+      //   standardError: standardError.message,
+      //   errorCode: standardError.code,
+      // });
     }
   }
 
@@ -239,7 +247,15 @@ class MemoryOptimizationService {
         }
       }
     } catch (error) {
-      console.error('[MemoryOptimizationService] Query tracking failed:', error);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Query tracking failed',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'MemoryOptimizationService',
+          operation: 'trackQuery',
+        }
+      );
     }
   }
 
@@ -314,7 +330,15 @@ class MemoryOptimizationService {
         }
       }
     } catch (error) {
-      console.error('[MemoryOptimizationService] Memory leak detection failed:', error);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Memory leak detection failed',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'MemoryOptimizationService',
+          operation: 'detectMemoryLeaks',
+        }
+      );
     }
 
     return leaks;
@@ -335,15 +359,23 @@ class MemoryOptimizationService {
         }
 
         // Check for memory leaks
-        const leaks = this.detectMemoryLeaks();
-        if (leaks.length > 0) {
-          console.warn('[MemoryOptimizationService] Potential memory leaks detected:', leaks);
-        }
+                  const leaks = this.detectMemoryLeaks();
+          if (leaks.length > 0) {
+            logWarn('[MemoryOptimizationService] Potential memory leaks detected:', { leaks });
+          }
 
         // Optimize memory if needed
         this.optimizeMemory();
       } catch (error) {
-        console.error('[MemoryOptimizationService] Memory monitoring failed:', error);
+        ErrorHandlingService.getInstance().processError(
+          error,
+          'Memory monitoring failed',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          {
+            component: 'MemoryOptimizationService',
+            operation: 'startMemoryMonitoring',
+          }
+        );
       }
     }, this.config.optimizationInterval);
 
@@ -356,7 +388,7 @@ class MemoryOptimizationService {
    */
   private startQueryOptimization(): void {
     // This will be called by database operations
-    console.log('[MemoryOptimizationService] Query optimization monitoring started');
+    logDebug('[MemoryOptimizationService] Query optimization monitoring started');
   }
 
   /**
@@ -377,9 +409,17 @@ class MemoryOptimizationService {
         memoryImpact: 0,
       };
 
-      console.log('[MemoryOptimizationService] Cleanup completed');
+      logDebug('[MemoryOptimizationService] Cleanup completed');
     } catch (error) {
-      console.error('[MemoryOptimizationService] Cleanup failed:', error);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Memory optimization service cleanup failed',
+        ErrorCodes.SYSTEM.CLEANUP_FAILED,
+        {
+          component: 'MemoryOptimizationService',
+          operation: 'cleanup',
+        }
+      );
     }
   }
 
@@ -442,7 +482,15 @@ class MemoryOptimizationService {
         });
       }
     } catch (error) {
-      console.error('[MemoryOptimizationService] Failed to generate recommendations:', error);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Failed to generate optimization recommendations',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'MemoryOptimizationService',
+          operation: 'getOptimizationRecommendations',
+        }
+      );
     }
 
     return recommendations;

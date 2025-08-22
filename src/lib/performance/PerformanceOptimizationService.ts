@@ -13,6 +13,8 @@
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logDebug, logWarn } from '@/lib/logger';
 
 // Phase 2 Performance Configuration
 export interface Phase2PerformanceConfig {
@@ -165,7 +167,7 @@ export class PerformanceOptimizationService {
       // Initialize component preloading
       this.initializeComponentPreloading();
 
-      console.log('[PerformanceOptimizationService] Phase 2 optimization initialized');
+      logDebug('[PerformanceOptimizationService] Phase 2 optimization initialized');
     } catch (error) {
       this.handleError(error, 'initializeOptimization');
     }
@@ -188,7 +190,7 @@ export class PerformanceOptimizationService {
     }, this.config.memoryMonitoringInterval);
     this.intervals.set('memory', memoryInterval);
 
-    console.log('[PerformanceOptimizationService] Optimized monitoring started');
+    logDebug('[PerformanceOptimizationService] Optimized monitoring started');
   }
 
   /**
@@ -219,7 +221,7 @@ export class PerformanceOptimizationService {
       const timeoutId = setTimeout(() => {
         this.loadingComponents.delete(componentName);
         this.metrics.lazyLoading.loadFailures++;
-        console.warn(`[PerformanceOptimizationService] Component ${componentName} load timeout`);
+        logWarn(`[PerformanceOptimizationService] Component ${componentName} load timeout`);
       }, this.config.loadTimeout);
       this.timeouts.set(`load_${componentName}`, timeoutId);
 
@@ -248,7 +250,7 @@ export class PerformanceOptimizationService {
       // Process queue
       this.processPreloadQueue();
 
-      console.log(
+      logDebug(
         `[PerformanceOptimizationService] Component ${componentName} loaded in ${loadTime}ms`
       );
     } catch (error) {
@@ -278,7 +280,7 @@ export class PerformanceOptimizationService {
     }, this.config.cleanupCheckInterval);
     this.intervals.set('cleanup', cleanupInterval);
 
-    console.log('[PerformanceOptimizationService] Cleanup monitoring started');
+    logDebug('[PerformanceOptimizationService] Cleanup monitoring started');
   }
 
   private async performCleanup(): Promise<void> {
@@ -308,7 +310,7 @@ export class PerformanceOptimizationService {
       this.metrics.cleanup.cleanupOperations += cleanupOperations;
       this.metrics.cleanup.lastCleanup = Date.now();
 
-      console.log(
+      logDebug(
         `[PerformanceOptimizationService] Cleanup completed: ${cleanupOperations} operations in ${Date.now() - startTime}ms`
       );
     } catch (error) {
@@ -336,7 +338,7 @@ export class PerformanceOptimizationService {
     this.metrics.monitoring.analyticsEvents++;
     this.lastAnalyticsLog = now;
 
-    console.log(`[PerformanceOptimizationService] Analytics event: ${eventName}`, data);
+    logDebug(`[PerformanceOptimizationService] Analytics event: ${eventName}`, { data });
   }
 
   /**
@@ -347,21 +349,21 @@ export class PerformanceOptimizationService {
       // Clear all intervals
       this.intervals.forEach((interval, name) => {
         clearInterval(interval);
-        console.log(`[PerformanceOptimizationService] Cleared interval: ${name}`);
+        logDebug(`[PerformanceOptimizationService] Cleared interval: ${name}`);
       });
       this.intervals.clear();
 
       // Clear all timeouts
       this.timeouts.forEach((timeout, name) => {
         clearTimeout(timeout);
-        console.log(`[PerformanceOptimizationService] Cleared timeout: ${name}`);
+        logDebug(`[PerformanceOptimizationService] Cleared timeout: ${name}`);
       });
       this.timeouts.clear();
 
       // Remove event listeners
       this.eventListeners.forEach((cleanup, name) => {
         cleanup();
-        console.log(`[PerformanceOptimizationService] Removed event listener: ${name}`);
+        logDebug(`[PerformanceOptimizationService] Removed event listener: ${name}`);
       });
       this.eventListeners.clear();
 
@@ -370,7 +372,7 @@ export class PerformanceOptimizationService {
       this.loadedComponents.clear();
       this.preloadQueue.length = 0;
 
-      console.log('[PerformanceOptimizationService] Complete cleanup performed');
+      logDebug('[PerformanceOptimizationService] Complete cleanup performed');
     } catch (error) {
       this.handleError(error, 'cleanup');
     }
@@ -380,7 +382,7 @@ export class PerformanceOptimizationService {
   private collectOptimizedMetrics(): void {
     this.metrics.monitoring.metricsCollections++;
     this.metrics.performance.memoryUsage = this.getCurrentMemoryUsage();
-    console.log('[PerformanceOptimizationService] Metrics collected');
+          logDebug('[PerformanceOptimizationService] Metrics collected');
   }
 
   private monitorMemoryUsage(): void {
@@ -388,7 +390,7 @@ export class PerformanceOptimizationService {
     const usage = this.getCurrentMemoryUsage();
 
     if (usage > this.config.maxMemoryUsage) {
-      console.warn(
+      logWarn(
         `[PerformanceOptimizationService] High memory usage: ${(usage * 100).toFixed(1)}%`
       );
     }
@@ -449,7 +451,7 @@ export class PerformanceOptimizationService {
 
   private initializeComponentPreloading(): void {
     // Component preloading initialization
-    console.log('[PerformanceOptimizationService] Component preloading initialized');
+    logDebug('[PerformanceOptimizationService] Component preloading initialized');
   }
 
   private handleError(error: unknown, operation: string, metadata?: any): void {

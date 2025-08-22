@@ -60,7 +60,8 @@ export default function ValidationRulesPage() {
           </div>
           <Button
             onClick={() => trackAction('add_rule_clicked')}
-            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+            variant="primary"
+            className="flex items-center"
             disabled
           >
             <PlusIcon className="w-5 h-5 mr-2" />

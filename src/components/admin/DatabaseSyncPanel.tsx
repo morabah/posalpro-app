@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { logDebug } from '@/lib/logger';
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -32,7 +33,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  console.log(`Toast (${type}):`, message);
+  logDebug(`Toast (${type}):`, { message });
   // In a real implementation, this would show a toast notification
 };
 

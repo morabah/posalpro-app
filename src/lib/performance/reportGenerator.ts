@@ -3,6 +3,9 @@
  * Generates detailed reports for investigation and enhancement
  */
 
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+
 import { ComponentTestResult } from './componentTester';
 import { PerformanceTestResult } from './performanceTester';
 import { SidebarTestResult } from './sidebarTester';
@@ -644,7 +647,16 @@ export class ReportGenerator {
         const recentReports = existingReports.slice(-10);
         localStorage.setItem('posalpro_test_reports', JSON.stringify(recentReports));
       } catch (error) {
-        console.error('Failed to save report to localStorage:', error);
+        ErrorHandlingService.getInstance().processError(
+          error,
+          'Failed to save report to localStorage',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          {
+            component: 'ReportGenerator',
+            operation: 'saveReportToStorage',
+            reportId: report.id,
+          }
+        );
       }
     }
   }
@@ -657,7 +669,15 @@ export class ReportGenerator {
         this.reports = reports;
         return reports;
       } catch (error) {
-        console.error('Failed to load reports from localStorage:', error);
+        ErrorHandlingService.getInstance().processError(
+          error,
+          'Failed to load reports from localStorage',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          {
+            component: 'ReportGenerator',
+            operation: 'loadReportsFromStorage',
+          }
+        );
       }
     }
     return [];

@@ -1,4 +1,5 @@
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logDebug } from '@/lib/logger';
 import { renderHook } from '@testing-library/react';
 
 describe('Analytics Optimization Verification', () => {
@@ -19,21 +20,21 @@ describe('Analytics Optimization Verification', () => {
         }
       };
     })();
-    
+
     Object.defineProperty(window, 'localStorage', { value: localStorageMock });
-    
+
     // Render the hook
     const { result } = renderHook(() => useOptimizedAnalytics());
-    
+
     // Check that the hook returns the expected functions
     expect(result.current).toHaveProperty('trackOptimized');
     expect(typeof result.current.trackOptimized).toBe('function');
-    
+
     // Test that we can call the trackOptimized function
     expect(() => {
       result.current.trackOptimized('test_event', { test: 'data' });
     }).not.toThrow();
-    
-    console.log('Analytics optimization verification passed');
+
+    logDebug('Analytics optimization verification passed');
   });
 });

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { useAnalyticsDashboard, useHypothesisTracking } from '@/hooks/useAnalytics';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useState } from 'react';
+import { logDebug } from '@/lib/logger';
 
 // Inline SVG components to replace Heroicons and prevent webpack chunk loading issues
 const ArrowPathIcon = ({ className = 'h-5 w-5' }) => (
@@ -161,7 +162,7 @@ export const AnalyticsDashboard: React.FC = () => {
   const handleExport = () => {
     trackAnalyticsEvent('export_report');
     // TODO: Implement report export functionality
-    console.log('Exporting analytics report...');
+    logDebug('Exporting analytics report...');
   };
 
   const isLoading = isDashboardLoading || isHypothesisLoading;

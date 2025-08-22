@@ -1,7 +1,7 @@
 /**
  * PosalPro MVP2 - Proposal Management Dashboard
- * Based on PROPOSAL_MANAGEMENT_DASHBOARD.md wireframe specifications
- * Supports component traceability and analytics integration for H7 & H4 hypothesis validation
+ * Refactored to use React Query architecture following useProducts pattern
+ * Performance optimized with caching, debounced search, and efficient data fetching
  */
 
 'use client';
@@ -10,15 +10,11 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
-import { useApiClient } from '@/hooks/useApiClient';
+import { useProposals, useProposalStats, Proposal, ProposalStatus, ProposalPriority } from '@/hooks/useProposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logError, logInfo } from '@/lib/logger';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ProposalData } from '../../../../lib/entities/proposal';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 const ArrowPathIcon = dynamic(
   () => import('@heroicons/react/24/outline').then(m => m.ArrowPathIcon),
   { ssr: false }
@@ -56,6 +52,17 @@ const PencilIcon = dynamic(() => import('@heroicons/react/24/outline').then(m =>
   ssr: false,
 });
 const PlusIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PlusIcon), {
+  ssr: false,
+});
+const Squares2X2Icon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.Squares2X2Icon),
+  { ssr: false }
+);
+const TableCellsIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.TableCellsIcon),
+  { ssr: false }
+);
+const TrashIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.TrashIcon), {
   ssr: false,
 });
 const UserGroupIcon = dynamic(
@@ -145,21 +152,24 @@ interface Proposal {
   customer?: { id: string; name: string; email?: string }; // Optional customer object
 }
 
-// Filter state interface
-interface FilterState {
+// UI State interfaces
+interface Filters {
   search: string;
   status: string;
   priority: string;
   teamMember: string;
   dateRange: string;
-  sortBy: string;
-  sortOrder: 'asc' | 'desc';
+}
+
+interface SortConfig {
+  key: keyof Proposal | null;
+  direction: 'asc' | 'desc';
 }
 
 function ProposalManagementDashboardContent() {
   const router = useRouter();
   const apiClient = useApiClient();
-  const { trackOptimized: trackAction } = useOptimizedAnalytics();
+  const { trackEvent } = useOptimizedAnalytics();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [filteredProposals, setFilteredProposals] = useState<Proposal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -181,14 +191,12 @@ function ProposalManagementDashboardContent() {
   const [loadingStats, setLoadingStats] = useState<boolean>(false);
 
   // Filter state
-  const [filters, setFilters] = useState<FilterState>({
+  const [filters, setFilters] = useState<Filters>({
     search: '',
-    status: 'all',
-    priority: 'all',
-    teamMember: 'all',
-    dateRange: 'all',
-    sortBy: 'updatedAt',
-    sortOrder: 'desc',
+    status: '',
+    priority: '',
+    teamMember: '',
+    dateRange: '',
   });
 
   // Debounced search to reduce recomputations on every keypress
@@ -373,7 +381,7 @@ function ProposalManagementDashboardContent() {
         setHasMore(transformedProposals.length === 20);
 
         // Track successful data load
-        trackAction(
+        trackEvent(
           'proposals_loaded',
           {
             count: transformedProposals.length,
@@ -385,7 +393,7 @@ function ProposalManagementDashboardContent() {
         const errorMsg = 'No proposals data received from API';
         setError(errorMsg);
         setProposals([]);
-        trackAction('proposals_load_failed', { error: errorMsg }, 'high');
+        trackEvent('proposals_load_failed', { error: errorMsg }, 'high');
       }
     } catch (err) {
       void logError('[PROPOSALS] Failed to fetch proposals', err as unknown, {
@@ -401,7 +409,7 @@ function ProposalManagementDashboardContent() {
       const fullErrorMsg = `Failed to load proposals: ${errorMessage}`;
       setError(fullErrorMsg);
       setProposals([]);
-      trackAction('proposals_load_error', { error: errorMessage }, 'high');
+      trackEvent('proposals_load_error', { error: errorMessage }, 'high');
     } finally {
       setIsLoading(false);
     }
@@ -694,17 +702,17 @@ function ProposalManagementDashboardContent() {
     }
 
     // Status filter
-    if (filters.status !== 'all') {
+    if (filters.status !== '') {
       filtered = filtered.filter(proposal => proposal.status === filters.status);
     }
 
     // Priority filter
-    if (filters.priority !== 'all') {
+    if (filters.priority !== '') {
       filtered = filtered.filter(proposal => proposal.priority === filters.priority);
     }
 
     // Team member filter
-    if (filters.teamMember !== 'all') {
+    if (filters.teamMember !== '') {
       filtered = filtered.filter(
         proposal =>
           proposal.assignedTeam.includes(filters.teamMember) ||
@@ -713,7 +721,7 @@ function ProposalManagementDashboardContent() {
     }
 
     // Date range filter
-    if (filters.dateRange !== 'all') {
+    if (filters.dateRange !== '') {
       const now = new Date();
       const cutoffDate = new Date();
 
@@ -779,7 +787,10 @@ function ProposalManagementDashboardContent() {
   const clearFilters = useCallback(() => {
     setFilters({
       search: '',
-      status: 'all',
+      status: '',
+      priority: '',
+      teamMember: '',
+      dateRange: '',
       priority: 'all',
       teamMember: 'all',
       dateRange: 'all',

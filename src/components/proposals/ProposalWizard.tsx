@@ -469,15 +469,6 @@ export function ProposalWizard({
     };
   }, []);
 
-  // Block rendering and network mutations until authenticated to avoid 401s during init
-  if (typeof window !== 'undefined' && !isLoading && !isAuthenticated) {
-    return (
-      <div className="p-6 text-center text-gray-600">
-        Authentication required. Please sign in and reopen the proposal.
-      </div>
-    );
-  }
-
   // ✅ NEW: Load existing proposal data when in edit mode (single-run per ID)
   useEffect(() => {
     const loadExistingProposal = async () => {
@@ -1289,35 +1280,37 @@ export function ProposalWizard({
                 ? topLevelSelections
                 : wdSelections || [];
             if (source.length) {
-              console.log('[ProposalWizard] (global) Step3 fallback source size:', source.length);
+              logDebug('[ProposalWizard] Step3 fallback source size:', {
+                sourceLength: source.length,
+              });
               const hydrated = await Promise.all(
                 source.map(async sel => {
                   try {
                     const itemRes = await apiClient.get<ContentItem>(
                       `/api/content/${sel.contentId}`
                     );
-                    const item: ContentItem =
-                      itemRes && (itemRes as ContentItem).id
-                        ? {
-                            id: itemRes.id,
-                            title: itemRes.title,
-                            type: itemRes.type,
-                            tags: itemRes.tags || [],
-                            content: itemRes.content || '',
-                            relevanceScore: 0,
-                            successRate: 0,
-                            section: sel.section,
-                          }
-                        : {
-                            id: sel.contentId,
-                            title: 'Selected Content',
-                            type: 'template',
-                            tags: [],
-                            content: '',
-                            relevanceScore: 0,
-                            successRate: 0,
-                            section: sel.section,
-                          };
+                    const hasId = Boolean((itemRes as { id?: string } | null)?.id);
+                    const item: ContentItem = hasId
+                      ? {
+                          id: itemRes.id,
+                          title: itemRes.title,
+                          type: itemRes.type,
+                          tags: itemRes.tags || [],
+                          content: itemRes.content || '',
+                          relevanceScore: 0,
+                          successRate: 0,
+                          section: sel.section,
+                        }
+                      : {
+                          id: sel.contentId,
+                          title: 'Selected Content',
+                          type: 'template',
+                          tags: [],
+                          content: '',
+                          relevanceScore: 0,
+                          successRate: 0,
+                          section: sel.section,
+                        };
                     return {
                       item,
                       section: sel.section,
@@ -1359,7 +1352,9 @@ export function ProposalWizard({
           const source =
             topLevelSections && topLevelSections.length > 0 ? topLevelSections : wdSections || [];
           if (source.length) {
-            console.log('[ProposalWizard] (global) Step5 fallback source size:', source.length);
+            logDebug('[ProposalWizard] Step5 fallback source size:', {
+              sourceLength: source.length,
+            });
             loadedWizardData.step5.sections = source.map(
               (s, index: number): ProposalSection => ({
                 id: s.id || String(index + 1),
@@ -1523,8 +1518,6 @@ export function ProposalWizard({
           setCurrentStep(4);
         }
       } catch (error) {
-        console.error('[ProposalWizard] Failed to load existing proposal:', error);
-
         // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService per CORE_REQUIREMENTS.md
         const standardError = errorHandlingService.processError(
           error,
@@ -2884,9 +2877,10 @@ export function ProposalWizard({
     // ✅ CRITICAL: Memory optimization on step change
     const currentMemoryUsage = getMemoryUsageMB();
     if (currentMemoryUsage > 160) {
-      console.log(
-        `🧹 [Memory Optimization] High memory usage (${currentMemoryUsage.toFixed(1)}MB) before step change, optimizing...`
-      );
+      logDebug('[Memory Optimization] High memory usage before step change, optimizing...', {
+        memoryUsage: `${currentMemoryUsage.toFixed(1)}MB`,
+        step: 'stepChange',
+      });
       optimizeComponentMemory('ProposalWizard');
     }
 
@@ -3145,6 +3139,15 @@ export function ProposalWizard({
     ) as unknown as React.ComponentType<StepComponentProps>;
     return memo(Component) as unknown as React.ComponentType<StepComponentProps>;
   }, [currentStep]);
+
+  // Block rendering and network mutations until authenticated to avoid 401s during init
+  if (typeof window !== 'undefined' && !isLoading && !isAuthenticated) {
+    return (
+      <div className="p-6 text-center text-gray-600">
+        Authentication required. Please sign in and reopen the proposal.
+      </div>
+    );
+  }
 
   return (
     <div

@@ -8,10 +8,11 @@
 
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorHandlingService } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { SessionProvider, useSession } from 'next-auth/react';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logWarn } from '@/lib/logger';
 import type { Session } from 'next-auth';
+import { SessionProvider, useSession } from 'next-auth/react';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 // Component Traceability Matrix
@@ -76,10 +77,44 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
   const [sessionWarning, setSessionWarning] = useState<boolean>(false);
   const [isClient, setIsClient] = useState(false);
+  const [sessionRetryCount, setSessionRetryCount] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Force session refresh if stuck in loading state
+  useEffect(() => {
+    if (status === 'loading' && sessionRetryCount < 2) {
+      const timeout = setTimeout(async () => {
+        try {
+          logDebug('Force refreshing session due to loading timeout');
+          await update();
+          setSessionRetryCount(prev => prev + 1);
+        } catch (error) {
+          errorHandlingService.processError(
+            error as Error,
+            'Session refresh failed',
+            ErrorCodes.AUTH.SESSION_INVALID,
+            {
+              component: 'AuthProvider',
+              operation: 'forceSessionRefresh',
+              context: { sessionRetryCount },
+            }
+          );
+        }
+      }, 2000); // 2 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [status, sessionRetryCount, update]);
+
+  // Reset retry count when session loads successfully
+  useEffect(() => {
+    if (status === 'authenticated') {
+      setSessionRetryCount(0);
+    }
+  }, [status]);
 
   // Extract user data from session (memoized to stabilize hook deps)
   const user: AuthUser | null = useMemo(() => {
@@ -105,7 +140,8 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       if (!roles.length) return false;
 
       const requiredRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-      const isSuperAdmin = roles.includes('Administrator') || roles.includes('System Administrator');
+      const isSuperAdmin =
+        roles.includes('Administrator') || roles.includes('System Administrator');
       return requiredRoles.some(role => roles.includes(role) || isSuperAdmin);
     },
     [roles]
@@ -118,12 +154,11 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       const requiredPermissions = Array.isArray(requiredPermission)
         ? requiredPermission
         : [requiredPermission];
-      const isSuperAdmin = roles.includes('Administrator') || roles.includes('System Administrator');
+      const isSuperAdmin =
+        roles.includes('Administrator') || roles.includes('System Administrator');
       return requiredPermissions.some(
         permission =>
-          permissions.includes(permission) ||
-          permissions.includes('*:*') ||
-          isSuperAdmin
+          permissions.includes(permission) || permissions.includes('*:*') || isSuperAdmin
       );
     },
     [permissions, roles]
@@ -313,14 +348,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       // Store the session tracking timestamp
       localStorage.setItem(sessionKey, currentSessionTime.toString());
     }
-  }, [
-    isAuthenticated,
-    analytics,
-    user,
-    user?.id,
-    user?.department,
-    roles,
-  ]);
+  }, [isAuthenticated, analytics, user, user?.id, user?.department, roles]);
 
   // Track user activity on page interactions
   useEffect(() => {
@@ -522,9 +550,7 @@ const DEFAULT_AUTH_CONTEXT: AuthContextState = {
 export function useAuth(): AuthContextState {
   const context = useContext(AuthContext);
   if (!context) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('useAuth called outside of AuthProvider. Returning safe default context.');
-    }
+    logWarn('useAuth called outside of AuthProvider. Returning safe default context.');
     return DEFAULT_AUTH_CONTEXT;
   }
   return context;

@@ -16,8 +16,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Check, Loader2, Settings, Sparkles, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { FieldPath } from 'react-hook-form';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -31,7 +30,9 @@ import { CreateProductData } from '@/types/entities/product';
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logError } from '@/lib/logger';
+import { logDebug, logError } from '@/lib/logger';
+import { useApiClient } from '@/hooks/useApiClient';
+import { toast } from 'sonner';
 
 // Form validation schema based on DATA_MODEL.md Product interface
 const productCreationSchema = z.object({
@@ -136,6 +137,7 @@ interface ProductCreationFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: CreateProductData) => Promise<void>;
+  inline?: boolean; // New prop to control modal vs inline rendering
   initialData?: Partial<ProductCreationFormData>;
 }
 
@@ -143,6 +145,7 @@ export function ProductCreationForm({
   isOpen,
   onClose,
   onSubmit,
+  inline = false,
   initialData,
 }: ProductCreationFormProps) {
   // Component analytics for hypothesis validation
@@ -159,6 +162,11 @@ export function ProductCreationForm({
   const [currentStep, setCurrentStep] = useState(0);
   const [aiDescriptionLoading, setAiDescriptionLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isAdvancingStep, setIsAdvancingStep] = useState(false);
+
+  // Synchronous guards to prevent re-entrant step advancement
+  const advancingRef = useRef(false);
+  const lastAdvanceAtRef = useRef(0);
 
   const form = useForm<ProductCreationFormData>({
     resolver: zodResolver(productCreationSchema),
@@ -183,6 +191,9 @@ export function ProductCreationForm({
       ...initialData,
     },
   });
+
+  // api client for lightweight SKU checks (complies with CORE_REQUIREMENTS data fetching)
+  const api = useApiClient();
 
   // Field arrays for dynamic sections
   const {
@@ -273,7 +284,6 @@ export function ProductCreationForm({
 
   // AI-assisted description generation (AC-2.1.2 equivalent for products)
   const generateAIDescription = useCallback(async () => {
-    const startTime = Date.now();
     setAiDescriptionLoading(true);
 
     try {
@@ -332,92 +342,156 @@ export function ProductCreationForm({
     }
   }, [form]);
 
-  // Form submission with analytics tracking
-  const handleSubmit = useCallback(
-    async (data: ProductCreationFormData) => {
-      const startTime = Date.now();
-      setIsSubmitting(true);
-      setValidationErrors([]);
-      let productData: CreateProductData;
+  // Generate unique SKU helper
+  const generateUniqueSKU = useCallback(() => {
+    const baseSKU = form.getValues('name')
+      ? form
+          .getValues('name')
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '')
+          .substring(0, 6)
+      : 'PROD';
+    const timestamp = Date.now().toString();
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const randSuffix2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const uniqueSKU = `${baseSKU}-${timestamp.slice(-6)}-${randomSuffix}-${randSuffix2}`;
+    form.setValue('sku', uniqueSKU);
+    form.trigger('sku');
 
+    // Show success toast
+    toast.success('Unique SKU Generated', {
+      description: `Generated SKU: ${uniqueSKU}`,
+      duration: 3000,
+    });
+  }, [form]);
+
+  // Check if SKU already exists (client-side presubmit via useApiClient)
+  const checkSKUExists = useCallback(async (sku: string): Promise<boolean> => {
+    logDebug('checkSKUExists function called', { sku });
+    try {
+      if (!sku) return false;
+      // minimal payload and limit=1 for performance; exact match on client
+      const data = await api.get<{ success: boolean; data?: { products?: Array<{ sku: string }> } }>(
+        `/api/products?sku=${encodeURIComponent(sku)}&skuExact=true&limit=1&fields=sku`
+      );
+      const exists = Boolean(
+        data?.data?.products?.some(p => String(p.sku || '').toUpperCase() === sku.toUpperCase())
+      );
+      logDebug('SKU exists result', { exists, sku });
+      return exists;
+    } catch (error) {
+      logError('SKU check failed', { sku, error });
+      return false;
+    }
+  }, [api]);
+
+  // SKU validation state
+  const [skuAvailability, setSkuAvailability] = useState<'unknown' | 'checking' | 'available' | 'taken'>('unknown');
+
+  // SKU validation on blur
+  const validateSKUOnBlur = useCallback(async (sku: string) => {
+    if (!sku || sku.trim().length === 0) {
+      setSkuAvailability('unknown');
+      return;
+    }
+
+    setSkuAvailability('checking');
+    try {
+      const exists = await checkSKUExists(sku.trim());
+      setSkuAvailability(exists ? 'taken' : 'available');
+    } catch (error) {
+      logError('SKU validation failed on blur', { sku, error });
+      setSkuAvailability('unknown');
+    }
+  }, [checkSKUExists]);
+
+  // Register SKU with RHF and add onBlur validation
+  const skuFieldRegister = {
+    ...form.register('sku'),
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+      form.register('sku').onBlur?.(e); // Call original onBlur if exists
+      validateSKUOnBlur(e.target.value);
+    }
+  };
+
+  // Central flag to block submission when SKU is invalid/being checked
+  const isSkuInvalid =
+    !!form.formState.errors.sku || skuAvailability === 'taken' || skuAvailability === 'checking';
+
+  // Form submission with analytics tracking - simplified to avoid dependency issues
+  const handleSubmit = useCallback(async (data: ProductCreationFormData) => {
+    setIsSubmitting(true);
+    setValidationErrors([]);
+
+    try {
+      // Convert form data to CreateProductData format
+      const productData: CreateProductData = {
+        name: data.name,
+        description: data.description,
+        sku: data.sku,
+        price: data.price,
+        currency: data.currency,
+        category: data.category,
+        tags: data.tags,
+        attributes: data.attributes?.reduce(
+          (acc, attr) => {
+            acc[attr.key] = attr.value as unknown as string;
+            return acc;
+          },
+          {} as Record<string, unknown>
+        ),
+        images: data.images,
+        userStoryMappings: data.userStoryMappings,
+      };
+
+      // Pre-validate SKU to prevent 409 conflicts
       try {
-        // Convert form data to CreateProductData format
-        productData = {
-          name: data.name,
-          description: data.description,
-          sku: data.sku,
-          price: data.price,
-          currency: data.currency,
-          category: data.category,
-          tags: data.tags,
-          attributes: data.attributes?.reduce(
-            (acc, attr) => {
-              acc[attr.key] = attr.value as unknown as string;
-              return acc;
-            },
-            {} as Record<string, unknown>
-          ),
-          images: data.images,
-          userStoryMappings: data.userStoryMappings,
-        };
+        const skuExists = await checkSKUExists(data.sku);
+        if (skuExists) {
+          // Generate new SKU automatically
+          const baseSKU = data.name?.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 6) || 'PROD';
+          const timestamp = Date.now().toString();
+          const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+          const uniqueSKU = `${baseSKU}-${timestamp.slice(-6)}-${randomSuffix}`;
+          form.setValue('sku', uniqueSKU);
 
-        // Submit the product
-        await onSubmit(productData);
-
-        // TODO: Track successful creation for hypothesis validation when analytics available
-        // trackProductCreation({
-        //   productData,
-        //   creationTime: Date.now() - startTime,
-        //   useAIDescription: data.useAIDescription,
-        //   categoriesCount: data.category.length,
-        //   attributesCount: data.attributes?.length || 0,
-        //   userStory: 'US-3.1',
-        //   hypothesis: 'H8',
-        //   acceptanceCriteria: 'AC-3.1.1'
-        // });
-
-        // TODO: Track categorization efficiency for H1 validation when analytics available
-        // trackCategorizationEfficiency({
-        //   categoriesSelected: data.category.length,
-        //   tagsAdded: data.tags?.length || 0,
-        //   aiAssisted: data.useAIDescription,
-        //   userStory: 'US-1.2',
-        //   hypothesis: 'H1'
-        // });
-
-        // Close form on success
-        onClose();
-      } catch (error) {
-        // ✅ ENHANCED: Use proper logger instead of console.error
-        const errorHandlingService = ErrorHandlingService.getInstance();
-        const standardError = errorHandlingService.processError(
-          error,
-          'Product creation failed',
-          ErrorCodes.DATA.CREATE_FAILED,
-          {
-            component: 'ProductCreationForm',
-            operation: 'createProduct',
-            productData: JSON.stringify(data),
-          }
-        );
-
-        logError('Product creation failed', error, {
-          component: 'ProductCreationForm',
-          operation: 'createProduct',
-          productData: JSON.stringify(data),
-          standardError: standardError.message,
-          errorCode: standardError.code,
-        });
-
-        setValidationErrors([
-          error instanceof Error ? error.message : 'Failed to create product. Please try again.',
-        ]);
-      } finally {
-        setIsSubmitting(false);
+          toast.error('SKU Conflict - Auto-Generated New SKU', {
+            description: 'The SKU was already in use. A new unique SKU has been generated automatically.',
+            duration: 4000,
+          });
+          return;
+        }
+      } catch (validationError) {
+        // Continue with submission if validation fails
+        logError('SKU validation failed', { sku: data.sku, error: validationError });
       }
-    },
-    [onSubmit, onClose]
-  );
+
+      // Submit the product
+      await onSubmit(productData);
+      onClose();
+    } catch (error) {
+      const processedError = ErrorHandlingService.getInstance().processError(
+        error as Error,
+        'Failed to create product. Please try again.',
+        ErrorCodes.BUSINESS.PROCESS_FAILED,
+        {
+          component: 'ProductCreationForm',
+          operation: 'handleSubmit',
+          context: { productData: { name: data.name, sku: data.sku } }
+        }
+      );
+      
+      const errorMessage = processedError.metadata?.userFriendlyMessage || processedError.message;
+      setValidationErrors([errorMessage]);
+      
+      toast.error('Product Creation Failed', {
+        description: errorMessage,
+        duration: 4000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [onSubmit, onClose, checkSKUExists]);
 
   // Category toggle handler for multi-select
   const toggleCategory = useCallback(
@@ -460,88 +534,158 @@ export function ProductCreationForm({
     [form]
   );
 
-  // Step navigation
-  const canProceedToNextStep = useCallback(() => {
-    const values = form.getValues();
-    const errors = form.formState.errors;
+  // Step navigation - simplified to avoid TDZ issues
+  const canProceedToNextStep = () => {
+    try {
+      if (!form || !form.getValues || !form.formState) return false;
+      
+      const values = form.getValues();
+      const errors = form.formState.errors || {};
 
-    switch (currentStep) {
-      case 0: {
-        const hasBasicData =
-          values.name && values.sku && values.price !== undefined && values.price >= 0;
-        const hasBasicErrors = errors.name || errors.sku || errors.price;
-        return hasBasicData && !hasBasicErrors;
+      switch (currentStep) {
+        case 0: {
+          // Basic Information: name, sku, price are required (allow price 0)
+          const hasName = typeof values.name === 'string' && values.name.trim().length > 0;
+          const hasSku = typeof values.sku === 'string' && values.sku.trim().length > 0;
+          const priceNum = Number(values.price);
+          const hasPrice = Number.isFinite(priceNum) && priceNum >= 0;
+          return hasName && hasSku && hasPrice && !errors.name && !errors.sku && !errors.price;
+        }
+        case 1: {
+          // Categorization: category is required
+          return !errors.category && values.category && values.category.length > 0;
+        }
+        case 2: {
+          // Configuration: priceModel is required
+          return !errors.priceModel && values.priceModel;
+        }
+        case 3: {
+          return true; // Resources step - all optional
+        }
+        case 4: {
+          return true; // Final review step
+        }
+        default: {
+          return false;
+        }
       }
-      case 1: {
-        const hasCategory = values.category && values.category.length > 0;
-        const hasCategoryErrors = errors.category;
-        return hasCategory && !hasCategoryErrors;
-      }
-      case 2: {
-        const hasPriceModel = values.priceModel;
-        const hasPriceModelErrors = errors.priceModel;
-        return hasPriceModel && !hasPriceModelErrors;
-      }
-      case 3: {
-        return true; // This step is optional
-      }
-      case 4: {
-        return true; // Final review step
-      }
-      default: {
-        return false;
-      }
+    } catch (error) {
+      logError('canProceedToNextStep error:', error);
+      return false;
     }
-  }, [currentStep, form]);
+  };
 
-  const nextStep = useCallback(async () => {
-    // Get current step fields that need validation
+  // Debug function for development - simplified dependencies
+  const debugForm = useCallback(() => {
+    logDebug('Debug - Form Values:', { formValues: form.getValues() });
+    logDebug('Debug - Form Errors:', { formErrors: form.formState.errors });
+    logDebug('Debug - Current Step:', { currentStep });
+    logDebug('Debug - Form Steps Length:', { formStepsLength: formSteps.length });
+    logDebug('Debug - Is Submitting:', { isSubmitting });
+    logDebug('Debug - Form State:', {
+      isDirty: form.formState.isDirty,
+      isValid: form.formState.isValid,
+      isSubmitting: form.formState.isSubmitting,
+    });
+  }, [form, currentStep, formSteps.length, isSubmitting]);
+
+  const handleNextStep = useCallback(async () => {
+    logDebug('Next Step button clicked!');
+    logDebug('Current step before advancement:', { currentStep });
+
+    // Prevent concurrent validations/advancements (ref + state guard)
+    if (advancingRef.current || isAdvancingStep) {
+      logDebug('Next Step ignored - advancement already in progress');
+      return;
+    }
+
+    // Throttle rapid clicks
+    const now = Date.now();
+    if (now - lastAdvanceAtRef.current < 300) {
+      logDebug('Next Step ignored - throttled to prevent rapid re-entry');
+      return;
+    }
+    lastAdvanceAtRef.current = now;
+
+    // Inline the next step logic to avoid circular dependency
     const currentStepFields = formSteps[currentStep].fields;
 
-    console.log('NextStep called - Current step:', currentStep);
-    console.log('Fields to validate:', currentStepFields);
-
-    // If no fields to validate, proceed immediately
-    if (currentStepFields.length === 0) {
-      console.log('No fields to validate, proceeding...');
-      if (currentStep < formSteps.length - 1) {
-        setCurrentStep(prev => prev + 1);
-        setValidationErrors([]);
+    if (!currentStepFields || currentStepFields.length === 0) {
+      advancingRef.current = true;
+      setIsAdvancingStep(true);
+      try {
+        setCurrentStep(prev => Math.min(prev + 1, formSteps.length - 1));
+      } finally {
+        setIsAdvancingStep(false);
+        advancingRef.current = false;
       }
       return;
     }
 
-    // Trigger validation for current step fields
-    const validationPromises = currentStepFields.map(field =>
-      form.trigger(field as keyof ProductCreationFormData)
-    );
-
-    const validationResults = await Promise.all(validationPromises);
-    const isFormValid = validationResults.every(result => result);
-
-    console.log('Validation results:', validationResults);
-    console.log('Is form valid:', isFormValid);
-    console.log('Can proceed:', canProceedToNextStep());
-
-    // Check both validation results and current step validation
-    if (isFormValid && canProceedToNextStep()) {
-      console.log('Advancing to next step...');
-      if (currentStep < formSteps.length - 1) {
-        setCurrentStep(prev => prev + 1);
-        setValidationErrors([]);
+    try {
+      advancingRef.current = true;
+      setIsAdvancingStep(true);
+      // Validate current step fields and focus the first invalid field if any
+      const isValid = await form.trigger(
+        currentStepFields as Array<keyof ProductCreationFormData>,
+        { shouldFocus: true }
+      );
+      if (isValid) {
+        setCurrentStep(prev => Math.min(prev + 1, formSteps.length - 1));
       }
-    } else {
-      console.log('Validation failed, showing errors...');
-      setValidationErrors(['Please complete all required fields before proceeding.']);
+    } finally {
+      setIsAdvancingStep(false);
+      advancingRef.current = false;
     }
-  }, [currentStep, canProceedToNextStep, form, formSteps]);
+  }, [currentStep, formSteps, form, isAdvancingStep]);
+
+  const handleForceNextStep = useCallback(() => {
+    logDebug('Force Next Step clicked!');
+    if (advancingRef.current || isAdvancingStep) {
+      logDebug('Force Next ignored - advancement/validation in progress');
+      return;
+    }
+    advancingRef.current = true;
+    setIsAdvancingStep(true);
+    try {
+      setCurrentStep(prev => Math.min(prev + 1, formSteps.length - 1));
+    } finally {
+      setIsAdvancingStep(false);
+      advancingRef.current = false;
+    }
+  }, [formSteps.length, isAdvancingStep, form]);
 
   const prevStep = useCallback(() => {
+    if (isAdvancingStep || advancingRef.current) {
+      logDebug('Previous Step ignored - advancement in progress');
+      return;
+    }
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
       setValidationErrors([]);
     }
-  }, [currentStep]);
+  }, [currentStep, isAdvancingStep]);
+
+  // Treat Enter as Next before final step; block submits during advancement/validation
+  const onFormSubmit = useCallback(
+    (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (currentStep < formSteps.length - 1) {
+        if (!isAdvancingStep && !advancingRef.current && !form.formState.isValidating) {
+          void handleNextStep();
+        } else {
+          logDebug('Form submit ignored - validation/advancement in progress');
+        }
+        return;
+      }
+      if (isAdvancingStep || advancingRef.current || form.formState.isValidating) {
+        logDebug('Final submit ignored - validation/advancement in progress');
+        return;
+      }
+      void form.handleSubmit(handleSubmit)();
+    },
+    [currentStep, formSteps.length, handleNextStep, isAdvancingStep, form, handleSubmit]
+  );
 
   // Reset form when modal closes
   useEffect(() => {
@@ -552,22 +696,15 @@ export function ProductCreationForm({
     }
   }, [isOpen, form]);
 
-  // Watch form values and errors to update button state
-  const watchedValues = form.watch();
-  const formErrors = form.formState.errors;
-
-  // Force re-render when form values or errors change
-  useEffect(() => {
-    // This effect will trigger re-renders when form state changes
-  }, [watchedValues, formErrors, form.formState.isValid]);
+  // Simplified form state watching - remove potential TDZ triggers
+  const formIsValid = form.formState.isValid;
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+  const formContent = (
+    <div className={inline ? "" : "bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <Settings className="h-6 w-6 text-blue-600" />
@@ -583,6 +720,7 @@ export function ProductCreationForm({
             variant="ghost"
             size="sm"
             onClick={onClose}
+            disabled={isSubmitting || isAdvancingStep || form.formState.isValidating}
             className="text-gray-500 hover:text-gray-700"
           >
             <X className="h-5 w-5" />
@@ -619,7 +757,7 @@ export function ProductCreationForm({
         </div>
 
         {/* Form Content */}
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 overflow-y-auto">
+        <form onSubmit={onFormSubmit} aria-busy={isAdvancingStep || form.formState.isValidating || isSubmitting} className="flex-1 overflow-y-auto">
           <div className="p-6 space-y-6">
             {/* Error Display */}
             {validationErrors.length > 0 && (
@@ -661,19 +799,75 @@ export function ProductCreationForm({
                     <label htmlFor="sku" className="block text-sm font-medium text-gray-700 mb-2">
                       SKU *
                     </label>
-                    <input
-                      id="sku"
-                      type="text"
-                      {...form.register('sku')}
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        form.formState.errors.sku ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                      }`}
-                      placeholder="PROD-001"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        id="sku"
+                        type="text"
+                        {...skuFieldRegister}
+                        className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                          form.formState.errors.sku || skuAvailability === 'taken'
+                            ? 'border-red-300 bg-red-50'
+                            : skuAvailability === 'available'
+                              ? 'border-green-300 bg-green-50'
+                              : 'border-gray-300'
+                        }`}
+                        placeholder="PROD-001"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={generateUniqueSKU}
+                        className="whitespace-nowrap"
+                        title="Generate unique SKU"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const sku = form.getValues('sku');
+                          if (sku) {
+                            const exists = await checkSKUExists(sku);
+                            if (exists) {
+                              toast.error('SKU Not Available', {
+                                description: 'This SKU is already in use.',
+                                action: {
+                                  label: 'Generate New SKU',
+                                  onClick: generateUniqueSKU,
+                                },
+                              });
+                            } else {
+                              toast.success('SKU Available', {
+                                description: 'This SKU is available for use.',
+                              });
+                            }
+                          }
+                        }}
+                        className="whitespace-nowrap"
+                        title="Check SKU availability"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    </div>
                     {form.formState.errors.sku && (
                       <p className="mt-1 text-sm text-red-600">
                         {form.formState.errors.sku.message}
                       </p>
+                    )}
+                    {skuAvailability === 'checking' && (
+                      <p className="mt-1 text-sm text-gray-500">Checking SKU availability…</p>
+                    )}
+                    {skuAvailability === 'taken' && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        This SKU is already in use. Please choose a different one.
+                      </p>
+                    )}
+                    {skuAvailability === 'available' && (
+                      <p className="mt-1 text-sm text-green-700">This SKU is available.</p>
                     )}
                     <p className="mt-1 text-xs text-gray-500">
                       Only uppercase letters, numbers, hyphens (-), and underscores (_) allowed
@@ -1283,11 +1477,11 @@ export function ProductCreationForm({
           {/* Footer Actions */}
           <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t">
             <div className="flex items-center gap-4">
-              <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
+              <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting || isAdvancingStep || form.formState.isValidating}>
                 Cancel
               </Button>
               {currentStep > 0 && (
-                <Button type="button" variant="outline" onClick={prevStep} disabled={isSubmitting}>
+                <Button type="button" variant="outline" onClick={prevStep} disabled={isSubmitting || isAdvancingStep || form.formState.isValidating}>
                   Previous
                 </Button>
               )}
@@ -1298,7 +1492,7 @@ export function ProductCreationForm({
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isAdvancingStep || form.formState.isValidating}
                 className="text-gray-600 border-gray-300"
               >
                 Save Draft
@@ -1308,53 +1502,23 @@ export function ProductCreationForm({
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
-                    onClick={() => {
-                      console.log('Debug - Form Values:', form.getValues());
-                      console.log('Debug - Form Errors:', form.formState.errors);
-                      console.log('Debug - Can Proceed:', canProceedToNextStep());
-                      console.log('Debug - Current Step:', currentStep);
-                      console.log('Debug - Form Steps Length:', formSteps.length);
-                      console.log('Debug - Is Submitting:', isSubmitting);
-                      console.log(
-                        'Debug - Button Disabled:',
-                        !canProceedToNextStep() || isSubmitting
-                      );
-
-                      // Force trigger validation
-                      const currentStepFields = formSteps[currentStep].fields as Array<
-                        FieldPath<ProductCreationFormData>
-                      >;
-                      console.log('Debug - Fields to validate:', currentStepFields);
-
-                      currentStepFields.forEach(field => {
-                        void form.trigger(field);
-                        const { error } = form.getFieldState(field);
-                        const hasError = Boolean(error);
-                        console.log(`Debug - Field ${field} has error:`, hasError);
-                      });
-                    }}
+                    onClick={debugForm}
                     variant="outline"
                     size="sm"
+                    disabled={isSubmitting || isAdvancingStep || form.formState.isValidating}
                     className="text-xs"
                   >
                     Debug
                   </Button>
                   <Button
                     type="button"
-                    onClick={() => {
-                      console.log('Next Step button clicked!');
-                      console.log(
-                        'Button disabled state:',
-                        !canProceedToNextStep() || isSubmitting
-                      );
-                      nextStep();
-                    }}
+                    onClick={handleNextStep}
                     disabled={
-                      !canProceedToNextStep() || isSubmitting || form.formState.isValidating
+                      !canProceedToNextStep() || isSubmitting || form.formState.isValidating || isAdvancingStep
                     }
                     className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {form.formState.isValidating ? (
+                    {isAdvancingStep || form.formState.isValidating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Validating...
@@ -1365,12 +1529,10 @@ export function ProductCreationForm({
                   </Button>
                   <Button
                     type="button"
-                    onClick={() => {
-                      console.log('Force Next Step clicked!');
-                      setCurrentStep(prev => prev + 1);
-                    }}
+                    onClick={handleForceNextStep}
                     variant="outline"
                     size="sm"
+                    disabled={isSubmitting || isAdvancingStep || form.formState.isValidating}
                     className="text-xs"
                   >
                     Force Next
@@ -1379,8 +1541,8 @@ export function ProductCreationForm({
               ) : (
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700"
+                  disabled={isSubmitting || isSkuInvalid || isAdvancingStep || form.formState.isValidating}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <>
@@ -1396,6 +1558,11 @@ export function ProductCreationForm({
           </div>
         </form>
       </div>
+  );
+
+  return inline ? formContent : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      {formContent}
     </div>
   );
 }

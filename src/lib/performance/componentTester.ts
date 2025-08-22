@@ -3,6 +3,10 @@
  * Tests forms, fields, tabs, buttons, modals, and all UI component functionalities
  */
 
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logDebug } from '@/lib/logger';
+
 export interface ComponentTestResult {
   testName: string;
   componentType: string;
@@ -594,7 +598,7 @@ export class ComponentTester {
 
   // Run all component tests
   async runAllComponentTests(): Promise<ComponentTestResult[]> {
-    console.log('🚀 Starting comprehensive component functionality tests...');
+    logDebug('🚀 Starting comprehensive component functionality tests...');
 
     this.testResults = []; // Clear previous results
 
@@ -613,11 +617,19 @@ export class ComponentTester {
         // Small delay between tests
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
-        console.error('Component test execution failed:', error);
+        ErrorHandlingService.getInstance().processError(
+          error as Error,
+          'Component test execution failed',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          {
+            component: 'ComponentTester',
+            operation: 'runAllTests',
+          }
+        );
       }
     }
 
-    console.log('✅ Component functionality tests completed');
+    logDebug('✅ Component functionality tests completed');
     return this.testResults;
   }
 

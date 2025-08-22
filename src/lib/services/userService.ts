@@ -7,6 +7,9 @@
  */
 
 import { hashPassword } from '@/lib/auth/passwordUtils';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logError } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { Role, User } from '@prisma/client';
 
@@ -20,7 +23,9 @@ const roleCache = new Map<string, { roles: Role[]; timestamp: number }>();
 const ROLE_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 // ✅ CRITICAL: Cache cleanup function (generic to avoid any)
-interface CacheEntryBase { timestamp: number }
+interface CacheEntryBase {
+  timestamp: number;
+}
 function cleanupCache<T extends CacheEntryBase>(cache: Map<string, T>, maxSize: number) {
   if (cache.size > maxSize) {
     const entries = Array.from(cache.entries());
@@ -36,15 +41,18 @@ async function getCachedUser(email: string): Promise<AuthUserRecord | null> {
   const cached = userCache.get(email);
 
   if (cached && now - cached.timestamp < USER_CACHE_TTL) {
+    logDebug(`📦 [User Cache] Cache hit for: ${email}`);
     return cached.user;
   }
 
+  logDebug(`🔍 [User Service] Fetching user from database: ${email}`);
   return null;
 }
 
 // ✅ CRITICAL: Cache user data
 function cacheUser(email: string, user: AuthUserRecord) {
   userCache.set(email, { user, timestamp: Date.now() });
+  logDebug(`📦 [User Cache] Cached user: ${email}`);
   cleanupCache(userCache, MAX_CACHE_SIZE);
 }
 
@@ -123,11 +131,11 @@ export async function getUserByEmail(email: string): Promise<AuthUserRecord | nu
     // ✅ CRITICAL: Check cache first
     const cachedUser = await getCachedUser(email);
     if (cachedUser) {
-      console.log(`📦 [User Cache] Cache hit for: ${email}`);
+      logDebug(`📦 [User Cache] Cache hit for: ${email}`);
       return cachedUser;
     }
 
-    console.log(`🔍 [User Service] Fetching user from database: ${email}`);
+    logDebug(`🔍 [User Service] Fetching user from database: ${email}`);
 
     // ✅ PERFORMANCE: Avoid transaction for single read to reduce auth latency
     const result = await prisma.user.findUnique({
@@ -156,12 +164,21 @@ export async function getUserByEmail(email: string): Promise<AuthUserRecord | nu
     if (result) {
       // ✅ CRITICAL: Cache the result
       cacheUser(email, result);
-      console.log(`📦 [User Cache] Cached user: ${email}`);
+      logDebug(`📦 [User Cache] Cached user: ${email}`);
     }
 
     return result;
   } catch (error) {
-    console.error('[User Service] Error fetching user:', error);
+    ErrorHandlingService.getInstance().processError(
+      error,
+      'Error fetching user',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        component: 'UserService',
+        operation: 'getUserByEmail',
+        email,
+      }
+    );
     return null;
   }
 }
@@ -178,7 +195,16 @@ export async function updateLastLogin(userId: string): Promise<void> {
       data: { lastLogin: new Date() },
     });
   } catch (error) {
-    console.error('[User Service] Error updating last login:', error);
+    ErrorHandlingService.getInstance().processError(
+      error,
+      'Error updating last login',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      {
+        component: 'UserService',
+        operation: 'updateLastLogin',
+        userId,
+      }
+    );
   }
 }
 
@@ -241,7 +267,16 @@ export async function getUsers(params: {
 
     return { users, total };
   } catch (error) {
-    console.error('[User Service] Error fetching users:', error);
+    ErrorHandlingService.getInstance().processError(
+      error,
+      'Error fetching users',
+      ErrorCodes.DATA.FETCH_FAILED,
+      {
+        component: 'UserService',
+        operation: 'getUsers',
+        params,
+      }
+    );
     return { users: [], total: 0 };
   }
 }
@@ -275,7 +310,7 @@ export async function getUserRoles(userId: string): Promise<Role[]> {
 
     return roles;
   } catch (error) {
-    console.error('[User Service] Error fetching user roles:', error);
+    logError('[User Service] Error fetching user roles:', error);
     return [];
   }
 }
@@ -286,7 +321,7 @@ export async function getUserRoles(userId: string): Promise<Role[]> {
 export function clearUserCache(): void {
   userCache.clear();
   roleCache.clear();
-  console.log('🧹 [User Cache] Cache cleared');
+  logDebug('🧹 [User Cache] Cache cleared');
 }
 
 /**

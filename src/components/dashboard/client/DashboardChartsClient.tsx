@@ -184,8 +184,11 @@ export default function DashboardChartsClient() {
               <span className="text-sm text-gray-500">by day</span>
             </div>
             <div className="grid grid-cols-12 gap-1 items-end h-40">
-              {nearDue.map(point => (
-                <div key={point.date} className="flex flex-col items-center justify-end h-full">
+              {nearDue.map((point, index) => (
+                <div
+                  key={point.date || `date-${index}`}
+                  className="flex flex-col items-center justify-end h-full"
+                >
                   <div
                     className="bg-blue-500 rounded-t w-full"
                     style={{ height: `${Math.max(4, (point.count / maxNearDue) * 160)}px` }}
@@ -204,8 +207,8 @@ export default function DashboardChartsClient() {
               <span className="text-sm text-gray-500">top 8</span>
             </div>
             <div className="space-y-2">
-              {topEmployees.map(row => (
-                <div key={row.id} className="flex items-center gap-2">
+              {topEmployees.map((row, index) => (
+                <div key={row.id || `employee-${index}`} className="flex items-center gap-2">
                   <div className="w-40 truncate" title={row.name}>
                     {row.name}
                   </div>
@@ -231,8 +234,11 @@ export default function DashboardChartsClient() {
               <span className="text-sm text-gray-500">stage counts</span>
             </div>
             <div className="grid grid-cols-6 gap-2 items-end h-40">
-              {funnel.map(s => (
-                <div key={s.stage} className="flex flex-col items-center justify-end h-full">
+              {funnel.map((s, index) => (
+                <div
+                  key={s.stage || `stage-${index}`}
+                  className="flex flex-col items-center justify-end h-full"
+                >
                   <div
                     className="bg-purple-500 rounded-t w-full"
                     style={{ height: `${Math.max(4, (s.count / maxFunnel) * 160)}px` }}
@@ -251,8 +257,11 @@ export default function DashboardChartsClient() {
               <span className="text-sm text-gray-500">open only</span>
             </div>
             <div className="grid grid-cols-3 gap-4 items-end h-40">
-              {overdueByPriority.map(p => (
-                <div key={p.priority} className="flex flex-col items-center justify-end h-full">
+              {overdueByPriority.map((p, index) => (
+                <div
+                  key={p.priority || `priority-${index}`}
+                  className="flex flex-col items-center justify-end h-full"
+                >
                   <div
                     className="bg-red-500 rounded-t w-full"
                     style={{ height: `${Math.max(4, (p.count / maxOverdue) * 160)}px` }}
@@ -271,8 +280,8 @@ export default function DashboardChartsClient() {
               <span className="text-sm text-gray-500">top 8</span>
             </div>
             <div className="space-y-2">
-              {topProducts.map(p => (
-                <div key={p.id} className="flex items-center gap-2">
+              {topProducts.map((p, index) => (
+                <div key={p.id || `product-${index}`} className="flex items-center gap-2">
                   <div className="w-40 truncate" title={p.name}>
                     {p.name}
                   </div>
@@ -298,8 +307,8 @@ export default function DashboardChartsClient() {
               <span className="text-sm text-gray-500">top 10</span>
             </div>
             <div className="space-y-2">
-              {topWinning.map(p => (
-                <div key={p.id} className="flex items-center gap-2">
+              {topWinning.map((p, index) => (
+                <div key={p.id || `winning-${index}`} className="flex items-center gap-2">
                   <div className="w-40 truncate" title={p.name}>
                     {p.name}
                   </div>
@@ -325,8 +334,11 @@ export default function DashboardChartsClient() {
               <span className="text-sm text-gray-500">pairs by frequency</span>
             </div>
             <div className="space-y-2">
-              {bundles.map(pair => (
-                <div key={`${pair.aId}-${pair.bId}`} className="flex items-center gap-2">
+              {bundles.map((pair, index) => (
+                <div
+                  key={`${pair.aId}-${pair.bId}` || `bundle-${index}`}
+                  className="flex items-center gap-2"
+                >
                   <div className="w-56 truncate" title={`${pair.aName} + ${pair.bName}`}>
                     {pair.aName} + {pair.bName}
                   </div>

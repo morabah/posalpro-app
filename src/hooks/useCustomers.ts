@@ -4,6 +4,9 @@
  * Performance optimized with caching and pagination
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logWarn } from '@/lib/logger';
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useApiClient } from './useApiClient';
 
@@ -107,7 +110,18 @@ export function useCustomers(
 
         return response.data;
       } catch (error) {
-        console.error('[useCustomers] API failed:', error);
+        logWarn('Failed to fetch customers:', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        ErrorHandlingService.getInstance().processError(
+          error as Error,
+          'Failed to fetch customers',
+          ErrorCodes.API.REQUEST_FAILED,
+          {
+            component: 'useCustomers',
+            operation: 'fetchCustomers',
+          }
+        );
         throw error;
       }
     },
@@ -118,7 +132,8 @@ export function useCustomers(
     refetchOnReconnect: false, // Keep disabled; use targeted retry below
     retry: (failureCount, error) => {
       // Only retry transient network errors (e.g., during Fast Refresh)
-      const isNetworkError = error instanceof TypeError || /Failed to fetch|load failed/i.test(String(error));
+      const isNetworkError =
+        error instanceof TypeError || /Failed to fetch|load failed/i.test(String(error));
       return isNetworkError && failureCount < 2;
     },
     retryDelay: 300,
@@ -142,10 +157,9 @@ export function useCustomer(id: string): UseQueryResult<Customer, Error> {
 
       if (!response.success) {
         // Log error but let React Query handle the error state
-        console.warn(
-          '[useCustomers] Customer fetch failed:',
-          response.message || 'Failed to fetch customer'
-        );
+        logWarn('[useCustomers] Customer fetch failed:', {
+          message: response.message || 'Failed to fetch customer',
+        });
         throw new Error(response.message || 'Failed to fetch customer');
       }
 

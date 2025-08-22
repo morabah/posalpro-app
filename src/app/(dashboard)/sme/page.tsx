@@ -36,7 +36,7 @@ interface SMEAction {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
-  color: string;
+  variant: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 }
 
 export default function SMEPage() {
@@ -65,7 +65,7 @@ export default function SMEPage() {
       description: 'View and manage your contributions to proposals',
       icon: DocumentTextIcon,
       href: '/sme/contributions',
-      color: 'bg-blue-600 hover:bg-blue-700',
+      variant: 'primary' as const,
     },
     {
       id: 'assignments',
@@ -73,7 +73,7 @@ export default function SMEPage() {
       description: 'Review your current and pending assignments',
       icon: ClockIcon,
       href: '/sme/assignments',
-      color: 'bg-green-600 hover:bg-green-700',
+      variant: 'primary' as const,
     },
   ];
 
@@ -194,7 +194,8 @@ export default function SMEPage() {
                 <p className="text-gray-600 text-sm mb-4">{action.description}</p>
                 <Button
                   onClick={() => handleActionClick(action)}
-                  className={`${action.color} text-white w-full`}
+                  variant={action.variant}
+                  className="w-full"
                 >
                   Access {action.title}
                 </Button>

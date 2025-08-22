@@ -521,7 +521,8 @@ export function CustomerProfileClient({ customerId }: CustomerProfileClientProps
                 </Button>
                 <Button
                   onClick={handleSaveChanges}
-                  className="flex items-center min-h-[44px] bg-green-600 hover:bg-green-700"
+                  variant="primary"
+                  className="flex items-center min-h-[44px]"
                   disabled={isLoading}
                   aria-label="Save changes"
                 >

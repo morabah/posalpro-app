@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logDebug } from '@/lib/logger';
 import {
   AdjustmentsHorizontalIcon,
   ChartBarIcon,
@@ -311,7 +312,7 @@ export default function ApprovalWorkflowPage() {
       }
     });
 
-    console.log('Analytics: workflow_rule_saved', {
+    logDebug('Analytics: workflow_rule_saved', {
       ruleId: rule.id,
       ruleName: rule.name,
       category: rule.category,
@@ -322,7 +323,7 @@ export default function ApprovalWorkflowPage() {
   const handleRuleDelete = useCallback((ruleId: string) => {
     setWorkflowRules(prev => prev.filter(r => r.id !== ruleId));
 
-    console.log('Analytics: workflow_rule_deleted', {
+    logDebug('Analytics: workflow_rule_deleted', {
       ruleId,
       timestamp: Date.now(),
     });
@@ -358,7 +359,7 @@ export default function ApprovalWorkflowPage() {
 
     setWorkflowRules(prev => [...prev, ...newRules]);
 
-    console.log('Analytics: workflow_template_applied', {
+    logDebug('Analytics: workflow_template_applied', {
       templateId: template.id,
       templateName: template.name,
       rulesAdded: newRules.length,
@@ -368,11 +369,11 @@ export default function ApprovalWorkflowPage() {
 
   const handleDecisionSubmit = useCallback(
     (decision: DecisionFormData) => {
-      console.log('Decision submitted:', decision);
+      logDebug('Decision submitted:', { decision });
       // TODO: Implement actual decision submission logic (US-4.2)
       // Example: call an API, update state, etc.
       // Track analytics for decision submission (H7)
-      console.log('Analytics: decision_submitted', {
+      logDebug('Analytics: decision_submitted', {
         decisionType: decision.decision,
         proposalId: selectedTask?.proposalId,
         timestamp: Date.now(),
@@ -383,11 +384,11 @@ export default function ApprovalWorkflowPage() {
 
   const handleRequestCollaboration = useCallback(
     (collaborators: string[]) => {
-      console.log('Collaboration requested with:', collaborators);
+      logDebug('Collaboration requested with:', { collaborators });
       // TODO: Implement actual collaboration request logic (US-4.3)
       // Example: send notifications, update task assignees
       // Track analytics for collaboration request (H7)
-      console.log('Analytics: collaboration_requested', {
+      logDebug('Analytics: collaboration_requested', {
         collaboratorCount: collaborators.length,
         proposalId: selectedTask?.proposalId,
         timestamp: Date.now(),
@@ -398,11 +399,11 @@ export default function ApprovalWorkflowPage() {
 
   const handleUpdateChecklist = useCallback(
     (itemId: string, completed: boolean, notes?: string) => {
-      console.log('Checklist item updated:', { itemId, completed, notes });
+      logDebug('Checklist item updated:', { itemId, completed, notes });
       // TODO: Implement actual checklist update logic (US-4.1)
       // Example: update task checklist state, persist changes
       // Track analytics for checklist update (H7)
-      console.log('Analytics: checklist_item_updated', {
+      logDebug('Analytics: checklist_item_updated', {
         itemId,
         completed,
         hasNotes: !!notes,
@@ -544,10 +545,10 @@ export default function ApprovalWorkflowPage() {
               handleTaskSelect(task);
             }}
             onBulkAction={(action, items) => {
-              console.log('Bulk action:', { action, items });
+              logDebug('Bulk action:', { action, items });
             }}
             onQueueOptimization={metrics => {
-              console.log('Queue optimization metrics:', metrics);
+              logDebug('Queue optimization metrics:', { metrics });
             }}
           />
         )}
@@ -584,10 +585,10 @@ export default function ApprovalWorkflowPage() {
               },
             ]}
             onWorkflowGenerate={(proposalId, workflow) => {
-              console.log('Workflow generated:', { proposalId, workflow });
+              logDebug('Workflow generated:', { proposalId, workflow });
             }}
             onTemplateSelect={template => {
-              console.log('Template selected:', template);
+              logDebug('Template selected:', { template });
             }}
           />
         )}
@@ -652,10 +653,10 @@ export default function ApprovalWorkflowPage() {
             criticalPath={['initial_review', 'technical_validation', 'budget_approval']}
             parallelStages={[]}
             onStageUpdate={(stageId, updates) => {
-              console.log('Stage updated:', { stageId, updates });
+              logDebug('Stage updated:', { stageId, updates });
             }}
             onTimelineUpdate={timeline => {
-              console.log('Timeline updated:', timeline);
+              logDebug('Timeline updated:', { timeline });
             }}
           />
         )}

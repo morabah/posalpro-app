@@ -5,7 +5,6 @@
  */
 
 // Providers moved to segment layouts (e.g., (dashboard)/layout) to reduce /auth/* bundle size
-import { ServiceWorkerRegistration } from '@/components/pwa/ServiceWorkerRegistration';
 import '@/styles/globals.css';
 import { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
@@ -189,7 +188,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.className} h-full antialiased`}>
         {children}
-        <ServiceWorkerRegistration />
       </body>
     </html>
   );

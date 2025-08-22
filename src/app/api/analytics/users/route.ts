@@ -300,7 +300,17 @@ async function trackAnalyticsAccessEvent(
       },
     });
   } catch (error) {
-    console.error('Failed to track analytics access event:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to track analytics access event',
+      ErrorCodes.ANALYTICS.TRACKING_ERROR,
+      {
+        component: 'UserAnalyticsRoute',
+        operation: 'trackAnalyticsAccessEvent',
+        userId,
+        analyticsType,
+      }
+    );
     // Don't throw error as this is non-critical
   }
 }

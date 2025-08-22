@@ -4,6 +4,7 @@
 
 'use client';
 
+import { logDebug } from '@/lib/logger';
 import React, { useEffect, useRef } from 'react';
 
 export const AnalyticsStorageMonitor: React.FC = () => {
@@ -16,12 +17,12 @@ export const AnalyticsStorageMonitor: React.FC = () => {
     const currentTime = Date.now();
 
     if (currentTime - lastUpdateRef.current < THROTTLE_INTERVAL) {
-      console.log('📊 AnalyticsStorageMonitor: Throttled for performance');
+      logDebug('📊 AnalyticsStorageMonitor: Throttled for performance');
       return;
     }
 
     if (isMonitoringRef.current) {
-      console.log('📊 AnalyticsStorageMonitor: Already monitoring, skipping...');
+      logDebug('📊 AnalyticsStorageMonitor: Already monitoring, skipping...');
       return;
     }
 
@@ -38,7 +39,7 @@ export const AnalyticsStorageMonitor: React.FC = () => {
           // ✅ CRITICAL: Only log if significant storage usage
           if (storageSize > 1024) {
             // Only log if >1KB
-            console.log(`📊 AnalyticsStorageMonitor: Storage usage: ${storageSize} bytes`);
+            logDebug(`📊 AnalyticsStorageMonitor: Storage usage: ${storageSize} bytes`);
           }
         }
       } catch (error) {
@@ -69,7 +70,7 @@ export const AnalyticsStorageMonitor: React.FC = () => {
       }, 100);
     }
 
-    console.log('📊 AnalyticsStorageMonitor: Optimized monitoring enabled');
+    logDebug('📊 AnalyticsStorageMonitor: Optimized monitoring enabled');
   }, []);
 
   // ✅ CRITICAL: Return null to prevent any DOM impact

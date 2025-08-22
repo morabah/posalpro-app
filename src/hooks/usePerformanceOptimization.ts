@@ -9,6 +9,9 @@
 
 'use client';
 
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { StandardError } from '@/lib/errors/StandardError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Removed unused COMPONENT_MAPPING to satisfy lint rules
@@ -84,6 +87,7 @@ const DEFAULT_CONFIG: PerformanceConfig = {
 export function usePerformanceOptimization(config: Partial<PerformanceConfig> = {}) {
   // ✅ CRITICAL OPTIMIZATION: Interval constants removed to avoid unused warnings
   const DEBOUNCE_DELAY = 2000; // 2 second debounce
+  const errorHandlingService = ErrorHandlingService.getInstance();
 
   const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
@@ -141,9 +145,14 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
         // }, finalConfig.reportingInterval);
 
         // Initial metrics collection handled in separate effect
-      } catch (error) {
-        console.warn('[Performance] Initialization failed:', error);
-      }
+              } catch (error) {
+          errorHandlingService.processError(
+            error as Error,
+            'Performance initialization failed',
+            ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
+            { component: 'usePerformanceOptimization', operation: 'initialization' }
+          );
+        }
     };
 
     initializePerformanceOptimization();
@@ -200,9 +209,14 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
         observer.observe({ entryTypes: ['largest-contentful-paint'] });
         performanceObserverRef.current = observer;
       }
-    } catch (error) {
-      console.warn('[Performance] Web Vitals tracking setup failed:', error);
-    }
+          } catch (error) {
+        errorHandlingService.processError(
+          error as Error,
+          'Web Vitals tracking setup failed',
+          ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
+          { component: 'usePerformanceOptimization', operation: 'webVitalsSetup' }
+        );
+      }
   }, []);
 
   // ✅ Trigger web vitals setup when enabled
@@ -218,19 +232,29 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
   const calculateOptimizationScore = useCallback(() => {
     try {
       return 0; // Simplified score
-    } catch (error) {
-      console.warn('[Performance] Optimization score calculation failed:', error);
-      return 0;
-    }
+          } catch (error) {
+        errorHandlingService.processError(
+          error as Error,
+          'Optimization score calculation failed',
+          ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
+          { component: 'usePerformanceOptimization', operation: 'scoreCalculation' }
+        );
+        return 0;
+      }
   }, []);
 
   const generateRecommendations = useCallback(() => {
     try {
       return []; // Simplified recommendations
-    } catch (error) {
-      console.warn('[Performance] Recommendations generation failed:', error);
-      return [];
-    }
+          } catch (error) {
+        errorHandlingService.processError(
+          error as Error,
+          'Recommendations generation failed',
+          ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
+          { component: 'usePerformanceOptimization', operation: 'recommendationsGeneration' }
+        );
+        return [];
+      }
   }, []);
 
   const collectMetrics = useCallback(() => {
@@ -273,9 +297,14 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
         }));
 
         debouncedCallsRef.current.delete(debounceKey);
-      } catch (error) {
-        console.warn('[Performance] Metrics collection failed:', error);
-      }
+              } catch (error) {
+          errorHandlingService.processError(
+            error as Error,
+            'Metrics collection failed',
+            ErrorCodes.SYSTEM.METRICS_COLLECTION_FAILED,
+            { component: 'usePerformanceOptimization', operation: 'metricsCollection' }
+          );
+        }
     }, DEBOUNCE_DELAY);
 
     debouncedCallsRef.current.set(debounceKey, timer);
@@ -319,9 +348,14 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
           },
         }));
       }
-    } catch (error) {
-      console.warn('[Performance] Memory metrics collection failed:', error);
-    }
+          } catch (error) {
+        errorHandlingService.processError(
+          error as Error,
+          'Memory metrics collection failed',
+          ErrorCodes.SYSTEM.METRICS_COLLECTION_FAILED,
+          { component: 'usePerformanceOptimization', operation: 'memoryMetricsCollection' }
+        );
+      }
   }, []);
 
   /**
@@ -348,9 +382,14 @@ export function usePerformanceOptimization(config: Partial<PerformanceConfig> = 
     try {
       // Simplified optimization logic
       setLastOptimization(Date.now());
-    } catch (error) {
-      console.warn('[Performance] Automatic optimization failed:', error);
-    }
+          } catch (error) {
+        errorHandlingService.processError(
+          error as Error,
+          'Automatic optimization failed',
+          ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
+          { component: 'usePerformanceOptimization', operation: 'automaticOptimization' }
+        );
+      }
   }, []);
 
   return {

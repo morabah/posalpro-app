@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/forms/Button';
 import Link from 'next/link';
 
 export default function NotFound() {
@@ -13,11 +14,10 @@ export default function NotFound() {
         </div>
 
         <div className="space-y-4">
-          <Link
-            href="/dashboard"
-            className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
-          >
-            Go to Dashboard
+          <Link href="/dashboard">
+            <Button variant="primary" size="lg">
+              Go to Dashboard
+            </Button>
           </Link>
 
           <div className="text-center">

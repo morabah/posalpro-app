@@ -10,7 +10,7 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { prisma } from '@/lib/db/prisma';
 import { createApiErrorResponse, ErrorCodes, StandardError } from '@/lib/errors';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logError } from '@/lib/logger';
+import { logDebug, logError } from '@/lib/logger';
 import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getServerSession } from 'next-auth/next';
@@ -136,8 +136,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         400
       );
     }
-
-    console.log('[ProposalDetailAPI] Fetching proposal:', proposalId);
 
     // Fetch proposal with related data
     const proposal = await prisma.proposal.findUnique({
@@ -346,7 +344,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // DEBUG: Log wizardData and sectionAssignments snapshot before returning
     if (process.env.NODE_ENV !== 'production') {
       const sa = wd?.step5?.sectionAssignments || md.sectionAssignments || null;
-      console.log('[ProposalDetailAPI][DEBUG] GET payload snapshot', {
+      logDebug('[ProposalDetailAPI][DEBUG] GET payload snapshot', {
         proposalId,
         wizardDataStep3Count: Array.isArray(wd?.step3?.selectedContent)
           ? (wd!.step3!.selectedContent as unknown[]).length
@@ -871,9 +869,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
  * This addresses the immediate priority for partial data updates identified in optimization evaluation
  */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  console.log('🚀 [ProposalAPI] PATCH endpoint called!');
-  console.log('🚀 [ProposalAPI] Request URL:', request.url);
-  console.log('🚀 [ProposalAPI] Request method:', request.method);
+  const errorHandlingService = ErrorHandlingService.getInstance();
+
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -889,7 +886,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const params = await context.params;
     const { id } = params;
 
-    console.log(`[ProposalAPI] 🚀 PATCH request received for proposal ${id}`);
+    // Replace console.log statements with logDebug
+    logDebug('[ProposalAPI] PATCH endpoint called!', {
+      requestUrl: request.url,
+      requestMethod: request.method,
+      proposalId: id,
+    });
 
     // Parse and normalize request body (pre-validate)
     const rawBody = await request.json();
@@ -901,29 +903,33 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (typeof body.status === 'string') {
       body.status = String(body.status).toUpperCase();
     }
-    console.log(`[ProposalAPI] Request body keys:`, Object.keys(body));
-    console.log(`[ProposalAPI] Has products in request:`, !!body.products);
-    console.log(`[ProposalAPI] Has wizardData in request:`, !!body.metadata?.wizardData);
-    console.log(`[ProposalAPI] Has step4 products:`, !!body.metadata?.wizardData?.step4?.products);
+    logDebug('[ProposalAPI] Request body keys:', { keys: Object.keys(body) });
+    logDebug('[ProposalAPI] Has products in request:', { hasProducts: !!body.products });
+    logDebug('[ProposalAPI] Has wizardData in request:', {
+      hasWizardData: !!body.metadata?.wizardData,
+    });
+    logDebug('[ProposalAPI] Has step4 products:', {
+      hasStep4Products: !!body.metadata?.wizardData?.step4?.products,
+    });
 
     if (body.products) {
-      console.log(`[ProposalAPI] Direct products array:`, JSON.stringify(body.products, null, 2));
+      logDebug('[ProposalAPI] Direct products array:', {
+        products: JSON.stringify(body.products, null, 2),
+      });
     }
     if (body.metadata?.wizardData?.step4?.products) {
-      console.log(
-        `[ProposalAPI] Step4 products array:`,
-        JSON.stringify(body.metadata.wizardData.step4.products, null, 2)
-      );
+      logDebug('[ProposalAPI] Step4 products array:', {
+        step4Products: JSON.stringify(body.metadata.wizardData.step4.products, null, 2),
+      });
     }
 
     if (body.products) {
-      console.log(`[ProposalAPI] Products count:`, body.products.length);
+      logDebug('[ProposalAPI] Products count:', { count: body.products.length });
     }
     if (body.wizardData?.step4?.products) {
-      console.log(
-        `[ProposalAPI] WizardData step4 products count:`,
-        body.wizardData.step4.products.length
-      );
+      logDebug('[ProposalAPI] WizardData step4 products count:', {
+        count: body.wizardData.step4.products.length,
+      });
     }
     let validatedData: z.infer<typeof ProposalPatchSchema>;
     try {
@@ -931,7 +937,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     } catch (e) {
       // Log full validation errors to server console for diagnosis
       if (e instanceof z.ZodError) {
-        console.warn('[ProposalPatchRoute][VALIDATION_ERROR]', JSON.stringify(e.errors, null, 2));
+        logDebug('[ProposalPatchRoute][VALIDATION_ERROR]', {
+          errors: JSON.stringify(e.errors, null, 2),
+        });
       }
       throw e;
     }
@@ -1010,7 +1018,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     // DEBUG: Log incoming PATCH wizard fields summary
     try {
-      console.log('[ProposalPatchRoute][DEBUG] Incoming fields', {
+      logDebug('[ProposalPatchRoute][DEBUG] Incoming fields', {
         proposalId: id,
         hasTeamAssignments: !!teamAssignments,
         contentSelectionsCount: Array.isArray(contentSelections) ? contentSelections.length : 0,
@@ -1232,7 +1240,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         } as unknown as Record<string, unknown>;
         // DEBUG
         if (process.env.NODE_ENV !== 'production') {
-          console.log(
+          logDebug(
             '[ProposalPatchRoute][DEBUG] Applied rfpReferenceNumber to metadata.step1.details'
           );
         }
@@ -1260,7 +1268,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             ?.sectionAssignments;
           return sa ? Object.keys(sa) : [];
         })();
-        console.log('[ProposalPatchRoute][DEBUG] Merged metadata snapshot', {
+        logDebug('[ProposalPatchRoute][DEBUG] Merged metadata snapshot', {
           proposalId: id,
           step3Count: Array.isArray(
             (mergedMeta as { wizardData?: WizardData })?.wizardData?.step3?.selectedContent
@@ -1401,7 +1409,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
       // DEBUG: Log value calculation
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[ProposalPatchRoute][DEBUG] Value calculation', {
+        logDebug('[ProposalPatchRoute][DEBUG] Value calculation', {
           proposalId: id,
           hasProducts,
           step4TotalValue,
@@ -1481,11 +1489,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           }))
         : undefined;
 
-    console.log(`[ProposalAPI] 🔍 Product change detection:`);
-    console.log(`[ProposalAPI] - Current products count:`, currentProposal.products.length);
-    console.log(
-      `[ProposalAPI] - Current products:`,
-      JSON.stringify(
+    logDebug(`[ProposalAPI] 🔍 Product change detection:`, {});
+    logDebug(`[ProposalAPI] - Current products count:`, { count: currentProposal.products.length });
+    logDebug(`[ProposalAPI] - Current products:`, {
+      products: JSON.stringify(
         currentProposal.products.map(p => ({
           productId: p.productId,
           quantity: p.quantity,
@@ -1494,28 +1501,26 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         })),
         null,
         2
-      )
-    );
-    console.log(
-      `[ProposalAPI] - Incoming products:`,
-      incomingProducts ? incomingProducts.length : 'none'
-    );
+      ),
+    });
+    logDebug(`[ProposalAPI] - Incoming products:`, {
+      count: incomingProducts ? incomingProducts.length : 'none',
+    });
     if (incomingProducts) {
-      console.log(
-        `[ProposalAPI] - Incoming products data:`,
-        JSON.stringify(incomingProducts, null, 2)
-      );
+      logDebug(`[ProposalAPI] - Incoming products data:`, {
+        data: JSON.stringify(incomingProducts, null, 2),
+      });
     }
-    console.log(`[ProposalAPI] - validatedData.products:`, !!(validatedData as any)?.products);
-    console.log(
-      `[ProposalAPI] - mergedMeta.wizardData.step4.products:`,
-      !!(mergedMeta as any)?.wizardData?.step4?.products
-    );
+    logDebug(`[ProposalAPI] - validatedData.products:`, {
+      hasProducts: !!(validatedData as any)?.products,
+    });
+    logDebug(`[ProposalAPI] - mergedMeta.wizardData.step4.products:`, {
+      hasStep4Products: !!(mergedMeta as any)?.wizardData?.step4?.products,
+    });
     if ((mergedMeta as any)?.wizardData?.step4?.products) {
-      console.log(
-        `[ProposalAPI] - Raw step4 products:`,
-        JSON.stringify((mergedMeta as any).wizardData.step4.products, null, 2)
-      );
+      logDebug(`[ProposalAPI] - Raw step4 products:`, {
+        step4Products: JSON.stringify((mergedMeta as any).wizardData.step4.products, null, 2),
+      });
     }
 
     // Detect product changes BEFORE the transaction
@@ -1559,14 +1564,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
 
-    console.log(
-      `[ProposalAPI] 🔍 Product change detection result: changedProducts = ${changedProducts}`
+    logDebug(
+      `[ProposalAPI] 🔍 Product change detection result: changedProducts = ${changedProducts}`,
+      { changedProducts }
     );
-    console.log(`[ProposalAPI] 🔍 Affected product IDs:`, affectedProductIds);
+    logDebug(`[ProposalAPI] 🔍 Affected product IDs:`, { productIds: affectedProductIds });
 
     // Create version BEFORE update if products changed
     if (changedProducts) {
-      console.log(`[ProposalAPI] 🚀 Creating version snapshot BEFORE update...`);
+      logDebug(`[ProposalAPI] 🚀 Creating version snapshot BEFORE update...`);
       try {
         const PrismaLocal = (require('@prisma/client') as any).Prisma;
         const lastVersionResult = (await prisma.$queryRaw(
@@ -1615,11 +1621,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
                            VALUES (gen_random_uuid()::text, ${id}, ${nextVersion}, ${session.user.id}, 'product_change', 'Products modified (add/update/remove)', ${snapshot as any}, ${Array.from(allProductIds)})`
         );
 
-        console.log(
+        logDebug(
           `[ProposalAPI] Created version ${nextVersion} for proposal ${id} - product changes detected`
         );
       } catch (versionError) {
-        console.error('[ProposalAPI] Failed to create version:', versionError);
+        errorHandlingService.processError(
+          versionError as Error,
+          'Failed to create version',
+          ErrorCodes.DATA.CREATE_FAILED,
+          {
+            component: 'ProposalAPI',
+            operation: 'createVersion',
+            proposalId: id,
+          }
+        );
         // Continue with update even if version creation fails
       }
     }

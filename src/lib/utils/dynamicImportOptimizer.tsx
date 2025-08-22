@@ -6,6 +6,7 @@
  * 🚀 MEMORY OPTIMIZATION: Enhanced with aggressive memory management
  */
 
+import { logDebug, logWarn } from '@/lib/logger';
 import React, { ComponentType, lazy, Suspense } from 'react';
 
 export type MemoryOptimizedComponent<T extends ComponentType<any>> = ComponentType<
@@ -220,10 +221,14 @@ export function analyzeBundleSize(componentName: string, importFn: () => Promise
   importFn()
     .then(() => {
       const loadTime = performance.now() - startTime;
-      console.log(`📦 [Bundle Analysis] ${componentName}: ${loadTime.toFixed(2)}ms`);
+      logDebug(`📦 [Bundle Analysis] ${componentName}: ${loadTime.toFixed(2)}ms`);
+
+      if (loadTime > 100) {
+        logWarn(`⚠️ [Bundle Analysis] Failed to load ${componentName}`);
+      }
     })
     .catch(() => {
-      console.warn(`⚠️ [Bundle Analysis] Failed to load ${componentName}`);
+      logWarn(`⚠️ [Bundle Analysis] Failed to load ${componentName}`);
     });
 }
 

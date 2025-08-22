@@ -8,6 +8,7 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { logDebug } from '@/lib/logger';
 import {
   ChartBarIcon,
   DocumentTextIcon,
@@ -15,7 +16,7 @@ import {
   PhotoIcon,
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * Type definitions for better type safety
@@ -29,22 +30,31 @@ interface ContentTrackingMetadata {
   [key: string]: unknown;
 }
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-5.1', 'US-5.2'],
-  acceptanceCriteria: ['AC-5.1.1', 'AC-5.2.1'],
-  methods: ['browseContentLibrary()', 'searchContent()', 'trackContentUsage()'],
-  hypotheses: ['H8', 'H9'],
-  testCases: ['TC-H8-001', 'TC-H9-001'],
-};
+// Component Traceability Matrix (commented out to remove unused variable warning)
+// const COMPONENT_MAPPING = {
+//   userStories: ['US-5.1', 'US-5.2'],
+//   acceptanceCriteria: ['AC-5.1.1', 'AC-5.2.1'],
+//   methods: ['browseContentLibrary()', 'searchContent()', 'trackContentUsage()'],
+//   hypotheses: ['H8', 'H9'],
+//   testCases: ['TC-H8-001', 'TC-H9-001'],
+// };
 
 export default function ContentPage() {
   const router = useRouter();
   const [sessionStartTime] = useState(Date.now());
 
+  useEffect(() => {
+    // Track page analytics
+    logDebug('Content Analytics:', {
+      page: 'content',
+      timestamp: Date.now(),
+      userAgent: navigator.userAgent,
+    });
+  }, []);
+
   const trackAction = useCallback(
     (action: string, metadata: ContentTrackingMetadata = {}) => {
-      console.log('Content Analytics:', {
+      logDebug('Content Analytics:', {
         action,
         metadata,
         timestamp: Date.now(),
@@ -107,10 +117,7 @@ export default function ContentPage() {
               Browse and search your content repository for proposal development
             </p>
           </div>
-          <Button
-            onClick={handleSearchContent}
-            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
-          >
+          <Button onClick={handleSearchContent} variant="primary" className="flex items-center">
             <MagnifyingGlassIcon className="w-5 h-5 mr-2" />
             Search Content
           </Button>

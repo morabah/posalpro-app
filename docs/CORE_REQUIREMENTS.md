@@ -1,6 +1,39 @@
 # CORE REQUIREMENTS (Non-Negotiable)
 
-## 🔧 **ERROR HANDLING & TYPE SAFETY**
+## Priority Index (Phased Implementation Order)
+
+1. **[Core Fundamentals](#core-fundamentals)**
+   - [Error Handling & Type Safety](#-error-handling--type-safety)
+   - [Duplicate Prevention & Established Patterns](#-duplicate-prevention--existing-patterns)
+   - [Singleton Pattern (General Design Pattern)](#️-singleton-pattern-general-design-pattern)
+2. **[Architecture & Providers](#architecture--providers)**
+   - [Route-group Layout Provider Stack](#-route-group-layout-provider-stack)
+   - [SSR/CSR Hydration Consistency](#️-ssrcsr-hydration-consistency-mandatory)
+   - [Development Build Stability](#️-development-build-stability-chrome-fast-refresh--webpack)
+3. **[Data & API](#data--api)**
+   - [Data Fetching & Client Performance](#-data-fetching--performance-critical)
+   - [API & Database Performance](#-api--database-performance)
+   - [Database Transaction Patterns](#-database-transaction-patterns)
+4. **[Security & Auth](#security--auth)**
+   - [Authentication & Session Management](#-authentication--session-management)
+   - [RBAC Authorization](#-rbac-authorization)
+   - [Security State Storage Patterns](#-security-state-storage-patterns)
+5. **[UI & Accessibility](#ui--accessibility)**
+   - [Design System Usage](#️-design-system-usage-mandatory)
+   - [Accessibility Standards](#️-wcag-21-aa-mandatory-accessibility-compliance)
+6. **[Performance & Analytics](#performance--analytics)**
+   - [Bundle Optimization](#-bundle-optimization)
+   - [Analytics & Hypothesis Validation](#-analytics--hypothesis-validation)
+7. **[Wizard & Memory Optimization](#wizard--memory-optimization)**
+   - [Wizard Data Hydration](#️-wizard-data-hydration-multi-source-merge--mandatory)
+   - [Memory Optimization](#-memory-optimization)
+8. **[Documentation & Quality Gates](#documentation--quality-gates)**
+   - [Documentation Updates](#-required-updates-update-documentation-after-implementation)
+   - [Quality Gates](#-quality-gates-all-implementations-must-pass)
+9. **[Deployment & Versioning](#deployment--versioning)**
+   - [Deployment & Version Management](#-deployment--version-management)
+
+## 🔧 **ERROR HANDLING & TYPE SAFETY** {#error-handling--type-safety}
 
 **🛡️ Error Handling: Use standardized ErrorHandlingService system only**
 
@@ -14,7 +47,7 @@
 - Use: Explicit interfaces, strict typing, no any types
 - Standard: Follow DEVELOPMENT_STANDARDS.md patterns
 
-## 🔍 **DUPLICATE PREVENTION & EXISTING PATTERNS**
+## 🔍 **DUPLICATE PREVENTION & EXISTING PATTERNS** {#duplicate-prevention--existing-patterns}
 
 **♻️ Check for Established Implementations First**
 
@@ -33,14 +66,16 @@
 - **TIER 3**: IMPLEMENTATION_LOG.md, VERSION_HISTORY.md, LESSONS_LEARNED.md
 - **Full List**: docs/CRITICAL_REFERENCE_DOCUMENTS.md
 
-## ⚡ **DATA FETCHING & PERFORMANCE (CRITICAL)**
+## 🏗️ **ARCHITECTURE & PROVIDERS** {#architecture--providers}
 
-**🚀 MANDATORY: Always use useApiClient pattern for data fetching**
+### ⚡ **DATA FETCHING & PERFORMANCE (CRITICAL)** {#data-fetching--performance-critical}
 
-- Pattern: Follow BasicInformationStep.tsx customer selection as gold standard
-- Code: `const apiClient = useApiClient();` + simple `useEffect` +
-  `apiClient.get()`
-- Never: Custom caching systems, direct fetch() calls, complex loading states
+**🚀 MANDATORY: React Query for complex data fetching, useApiClient for simple cases**
+
+- **Complex Data (lists, caching, mutations)**: Use React Query hooks (`useQuery`, `useMutation`) under `QueryProvider`
+- **Simple Data (one-time fetches)**: Use `useApiClient` pattern with `useEffect`
+- **Pattern**: Follow `useProposals.ts` and `useProducts.ts` as gold standards for React Query implementation
+- **Never**: Custom caching systems, direct fetch() calls, complex manual loading states
 - Reference: [Lesson #12 in LESSONS_LEARNED.md][memory:3929430536446174589]]
 
 **⚡ List View Performance Optimization (CRITICAL)**
@@ -76,20 +111,43 @@ const transformedData = apiData.map(item => ({
 const endpoint = `/entities?limit=100&includeCustomer=true&includeTeam=true&fields=id,title,status,priority,createdAt,updatedAt,dueDate,value,tags,customer,customer(id,name,industry),assignedTo(id,name,role),creator(id,name,email)`;
 ```
 
-**⚡ Proven Performance Pattern:**
+**⚡ Proven Performance Patterns:**
 
+**React Query Pattern (for lists, caching, mutations):**
+```typescript
+// Hook implementation
+export function useProposals(params: ProposalsQueryParams = {}) {
+  const apiClient = useApiClient();
+  return useQuery({
+    queryKey: PROPOSALS_QUERY_KEYS.list(params),
+    queryFn: async () => {
+      const response = await apiClient.get(`/proposals?${searchParams}`);
+      return extractProposalsResponse(response);
+    },
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
+
+// Component usage
+const { data, isLoading, error, refetch } = useProposals({ page, limit: 20, ...filters });
+```
+
+**Simple useApiClient Pattern (for one-time fetches):**
 ```typescript
 const apiClient = useApiClient();
 useEffect(() => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/endpoint');
-      if (response.success && response.data) {
-        setData(response.data);
+      const response = await apiClient.get('/api/customers');
+      if (response.success) {
+        setCustomers(response.data);
       }
     } catch (error) {
-      setError('Failed to load data');
+      // Handle error
     } finally {
       setLoading(false);
     }
@@ -100,17 +158,20 @@ useEffect(() => {
 
 **🚫 FORBIDDEN Data Fetching Patterns:**
 
-- Custom caching with localStorage/memory maps
-- Direct `fetch()` calls or `axios` usage
-- Complex loading state management
-- Multiple useEffect dependencies causing re-fetches
-- Any pattern that takes >1 second to load data
-- **Heavy initial loads**: Requesting 100+ items with full relation hydration
-- **Server-side UI transformation**: Complex data mapping on server instead of
+- Custom caching with localStorage/memory maps (use React Query caching)
+- Direct `fetch()` calls or `axios` usage (use `useApiClient` or React Query)
+- Manual loading state management when React Query can handle it
+- Multiple useEffect dependencies causing re-fetches (use React Query dependencies)
+- Client-side filtering of large datasets (use server-side filtering with query params)
+- Nested API calls in render loops
+- Using `useApiClient` for complex data that needs caching/invalidation (use React Query)
+- Manual pagination state when React Query can manage it
+- Requesting 100+ items with full relation hydration
+- Server-side UI transformation: Complex data mapping on server instead of
   client
-- **Over-fetching relations**: Including `includeCustomer=true&includeTeam=true`
+- Over-fetching relations: Including `includeCustomer=true&includeTeam=true`
   for list views
-- **Large page sizes**: Using `limit=100+` instead of 30-50 for initial loads
+- Large page sizes: Using `limit=100+` instead of 30-50 for initial loads
 
 ### 🖼️ Image Optimization (Mandatory)
 
@@ -120,7 +181,9 @@ useEffect(() => {
   defaults.
 - Audit UI for `<img>` occurrences during cleanup and migrate them.
 
-## 🔐 **AUTH & SESSION MANAGEMENT (MANDATORY UPDATES)**
+## 🔐 **SECURITY & AUTH** {#security--auth}
+
+### 🔐 **AUTH & SESSION MANAGEMENT (MANDATORY UPDATES)** {#authentication--session-management}
 
 **✅ Unified Auth Context Usage**
 
@@ -144,16 +207,97 @@ useEffect(() => {
   identifier. This mechanism is strictly forbidden in production builds and must
   be gated by `NODE_ENV === 'development'` (or an explicit feature flag).
 
-**🧰 Service Worker (Dev Smoothing Only)**
+**🧰 React Query Caching (Production Ready)**
 
-- Short-lived SW caching for `/api/auth/providers` and `/api/auth/session` (dev
-  only) to reduce cold spikes during rapid navigation/tests. Must be disabled
-  for production builds.
+- Use React Query's built-in caching with `staleTime: 30000` (30s) and `gcTime: 120000` (2min)
+- Configure `refetchOnWindowFocus: false` and `retry: 1` for optimal UX
+- Implement proper query keys with parameters for cache invalidation
+- Never use Service Worker caching for API data - React Query handles this efficiently
 
 **🧰 Redis Usage Policy**
 
 - Disable Redis in development to avoid startup/connect delays; use in-memory
   fallback with conservative timeouts (e.g., `connectTimeout=3000ms`).
+
+## 🔄 **REACT QUERY PATTERNS (MANDATORY)**
+
+**🚀 React Query Implementation Standards**
+
+Follow these patterns for all complex data fetching (lists, forms, mutations):
+
+**📋 Query Hook Structure:**
+```typescript
+// Query Keys - Hierarchical and parameterized
+export const PROPOSALS_QUERY_KEYS = {
+  all: ['proposals'] as const,
+  lists: () => [...PROPOSALS_QUERY_KEYS.all, 'list'] as const,
+  list: (params: ProposalsQueryParams) => [...PROPOSALS_QUERY_KEYS.lists(), params] as const,
+  details: () => [...PROPOSALS_QUERY_KEYS.all, 'detail'] as const,
+  detail: (id: string) => [...PROPOSALS_QUERY_KEYS.details(), id] as const,
+  stats: () => [...PROPOSALS_QUERY_KEYS.all, 'stats'] as const,
+};
+
+// Hook Implementation
+export function useProposals(params: ProposalsQueryParams = {}) {
+  const apiClient = useApiClient();
+  return useQuery({
+    queryKey: PROPOSALS_QUERY_KEYS.list(params),
+    queryFn: async () => {
+      const searchParams = new URLSearchParams();
+      // Add params to searchParams...
+      const response = await apiClient.get(`/proposals?${searchParams}`);
+      return extractProposalsResponse(response);
+    },
+    staleTime: 30000,      // 30s - data considered fresh
+    gcTime: 120000,        // 2min - cache garbage collection
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
+```
+
+**⚙️ Configuration Standards:**
+- **staleTime**: 30 seconds for list data, 5 minutes for static data
+- **gcTime**: 2 minutes for lists, 5 minutes for details
+- **refetchOnWindowFocus**: false (avoid unnecessary refetches)
+- **retry**: 1 (single retry on failure)
+
+**🔑 Query Key Patterns:**
+- Hierarchical: `['resource', 'type', params]`
+- Parameterized: Include all query parameters that affect results
+- Consistent: Use factory pattern for maintainability
+
+**🎯 When to Use React Query vs useApiClient:**
+- **React Query**: Lists, forms, mutations, any data needing caching/invalidation
+- **useApiClient**: Simple one-time fetches, fire-and-forget operations
+
+**📊 Pagination & Search Patterns:**
+```typescript
+// Debounced search with server-side filtering
+const [debouncedSearch] = useDebounce(search, 300);
+const { data, isLoading } = useProposals({
+  page,
+  limit: 20,
+  search: debouncedSearch,
+  status: filters.status,
+  sortBy: sort.key,
+  sortOrder: sort.direction,
+});
+
+// Cursor-based pagination for large datasets
+const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
+  queryKey: PROPOSALS_QUERY_KEYS.list(params),
+  queryFn: ({ pageParam = null }) => fetchProposals({ cursor: pageParam, ...params }),
+  getNextPageParam: (lastPage) => lastPage.nextCursor,
+});
+```
+
+**🚫 React Query Anti-Patterns:**
+- Don't use React Query for simple one-time fetches
+- Don't bypass query keys - always use the factory pattern
+- Don't set staleTime to 0 unless data must be real-time
+- Don't use enabled: false without clear UX reasoning
+- Don't mix React Query with manual loading states
 
 ## 🧠 **WIZARD & MEMORY OPTIMIZATION (MANDATORY)**
 
@@ -177,10 +321,10 @@ useEffect(() => {
 
 **📥 Deferred Data Fetching (Forms)**
 
-- Defer heavy list fetches until user intent (e.g., `onFocus` of customer
-  select) and request small pages by default (e.g., `limit=10`, `sort=name`).
-- Do not use mock data in UI paths; always fetch from database via
-  `useApiClient`.
+- Defer heavy list fetches until user intent (e.g., `onFocus` of customer select) and request small pages by default (e.g., `limit=10`, `sort=name`).
+- Do not use mock data in UI paths; always fetch from database via React Query hooks or `useApiClient`.
+- Implement debounced search with 300ms delay to reduce API calls.
+- Use server-side filtering and sorting via query parameters instead of client-side processing.
 
 ### 🪝 Hook Dependency Policy (Wizard & High-Frequency Components)
 
@@ -202,6 +346,123 @@ useEffect(() => {
   blocks).
 - Avoid unsafe spreads that create new arrays in render paths. Prefer
   `Array.from({ length: n })` over `[...Array(n)]` for skeletons.
+
+### 🔑 Stable React Keys (Mandatory)
+
+- Prefer stable database IDs for list `key` props (e.g., `entity.id`).
+- When no single stable ID exists, use a deterministic composite key (e.g.,
+  `${aId}-${bId}`).
+- As a last-resort fallback only, use index-based keys (e.g., `item-${index}`),
+  and never for sortable/reorderable lists.
+- Never use time/locale/random values to build keys in SSR or CSR.
+
+### ♻️ SSR/CSR Hydration Consistency (Mandatory)
+
+- Client Components must render the same structural HTML on the server and
+  client.
+- Do not return a different wrapper on the client (e.g., `<nav>` client vs
+  `<div>` server) for shared UI like headers/breadcrumbs.
+- Always render a stable wrapper for navigation scaffolding (e.g., breadcrumbs)
+  and only change inner content after mount.
+- Ensure all render branches (loading, unauthenticated, success, error) include
+  the same header/breadcrumb block to prevent wrapper swaps during hydration.
+- Never use time/locale/random values during SSR that would differ on the client
+  for elements that affect structure.
+- Prefer explicit breadcrumb items during SSR for dynamic routes; avoid
+  path-dependent branching that yields different trees.
+
+### 🧩 Development Build Stability (Chrome Fast Refresh / Webpack)
+
+- In development, prevent stale chunks and Chrome-only Fast Refresh errors
+  (e.g., `TypeError: Cannot read properties of undefined (reading 'call')`) by
+  applying these settings in `next.config.js`:
+  - Do not optimize React packages with `experimental.optimizePackageImports`.
+    Keep only non-React packages (e.g.,
+    `'@prisma/client','next-auth','lucide-react'`).
+  - Disable persistent webpack cache in dev: `config.cache = false;` and clear
+    `snapshot.managedPaths`/`immutablePaths`.
+  - Reduce hashing volatility in dev:
+    `config.optimization.realContentHash = false;`.
+  - Add dev-only no-store cache headers for static chunks:
+    `source: '/_next/static/(.*)' -> Cache-Control: 'no-store, must-revalidate'`.
+- Run with the project command (`npm run dev:smart`). If needed, temporarily
+  disable Fast Refresh: `FAST_REFRESH=false npm run dev:smart`.
+- After config changes, hard refresh the browser (or empty caches) to purge
+  stale modules.
+
+Required patterns (example):
+
+```tsx
+// ✅ Stable Breadcrumbs wrapper across SSR/CSR
+export function Breadcrumbs({
+  items,
+}: {
+  items: Array<{ label: string; href: string }>;
+}) {
+  return (
+    <nav aria-label="Breadcrumb navigation">
+      <ol>
+        {items.map(it => (
+          <li key={it.href}>
+            <a href={it.href}>{it.label}</a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+// ✅ Settings page renders the same header in all branches
+function SettingsPage() {
+  const header = (
+    <Breadcrumbs
+      items={[
+        { label: 'Home', href: '/dashboard' },
+        { label: 'Settings', href: '/settings' },
+      ]}
+    />
+  );
+  if (loading)
+    return (
+      <div>
+        {header}
+        {/* skeleton */}
+      </div>
+    );
+  if (!isAuthenticated)
+    return (
+      <div>
+        {header}
+        {/* auth required */}
+      </div>
+    );
+  return (
+    <div>
+      {header}
+      {/* main content */}
+    </div>
+  );
+}
+```
+
+Forbidden:
+
+- ❌ Server returns `null` or `<div>` while client renders `<nav>` for the same
+  component
+- ❌ Conditional wrapper based on `typeof window !== 'undefined'` that changes
+  structure
+- ❌ Using `Date.now()`/`Math.random()`/locale formatting to build keys or
+  structure during SSR
+
+Route-group layout session (auth) requirements:
+
+- App Router route-group layouts that depend on session must pass the server
+  session into the client provider to avoid client-side loading stalls.
+- Use `getServerSession(authOptions)` in `(dashboard)/layout.tsx` and pass to
+  `AuthProvider`.
+- When the layout response depends on per-request session, set
+  `export const dynamic = 'force-dynamic'` to prevent stale SSR caches that can
+  cause hydration drift.
 
 ### 🔁 Wizard Data Hydration (Multi-Source Merge – Mandatory)
 
@@ -451,15 +712,13 @@ Implementation checklist (client):
 
 **🚀 Optimization: Use existing performance infrastructure**
 
-- Data Fetching (Client): useApiClient pattern (MANDATORY - see above). Do not
-  introduce custom client-side caches beyond apiClient’s built-ins.
+- Data Fetching (Client): React Query for complex data (lists, forms, mutations) with built-in caching. Use useApiClient only for simple one-time fetches. Do not introduce custom client-side caches.
 - Data Access (Server/API routes/RSC): use direct data access (Prisma/fetch)
   with the same validation and error-handling standards.
 - Database: DatabaseQueryOptimizer for all queries.
 - Bundle: Lazy loading with BundleOptimizer.
 - Caching:
-  - Client: Only use built-in apiClient caching (no custom client caches or
-    localStorage caches).
+  - Client: Use React Query's built-in caching for complex data. Use apiClient for simple fetches only (no custom client caches or localStorage caches).
   - Server/API routes: Allowed to use targeted in-memory caches with short TTLs
     and explicit invalidation where appropriate (e.g., dashboard stats,
     proposals list, auth providers/session in dev). Never cache sensitive data
@@ -472,6 +731,205 @@ Implementation checklist (client):
 - Path: front end structure/wireframes/[SCREEN_NAME].md
 - Pattern: Follow WIREFRAME_INTEGRATION_GUIDE.md
 - Consistency: Apply WIREFRAME_CONSISTENCY_REVIEW.md standards
+
+## 🎨 **UI & ACCESSIBILITY** {#ui--accessibility}
+
+### 🧩 Design System Usage (Mandatory) {#️-design-system-usage-mandatory}
+
+- **Design System Location**: `src/design-system/` - Centralized design tokens
+  and components
+- **Components**: Always use existing design system components from
+  `src/components/ui` and tokens from `src/design-system`.
+- **Tokens**: Import from `src/design-system/tokens.ts` for colors, spacing,
+  typography, shadows
+- **Singleton Pattern**: Use singleton pattern for design system services and
+  shared utilities
+- **Do not handcraft UI** with raw `div` + Tailwind for components that already
+  exist in the library.
+
+## 🏗️ **CORE FUNDAMENTALS** {#core-fundamentals}
+
+### 🏗️ Singleton Pattern (General Design Pattern) {#️-singleton-pattern-general-design-pattern}
+
+- **Purpose**: Ensure a class has only one instance throughout the application
+  lifecycle
+- **Global Access**: Provide a global access point to that single instance
+- **Lazy Initialization**: Create the instance only when first needed
+- **Thread Safety**: Ensure safe access in multi-threaded environments
+
+#### **Pattern Implementation**:
+
+```typescript
+// ✅ Correct: General Singleton pattern
+class ServiceName {
+  private static instance: ServiceName;
+  private constructor() {}
+
+  static getInstance(): ServiceName {
+    if (!ServiceName.instance) {
+      ServiceName.instance = new ServiceName();
+    }
+    return ServiceName.instance;
+  }
+
+  // Service methods
+  method1() {
+    /* ... */
+  }
+  method2() {
+    /* ... */
+  }
+}
+
+// Usage - always returns the same instance
+const service1 = ServiceName.getInstance();
+const service2 = ServiceName.getInstance();
+console.log(service1 === service2); // true - same instance!
+```
+
+#### **Key Components**:
+
+1. **Private Static Instance**: Holds the single instance
+2. **Private Constructor**: Prevents direct instantiation
+3. **Public Static getInstance()**: Provides global access point
+4. **Lazy Initialization**: Creates instance only when first accessed
+
+#### **Benefits**:
+
+- **Memory Efficiency**: Only one instance exists
+- **Consistency**: Same state/behavior across the application
+- **Global Access**: Easy to access from anywhere
+- **Lazy Loading**: Created only when needed
+- **Thread Safety**: Safe in concurrent environments
+
+#### **Use Cases**:
+
+- **Service Classes**: Design system services, analytics services, error
+  handling services
+- **Configuration Managers**: App configuration, environment settings
+- **Cache Managers**: Global caching, session management
+- **Database Connections**: Connection pooling, ORM instances
+- **Logging Services**: Centralized logging, audit trails
+- **State Managers**: Global state, application state
+- **Utility Services**: Validation services, formatting services
+
+#### **When to Use**:
+
+- ✅ **Shared Resources**: Services that need to be shared globally
+- ✅ **Stateful Services**: Services that maintain state across the app
+- ✅ **Expensive Operations**: Services that are expensive to create
+- ✅ **Configuration**: Global configuration that shouldn't be duplicated
+
+#### **When NOT to Use**:
+
+- ❌ **Stateless Utilities**: Use regular functions instead
+- ❌ **Simple Data**: Use React state or context instead
+- ❌ **Temporary Objects**: Use regular classes instead
+
+#### **Real Examples**:
+
+```typescript
+// Design System Service
+class DesignSystemService {
+  private static instance: DesignSystemService;
+  private constructor() {}
+
+  static getInstance(): DesignSystemService {
+    if (!DesignSystemService.instance) {
+      DesignSystemService.instance = new DesignSystemService();
+    }
+    return DesignSystemService.instance;
+  }
+
+  getTokens() {
+    /* ... */
+  }
+  validateTheme() {
+    /* ... */
+  }
+}
+
+// Error Handling Service
+class ErrorHandlingService {
+  private static instance: ErrorHandlingService;
+  private constructor() {}
+
+  static getInstance(): ErrorHandlingService {
+    if (!ErrorHandlingService.instance) {
+      ErrorHandlingService.instance = new ErrorHandlingService();
+    }
+    return ErrorHandlingService.instance;
+  }
+
+  processError(error: Error) {
+    /* ... */
+  }
+  getUserFriendlyMessage(error: Error) {
+    /* ... */
+  }
+}
+
+// Analytics Service
+class AnalyticsService {
+  private static instance: AnalyticsService;
+  private constructor() {}
+
+  static getInstance(): AnalyticsService {
+    if (!AnalyticsService.instance) {
+      AnalyticsService.instance = new AnalyticsService();
+    }
+    return AnalyticsService.instance;
+  }
+
+  track(event: string, data?: any) {
+    /* ... */
+  }
+  identify(userId: string) {
+    /* ... */
+  }
+}
+```
+
+Migration quick‑steps:
+
+1. **Reference Design System**: Check `src/design-system/tokens.ts` for
+   available tokens
+2. Identify manual UI patterns (e.g., repeated `bg-white border rounded`
+   blocks).
+3. Replace with design system components and variants:
+   - Cards: `Card` (`variant="outlined" | "elevated"`)
+   - Buttons: `Button` (`variant="primary" | "secondary" | "danger"`, `size`)
+   - Badges: `Badge` for status/selection indicators
+   - Forms: `Input`, `Select`, `Textarea`, `Checkbox`, `Radio`, `Switch`,
+     `FormField`, `FormError`
+   - Navigation/Overlays: `Tabs`, `Breadcrumbs`, `Modal`, `Dropdown`, `Tooltip`
+     (when available)
+4. Map props to component API and remove redundant `className`; keep utilities
+   only for layout spacing (e.g., `mt-4`, `grid gap-4`).
+5. Accessibility: preserve labels/`aria-*`; ensure visible focus rings via the
+   component, not custom overrides.
+6. Testing: prefer built‑in `data-testid` from components; avoid brittle
+   selectors.
+7. Theming: use tokens (`@/design-system`) and documented variants; avoid inline
+   styles and ad‑hoc colors.
+8. States: use component props for `variant`, `size`, `disabled`, `loading`
+   instead of custom class combinations.
+9. Imports: always from `@/components/ui/...` and `@/design-system/...`; avoid
+   deep relative paths.
+
+Exceptions:
+
+- If a required component does not exist, create it under `src/components/ui`
+  following `front end structure /implementation/COMPONENT_STRUCTURE.md`, and
+  document it in `PROJECT_REFERENCE.md`.
+- Temporary raw styling is allowed only with a tracked follow‑up to migrate to
+  the design system.
+
+Review checklist:
+
+- No repeated manual card/button patterns (`bg-white border rounded ...`).
+- No duplicate components that overlap with the design system.
+- All interactive elements expose proper focus states and keyboard navigation.
 
 **♿ WCAG 2.1 AA: Mandatory accessibility compliance**
 
@@ -595,14 +1053,119 @@ npm run app:cli -- --command "versions list 50"
 npm run app:cli -- --command "versions for <proposalId> 20"
 ```
 
-**🚀 CRITICAL PERFORMANCE LESSONS:**
+## 🛠️ Full‑Stack Page Implementation Strategy (from scratch)
 
-- **ALWAYS** use useApiClient pattern for data fetching
-- **NEVER** implement custom caching systems
-- **REFERENCE** BasicInformationStep.tsx customer selection as gold standard
-- **VALIDATE** against <1 second loading time baseline
-- **REMEMBER** [Lesson #12: Complex caching systems cause more problems than
-  they solve][memory:3929430536446174589]]
+Use this strategic checklist to create a new, production‑ready page that is
+fully connected to the backend. Every step stems from existing patterns in this
+codebase and the rules in this document.
+
+1. Plan and scaffold
+
+- Identify the route under `src/app/` (prefer existing route groups like
+  `(dashboard)` to inherit providers).
+- Review: WIREFRAME_INTEGRATION_GUIDE.md, COMPONENT_STRUCTURE.md, DATA_MODEL.md,
+  SITEMAP.md, ACCESSIBILITY_SPECIFICATION.md.
+- Run: `npm run dev:smart` to boot with health checks.
+
+2. Ensure provider stack (if creating a new route group)
+
+- Mirror `(dashboard)/layout.tsx` provider order: `TTFBOptimizationProvider` →
+  `WebVitalsProvider` → `SharedAnalyticsProvider` → `ClientLayoutWrapper` →
+  `QueryProvider` → `ToastProvider` → `AuthProvider` → `ProtectedLayout`.
+- Pass server session via `getServerSession(authOptions)` into `AuthProvider` to
+  prevent auth loading stalls.
+
+3. Create the page shell (SSR/CSR consistency)
+
+- Use App Router page with stable wrappers (breadcrumbs/header) identical across
+  loading/empty/error/success states.
+- Use client components only when interactivity is needed; otherwise prefer
+  server components for static parts.
+
+4. Design system first (no raw UI)
+
+- Use `src/components/ui/*` and tokens from `src/design-system/*` for all common
+  UI: `Card`, `Button`, `Badge`, `Input`, `Select`, `Tabs`, `Table`, etc.
+- Map styles to component variants (`variant`, `size`); keep `className` for
+  layout spacing only.
+
+5. Data access strategy
+
+- Client: Use React Query (`useQuery`, `useMutation`) for complex data fetching with caching, pagination, and mutations. Use `useApiClient` pattern only for simple one-time fetches under the `QueryProvider`.
+- Server/API: Add API routes under `src/app/api/<resource>` with Zod validation,
+  strict typing, and selective hydration.
+- Always request minimal fields with `fields` param and avoid heavy relation
+  hydration by default.
+
+6. RBAC and security
+
+- Guard sensitive API routes with
+  `validateApiPermission({ resource, action, scope? })` and follow scope rules
+  (OWN/TEAM/ALL).
+- Use NextAuth session in route group layouts; rely on `ProtectedLayout` for
+  page‑level protection.
+
+7. Pagination and large data handling
+
+- Lists: default page size 30–50. Prefer cursor pagination (`limit+1` technique)
+  and return `hasNextPage` + `nextCursor`.
+- Virtualization: when visible rows can exceed ~200, add row virtualization for
+  the table region and keep pagination; never fetch huge pages.
+
+8. Performance and caching
+
+- Server: short‑TTL caching for derived/analytics/history endpoints (public,
+  max‑age≈60–120, s‑maxage≈120–240) with correct cache keys.
+- Client: no custom caches; rely on React Query for complex data, apiClient for simple fetches. Lazy‑load heavy widgets with dynamic imports; split bundles.
+- Follow list optimization rules: minimal fields, denormalized labels, single
+  request per interaction.
+
+9. Error handling and logging
+
+- Use `ErrorHandlingService` + `ErrorCodes` + `useErrorHandling` for all
+  try/catch paths.
+- Surface user‑friendly messages; record analytics and logs through the standard
+  system (no `console.*` in product code).
+- Use standardized error displays/components where appropriate.
+
+10. Accessibility and UX standards
+
+- Maintain WCAG 2.1 AA: proper labels, focus states, keyboard navigation, 44px
+  touch targets, color contrast.
+- Keep SSR/CSR structures identical; avoid time/locale/random differences at
+  render time.
+
+11. Analytics and traceability
+
+- Add Component Traceability Matrix metadata (user stories, acceptance criteria,
+  hypotheses, test cases).
+- Track key interactions via the analytics hooks (hypothesis validation,
+  performance metrics as applicable).
+
+12. Testing and validation
+
+- Type safety: `npm run type-check` must be clean.
+- Build locally if needed; verify no linter/TS violations, and UI states
+  (loading/error/empty/data) render correctly.
+- Use `npm run app:cli` to exercise API endpoints with real auth sessions;
+  verify RBAC.
+
+13. Documentation updates (mandatory)
+
+- Update `docs/IMPLEMENTATION_LOG.md` with phase/status/traceability.
+- Add notable insights to `docs/LESSONS_LEARNED.md` when patterns or pitfalls
+  emerge.
+- Update `PROJECT_REFERENCE.md` if new components/routes/endpoints are added.
+
+Decision helpers (from existing implementation)
+
+- Client fetch: prefer React Query (`useQuery`, `useMutation`) for lists, forms, and any data that needs caching/invalidation. Use `useApiClient` only for simple one-time fetches under `QueryProvider`.
+- Pagination vs virtualization: paginate by default; add virtualization for long
+  on‑screen lists without increasing page size.
+- Caching: only on the server for derived data; no custom client caches. Use
+  proper headers and cache keys.
+- Design system: never handcraft buttons/cards/forms when components exist. Use
+  variants; keep overrides minimal.
 
 ## 🗄️ **DATABASE ID FORMAT VALIDATION (CRITICAL)**
 

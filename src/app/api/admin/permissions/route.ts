@@ -1,10 +1,11 @@
-import { logger } from '@/utils/logger'; /**
+/**
  * PosalPro MVP2 - Admin Permissions API Route
  * Database-driven permission management API
  * Based on ADMIN_SCREEN.md wireframe and RBAC schema specifications
  */
 
 import prisma from '@/lib/db/prisma';
+import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -34,14 +35,15 @@ const UpdatePermissionSchema = z.object({
 
 // GET /api/admin/permissions - Fetch permissions from database
 export async function GET(request: NextRequest) {
-  try {
-    const url = new URL(request.url);
-    const searchParams = Object.fromEntries(url.searchParams);
-    const { page, limit, search, resource, action, scope } =
-      GetPermissionsSchema.parse(searchParams);
+  const url = new URL(request.url);
+  const searchParams = Object.fromEntries(url.searchParams);
+  const { page, limit, search, resource, action, scope } =
+    GetPermissionsSchema.parse(searchParams);
 
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+
+  try {
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
@@ -98,7 +100,18 @@ export async function GET(request: NextRequest) {
       filters,
     });
   } catch (error) {
-    logger.error('[AdminPermissions] Error:', error);
+    // Use standardized error handling
+    errorHandlingService.processError(
+      error,
+      'Failed to fetch permissions',
+      ErrorCodes.DATA.QUERY_FAILED,
+      {
+        component: 'AdminPermissionsRoute',
+        operation: 'GET',
+        page: pageNum,
+        limit: limitNum,
+      }
+    );
     return NextResponse.json(
       { error: 'Failed to fetch permissions', code: 'PERMISSIONS_ERROR' },
       { status: 500 }
@@ -108,8 +121,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/admin/permissions - Create new permission
 export async function POST(request: NextRequest) {
+  let body;
   try {
-    const body = await request.json();
+    body = await request.json();
 
     // Validate permission data
     if (!body.name || !body.description) {
@@ -135,7 +149,16 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[AdminPermissions] Create error:', error);
+    errorHandlingService.processError(
+      error,
+      'Failed to create permission',
+      ErrorCodes.DATA.CREATE_FAILED,
+      {
+        component: 'AdminPermissionsRoute',
+        operation: 'POST',
+        permissionData: JSON.stringify(body),
+      }
+    );
     return NextResponse.json(
       { error: 'Failed to create permission', code: 'PERMISSION_CREATE_ERROR' },
       { status: 500 }
@@ -145,9 +168,10 @@ export async function POST(request: NextRequest) {
 
 // PUT /api/admin/permissions - Update permission
 export async function PUT(request: NextRequest) {
+  const body = await request.json();
+  const { id, ...updateData } = body;
+
   try {
-    const body = await request.json();
-    const { id, ...updateData } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Permission ID is required' }, { status: 400 });
@@ -209,7 +233,17 @@ export async function PUT(request: NextRequest) {
       message: 'Permission updated successfully',
     });
   } catch (error) {
-    logger.error('Failed to update permission:', error);
+    // Use standardized error handling
+    errorHandlingService.processError(
+      error,
+      'Failed to update permission',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      {
+        component: 'AdminPermissionsRoute',
+        operation: 'PUT',
+        permissionId: id,
+      }
+    );
     return NextResponse.json(
       {
         error: 'Failed to update permission',
@@ -222,9 +256,10 @@ export async function PUT(request: NextRequest) {
 
 // DELETE /api/admin/permissions - Delete permission
 export async function DELETE(request: NextRequest) {
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
+
   try {
-    const url = new URL(request.url);
-    const id = url.searchParams.get('id');
 
     if (!id) {
       return NextResponse.json({ error: 'Permission ID is required' }, { status: 400 });
@@ -273,7 +308,17 @@ export async function DELETE(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('Failed to delete permission:', error);
+    // Use standardized error handling
+    errorHandlingService.processError(
+      error,
+      'Failed to delete permission',
+      ErrorCodes.DATA.DELETE_FAILED,
+      {
+        component: 'AdminPermissionsRoute',
+        operation: 'DELETE',
+        permissionId: id,
+      }
+    );
     return NextResponse.json(
       {
         error: 'Failed to delete permission',

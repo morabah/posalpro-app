@@ -6,6 +6,7 @@
 import { withAuth } from 'next-auth/middleware';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { logDebug, logWarn } from '@/lib/logger';
 
 // Permission validation utility
 const hasPermission = (userPermissions: string[], requiredPermission: string): boolean => {
@@ -80,7 +81,7 @@ export default withAuth(
 
     // Enhanced security: Validate token structure
     if (!tokenRaw || typeof tokenRaw !== 'object') {
-      console.warn('[Security] Invalid token structure detected');
+      logWarn('[Security] Invalid token structure detected');
       return NextResponse.redirect(new URL('/auth/login', req.url));
     }
 
@@ -91,7 +92,7 @@ export default withAuth(
       : [];
 
     // Enhanced logging for security monitoring
-    console.log(`[Security] Access attempt: ${method} ${pathname}`, {
+    logDebug(`[Security] Access attempt: ${method} ${pathname}`, {
       userId: tokenRaw.id,
       roles: userRoles,
       permissionCount: userPermissions.length,
@@ -105,7 +106,7 @@ export default withAuth(
 
       if (requiredPermission) {
         if (!hasPermission(userPermissions, requiredPermission)) {
-          console.warn('[Security] API permission denied', {
+          logWarn('[Security] API permission denied', {
             userId: tokenRaw.id,
             path: pathname,
             method,
@@ -125,7 +126,7 @@ export default withAuth(
     const requiredPermission = ROUTE_PERMISSIONS[pathname];
     if (requiredPermission) {
       if (!hasPermission(userPermissions, requiredPermission)) {
-        console.warn('[Security] Page permission denied', {
+        logWarn('[Security] Page permission denied', {
           userId: tokenRaw.id,
           path: pathname,
           required: requiredPermission,
@@ -143,7 +144,7 @@ export default withAuth(
         userRoles.includes('Administrator');
 
       if (!hasAdminAccess) {
-        console.warn('[Security] Admin access denied', {
+        logWarn('[Security] Admin access denied', {
           userId: tokenRaw.id,
           path: pathname,
           roles: userRoles,

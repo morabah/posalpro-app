@@ -3,6 +3,8 @@
  * Handles service worker registration, updates, and offline capabilities
  */
 
+import { logDebug, logWarn, logError } from '@/lib/logger';
+
 export interface ServiceWorkerConfig {
   enabled: boolean;
   updateCheckInterval: number;
@@ -50,7 +52,10 @@ export interface ServiceWorkerPublicAPI {
   updateConfig(newConfig: Partial<ServiceWorkerConfig>): void;
   unregister(): Promise<boolean>;
   on<E extends keyof SwEventPayloads>(event: E, callback: (data: SwEventPayloads[E]) => void): void;
-  off<E extends keyof SwEventPayloads>(event: E, callback: (data: SwEventPayloads[E]) => void): void;
+  off<E extends keyof SwEventPayloads>(
+    event: E,
+    callback: (data: SwEventPayloads[E]) => void
+  ): void;
 }
 
 class ServiceWorkerManager implements ServiceWorkerPublicAPI {
@@ -67,7 +72,7 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
       offlineSupport: true,
       backgroundSync: true,
       pushNotifications: false,
-      ...config
+      ...config,
     };
 
     this.status = {
@@ -77,7 +82,7 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
       hasUpdate: false,
       isOffline: typeof navigator !== 'undefined' ? !navigator.onLine : false,
       cacheSize: 0,
-      lastUpdate: null
+      lastUpdate: null,
     };
 
     this.setupEventListeners();
@@ -88,16 +93,16 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
    */
   async initialize(): Promise<boolean> {
     if (!this.config.enabled || !this.status.isSupported) {
-      console.log('[SW Manager] Service worker not enabled or supported');
+      logDebug('[SW Manager] Service worker not enabled or supported');
       return false;
     }
 
     try {
-      console.log('[SW Manager] Registering service worker...');
-      
+      logDebug('[SW Manager] Registering service worker...');
+
       this.registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/',
-        updateViaCache: 'none'
+        updateViaCache: 'none',
       });
 
       this.status.isRegistered = true;
@@ -115,11 +120,11 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
       }
 
       this.emit('initialized', this.status);
-      console.log('[SW Manager] Service worker initialized successfully');
-      
+      logDebug('[SW Manager] Service worker initialized successfully');
+
       return true;
     } catch (error) {
-      console.error('[SW Manager] Failed to register service worker:', error);
+      logError('[SW Manager] Failed to register service worker:', error);
       this.emit('error', error);
       return false;
     }
@@ -129,7 +134,12 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
    * Check if service workers are supported
    */
   private isServiceWorkerSupported(): boolean {
-    return typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'caches' in window;
+    return (
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      'caches' in window
+    );
   }
 
   /**
@@ -139,13 +149,13 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
     window.addEventListener('online', () => {
       this.status.isOffline = false;
       this.emit('online', this.status);
-      console.log('[SW Manager] Back online');
+      logDebug('[SW Manager] Back online');
     });
 
     window.addEventListener('offline', () => {
       this.status.isOffline = true;
       this.emit('offline', this.status);
-      console.log('[SW Manager] Gone offline');
+      logDebug('[SW Manager] Gone offline');
     });
   }
 
@@ -156,7 +166,7 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
     if (!this.registration) return;
 
     this.registration.addEventListener('updatefound', () => {
-      console.log('[SW Manager] Service worker update found');
+      logDebug('[SW Manager] Service worker update found');
       this.status.hasUpdate = true;
       this.emit('updatefound', this.status);
 
@@ -165,10 +175,10 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
         installingWorker.addEventListener('statechange', () => {
           if (installingWorker.state === 'installed') {
             if (navigator.serviceWorker.controller) {
-              console.log('[SW Manager] New service worker available');
+              logDebug('[SW Manager] New service worker available');
               this.emit('updateavailable', this.status);
             } else {
-              console.log('[SW Manager] Service worker installed for first time');
+              logDebug('[SW Manager] Service worker installed for first time');
               this.status.isActive = true;
               this.emit('activated', this.status);
             }
@@ -189,14 +199,21 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
   private handleServiceWorkerMessage(event: MessageEvent): void {
     const data: unknown = (event as MessageEvent<unknown>).data;
 
-    interface CacheUpdatedMessage { type: 'CACHE_UPDATED'; size: number }
-    interface OfflineReadyMessage { type: 'OFFLINE_READY' }
+    interface CacheUpdatedMessage {
+      type: 'CACHE_UPDATED';
+      size: number;
+    }
+    interface OfflineReadyMessage {
+      type: 'OFFLINE_READY';
+    }
 
     const isObject = (val: unknown): val is Record<string, unknown> =>
       typeof val === 'object' && val !== null;
 
     const isCacheUpdated = (val: unknown): val is CacheUpdatedMessage =>
-      isObject(val) && (val as { type?: unknown }).type === 'CACHE_UPDATED' && typeof (val as { size?: unknown }).size === 'number';
+      isObject(val) &&
+      (val as { type?: unknown }).type === 'CACHE_UPDATED' &&
+      typeof (val as { size?: unknown }).size === 'number';
 
     const isOfflineReady = (val: unknown): val is OfflineReadyMessage =>
       isObject(val) && (val as { type?: unknown }).type === 'OFFLINE_READY';
@@ -208,7 +225,7 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
     }
 
     if (isOfflineReady(data)) {
-      console.log('[SW Manager] Offline functionality ready');
+      logDebug('[SW Manager] Offline functionality ready');
       this.emit('offlineready', this.status);
       return;
     }
@@ -224,7 +241,7 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
         try {
           await this.registration.update();
         } catch (error) {
-          console.error('[SW Manager] Update check failed:', error);
+          logError('[SW Manager] Update check failed:', error);
         }
       }
     }, this.config.updateCheckInterval);
@@ -239,11 +256,15 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
     try {
       // Check if background sync is supported
       if ('sync' in this.registration) {
-        await (this.registration as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register('background-sync');
-        console.log('[SW Manager] Background sync registered');
+        await (
+          this.registration as ServiceWorkerRegistration & {
+            sync: { register: (tag: string) => Promise<void> };
+          }
+        ).sync.register('background-sync');
+        logDebug('[SW Manager] Background sync registered');
       }
     } catch (error) {
-      console.error('[SW Manager] Background sync registration failed:', error);
+      logError('[SW Manager] Background sync registration failed:', error);
     }
   }
 
@@ -252,25 +273,25 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
    */
   async updateServiceWorker(): Promise<boolean> {
     if (!this.registration) {
-      console.warn('[SW Manager] No registration available for update');
+      logWarn('[SW Manager] No registration available for update');
       return false;
     }
 
     try {
       await this.registration.update();
-      
+
       if (this.registration.waiting) {
         // Tell the waiting service worker to skip waiting
         this.registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        
+
         // Reload the page to activate the new service worker
         window.location.reload();
         return true;
       }
-      
+
       return false;
     } catch (error) {
-      console.error('[SW Manager] Service worker update failed:', error);
+      logError('[SW Manager] Service worker update failed:', error);
       this.emit('error', error);
       return false;
     }
@@ -294,7 +315,7 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
 
       return cacheInfo;
     } catch (error) {
-      console.error('[SW Manager] Failed to get cache info:', error);
+      logError('[SW Manager] Failed to get cache info:', error);
       return [];
     }
   }
@@ -308,14 +329,14 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
     try {
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map(name => caches.delete(name)));
-      
+
       this.status.cacheSize = 0;
       this.emit('cachecleared', this.status);
-      console.log('[SW Manager] All caches cleared');
-      
+      logDebug('[SW Manager] All caches cleared');
+
       return true;
     } catch (error) {
-      console.error('[SW Manager] Failed to clear caches:', error);
+      logError('[SW Manager] Failed to clear caches:', error);
       return false;
     }
   }
@@ -332,20 +353,24 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
         id: Date.now().toString(),
         action,
         data,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       localStorage.setItem(`sw-queue-${queueData.id}`, JSON.stringify(queueData));
-      
+
       // Register for background sync
       if ('sync' in this.registration) {
-        await (this.registration as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register('background-sync');
+        await (
+          this.registration as ServiceWorkerRegistration & {
+            sync: { register: (tag: string) => Promise<void> };
+          }
+        ).sync.register('background-sync');
       }
-      
-      console.log('[SW Manager] Action queued for background sync:', action);
+
+      logDebug('[SW Manager] Action queued for background sync:', { action });
       return true;
     } catch (error) {
-      console.error('[SW Manager] Failed to queue action for sync:', error);
+      logError('[SW Manager] Failed to queue action for sync:', error);
       return false;
     }
   }
@@ -386,7 +411,10 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
     this.listeners.get(event)!.add(callback as (data: unknown) => void);
   }
 
-  off<E extends keyof SwEventPayloads>(event: E, callback: (data: SwEventPayloads[E]) => void): void;
+  off<E extends keyof SwEventPayloads>(
+    event: E,
+    callback: (data: SwEventPayloads[E]) => void
+  ): void;
   off(event: string, callback: (data?: unknown) => void): void;
   off(event: string, callback: (data?: unknown) => void): void {
     const eventListeners = this.listeners.get(event);
@@ -403,7 +431,7 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
           // Listeners are stored as (unknown) => void; pass the typed payload
           (callback as (d: SwEventPayloads[E]) => void)(data);
         } catch (error) {
-          console.error(`[SW Manager] Error in event listener for ${String(event)}:`, error);
+          logError(`[SW Manager] Error in event listener for ${String(event)}:`, error);
         }
       });
     }
@@ -417,18 +445,18 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
 
     try {
       const result = await this.registration.unregister();
-      
+
       if (result) {
         this.status.isRegistered = false;
         this.status.isActive = false;
         this.registration = null;
         this.emit('unregistered', this.status);
-        console.log('[SW Manager] Service worker unregistered');
+        logDebug('[SW Manager] Service worker unregistered');
       }
-      
+
       return result;
     } catch (error) {
-      console.error('[SW Manager] Failed to unregister service worker:', error);
+      logError('[SW Manager] Failed to unregister service worker:', error);
       return false;
     }
   }
@@ -437,48 +465,65 @@ class ServiceWorkerManager implements ServiceWorkerPublicAPI {
 // Export lazy-loaded singleton instance to prevent SSR errors
 let _serviceWorkerManager: ServiceWorkerManager | null = null;
 
+// Create the stub object outside the function to avoid circular reference
+const createStub = (): ServiceWorkerPublicAPI => {
+  const defaultConfig: ServiceWorkerConfig = {
+    enabled: false,
+    updateCheckInterval: 60000,
+    cacheStrategy: 'conservative',
+    offlineSupport: false,
+    backgroundSync: false,
+    pushNotifications: false,
+  };
+
+  return {
+    initialize: () => Promise.resolve(false),
+    updateServiceWorker: () => Promise.resolve(false),
+    getCacheInfo: () => Promise.resolve([]),
+    clearCaches: () => Promise.resolve(false),
+    queueForSync: () => Promise.resolve(false),
+    getStatus: () => ({
+      isSupported: false,
+      isRegistered: false,
+      isActive: false,
+      hasUpdate: false,
+      isOffline: false,
+      cacheSize: 0,
+      lastUpdate: null,
+    }),
+    getConfig: () => ({ ...defaultConfig }),
+    updateConfig: () => {
+      /* no-op on server */
+    },
+    // Provide generic implementations that satisfy the typed signatures
+    on: () => {
+      /* no-op on server */
+    },
+    off: () => {
+      /* no-op on server */
+    },
+    unregister: () => Promise.resolve(false),
+  };
+};
+
 export const serviceWorkerManager: ServiceWorkerPublicAPI = (() => {
-  if (typeof window === 'undefined') {
+  // Enhanced SSR protection - check for both window and self
+  if (typeof window === 'undefined' || typeof self === 'undefined') {
     // Return a mock object during SSR
-
-    const defaultConfig: ServiceWorkerConfig = {
-      enabled: false,
-      updateCheckInterval: 60000,
-      cacheStrategy: 'conservative',
-      offlineSupport: false,
-      backgroundSync: false,
-      pushNotifications: false,
-    };
-
-    const stub: ServiceWorkerPublicAPI = {
-      initialize: () => Promise.resolve(false),
-      updateServiceWorker: () => Promise.resolve(false),
-      getCacheInfo: () => Promise.resolve([]),
-      clearCaches: () => Promise.resolve(false),
-      queueForSync: () => Promise.resolve(false),
-      getStatus: () => ({
-        isSupported: false,
-        isRegistered: false,
-        isActive: false,
-        hasUpdate: false,
-        isOffline: false,
-        cacheSize: 0,
-        lastUpdate: null,
-      }),
-      getConfig: () => ({ ...defaultConfig }),
-      updateConfig: () => { /* no-op on server */ },
-      // Provide generic implementations that satisfy the typed signatures
-      on: () => { /* no-op on server */ },
-      off: () => { /* no-op on server */ },
-      unregister: () => Promise.resolve(false),
-    };
-    return stub;
+    return createStub();
   }
-  
-  if (!_serviceWorkerManager) {
-    _serviceWorkerManager = new ServiceWorkerManager();
+
+  // Only create the manager if we're in a browser environment
+  if (!_serviceWorkerManager && typeof window !== 'undefined') {
+    try {
+      _serviceWorkerManager = new ServiceWorkerManager();
+    } catch (error) {
+      logWarn('[ServiceWorkerManager] Failed to initialize:', { error: error instanceof Error ? error.message : String(error) });
+      // Return stub if initialization fails
+      return createStub();
+    }
   }
-  return _serviceWorkerManager;
+  return _serviceWorkerManager || createStub(); // Fallback to stub
 })();
 
 // Export class for custom instances

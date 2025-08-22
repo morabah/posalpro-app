@@ -5,6 +5,9 @@
 
 import { recordCacheHit, recordCacheMiss, recordLatency } from '@/lib/observability/metricsStore';
 import { createClient } from 'redis';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logDebug, logWarn } from '@/lib/logger';
 import type { RedisClientType } from 'redis';
 
 // Enable Redis only in production unless explicitly overridden
@@ -40,18 +43,18 @@ export async function initializeRedis(): Promise<RedisClientType> {
   if (isConnected) return redisClient;
 
   try {
-    console.log('📡 Attempting to connect to Redis...');
+    logDebug('📡 Attempting to connect to Redis...');
     await redisClient.connect();
     isConnected = true;
-    console.log('✅ Redis connected successfully');
+    logDebug('✅ Redis connected successfully');
 
     // Test the connection
     const pong = await redisClient.ping();
-    console.log(`✅ Redis ping successful: ${pong}`);
+    logDebug('✅ Redis ping successful:', { pong });
   } catch (error) {
-    console.warn(
+    logWarn(
       '⚠️  Redis connection failed, falling back to in-memory cache:',
-      error instanceof Error ? error.message : String(error)
+      { error: error instanceof Error ? error.message : String(error) }
     );
     isConnected = false;
   }
@@ -98,7 +101,7 @@ export async function getCache<T = unknown>(key: string): Promise<T | null> {
     recordLatency(Date.now() - start);
     return hit ? (JSON.parse(value as string) as T) : null;
   } catch (error) {
-    console.warn('⚠️  Cache get error:', error instanceof Error ? error.message : String(error));
+    logWarn('⚠️  Cache get error:', { error: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }
@@ -121,7 +124,7 @@ export async function setCache(
     await redisClient.setEx(key, ttl, JSON.stringify(value));
     recordLatency(Date.now() - start);
   } catch (error) {
-    console.warn('⚠️  Cache set error:', error instanceof Error ? error.message : String(error));
+    logWarn('⚠️  Cache set error:', { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -134,7 +137,7 @@ export async function deleteCache(key: string): Promise<void> {
   try {
     await redisClient.del(key);
   } catch (error) {
-    console.warn('⚠️  Redis delete error:', error instanceof Error ? error.message : String(error));
+    logWarn('⚠️  Redis delete error:', { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -147,7 +150,7 @@ export async function clearCache(pattern: string): Promise<void> {
       await redisClient.del(keys);
     }
   } catch (error) {
-    console.warn('⚠️  Redis clear error:', error instanceof Error ? error.message : String(error));
+    logWarn('⚠️  Redis clear error:', { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -210,9 +213,9 @@ export async function checkRedisHealth(): Promise<boolean> {
     const pong = await redisClient.ping();
     return pong === 'PONG';
   } catch (error) {
-    console.warn(
+    logWarn(
       '⚠️  Redis health check failed:',
-      error instanceof Error ? error.message : String(error)
+      { error: error instanceof Error ? error.message : String(error) }
     );
     return false;
   }
@@ -227,6 +230,16 @@ export async function closeRedis(): Promise<void> {
 }
 
 // Initialize Redis on module load
-ensureRedisConnection().catch(console.error);
+ensureRedisConnection().catch((error) => {
+  ErrorHandlingService.getInstance().processError(
+    error,
+    'Failed to initialize Redis connection',
+    ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
+    {
+      component: 'Redis',
+      operation: 'ensureRedisConnection',
+    }
+  );
+});
 
 export { CACHE_CONFIG, redisClient };

@@ -9,6 +9,7 @@
 
 'use client';
 
+import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -104,10 +105,10 @@ export default function RFPAnalysisPage() {
               </p>
             </div>
             <div className="flex space-x-3">
-              <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+              <Button variant="outline">
                 <ChartBarIcon className="w-4 h-4 mr-2" />
                 Export Report
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -217,9 +218,7 @@ export default function RFPAnalysisPage() {
             <p className="text-sm text-gray-600 mb-4">
               AI-powered analysis to identify common requirement patterns and suggest optimizations.
             </p>
-            <button className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-              Run Analysis
-            </button>
+            <Button variant="primary">Run Analysis</Button>
           </div>
 
           {/* Compliance Optimization */}
@@ -229,9 +228,7 @@ export default function RFPAnalysisPage() {
               Identify gaps in compliance and suggest improvements for better proposal success
               rates.
             </p>
-            <button className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700">
-              Optimize
-            </button>
+            <Button variant="primary">Optimize</Button>
           </div>
         </div>
       </div>

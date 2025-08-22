@@ -286,7 +286,16 @@ export class ApiResponseOptimizer {
       this.cache.set(key, entry);
     } catch (error) {
       // Simplified error handling to avoid TypeScript issues
-      console.error('Failed to cache response:', error);
+      this.errorHandlingService.processError(
+        error,
+        'Failed to cache response',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'ApiResponseOptimizer',
+          operation: 'cacheResponse',
+          cacheKey: key,
+        }
+      );
     }
   }
 
@@ -332,7 +341,15 @@ export class ApiResponseOptimizer {
       };
     } catch (error) {
       // Simplified error handling
-      console.error('Failed to compress data:', error);
+      this.errorHandlingService.processError(
+        error,
+        'Failed to compress data',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'ApiResponseOptimizer',
+          operation: 'compressData',
+        }
+      );
       return {
         compressedData: data,
         compressedSize: this.calculateDataSize(data),

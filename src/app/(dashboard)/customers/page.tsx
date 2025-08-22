@@ -1,16 +1,19 @@
 'use client';
 
-import { CustomersListSkeleton } from '@/components/ui/LoadingStates';
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { useResponsive } from '@/hooks/useResponsive';
 import { Button } from '@/components/ui/forms/Button';
-import dynamic from 'next/dynamic';
+import { CustomersListSkeleton } from '@/components/ui/LoadingStates';
+import { useResponsive } from '@/hooks/useResponsive';
 import { useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 
 // ✅ PERFORMANCE: Lazy load heavy CustomerList component
 const CustomerListLazy = lazy(() => import('@/components/customers/CustomerList'));
 const CustomerCreationSidebar = dynamic(
-  () => import('@/components/customers/CustomerCreationSidebar').then(m => ({ default: m.CustomerCreationSidebar })),
+  () =>
+    import('@/components/customers/CustomerCreationSidebar').then(m => ({
+      default: m.CustomerCreationSidebar,
+    })),
   { ssr: false }
 );
 
@@ -63,7 +66,9 @@ export default function CustomersPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <FastCustomersHeader />
         <div className="flex items-center gap-2">
-          <Button onClick={() => setIsCreateOpen(true)} className="bg-blue-600 hover:bg-blue-700">Create Customer</Button>
+          <Button onClick={() => setIsCreateOpen(true)} variant="primary">
+            Create Customer
+          </Button>
         </div>
       </div>
 
@@ -76,7 +81,11 @@ export default function CustomersPage() {
 
       {/* View mode toggle */}
       <div className="flex justify-end">
-        <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden" role="group" aria-label="View mode">
+        <div
+          className="inline-flex rounded-lg border border-gray-300 overflow-hidden"
+          role="group"
+          aria-label="View mode"
+        >
           <button
             type="button"
             className={`px-3 py-2 text-sm min-h-[44px] ${viewMode === 'list' ? 'bg-gray-100 text-gray-900' : 'bg-white text-gray-700'}`}

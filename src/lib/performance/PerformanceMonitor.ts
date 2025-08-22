@@ -4,9 +4,9 @@
  * Provides real-time monitoring and alerts for performance regressions
  */
 
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logError } from '@/lib/logger';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logWarn } from '@/lib/logger';
 
 interface PerformanceMetric {
   name: string;
@@ -332,13 +332,13 @@ export class PerformanceMonitor {
         }
       );
 
-      logError('Performance metrics collection error', error, {
-        component: 'PerformanceMonitor',
-        operation: 'collectMetrics',
-        metricType: 'web-vitals',
-        standardError: standardError.message,
-        errorCode: standardError.code,
-      });
+      // logError('Performance metrics collection error', error, {
+      //   component: 'PerformanceMonitor',
+      //   operation: 'collectMetrics',
+      //   metricType: 'web-vitals',
+      //   standardError: standardError.message,
+      //   errorCode: standardError.code,
+      // });
     }
   }
 
@@ -374,7 +374,7 @@ export class PerformanceMonitor {
       longTaskObserver.observe({ entryTypes: ['longtask'] });
       this.observers.push(longTaskObserver);
     } catch (error) {
-      console.warn('Failed to set up long task monitoring:', error);
+      logWarn('Failed to set up long task monitoring:', { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -454,13 +454,22 @@ export class PerformanceMonitor {
       try {
         callback(alert);
       } catch (error) {
-        console.error('Error in alert callback:', error);
+        ErrorHandlingService.getInstance().processError(
+          error as Error,
+          'Error in alert callback',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          {
+            component: 'PerformanceMonitor',
+            operation: 'createAlert',
+            alertType: alert.type,
+          }
+        );
       }
     });
 
-    // Log to console for development
-    if (process.env.NODE_ENV === 'development') {
-      console.warn(`🚨 Performance Alert [${alert.type.toUpperCase()}]:`, alert.message);
+    // Log critical alerts
+    if (alert.type === 'critical') {
+      logWarn(`🚨 Performance Alert [${alert.type.toUpperCase()}]:`, { message: alert.message });
     }
 
     // Keep only recent alerts

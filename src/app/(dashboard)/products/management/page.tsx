@@ -271,7 +271,6 @@ export default function ProductManagementPage() {
       title: 'Add New Product',
       description: 'Create a new product in the catalog',
       icon: PlusIcon,
-      color: 'bg-blue-600 hover:bg-blue-700',
       action: handleAddProduct,
     },
     {
@@ -279,7 +278,6 @@ export default function ProductManagementPage() {
       title: 'Manage Categories',
       description: 'Organize products into categories',
       icon: CircleStackIcon,
-      color: 'bg-green-600 hover:bg-green-700',
       action: handleManageCategories,
     },
     {
@@ -287,7 +285,6 @@ export default function ProductManagementPage() {
       title: 'Bulk Operations',
       description: 'Perform operations on multiple products',
       icon: CogIcon,
-      color: 'bg-purple-600 hover:bg-purple-700',
       action: handleBulkOperations,
     },
   ];
@@ -303,7 +300,8 @@ export default function ProductManagementPage() {
           </div>
           <Button
             onClick={handleAddProduct}
-            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center min-h-[44px]"
+            variant="primary"
+            className="flex items-center min-h-[44px]"
             aria-label="Add new product"
           >
             <PlusIcon className="w-5 h-5 mr-2" />
@@ -326,7 +324,8 @@ export default function ProductManagementPage() {
                 <p className="text-gray-600 text-sm mb-4">{action.description}</p>
                 <Button
                   onClick={action.action}
-                  className={`${action.color} text-white w-full min-h-[44px]`}
+                  variant="primary"
+                  className="w-full min-h-[44px]"
                   aria-label={action.title}
                 >
                   {action.title}
@@ -350,10 +349,7 @@ export default function ProductManagementPage() {
                 Get started by creating your first product.
               </p>
               <div className="mt-6">
-                <Button
-                  onClick={handleAddProduct}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
+                <Button onClick={handleAddProduct} variant="primary">
                   <PlusIcon className="w-4 w-4 mr-2" />
                   Create Product
                 </Button>

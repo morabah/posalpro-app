@@ -3,6 +3,10 @@
  * Tests all sidebar functionalities, navigation, role-based access, and performance
  */
 
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logDebug } from '@/lib/logger';
+
 export interface SidebarTestResult {
   testName: string;
   passed: boolean;
@@ -480,7 +484,7 @@ export class SidebarTester {
 
   // Run all sidebar tests
   async runAllSidebarTests(): Promise<SidebarTestResult[]> {
-    console.log('🚀 Starting comprehensive sidebar functionality tests...');
+    logDebug('🚀 Starting comprehensive sidebar functionality tests...');
 
     this.testResults = []; // Clear previous results
 
@@ -500,11 +504,19 @@ export class SidebarTester {
         // Small delay between tests
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
-        console.error('Test execution failed:', error);
+        ErrorHandlingService.getInstance().processError(
+          error as Error,
+          'Test execution failed',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          {
+            component: 'SidebarTester',
+            operation: 'runAllSidebarTests',
+          }
+        );
       }
     }
 
-    console.log('✅ Sidebar functionality tests completed');
+    logDebug('✅ Sidebar functionality tests completed');
     return this.testResults;
   }
 

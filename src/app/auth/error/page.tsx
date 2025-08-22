@@ -3,6 +3,7 @@
  * Displays authentication error messages from NextAuth.js
  */
 
+import { Button } from '@/components/ui/forms/Button';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
@@ -105,29 +106,26 @@ function AuthErrorContent({ error, callbackUrl }: { error?: string; callbackUrl?
 
             {/* Action Buttons */}
             <div className="space-y-4">
-              <Link
-                href="/auth/login"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              >
-                Try Sign In Again
+              <Link href="/auth/login" className="w-full">
+                <Button variant="primary" className="w-full">
+                  Try Sign In Again
+                </Button>
               </Link>
 
               {callbackUrl && callbackUrl !== '/auth/login' && (
-                <Link
-                  href={callbackUrl}
-                  className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Return to Original Page
+                <Link href={callbackUrl} className="w-full">
+                  <Button variant="outline" className="w-full">
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Return to Original Page
+                  </Button>
                 </Link>
               )}
 
-              <Link
-                href="/"
-                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Home
+              <Link href="/" className="w-full">
+                <Button variant="outline" className="w-full">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Home
+                </Button>
               </Link>
             </div>
 

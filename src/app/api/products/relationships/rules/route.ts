@@ -97,7 +97,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Rule creation error:', error);
     errorHandlingService.processError(error, 'Failed to create rule', undefined, {
       component: 'ProductRelationshipRulesAPI',
       operation: 'POST',

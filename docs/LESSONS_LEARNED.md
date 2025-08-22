@@ -82,6 +82,198 @@ component mounting (`RecentProposals`), and high memory during
 
 ---
 
+## Hydration Mismatch From Wrapper Swaps (SSR/CSR Consistency)
+
+**Date**: 2025-08-20 • **Category**: React/Next.js Hydration, Auth/Layout
+
+### Context
+
+`/settings` intermittently showed a recoverable hydration error. Server HTML
+rendered a different wrapper for the breadcrumbs/header than the client tree
+(e.g., server `<div class="mb-8">` vs client `<nav ...>`), and different
+branches (loading/unauthenticated/success) rendered different header structures.
+Under the `(dashboard)` route-group, the page also relied on client session
+resolving, increasing the likelihood of divergent trees.
+
+### Problem
+
+- Server and client produced different markup for the same component due to
+  conditional wrapper logic and branch-specific headers.
+- Some branches omitted breadcrumbs while others included them, causing
+  structure changes post-hydration.
+- Route-group layout lacked explicit per-request session propagation, leading to
+  stalled client auth and timing-related drift.
+
+### Solution
+
+1. Stabilize shared wrappers:
+
+- Make `Breadcrumbs` always render a stable `<nav>` on both server and client
+  (never return `null` or a different wrapper based on mount state).
+- In pages, include the exact same header/breadcrumb block in all render
+  branches (loading, unauthenticated, success, error).
+
+2. Route-group auth/session alignment:
+
+- Convert `(dashboard)/layout.tsx` to an async server layout and pass
+  `session={await getServerSession(authOptions)}` into `AuthProvider`.
+- Mark layout as `export const dynamic = 'force-dynamic'` when session affects
+  the response to avoid stale SSR caches.
+
+### Example (Generalized)
+
+```tsx
+// Stable Breadcrumbs
+export function Breadcrumbs({
+  items,
+}: {
+  items: Array<{ label: string; href: string }>;
+}) {
+  return (
+    <nav aria-label="Breadcrumb navigation">
+      <ol>
+        {items.map(i => (
+          <li key={i.href}>{i.label}</li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+// Page header reused verbatim in all branches
+const header = (
+  <Breadcrumbs
+    items={[
+      { label: 'Home', href: '/dashboard' },
+      { label: 'Settings', href: '/settings' },
+    ]}
+  />
+);
+if (loading)
+  return (
+    <div>
+      {header}
+      {/* skeleton */}
+    </div>
+  );
+if (!isAuthenticated)
+  return (
+    <div>
+      {header}
+      {/* auth required */}
+    </div>
+  );
+return (
+  <div>
+    {header}
+    {/* main */}
+  </div>
+);
+```
+
+### Key Insights
+
+- Hydration stability requires identical wrapper structure between SSR and CSR.
+- Auth-provided layouts should receive server session to prevent client-only
+  session races.
+- Dynamic route-group layouts should opt out of static caching when
+  session-bound.
+
+### Prevention / Standards
+
+- Always render the same header/breadcrumb wrapper in all branches.
+- Avoid `typeof window` branches that change structure; only mutate content, not
+  wrappers.
+- Never use time/locale/random values to build structure/keys at SSR.
+- Pass `getServerSession` result into auth provider at the layout level and mark
+  such layouts `dynamic = 'force-dynamic'` when needed.
+
+### Verification
+
+- View page-source and client-rendered nodes; wrappers match (e.g., `<nav>`
+  present in both).
+- Network logs show no excessive `/api/auth/session` loops and layout resolves
+  quickly.
+- CLI confirms preference persistence via `/api/user/preferences` (no UI
+  reliance).
+
+---
+
+## React Key Warnings: Stable Keys and Defensive Fallbacks
+
+**Date**: 2025-08-21 • **Category**: React / Rendering
+
+### Context
+
+Dashboard charts emitted "Each child in a list should have a unique 'key' prop"
+warnings when upstream data occasionally lacked expected ID fields.
+
+### Problem
+
+- Some arrays (employees/products/bundles) had missing/undefined identifier
+  properties. Using those directly in `key={id}` triggered React warnings.
+
+### Solution
+
+- Use stable IDs when available. Otherwise, prefer deterministic composites
+  (e.g., `${aId}-${bId}`). As last resort, use a namespaced index fallback
+  (`employee-${index}`, `product-${index}`, etc.).
+
+### Standard
+
+- Do not use random/time-based keys. Avoid index keys for reorderable lists.
+- Ensure API contracts include stable identifiers where possible; add defensive
+  UI fallbacks when integrating historical/aggregate data.
+
+### Verification
+
+- No React key warnings in console. Lists render and update without reordering
+  glitches.
+
+---
+
+## Chrome-Only Fast Refresh/Webpack Stale Chunk Errors
+
+**Date**: 2025-08-21 • **Category**: Dev Experience / Build System
+
+### Context
+
+In Chrome during development, occasional errors appeared after edits:
+`TypeError: Cannot read properties of undefined (reading 'call')`. Private
+window worked; normal window failed until caches were cleared, indicating stale
+module chunks and HMR cache interactions.
+
+### Root Cause
+
+- Dev persistent webpack cache + aggressive chunk reuse combined with browser
+  caching and Fast Refresh produced stale module references.
+- `experimental.optimizePackageImports` included React packages, increasing the
+  likelihood of RSC/HMR edge cases.
+
+### Solution
+
+Applied dev-hardening in `next.config.js`:
+
+- Remove React packages from `optimizePackageImports` (keep only non-React).
+- Disable webpack persistent cache in dev (`config.cache = false`) and clear
+  `snapshot.managedPaths`/`immutablePaths`.
+- Set `optimization.realContentHash = false` in dev.
+- Add dev-only no-store headers for `/_next/static/*` to avoid stale chunk
+  reuse.
+- If needed, run with `FAST_REFRESH=false npm run dev:smart` temporarily.
+
+### Verification
+
+- Hard refresh (or Empty Caches) resolves previously sticky errors.
+- Subsequent edits no longer trigger Chrome-only HMR failures.
+
+### Prevention / Standards
+
+- Keep the dev config changes in place; do not reintroduce React into
+  `optimizePackageImports`.
+- Prefer `npm run dev:smart` always; use hard refresh/Empty Caches after config
+  changes.
+
 ## Critical Performance Pattern: Always Use useApiClient for Client Fetching
 
 **Date**: 2025-06-23 • **Category**: Performance / Architecture • **Impact**:
@@ -1197,3 +1389,188 @@ Applied the same provider wrapping pattern to both edit routes:
 - ❌ Inconsistent provider patterns across similar routes
 
 ---
+
+## Critical Fix: QueryClient Provider & React Query Mutations
+
+**Date**: 2025-01-21 **Phase**: 2.7 - Infrastructure Stability **Context**:
+Fixing "No QueryClient set" error causing 500 errors on products and customers
+pages **Problem**: QueryProvider was only rendering QueryClientProvider after
+client-side hydration, but components were trying to use useQueryClient
+immediately, causing runtime errors **Solution**:
+
+- Fixed QueryProvider to always render QueryClientProvider (removed client-side
+  only condition)
+- Replaced mock mutation objects with proper React Query useMutation hooks
+- Added proper cache invalidation and updates for create/update/delete
+  operations **Key Insights**:
+- QueryClientProvider must be available during SSR/CSR hydration, not just after
+  client-side initialization
+- Mock mutation objects break React Query's caching and error handling
+- Proper useMutation hooks provide better error handling and cache management
+  **Prevention**:
+- Always ensure QueryClientProvider is available from the start
+- Use proper React Query hooks instead of mock objects
+- Test React Query functionality during development **Analytics Impact**:
+  Maintained existing tracking **Accessibility Considerations**: No
+  accessibility implications **Security Implications**: No security changes,
+  pure infrastructure fix **Related**: [Design System Migration - Phase
+  3][memory:phase3], [React Query Integration][memory:react-query]
+
+---
+
+## ProductCreationForm Concurrency & Routing Fixes
+
+**Date**: 2025-08-22 • **Category**: React Concurrency / Form Validation / Routing
+
+### Context
+
+ProductCreationForm experienced "Step is still running" errors from concurrent step validation and routing inconsistencies between modal (`/products`) and standalone (`/products/create`) usage.
+
+### Problems
+
+- Concurrent `handleNextStep` calls causing race conditions during validation
+- Rapid clicks bypassing validation states and triggering multiple async operations
+- SKU uniqueness validation missing on field blur
+- Routing inconsistency: form worked as modal but failed as standalone page
+
+### Solutions
+
+**1. Synchronous Guards & Throttling**
+- Added `useRef` guards (`advancingRef`, `lastAdvanceAtRef`) to prevent re-entrant calls
+- 300ms throttle on rapid clicks to prevent overlapping validations
+- All navigation handlers respect `isAdvancingStep` state
+
+**2. UI State Management**
+- Disabled all navigation buttons during step advancement or validation
+- Added loading spinner on "Next Step" button during validation
+- Modal close button disabled during advancement
+
+**3. SKU Uniqueness Validation**
+- Implemented real-time validation on field blur via API call
+- Visual feedback with border color changes (red=taken, green=available)
+- Submit blocked when SKU is invalid or being checked
+
+**4. Routing Consistency**
+- Added `inline` prop to support both modal and standalone rendering
+- Fixed `/products/create` route to render form independently
+- Ensured identical behavior between both usage patterns
+
+**5. Error Handling Compliance**
+- Updated to use `ErrorHandlingService.getInstance().processError()` pattern
+- Added proper error metadata with component context
+- Wrapped `handleSubmit` in `useCallback` to fix React Hook dependencies
+
+### Key Insights
+
+- **Synchronous guards** prevent React state race conditions more effectively than async locks
+- **UI disabling** during operations provides better UX than error messages
+- **Real-time validation** improves form completion rates and data quality
+- **Dual rendering modes** require careful prop design to maintain consistency
+- **CORE_REQUIREMENTS.md compliance** ensures long-term maintainability
+
+### Standards
+
+- Use `useRef` for synchronous operation guards in multi-step forms
+- Always disable UI during async operations to prevent concurrency
+- Implement field-level validation with immediate feedback
+- Design components to support multiple rendering contexts
+- Follow established error handling patterns with proper metadata
+
+### Verification
+
+- Manual testing confirmed no "Step is still running" errors with rapid clicks
+- Both `/products` (modal) and `/products/create` (standalone) work identically
+- SKU validation triggers on blur with proper visual feedback
+- TypeScript compliance maintained with zero errors
+
+---
+
+## Error Handling Migration - Final Comprehensive Lessons Learned
+
+**Date**: 2025-01-21 **Phase**: 2.9 - Error Handling Standardization **Context**: Comprehensive migration from console.error to standardized ErrorHandlingService across the entire application **Problem**: Inconsistent error handling patterns across 44+ files created debugging difficulties, poor observability, and security vulnerabilities **Solution**: Systematic migration to ErrorHandlingService.getInstance().processError() with proper metadata and error codes **Key Insights**:
+
+### **Critical Lessons Learned**
+
+1. **Scope Management is Critical**: Variables used in error metadata must be declared outside try blocks to avoid scope issues. This was a recurring pattern across multiple files.
+
+2. **Error Code Validation**: Many ErrorCodes properties don't exist (e.g., `OPERATION_FAILED`). Always use existing codes like `INTERNAL_ERROR`, `INITIALIZATION_FAILED`, etc.
+
+3. **Infrastructure Quality Discovery**: The migration revealed excellent existing code quality - many components already had proper error handling infrastructure in place.
+
+4. **Incremental Migration Success**: Migration can be done incrementally without breaking existing functionality, allowing for systematic improvement.
+
+5. **Metadata Enrichment**: Proper error metadata (component, operation, context) dramatically improves debugging capabilities and observability.
+
+6. **Pattern Consistency**: Error handling patterns should be consistent across all layers (API routes, components, hooks, utilities).
+
+7. **Performance Impact**: Standardized error handling has minimal performance impact while providing significant debugging benefits.
+
+8. **Code Quality Assessment**: The migration process served as a comprehensive code quality audit, revealing well-structured error handling in many areas.
+
+### **Technical Patterns Discovered**
+
+- **Singleton Pattern**: ErrorHandlingService.getInstance() provides consistent access across the application
+- **Metadata Structure**: Component + operation + context provides comprehensive error tracking
+- **Error Code Categorization**: SYSTEM, AUTH, DATA, ANALYTICS categories enable proper error classification
+- **Scope Management**: Variable declaration outside try blocks prevents metadata access issues
+- **Incremental Migration**: Phased approach allows systematic improvement without breaking changes
+
+### **Prevention Standards**
+
+- Always use ErrorHandlingService.getInstance().processError() instead of console.error
+- Declare variables used in error metadata outside try blocks
+- Use appropriate ErrorCodes from existing categories
+- Include component and operation metadata for better debugging
+- Maintain consistent error handling patterns across the entire application
+- Follow established patterns from CORE_REQUIREMENTS.md
+
+### **Impact Assessment**
+
+- **Debugging**: Enhanced error tracking and debugging capabilities
+- **Security**: Improved security through standardized error logging and tracking
+- **Observability**: Better error categorization and metadata for monitoring
+- **Maintainability**: Consistent error handling patterns across the codebase
+- **Code Quality**: Discovered excellent existing infrastructure quality
+
+### **Migration Statistics**
+
+- **Total Files Migrated**: 33+ files across multiple phases
+- **Console.error Reduction**: From 49 to 16 calls (67% reduction)
+- **Remaining Calls**: Primarily in test utilities and logger infrastructure (appropriate to keep)
+- **Coverage**: Complete coverage of API routes, React components, hooks, utility services, and performance utilities
+
+### **Phase-by-Phase Progress**
+
+- **Phase 1**: 10 critical API routes & middleware (44 → 41 files)
+- **Phase 2**: 6 React components & test files (41 → 35 files)
+- **Phase 3**: 9 remaining API routes & hooks (49 → 37 calls)
+- **Phase 4**: 6 library utilities & performance services (37 → 22 calls)
+- **Phase 5**: 4 performance utilities & service utilities (22 → 16 calls)
+
+### **Remaining Work**
+
+- **Service Utilities**: 2 remaining calls in userService.ts
+- **Offline Utilities**: 8 calls in ServiceWorkerManager.ts (appropriate for offline functionality)
+- **Test Utilities**: 2 calls in test-utils.tsx (appropriate for testing)
+- **Logger Utilities**: 3 calls in logger infrastructure (appropriate for logging)
+
+### **Future Considerations**
+
+- Continue migration for remaining service utilities and offline components
+- Establish automated linting rules to prevent console.error usage
+- Implement error handling compliance checks in CI/CD pipeline
+- Consider error handling patterns for new feature development
+- Evaluate offline error handling patterns for ServiceWorkerManager
+
+### **Quality Assurance**
+
+- **TypeScript Compliance**: All migrations maintain 100% TypeScript compliance
+- **Functionality Preservation**: No breaking changes or functionality loss
+- **Performance Impact**: Minimal performance overhead with significant debugging benefits
+- **Code Quality**: Improved consistency and maintainability across the codebase
+
+**Related**: [Error Handling Standards][memory:error-handling], [CORE_REQUIREMENTS.md][memory:core-requirements], [Singleton Pattern][memory:singleton]
+
+---
+
+## Critical Fix: QueryClient Provider & React Query Mutations

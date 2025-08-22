@@ -7,6 +7,10 @@
  */
 
 import { useLoginAnalytics } from '@/hooks/auth/useLoginAnalytics';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logDebug } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, ChevronDown, CircleAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { getSession, signIn } from 'next-auth/react';
@@ -96,6 +100,7 @@ const handleAuthError = (
 export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
   const router = useRouter();
   const analytics = useLoginAnalytics();
+  const errorHandlingService = ErrorHandlingService.getInstance();
 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -154,7 +159,7 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
       if (now - lastDebugTime.current > 2000) {
         // Only log every 2 seconds max
         lastDebugTime.current = now;
-        console.log('LoginForm State:', {
+        logDebug('LoginForm State:', {
           isValid,
           hasCredentials: !!(email && password && selectedRole),
           errorCount: Object.keys(errors).length,

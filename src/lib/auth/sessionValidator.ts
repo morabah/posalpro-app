@@ -1,7 +1,8 @@
 // [AUTH_FIX] Enhanced session validation
 import { authOptions } from '@/lib/auth';
-import { getServerSession } from 'next-auth';
+import { logDebug } from '@/lib/logger';
 import type { Session } from 'next-auth';
+import { getServerSession } from 'next-auth';
 
 interface ValidationDebug {
   hasSession: boolean;
@@ -23,7 +24,9 @@ export interface ValidationResult {
 export class SessionValidator {
   static async validateSession(): Promise<ValidationResult> {
     const session = await getServerSession(authOptions);
-    const user = session?.user as ({ id?: unknown; email?: string | null; roles?: unknown } | undefined);
+    const user = session?.user as
+      | { id?: unknown; email?: string | null; roles?: unknown }
+      | undefined;
 
     const validation: ValidationResult = {
       isValid: false,
@@ -41,33 +44,33 @@ export class SessionValidator {
     };
 
     if (!session) {
-      validation.error = 'No session found';
-      console.log('[AUTH_FIX] Session validation failed: No session');
+      logDebug('[AUTH_FIX] Session validation failed: No session');
+      validation.error = 'No session';
       return validation;
     }
 
     if (!session.user) {
+      logDebug('[AUTH_FIX] Session validation failed: No user in session');
       validation.error = 'No user in session';
-      console.log('[AUTH_FIX] Session validation failed: No user in session');
       return validation;
     }
 
-    if (!('id' in session.user) || !(session.user as { id?: unknown }).id) {
-      validation.error = 'No user ID in session';
-      console.log('[AUTH_FIX] Session validation failed: No user ID');
+    if (!session.user.id) {
+      logDebug('[AUTH_FIX] Session validation failed: No user ID');
+      validation.error = 'No user ID';
       return validation;
     }
 
-    validation.isValid = true;
-    validation.session = session;
-    validation.user = session.user;
-
-    console.log('[AUTH_FIX] Session validation successful:', {
+    // Session is valid
+    logDebug('[AUTH_FIX] Session validation successful:', {
       userId: session.user.id,
       email: session.user.email,
       roles: session.user.roles,
     });
 
+    validation.isValid = true;
+    validation.session = session;
+    validation.user = session.user;
     return validation;
   }
 

@@ -6,7 +6,8 @@
 'use client';
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import html2pdf from 'html2pdf.js';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { Download, Loader2 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
@@ -66,6 +67,9 @@ export default function PDFExportButton({
         'medium'
       );
 
+      // Dynamic import to prevent SSR issues
+      const html2pdf = (await import('html2pdf.js')).default;
+
       // Find the target element
       const targetElement = document.getElementById(targetId);
       if (!targetElement) {
@@ -124,7 +128,16 @@ export default function PDFExportButton({
         'medium'
       );
     } catch (error) {
-      console.error('PDF export failed:', error);
+      ErrorHandlingService.getInstance().processError(
+        error as Error,
+        'PDF export failed',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'PDFExportButton',
+          operation: 'exportToPDF',
+          context: { targetId, filename },
+        }
+      );
 
       // Track error
       analytics(

@@ -1,3 +1,5 @@
+import { logDebug } from '@/lib/logger';
+
 /**
  * Request Deduplication Utility
  * Prevents duplicate API calls by caching pending requests
@@ -23,16 +25,16 @@ class RequestDeduplicator {
   ): Promise<T> {
     // Check if request is already pending
     const existing = this.pendingRequests.get(key);
-    
+
     if (existing) {
-      console.log(`🔄 [RequestDeduplication] Reusing pending request: ${key}`);
+      logDebug(`🔄 [RequestDeduplication] Reusing pending request: ${key}`);
       return existing.promise as Promise<T>;
     }
 
     // Create new request
-    console.log(`🚀 [RequestDeduplication] Creating new request: ${key}`);
+    logDebug(`🚀 [RequestDeduplication] Creating new request: ${key}`);
     const promise = requestFn();
-    
+
     // Set up cleanup
     const timeout = setTimeout(() => {
       this.pendingRequests.delete(key);
@@ -46,14 +48,13 @@ class RequestDeduplicator {
     });
 
     // Clean up on completion (success or failure)
-    promise
-      .finally(() => {
-        const pending = this.pendingRequests.get(key);
-        if (pending?.timeout) {
-          clearTimeout(pending.timeout);
-        }
-        this.pendingRequests.delete(key);
-      });
+    promise.finally(() => {
+      const pending = this.pendingRequests.get(key);
+      if (pending?.timeout) {
+        clearTimeout(pending.timeout);
+      }
+      this.pendingRequests.delete(key);
+    });
 
     return promise;
   }
@@ -70,7 +71,7 @@ class RequestDeduplicator {
    * Clear all pending requests
    */
   clear(): void {
-    this.pendingRequests.forEach((request) => {
+    this.pendingRequests.forEach(request => {
       if (request.timeout) {
         clearTimeout(request.timeout);
       }
@@ -92,15 +93,27 @@ class RequestDeduplicator {
   private getOldestRequestAge(): number {
     let oldest = 0;
     const now = Date.now();
-    
-    this.pendingRequests.forEach((request) => {
+
+    this.pendingRequests.forEach(request => {
       const age = now - request.timestamp;
       if (age > oldest) {
         oldest = age;
       }
     });
-    
+
     return oldest;
+  }
+
+  private getRequestKey(url: string, method: string, body?: unknown): string {
+    const key = `${method}:${url}:${JSON.stringify(body || '')}`;
+
+    if (this.pendingRequests.has(key)) {
+      logDebug(`🔄 [RequestDeduplication] Reusing pending request: ${key}`);
+      return key;
+    }
+
+    logDebug(`🚀 [RequestDeduplication] Creating new request: ${key}`);
+    return key;
   }
 }
 

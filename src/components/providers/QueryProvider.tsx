@@ -75,19 +75,20 @@ export function QueryProvider({ children }: QueryProviderProps) {
       })
   );
 
-  // Don't render until client-side
-  if (!isClient) {
-    return <>{children}</>;
-  }
-
+  // ✅ FIXED: Always render QueryClientProvider to prevent "No QueryClient set" errors
   return (
     <QueryClientProvider client={queryClient}>
       {children}
       {/* Show React Query DevTools in development */}
-      {process.env.NODE_ENV === 'development' && (() => {
-        const Devtools = dynamic(() => import('@tanstack/react-query-devtools').then(m => m.ReactQueryDevtools), { ssr: false });
-        return <Devtools initialIsOpen={false} position="bottom" />;
-      })()}
+      {process.env.NODE_ENV === 'development' &&
+        isClient &&
+        (() => {
+          const Devtools = dynamic(
+            () => import('@tanstack/react-query-devtools').then(m => m.ReactQueryDevtools),
+            { ssr: false }
+          );
+          return <Devtools initialIsOpen={false} position="bottom" />;
+        })()}
     </QueryClientProvider>
   );
 }

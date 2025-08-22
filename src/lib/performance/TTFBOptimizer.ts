@@ -5,6 +5,7 @@
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logWarn } from '@/lib/logger';
 
 export interface TTFBOptimizationConfig {
   enablePreloading: boolean;
@@ -60,7 +61,7 @@ export class TTFBOptimizer {
         await this.optimizeCriticalCSS();
       }
 
-      console.log('✅ TTFB optimization completed');
+      logDebug('✅ TTFB optimization completed');
     } catch (error) {
       const standardError = this.errorHandlingService.processError(
         error,
@@ -81,7 +82,7 @@ export class TTFBOptimizer {
   private async setupServerSideCaching(): Promise<void> {
     // Implement Redis caching for API responses
     // Cache frequently accessed data like user sessions, customer lists
-    console.log('🔧 Setting up server-side caching for TTFB optimization');
+    logDebug('🔧 Setting up server-side caching for TTFB optimization');
   }
 
   /**
@@ -91,7 +92,7 @@ export class TTFBOptimizer {
     // Implement connection pooling
     // Optimize query execution plans
     // Enable query result caching
-    console.log('🔧 Optimizing database connections for TTFB improvement');
+    logDebug('🔧 Optimizing database connections for TTFB improvement');
   }
 
   /**
@@ -101,7 +102,7 @@ export class TTFBOptimizer {
     if (typeof document !== 'undefined') {
       // ✅ CRITICAL: Only preload resources that are immediately needed
       // Removed API endpoint preloading to prevent warnings
-      console.log('🔧 Resource hints optimization completed (no preload warnings)');
+      logDebug('🔧 Resource hints optimization completed (no preload warnings)');
     }
   }
 
@@ -111,7 +112,7 @@ export class TTFBOptimizer {
   private async optimizeCriticalCSS(): Promise<void> {
     // Inline critical CSS
     // Defer non-critical CSS
-    console.log('🔧 Optimizing critical CSS for TTFB improvement');
+    logDebug('🔧 Optimizing critical CSS for TTFB improvement');
   }
 
   /**
@@ -126,10 +127,10 @@ export class TTFBOptimizer {
             const ttfb = navEntry.responseStart - navEntry.requestStart;
 
             if (ttfb > this.config.maxTTFB) {
-              console.warn(`⚠️ TTFB violation: ${ttfb}ms (target: <${this.config.maxTTFB}ms)`);
+              logWarn(`⚠️ TTFB violation: ${ttfb}ms (target: <${this.config.maxTTFB}ms)`);
               this.triggerTTFBOptimization();
             } else {
-              console.log(`✅ TTFB: ${ttfb}ms (excellent)`);
+              logDebug(`✅ TTFB: ${ttfb}ms (excellent)`);
             }
           }
         }
@@ -143,7 +144,7 @@ export class TTFBOptimizer {
    * ✅ CRITICAL: Trigger TTFB optimization when violations detected
    */
   private triggerTTFBOptimization(): void {
-    console.log('🚨 TTFB violation detected, triggering optimization...');
+    logDebug('🚨 TTFB violation detected, triggering optimization...');
     this.optimizeTTFB();
   }
 }

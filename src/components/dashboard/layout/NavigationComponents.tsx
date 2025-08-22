@@ -3,22 +3,22 @@
  * Navigation-specific components and utilities
  */
 
-import { memo, useState } from 'react';
 import {
+  BellIcon,
+  BuildingOfficeIcon,
+  ChartBarIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  HomeIcon,
-  ChartBarIcon,
-  UserGroupIcon,
   CogIcon,
   DocumentTextIcon,
-  BuildingOfficeIcon,
-  MegaphoneIcon,
-  BellIcon,
   ExclamationTriangleIcon,
+  HomeIcon,
+  MagnifyingGlassIcon,
   SparklesIcon,
-  MagnifyingGlassIcon
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
+import Image from 'next/image';
+import { memo, useState } from 'react';
 
 // Navigation Menu Item
 export const NavigationMenuItem = memo(
@@ -26,7 +26,7 @@ export const NavigationMenuItem = memo(
     item,
     isActive,
     isExpanded,
-    onToggle
+    onToggle,
   }: {
     item: {
       id: string;
@@ -69,7 +69,7 @@ export const NavigationMenuItem = memo(
 
         {hasChildren && isExpanded && (
           <div className="ml-6 mt-1 space-y-1">
-            {item.children!.map((child) => (
+            {item.children!.map(child => (
               <a
                 key={child.id}
                 href={child.href}
@@ -89,13 +89,7 @@ NavigationMenuItem.displayName = 'NavigationMenuItem';
 
 // Main Navigation Menu
 export const MainNavigationMenu = memo(
-  ({
-    activeItem,
-    onItemClick
-  }: {
-    activeItem?: string;
-    onItemClick: (itemId: string) => void;
-  }) => {
+  ({ activeItem, onItemClick }: { activeItem?: string; onItemClick: (itemId: string) => void }) => {
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
     const navigationItems = [
@@ -169,7 +163,7 @@ export const MainNavigationMenu = memo(
 
     return (
       <nav className="space-y-1">
-        {navigationItems.map((item) => (
+        {navigationItems.map(item => (
           <NavigationMenuItem
             key={item.id}
             item={item}
@@ -187,11 +181,7 @@ MainNavigationMenu.displayName = 'MainNavigationMenu';
 
 // Quick Actions Menu
 export const QuickActionsMenu = memo(
-  ({
-    onActionClick
-  }: {
-    onActionClick: (actionId: string) => void;
-  }) => {
+  ({ onActionClick }: { onActionClick: (actionId: string) => void }) => {
     const quickActions = [
       {
         id: 'new-proposal',
@@ -223,7 +213,7 @@ export const QuickActionsMenu = memo(
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
         <div className="space-y-2">
-          {quickActions.map((action) => (
+          {quickActions.map(action => (
             <button
               key={action.id}
               onClick={() => onActionClick(action.id)}
@@ -249,7 +239,7 @@ export const NotificationCenter = memo(
   ({
     notifications,
     onNotificationClick,
-    onMarkAllRead
+    onMarkAllRead,
   }: {
     notifications: Array<{
       id: string;
@@ -295,10 +285,7 @@ export const NotificationCenter = memo(
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
           {unreadCount > 0 && (
-            <button
-              onClick={onMarkAllRead}
-              className="text-xs text-blue-600 hover:text-blue-700"
-            >
+            <button onClick={onMarkAllRead} className="text-xs text-blue-600 hover:text-blue-700">
               Mark all read
             </button>
           )}
@@ -307,7 +294,7 @@ export const NotificationCenter = memo(
         <div className="max-h-64 overflow-y-auto">
           {notifications.length > 0 ? (
             <div className="space-y-1">
-              {notifications.map((notification) => (
+              {notifications.map(notification => (
                 <div
                   key={notification.id}
                   onClick={() => onNotificationClick(notification.id)}
@@ -322,12 +309,8 @@ export const NotificationCenter = memo(
                       {getNotificationIcon(notification.type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900">
-                        {notification.title}
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        {notification.message}
-                      </div>
+                      <div className="text-sm font-medium text-gray-900">{notification.title}</div>
+                      <div className="text-sm text-gray-600 mt-1">{notification.message}</div>
                       <div className="text-xs text-gray-500 mt-1">
                         {new Date(notification.timestamp).toLocaleString()}
                       </div>
@@ -354,7 +337,7 @@ NotificationCenter.displayName = 'NotificationCenter';
 export const SearchBar = memo(
   ({
     onSearch,
-    placeholder = 'Search...'
+    placeholder = 'Search...',
   }: {
     onSearch: (query: string) => void;
     placeholder?: string;
@@ -373,7 +356,7 @@ export const SearchBar = memo(
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={e => setQuery(e.target.value)}
           placeholder={placeholder}
           className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
@@ -391,7 +374,7 @@ SearchBar.displayName = 'SearchBar';
 export const UserMenu = memo(
   ({
     user,
-    onMenuAction
+    onMenuAction,
   }: {
     user: {
       name: string;
@@ -417,7 +400,13 @@ export const UserMenu = memo(
         >
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
             {user.avatar ? (
-              <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full" />
+              <Image
+                src={user.avatar}
+                alt={user.name}
+                className="w-8 h-8 rounded-full"
+                width={32}
+                height={32}
+              />
             ) : (
               <span className="text-white text-sm font-medium">
                 {user.name.charAt(0).toUpperCase()}
@@ -434,7 +423,7 @@ export const UserMenu = memo(
         {isOpen && (
           <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
             <div className="py-1">
-              {menuItems.map((item) => (
+              {menuItems.map(item => (
                 <a
                   key={item.id}
                   href={item.href}
@@ -456,9 +445,3 @@ export const UserMenu = memo(
 );
 
 UserMenu.displayName = 'UserMenu';
-
-
-
-
-
-

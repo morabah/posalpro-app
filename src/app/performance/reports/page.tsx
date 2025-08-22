@@ -6,6 +6,7 @@
  */
 
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/forms/Button';
 import { reportGenerator, TestReport } from '@/lib/performance/reportGenerator';
 import {
   ArrowDownTrayIcon,
@@ -19,40 +20,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
-// Simple Button component
-const Button = ({
-  onClick,
-  disabled,
-  children,
-  variant = 'primary',
-  className = '',
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-  variant?: 'primary' | 'outline' | 'destructive';
-  className?: string;
-}) => {
-  const baseClasses =
-    'px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-  const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
-    destructive: 'bg-red-600 text-white hover:bg-red-700',
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`${baseClasses} ${variantClasses[variant]} ${className}`}
-    >
-      {children}
-    </button>
-  );
-};
-
-// Simple Alert component
+// Simple Alert component using design system Card
 const Alert = ({
   children,
   type = 'info',
@@ -61,13 +29,13 @@ const Alert = ({
   type?: 'info' | 'success' | 'warning' | 'error';
 }) => {
   const typeClasses = {
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
-    success: 'bg-green-50 border-green-200 text-green-800',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
+    info: 'border-blue-200 bg-blue-50',
+    success: 'border-green-200 bg-green-50',
+    warning: 'border-yellow-200 bg-yellow-50',
+    error: 'border-red-200 bg-red-50',
   };
 
-  return <div className={`border rounded-lg p-4 ${typeClasses[type]}`}>{children}</div>;
+  return <Card className={`p-4 ${typeClasses[type]}`}>{children}</Card>;
 };
 
 export default function TestReportsPage() {
@@ -171,7 +139,7 @@ export default function TestReportsPage() {
             <h2 className="text-lg font-semibold text-gray-900">Reports Overview</h2>
             <Button
               onClick={clearAllReports}
-              variant="destructive"
+              variant="danger"
               className="flex items-center space-x-2"
             >
               <TrashIcon className="w-4 h-4" />
@@ -365,7 +333,7 @@ export default function TestReportsPage() {
                     </Button>
                     <Button
                       onClick={() => deleteReport(report.id)}
-                      variant="destructive"
+                      variant="danger"
                       className="text-sm px-3 py-1 flex items-center space-x-1"
                     >
                       <TrashIcon className="w-4 h-4" />

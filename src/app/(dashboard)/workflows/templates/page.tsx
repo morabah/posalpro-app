@@ -515,7 +515,8 @@ export default function WorkflowTemplateManager() {
             <div className="flex items-center space-x-4">
               <Button
                 onClick={() => handleTemplateAction('create')}
-                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+                variant="primary"
+                className="flex items-center"
               >
                 <PlusIcon className="w-4 h-4 mr-2" />
                 Create Template
@@ -804,7 +805,8 @@ export default function WorkflowTemplateManager() {
                           <Button
                             onClick={() => handleTemplateAction('deploy', selectedTemplate)}
                             size="sm"
-                            className="bg-green-600 hover:bg-green-700 text-white flex items-center justify-center"
+                            variant="primary"
+                            className="flex items-center justify-center"
                           >
                             <PlayIcon className="w-4 h-4 mr-1" />
                             Deploy

@@ -336,7 +336,7 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
     if (data.sections && data.sections.length > 0) {
       type IncomingSection = Partial<ProposalSection> & { dueDate?: string | Date };
       baseSections = (data.sections as unknown as IncomingSection[]).map(section => ({
-        id: section.id ?? crypto.randomUUID(),
+        id: section.id ?? `tmp-${Math.random().toString(36).slice(2)}`,
         title: section.title ?? 'Untitled',
         required: section.required ?? true,
         order: section.order ?? 1,

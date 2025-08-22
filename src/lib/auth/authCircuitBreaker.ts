@@ -4,6 +4,9 @@
  * Implements exponential backoff and circuit breaker pattern
  */
 
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+
 interface CircuitBreakerConfig {
   maxRetries: number;
   timeoutMs: number;
@@ -154,7 +157,17 @@ export class AuthCircuitBreaker {
     } else if (this.state.failures < this.config.maxRetries) {
       console.warn(`⚠️ [AuthCircuitBreaker] Auth failure ${this.state.failures}/${this.config.maxRetries}`);
     } else {
-      console.error(`❌ [AuthCircuitBreaker] Circuit breaker activated. Error: ${error.message}`);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Circuit breaker activated',
+        ErrorCodes.AUTH.AUTHORIZATION_FAILED,
+        {
+          component: 'AuthCircuitBreaker',
+          operation: 'recordFailure',
+          failureCount: this.state.failures,
+          maxRetries: this.config.maxRetries,
+        }
+      );
     }
   }
 
@@ -220,4 +233,4 @@ export function getAuthCircuitBreaker(): AuthCircuitBreaker {
     authCircuitBreakerInstance = new AuthCircuitBreaker();
   }
   return authCircuitBreakerInstance;
-} 
+}

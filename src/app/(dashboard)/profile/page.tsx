@@ -9,7 +9,7 @@ const UserProfile = dynamic(() => import('@/components/profile/UserProfile'), {
     <div className="animate-pulse p-6">
       <div className="h-8 bg-gray-200 rounded mb-6"></div>
       <div className="space-y-4">
-        {[...Array(8)].map((_, i) => (
+        {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="h-12 bg-gray-100 rounded"></div>
         ))}
       </div>

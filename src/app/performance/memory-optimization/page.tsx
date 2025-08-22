@@ -5,9 +5,10 @@
  */
 
 import { MemoryOptimizationDashboard } from '@/components/performance/MemoryOptimizationDashboard';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { ErrorHandlingService } from '@/lib/errors';
 import { Metadata } from 'next';
-import { Suspense } from 'react';
 
 export const metadata: Metadata = {
   title: 'Memory Optimization - PosalPro MVP2',
@@ -52,7 +53,7 @@ function MemoryOptimizationPage() {
         {/* Performance Insights */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Memory Usage Trends */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <Card className="p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Memory Usage Trends</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -65,13 +66,15 @@ function MemoryOptimizationPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Memory Leaks Detected</span>
-                <span className="text-sm font-medium text-red-600">0</span>
+                <Badge variant="destructive" className="text-sm">
+                  0
+                </Badge>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Event Listener Analysis */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <Card className="p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Event Listener Analysis</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -84,130 +87,101 @@ function MemoryOptimizationPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Optimization Needed</span>
-                <span className="text-sm font-medium text-yellow-600">Analyzing...</span>
+                <Badge variant="warning" className="text-sm">
+                  Analyzing...
+                </Badge>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Optimization Strategies */}
-        <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
+        <Card className="mt-8 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Optimization Strategies</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-4 border border-gray-200 rounded-lg">
+            <Card className="p-4">
               <h3 className="text-sm font-medium text-gray-900 mb-2">Memory Management</h3>
               <ul className="text-sm text-gray-600 space-y-1">
                 <li>• Automatic garbage collection</li>
-                <li>• Detached element cleanup</li>
                 <li>• Memory leak detection</li>
                 <li>• Heap size optimization</li>
+                <li>• Object pooling</li>
               </ul>
-            </div>
-            <div className="p-4 border border-gray-200 rounded-lg">
+            </Card>
+
+            <Card className="p-4">
               <h3 className="text-sm font-medium text-gray-900 mb-2">
                 Event Listener Optimization
               </h3>
               <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Duplicate listener removal</li>
-                <li>• Hidden element cleanup</li>
-                <li>• Listener count monitoring</li>
-                <li>• Automatic cleanup triggers</li>
+                <li>• Automatic cleanup</li>
+                <li>• Event delegation</li>
+                <li>• Throttling & debouncing</li>
+                <li>• Memory leak prevention</li>
               </ul>
-            </div>
-            <div className="p-4 border border-gray-200 rounded-lg">
+            </Card>
+
+            <Card className="p-4">
               <h3 className="text-sm font-medium text-gray-900 mb-2">Performance Monitoring</h3>
               <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Real-time metrics tracking</li>
-                <li>• Optimization history</li>
+                <li>• Real-time metrics</li>
                 <li>• Performance alerts</li>
-                <li>• Automated optimization</li>
+                <li>• Optimization suggestions</li>
+                <li>• Historical analysis</li>
               </ul>
-            </div>
+            </Card>
           </div>
-        </div>
+        </Card>
 
-        {/* Technical Details */}
-        <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Implementation</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-2">
-                Memory Optimization Service
-              </h3>
-              <div className="text-sm text-gray-600 space-y-2">
-                <p>
-                  The MemoryOptimizationService provides comprehensive memory management
-                  capabilities:
-                </p>
-                <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>Automatic cleanup of detached DOM elements</li>
-                  <li>Event listener tracking and optimization</li>
-                  <li>Memory leak detection and prevention</li>
-                  <li>Garbage collection optimization</li>
-                  <li>Real-time memory metrics monitoring</li>
-                </ul>
+        {/* Implementation Status */}
+        <Card className="mt-8 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Implementation Status</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Memory Monitoring</span>
+                <Badge variant="success" className="text-xs">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Event Listener Tracking</span>
+                <Badge variant="success" className="text-xs">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Automatic Cleanup</span>
+                <Badge variant="success" className="text-xs">
+                  Active
+                </Badge>
               </div>
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-2">Performance Targets</h3>
-              <div className="text-sm text-gray-600 space-y-2">
-                <div className="flex justify-between">
-                  <span>Memory Usage:</span>
-                  <span className="font-medium">&lt; 100MB</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Event Listeners:</span>
-                  <span className="font-medium">&lt; 500</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Detached Elements:</span>
-                  <span className="font-medium">0</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Optimization Score:</span>
-                  <span className="font-medium">&gt; 90%</span>
-                </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Performance Alerts</span>
+                <Badge variant="success" className="text-xs">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Optimization Engine</span>
+                <Badge variant="success" className="text-xs">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Historical Analysis</span>
+                <Badge variant="warning" className="text-xs">
+                  In Progress
+                </Badge>
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Error Handling */}
-        <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-yellow-800 mb-4">
-            Error Handling & Monitoring
-          </h2>
-          <div className="text-sm text-yellow-700 space-y-2">
-            <p>
-              The memory optimization system includes comprehensive error handling and monitoring:
-            </p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>Automatic error detection and reporting</li>
-              <li>Graceful degradation on optimization failures</li>
-              <li>Real-time performance violation alerts</li>
-              <li>Comprehensive logging and debugging</li>
-              <li>Integration with ErrorHandlingService</li>
-            </ul>
-          </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
 }
 
-export default function MemoryOptimizationPageWrapper() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading Memory Optimization Dashboard...</p>
-          </div>
-        </div>
-      }
-    >
-      <MemoryOptimizationPage />
-    </Suspense>
-  );
-}
+export default MemoryOptimizationPage;

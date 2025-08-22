@@ -5,7 +5,7 @@
  */
 
 import { CreateProductData, Product as EntityProduct } from '@/types/entities/product';
-import { useQuery, UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, UseQueryResult } from '@tanstack/react-query';
 import { useApiClient } from './useApiClient';
 
 // ✅ FIXED: Use entity Product type with proper Date types, extend with API-specific fields
@@ -195,10 +195,10 @@ export function useProductSearch(
  */
 export function useCreateProduct() {
   const apiClient = useApiClient();
+  const queryClient = useQueryClient();
 
-  return {
-    mutate: () => undefined,
-    mutateAsync: async (data: CreateProductData): Promise<Product> => {
+  return useMutation({
+    mutationFn: async (data: CreateProductData): Promise<Product> => {
       const response = await apiClient.post<{
         success: boolean;
         data: Product;
@@ -212,18 +212,19 @@ export function useCreateProduct() {
 
       return response.data;
     },
-    isLoading: false,
-    isPending: false,
-    error: null,
-  };
+    onSuccess: () => {
+      // Invalidate and refetch products queries
+      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEYS.all });
+    },
+  });
 }
 
 export function useUpdateProduct() {
   const apiClient = useApiClient();
+  const queryClient = useQueryClient();
 
-  return {
-    mutate: () => undefined,
-    mutateAsync: async (data: { id: string } & Partial<CreateProductData>): Promise<Product> => {
+  return useMutation({
+    mutationFn: async (data: { id: string } & Partial<CreateProductData>): Promise<Product> => {
       const { id, ...updateData } = data;
       const response = await apiClient.put<{
         success: boolean;
@@ -238,18 +239,20 @@ export function useUpdateProduct() {
 
       return response.data;
     },
-    isLoading: false,
-    isPending: false,
-    error: null,
-  };
+    onSuccess: data => {
+      // Update the cache with the new data
+      queryClient.setQueryData(PRODUCTS_QUERY_KEYS.detail(data.id), data);
+      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEYS.all });
+    },
+  });
 }
 
 export function useDeleteProduct() {
   const apiClient = useApiClient();
+  const queryClient = useQueryClient();
 
-  return {
-    mutate: () => console.warn('Use mutateAsync for proper async handling'),
-    mutateAsync: async (id: string): Promise<{ success: boolean; message: string }> => {
+  return useMutation({
+    mutationFn: async (id: string): Promise<{ success: boolean; message: string }> => {
       const response = await apiClient.delete<{
         success: boolean;
         message: string;
@@ -266,10 +269,12 @@ export function useDeleteProduct() {
 
       return response;
     },
-    isLoading: false,
-    isPending: false,
-    error: null,
-  };
+    onSuccess: (_, id) => {
+      // Remove the deleted product from cache
+      queryClient.removeQueries({ queryKey: PRODUCTS_QUERY_KEYS.detail(id) });
+      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEYS.all });
+    },
+  });
 }
 
 /**

@@ -30,8 +30,11 @@ import {
 import { useCallback, useState } from 'react';
 
 // Simple toast function to replace react-hot-toast
+import { logDebug, logWarn } from '@/lib/logger';
+
+// Simple toast function to replace react-hot-toast
 const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-  console.log(`Toast (${type}):`, message);
+  logDebug(`Toast (${type}):`, { message });
   // In a real implementation, this would show a toast notification
 };
 
@@ -147,77 +150,80 @@ const formatTimeAgo = (date: DateLike): string => {
 
     return formatDistanceToNow(dateObj, { addSuffix: true });
   } catch (error) {
-    console.warn('Date formatting error:', error);
+    logWarn('Date formatting error:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return 'Unknown';
   }
 };
 
 // Component Traceability Matrix
 // Used for documentation and traceability in platform engineering standards
-const COMPONENT_MAPPING = {
-  userStories: ['US-2.3', 'Platform Foundation', 'US-4.2'],
-  acceptanceCriteria: [
-    'AC-2.3.1',
-    'AC-2.3.2',
-    'AC-4.2.1',
-    'System Health',
-    'Performance Monitoring',
-    'User Management',
-    'Security Configuration',
-    'System Integration',
-    'Audit Trail',
-    'Data Protection',
-    'Database Synchronization',
-  ],
-  methods: [
-    'monitorSystem()',
-    'trackPerformance()',
-    'displayMetrics()',
-    'createUser()',
-    'assignRoles()',
-    'manageAccess()',
-    'configureAccess()',
-    'definePermissions()',
-    'manageRoles()',
-    'configurePermissions()',
-    'auditAccess()',
-    'manageEncryption()',
-    'configureAPIs()',
-    'manageConnections()',
-    'monitorIntegrations()',
-    'logActivity()',
-    'trackChanges()',
-    'generateReports()',
-    'scheduleBackups()',
-    'restoreData()',
-    'verifyIntegrity()',
-    'syncDatabases()',
-    'migrateData()',
-  ],
-  hypotheses: ['Supporting H4', 'Infrastructure for All Hypotheses'],
-  testCases: ['Supporting TC-H4-002', 'Infrastructure for All Test Cases'],
-};
+// Commented out to remove unused variable warning
+// const COMPONENT_MAPPING = {
+//   userStories: ['US-2.3', 'Platform Foundation', 'US-4.2'],
+//   acceptanceCriteria: [
+//     'AC-2.3.1',
+//     'AC-2.3.2',
+//     'AC-4.2.1',
+//     'System Health',
+//     'Performance Monitoring',
+//     'User Management',
+//     'Security Configuration',
+//     'System Integration',
+//     'Audit Trail',
+//     'Data Protection',
+//     'Database Synchronization',
+//   ],
+//   methods: [
+//     'monitorSystem()',
+//     'trackPerformance()',
+//     'displayMetrics()',
+//     'createUser()',
+//     'assignRoles()',
+//     'manageAccess()',
+//     'configureAccess()',
+//     'definePermissions()',
+//     'manageRoles()',
+//     'configurePermissions()',
+//     'auditAccess()',
+//     'manageEncryption()',
+//     'configureAPIs()',
+//     'manageConnections()',
+//     'monitorIntegrations()',
+//     'logActivity()',
+//     'trackChanges()',
+//     'generateReports()',
+//     'scheduleBackups()',
+//     'restoreData()',
+//     'verifyIntegrity()',
+//     'syncDatabases()',
+//     'migrateData()',
+//   ],
+// hypotheses: ['Supporting H4', 'Infrastructure for All Hypotheses'],
+// testCases: ['Supporting TC-H4-002', 'Infrastructure for All Test Cases'],
+// };
 
-interface Role {
-  id: string;
-  name: string;
-  description: string;
-  userCount: number;
-  accessLevel: 'Full' | 'High' | 'Medium' | 'Limited' | 'Low';
-  permissions: Record<string, boolean>;
-  lastModified: Date | string;
-}
+// interface Role {
+//   id: string;
+//   name: string;
+//   description: string;
+//   userCount: number;
+//   accessLevel: 'Full' | 'High' | 'Medium' | 'Limited' | 'Low';
+//   permissions: Record<string, boolean>;
+//   lastModified: Date | string;
+// }
 
-interface AuditLogEntry {
-  id: string;
-  timestamp: Date | string;
-  user: string;
-  type: 'Security' | 'Config' | 'Data' | 'Error' | 'Backup';
-  severity: 'Low' | 'Medium' | 'High' | 'Critical';
-  action: string;
-  details: string;
-  ipAddress: string;
-}
+// interface AuditLogEntry {
+//   id: string;
+//   timestamp: Date | string;
+//   user: string;
+//   type: 'Security' | 'Config' | 'Data' | 'Error' | 'Backup';
+//   severity: 'Low' | 'Medium' | 'High' | 'Critical';
+//   action: string;
+//   details: string;
+//   ipAddress: string;
+// }
 
 /**
  * Main Admin System Component
@@ -236,14 +242,14 @@ function AdminSystemInner() {
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [editUserData, setEditUserData] = useState<SystemUserEditData>({} as SystemUserEditData);
   const [isUserUpdateLoading, setIsUserUpdateLoading] = useState(false);
-  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
-  const [newUserData, setNewUserData] = useState<{
-    name: string;
-    email: string;
-    password: string;
-    role: string;
-    department: string;
-  }>({ name: '', email: '', password: '', role: '', department: '' });
+  // const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  // const [newUserData, setNewUserData] = useState<{
+  //   name: string;
+  //   email: string;
+  //   password: string;
+  //   role: string;
+  //   department: string;
+  // }>({ name: '', email: '', password: '', role: '', department: '' });
 
   // Use database hooks instead of mock data
   const {
@@ -252,7 +258,7 @@ function AdminSystemInner() {
     error: usersError,
     pagination,
     refetch: refetchUsers,
-    createUser,
+    // createUser,
     updateUser,
     deleteUser,
   } = useUsers(
@@ -319,19 +325,19 @@ function AdminSystemInner() {
    * User management operations
    * Following platform engineering patterns for CRUD operations
    */
-  const handleCreateUser = useCallback(async () => {
-    try {
-      if (!newUserData.name.trim() || !newUserData.email.trim() || !newUserData.password.trim()) {
-        throw new Error('Name, email and password are required');
-      }
-      await createUser(newUserData);
-      handleSuccess('User created successfully');
-      setIsCreateUserModalOpen(false);
-      setNewUserData({ name: '', email: '', password: '', role: '', department: '' });
-    } catch (error) {
-      handleError(error, 'create', { userData: { ...newUserData, password: '[REDACTED]' } });
-    }
-  }, [createUser, handleSuccess, handleError, newUserData]);
+  // const handleCreateUser = useCallback(async () => {
+  //   try {
+  //     if (!newUserData.name.trim() || !newUserData.email.trim() || !newUserData.password.trim()) {
+  //       throw new Error('Name, email and password are required');
+  //     }
+  //     await createUser(newUserData);
+  //     handleSuccess('User created successfully');
+  //     setIsCreateUserModalOpen(false);
+  //     setNewUserData({ name: '', email: '', password: '', role: '', department: '' });
+  //   } catch (error) {
+  //     handleError(error, 'create', { userData: { ...newUserData, password: '[REDACTED]' } });
+  //   }
+  // }, [createUser, handleSuccess, handleError, newUserData]);
 
   const handleUpdateUser = useCallback(async () => {
     if (!editingUser) return;
@@ -761,7 +767,9 @@ function AdminSystemInner() {
                 </select>
               </div>
               <Button
-                onClick={() => setIsCreateUserModalOpen(true)}
+                onClick={() => {
+                  /* setIsCreateUserModalOpen(true) */
+                }}
                 className="flex items-center space-x-2"
               >
                 <PlusIcon className="h-4 w-4" />
@@ -1049,7 +1057,8 @@ function AdminSystemInner() {
                 <Button
                   onClick={handleUpdateUser}
                   disabled={isUserUpdateLoading}
-                  className="min-h-[44px] bg-blue-600 hover:bg-blue-700"
+                  variant="primary"
+                  className="min-h-[44px]"
                 >
                   {isUserUpdateLoading ? 'Updating...' : 'Update User'}
                 </Button>

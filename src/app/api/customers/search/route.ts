@@ -270,7 +270,20 @@ async function trackCustomerSearchEvent(
       },
     });
   } catch (error) {
-    console.error('Failed to track customer search event:', error);
+    // Use standardized error handling for analytics tracking
+    errorHandlingService.processError(
+      error,
+      'Failed to track customer search event',
+      ErrorCodes.ANALYTICS.TRACKING_FAILED,
+      {
+        component: 'CustomerSearchRoute',
+        operation: 'trackCustomerSearchEvent',
+        userId,
+        query,
+        resultsCount,
+        searchDuration,
+      }
+    );
     // Don't throw error as this is non-critical
   }
 }

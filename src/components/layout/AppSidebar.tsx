@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useTierSettings } from '@/hooks/useTierSettings';
 
 interface NavigationItem {
   id: string;
@@ -262,6 +263,8 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['dashboard']));
   const navigationThrottleRef = useRef(new Map<string, number>());
+  const { getSidebarItems } = useTierSettings();
+  const analytics = useAnalytics();
 
   // Auto-expand active group with null check
   useEffect(() => {
@@ -300,7 +303,6 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
 
         // ⚡ PERFORMANCE: Use optimized analytics hook via useAnalytics (mocked in tests)
         try {
-          const analytics = useAnalytics();
           if (action === 'navigate') {
             analytics.track('navigate', {
               itemName: metadata.itemName,
@@ -314,7 +316,7 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
           } else {
             analytics.track(action, { ...metadata });
           }
-        } catch (_err) {
+        } catch {
           // Silent fail in case analytics is unavailable
         }
 
@@ -332,29 +334,43 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
         return;
       }
     },
-    []
+    [analytics]
   );
 
-  // Filter navigation items by user role - Make more permissive
+  // Filter navigation items by user role and tier settings
   const getFilteredNavigation = useCallback(() => {
-    if (!user?.role) return NAVIGATION_ITEMS;
-
-    return NAVIGATION_ITEMS.filter(item => {
-      // If no roles specified, show to everyone
-      if (!item.roles) return true;
-      // Show admin items only to admin users
-      if (item.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
-      // For other role restrictions, be more permissive
-      return true;
-    }).map(item => ({
-      ...item,
-      children: item.children?.filter(child => {
-        if (!child.roles) return true;
-        if (child.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+    const allowedSidebarItems = getSidebarItems();
+    
+    // Start with role-based filtering
+    let filteredItems = NAVIGATION_ITEMS;
+    
+    if (user?.role) {
+      filteredItems = NAVIGATION_ITEMS.filter(item => {
+        // If no roles specified, show to everyone
+        if (!item.roles) return true;
+        // Show admin items only to admin users
+        if (item.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+        // For other role restrictions, be more permissive
         return true;
-      }),
-    }));
-  }, [user?.role]);
+      }).map(item => ({
+        ...item,
+        children: item.children?.filter(child => {
+          if (!child.roles) return true;
+          if (child.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+          return true;
+        }),
+      }));
+    }
+
+    // Apply tier-based filtering
+    if (!allowedSidebarItems.includes('all')) {
+      filteredItems = filteredItems.filter(item => 
+        allowedSidebarItems.includes(item.id)
+      );
+    }
+
+    return filteredItems;
+  }, [user?.role, getSidebarItems]);
 
   const toggleGroup = useCallback(
     (groupId: string) => {

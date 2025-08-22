@@ -97,10 +97,7 @@ export function Breadcrumbs({ items, className = '' }: BreadcrumbsProps) {
     return breadcrumbs;
   }, [items, pathname]);
 
-  // Don't render if only home breadcrumb
-  if (breadcrumbItems.length <= 1) {
-    return null;
-  }
+  // Always render a stable <nav> to avoid SSR/CSR divergence on initial paint
 
   return (
     <nav

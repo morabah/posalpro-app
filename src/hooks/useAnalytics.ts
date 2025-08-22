@@ -7,6 +7,9 @@
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
 import { useApiClient } from './useApiClient';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logDebug } from '@/lib/logger';
 
 // Analytics Data Types
 export interface PerformanceAnalyticsData {
@@ -166,7 +169,15 @@ async function getHypothesisData(
           : 'needs-improvement') as 'excellent' | 'good' | 'needs-improvement' | 'critical',
     }));
   } catch (error) {
-    console.error('Error fetching hypothesis data:', error);
+    ErrorHandlingService.getInstance().processError(
+      error as Error,
+      'Error fetching hypothesis data',
+      ErrorCodes.ANALYTICS.ANALYTICS_FAILED,
+      {
+        component: 'useAnalytics',
+        operation: 'getHypothesisData',
+      }
+    );
     return generateMockHypothesisData();
   }
 }
@@ -203,7 +214,15 @@ export function useAnalyticsDashboard(
         return response.data;
       } catch (error) {
         // Log the error and fallback to mock data
-        console.error('Error fetching analytics dashboard data:', error);
+        ErrorHandlingService.getInstance().processError(
+          error as Error,
+          'Error fetching analytics dashboard data',
+          ErrorCodes.ANALYTICS.ANALYTICS_FAILED,
+          {
+            component: 'useAnalytics',
+            operation: 'useAnalyticsDashboard',
+          }
+        );
         return generateMockAnalyticsData(params.timeRange || '30d');
       }
     },
@@ -265,7 +284,15 @@ export function usePerformanceAnalytics(
         return response.data;
       } catch (error) {
         // Log the error and fallback to mock data
-        console.error('Error fetching performance analytics data:', error);
+        ErrorHandlingService.getInstance().processError(
+          error as Error,
+          'Error fetching performance analytics data',
+          ErrorCodes.ANALYTICS.ANALYTICS_FAILED,
+          {
+            component: 'useAnalytics',
+            operation: 'usePerformanceAnalytics',
+          }
+        );
         return generateMockPerformanceData();
       }
     },
@@ -457,7 +484,7 @@ export function useAnalytics() {
 
       // ✅ Throttle analytics events to prevent spam
       if (currentTime - lastAnalyticsTime.current > ANALYTICS_THROTTLE_INTERVAL) {
-        console.log(`Analytics Event: ${eventName}`, properties);
+        logDebug(`Analytics Event: ${eventName}`, properties);
         lastAnalyticsTime.current = currentTime;
 
         // Send to analytics service in production
@@ -483,21 +510,21 @@ export function useAnalytics() {
 
   const identify = (userId: string, traits: Record<string, unknown> = {}) => {
     if (typeof window !== 'undefined') {
-      console.log(`Analytics Identify: ${userId}`, traits);
+      logDebug(`Analytics Identify: ${userId}`, traits);
       track('user_identified', { userId, ...traits });
     }
   };
 
   const page = (pageName: string, properties: Record<string, unknown> = {}) => {
     if (typeof window !== 'undefined') {
-      console.log(`Analytics Page: ${pageName}`, properties);
+      logDebug(`Analytics Page: ${pageName}`, properties);
       track('page_view', { page: pageName, ...properties });
     }
   };
 
   const emergencyDisable = () => {
     if (typeof window !== 'undefined') {
-      console.log('Analytics emergency disabled');
+      logDebug('Analytics emergency disabled');
       localStorage.setItem('analytics_disabled', 'true');
     }
   };

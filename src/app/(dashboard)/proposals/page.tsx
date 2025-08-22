@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/forms/Button';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { logDebug } from '@/lib/logger';
 const ClockIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.ClockIcon), {
   ssr: false,
 });
@@ -44,7 +45,7 @@ interface QuickAction {
   description: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   href: string;
-  color: string;
+  variant: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 }
 
 // Component Traceability Matrix - tracking user stories and acceptance criteria
@@ -60,7 +61,7 @@ export default function ProposalsPage() {
 
   const trackAction = useCallback(
     (action: string, metadata: ProposalTrackingMetadata = {}) => {
-      console.log('Proposals Analytics:', {
+      logDebug('Proposals Analytics:', {
         action,
         metadata,
         timestamp: Date.now(),
@@ -80,7 +81,7 @@ export default function ProposalsPage() {
       description: 'Start a new proposal from scratch or template',
       icon: PlusIcon,
       href: '/dashboard/proposals/create',
-      color: 'bg-blue-600 hover:bg-blue-700',
+      variant: 'primary',
     },
     {
       id: 'manage-proposals',
@@ -88,7 +89,7 @@ export default function ProposalsPage() {
       description: 'View and edit existing proposals',
       icon: FolderOpenIcon,
       href: '/proposals/manage',
-      color: 'bg-green-600 hover:bg-green-700',
+      variant: 'primary',
     },
     {
       id: 'approve-proposals',
@@ -96,7 +97,7 @@ export default function ProposalsPage() {
       description: 'Review proposals pending approval',
       icon: ClockIcon,
       href: '/proposals/approve',
-      color: 'bg-purple-600 hover:bg-purple-700',
+      variant: 'primary',
     },
   ];
 
@@ -139,7 +140,8 @@ export default function ProposalsPage() {
                 <p className="text-gray-600 text-sm mb-4">{action.description}</p>
                 <Button
                   onClick={() => handleQuickAction(action)}
-                  className={`${action.color} text-white w-full`}
+                  variant={action.variant}
+                  className="w-full"
                 >
                   Access {action.title}
                 </Button>

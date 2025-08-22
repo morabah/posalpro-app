@@ -24,11 +24,14 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logDebug, logWarn } from '@/lib/logger';
 // import { toast } from 'react-hot-toast'; // Removed as per edit hint
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  console.log(`Toast (${type}):`, message);
+  logDebug(`Toast (${type}):`, { message });
   // In a real implementation, this would show a toast notification
 };
 
@@ -193,77 +196,86 @@ export default function SMEContributionInterface() {
 
   const { trackOptimized: trackAction } = useOptimizedAnalytics();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (dataFetchedRef.current) return;
-      dataFetchedRef.current = true;
-      setIsLoading(true);
-      try {
-        console.log('[SMEContributions] 🚀 Fetching SME data via apiClient...');
-        const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] =
-          await Promise.all([
-            apiClient.get<ApiResponse<SMEAssignment>>('/sme/assignment'),
-            apiClient.get<ApiResponse<ContributionTemplate[]>>('/sme/templates'),
-            apiClient.get<ApiResponse<ContributionResource[]>>('/sme/resources'),
-            apiClient.get<ApiResponse<VersionHistory[]>>('/sme/versions'),
-          ]);
+  const fetchSMEData = useCallback(async () => {
+    if (dataFetchedRef.current) return;
+    dataFetchedRef.current = true;
+    setIsLoading(true);
+    try {
+      logDebug('[SMEContributions] 🚀 Fetching SME data via apiClient...');
+      const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] =
+        await Promise.all([
+          apiClient.get<ApiResponse<SMEAssignment>>('/sme/assignment'),
+          apiClient.get<ApiResponse<ContributionTemplate[]>>('/sme/templates'),
+          apiClient.get<ApiResponse<ContributionResource[]>>('/sme/resources'),
+          apiClient.get<ApiResponse<VersionHistory[]>>('/sme/versions'),
+        ]);
 
-        if (assignmentResponse.success && assignmentResponse.data) {
-          const assignment = {
-            ...assignmentResponse.data,
-            assignedAt: new Date(assignmentResponse.data.assignedAt),
-            dueDate: new Date(assignmentResponse.data.dueDate),
-            content: {
-              ...assignmentResponse.data.content,
-              lastSaved: new Date(assignmentResponse.data.content.lastSaved),
-            },
-          };
-          setAssignmentData(assignment);
-          setContent(assignment.content.draft);
-          setWordCount(assignment.content.wordCount);
-          setLastSaved(assignment.content.lastSaved);
-        } else {
-          // Handle assignment fetch failure gracefully
-          const errorMessage = assignmentResponse.error || 'Failed to fetch assignment data';
-          console.warn('[SMEContributions] ⚠️ Assignment data not available:', errorMessage);
-          setFetchError(errorMessage);
-          // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
-          if (trackAction) {
-            trackAction('sme_assignment_load_failed', { error: errorMessage }, 'medium');
-          }
-        }
-
-        if (templatesResponse.success && Array.isArray(templatesResponse.data)) {
-          setTemplatesData(templatesResponse.data);
-        }
-
-        if (resourcesResponse.success && Array.isArray(resourcesResponse.data)) {
-          setResourcesData(resourcesResponse.data);
-        }
-
-        if (versionsResponse.success && Array.isArray(versionsResponse.data)) {
-          setVersionsData(
-            versionsResponse.data.map((v: VersionHistory) => ({
-              ...v,
-              savedAt: new Date(v.savedAt),
-            }))
-          );
-        }
-      } catch (error) {
-        console.error('[SMEContributions] ❌ Error fetching SME data:', error);
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      if (assignmentResponse.success && assignmentResponse.data) {
+        const assignment = {
+          ...assignmentResponse.data,
+          assignedAt: new Date(assignmentResponse.data.assignedAt),
+          dueDate: new Date(assignmentResponse.data.dueDate),
+          content: {
+            ...assignmentResponse.data.content,
+            lastSaved: new Date(assignmentResponse.data.content.lastSaved),
+          },
+        };
+        setAssignmentData(assignment);
+        setContent(assignment.content.draft);
+        setWordCount(assignment.content.wordCount);
+        setLastSaved(assignment.content.lastSaved);
+      } else {
+        // Handle assignment fetch failure gracefully
+        const errorMessage = assignmentResponse.error || 'Failed to fetch assignment data';
+        logWarn('[SMEContributions] ⚠️ Assignment data not available:', { error: errorMessage });
         setFetchError(errorMessage);
         // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
         if (trackAction) {
-          trackAction('sme_data_load_failed', { error: errorMessage }, 'high');
+          trackAction('sme_assignment_load_failed', { error: errorMessage }, 'medium');
         }
-      } finally {
-        setIsLoading(false);
       }
-    };
 
-    fetchData();
-  }, []); // ✅ CRITICAL FIX: Remove unstable dependencies
+      if (templatesResponse.success && Array.isArray(templatesResponse.data)) {
+        setTemplatesData(templatesResponse.data);
+      }
+
+      if (resourcesResponse.success && Array.isArray(resourcesResponse.data)) {
+        setResourcesData(resourcesResponse.data);
+      }
+
+      if (versionsResponse.success && Array.isArray(versionsResponse.data)) {
+        setVersionsData(
+          versionsResponse.data.map((v: VersionHistory) => ({
+            ...v,
+            savedAt: new Date(v.savedAt),
+          }))
+        );
+      }
+    } catch (error) {
+      ErrorHandlingService.getInstance().processError(
+        error as Error,
+        'Failed to fetch SME data',
+        ErrorCodes.DATA.FETCH_FAILED,
+        {
+          component: 'SMEContributionInterface',
+          operation: 'fetchData',
+          context: { dataType: 'sme_assignment_data' }
+        }
+      );
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      setFetchError(errorMessage);
+      // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
+      if (trackAction) {
+        trackAction('sme_data_load_failed', { error: errorMessage }, 'high');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiClient]); // ✅ CRITICAL FIX: Remove unstable dependencies
+
+  useEffect(() => {
+    fetchSMEData();
+  }, [fetchSMEData]); // ✅ CRITICAL FIX: Remove unstable dependencies
 
   const handleAutoSave = useCallback(async () => {
     if (!hasUnsavedChanges) return;
@@ -298,7 +310,7 @@ export default function SMEContributionInterface() {
       } else {
         // Handle autosave failure gracefully
         const errorMessage = response.error || 'Autosave failed';
-        console.warn('[SMEContributions] ⚠️ Autosave failed:', errorMessage);
+        logWarn('[SMEContributions] ⚠️ Autosave failed:', { error: errorMessage });
         setAutosaveStatus('Error saving');
         showToast('Failed to auto-save draft.', 'error');
         trackAction('autosave_failed', { error: errorMessage }, 'high');

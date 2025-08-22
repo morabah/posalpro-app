@@ -4,11 +4,13 @@
  */
 
 import { checkRedisHealth, getCache, setCache } from '@/lib/redis';
+import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+
   try {
-    const startTime = Date.now();
 
     // Check Redis health
     const isHealthy = await checkRedisHealth();
@@ -51,7 +53,17 @@ export async function GET(request: NextRequest) {
       status: isHealthy && cacheTestPassed ? 200 : 503,
     });
   } catch (error) {
-    console.error('Redis health check failed:', error);
+    // Use standardized error handling for Redis health checks
+    errorHandlingService.processError(
+      error,
+      'Redis health check failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'RedisHealthRoute',
+        operation: 'healthCheck',
+        totalTime: Date.now() - startTime,
+      }
+    );
 
     return NextResponse.json(
       {

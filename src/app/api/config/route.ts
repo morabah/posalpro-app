@@ -5,6 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -105,14 +106,14 @@ const allowedFields = [
  * GET /api/config - Get application configuration
  */
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { searchParams } = new URL(request.url);
     const config = { ...defaultConfig };
 
     // Handle field selection for performance optimization
@@ -147,7 +148,17 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Config API error:', error);
+    // Use standardized error handling for configuration errors
+    errorHandlingService.processError(
+      error,
+      'Config API error',
+      ErrorCodes.SYSTEM.CONFIGURATION,
+      {
+        component: 'ConfigRoute',
+        operation: 'GET',
+        requestedFields: searchParams.get('fields'),
+      }
+    );
     return NextResponse.json(
       {
         error: 'Failed to fetch configuration',

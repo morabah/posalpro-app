@@ -146,6 +146,33 @@ class ApiClientSingleton {
           throw std;
         }
 
+        // Handle 409 Conflict errors (duplicate entities)
+        if (status === 409) {
+          const std = new StandardError({
+            message:
+              (parsed &&
+              typeof parsed === 'object' &&
+              'error' in parsed &&
+              typeof (parsed as any).error === 'string'
+                ? (parsed as any).error
+                : undefined) || 'Resource already exists',
+            code: ErrorCodes.VALIDATION.DUPLICATE_ENTITY,
+            metadata: {
+              ...baseMetadata,
+              serverMessage:
+                parsed && typeof parsed === 'object'
+                  ? typeof (parsed as any).error === 'string'
+                    ? (parsed as any).error
+                    : typeof (parsed as any).message === 'string'
+                      ? (parsed as any).message
+                      : undefined
+                  : undefined,
+            },
+          });
+          this.errorHandlingService.processError(std);
+          throw std;
+        }
+
         // Fallback for other HTTP errors
         const std = new StandardError({
           message:

@@ -3,8 +3,15 @@
  * React hook for managing service worker functionality
  */
 
-import { serviceWorkerManager, ServiceWorkerStatus, ServiceWorkerConfig } from '@/lib/offline/ServiceWorkerManager';
-import { useEffect, useState, useCallback } from 'react';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug } from '@/lib/logger';
+import {
+  ServiceWorkerConfig,
+  serviceWorkerManager,
+  ServiceWorkerStatus,
+} from '@/lib/offline/ServiceWorkerManager';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface UseServiceWorkerReturn {
   status: ServiceWorkerStatus;
@@ -12,7 +19,7 @@ export interface UseServiceWorkerReturn {
   isOnline: boolean;
   updateAvailable: boolean;
   cacheInfo: Array<{ name: string; size: number }>;
-  
+
   // Actions
   initialize: () => Promise<boolean>;
   updateServiceWorker: () => Promise<boolean>;
@@ -20,7 +27,7 @@ export interface UseServiceWorkerReturn {
   queueForSync: (action: string, data: Record<string, unknown>) => Promise<boolean>;
   updateConfig: (config: Partial<ServiceWorkerConfig>) => void;
   unregister: () => Promise<boolean>;
-  
+
   // Cache management
   refreshCacheInfo: () => Promise<void>;
 }
@@ -63,9 +70,12 @@ export function useServiceWorker(autoInitialize: boolean = true): UseServiceWork
   }, [refreshCacheInfo]);
 
   // Queue action for background sync
-  const queueForSync = useCallback(async (action: string, data: Record<string, unknown>): Promise<boolean> => {
-    return await serviceWorkerManager.queueForSync(action, data);
-  }, []);
+  const queueForSync = useCallback(
+    async (action: string, data: Record<string, unknown>): Promise<boolean> => {
+      return await serviceWorkerManager.queueForSync(action, data);
+    },
+    []
+  );
 
   // Update configuration
   const updateConfig = useCallback((newConfig: Partial<ServiceWorkerConfig>): void => {
@@ -79,8 +89,6 @@ export function useServiceWorker(autoInitialize: boolean = true): UseServiceWork
     setStatus(serviceWorkerManager.getStatus());
     return result;
   }, []);
-
-
 
   // Setup event listeners
   useEffect(() => {
@@ -139,7 +147,7 @@ export function useServiceWorker(autoInitialize: boolean = true): UseServiceWork
     isOnline: !status.isOffline,
     updateAvailable,
     cacheInfo,
-    
+
     // Actions
     initialize,
     updateServiceWorker,
@@ -147,7 +155,7 @@ export function useServiceWorker(autoInitialize: boolean = true): UseServiceWork
     queueForSync,
     updateConfig,
     unregister,
-    
+
     // Cache management
     refreshCacheInfo,
   };
@@ -158,25 +166,27 @@ export function useServiceWorker(autoInitialize: boolean = true): UseServiceWork
  */
 export function useOfflineSync() {
   const { queueForSync, isOnline } = useServiceWorker();
-  
-  const syncAction = useCallback(async (action: string, data: Record<string, unknown>) => {
-    if (isOnline) {
-      // Execute immediately if online
-      try {
-        // This would typically call your API
-        console.log('Executing action online:', action, data);
-        return { success: true, immediate: true };
-      } catch {
-        // Queue for later if immediate execution fails
+
+  const syncAction = useCallback(
+    async (action: string, data: Record<string, unknown>) => {
+      if (isOnline) {
+        // Execute immediately if online
+        try {
+          logDebug('Executing action online:', { action, data });
+          return { success: true, immediate: true };
+        } catch {
+          // Queue for later if immediate execution fails
+          const queued = await queueForSync(action, data);
+          return { success: queued, immediate: false, queued };
+        }
+      } else {
+        // Queue for when back online
         const queued = await queueForSync(action, data);
         return { success: queued, immediate: false, queued };
       }
-    } else {
-      // Queue for when back online
-      const queued = await queueForSync(action, data);
-      return { success: queued, immediate: false, queued };
-    }
-  }, [isOnline, queueForSync]);
+    },
+    [isOnline, queueForSync]
+  );
 
   return {
     syncAction,
@@ -189,21 +199,33 @@ export function useOfflineSync() {
  */
 export function useCacheManagement() {
   const { cacheInfo, clearCaches, refreshCacheInfo } = useServiceWorker(false);
-  
+
   const totalCacheSize = cacheInfo.reduce((total, cache) => total + cache.size, 0);
-  
-  const clearSpecificCache = useCallback(async (cacheName: string): Promise<boolean> => {
-    try {
-      const result = await caches.delete(cacheName);
-      if (result) {
-        await refreshCacheInfo();
+
+  const clearSpecificCache = useCallback(
+    async (cacheName: string): Promise<boolean> => {
+      try {
+        const result = await caches.delete(cacheName);
+        if (result) {
+          await refreshCacheInfo();
+        }
+        return result;
+      } catch (error) {
+        ErrorHandlingService.getInstance().processError(
+          error as Error,
+          'Failed to clear specific cache',
+          ErrorCodes.SYSTEM.INTERNAL_ERROR,
+          {
+            component: 'useServiceWorker',
+            operation: 'clearSpecificCache',
+            cacheName,
+          }
+        );
+        return false;
       }
-      return result;
-    } catch (error) {
-      console.error('Failed to clear specific cache:', error);
-      return false;
-    }
-  }, [refreshCacheInfo]);
+    },
+    [refreshCacheInfo]
+  );
 
   return {
     cacheInfo,

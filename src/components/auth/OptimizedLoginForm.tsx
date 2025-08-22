@@ -13,6 +13,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logDebug } from '@/lib/logger';
 
 // Import analytics hook directly (not a React component)
 
@@ -57,6 +61,7 @@ interface OptimizedLoginFormProps {
 
 export function OptimizedLoginForm({ callbackUrl, className = '' }: OptimizedLoginFormProps) {
   const router = useRouter();
+  const errorHandlingService = ErrorHandlingService.getInstance();
 
   // State management
   const [showPassword, setShowPassword] = useState(false);
@@ -86,11 +91,13 @@ export function OptimizedLoginForm({ callbackUrl, className = '' }: OptimizedLog
 
   // Optimized submit handler
   const onSubmit = async (data: LoginFormData) => {
-    console.log('Form submission data:', JSON.stringify(data, null, 2));
-    setIsLoading(true);
-    setAuthError(null);
-
     try {
+      setIsLoading(true);
+      setAuthError(null);
+
+      // Replace console.log with logDebug
+      logDebug('Form submission data:', { formData: data });
+
       const credentials = {
         email: data.email,
         password: data.password,
@@ -98,14 +105,14 @@ export function OptimizedLoginForm({ callbackUrl, className = '' }: OptimizedLog
         redirect: false,
       };
 
-      console.log('SignIn credentials:', JSON.stringify(credentials, null, 2));
+      logDebug('SignIn credentials:', { email: credentials.email });
 
       const result = await signIn('credentials', credentials);
 
-      console.log('SignIn result:', result);
+      logDebug('SignIn result:', { success: result?.ok, error: result?.error });
 
       if (result?.error) {
-        console.log('Authentication error:', result.error);
+        logDebug('Authentication error:', { error: result.error });
         setAuthError('Invalid credentials. Please try again.');
         return;
       }
@@ -113,10 +120,10 @@ export function OptimizedLoginForm({ callbackUrl, className = '' }: OptimizedLog
       // Redirect based on role or callback URL
       const redirectUrl =
         callbackUrl || (data.role ? ROLE_REDIRECTS[data.role] : null) || '/dashboard';
-      console.log('Redirecting to:', redirectUrl);
+      logDebug('Redirecting to:', { redirectUrl });
       router.push(redirectUrl);
     } catch (error) {
-      console.log('Form submission error:', error);
+      logDebug('Form submission error:', { error: error instanceof Error ? error.message : 'Unknown error' });
       setAuthError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);

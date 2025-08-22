@@ -10,10 +10,11 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug } from '@/lib/logger';
 import {
   ArrowRightIcon,
   BellIcon,
@@ -176,14 +177,18 @@ export default function ApprovalWorkflowDashboard() {
         setApprovals(data);
 
         // Track successful load with Component Traceability Matrix
-        analytics('approval_workflow_loaded', {
-          userStories: COMPONENT_MAPPING.userStories,
-          acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-          testCases: COMPONENT_MAPPING.testCases,
-          approvalCount: data.length,
-          timestamp: Date.now(),
-        }, 'medium');
+        analytics(
+          'approval_workflow_loaded',
+          {
+            userStories: COMPONENT_MAPPING.userStories,
+            acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+            testCases: COMPONENT_MAPPING.testCases,
+            approvalCount: data.length,
+            timestamp: Date.now(),
+          },
+          'medium'
+        );
       } catch (err) {
         // Use standardized error handling
         const standardError = errorHandlingService.processError(
@@ -205,15 +210,19 @@ export default function ApprovalWorkflowDashboard() {
         setError(userFriendlyMessage);
 
         // Track error analytics with Component Traceability Matrix
-        analytics('approval_workflow_load_error', {
-          userStories: COMPONENT_MAPPING.userStories,
-          acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
-          hypotheses: COMPONENT_MAPPING.hypotheses,
-          testCases: COMPONENT_MAPPING.testCases,
-          errorType: standardError.code,
-          errorMessage: standardError.message,
-          timestamp: Date.now(),
-        }, 'high');
+        analytics(
+          'approval_workflow_load_error',
+          {
+            userStories: COMPONENT_MAPPING.userStories,
+            acceptanceCriteria: COMPONENT_MAPPING.acceptanceCriteria,
+            hypotheses: COMPONENT_MAPPING.hypotheses,
+            testCases: COMPONENT_MAPPING.testCases,
+            errorType: standardError.code,
+            errorMessage: standardError.message,
+            timestamp: Date.now(),
+          },
+          'high'
+        );
       } finally {
         setLoading(false);
       }
@@ -316,7 +325,7 @@ export default function ApprovalWorkflowDashboard() {
   }, []);
 
   const trackAction = useCallback((action: string, metadata: object = {}) => {
-    console.log('Approval Workflow Analytics:', {
+    logDebug('Approval Workflow Analytics:', {
       action,
       metadata,
       timestamp: Date.now(),
@@ -324,7 +333,12 @@ export default function ApprovalWorkflowDashboard() {
   }, []);
 
   useEffect(() => {
-    trackAction('dashboard_viewed');
+    // Track page analytics
+    logDebug('Approval Workflow Analytics:', {
+      page: 'proposals-approve',
+      timestamp: Date.now(),
+      userAgent: navigator.userAgent,
+    });
   }, []);
 
   // ✅ FIXED: Move useMemo before early returns to comply with Rules of Hooks

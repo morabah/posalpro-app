@@ -1,5 +1,6 @@
 import { authOptions } from '@/lib/auth';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { logError } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -62,7 +63,16 @@ export async function POST(request: NextRequest) {
       errorId: standardError.code,
     });
   } catch (error) {
-    console.error('[ErrorReportingAPI] Failed to process error report:', error);
+    // Use standardized error handling for error reporting failures
+    ErrorHandlingService.getInstance().processError(
+      error,
+      'Failed to process error report',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'ErrorReportingAPI',
+        operation: 'POST',
+      }
+    );
 
     return NextResponse.json(
       {

@@ -22,6 +22,7 @@ import {
   UserIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -998,7 +999,7 @@ export default function ProposalDetailPage() {
               </Card>
 
               {/* Communication Center */}
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <Card className="overflow-hidden">
                 <div className="bg-gradient-to-r from-gray-50 to-blue-50 px-4 py-3 border-b border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-900 flex items-center">
@@ -1095,7 +1096,7 @@ export default function ProposalDetailPage() {
                             : 'bg-gray-100 text-gray-600 border-gray-300'
                         }`}
                       >
-                        7
+                        12
                       </Badge>
                     </button>
                   </nav>
@@ -1116,10 +1117,12 @@ export default function ProposalDetailPage() {
                       {/* Individual Messages */}
                       <div className="flex space-x-3 group">
                         <div className="relative">
-                          <img
+                          <Image
                             className="h-8 w-8 rounded-full"
                             src="/api/placeholder/32/32"
                             alt="User"
+                            width={32}
+                            height={32}
                           />
                           <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 border-2 border-white rounded-full"></div>
                         </div>
@@ -1172,10 +1175,12 @@ export default function ProposalDetailPage() {
                   {/* Enhanced Message Composer */}
                   <div className="border-t border-gray-200 p-4 bg-white">
                     <div className="flex items-start space-x-3">
-                      <img
+                      <Image
                         className="h-8 w-8 rounded-full"
                         src="/api/placeholder/32/32"
                         alt="You"
+                        width={32}
+                        height={32}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="relative">
@@ -1216,7 +1221,7 @@ export default function ProposalDetailPage() {
                               <option>High</option>
                               <option>Urgent</option>
                             </select>
-                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                            <Button size="sm" variant="primary">
                               <PaperAirplaneIcon className="h-4 w-4 mr-1" />
                               Send
                             </Button>
@@ -1226,7 +1231,7 @@ export default function ProposalDetailPage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
           </div>
         </div>

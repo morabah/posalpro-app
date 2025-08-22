@@ -3,6 +3,10 @@
  * Comprehensive performance measurement and validation system
  */
 
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug } from '@/lib/logger';
+
 interface PerformanceTestResult {
   testName: string;
   renderTime: number;
@@ -55,7 +59,7 @@ class PerformanceTester {
       lastRenderTime: performance.now(),
     });
 
-    console.log(`[PerformanceTester] Started test: ${testName}`);
+    logDebug(`[PerformanceTester] Started test: ${testName}`);
   }
 
   /**
@@ -71,7 +75,18 @@ class PerformanceTester {
 
     // Detect potential infinite loops (more than 50 renders in 1 second)
     if (test.renderCount > 50 && now - test.startTime < 1000) {
-      console.error(`[PerformanceTester] Infinite loop detected in ${testName}!`);
+      ErrorHandlingService.getInstance().processError(
+        new Error('Infinite loop detected'),
+        'Infinite loop detected in performance test',
+        ErrorCodes.PERFORMANCE.OPTIMIZATION_FAILED,
+        {
+          component: 'PerformanceTester',
+          operation: 'recordRender',
+          testName,
+          renderCount: test.renderCount,
+          timeElapsed: now - test.startTime,
+        }
+      );
     }
   }
 
@@ -132,7 +147,16 @@ class PerformanceTester {
     this.testResults.push(result);
     this.activeTests.delete(testName);
 
-    console.log(`[PerformanceTester] Test completed: ${testName}`, result);
+    logDebug(`[PerformanceTester] Test completed: ${testName}`, {
+      testName: result.testName,
+      renderTime: result.renderTime,
+      rerenderCount: result.rerenderCount,
+      memoryUsage: result.memoryUsage,
+      infiniteLoopDetected: result.infiniteLoopDetected,
+      score: result.score,
+      recommendations: result.recommendations.join(', '),
+      timestamp: result.timestamp,
+    });
     return result;
   }
 
@@ -336,6 +360,52 @@ Priority fixes needed for: ${failedTests.map(t => t.testName).join(', ')}
   clearResults(): void {
     this.testResults = [];
     this.activeTests.clear();
+  }
+
+  async runTest(
+    testName: string,
+    testFn: () => Promise<PerformanceTestResult>
+  ): Promise<PerformanceTestResult> {
+    const startTime = performance.now();
+    logDebug(`[PerformanceTester] Started test: ${testName}`);
+
+    try {
+      const result = await testFn();
+      const endTime = performance.now();
+
+      const finalResult: PerformanceTestResult = {
+        ...result,
+        renderTime: endTime - startTime,
+        timestamp: Date.now(),
+      };
+
+      logDebug(`[PerformanceTester] Test completed: ${testName}`, {
+        testName: result.testName,
+        renderTime: result.renderTime,
+        rerenderCount: result.rerenderCount,
+        memoryUsage: result.memoryUsage,
+        infiniteLoopDetected: result.infiniteLoopDetected,
+        score: result.score,
+        recommendations: result.recommendations,
+        timestamp: result.timestamp,
+      } as Record<string, unknown>);
+
+      return finalResult;
+    } catch (error) {
+      const endTime = performance.now();
+      const errorResult: PerformanceTestResult = {
+        testName,
+        renderTime: endTime - startTime,
+        rerenderCount: 0,
+        memoryUsage: 0,
+        infiniteLoopDetected: false,
+        score: 0,
+        recommendations: ['Test failed due to error'],
+        timestamp: Date.now(),
+      };
+
+      return errorResult;
+    }
   }
 }
 

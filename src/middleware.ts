@@ -1,5 +1,8 @@
 import enhancedRBACMiddleware from '@/lib/auth/enhancedMiddleware';
 import { createSecurityMiddleware, SecurityHeaders } from '@/lib/security/hardening';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -119,7 +122,20 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
         );
       }
     } catch (error) {
-      console.error('[Edge Auth] Token validation error', { pathname, error });
+      // Use standardized error handling for middleware
+      const errorHandlingService = ErrorHandlingService.getInstance();
+      const standardError = new StandardError({
+        message: 'Token validation failed',
+        code: ErrorCodes.AUTH.INVALID_TOKEN,
+        metadata: {
+          component: 'middleware',
+          operation: 'enforceEdgeAuth',
+          pathname,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      errorHandlingService.processError(standardError);
+
       return NextResponse.json(
         { error: 'Authentication failed', code: 'TOKEN_INVALID' },
         { status: 401 }

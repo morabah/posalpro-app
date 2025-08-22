@@ -272,7 +272,7 @@ export default function SMEAssignmentsPage() {
                     {assignment.status === 'Pending' && (
                       <Button
                         onClick={() => handleAcceptAssignment(assignment.id)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        variant="primary"
                         disabled
                       >
                         Accept Assignment

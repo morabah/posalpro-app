@@ -13,8 +13,8 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { logError } from '@/lib/logger';
+import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
@@ -43,6 +43,7 @@ const ProductQuerySchema = z.object({
   priceRange: z.string().optional(), // "min,max" format
   isActive: z.coerce.boolean().optional(),
   sku: z.string().optional(),
+  skuExact: z.coerce.boolean().optional().default(false),
   // Batch lookup support: comma-separated product ids (cuid)
   ids: z.string().optional(),
   sortBy: z.enum(['name', 'price', 'createdAt', 'updatedAt']).default('createdAt'),
@@ -108,7 +109,10 @@ export async function GET(request: NextRequest) {
         .filter(v => v.length > 0);
       if (ids.length === 0) {
         const res = NextResponse.json({ success: true, data: [] });
-        res.headers.set('Cache-Control', process.env.NODE_ENV === 'production' ? 'public, max-age=60, s-maxage=180' : 'no-store');
+        res.headers.set(
+          'Cache-Control',
+          process.env.NODE_ENV === 'production' ? 'public, max-age=60, s-maxage=180' : 'no-store'
+        );
         return res;
       }
 
@@ -119,13 +123,20 @@ export async function GET(request: NextRequest) {
 
         // Selective field loading based on request
         const selectFields = fieldsParam
-          ? fieldsParam.split(',').reduce((acc, field) => {
-              const trimmedField = field.trim();
-              if (['id', 'name', 'price', 'currency', 'category', 'sku', 'description'].includes(trimmedField)) {
-                acc[trimmedField] = true;
-              }
-              return acc;
-            }, {} as Record<string, boolean>)
+          ? fieldsParam.split(',').reduce(
+              (acc, field) => {
+                const trimmedField = field.trim();
+                if (
+                  ['id', 'name', 'price', 'currency', 'category', 'sku', 'description'].includes(
+                    trimmedField
+                  )
+                ) {
+                  acc[trimmedField] = true;
+                }
+                return acc;
+              },
+              {} as Record<string, boolean>
+            )
           : {
               id: true,
               name: true,
@@ -156,7 +167,7 @@ export async function GET(request: NextRequest) {
               id: { in: ids },
               isActive: true,
             },
-          })
+          }),
         ]);
 
         // Track performance analytics
@@ -169,8 +180,8 @@ export async function GET(request: NextRequest) {
             total: productCount,
             requested: ids.length,
             found: products.length,
-            latency: Math.round(latency)
-          }
+            latency: Math.round(latency),
+          },
         });
         if (process.env.NODE_ENV === 'production') {
           res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
@@ -230,7 +241,8 @@ export async function GET(request: NextRequest) {
             errorCode,
             500,
             {
-              userFriendlyMessage: 'An error occurred while fetching products. Please try again later.',
+              userFriendlyMessage:
+                'An error occurred while fetching products. Please try again later.',
             }
           );
         }
@@ -298,7 +310,9 @@ export async function GET(request: NextRequest) {
 
     // SKU filtering
     if (validatedQuery.sku) {
-      where.sku = { contains: validatedQuery.sku, mode: 'insensitive' };
+      where.sku = validatedQuery.skuExact
+        ? validatedQuery.sku
+        : { contains: validatedQuery.sku, mode: 'insensitive' };
     }
 
     // Cursor-first pagination when cursor provided or when 'page' is absent
@@ -321,7 +335,7 @@ export async function GET(request: NextRequest) {
           pagination: {
             limit: validatedQuery.limit,
             hasMore,
-            nextCursor: hasMore ? products[products.length - 1]?.id ?? null : null,
+            nextCursor: hasMore ? (products[products.length - 1]?.id ?? null) : null,
           },
           filters: {
             search: validatedQuery.search,
@@ -502,12 +516,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = ProductCreateSchema.parse(body);
 
-    // Check for duplicate SKU
+    // Check for duplicate SKU (strict behavior: reject duplicates)
     const existingProduct = await prisma.product.findUnique({
       where: { sku: validatedData.sku },
       select: { id: true },
     });
-
     if (existingProduct) {
       return createApiErrorResponse(
         new StandardError({
@@ -521,7 +534,7 @@ export async function POST(request: NextRequest) {
         }),
         'Duplicate product',
         ErrorCodes.VALIDATION.DUPLICATE_ENTITY,
-        400,
+        409,
         { userFriendlyMessage: 'A product with this SKU already exists' }
       );
     }

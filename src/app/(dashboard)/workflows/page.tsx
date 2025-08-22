@@ -8,25 +8,44 @@
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { logDebug } from '@/lib/logger';
 import {
   AdjustmentsHorizontalIcon,
   DocumentTextIcon,
   ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface WorkflowMetadata {
   [key: string]: string | number | boolean | Date;
+}
+
+interface WorkflowAction {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  variant: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 }
 
 export default function WorkflowsPage() {
   const router = useRouter();
   const [sessionStartTime] = useState(Date.now());
 
+  useEffect(() => {
+    // Track page analytics
+    logDebug('Workflows Analytics:', {
+      page: 'workflows',
+      timestamp: Date.now(),
+      userAgent: navigator.userAgent,
+    });
+  }, []);
+
   const trackAction = useCallback(
     (action: string, metadata: WorkflowMetadata = {}) => {
-      console.log('Workflows Analytics:', {
+      logDebug('Workflows Analytics:', {
         action,
         metadata,
         timestamp: Date.now(),
@@ -37,14 +56,14 @@ export default function WorkflowsPage() {
     [sessionStartTime]
   );
 
-  const workflowActions = [
+  const workflowActions: WorkflowAction[] = [
     {
       id: 'approval',
       title: 'Approval Workflows',
       description: 'Manage approval processes and review cycles',
       icon: ShieldCheckIcon,
       href: '/workflows/approval',
-      color: 'bg-blue-600 hover:bg-blue-700',
+      variant: 'primary',
     },
     {
       id: 'templates',
@@ -52,7 +71,7 @@ export default function WorkflowsPage() {
       description: 'Create and manage workflow templates',
       icon: DocumentTextIcon,
       href: '/workflows/templates',
-      color: 'bg-green-600 hover:bg-green-700',
+      variant: 'primary',
     },
   ];
 
@@ -84,7 +103,8 @@ export default function WorkflowsPage() {
                     trackAction(`${action.id}_clicked`);
                     router.push(action.href);
                   }}
-                  className={`${action.color} text-white w-full`}
+                  variant={action.variant}
+                  className="w-full"
                 >
                   Access {action.title}
                 </Button>

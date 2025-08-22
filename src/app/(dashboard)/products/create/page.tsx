@@ -12,6 +12,7 @@
 
 import { Button } from '@/components/ui/forms/Button';
 import dynamic from 'next/dynamic';
+import { logDebug } from '@/lib/logger';
 
 // Dynamic import for heavy ProductCreationForm
 const ProductCreationForm = dynamic(
@@ -37,6 +38,8 @@ import { CreateProductData } from '@/types/entities/product';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 
 // Inline SVG components to replace Lucide React and prevent webpack chunk loading issues
 const ArrowLeft = ({ className = 'h-5 w-5' }) => (
@@ -106,7 +109,7 @@ const Settings = ({ className = 'h-5 w-5' }) => (
 
 // Simple toast function to replace sonner
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  console.log(`Toast (${type}):`, message);
+  logDebug(`Toast (${type}):`, { message });
   // In a real implementation, this would show a toast notification
 };
 
@@ -130,14 +133,23 @@ export default function ProductCreationPage() {
       // Show success toast
       showToast('Product created successfully!');
 
-      console.log('Product created successfully:', result);
+      logDebug('Product created successfully:', { result });
 
       // Auto-navigate back after success
       setTimeout(() => {
         router.push('/products');
       }, 3000);
     } catch (error) {
-      console.error('Failed to create product:', error);
+      ErrorHandlingService.getInstance().processError(
+        error as Error,
+        'Failed to create product. Please try again.',
+        ErrorCodes.BUSINESS.PROCESS_FAILED,
+        {
+          component: 'ProductCreationPage',
+          operation: 'handleProductSubmit',
+          context: { productData: data }
+        }
+      );
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to create product. Please try again.';
       showToast(errorMessage, 'error');
@@ -213,13 +225,12 @@ export default function ProductCreationPage() {
                 </div>
               </div>
 
-              <div className="p-6">
-                <ProductCreationForm
-                  isOpen={isFormOpen && !creationSuccess}
-                  onClose={handleClose}
-                  onSubmit={handleProductSubmit}
-                />
-              </div>
+              <ProductCreationForm
+                isOpen={true}
+                inline={true}
+                onClose={handleClose}
+                onSubmit={handleProductSubmit}
+              />
             </div>
           )}
 

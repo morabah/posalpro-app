@@ -171,7 +171,7 @@ export default function ProductsPage() {
               Cards
             </button>
           </div>
-          <Button onClick={() => setIsCreateOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={() => setIsCreateOpen(true)} variant="primary">
             Create Product
           </Button>
         </div>

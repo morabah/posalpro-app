@@ -1,4 +1,7 @@
 // [IO_FIX] Memory-safe file operations
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logWarn } from '@/lib/logger';
 import { promises as fs } from 'fs';
 
 export class SafeFileOperations {
@@ -31,13 +34,22 @@ export class SafeFileOperations {
 
       return true;
     } catch (error) {
-      console.error('[IO_FIX] Write operation failed:', error);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Write operation failed',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'SafeFileOperations',
+          operation: 'writeFileSafe',
+          filePath: path,
+        }
+      );
 
       // Restore backup if available
       try {
         await fs.copyFile(`${path}.backup`, path);
         await fs.unlink(`${path}.backup`);
-        console.log('[IO_FIX] Restored from backup');
+        logDebug('[IO_FIX] Restored from backup');
       } catch {
         // Backup restore failed
       }
@@ -49,15 +61,26 @@ export class SafeFileOperations {
   static async readFileSafe(path: string, options: any = {}) {
     try {
       const stats = await fs.stat(path);
+      const fileSize = stats.size;
 
-      // For large files, use streaming
-      if (stats.size > 10 * 1024 * 1024) { // 10MB
-        console.warn('[IO_FIX] Large file detected, consider streaming');
+      // Warn about large files
+      if (fileSize > 10 * 1024 * 1024) {
+        // 10MB
+        logWarn('[IO_FIX] Large file detected, consider streaming');
       }
 
       return await fs.readFile(path, options);
     } catch (error) {
-      console.error('[IO_FIX] Read operation failed:', error);
+      ErrorHandlingService.getInstance().processError(
+        error,
+        'Read operation failed',
+        ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        {
+          component: 'SafeFileOperations',
+          operation: 'readFileSafe',
+          filePath: path,
+        }
+      );
       throw error;
     }
   }

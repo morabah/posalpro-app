@@ -3,16 +3,23 @@
  * Full provider stack scoped to authenticated dashboard area
  */
 
-import { ProtectedLayout } from '@/components/layout';
 import { ToastProvider } from '@/components/feedback/Toast/ToastProvider';
+import { ProtectedLayout } from '@/components/layout';
 import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { SharedAnalyticsProvider } from '@/components/providers/SharedAnalyticsProvider';
 import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizationProvider';
 import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
+import { ServiceWorkerWrapper } from '@/components/pwa/ServiceWorkerWrapper';
+import { authOptions } from '@/lib/auth';
+import { getServerSession } from 'next-auth';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Provide server session to AuthProvider to prevent client-side loading stalls
+  const session = await getServerSession(authOptions);
   return (
     <TTFBOptimizationProvider>
       <WebVitalsProvider>
@@ -20,7 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <ClientLayoutWrapper>
             <QueryProvider>
               <ToastProvider position="top-right" maxToasts={5}>
-                <AuthProvider>
+                <AuthProvider session={session}>
                   <ProtectedLayout>{children}</ProtectedLayout>
                 </AuthProvider>
               </ToastProvider>
@@ -28,6 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </ClientLayoutWrapper>
         </SharedAnalyticsProvider>
       </WebVitalsProvider>
+      <ServiceWorkerWrapper />
     </TTFBOptimizationProvider>
   );
 }

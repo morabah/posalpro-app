@@ -5,13 +5,14 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import { createApiErrorResponse, ErrorCodes, StandardError } from '@/lib/errors';
+import { createApiErrorResponse, ErrorCodes, StandardError, ErrorHandlingService } from '@/lib/errors';
 import ImageOptimizationService from '@/lib/performance/ImageOptimizationService';
 import MemoryOptimizationService from '@/lib/performance/MemoryOptimizationService';
 import { getCache, setCache } from '@/lib/redis';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { logWarn } from '@/lib/logger';
 
 /**
  * Component Traceability Matrix:
@@ -89,12 +90,20 @@ export async function GET(request: NextRequest) {
     try {
       await setCache(cacheKey, optimizationStatus, 300);
     } catch (cacheError) {
-      console.warn('[PerformanceOptimizationAPI] Failed to cache status:', cacheError);
+      logWarn('[PerformanceOptimizationAPI] Failed to cache status:', { error: cacheError instanceof Error ? cacheError.message : String(cacheError) });
     }
 
     return NextResponse.json(optimizationStatus);
   } catch (error) {
-    console.error('[PerformanceOptimizationAPI] Error:', error);
+    ErrorHandlingService.getInstance().processError(
+      error,
+      'Failed to get optimization status',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'PerformanceOptimizationAPI',
+        operation: 'getOptimizationStatus',
+      }
+    );
 
     return createApiErrorResponse(
       error instanceof StandardError
@@ -117,6 +126,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let type: string = '';
   try {
     await validateApiPermission(request, { resource: 'performance', action: 'update' });
     // Get session for authentication
@@ -141,7 +151,8 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { type, options = {} } = body;
+    const { type: requestType, options = {} } = body;
+    type = requestType;
 
     // Initialize services
     const memoryService = MemoryOptimizationService.getInstance();
@@ -224,7 +235,7 @@ export async function POST(request: NextRequest) {
     try {
       await setCache(cacheKey, optimizationResults, 600); // 10 minutes
     } catch (cacheError) {
-      console.warn('[PerformanceOptimizationAPI] Failed to cache results:', cacheError);
+      logWarn('[PerformanceOptimizationAPI] Failed to cache results:', { error: cacheError instanceof Error ? cacheError.message : String(cacheError) });
     }
 
     return NextResponse.json({
@@ -233,7 +244,16 @@ export async function POST(request: NextRequest) {
       results: optimizationResults,
     });
   } catch (error) {
-    console.error('[PerformanceOptimizationAPI] Optimization error:', error);
+    ErrorHandlingService.getInstance().processError(
+      error,
+      'Failed to trigger optimization',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'PerformanceOptimizationAPI',
+        operation: 'triggerOptimization',
+        optimizationType: type,
+      }
+    );
 
     return createApiErrorResponse(
       error instanceof StandardError
