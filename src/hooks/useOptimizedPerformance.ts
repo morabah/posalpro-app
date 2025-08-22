@@ -100,7 +100,12 @@ export function useOptimizedPerformance() {
           loadTime,
         }));
       } catch (error) {
-        console.warn('[OptimizedPerformance] Setup failed:', error);
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        import('@/lib/logger').then(({ logWarn }) =>
+          logWarn('[OptimizedPerformance] Setup failed', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        );
       }
     };
 
@@ -138,7 +143,12 @@ export function useOptimizedPerformance() {
         return memoryUsage;
       }
     } catch (error) {
-      console.warn('[OptimizedPerformance] Memory collection failed:', error);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      import('@/lib/logger').then(({ logWarn }) =>
+        logWarn('[OptimizedPerformance] Memory collection failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
     }
     return 0;
   }, []);
@@ -171,7 +181,12 @@ export function useOptimizedPerformance() {
 
       return finalScore;
     } catch (error) {
-      console.warn('[OptimizedPerformance] Score calculation failed:', error);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      import('@/lib/logger').then(({ logWarn }) =>
+        logWarn('[OptimizedPerformance] Score calculation failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
       return 100;
     }
   }, [metrics.memoryUsage, metrics.loadTime, metrics.webVitals.lcp]);
@@ -206,7 +221,12 @@ export function useOptimizedPerformance() {
 
       return recommendations;
     } catch (error) {
-      console.warn('[OptimizedPerformance] Recommendations failed:', error);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      import('@/lib/logger').then(({ logWarn }) =>
+        logWarn('[OptimizedPerformance] Recommendations failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
       return ['Performance analysis unavailable'];
     }
   }, [metrics.memoryUsage, metrics.loadTime, metrics.webVitals.lcp]);
@@ -238,7 +258,12 @@ export function useOptimizedPerformance() {
         recommendations,
       };
     } catch (error) {
-      console.warn('[OptimizedPerformance] Analysis failed:', error);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      import('@/lib/logger').then(({ logWarn }) =>
+        logWarn('[OptimizedPerformance] Analysis failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
       return null;
     }
   }, [

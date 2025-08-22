@@ -1,6 +1,6 @@
 'use client';
 
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * PosalPro MVP2 - Validation Hook
  * Real-time validation capabilities with H8 hypothesis tracking

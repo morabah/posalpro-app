@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * PosalPro MVP2 - User Registration API Route
  * Based on USER_REGISTRATION_SCREEN.md wireframe

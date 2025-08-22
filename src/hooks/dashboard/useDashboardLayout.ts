@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Dashboard Layout Hook
  * Comprehensive dashboard layout management with responsive grid, widget positioning, and user customization
  * Based on DASHBOARD_SCREEN.md wireframe specifications

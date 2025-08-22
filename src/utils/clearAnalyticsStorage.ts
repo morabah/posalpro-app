@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * PosalPro MVP2 - Analytics Storage Cleanup Utility
  * Provides manual cleanup functions for development and troubleshooting

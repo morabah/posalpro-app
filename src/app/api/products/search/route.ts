@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Product Search API
  * Provides advanced search functionality for products
  * Supports H1 hypothesis (Content Discovery Efficiency)

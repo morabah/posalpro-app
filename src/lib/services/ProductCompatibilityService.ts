@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * Product Compatibility Service for PosalPro MVP2
  * Handles product compatibility checking and dependency validation
  */

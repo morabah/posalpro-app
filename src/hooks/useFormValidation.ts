@@ -1,6 +1,6 @@
 'use client';
 
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * PosalPro MVP2 - Form Validation Hook
  * React Hook Form + Zod integration for enhanced form validation

@@ -33,8 +33,9 @@ export default function ValidationRulesPage() {
   const [sessionStartTime] = useState(Date.now());
 
   const trackAction = useCallback(
-    (action: string, metadata: ValidationMetadata = {}) => {
-      console.log('Validation Rules Analytics:', {
+    async (action: string, metadata: ValidationMetadata = {}) => {
+      const { logInfo } = await import('@/lib/logger');
+      await logInfo('Validation Rules Analytics', {
         action,
         metadata,
         timestamp: Date.now(),

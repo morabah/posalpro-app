@@ -2519,23 +2519,31 @@ button styling patterns remain in the codebase.
 - src/app/api/config/route.ts
 
 **Key Changes**:
-- Migrated 10 critical API routes and middleware from console.error to standardized ErrorHandlingService
+
+- Migrated 10 critical API routes and middleware from console.error to
+  standardized ErrorHandlingService
 - Added proper imports for ErrorCodes, errorHandlingService, and StandardError
 - Implemented consistent error handling patterns across all migrated files
 - Fixed scope issues for variables used in error handling metadata
-- Maintained existing error response structures while adding standardized logging
+- Maintained existing error response structures while adding standardized
+  logging
 - Reduced files with console.error from 44 to 41 (3 files migrated)
 
 **Wireframe Reference**: API routes, middleware, health checks, admin interfaces
 **Component Traceability**: US-4.1, US-4.2, US-6.1, US-6.2, H4, H6, H8, H11
 **Analytics Integration**: Maintained existing tracking and analytics
-**Accessibility**: No accessibility implications
-**Security**: Enhanced security through standardized error handling and logging
-**Testing**: All migrated files maintain existing functionality
-**Performance Impact**: Improved error tracking and debugging capabilities
-**Wireframe Compliance**: Maintained existing API response structures
-**Design Deviations**: None - pure error handling standardization
-**Notes**: Successfully completed Phase 1 of Error Handling Migration focusing on critical API routes and middleware. All migrated files now use the standardized ErrorHandlingService.getInstance().processError() pattern with proper error codes and metadata. This establishes the foundation for Phase 2 which will focus on React components and hooks. The migration maintains backward compatibility while providing enhanced error tracking and debugging capabilities.
+**Accessibility**: No accessibility implications **Security**: Enhanced security
+through standardized error handling and logging **Testing**: All migrated files
+maintain existing functionality **Performance Impact**: Improved error tracking
+and debugging capabilities **Wireframe Compliance**: Maintained existing API
+response structures **Design Deviations**: None - pure error handling
+standardization **Notes**: Successfully completed Phase 1 of Error Handling
+Migration focusing on critical API routes and middleware. All migrated files now
+use the standardized ErrorHandlingService.getInstance().processError() pattern
+with proper error codes and metadata. This establishes the foundation for Phase
+2 which will focus on React components and hooks. The migration maintains
+backward compatibility while providing enhanced error tracking and debugging
+capabilities.
 
 ---
 
@@ -2552,31 +2560,43 @@ button styling patterns remain in the codebase.
 - src/components/dashboard/PDFExportButton.tsx
 
 **Key Changes**:
-- Migrated 6 React components and test files from console.error to standardized ErrorHandlingService
+
+- Migrated 6 React components and test files from console.error to standardized
+  ErrorHandlingService
 - Added proper imports for ErrorHandlingService and ErrorCodes
-- Implemented consistent error handling patterns with proper metadata and context
-- Fixed error handling in performance page, product creation, SME contributions, and PDF export
+- Implemented consistent error handling patterns with proper metadata and
+  context
+- Fixed error handling in performance page, product creation, SME contributions,
+  and PDF export
 - Updated test files to use standardized error handling for better debugging
 - Reduced files with console.error from 41 to 35 (6 files migrated)
-- Discovered that several components (ProductCreationForm, ProductRelationshipManager, SimpleErrorBoundary, ErrorBoundary, DashboardShell) already had proper error handling
+- Discovered that several components (ProductCreationForm,
+  ProductRelationshipManager, SimpleErrorBoundary, ErrorBoundary,
+  DashboardShell) already had proper error handling
 
-**Wireframe Reference**: Performance dashboard, product creation, SME interface, PDF export, authentication
-**Component Traceability**: US-6.1, US-6.2, US-3.1, US-3.2, US-2.1, US-2.3
-**Analytics Integration**: Maintained existing tracking and analytics
-**Accessibility**: No accessibility implications
-**Security**: Enhanced security through standardized error handling and logging
-**Testing**: All migrated files maintain existing functionality, test files improved
+**Wireframe Reference**: Performance dashboard, product creation, SME interface,
+PDF export, authentication **Component Traceability**: US-6.1, US-6.2, US-3.1,
+US-3.2, US-2.1, US-2.3 **Analytics Integration**: Maintained existing tracking
+and analytics **Accessibility**: No accessibility implications **Security**:
+Enhanced security through standardized error handling and logging **Testing**:
+All migrated files maintain existing functionality, test files improved
 **Performance Impact**: Improved error tracking and debugging capabilities
 **Wireframe Compliance**: Maintained existing functionality and user experience
-**Design Deviations**: None - pure error handling standardization
-**Notes**: Successfully completed Phase 2 of Error Handling Migration focusing on React components and hooks. All migrated files now use the standardized ErrorHandlingService.getInstance().processError() pattern with proper error codes and metadata. The migration discovered that many components already had proper error handling in place, demonstrating good code quality. Phase 2 establishes consistent error handling across the React component layer while maintaining backward compatibility and enhancing debugging capabilities.
+**Design Deviations**: None - pure error handling standardization **Notes**:
+Successfully completed Phase 2 of Error Handling Migration focusing on React
+components and hooks. All migrated files now use the standardized
+ErrorHandlingService.getInstance().processError() pattern with proper error
+codes and metadata. The migration discovered that many components already had
+proper error handling in place, demonstrating good code quality. Phase 2
+establishes consistent error handling across the React component layer while
+maintaining backward compatibility and enhancing debugging capabilities.
 
 ---
 
 ## 2025-01-21 10:45 - Critical SSR Fix & Error Handling Migration Completion
 
-**Phase**: 2.9 - Error Handling Standardization & SSR Resolution **Status**: ✅ Complete
-**Duration**: 45 minutes **Files Modified**:
+**Phase**: 2.9 - Error Handling Standardization & SSR Resolution **Status**: ✅
+Complete **Duration**: 45 minutes **Files Modified**:
 
 - src/app/layout.tsx
 - src/app/api/errors/report/route.ts
@@ -2586,33 +2606,49 @@ button styling patterns remain in the codebase.
 - src/lib/utils/safeFileOps.ts
 
 **Key Changes**:
-- **CRITICAL SSR FIX**: Converted ServiceWorkerRegistration to dynamic import with `{ ssr: false }` to prevent "self is not defined" server-side rendering error
-- Fixed TypeScript compilation errors from error handling migration (6 remaining errors eliminated)
-- Corrected ErrorCodes references: `OPERATION_FAILED` → `INTERNAL_ERROR`, `CIRCUIT_BREAKER_ACTIVATED` → `AUTHORIZATION_FAILED`
+
+- **CRITICAL SSR FIX**: Converted ServiceWorkerRegistration to dynamic import
+  with `{ ssr: false }` to prevent "self is not defined" server-side rendering
+  error
+- Fixed TypeScript compilation errors from error handling migration (6 remaining
+  errors eliminated)
+- Corrected ErrorCodes references: `OPERATION_FAILED` → `INTERNAL_ERROR`,
+  `CIRCUIT_BREAKER_ACTIVATED` → `AUTHORIZATION_FAILED`
 - Fixed variable scope issues in error reporting API route
 - Achieved 100% TypeScript compliance with 0 errors
 
 **SSR Resolution Details**:
-- Root cause: ServiceWorkerRegistration was being imported and executed during server-side rendering
-- Solution: Used `dynamic()` import with `{ ssr: false }` to prevent SSR execution
-- Pattern established for all browser-specific components requiring client-side only execution
+
+- Root cause: ServiceWorkerRegistration was being imported and executed during
+  server-side rendering
+- Solution: Used `dynamic()` import with `{ ssr: false }` to prevent SSR
+  execution
+- Pattern established for all browser-specific components requiring client-side
+  only execution
 
 **Error Handling Migration Summary**:
+
 - **Total Console.error Reduction**: From 49 to 16 calls (67% reduction)
 - **Files Successfully Migrated**: 33+ files across all phases
 - **TypeScript Compliance**: 100% achieved with 0 compilation errors
-- **Pattern Consistency**: Standardized ErrorHandlingService.getInstance().processError() across entire application
+- **Pattern Consistency**: Standardized
+  ErrorHandlingService.getInstance().processError() across entire application
 
-**Wireframe Reference**: All application screens now have consistent error handling
-**Component Traceability**: Complete system-wide error handling standardization
-**Analytics Integration**: Enhanced error tracking and debugging capabilities
-**Accessibility**: No accessibility implications
-**Security**: Improved security through standardized error logging and tracking
-**Testing**: All migrated code maintains existing functionality
-**Performance Impact**: Minimal performance overhead with significant debugging benefits
-**Wireframe Compliance**: Maintained existing functionality and user experience
-**Design Deviations**: None - pure infrastructure improvement
-**Notes**: Successfully resolved critical SSR error that was causing "self is not defined" runtime errors. The dynamic import pattern for ServiceWorkerRegistration prevents server-side execution while maintaining client-side PWA functionality. Error handling migration now complete with comprehensive standardization across the entire application. System ready for production deployment with enhanced error tracking, debugging capabilities, and zero TypeScript compilation errors.
+**Wireframe Reference**: All application screens now have consistent error
+handling **Component Traceability**: Complete system-wide error handling
+standardization **Analytics Integration**: Enhanced error tracking and debugging
+capabilities **Accessibility**: No accessibility implications **Security**:
+Improved security through standardized error logging and tracking **Testing**:
+All migrated code maintains existing functionality **Performance Impact**:
+Minimal performance overhead with significant debugging benefits **Wireframe
+Compliance**: Maintained existing functionality and user experience **Design
+Deviations**: None - pure infrastructure improvement **Notes**: Successfully
+resolved critical SSR error that was causing "self is not defined" runtime
+errors. The dynamic import pattern for ServiceWorkerRegistration prevents
+server-side execution while maintaining client-side PWA functionality. Error
+handling migration now complete with comprehensive standardization across the
+entire application. System ready for production deployment with enhanced error
+tracking, debugging capabilities, and zero TypeScript compilation errors.
 
 ---
 
@@ -2632,22 +2668,79 @@ button styling patterns remain in the codebase.
 - src/hooks/useServiceWorker.ts
 
 **Key Changes**:
-- Migrated 9 additional files from console.error to standardized ErrorHandlingService
+
+- Migrated 9 additional files from console.error to standardized
+  ErrorHandlingService
 - Fixed scope issues for variables used in error handling metadata
 - Added proper imports for ErrorHandlingService and ErrorCodes
-- Implemented consistent error handling patterns with proper metadata and context
+- Implemented consistent error handling patterns with proper metadata and
+  context
 - Reduced console.error calls from 49 to 37 (12 calls migrated)
-- Discovered that many files already had proper error handling infrastructure in place
+- Discovered that many files already had proper error handling infrastructure in
+  place
 
-**Wireframe Reference**: Admin permissions, performance optimization, proposals management, analytics, PWA, hooks
-**Component Traceability**: US-4.1, US-4.2, US-6.1, US-6.2, US-3.1, US-3.2, US-5.1, US-5.2
-**Analytics Integration**: Maintained existing tracking and analytics
-**Accessibility**: No accessibility implications
-**Security**: Enhanced security through standardized error handling and logging
-**Testing**: All migrated files maintain existing functionality
+**Wireframe Reference**: Admin permissions, performance optimization, proposals
+management, analytics, PWA, hooks **Component Traceability**: US-4.1, US-4.2,
+US-6.1, US-6.2, US-3.1, US-3.2, US-5.1, US-5.2 **Analytics Integration**:
+Maintained existing tracking and analytics **Accessibility**: No accessibility
+implications **Security**: Enhanced security through standardized error handling
+and logging **Testing**: All migrated files maintain existing functionality
 **Performance Impact**: Improved error tracking and debugging capabilities
 **Wireframe Compliance**: Maintained existing functionality and user experience
-**Design Deviations**: None - pure error handling standardization
-**Notes**: Successfully completed Phase 3 of Error Handling Migration focusing on remaining API routes and hooks. All migrated files now use the standardized ErrorHandlingService.getInstance().processError() pattern with proper error codes and metadata. The migration demonstrates excellent code quality with many files already having proper error handling infrastructure. Phase 3 establishes comprehensive error handling coverage across the application while maintaining backward compatibility and enhancing debugging capabilities.
+**Design Deviations**: None - pure error handling standardization **Notes**:
+Successfully completed Phase 3 of Error Handling Migration focusing on remaining
+API routes and hooks. All migrated files now use the standardized
+ErrorHandlingService.getInstance().processError() pattern with proper error
+codes and metadata. The migration demonstrates excellent code quality with many
+files already having proper error handling infrastructure. Phase 3 establishes
+comprehensive error handling coverage across the application while maintaining
+backward compatibility and enhancing debugging capabilities.
+
+---
+
+## 2025-08-22  — Design Patterns Templates Scaffolding & Enhancement
+
+- Phase: Architecture & Patterns — Templates
+- Status: ✅ Complete
+- Files Added/Enhanced:
+  - `templates/design-patterns/README.md` (Enhanced with new patterns)
+  - `templates/design-patterns/page.template.tsx` (Enhanced with Component Traceability Matrix)
+  - `templates/design-patterns/hook.template.ts`
+  - `templates/design-patterns/react-query-hook.template.ts` (Enhanced with analytics)
+  - `templates/design-patterns/api-route.template.ts` (Enhanced with RBAC patterns)
+  - `templates/design-patterns/service.template.ts`
+  - `templates/design-patterns/component.template.tsx` (Enhanced with mobile patterns)
+  - `templates/design-patterns/test.template.ts`
+  - `templates/design-patterns/integration-test.template.tsx`
+  - `templates/design-patterns/zod-schema.template.ts`
+  - `templates/design-patterns/types.template.ts`
+  - **NEW:** `templates/design-patterns/middleware.template.ts`
+  - **NEW:** `templates/design-patterns/provider.template.tsx`
+  - **NEW:** `templates/design-patterns/layout.template.tsx`
+  - **NEW:** `templates/design-patterns/error-handler-hook.template.ts`
+  - **NEW:** `templates/design-patterns/analytics-hook.template.ts`
+  - **NEW:** `templates/design-patterns/mobile-component.template.tsx`
+
+- Key Enhancements:
+  - **Component Traceability Matrix**: All templates include userStory, hypothesis, acceptanceCriteria tracking
+  - **RBAC Integration**: API routes include complete validateApiPermission patterns with session management
+  - **Mobile Optimization**: 44px+ touch targets, gesture handling, responsive design
+  - **Analytics Tracking**: Hypothesis validation, performance metrics, user story progress tracking
+  - **data-testid Attributes**: Consistent testing selectors across all UI components
+  - **Provider Stack Architecture**: Complete route-group layout provider patterns
+  - **Error Handling**: Centralized useErrorHandler hook with StandardError integration
+  - **Middleware Patterns**: Authentication, authorization, security headers
+  - **Performance Patterns**: Minimal field selection, cursor pagination, selective hydration
+
+- Verification:
+  - 17 templates total covering all major file types
+  - Templates excluded from TS build and ESLint (expected import resolution errors)
+  - README updated with usage patterns and comprehensive template listing
+  - All patterns align with CORE_REQUIREMENTS.md mandates
+
+- Traceability:
+  - User Story: Developer productivity via standardized scaffolding
+  - Hypothesis: Consistent templates reduce regressions and ensure compliance with CORE_REQUIREMENTS
+  - Acceptance Criteria: Complete coverage of CORE_REQUIREMENTS patterns, ready-to-use templates
 
 ---

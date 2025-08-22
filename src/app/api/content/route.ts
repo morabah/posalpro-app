@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logDebug, logInfo, logWarn, logError } from '@/lib/logger'; /**
  * PosalPro MVP2 - Content API Route
  * Content management with authentication and analytics
  * Component Traceability: US-6.1, US-6.2
@@ -161,10 +161,10 @@ interface ContentWhereClause {
 export async function GET(request: NextRequest) {
   try {
     await validateApiPermission(request, { resource: 'content', action: 'read' });
-    logger.info('GET /api/content - Starting request processing');
+    await logDebug('GET /api/content - Starting request processing');
 
     const session = await getServerSession(authOptions);
-    logger.info('Session data:', {
+    await logDebug('Session data', {
       userId: session?.user?.id,
       userEmail: session?.user?.email,
       isAuthenticated: !!session,
@@ -186,9 +186,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Check read permissions
-    logger.info('Checking user permissions...');
+    await logDebug('Checking user permissions...');
     const canRead = await checkUserPermissions(session.user.id, 'read');
-    logger.info('Permission check result:', { canRead, userId: session.user.id });
+    await logDebug('Permission check result', { canRead, userId: session.user.id });
 
     if (!canRead) {
       errorHandlingService.processError(
@@ -212,10 +212,10 @@ export async function GET(request: NextRequest) {
     // Parse and validate query parameters
     const url = new URL(request.url);
     const queryParams = Object.fromEntries(url.searchParams.entries());
-    logger.info('Query parameters:', queryParams);
+    await logDebug('Query parameters', queryParams as unknown as Record<string, unknown>);
 
     const query = ContentQuerySchema.parse(queryParams);
-    logger.info('Validated query:', query);
+    await logDebug('Validated query', query as unknown as Record<string, unknown>);
 
     // Build where clause
     const where: any = {
@@ -293,18 +293,18 @@ export async function GET(request: NextRequest) {
               },
             });
           } else {
-            logger.warn('Skipping contentAccessLog: session user not found in DB', {
+            await logWarn('Skipping contentAccessLog: session user not found in DB', {
               userId: session.user.id,
             });
           }
         } catch (logError) {
-          logger.warn('Skipping contentAccessLog due to error', {
+          await logWarn('Skipping contentAccessLog due to error', {
             error: logError instanceof Error ? logError.message : 'Unknown error',
           });
         }
       }
 
-      logger.info('Returning content data:', {
+      await logInfo('Returning content data', {
         contentCount: content.length,
         sampleContent: content[0],
         pagination: {
@@ -482,7 +482,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    logger.info('Content created successfully', {
+    await logInfo('Content created successfully', {
       contentId: created.id,
       title: sanitizedTitle,
       category: dbType,
@@ -497,7 +497,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    logger.error('Content creation error:', error);
+    await logError('Content creation error', error);
 
     return createApiErrorResponse(
       new StandardError({

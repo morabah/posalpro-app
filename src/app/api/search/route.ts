@@ -9,7 +9,7 @@ import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { decidePaginationStrategy } from '@/lib/utils/selectiveHydration';
-import { logger } from '@/utils/logger';
+import { logDebug, logInfo, logWarn, logError } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Track search event for analytics
-    logger.info('Search request initiated', {
+    await logInfo('Search request initiated', {
       searchTerm: validatedQuery.q,
       searchType: validatedQuery.type,
       userId: session.user.id,
@@ -238,10 +238,14 @@ export async function GET(request: NextRequest) {
       },
     };
 
+    await logInfo('Search request success', {
+      searchTerm: validatedQuery.q,
+      totalCount: response.meta.totalCount,
+      executionTime: response.meta.executionTime,
+    });
     return NextResponse.json(response);
   } catch (error) {
-    logger.error('Search request failed', {
-      error: error instanceof Error ? error.message : String(error),
+    await logError('Search request failed', error as unknown, {
       searchTerm: validatedQuery?.q,
       userId: session?.user?.id,
       userEmail: session?.user?.email,

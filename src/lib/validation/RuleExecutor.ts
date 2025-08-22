@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * Rule Executor for PosalPro MVP2 Validation Engine
  * Handles individual validation rule processing and execution
  */

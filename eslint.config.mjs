@@ -418,6 +418,9 @@ export default tseslint.config(
       'public/**',
       'coverage/**',
       'scripts/**', // Ignore deployment and utility scripts
+      'templates/**', // Ignore scaffolding templates
+      'docs/**', // Ignore documentation files
+      '**/*.md', // Ignore markdown files
       '**/__snapshots__/**',
       '**/*.snap',
     ],

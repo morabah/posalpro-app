@@ -1,9 +1,9 @@
 /**
  * Cache Service - DEPRECATED
- * 
+ *
  * This custom caching system has been removed to comply with CORE_REQUIREMENTS.md
  * All caching is now handled automatically by apiClient.
- * 
+ *
  * This file is kept for backward compatibility but exports no-op stubs.
  * Use useApiClient pattern for all data fetching with built-in caching.
  */
@@ -14,7 +14,10 @@ class CacheService {
   private static instance: CacheService | null = null;
 
   constructor() {
-    console.warn('CacheService is deprecated. Use apiClient built-in caching instead.');
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    import('@/lib/logger').then(({ logWarn }) =>
+      logWarn('CacheService is deprecated. Use apiClient built-in caching instead.')
+    );
   }
 
   static getInstance(): CacheService {
@@ -25,20 +28,32 @@ class CacheService {
   }
 
   set(_key: string, _data: unknown, _ttl: number): void {
-    console.warn('CacheService.set is deprecated. Use apiClient built-in caching instead.');
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    import('@/lib/logger').then(({ logWarn }) =>
+      logWarn('CacheService.set is deprecated. Use apiClient built-in caching instead.')
+    );
   }
 
   get(_key: string): null {
-    console.warn('CacheService.get is deprecated. Use apiClient built-in caching instead.');
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    import('@/lib/logger').then(({ logWarn }) =>
+      logWarn('CacheService.get is deprecated. Use apiClient built-in caching instead.')
+    );
     return null;
   }
 
   delete(_key: string): void {
-    console.warn('CacheService.delete is deprecated. Use apiClient built-in caching instead.');
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    import('@/lib/logger').then(({ logWarn }) =>
+      logWarn('CacheService.delete is deprecated. Use apiClient built-in caching instead.')
+    );
   }
 
   clear(): void {
-    console.warn('CacheService.clear is deprecated. Use apiClient built-in caching instead.');
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    import('@/lib/logger').then(({ logWarn }) =>
+      logWarn('CacheService.clear is deprecated. Use apiClient built-in caching instead.')
+    );
   }
 
   async cached<T>(
@@ -46,7 +61,10 @@ class CacheService {
     fn: () => Promise<T>,
     _ttl: number
   ): Promise<T> {
-    console.warn('CacheService.cached is deprecated. Use apiClient built-in caching instead.');
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    import('@/lib/logger').then(({ logWarn }) =>
+      logWarn('CacheService.cached is deprecated. Use apiClient built-in caching instead.')
+    );
     // Just execute the function without caching
     return await fn();
   }

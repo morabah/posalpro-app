@@ -3,7 +3,7 @@
  * Standardized permission validation for API endpoints
  */
 
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 

@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Individual Product API Routes
  * Enhanced product operations with authentication and analytics
  * Component Traceability: US-3.1, US-3.2, H3, H4

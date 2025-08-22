@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Logout API Route
  * Session cleanup and security logging
  */

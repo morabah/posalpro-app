@@ -1,5 +1,5 @@
 'use client';
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Database Query Optimization Service
  * Intelligent query caching with performance monitoring and optimization
  *

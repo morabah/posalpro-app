@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * PosalPro MVP2 - Customer Proposals API Routes
  * Enhanced customer proposal history with analytics tracking

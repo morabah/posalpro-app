@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Individual Workflow API Routes
  * Enhanced workflow operations with authentication and analytics
  * Component Traceability: US-4.1, US-4.3, H7

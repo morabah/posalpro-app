@@ -260,10 +260,10 @@ export function useDeleteProduct() {
 
       if (!response.success) {
         // Log error but let the mutation error handling manage it
-        console.warn(
-          '[useProducts] Product deletion failed:',
-          response.message || 'Failed to delete product'
-        );
+        const { logWarn } = await import('@/lib/logger');
+        await logWarn('[useProducts] Product deletion failed', {
+          error: response.message || 'Failed to delete product',
+        });
         throw new Error(response.message || 'Failed to delete product');
       }
 

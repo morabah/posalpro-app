@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Logging Service
  * Enterprise-grade logging infrastructure
  * Component Traceability Matrix: US-6.1, US-6.2, H8, H11

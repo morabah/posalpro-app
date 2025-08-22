@@ -3,7 +3,7 @@
  * Comprehensive HTTP client with authentication, error handling, retry logic, and caching
  */
 
-import { logger } from '@/utils/logger'; // Environment-aware API base URL resolution
+import { logger } from '@/lib/logger'; // Environment-aware API base URL resolution
 import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
 import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
 import { requestDeduplicator } from '@/lib/utils/requestDeduplication';

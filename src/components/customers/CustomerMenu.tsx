@@ -12,8 +12,9 @@ export function CustomerMenu() {
   const router = useRouter();
 
   // ✅ FIXED: Replace any type with proper Customer interface
-  const handleCustomerCreated = (customer: Customer) => {
-    console.log('[CustomerMenu] Customer created:', customer);
+  const handleCustomerCreated = async (customer: Customer) => {
+    const { logDebug } = await import('@/lib/logger');
+    await logDebug('[CustomerMenu] Customer created', { customer });
     // Optionally navigate to customer page or refresh customer list
   };
 

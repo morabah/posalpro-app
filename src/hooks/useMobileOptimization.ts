@@ -5,6 +5,7 @@
  */
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logWarn } from '@/lib/logger';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface MobileOptimizationConfig {
@@ -103,7 +104,10 @@ export function useMobileOptimization(
         const maxMemoryUsage = finalConfig.maxMemoryUsage;
         if (memInfo.usedJSHeapSize > maxMemoryUsage) {
           memoryPressureWarning.current = true;
-          console.warn('Memory pressure detected on mobile device');
+          void logWarn('Memory pressure detected on mobile device', {
+            usedJSHeapSize: memInfo.usedJSHeapSize,
+            maxMemoryUsage,
+          });
         } else {
           memoryPressureWarning.current = false;
         }

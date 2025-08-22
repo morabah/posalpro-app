@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * License Validation Service for PosalPro MVP2
  * Handles license validation and compliance checking
  */

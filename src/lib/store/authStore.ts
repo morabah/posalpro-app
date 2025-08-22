@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Authentication Store
  * Zustand store for managing authentication state and user sessions
  * Integrates with NextAuth.js and provides centralized auth management

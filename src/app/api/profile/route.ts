@@ -7,7 +7,7 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 

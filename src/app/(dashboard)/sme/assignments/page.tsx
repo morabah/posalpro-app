@@ -15,6 +15,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { useCallback, useState } from 'react';
+import { logInfo } from '@/lib/logger';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -31,7 +32,7 @@ export default function SMEAssignmentsPage() {
 
   const trackAction = useCallback(
     (action: string, metadata: Record<string, unknown> = {}) => {
-      console.log('SME Assignments Analytics:', {
+      void logInfo('SME Assignments Analytics', {
         action,
         metadata,
         timestamp: Date.now(),

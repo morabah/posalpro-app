@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { Suspense, useEffect } from 'react';
+import { logInfo } from '@/lib/logger';
 
 // Lazy load the UserProfile component for better performance
 const UserProfile = dynamic(() => import('@/components/profile/UserProfile'), {
@@ -25,7 +26,10 @@ export default function ProfilePage() {
 
     return () => {
       const endTime = performance.now();
-      console.log('[PERFORMANCE] Profile page render time:', endTime - startTime, 'ms');
+      void logInfo('[PERFORMANCE] Profile page render time', {
+        renderMs: endTime - startTime,
+        component: 'ProfilePage',
+      });
     };
   }, []);
 

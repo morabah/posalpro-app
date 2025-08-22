@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * Content Service
  * Enhanced data access layer for Content entities with semantic search and AI integration
  * Supports H1 hypothesis validation for 45% search time reduction

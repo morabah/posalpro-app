@@ -14,6 +14,7 @@
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logWarn } from '@/lib/logger';
 import { ComponentType, lazy, LazyExoticComponent } from 'react';
 
 export interface LazyLoadConfig {
@@ -210,10 +211,16 @@ export class ComponentLazyLoading {
           await this.loadComponentDynamically(componentName, getStepComponent(nextStep));
           this.preloadedComponents.add(componentName);
 
-          console.log(`[ComponentLazyLoading] Preloaded step ${nextStep} component`);
+          await logDebug('ComponentLazyLoading: Preloaded step component', {
+            step: nextStep,
+            componentName
+          });
         } catch (error) {
           // Preload failures shouldn't break the app
-          console.warn(`[ComponentLazyLoading] Preload failed for step ${nextStep}:`, error);
+          await logWarn('ComponentLazyLoading: Preload failed for step', {
+            step: nextStep,
+            error: error instanceof Error ? error.message : String(error)
+          });
         }
       }, this.config.preloadDelay);
     } catch (error) {
@@ -258,9 +265,10 @@ export class ComponentLazyLoading {
       const cleanupTime = performance.now() - cleanupStartTime;
 
       if (cleanupCount > 0) {
-        console.log(
-          `[ComponentLazyLoading] Cleaned up ${cleanupCount} unused components in ${cleanupTime.toFixed(2)}ms`
-        );
+        void logDebug('ComponentLazyLoading: Cleaned up unused components', {
+          cleanupCount,
+          cleanupTimeMs: Number(cleanupTime.toFixed(2))
+        });
       }
     } catch (error) {
       this.errorHandlingService.processError(

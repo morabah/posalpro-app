@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * Error Interceptor
  * Handles global error processing and categorization
  */

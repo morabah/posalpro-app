@@ -199,7 +199,7 @@ export const RecentActivity: React.FC<WidgetProps> = ({
     { type: 'content', label: 'Content', count: filterCounts.content || 0 },
   ].filter(filter => filter.count > 0);
 
-  const handleActivityClick = (activity: ActivityFeedItem) => {
+  const handleActivityClick = async (activity: ActivityFeedItem) => {
     onInteraction?.('activity_clicked', {
       activityId: activity.id,
       activityType: activity.type,
@@ -208,7 +208,8 @@ export const RecentActivity: React.FC<WidgetProps> = ({
 
     if (activity.link) {
       // In a real app, this would navigate to the activity link
-      console.log('Navigate to:', activity.link);
+      const { logDebug } = await import('@/lib/logger');
+      void logDebug('Navigate to activity', { link: activity.link });
     }
   };
 

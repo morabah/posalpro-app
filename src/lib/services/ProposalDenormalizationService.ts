@@ -8,7 +8,7 @@
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

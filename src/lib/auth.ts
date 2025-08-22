@@ -15,7 +15,7 @@
  */
 
 import { secureSessionManager } from '@/lib/auth/secureSessionManager';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { NextAuthOptions, type User as NextAuthUser, type Session } from 'next-auth';
 import type { JWT as NextAuthJWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';

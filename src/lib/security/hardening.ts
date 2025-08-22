@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Security Hardening Framework
  * Implements rate limiting, input validation, security headers, and audit logging
  *

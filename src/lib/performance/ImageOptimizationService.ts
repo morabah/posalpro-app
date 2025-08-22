@@ -7,7 +7,7 @@
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
-import { logError } from '@/lib/logger';
+import { logError, logDebug, logWarn } from '@/lib/logger';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -68,7 +68,7 @@ class ImageOptimizationService {
     if (this.isInitialized) return;
 
     try {
-      console.log('[ImageOptimizationService] Initializing image optimization...');
+      await logDebug('ImageOptimizationService: Initializing image optimization');
 
       // Create optimized assets directory if it doesn't exist
       const optimizedDir = path.join(process.cwd(), 'public', 'optimized');
@@ -76,11 +76,13 @@ class ImageOptimizationService {
         await fs.access(optimizedDir);
       } catch {
         await fs.mkdir(optimizedDir, { recursive: true });
-        console.log('[ImageOptimizationService] Created optimized assets directory');
+        await logDebug('ImageOptimizationService: Created optimized assets directory', {
+          directory: optimizedDir
+        });
       }
 
       this.isInitialized = true;
-      console.log('[ImageOptimizationService] Image optimization initialized successfully');
+      await logDebug('ImageOptimizationService: Image optimization initialized successfully');
     } catch (error) {
       // ✅ ENHANCED: Use proper logger instead of console.error
       const errorHandlingService = ErrorHandlingService.getInstance();
@@ -143,9 +145,12 @@ class ImageOptimizationService {
       const optimizedSize = Math.round(originalSize * 0.7); // 30% compression
       const compressionRatio = optimizedSize / originalSize;
 
-      console.log(
-        `[ImageOptimizationService] Optimized ${imagePath}: ${originalSize} -> ${optimizedSize} bytes`
-      );
+      await logDebug('ImageOptimizationService: Image optimized', {
+        imagePath,
+        originalSize,
+        optimizedSize,
+        compressionRatio
+      });
 
       return {
         originalSize,
@@ -209,7 +214,9 @@ class ImageOptimizationService {
       const imageFiles = await this.findImageFiles(publicDir, imageExtensions);
       totalFiles = imageFiles.length;
 
-      console.log(`[ImageOptimizationService] Found ${totalFiles} image files to optimize`);
+      await logDebug('ImageOptimizationService: Found image files to optimize', {
+        totalFiles
+      });
 
       // Process each image
       for (const imagePath of imageFiles) {
@@ -247,11 +254,12 @@ class ImageOptimizationService {
         }
       }
 
-      console.log(`[ImageOptimizationService] Optimization complete:`);
-      console.log(`  - Total files: ${totalFiles}`);
-      console.log(`  - Success: ${successCount}`);
-      console.log(`  - Errors: ${errorCount}`);
-      console.log(`  - Size reduction: ${(totalSizeReduction / 1024 / 1024).toFixed(2)}MB`);
+      await logDebug('ImageOptimizationService: Optimization complete', {
+        totalFiles,
+        successCount,
+        errorCount,
+        sizeReductionMB: Number((totalSizeReduction / 1024 / 1024).toFixed(2))
+      });
 
       return {
         totalFiles,
@@ -317,7 +325,10 @@ class ImageOptimizationService {
         }
       }
     } catch (error) {
-      console.warn(`[ImageOptimizationService] Error reading directory ${dir}:`, error);
+      await logWarn('ImageOptimizationService: Error reading directory', {
+        directory: dir,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
 
     return files;
@@ -379,7 +390,10 @@ class ImageOptimizationService {
             largeImages++;
           }
         } catch (error) {
-          console.warn(`[ImageOptimizationService] Error reading ${imagePath}:`, error);
+          await logWarn('ImageOptimizationService: Error reading image file', {
+            imagePath,
+            error: error instanceof Error ? error.message : String(error)
+          });
         }
       }
 
@@ -423,7 +437,9 @@ class ImageOptimizationService {
    */
   public updateConfig(newConfig: Partial<ImageOptimizationConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    console.log('[ImageOptimizationService] Configuration updated');
+    void logDebug('ImageOptimizationService: Configuration updated', {
+      newConfig
+    });
   }
 
   /**

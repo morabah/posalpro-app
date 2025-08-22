@@ -57,7 +57,8 @@ export class RedisSecurityStorage implements SecurityStorage {
       const value = await getCache(this.getKey(key));
       return (value ?? null) as T | null;
     } catch (error) {
-      console.warn('Security storage get error:', error);
+      const { logWarn } = await import('@/lib/logger');
+      await logWarn('Security storage get error', { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }
@@ -66,7 +67,8 @@ export class RedisSecurityStorage implements SecurityStorage {
     try {
       await setCache(this.getKey(key), value, ttl);
     } catch (error) {
-      console.warn('Security storage set error:', error);
+      const { logWarn } = await import('@/lib/logger');
+      await logWarn('Security storage set error', { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -74,7 +76,8 @@ export class RedisSecurityStorage implements SecurityStorage {
     try {
       await deleteCache(this.getKey(key));
     } catch (error) {
-      console.warn('Security storage delete error:', error);
+      const { logWarn } = await import('@/lib/logger');
+      await logWarn('Security storage delete error', { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -83,7 +86,8 @@ export class RedisSecurityStorage implements SecurityStorage {
       const value = await this.get(key);
       return value !== null;
     } catch (error) {
-      console.warn('Security storage exists error:', error);
+      const { logWarn } = await import('@/lib/logger');
+      await logWarn('Security storage exists error', { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }

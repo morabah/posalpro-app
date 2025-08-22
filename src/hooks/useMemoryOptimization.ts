@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { logDebug, logWarn } from '@/lib/logger';
 
 interface MemoryInfo {
   usedJSHeapSize: number;
@@ -62,11 +63,11 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
         try {
           maybeGc();
           if (ENABLE_LOGS) {
-            console.log('🧹 [Memory Optimization] Forced garbage collection');
+            void logDebug('Memory Optimization: Forced garbage collection');
           }
         } catch (error) {
           if (ENABLE_LOGS) {
-            console.warn('⚠️ [Memory Optimization] Failed to force garbage collection:', error);
+            void logWarn('Memory Optimization: Failed to force garbage collection', { error });
           }
         }
       }
@@ -96,13 +97,13 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
           });
 
           if (ENABLE_LOGS) {
-            console.log(
-              `🧹 [Memory Optimization] Cleared ${keysToRemove.length} localStorage items`
-            );
+            void logDebug('Memory Optimization: Cleared localStorage items', {
+              clearedCount: keysToRemove.length
+            });
           }
         } catch (error) {
           if (ENABLE_LOGS) {
-            console.warn('⚠️ [Memory Optimization] Failed to clear localStorage:', error);
+            void logWarn('Memory Optimization: Failed to clear localStorage', { error });
           }
         }
       }
@@ -118,15 +119,18 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
 
     // Log memory usage
     if (ENABLE_LOGS && memoryUsage > 0) {
-      console.log(`📊 [Memory Optimization] Current usage: ${memoryUsage.toFixed(1)}MB`);
+      void logDebug('Memory Optimization: Current usage', {
+        usageMB: Number(memoryUsage.toFixed(1))
+      });
     }
 
     // Force cleanup if memory usage is too high
     if (memoryUsage > finalConfig.forceCleanupThreshold) {
       if (ENABLE_LOGS) {
-        console.warn(
-          `🚨 [Memory Optimization] High memory usage: ${memoryUsage.toFixed(1)}MB, forcing cleanup`
-        );
+        void logWarn('Memory Optimization: High memory usage, forcing cleanup', {
+          usageMB: Number(memoryUsage.toFixed(1)),
+          threshold: finalConfig.forceCleanupThreshold
+        });
       }
       cleanupResources();
       if (finalConfig.enableGarbageCollection) {
@@ -139,9 +143,10 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
       now - lastCleanupRef.current > finalConfig.cleanupInterval
     ) {
       if (ENABLE_LOGS) {
-        console.log(
-          `🧹 [Memory Optimization] Memory threshold exceeded: ${memoryUsage.toFixed(1)}MB, cleaning up`
-        );
+        void logDebug('Memory Optimization: Memory threshold exceeded, cleaning up', {
+          usageMB: Number(memoryUsage.toFixed(1)),
+          threshold: finalConfig.threshold
+        });
       }
       cleanupResources();
     }
@@ -175,7 +180,7 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
   // ✅ CRITICAL: Memory optimization methods
   const optimizeMemory = useCallback(() => {
     if (ENABLE_LOGS) {
-      console.log('🚀 [Memory Optimization] Starting memory optimization...');
+      void logDebug('Memory Optimization: Starting memory optimization');
     }
 
     // Force cleanup
@@ -189,9 +194,9 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
     // Log final memory usage
     const finalMemoryUsage = getMemoryUsageMB();
     if (ENABLE_LOGS) {
-      console.log(
-        `✅ [Memory Optimization] Optimization complete. Final usage: ${finalMemoryUsage.toFixed(1)}MB`
-      );
+      void logDebug('Memory Optimization: Optimization complete', {
+        finalUsageMB: Number(finalMemoryUsage.toFixed(1))
+      });
     }
   }, [
     cleanupResources,
@@ -205,7 +210,7 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
   const optimizeComponentMemory = useCallback(
     (componentName: string) => {
       if (ENABLE_LOGS) {
-        console.log(`🧹 [Memory Optimization] Optimizing memory for component: ${componentName}`);
+        void logDebug('Memory Optimization: Optimizing memory for component', { componentName });
       }
 
       // Component-specific cleanup
@@ -214,9 +219,10 @@ export function useMemoryOptimization(config: Partial<MemoryOptimizationConfig> 
       // Log component memory usage
       const memoryUsage = getMemoryUsageMB();
       if (ENABLE_LOGS) {
-        console.log(
-          `📊 [Memory Optimization] ${componentName} memory usage: ${memoryUsage.toFixed(1)}MB`
-        );
+        void logDebug('Memory Optimization: Component memory usage', {
+          componentName,
+          usageMB: Number(memoryUsage.toFixed(1))
+        });
       }
     },
     [cleanupResources, getMemoryUsageMB, ENABLE_LOGS]

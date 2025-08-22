@@ -394,9 +394,12 @@ export function SectionAssignmentStep({ data, onUpdate, analytics }: SectionAssi
         })),
       });
       const assignedCount = mergedSections.filter(s => !!s.assignedTo).length;
-      console.log(
-        '[SectionAssignmentStep] RHF reset with hydrated sections. Assigned count:',
-        assignedCount
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      import('@/lib/logger').then(({ logDebug }) =>
+        logDebug('[SectionAssignmentStep] RHF reset with hydrated sections', {
+          component: 'SectionAssignmentStep',
+          assignedCount,
+        })
       );
       // Push hydrated assignments up so wizard can persist them
       onUpdateRef.current({

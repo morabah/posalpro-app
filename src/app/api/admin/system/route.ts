@@ -1,6 +1,6 @@
 import { authOptions } from '@/lib/auth';
 import { createApiErrorResponse, ErrorCodes } from '@/lib/errors';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';

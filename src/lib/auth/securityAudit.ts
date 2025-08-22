@@ -4,7 +4,7 @@
  */
 
 import prisma from '@/lib/db/prisma';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { AuditCategory, AuditSeverity, RiskLevel, SecurityEventType } from '@prisma/client';
 
 export interface SecurityEvent {

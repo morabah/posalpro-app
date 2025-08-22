@@ -9,7 +9,7 @@ import { permissionValidator } from './permissionValidator';
 import { secureSessionManager } from './secureSessionManager';
 import { securityAuditManager } from './securityAudit';
 // import { validateApiPermission } from './apiAuthorization';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { RiskLevel, SecurityEventType } from '@prisma/client';
 
 export interface RBACContext {

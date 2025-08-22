@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Performance Monitoring Hook
  * Enhanced to detect and prevent infinite loops and performance violations
  */

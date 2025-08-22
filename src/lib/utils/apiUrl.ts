@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * Dynamic API URL Resolution Utility
  * Resolves API URLs based on current environment and port
  * Prevents hardcoded port issues in development

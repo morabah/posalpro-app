@@ -14,6 +14,7 @@
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug } from '@/lib/logger';
 
 export interface CleanupConfig {
   enableMemoryCleanup: boolean;
@@ -200,7 +201,12 @@ export class CleanupMechanisms {
 
       this.cleanupRegistry.set(id, entry);
 
-      console.log(`[CleanupMechanisms] Registered ${type} resource: ${id} (priority: ${priority})`);
+      void logDebug('CleanupMechanisms: Registered resource', {
+        type,
+        id,
+        priority,
+        component
+      });
     } catch (error) {
       this.errorHandlingService.processError(
         error,
@@ -232,7 +238,7 @@ export class CleanupMechanisms {
       const success = this.performCleanup(entry);
       if (success) {
         this.cleanupRegistry.delete(id);
-        console.log(`[CleanupMechanisms] Cleaned up resource: ${id}`);
+        void logDebug('CleanupMechanisms: Cleaned up resource', { id });
       }
 
       return success;
@@ -281,9 +287,11 @@ export class CleanupMechanisms {
       this.updateCleanupMetrics(cleanupTime);
 
       if (cleanedCount > 0) {
-        console.log(
-          `[CleanupMechanisms] Cleaned up ${cleanedCount} event listeners for ${componentId} in ${cleanupTime.toFixed(2)}ms`
-        );
+        void logDebug('CleanupMechanisms: Cleaned up event listeners', {
+          cleanedCount,
+          componentId,
+          cleanupTimeMs: Number(cleanupTime.toFixed(2))
+        });
       }
     } catch (error) {
       this.errorHandlingService.processError(
@@ -343,9 +351,10 @@ export class CleanupMechanisms {
       this.metrics.memoryFreedKB += memoryFreed / 1024;
       this.updateCleanupMetrics(cleanupTime);
 
-      console.log(
-        `[CleanupMechanisms] Memory cleanup completed: ${(memoryFreed / 1024).toFixed(2)}KB freed in ${cleanupTime.toFixed(2)}ms`
-      );
+      void logDebug('CleanupMechanisms: Memory cleanup completed', {
+        memoryFreedKB: Number((memoryFreed / 1024).toFixed(2)),
+        cleanupTimeMs: Number(cleanupTime.toFixed(2))
+      });
     } catch (error) {
       this.errorHandlingService.processError(
         error,
@@ -400,9 +409,12 @@ export class CleanupMechanisms {
       this.updateCleanupMetrics(cleanupTime);
 
       if (operationsCancelled > 0) {
-        console.log(
-          `[Cleanup] Cancelled ${operationsCancelled} async operations (timeouts: ${timeoutsCleaned}, intervals: ${intervalsCleaned}) in ${cleanupTime.toFixed(2)}ms`
-        );
+        void logDebug('CleanupMechanisms: Cancelled async operations', {
+          operationsCancelled,
+          timeoutsCleaned,
+          intervalsCleaned,
+          cleanupTimeMs: Number(cleanupTime.toFixed(2))
+        });
       }
     } catch (error) {
       this.errorHandlingService.processError(
@@ -481,7 +493,7 @@ export class CleanupMechanisms {
       this.cleanupResource(id);
     }
 
-    console.log('[CleanupMechanisms] Shutdown completed');
+    void logDebug('CleanupMechanisms: Shutdown completed');
   }
 }
 

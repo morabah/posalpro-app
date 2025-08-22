@@ -1,3 +1,103 @@
+# PosalPro MVP2 - Lessons Learned
+
+This document captures key insights, patterns, and solutions discovered during
+development.
+
+## Gold Standard Compliance Audit - Migration Requirements
+
+**Date**: 2025-01-08 • **Category**: Performance / Architecture • **Impact**:
+Critical
+
+### Context
+
+Conducted comprehensive audit to identify components not following the
+`/products` page and `ProductList` gold standard patterns for data fetching,
+error handling, performance, and structure.
+
+### Problem
+
+Approximately 40% of the codebase uses non-standard patterns:
+
+- Manual loading state management instead of React Query's built-in states
+- Custom caching systems instead of React Query's caching
+- Direct fetch calls instead of `useApiClient` pattern
+- Complex useEffect data fetching instead of React Query hooks
+- Custom data fetching hooks instead of standardized patterns
+
+### Solution
+
+**Migration Strategy**:
+
+1. **HIGH PRIORITY Components** (Critical Performance Impact):
+   - `src/hooks/dashboard/useDashboardData.ts` - Convert to React Query hooks
+   - `src/app/(dashboard)/proposals/[id]/page.tsx` - Convert to React Query
+     hooks
+   - `src/app/(dashboard)/customers/[id]/CustomerProfileClient.tsx` - Convert to
+     React Query hooks
+
+2. **MEDIUM PRIORITY Components** (Performance & Maintainability):
+   - `src/hooks/entities/useUser.ts` - Convert to React Query hooks
+   - `src/hooks/entities/useAuth.ts` - Convert to React Query hooks
+   - `src/components/analytics/HypothesisTrackingDashboard.tsx` - Convert to
+     React Query hooks
+
+3. **LOW PRIORITY Components** (Infrastructure Cleanup):
+   - Custom caching systems - Remove and rely on React Query caching
+   - Direct fetch calls - Replace with `useApiClient` pattern
+
+**Migration Checklist**:
+
+- [ ] Replace manual `useState` loading with React Query's `isLoading`
+- [ ] Replace manual error states with React Query's `error`
+- [ ] Replace manual data fetching with React Query hooks
+- [ ] Remove custom caching logic
+- [ ] Use proper query keys following the factory pattern
+- [ ] Implement proper error handling with `ErrorHandlingService`
+- [ ] Add Component Traceability Matrix metadata
+- [ ] Follow the exact patterns from `useProducts.ts` and `ProductList.tsx`
+
+### Key Insights
+
+1. **Gold Standard Components** (60% of codebase):
+   - `src/hooks/useProducts.ts` - ✅ Proper React Query implementation
+   - `src/hooks/useCustomers.ts` - ✅ Proper React Query implementation
+   - `src/hooks/useAnalytics.ts` - ✅ Proper React Query implementation
+   - `src/components/products/ProductList.tsx` - ✅ Uses React Query hooks
+     properly
+
+2. **Forbidden Patterns Identified**:
+   - Custom caching with localStorage/memory maps
+   - Direct `fetch()` calls or `axios` usage
+   - Manual loading state management when React Query can handle it
+   - Multiple useEffect dependencies causing re-fetches
+   - Client-side filtering of large datasets
+   - Nested API calls in render loops
+
+3. **Performance Impact**:
+   - Expected 70-80% performance improvement for migrated components
+   - Target load times: <2s for all navigation links
+   - Memory optimization through reduced bundle size and improved caching
+
+### Prevention
+
+1. **Always follow established patterns** from gold standard components
+2. **Use React Query for complex data fetching** (lists, forms, mutations)
+3. **Use `useApiClient` only for simple one-time fetches**
+4. **Never implement custom caching systems** - rely on React Query's built-in
+   caching
+5. **Maintain 100% TypeScript compliance** during all migrations
+6. **Follow CORE_REQUIREMENTS.md** for all new implementations
+
+### Related
+
+- [CORE_REQUIREMENTS.md → Data Fetching & Performance](#data-fetching--performance-critical)
+- [CORE_REQUIREMENTS.md → React Query Patterns](#react-query-patterns-mandatory)
+- [useProducts.ts](src/hooks/useProducts.ts) - Gold standard implementation
+- [ProductList.tsx](src/components/products/ProductList.tsx) - Gold standard
+  component
+
+---
+
 # Lessons Learned - PosalPro MVP2 (Curated)
 
 This document is a curated, de-duplicated collection of the most relevant and
@@ -1420,49 +1520,60 @@ immediately, causing runtime errors **Solution**:
 
 ## ProductCreationForm Concurrency & Routing Fixes
 
-**Date**: 2025-08-22 • **Category**: React Concurrency / Form Validation / Routing
+**Date**: 2025-08-22 • **Category**: React Concurrency / Form Validation /
+Routing
 
 ### Context
 
-ProductCreationForm experienced "Step is still running" errors from concurrent step validation and routing inconsistencies between modal (`/products`) and standalone (`/products/create`) usage.
+ProductCreationForm experienced "Step is still running" errors from concurrent
+step validation and routing inconsistencies between modal (`/products`) and
+standalone (`/products/create`) usage.
 
 ### Problems
 
 - Concurrent `handleNextStep` calls causing race conditions during validation
-- Rapid clicks bypassing validation states and triggering multiple async operations
+- Rapid clicks bypassing validation states and triggering multiple async
+  operations
 - SKU uniqueness validation missing on field blur
 - Routing inconsistency: form worked as modal but failed as standalone page
 
 ### Solutions
 
 **1. Synchronous Guards & Throttling**
-- Added `useRef` guards (`advancingRef`, `lastAdvanceAtRef`) to prevent re-entrant calls
+
+- Added `useRef` guards (`advancingRef`, `lastAdvanceAtRef`) to prevent
+  re-entrant calls
 - 300ms throttle on rapid clicks to prevent overlapping validations
 - All navigation handlers respect `isAdvancingStep` state
 
 **2. UI State Management**
+
 - Disabled all navigation buttons during step advancement or validation
 - Added loading spinner on "Next Step" button during validation
 - Modal close button disabled during advancement
 
 **3. SKU Uniqueness Validation**
+
 - Implemented real-time validation on field blur via API call
 - Visual feedback with border color changes (red=taken, green=available)
 - Submit blocked when SKU is invalid or being checked
 
 **4. Routing Consistency**
+
 - Added `inline` prop to support both modal and standalone rendering
 - Fixed `/products/create` route to render form independently
 - Ensured identical behavior between both usage patterns
 
 **5. Error Handling Compliance**
+
 - Updated to use `ErrorHandlingService.getInstance().processError()` pattern
 - Added proper error metadata with component context
 - Wrapped `handleSubmit` in `useCallback` to fix React Hook dependencies
 
 ### Key Insights
 
-- **Synchronous guards** prevent React state race conditions more effectively than async locks
+- **Synchronous guards** prevent React state race conditions more effectively
+  than async locks
 - **UI disabling** during operations provides better UX than error messages
 - **Real-time validation** improves form completion rates and data quality
 - **Dual rendering modes** require careful prop design to maintain consistency
@@ -1487,37 +1598,60 @@ ProductCreationForm experienced "Step is still running" errors from concurrent s
 
 ## Error Handling Migration - Final Comprehensive Lessons Learned
 
-**Date**: 2025-01-21 **Phase**: 2.9 - Error Handling Standardization **Context**: Comprehensive migration from console.error to standardized ErrorHandlingService across the entire application **Problem**: Inconsistent error handling patterns across 44+ files created debugging difficulties, poor observability, and security vulnerabilities **Solution**: Systematic migration to ErrorHandlingService.getInstance().processError() with proper metadata and error codes **Key Insights**:
+**Date**: 2025-01-21 **Phase**: 2.9 - Error Handling Standardization
+**Context**: Comprehensive migration from console.error to standardized
+ErrorHandlingService across the entire application **Problem**: Inconsistent
+error handling patterns across 44+ files created debugging difficulties, poor
+observability, and security vulnerabilities **Solution**: Systematic migration
+to ErrorHandlingService.getInstance().processError() with proper metadata and
+error codes **Key Insights**:
 
 ### **Critical Lessons Learned**
 
-1. **Scope Management is Critical**: Variables used in error metadata must be declared outside try blocks to avoid scope issues. This was a recurring pattern across multiple files.
+1. **Scope Management is Critical**: Variables used in error metadata must be
+   declared outside try blocks to avoid scope issues. This was a recurring
+   pattern across multiple files.
 
-2. **Error Code Validation**: Many ErrorCodes properties don't exist (e.g., `OPERATION_FAILED`). Always use existing codes like `INTERNAL_ERROR`, `INITIALIZATION_FAILED`, etc.
+2. **Error Code Validation**: Many ErrorCodes properties don't exist (e.g.,
+   `OPERATION_FAILED`). Always use existing codes like `INTERNAL_ERROR`,
+   `INITIALIZATION_FAILED`, etc.
 
-3. **Infrastructure Quality Discovery**: The migration revealed excellent existing code quality - many components already had proper error handling infrastructure in place.
+3. **Infrastructure Quality Discovery**: The migration revealed excellent
+   existing code quality - many components already had proper error handling
+   infrastructure in place.
 
-4. **Incremental Migration Success**: Migration can be done incrementally without breaking existing functionality, allowing for systematic improvement.
+4. **Incremental Migration Success**: Migration can be done incrementally
+   without breaking existing functionality, allowing for systematic improvement.
 
-5. **Metadata Enrichment**: Proper error metadata (component, operation, context) dramatically improves debugging capabilities and observability.
+5. **Metadata Enrichment**: Proper error metadata (component, operation,
+   context) dramatically improves debugging capabilities and observability.
 
-6. **Pattern Consistency**: Error handling patterns should be consistent across all layers (API routes, components, hooks, utilities).
+6. **Pattern Consistency**: Error handling patterns should be consistent across
+   all layers (API routes, components, hooks, utilities).
 
-7. **Performance Impact**: Standardized error handling has minimal performance impact while providing significant debugging benefits.
+7. **Performance Impact**: Standardized error handling has minimal performance
+   impact while providing significant debugging benefits.
 
-8. **Code Quality Assessment**: The migration process served as a comprehensive code quality audit, revealing well-structured error handling in many areas.
+8. **Code Quality Assessment**: The migration process served as a comprehensive
+   code quality audit, revealing well-structured error handling in many areas.
 
 ### **Technical Patterns Discovered**
 
-- **Singleton Pattern**: ErrorHandlingService.getInstance() provides consistent access across the application
-- **Metadata Structure**: Component + operation + context provides comprehensive error tracking
-- **Error Code Categorization**: SYSTEM, AUTH, DATA, ANALYTICS categories enable proper error classification
-- **Scope Management**: Variable declaration outside try blocks prevents metadata access issues
-- **Incremental Migration**: Phased approach allows systematic improvement without breaking changes
+- **Singleton Pattern**: ErrorHandlingService.getInstance() provides consistent
+  access across the application
+- **Metadata Structure**: Component + operation + context provides comprehensive
+  error tracking
+- **Error Code Categorization**: SYSTEM, AUTH, DATA, ANALYTICS categories enable
+  proper error classification
+- **Scope Management**: Variable declaration outside try blocks prevents
+  metadata access issues
+- **Incremental Migration**: Phased approach allows systematic improvement
+  without breaking changes
 
 ### **Prevention Standards**
 
-- Always use ErrorHandlingService.getInstance().processError() instead of console.error
+- Always use ErrorHandlingService.getInstance().processError() instead of
+  console.error
 - Declare variables used in error metadata outside try blocks
 - Use appropriate ErrorCodes from existing categories
 - Include component and operation metadata for better debugging
@@ -1527,7 +1661,8 @@ ProductCreationForm experienced "Step is still running" errors from concurrent s
 ### **Impact Assessment**
 
 - **Debugging**: Enhanced error tracking and debugging capabilities
-- **Security**: Improved security through standardized error logging and tracking
+- **Security**: Improved security through standardized error logging and
+  tracking
 - **Observability**: Better error categorization and metadata for monitoring
 - **Maintainability**: Consistent error handling patterns across the codebase
 - **Code Quality**: Discovered excellent existing infrastructure quality
@@ -1536,8 +1671,10 @@ ProductCreationForm experienced "Step is still running" errors from concurrent s
 
 - **Total Files Migrated**: 33+ files across multiple phases
 - **Console.error Reduction**: From 49 to 16 calls (67% reduction)
-- **Remaining Calls**: Primarily in test utilities and logger infrastructure (appropriate to keep)
-- **Coverage**: Complete coverage of API routes, React components, hooks, utility services, and performance utilities
+- **Remaining Calls**: Primarily in test utilities and logger infrastructure
+  (appropriate to keep)
+- **Coverage**: Complete coverage of API routes, React components, hooks,
+  utility services, and performance utilities
 
 ### **Phase-by-Phase Progress**
 
@@ -1550,9 +1687,11 @@ ProductCreationForm experienced "Step is still running" errors from concurrent s
 ### **Remaining Work**
 
 - **Service Utilities**: 2 remaining calls in userService.ts
-- **Offline Utilities**: 8 calls in ServiceWorkerManager.ts (appropriate for offline functionality)
+- **Offline Utilities**: 8 calls in ServiceWorkerManager.ts (appropriate for
+  offline functionality)
 - **Test Utilities**: 2 calls in test-utils.tsx (appropriate for testing)
-- **Logger Utilities**: 3 calls in logger infrastructure (appropriate for logging)
+- **Logger Utilities**: 3 calls in logger infrastructure (appropriate for
+  logging)
 
 ### **Future Considerations**
 
@@ -1566,10 +1705,13 @@ ProductCreationForm experienced "Step is still running" errors from concurrent s
 
 - **TypeScript Compliance**: All migrations maintain 100% TypeScript compliance
 - **Functionality Preservation**: No breaking changes or functionality loss
-- **Performance Impact**: Minimal performance overhead with significant debugging benefits
+- **Performance Impact**: Minimal performance overhead with significant
+  debugging benefits
 - **Code Quality**: Improved consistency and maintainability across the codebase
 
-**Related**: [Error Handling Standards][memory:error-handling], [CORE_REQUIREMENTS.md][memory:core-requirements], [Singleton Pattern][memory:singleton]
+**Related**: [Error Handling Standards][memory:error-handling],
+[CORE_REQUIREMENTS.md][memory:core-requirements], [Singleton
+Pattern][memory:singleton]
 
 ---
 

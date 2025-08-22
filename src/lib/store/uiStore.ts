@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger'; /**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - UI Store
  * Zustand store for managing global UI state, modals, notifications, and interface interactions
  * Provides centralized UI state management across the application

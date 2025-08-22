@@ -15,10 +15,10 @@ interface ServiceWorkerProviderProps {
   enableAutoUpdate?: boolean;
 }
 
-export function ServiceWorkerProvider({ 
-  children, 
+export function ServiceWorkerProvider({
+  children,
   enableNotifications = true,
-  enableAutoUpdate = false 
+  enableAutoUpdate = false
 }: ServiceWorkerProviderProps) {
   const {
     status,
@@ -36,7 +36,10 @@ export function ServiceWorkerProvider({
     if (typeof window !== 'undefined' && status.isSupported) {
       initialize().then(success => {
         if (success && enableNotifications) {
-          console.log('Service worker initialized successfully');
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          import('@/lib/logger').then(({ logInfo }) =>
+            logInfo('Service worker initialized successfully', { component: 'ServiceWorkerProvider' })
+          );
         }
       });
     }

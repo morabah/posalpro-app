@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Database Synchronization API
  * Enables controlled synchronization between local and cloud databases
  * Follows platform engineering best practices for separation of environments

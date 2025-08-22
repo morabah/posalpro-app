@@ -17,8 +17,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import {
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,

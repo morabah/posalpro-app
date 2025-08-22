@@ -178,7 +178,10 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
       if (!response.success) {
         // Log error but let the catch block handle it
-        console.warn('[PreferencesTab] Preferences update failed:', response.error || 'Failed to update preferences');
+        const { logWarn } = await import('@/lib/logger');
+        await logWarn('[PreferencesTab] Preferences update failed', {
+          error: response.error || 'Failed to update preferences',
+        });
         throw new Error(response.error || 'Failed to update preferences');
       }
 

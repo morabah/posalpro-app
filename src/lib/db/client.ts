@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Database Client Configuration
  * Production-ready Prisma client with optimized connection management
  */

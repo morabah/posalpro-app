@@ -28,7 +28,7 @@ jest.mock('@/lib/services/userService', () => ({
 }));
 
 // Mock logger
-jest.mock('@/utils/logger', () => ({
+jest.mock('@/lib/logger', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),

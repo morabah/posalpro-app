@@ -13,7 +13,7 @@
 
 import { useApiClient } from '@/hooks/useApiClient';
 import { databaseOptimizer } from '@/lib/performance/DatabaseOptimizer';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { useEffect, useState } from 'react';
 
 interface PerformanceMetrics {

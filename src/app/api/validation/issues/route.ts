@@ -4,9 +4,10 @@
  * Component Traceability Matrix: US-3.1, US-3.2, H8
  */
 
-import { ErrorHandlingService } from '@/lib/errors';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { logDebug, logInfo, logError } from '@/lib/logger';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -38,9 +39,14 @@ interface ValidationIssue {
  */
 export async function GET(request: NextRequest) {
   const errorHandlingService = ErrorHandlingService.getInstance();
+  const start = Date.now();
 
   try {
     await validateApiPermission(request, { resource: 'validation', action: 'read' });
+    await logDebug('[ValidationIssuesAPI] GET start', {
+      component: 'ValidationIssuesAPI',
+      operation: 'GET',
+    });
     // Simulate comprehensive validation issues
     // In production, this would query actual validation issues from the database
     const validationIssues: ValidationIssue[] = [
@@ -130,22 +136,36 @@ export async function GET(request: NextRequest) {
       },
     ];
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: validationIssues,
       message: 'Validation issues retrieved successfully',
       componentMapping: COMPONENT_MAPPING,
     });
+    await logInfo('[ValidationIssuesAPI] GET success', {
+      component: 'ValidationIssuesAPI',
+      operation: 'GET',
+      loadTime: Date.now() - start,
+      count: validationIssues.length,
+    });
+    return res;
   } catch (error) {
     const processedError = errorHandlingService.processError(
       error,
-      'Failed to retrieve validation issues'
+      'Failed to retrieve validation issues',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      { component: 'ValidationIssuesAPI', operation: 'GET' }
     );
+    await logError('[ValidationIssuesAPI] GET failed', error as unknown, {
+      component: 'ValidationIssuesAPI',
+      operation: 'GET',
+      errorCode: processedError.code,
+    });
 
     return NextResponse.json(
       {
         success: false,
-        error: errorHandlingService.getUserFriendlyMessage(error),
+        error: processedError.message,
         componentMapping: COMPONENT_MAPPING,
       },
       { status: 500 }

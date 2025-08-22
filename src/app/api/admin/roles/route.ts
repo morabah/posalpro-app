@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Admin Roles API Route
  * Database-driven role management API
  * Based on ADMIN_SCREEN.md wireframe and RBAC schema specifications

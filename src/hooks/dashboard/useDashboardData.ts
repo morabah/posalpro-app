@@ -1,9 +1,16 @@
-import { logger } from '@/utils/logger';/**
- * PosalPro MVP2 - Dashboard Data Hook
+/**
+ * PosalPro MVP2 - Dashboard Data Hook (React Query Implementation)
  * Comprehensive dashboard data management with role-based filtering and real-time updates
  * Based on DASHBOARD_SCREEN.md wireframe specifications
+ *
+ * CORE_REQUIREMENTS.md Compliance:
+ * - Uses React Query for complex data fetching with caching
+ * - Follows established query key factory patterns
+ * - Implements proper staleTime and gcTime configuration
+ * - Uses hierarchical query keys for cache invalidation
  */
 
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { dashboardAPI, type DashboardQueryOptions } from '@/lib/dashboard/api';
 import type {
   ActivityFeedItem,
@@ -13,11 +20,13 @@ import type {
   PerformanceMetrics,
   TeamMember,
 } from '@/lib/dashboard/types';
-import { UserType } from '@/types';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useDashboardAnalytics } from './useDashboardAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { UserType } from '@/types/enums';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-// Narrowed section type for strong typing across refresh operations
+// Dashboard section type for strong typing
 type DashboardSection =
   | 'proposals'
   | 'activities'
@@ -26,9 +35,7 @@ type DashboardSection =
   | 'performance'
   | 'notifications';
 
-// Note: Removed unused COMPONENT_MAPPING to satisfy lint @typescript-eslint/no-unused-vars
-
-// Hook configuration
+// Hook configuration options
 interface UseDashboardDataOptions {
   userId?: string;
   userRole?: UserType;
@@ -40,37 +47,7 @@ interface UseDashboardDataOptions {
   onDataChange?: (data: DashboardData) => void;
 }
 
-// Hook state interface
-interface DashboardDataState {
-  data: DashboardData | null;
-  loading: {
-    overall: boolean;
-    proposals: boolean;
-    activities: boolean;
-    team: boolean;
-    deadlines: boolean;
-    performance: boolean;
-    notifications: boolean;
-  };
-  errors: {
-    overall: string | null;
-    proposals: string | null;
-    activities: string | null;
-    team: string | null;
-    deadlines: string | null;
-    performance: string | null;
-    notifications: string | null;
-  };
-  lastUpdated: Date | null;
-  stats: {
-    totalRequests: number;
-    cacheHits: number;
-    errorCount: number;
-    averageLoadTime: number;
-  };
-}
-
-// Individual section data interfaces
+// Individual section data state interface
 interface SectionDataState<T> {
   data: T | null;
   loading: boolean;
@@ -78,6 +55,7 @@ interface SectionDataState<T> {
   lastUpdated: Date | null;
 }
 
+// Return interface for the hook
 export interface UseDashboardDataReturn {
   // Data
   dashboardData: DashboardData | null;
@@ -90,459 +68,378 @@ export interface UseDashboardDataReturn {
 
   // Loading states
   isLoading: boolean;
-  loadingStates: DashboardDataState['loading'];
+  isRefreshing: boolean;
 
   // Error states
   hasErrors: boolean;
-  errors: DashboardDataState['errors'];
+  error: Error | null;
 
   // Actions
-  refreshAll: () => Promise<void>;
+  refetch: () => Promise<void>;
   refreshSection: (section: DashboardSection) => Promise<void>;
-  clearErrors: () => void;
   markNotificationAsRead: (notificationId: string) => Promise<boolean>;
 
-  // Stats & Meta
-  stats: DashboardDataState['stats'];
+  // Meta
   lastUpdated: Date | null;
-
-  // Configuration
-  updateOptions: (newOptions: Partial<UseDashboardDataOptions>) => void;
 }
 
 /**
- * Comprehensive dashboard data management hook
+ * Query key factory for dashboard data
+ * Following CORE_REQUIREMENTS.md patterns for hierarchical query keys
  */
-export function useDashboardData(
-  initialOptions: UseDashboardDataOptions = {}
-): UseDashboardDataReturn {
-  const [options, setOptions] = useState<UseDashboardDataOptions>({
-    timeRange: 'week',
-    autoRefresh: true,
-    refreshInterval: 5 * 60 * 1000, // 5 minutes
-    enableCache: true,
-    ...initialOptions,
-  });
+const dashboardKeys = {
+  all: ['dashboard'] as const,
+  data: (options: DashboardQueryOptions) => [...dashboardKeys.all, 'data', options] as const,
+  section: (section: DashboardSection, options: DashboardQueryOptions) =>
+    [...dashboardKeys.all, 'section', section, options] as const,
+  notifications: (userId?: string) => [...dashboardKeys.all, 'notifications', userId] as const,
+};
 
-  const [state, setState] = useState<DashboardDataState>({
-    data: null,
-    loading: {
-      overall: false,
-      proposals: false,
-      activities: false,
-      team: false,
-      deadlines: false,
-      performance: false,
-      notifications: false,
-    },
-    errors: {
-      overall: null,
-      proposals: null,
-      activities: null,
-      team: null,
-      deadlines: null,
-      performance: null,
-      notifications: null,
-    },
-    lastUpdated: null,
-    stats: {
-      totalRequests: 0,
-      cacheHits: 0,
-      errorCount: 0,
-      averageLoadTime: 0,
-    },
-  });
+/**
+ * React Query-based dashboard data management hook
+ * Compliant with CORE_REQUIREMENTS.md React Query patterns
+ */
+export function useDashboardData(options: UseDashboardDataOptions = {}): UseDashboardDataReturn {
+  const queryClient = useQueryClient();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
-  // Analytics integration
-  const { trackError, trackEvent, trackInteraction } = useDashboardAnalytics(
-    options.userId || 'unknown',
-    options.userRole || 'unknown',
-    `dashboard-${Date.now()}`
-  );
+  // Default options with CORE_REQUIREMENTS.md compliant configuration
+  const queryOptions: DashboardQueryOptions = {
+    userId: options.userId,
+    userRole: options.userRole,
+    timeRange: options.timeRange || 'week',
+    refresh: false,
+  };
 
-  // Refs for cleanup and timing
-  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const loadStartTimeRef = useRef<number | null>(null);
-  const mountedRef = useRef(true);
-
-  // Update loading state helper
-  const updateLoadingState = useCallback(
-    (section: keyof DashboardDataState['loading'], loading: boolean) => {
-      setState(prev => ({
-        ...prev,
-        loading: {
-          ...prev.loading,
-          [section]: loading,
-        },
-      }));
-    },
-    []
-  );
-
-  // Update error state helper
-  const updateErrorState = useCallback(
-    (section: keyof DashboardDataState['errors'], error: string | null) => {
-      setState(prev => ({
-        ...prev,
-        errors: {
-          ...prev.errors,
-          [section]: error,
-        },
-      }));
-
-      if (error) {
-        trackError(error, { context: `dashboard_${section}` });
-        options.onError?.(new Error(error), section);
-      }
-    },
-    [options, trackError]
-  );
-
-  // Update stats helper
-  const updateStats = useCallback((update: Partial<DashboardDataState['stats']>) => {
-    setState(prev => ({
-      ...prev,
-      stats: {
-        ...prev.stats,
-        ...update,
-      },
-    }));
-  }, []);
-
-  /**
-   * Fetch all dashboard data
-   */
-  const fetchDashboardData = useCallback(
-    async (refresh = false) => {
-       
-      if (!mountedRef.current) return;
-
-      loadStartTimeRef.current = Date.now();
-      updateLoadingState('overall', true);
-      updateErrorState('overall', null);
-
+  // Main dashboard data query with React Query configuration per CORE_REQUIREMENTS.md
+  const {
+    data: dashboardData,
+    isLoading,
+    isRefetching: isRefreshing,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: dashboardKeys.data(queryOptions),
+    queryFn: async () => {
+      const start = Date.now();
+      void logDebug('[Dashboard] Fetch start', {
+        component: 'useDashboardData',
+        operation: 'getDashboardData',
+        userId: queryOptions.userId,
+        userRole: queryOptions.userRole,
+        timeRange: queryOptions.timeRange,
+      });
       try {
-        const queryOptions: DashboardQueryOptions = {
-          userId: options.userId,
-          userRole: options.userRole,
-          timeRange: options.timeRange,
-          refresh: refresh || !options.enableCache,
-        };
-
         const data = await dashboardAPI.getDashboardData(queryOptions);
-
-        if (!mountedRef.current) return;
-
-        setState(prev => ({
-          ...prev,
-          data,
-          lastUpdated: new Date(),
-        }));
-
-        // Update stats
-        const loadTime = Date.now() - (loadStartTimeRef.current || Date.now());
-        updateStats({
-          totalRequests: state.stats.totalRequests + 1,
-          averageLoadTime: (state.stats.averageLoadTime + loadTime) / 2,
+        void logInfo('[Dashboard] Fetch success', {
+          component: 'useDashboardData',
+          operation: 'getDashboardData',
+          loadTime: Date.now() - start,
         });
-
-        // Track analytics
-        trackEvent('dashboard_loaded', { loadTime, userRole: options.userRole });
-        trackInteraction('dashboard', 'load', { loadTime, success: true });
-
-        // Notify callback
-        options.onDataChange?.(data);
-      } catch (error) {
-        if (!mountedRef.current) return;
-
-        const errorMessage =
-          error instanceof Error ? error.message : 'Failed to fetch dashboard data';
-        updateErrorState('overall', errorMessage);
-        updateStats({ errorCount: state.stats.errorCount + 1 });
-
-        logger.error('Dashboard data fetch failed:', error);
-      } finally {
-        if (mountedRef.current) {
-          updateLoadingState('overall', false);
-        }
-      }
-    },
-    [
-      options,
-      state.stats,
-      updateLoadingState,
-      updateErrorState,
-      updateStats,
-      trackEvent,
-      trackInteraction,
-    ]
-  );
-
-  /**
-   * Refresh specific dashboard section
-   */
-  const refreshSection = useCallback(
-    async (section: DashboardSection) => {
-       
-      if (!mountedRef.current) return;
-
-      const sectionKey = section as keyof DashboardDataState['loading'];
-      const loadStartTime = Date.now();
-
-      updateLoadingState(sectionKey, true);
-      updateErrorState(sectionKey, null);
-
-      try {
-        const queryOptions: DashboardQueryOptions = {
-          userId: options.userId,
-          userRole: options.userRole,
-          timeRange: options.timeRange,
-          refresh: true,
-        };
-
-        let sectionData:
-          | DashboardData['proposals']
-          | ActivityFeedItem[]
-          | TeamMember[]
-          | Deadline[]
-          | PerformanceMetrics
-          | Notification[];
-
-        switch (section) {
-          case 'proposals':
-            sectionData = await dashboardAPI.refreshSection('proposals', queryOptions);
-            break;
-          case 'activities':
-            sectionData = await dashboardAPI.refreshSection('activities', queryOptions);
-            break;
-          case 'team':
-            sectionData = await dashboardAPI.refreshSection('team', queryOptions);
-            break;
-          case 'deadlines':
-            sectionData = await dashboardAPI.refreshSection('deadlines', queryOptions);
-            break;
-          case 'performance':
-            sectionData = await dashboardAPI.refreshSection('performance', queryOptions);
-            break;
-          case 'notifications':
-            sectionData = await dashboardAPI.refreshSection('notifications', queryOptions);
-            break;
-        }
-
-        if (!mountedRef.current) return;
-
-        // Update specific section in state
-        setState(prev => {
-          if (!prev.data) return prev;
-          const updatedData = { ...prev.data };
-          switch (section) {
-            case 'proposals':
-              updatedData.proposals = sectionData as DashboardData['proposals'];
-              break;
-            case 'activities':
-              updatedData.activities = sectionData as ActivityFeedItem[];
-              break;
-            case 'team':
-              updatedData.team = sectionData as TeamMember[];
-              break;
-            case 'deadlines':
-              updatedData.deadlines = sectionData as Deadline[];
-              break;
-            case 'performance':
-              updatedData.performance = sectionData as PerformanceMetrics;
-              break;
-            case 'notifications':
-              updatedData.notifications = sectionData as Notification[];
-              break;
+        return data;
+      } catch (err) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          err,
+          'Failed to fetch dashboard data',
+          ErrorCodes.DATA.QUERY_FAILED,
+          {
+            component: 'useDashboardData',
+            operation: 'getDashboardData',
+            userId: queryOptions.userId,
+            userRole: queryOptions.userRole,
+            timeRange: queryOptions.timeRange,
           }
-
-          return {
-            ...prev,
-            data: updatedData,
-            lastUpdated: new Date(),
-          };
+        );
+        void logError('[Dashboard] Fetch failed', {
+          component: 'useDashboardData',
+          operation: 'getDashboardData',
+          error: standardError.message,
         });
-
-        // Track analytics
-        const loadTime = Date.now() - loadStartTime;
-        trackEvent('section_refresh', { section, loadTime, userRole: options.userRole });
-        trackInteraction(section, 'refresh', { loadTime, success: true });
-      } catch (error) {
-        if (!mountedRef.current) return;
-
-        const errorMessage =
-          error instanceof Error ? error.message : `Failed to refresh ${section}`;
-        updateErrorState(sectionKey, errorMessage);
-        updateStats({ errorCount: state.stats.errorCount + 1 });
-
-        logger.error(`Failed to refresh ${section}:`, error);
-      } finally {
-        if (mountedRef.current) {
-          updateLoadingState(sectionKey, false);
-        }
+        throw standardError;
       }
     },
-    [
-      options,
-      state.stats,
-      updateLoadingState,
-      updateErrorState,
-      updateStats,
-      trackEvent,
-      trackInteraction,
-    ]
-  );
+    staleTime: 30000, // 30 seconds per CORE_REQUIREMENTS.md
+    gcTime: 120000, // 2 minutes per CORE_REQUIREMENTS.md
+    refetchOnWindowFocus: false, // Per CORE_REQUIREMENTS.md
+    retry: 1, // Per CORE_REQUIREMENTS.md
+    enabled: true,
+    refetchInterval: options.autoRefresh ? options.refreshInterval || 5 * 60 * 1000 : false,
+  });
 
-  /**
-   * Refresh all dashboard data
-   */
-  const refreshAll = useCallback(async () => {
-    await fetchDashboardData(true);
-  }, [fetchDashboardData]);
+  // Individual section queries for granular loading states
+  const proposalsQuery = useQuery({
+    queryKey: dashboardKeys.section('proposals', queryOptions),
+    queryFn: () => dashboardAPI.refreshSection('proposals', queryOptions),
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: false, // Only fetch when explicitly requested
+  });
 
-  /**
-   * Clear all error states
-   */
-  const clearErrors = useCallback(() => {
-    setState(prev => ({
-      ...prev,
-      errors: {
-        overall: null,
-        proposals: null,
-        activities: null,
-        team: null,
-        deadlines: null,
-        performance: null,
-        notifications: null,
-      },
-    }));
-  }, []);
+  const activitiesQuery = useQuery({
+    queryKey: dashboardKeys.section('activities', queryOptions),
+    queryFn: () => dashboardAPI.refreshSection('activities', queryOptions),
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: false,
+  });
 
-  /**
-   * Mark notification as read
-   */
-  const markNotificationAsRead = useCallback(
-    async (notificationId: string): Promise<boolean> => {
+  const teamQuery = useQuery({
+    queryKey: dashboardKeys.section('team', queryOptions),
+    queryFn: () => dashboardAPI.refreshSection('team', queryOptions),
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: false,
+  });
+
+  const deadlinesQuery = useQuery({
+    queryKey: dashboardKeys.section('deadlines', queryOptions),
+    queryFn: () => dashboardAPI.refreshSection('deadlines', queryOptions),
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: false,
+  });
+
+  const performanceQuery = useQuery({
+    queryKey: dashboardKeys.section('performance', queryOptions),
+    queryFn: () => dashboardAPI.refreshSection('performance', queryOptions),
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: false,
+  });
+
+  const notificationsQuery = useQuery({
+    queryKey: dashboardKeys.section('notifications', queryOptions),
+    queryFn: () => dashboardAPI.refreshSection('notifications', queryOptions),
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: false,
+  });
+
+  // Mutation for marking notifications as read
+  const markNotificationMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      void logDebug('[Dashboard] Update start', {
+        component: 'useDashboardData',
+        operation: 'markNotificationAsRead',
+        payloadKeys: ['notificationId'],
+      });
       try {
-        const success = await dashboardAPI.markNotificationAsRead(notificationId);
-
-        if (success && state.data?.notifications) {
-          // Update notification in local state
-          setState(prev => {
-            if (!prev.data?.notifications) return prev;
-
-            const updatedNotifications = prev.data.notifications.map(notification =>
-              notification.id === notificationId ? { ...notification, read: true } : notification
-            );
+        const ok = await dashboardAPI.markNotificationAsRead(notificationId);
+        void logInfo('[Dashboard] Update success', {
+          component: 'useDashboardData',
+          operation: 'markNotificationAsRead',
+        });
+        return ok;
+      } catch (err) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          err,
+          'Failed to mark notification as read',
+          ErrorCodes.DATA.UPDATE_FAILED,
+          { component: 'useDashboardData', operation: 'markNotificationAsRead' }
+        );
+        void logError('[Dashboard] Update failed', {
+          component: 'useDashboardData',
+          operation: 'markNotificationAsRead',
+          error: standardError.message,
+        });
+        throw standardError;
+      }
+    },
+    onSuccess: (success, notificationId) => {
+      if (success) {
+        // Optimistically update the cache
+        queryClient.setQueryData(
+          dashboardKeys.data(queryOptions),
+          (oldData: DashboardData | undefined) => {
+            if (!oldData?.notifications) return oldData;
 
             return {
-              ...prev,
-              data: {
-                ...prev.data,
-                notifications: updatedNotifications,
-              },
+              ...oldData,
+              notifications: oldData.notifications.map(notification =>
+                notification.id === notificationId ? { ...notification, read: true } : notification
+              ),
             };
-          });
-        }
+          }
+        );
 
-        return success;
-      } catch (error) {
-        logger.error('Failed to mark notification as read:', error);
-        return false;
+        // Track analytics
+        analytics('notification_marked_read', { notificationId }, 'low');
       }
     },
-    [state.data?.notifications]
-  );
+    onError: error => {
+      analytics('notification_mark_read_error', { error: error.message }, 'high');
+      void logError('[Dashboard] Notification mark read failed', {
+        component: 'useDashboardData',
+        operation: 'markNotificationAsRead',
+        error: error.message,
+      });
+      options.onError?.(error as Error, 'notifications');
+    },
+  });
 
-  /**
-   * Update hook options
-   */
-  const updateOptions = useCallback((newOptions: Partial<UseDashboardDataOptions>) => {
-    setOptions(prev => ({ ...prev, ...newOptions }));
-  }, []);
+  // Section refresh function
+  const refreshSection = async (section: DashboardSection): Promise<void> => {
+    try {
+      analytics('dashboard_section_refresh_start', { section }, 'medium');
+      void logDebug('[Dashboard] Section refresh start', {
+        component: 'useDashboardData',
+        operation: 'refreshSection',
+        section,
+      });
 
-  // Initial data fetch
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]); // Re-fetch when key options change via memoized dependency
-
-  // Auto-refresh setup
-  useEffect(() => {
-    if (!options.autoRefresh || !options.refreshInterval) return;
-
-    refreshTimeoutRef.current = setInterval(() => {
-      if (mountedRef.current && !state.loading.overall) {
-        fetchDashboardData();
+      switch (section) {
+        case 'proposals':
+          await proposalsQuery.refetch();
+          break;
+        case 'activities':
+          await activitiesQuery.refetch();
+          break;
+        case 'team':
+          await teamQuery.refetch();
+          break;
+        case 'deadlines':
+          await deadlinesQuery.refetch();
+          break;
+        case 'performance':
+          await performanceQuery.refetch();
+          break;
+        case 'notifications':
+          await notificationsQuery.refetch();
+          break;
       }
-    }, options.refreshInterval);
 
-    return () => {
-      if (refreshTimeoutRef.current) {
-        clearInterval(refreshTimeoutRef.current);
-      }
-    };
-  }, [options.autoRefresh, options.refreshInterval, state.loading.overall, fetchDashboardData]);
+      analytics('dashboard_section_refresh_success', { section }, 'medium');
+      void logInfo('[Dashboard] Section refresh success', {
+        component: 'useDashboardData',
+        operation: 'refreshSection',
+        section,
+      });
+    } catch (error) {
+      analytics(
+        'dashboard_section_refresh_error',
+        { section, error: (error as Error).message },
+        'high'
+      );
+      void logError('[Dashboard] Section refresh failed', {
+        component: 'useDashboardData',
+        operation: 'refreshSection',
+        section,
+        error: (error as Error).message,
+      });
+      options.onError?.(error as Error, section);
+    }
+  };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (refreshTimeoutRef.current) {
-        clearInterval(refreshTimeoutRef.current);
-      }
-    };
-  }, []);
+  // Mark notification as read function
+  const markNotificationAsRead = async (notificationId: string): Promise<boolean> => {
+    try {
+      const result = await markNotificationMutation.mutateAsync(notificationId);
+      return result as boolean;
+    } catch {
+      return false;
+    }
+  };
 
-  // Computed values
-  const isLoading = state.loading.overall;
-  const hasErrors = Object.values(state.errors).some(error => error !== null);
+  // Refetch function
+  const handleRefetch = async (): Promise<void> => {
+    analytics('dashboard_refetch_start', {}, 'medium');
+    void logDebug('[Dashboard] Refetch start', { component: 'useDashboardData' });
+    await refetch();
+    analytics('dashboard_refetch_complete', {}, 'medium');
+    void logInfo('[Dashboard] Refetch complete', { component: 'useDashboardData' });
+  };
 
-  // Individual section data with loading and error states
+  // Analytics tracking for data changes
+  if (dashboardData && options.onDataChange) {
+    options.onDataChange(dashboardData);
+  }
+
+  // Error tracking
+  if (error) {
+    analytics('dashboard_query_error', { error: error.message }, 'high');
+    void logError('[Dashboard] Query error', {
+      component: 'useDashboardData',
+      operation: 'getDashboardData',
+      error: error.message,
+    });
+    options.onError?.(error as Error);
+  }
+
+  // Individual section data states
   const proposals: SectionDataState<DashboardData['proposals']> = {
-    data: state.data?.proposals || null,
-    loading: state.loading.proposals,
-    error: state.errors.proposals,
-    lastUpdated: state.lastUpdated,
+    data: dashboardData?.proposals || proposalsQuery.data || null,
+    loading: proposalsQuery.isLoading,
+    error: proposalsQuery.error?.message || null,
+    lastUpdated: proposalsQuery.dataUpdatedAt ? new Date(proposalsQuery.dataUpdatedAt) : null,
   };
 
   const activities: SectionDataState<ActivityFeedItem[]> = {
-    data: state.data?.activities || null,
-    loading: state.loading.activities,
-    error: state.errors.activities,
-    lastUpdated: state.lastUpdated,
+    data: dashboardData?.activities || activitiesQuery.data || null,
+    loading: activitiesQuery.isLoading,
+    error: activitiesQuery.error?.message || null,
+    lastUpdated: activitiesQuery.dataUpdatedAt ? new Date(activitiesQuery.dataUpdatedAt) : null,
   };
 
   const team: SectionDataState<TeamMember[]> = {
-    data: state.data?.team || null,
-    loading: state.loading.team,
-    error: state.errors.team,
-    lastUpdated: state.lastUpdated,
+    data: dashboardData?.team || teamQuery.data || null,
+    loading: teamQuery.isLoading,
+    error: teamQuery.error?.message || null,
+    lastUpdated: teamQuery.dataUpdatedAt ? new Date(teamQuery.dataUpdatedAt) : null,
   };
 
   const deadlines: SectionDataState<Deadline[]> = {
-    data: state.data?.deadlines || null,
-    loading: state.loading.deadlines,
-    error: state.errors.deadlines,
-    lastUpdated: state.lastUpdated,
+    data: dashboardData?.deadlines || deadlinesQuery.data || null,
+    loading: deadlinesQuery.isLoading,
+    error: deadlinesQuery.error?.message || null,
+    lastUpdated: deadlinesQuery.dataUpdatedAt ? new Date(deadlinesQuery.dataUpdatedAt) : null,
   };
 
   const performance: SectionDataState<PerformanceMetrics> = {
-    data: state.data?.performance || null,
-    loading: state.loading.performance,
-    error: state.errors.performance,
-    lastUpdated: state.lastUpdated,
+    data: dashboardData?.performance || performanceQuery.data || null,
+    loading: performanceQuery.isLoading,
+    error: performanceQuery.error?.message || null,
+    lastUpdated: performanceQuery.dataUpdatedAt ? new Date(performanceQuery.dataUpdatedAt) : null,
   };
 
   const notifications: SectionDataState<Notification[]> = {
-    data: state.data?.notifications || null,
-    loading: state.loading.notifications,
-    error: state.errors.notifications,
-    lastUpdated: state.lastUpdated,
+    data: dashboardData?.notifications || notificationsQuery.data || null,
+    loading: notificationsQuery.isLoading,
+    error: notificationsQuery.error?.message || null,
+    lastUpdated: notificationsQuery.dataUpdatedAt
+      ? new Date(notificationsQuery.dataUpdatedAt)
+      : null,
   };
+
+  // Computed states
+  const hasErrors = !!(
+    error ||
+    proposalsQuery.error ||
+    activitiesQuery.error ||
+    teamQuery.error ||
+    deadlinesQuery.error ||
+    performanceQuery.error ||
+    notificationsQuery.error
+  );
+
+  const lastUpdated = dashboardData ? new Date() : null;
 
   return {
     // Data
-    dashboardData: state.data,
+    dashboardData: dashboardData || null,
     proposals,
     activities,
     team,
@@ -552,26 +449,21 @@ export function useDashboardData(
 
     // Loading states
     isLoading,
-    loadingStates: state.loading,
+    isRefreshing,
 
     // Error states
     hasErrors,
-    errors: state.errors,
+    error: error as Error | null,
 
     // Actions
-    refreshAll,
+    refetch: handleRefetch,
     refreshSection,
-    clearErrors,
     markNotificationAsRead,
 
-    // Stats & Meta
-    stats: state.stats,
-    lastUpdated: state.lastUpdated,
-
-    // Configuration
-    updateOptions,
+    // Meta
+    lastUpdated,
   };
 }
 
 // Export types for external use
-export type { DashboardDataState, SectionDataState, UseDashboardDataOptions };
+export type { DashboardSection, SectionDataState, UseDashboardDataOptions };

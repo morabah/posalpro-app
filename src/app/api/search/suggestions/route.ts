@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logDebug, logInfo, logError } from '@/lib/logger';/**
  * PosalPro MVP2 - Search Suggestions API Routes
  * Auto-complete and search suggestions functionality
  * Component Traceability: US-1.1, US-1.2, H1
@@ -68,6 +68,12 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => (b.score || 0) - (a.score || 0))
       .slice(0, validatedQuery.limit);
 
+    await logInfo('Search suggestions success', {
+      query: validatedQuery.q,
+      limit: validatedQuery.limit,
+      userId: session.user.id,
+      count: sortedSuggestions.length,
+    });
     return NextResponse.json({
       success: true,
       data: {
@@ -78,7 +84,7 @@ export async function GET(request: NextRequest) {
       message: 'Suggestions retrieved successfully',
     });
   } catch (error) {
-    logger.error('Search suggestions error:', error);
+    await logError('Search suggestions error', error as unknown);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -118,7 +124,8 @@ async function getContentSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(content.title, searchTerm, 'content'),
     }));
   } catch (error) {
-    logger.error('Content suggestions error:', error);
+    const { logError } = await import('@/lib/logger');
+    await logError('Content suggestions error', error as unknown);
     return [];
   }
 }
@@ -152,7 +159,8 @@ async function getProductSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(product.name, searchTerm, 'product'),
     }));
   } catch (error) {
-    logger.error('Product suggestions error:', error);
+    const { logError } = await import('@/lib/logger');
+    await logError('Product suggestions error', error as unknown);
     return [];
   }
 }
@@ -186,7 +194,8 @@ async function getCustomerSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(customer.name, searchTerm, 'customer'),
     }));
   } catch (error) {
-    logger.error('Customer suggestions error:', error);
+    const { logError } = await import('@/lib/logger');
+    await logError('Customer suggestions error', error as unknown);
     return [];
   }
 }
@@ -238,7 +247,8 @@ async function getTagSuggestions(searchTerm: string, limit: number) {
       score: calculateSuggestionScore(tag, searchTerm, 'tag'),
     }));
   } catch (error) {
-    logger.error('Tag suggestions error:', error);
+    const { logError } = await import('@/lib/logger');
+    await logError('Tag suggestions error', error as unknown);
     return [];
   }
 }
@@ -292,7 +302,8 @@ async function getRecentSearches(userId: string, searchTerm: string, limit: numb
       score: calculateSuggestionScore(item.query, searchTerm, 'recent'),
     }));
   } catch (error) {
-    logger.error('Recent searches error:', error);
+    const { logError } = await import('@/lib/logger');
+    await logError('Recent searches error', error as unknown);
     return [];
   }
 }

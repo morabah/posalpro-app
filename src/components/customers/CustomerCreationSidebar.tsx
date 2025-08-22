@@ -113,7 +113,8 @@ export function CustomerCreationSidebar({
     setMessage(null);
 
     try {
-      console.log('[CustomerCreationSidebar] Submitting customer data:', data);
+      const { logDebug } = await import('@/lib/logger');
+      await logDebug('[CustomerCreationSidebar] Submitting customer data', { data });
 
       // Clean up empty strings and convert revenue to number
       const cleanData = {

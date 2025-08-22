@@ -267,15 +267,17 @@ export const InteractiveRevenueChart = memo(
       datasets,
     };
 
-    const handleExport = (format: 'pdf' | 'excel' | 'csv') => {
+    const handleExport = async (format: 'pdf' | 'excel' | 'csv') => {
       // Simulate export functionality
-      console.log(`Exporting chart data in ${format} format`);
+      const { logInfo } = await import('@/lib/logger');
+      await logInfo('Exporting chart data', { format });
       // In a real implementation, this would trigger actual export
     };
 
-    const handleDrillDown = (category: string) => {
+    const handleDrillDown = async (category: string) => {
       // Simulate deeper drill-down
-      console.log(`Drilling down into ${category} for ${selectedPoint?.period}`);
+      const { logDebug } = await import('@/lib/logger');
+      await logDebug('Drilldown', { category, period: selectedPoint?.period });
     };
 
     return (

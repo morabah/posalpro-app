@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserByEmail } from '@/lib/services/userService';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
+import { logDebug } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
@@ -9,14 +10,12 @@ export async function GET(request: NextRequest) {
 
   try {
     if (process.env.NODE_ENV === 'development') {
-
-      console.log('🧪 Testing user authentication query...');
+      await logDebug('🧪 Testing user authentication query...');
     }
 
     // Test 1: Simple user query
     if (process.env.NODE_ENV === 'development') {
-
-      console.log('Test 1: Simple user query');
+      await logDebug('Test 1: Simple user query');
     }
     const simpleUser = await prisma.user.findUnique({
       where: { email: testEmail },
@@ -25,8 +24,7 @@ export async function GET(request: NextRequest) {
 
     // Test 2: User with roles (without transaction)
     if (process.env.NODE_ENV === 'development') {
-
-      console.log('Test 2: User with roles (no transaction)');
+      await logDebug('Test 2: User with roles (no transaction)');
     }
     const userWithRoles = await prisma.user.findUnique({
       where: { email: testEmail },
@@ -42,8 +40,7 @@ export async function GET(request: NextRequest) {
 
     // Test 3: Transaction with timeout
     if (process.env.NODE_ENV === 'development') {
-
-      console.log('Test 3: Transaction with timeout');
+      await logDebug('Test 3: Transaction with timeout');
     }
     const transactionUser = await prisma.$transaction(async tx => {
       return await tx.user.findUnique({
@@ -63,8 +60,7 @@ export async function GET(request: NextRequest) {
 
     // Test 4: User service function
     if (process.env.NODE_ENV === 'development') {
-
-      console.log('Test 4: User service function');
+      await logDebug('Test 4: User service function');
     }
     const serviceUser = await getUserByEmail(testEmail);
 

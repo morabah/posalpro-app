@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * Product Validation API Endpoint
  * Handles validation requests for product configurations
  */

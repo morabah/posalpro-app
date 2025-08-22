@@ -5,7 +5,7 @@
 
 import prisma from '@/lib/db/prisma';
 import { deleteAuthCache, getAuthCache, setAuthCache } from '@/lib/redis';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 
 export interface PermissionContext {
   userId: string;

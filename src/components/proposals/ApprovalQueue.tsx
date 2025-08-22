@@ -2,8 +2,8 @@
 
 /**
  * PosalPro MVP2 - Approval Queue Component
- * Based on APPROVAL_WORKFLOW_SCREEN.md wireframe specifications
- * Implements intelligent task prioritization and queue management
+ * Refactored to use React Query following gold standard patterns
+ * Performance optimized with structured logging, error handling, and analytics
  *
  * User Stories: US-4.3
  * Hypotheses: H7 (40% on-time improvement)
@@ -15,8 +15,11 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { apiClient } from '@/lib/api/client';
-import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiClient } from '@/hooks/useApiClient';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logDebug, logInfo, logWarn, logError } from '@/lib/logger';
 import {
   ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
@@ -25,7 +28,25 @@ import {
   ExclamationTriangleIcon,
   FunnelIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
+
+// Query key factory following gold standard pattern
+const APPROVAL_QUEUE_QUERY_KEYS = {
+  all: ['approval-queue'] as const,
+  lists: () => [...APPROVAL_QUEUE_QUERY_KEYS.all, 'list'] as const,
+  list: (filters: Record<string, any>) => [...APPROVAL_QUEUE_QUERY_KEYS.lists(), { filters }] as const,
+  stats: () => [...APPROVAL_QUEUE_QUERY_KEYS.all, 'stats'] as const,
+  item: (id: string) => [...APPROVAL_QUEUE_QUERY_KEYS.all, 'item', id] as const,
+};
+
+// Component Traceability Matrix
+const COMPONENT_MAPPING = {
+  userStories: ['US-4.3'],
+  acceptanceCriteria: ['AC-4.3.1', 'AC-4.3.3'],
+  methods: ['manageQueue()', 'calculatePriority()', 'trackApprovalEfficiency()'],
+  hypotheses: ['H7'],
+  testCases: ['TC-H7-003', 'TC-H7-004'],
+};
 
 // Types for approval queue management
 interface QueueItem {
@@ -93,10 +114,6 @@ export function ApprovalQueue({
   onBulkAction,
   onQueueOptimization,
 }: ApprovalQueueProps) {
-  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<QueueItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<QueueFilters>({
     assignee: [],
@@ -113,115 +130,154 @@ export function ApprovalQueue({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showFilters, setShowFilters] = useState(false);
 
-  const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const { trackOptimized } = useOptimizedAnalytics();
   const errorHandlingService = ErrorHandlingService.getInstance();
+  const apiClient = useApiClient();
+  const queryClient = useQueryClient();
 
-  // ✅ FIXED: Add proper type for API response
-  interface QueueApiResponse {
-    items: QueueItem[];
-    total: number;
-    page: number;
-    limit: number;
-  }
-
-  const fetchQueueItems = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // ✅ FIXED: Use proper type instead of any
-      const response = await apiClient.get<QueueApiResponse>('/api/approval-queue', {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      // ✅ FIXED: Use proper type instead of any
-      const items: QueueItem[] = response.data.items.map((item: QueueItem) => ({
-        ...item,
-        deadline: new Date(item.deadline),
-        lastActivity: new Date(item.lastActivity),
-      }));
-
-      setQueueItems(items);
-      setFilteredItems(items);
-
-      analytics('approval_queue_loaded', {
-        itemCount: items.length,
-        filters: Object.keys(filters).filter(key => {
-          const value = filters[key as keyof QueueFilters];
-          return Array.isArray(value) && value.length > 0;
-        }),
+  // React Query: Fetch approval queue items
+  const {
+    data: queueData,
+    error: queueError,
+    isLoading,
+    refetch: refetchQueue
+  } = useQuery({
+    queryKey: APPROVAL_QUEUE_QUERY_KEYS.list({ currentUser, filters, sortBy, sortOrder }),
+    queryFn: async (): Promise<QueueItem[]> => {
+      logDebug('Fetch approval queue start', {
+        component: 'ApprovalQueue',
+        operation: 'fetchQueueItems',
+        currentUser,
+        filters,
         sortBy,
-        sortOrder,
+        sortOrder
       });
-    } catch (error) {
-      const standardError = errorHandlingService.processError(
+
+      try {
+        const startTime = Date.now();
+        const response = await apiClient.get('/api/approval-queue');
+        const loadTime = Date.now() - startTime;
+
+        const apiResponse = response as any;
+        const items: QueueItem[] = (apiResponse?.items || []).map((item: any) => ({
+          ...item,
+          deadline: new Date(item.deadline),
+          lastActivity: new Date(item.lastActivity),
+        }));
+
+        logInfo('Fetch approval queue success', {
+          component: 'ApprovalQueue',
+          operation: 'fetchQueueItems',
+          loadTime,
+          itemCount: items.length,
+          currentUser
+        });
+
+        return items;
+      } catch (error) {
+        logError('Fetch approval queue failed', error, {
+          component: 'ApprovalQueue',
+          operation: 'fetchQueueItems',
+          currentUser,
+          filters,
+          sortBy,
+          sortOrder
+        });
+        throw error;
+      }
+    },
+    staleTime: 30000, // 30 seconds
+    gcTime: 120000, // 2 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  // React Query: Bulk action mutation
+  const bulkActionMutation = useMutation({
+    mutationFn: async ({ action, items }: { action: string; items: QueueItem[] }) => {
+      logDebug('Bulk action start', {
+        component: 'ApprovalQueue',
+        operation: 'bulkAction',
+        action,
+        itemCount: items.length,
+        itemIds: items.map(item => item.id)
+      });
+
+      try {
+        const startTime = Date.now();
+        const response = await apiClient.post('/api/approval-queue/bulk-action', {
+          action,
+          itemIds: items.map(item => item.id),
+        });
+        const loadTime = Date.now() - startTime;
+
+        logInfo('Bulk action success', {
+          component: 'ApprovalQueue',
+          operation: 'bulkAction',
+          action,
+          loadTime,
+          itemCount: items.length
+        });
+
+        return response;
+      } catch (error) {
+        logError('Bulk action failed', error, {
+          component: 'ApprovalQueue',
+          operation: 'bulkAction',
+          action,
+          itemCount: items.length
+        });
+        throw error;
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate and refetch queue data
+      queryClient.invalidateQueries({ queryKey: APPROVAL_QUEUE_QUERY_KEYS.all });
+
+      trackOptimized('approval_bulk_action_success', {
+        action: variables.action,
+        itemCount: variables.items.length,
+        userStory: COMPONENT_MAPPING.userStories[0],
+        hypothesis: COMPONENT_MAPPING.hypotheses[0]
+      }, 'medium');
+    },
+    onError: (error, variables) => {
+      errorHandlingService.processError(
         error,
-        'Failed to load approval queue',
+        `Failed to perform bulk action: ${variables.action}`,
         ErrorCodes.API.REQUEST_FAILED,
+        {
+          component: 'ApprovalQueue',
+          operation: 'bulkAction',
+          action: variables.action,
+          itemCount: variables.items.length
+        }
+      );
+    },
+  });
+
+  // Handle React Query errors
+  useEffect(() => {
+    if (queueError) {
+      errorHandlingService.processError(
+        queueError,
+        'Failed to load approval queue',
+        ErrorCodes.DATA.QUERY_FAILED,
         {
           component: 'ApprovalQueue',
           operation: 'fetchQueueItems',
           currentUser,
+          userStory: COMPONENT_MAPPING.userStories[0],
+          hypothesis: COMPONENT_MAPPING.hypotheses[0]
         }
       );
-
-      setError(errorHandlingService.getUserFriendlyMessage(standardError));
-      analytics('approval_queue_error', {
-        error: standardError.message,
-        currentUser,
-      });
-    } finally {
-      setIsLoading(false);
     }
-  }, [currentUser, filters, sortBy, sortOrder, analytics, errorHandlingService]);
+  }, [queueError, errorHandlingService, currentUser]);
 
-  // ✅ FIXED: Add queueMetrics calculation
-  const queueMetrics = useMemo((): QueueMetrics => {
-    const totalItems = queueItems.length;
-    const overdueItems = queueItems.filter(item => item.isOverdue).length;
-    const criticalItems = queueItems.filter(
-      item => item.priority === 'Critical' || item.urgency === 'Immediate'
-    ).length;
+  // Get queue items from React Query data
+  const queueItems = queueData || [];
 
-    const avgProcessingTime =
-      queueItems.reduce((sum, item) => sum + item.estimatedDuration, 0) / totalItems || 0;
-
-    const slaCompliantItems = queueItems.filter(item => item.slaRemaining > 0).length;
-    const slaComplianceRate = (slaCompliantItems / totalItems) * 100 || 0;
-
-    const stageGroups = queueItems.reduce(
-      (acc, item) => {
-        acc[item.stageType] = (acc[item.stageType] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
-
-    const bottleneckStages = Object.entries(stageGroups)
-      .filter(([_, count]) => count > 2)
-      .map(([stage]) => stage);
-
-    const escalatedItems = queueItems.filter(item => item.escalationLevel > 0).length;
-    const escalationRate = (escalatedItems / totalItems) * 100 || 0;
-
-    // Productivity score based on SLA compliance and processing efficiency
-    const productivityScore = Math.max(0, 100 - escalationRate - (100 - slaComplianceRate));
-
-    return {
-      totalItems,
-      overdueItems,
-      criticalItems,
-      avgProcessingTime,
-      slaComplianceRate,
-      bottleneckStages,
-      productivityScore,
-      escalationRate,
-    };
-  }, [queueItems]);
-
-  // ✅ FIXED: Remove unused parameter
+  // Calculate priority score for sorting
   const calculatePriority = useCallback((item: QueueItem) => {
     let score = 0;
 
@@ -271,46 +327,178 @@ export function ApprovalQueue({
     return score;
   }, []);
 
+  // Apply client-side filtering and sorting
+  const filteredItems = useMemo(() => {
+    let filtered = [...queueItems];
+
+    // Apply filters
+    if (filters.showMyTasksOnly) {
+      filtered = filtered.filter(item => item.assignee === currentUser);
+    }
+    if (filters.showOverdueOnly) {
+      filtered = filtered.filter(item => item.isOverdue);
+    }
+    if (filters.showCriticalPathOnly) {
+      filtered = filtered.filter(item => item.isCriticalPath);
+    }
+    if (filters.priority.length > 0) {
+      filtered = filtered.filter(item => filters.priority.includes(item.priority));
+    }
+    if (filters.stageType.length > 0) {
+      filtered = filtered.filter(item => filters.stageType.includes(item.stageType));
+    }
+    if (filters.status.length > 0) {
+      filtered = filtered.filter(item => filters.status.includes(item.status));
+    }
+    if (filters.riskLevel.length > 0) {
+      filtered = filtered.filter(item => filters.riskLevel.includes(item.riskLevel));
+    }
+    if (filters.urgency.length > 0) {
+      filtered = filtered.filter(item => filters.urgency.includes(item.urgency));
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: any, bValue: any;
+
+      switch (sortBy) {
+        case 'priority':
+          aValue = calculatePriority(a);
+          bValue = calculatePriority(b);
+          break;
+        case 'deadline':
+          aValue = a.deadline.getTime();
+          bValue = b.deadline.getTime();
+          break;
+        case 'sla':
+          aValue = a.slaRemaining;
+          bValue = b.slaRemaining;
+          break;
+        case 'complexity':
+          aValue = a.complexity;
+          bValue = b.complexity;
+          break;
+        default:
+          aValue = calculatePriority(a);
+          bValue = calculatePriority(b);
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+
+    return filtered;
+  }, [queueItems, filters, sortBy, sortOrder, currentUser, calculatePriority]);
+
+  // Calculate queue metrics
+  const queueMetrics = useMemo((): QueueMetrics => {
+    const totalItems = queueItems.length;
+    const overdueItems = queueItems.filter(item => item.isOverdue).length;
+    const criticalItems = queueItems.filter(
+      item => item.priority === 'Critical' || item.urgency === 'Immediate'
+    ).length;
+
+    const avgProcessingTime =
+      queueItems.reduce((sum, item) => sum + item.estimatedDuration, 0) / totalItems || 0;
+
+    const slaCompliantItems = queueItems.filter(item => item.slaRemaining > 0).length;
+    const slaComplianceRate = (slaCompliantItems / totalItems) * 100 || 0;
+
+    const stageGroups = queueItems.reduce(
+      (acc, item) => {
+        acc[item.stageType] = (acc[item.stageType] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    const bottleneckStages = Object.entries(stageGroups)
+      .filter(([_, count]) => count > 2)
+      .map(([stage]) => stage);
+
+    const escalatedItems = queueItems.filter(item => item.escalationLevel > 0).length;
+    const escalationRate = (escalatedItems / totalItems) * 100 || 0;
+
+    // Productivity score based on SLA compliance and processing efficiency
+    const productivityScore = Math.max(0, 100 - escalationRate - (100 - slaComplianceRate));
+
+    return {
+      totalItems,
+      overdueItems,
+      criticalItems,
+      avgProcessingTime,
+      slaComplianceRate,
+      bottleneckStages,
+      productivityScore,
+      escalationRate,
+    };
+  }, [queueItems]);
+
+  // Notify parent of queue optimization metrics
+  useEffect(() => {
+    onQueueOptimization(queueMetrics);
+  }, [queueMetrics, onQueueOptimization]);
+
+  // Event handlers
   const handleItemSelect = useCallback(
     (item: QueueItem) => {
       onItemSelect(item);
-      analytics('approval_item_selected', {
+      trackOptimized('approval_item_selected', {
         itemId: item.id,
         proposalId: item.proposalId,
         stageType: item.stageType,
         priority: item.priority,
-      });
+        userStory: COMPONENT_MAPPING.userStories[0],
+        hypothesis: COMPONENT_MAPPING.hypotheses[0]
+      }, 'medium');
     },
-    [onItemSelect, analytics]
+    [onItemSelect, trackOptimized]
   );
 
   const handleBulkAction = useCallback(
     (action: string) => {
       const selectedItemsList = queueItems.filter(item => selectedItems.has(item.id));
+
+      // Execute bulk action through mutation
+      bulkActionMutation.mutate({ action, items: selectedItemsList });
+
+      // Also call parent handler for immediate UI updates
       onBulkAction(action, selectedItemsList);
       setSelectedItems(new Set());
-
-      analytics('approval_bulk_action', {
-        action,
-        itemCount: selectedItemsList.length,
-        itemIds: selectedItemsList.map(item => item.id),
-      });
     },
-    [queueItems, selectedItems, onBulkAction, analytics]
+    [queueItems, selectedItems, onBulkAction, bulkActionMutation]
   );
 
   const handleSortChange = useCallback(
     (newSortBy: 'priority' | 'deadline' | 'sla' | 'complexity') => {
-      // ✅ FIXED: Use proper type instead of any
       setSortBy(newSortBy);
-      analytics('approval_queue_sort_changed', {
+      trackOptimized('approval_queue_sort_changed', {
         sortBy: newSortBy,
         sortOrder,
-      });
+        userStory: COMPONENT_MAPPING.userStories[0],
+        hypothesis: COMPONENT_MAPPING.hypotheses[0]
+      }, 'low');
     },
-    [sortOrder, analytics]
+    [sortOrder, trackOptimized]
   );
 
+  // Handle item selection for bulk actions
+  const handleItemSelection = useCallback((itemId: string, isSelected: boolean) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      if (isSelected) {
+        newSet.add(itemId);
+      } else {
+        newSet.delete(itemId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Utility functions for styling
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'Critical':
@@ -356,12 +544,58 @@ export function ApprovalQueue({
     }
   };
 
+  // Loading state
   if (isLoading) {
-    return <p>Loading approval queue...</p>;
+    return (
+      <div className="space-y-6">
+        <Card className="p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="text-center">
+                  <div className="h-8 bg-gray-200 rounded w-16 mx-auto mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-20 mx-auto"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-4 border rounded-lg">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
   }
 
-  if (error) {
-    return <p className="text-red-500">{error}</p>;
+  // Error state
+  if (queueError) {
+    return (
+      <Card className="p-6">
+        <div className="text-center">
+          <ExclamationTriangleIcon className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load approval queue</h3>
+          <p className="text-gray-600 mb-6">
+            There was an error loading the approval queue. Please try again.
+          </p>
+          <Button
+            variant="primary"
+            onClick={() => refetchQueue()}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Retrying...' : 'Retry'}
+          </Button>
+        </div>
+      </Card>
+    );
   }
 
   return (
@@ -453,11 +687,17 @@ export function ApprovalQueue({
                   size="sm"
                   onClick={() => handleBulkAction('approve')}
                   className="bg-green-600 hover:bg-green-700"
+                  disabled={bulkActionMutation.isPending}
                 >
                   <CheckCircleIcon className="h-4 w-4 mr-1" />
-                  Bulk Approve
+                  {bulkActionMutation.isPending ? 'Processing...' : 'Bulk Approve'}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => handleBulkAction('escalate')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction('escalate')}
+                  disabled={bulkActionMutation.isPending}
+                >
                   <ArrowTopRightOnSquareIcon className="h-4 w-4 mr-1" />
                   Escalate
                 </Button>
@@ -584,7 +824,7 @@ export function ApprovalQueue({
                     checked={selectedItems.has(item.id)}
                     onChange={e => {
                       e.stopPropagation();
-                      // handleItemSelection(item.id, e.target.checked); // This line was removed from the new_code
+                      handleItemSelection(item.id, e.target.checked);
                     }}
                     className="mt-1"
                   />

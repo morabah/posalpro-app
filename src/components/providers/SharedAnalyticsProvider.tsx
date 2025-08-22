@@ -127,7 +127,11 @@ export const SharedAnalyticsProvider = React.memo(function SharedAnalyticsProvid
       for (const event of eventsToFlush) {
         try {
           // Simulate analytics tracking (replace with actual implementation)
-          console.log('📊 [ANALYTICS]', event.eventName, event.eventData);
+          const { logDebug } = await import('@/lib/logger');
+          await logDebug('Analytics event tracked', {
+            eventName: event.eventName,
+            eventData: event.eventData
+          });
 
           // Track to error handling service for monitoring
           await errorHandlingService.processError(

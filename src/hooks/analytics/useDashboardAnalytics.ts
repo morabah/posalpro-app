@@ -5,7 +5,7 @@
  * Specialized analytics tracking for dashboard interactions with stability improvements
  */
 
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCallback, useMemo, useRef } from 'react';
 

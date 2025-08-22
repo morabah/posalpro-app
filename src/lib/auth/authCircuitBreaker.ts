@@ -6,6 +6,7 @@
 
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { logDebug, logInfo, logWarn } from '@/lib/logger';
 
 interface CircuitBreakerConfig {
   maxRetries: number;
@@ -106,7 +107,10 @@ export class AuthCircuitBreaker {
 
     // If enough time has passed, allow attempt to test if service is back up
     if (now - this.state.lastFailure > this.config.resetTimeoutMs) {
-      console.log('🔄 [AuthCircuitBreaker] Testing if auth service is back up');
+      void logDebug('🔄 [AuthCircuitBreaker] Testing if auth service is back up', {
+        component: 'AuthCircuitBreaker',
+        operation: 'canAttempt',
+      });
       return true;
     }
 
@@ -117,7 +121,11 @@ export class AuthCircuitBreaker {
     );
 
     if (now - this.state.lastAttempt < backoffTime) {
-      console.log(`🚫 [AuthCircuitBreaker] Still in backoff period (${Math.ceil((backoffTime - (now - this.state.lastAttempt)) / 1000)}s remaining)`);
+      void logDebug('🚫 [AuthCircuitBreaker] Backoff period active', {
+        component: 'AuthCircuitBreaker',
+        operation: 'canAttempt',
+        remainingSeconds: Math.ceil((backoffTime - (now - this.state.lastAttempt)) / 1000),
+      });
       return false;
     }
 
@@ -129,7 +137,10 @@ export class AuthCircuitBreaker {
    */
   recordSuccess(): void {
     if (this.state.failures > 0 || this.state.isOpen) {
-      console.log('✅ [AuthCircuitBreaker] Auth service recovered, resetting circuit breaker');
+      void logInfo('✅ [AuthCircuitBreaker] Auth service recovered, resetting circuit breaker', {
+        component: 'AuthCircuitBreaker',
+        operation: 'recordSuccess',
+      });
       this.resetState();
     }
   }
@@ -146,16 +157,29 @@ export class AuthCircuitBreaker {
     // Open circuit if too many failures
     if (this.state.failures >= this.config.maxRetries) {
       this.state.isOpen = true;
-      console.warn(`🚨 [AuthCircuitBreaker] Circuit opened after ${this.state.failures} failures. Auth attempts will be throttled.`);
+      void logWarn('🚨 [AuthCircuitBreaker] Circuit opened', {
+        component: 'AuthCircuitBreaker',
+        operation: 'recordFailure',
+        failures: this.state.failures,
+        maxRetries: this.config.maxRetries,
+      });
     }
 
     this.saveState();
 
     // Log with appropriate level based on failure count
     if (this.state.failures === 1) {
-      console.warn('⚠️ [AuthCircuitBreaker] First auth failure, will retry');
+      void logWarn('⚠️ [AuthCircuitBreaker] First auth failure, will retry', {
+        component: 'AuthCircuitBreaker',
+        operation: 'recordFailure',
+      });
     } else if (this.state.failures < this.config.maxRetries) {
-      console.warn(`⚠️ [AuthCircuitBreaker] Auth failure ${this.state.failures}/${this.config.maxRetries}`);
+      void logWarn('⚠️ [AuthCircuitBreaker] Auth failure', {
+        component: 'AuthCircuitBreaker',
+        operation: 'recordFailure',
+        failures: this.state.failures,
+        maxRetries: this.config.maxRetries,
+      });
     } else {
       ErrorHandlingService.getInstance().processError(
         error,
@@ -182,7 +206,10 @@ export class AuthCircuitBreaker {
    * Manually reset the circuit breaker
    */
   reset(): void {
-    console.log('🔄 [AuthCircuitBreaker] Manually resetting circuit breaker');
+    void logInfo('🔄 [AuthCircuitBreaker] Manually resetting circuit breaker', {
+      component: 'AuthCircuitBreaker',
+      operation: 'reset',
+    });
     this.resetState();
   }
 

@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - User Entity
  * User entity class with CRUD operations and business logic
  * Integrates with existing validation schemas and API client

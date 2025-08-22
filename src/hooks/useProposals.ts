@@ -175,15 +175,24 @@ export function useProposalStats(): UseQueryResult<ProposalStats, Error> {
     queryKey: PROPOSALS_QUERY_KEYS.stats(),
     queryFn: async (): Promise<ProposalStats> => {
       try {
-        const response = await apiClient.get('/proposals/stats?fresh=1');
-        const data = response?.data ?? response;
-        
+        const response = await apiClient.get<unknown>('/proposals/stats?fresh=1');
+        const raw = response as unknown;
+        const data = ((): Record<string, unknown> => {
+          if (isObject(raw) && isObject((raw as Record<string, unknown>).data)) {
+            return (raw as Record<string, unknown>).data as Record<string, unknown>;
+          }
+          if (isObject(raw)) {
+            return raw as Record<string, unknown>;
+          }
+          return {} as Record<string, unknown>;
+        })();
+
         return {
-          total: Number(data?.total ?? 0),
-          inProgress: Number(data?.inProgress ?? 0),
-          overdue: Number(data?.overdue ?? 0),
-          winRate: Number(data?.winRate ?? 0),
-          totalValue: Number(data?.totalValue ?? 0),
+          total: Number((data as any)?.total ?? 0),
+          inProgress: Number((data as any)?.inProgress ?? 0),
+          overdue: Number((data as any)?.overdue ?? 0),
+          winRate: Number((data as any)?.winRate ?? 0),
+          totalValue: Number((data as any)?.totalValue ?? 0),
         };
       } catch (error) {
         throw error instanceof Error ? error : new Error('Failed to fetch proposal stats');
@@ -205,13 +214,17 @@ export function useProposal(id: string): UseQueryResult<Proposal, Error> {
   return useQuery({
     queryKey: PROPOSALS_QUERY_KEYS.detail(id),
     queryFn: async (): Promise<Proposal> => {
-      const response = await apiClient.get(`/proposals/${id}`);
-      
-      if (!response.success && response.success !== undefined) {
-        throw new Error(response.message || 'Failed to fetch proposal');
+      const response = await apiClient.get<unknown>(`/proposals/${id}`);
+
+      const raw = response as unknown;
+      if (isObject(raw) && 'success' in raw && (raw as any).success === false) {
+        const message = (isObject(raw) && typeof (raw as any).message === 'string')
+          ? (raw as any).message
+          : 'Failed to fetch proposal';
+        throw new Error(message);
       }
 
-      const proposalData = response.data || response;
+      const proposalData = isObject(raw) && 'data' in raw ? (raw as any).data : raw;
       return transformApiProposal(proposalData);
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -254,7 +267,7 @@ function extractProposalsResponse(raw: unknown): {
 
 function transformApiProposal(apiProposal: unknown): Proposal {
   const p = isObject(apiProposal) ? apiProposal : {};
-  
+
   // Extract team lead
   const teamLead = typeof p.creatorName === 'string'
     ? p.creatorName

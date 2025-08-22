@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * Proposals API Endpoints
  * Type-safe proposal management operations with live database integration

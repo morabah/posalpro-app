@@ -70,12 +70,17 @@
 
 ### ⚡ **DATA FETCHING & PERFORMANCE (CRITICAL)** {#data-fetching--performance-critical}
 
-**🚀 MANDATORY: React Query for complex data fetching, useApiClient for simple cases**
+**🚀 MANDATORY: React Query for complex data fetching, useApiClient for simple
+cases**
 
-- **Complex Data (lists, caching, mutations)**: Use React Query hooks (`useQuery`, `useMutation`) under `QueryProvider`
-- **Simple Data (one-time fetches)**: Use `useApiClient` pattern with `useEffect`
-- **Pattern**: Follow `useProposals.ts` and `useProducts.ts` as gold standards for React Query implementation
-- **Never**: Custom caching systems, direct fetch() calls, complex manual loading states
+- **Complex Data (lists, caching, mutations)**: Use React Query hooks
+  (`useQuery`, `useMutation`) under `QueryProvider`
+- **Simple Data (one-time fetches)**: Use `useApiClient` pattern with
+  `useEffect`
+- **Pattern**: Follow `useProposals.ts` and `useProducts.ts` as gold standards
+  for React Query implementation
+- **Never**: Custom caching systems, direct fetch() calls, complex manual
+  loading states
 - Reference: [Lesson #12 in LESSONS_LEARNED.md][memory:3929430536446174589]]
 
 **⚡ List View Performance Optimization (CRITICAL)**
@@ -114,6 +119,7 @@ const endpoint = `/entities?limit=100&includeCustomer=true&includeTeam=true&fiel
 **⚡ Proven Performance Patterns:**
 
 **React Query Pattern (for lists, caching, mutations):**
+
 ```typescript
 // Hook implementation
 export function useProposals(params: ProposalsQueryParams = {}) {
@@ -132,10 +138,15 @@ export function useProposals(params: ProposalsQueryParams = {}) {
 }
 
 // Component usage
-const { data, isLoading, error, refetch } = useProposals({ page, limit: 20, ...filters });
+const { data, isLoading, error, refetch } = useProposals({
+  page,
+  limit: 20,
+  ...filters,
+});
 ```
 
 **Simple useApiClient Pattern (for one-time fetches):**
+
 ```typescript
 const apiClient = useApiClient();
 useEffect(() => {
@@ -161,16 +172,19 @@ useEffect(() => {
 - Custom caching with localStorage/memory maps (use React Query caching)
 - Direct `fetch()` calls or `axios` usage (use `useApiClient` or React Query)
 - Manual loading state management when React Query can handle it
-- Multiple useEffect dependencies causing re-fetches (use React Query dependencies)
-- Client-side filtering of large datasets (use server-side filtering with query params)
+- Multiple useEffect dependencies causing re-fetches (use React Query
+  dependencies)
+- Client-side filtering of large datasets (use server-side filtering with query
+  params)
 - Nested API calls in render loops
-- Using `useApiClient` for complex data that needs caching/invalidation (use React Query)
+- Using `useApiClient` for complex data that needs caching/invalidation (use
+  React Query)
 - Manual pagination state when React Query can manage it
 - Requesting 100+ items with full relation hydration
 - Server-side UI transformation: Complex data mapping on server instead of
   client
-- Over-fetching relations: Including `includeCustomer=true&includeTeam=true`
-  for list views
+- Over-fetching relations: Including `includeCustomer=true&includeTeam=true` for
+  list views
 - Large page sizes: Using `limit=100+` instead of 30-50 for initial loads
 
 ### 🖼️ Image Optimization (Mandatory)
@@ -209,10 +223,12 @@ useEffect(() => {
 
 **🧰 React Query Caching (Production Ready)**
 
-- Use React Query's built-in caching with `staleTime: 30000` (30s) and `gcTime: 120000` (2min)
+- Use React Query's built-in caching with `staleTime: 30000` (30s) and
+  `gcTime: 120000` (2min)
 - Configure `refetchOnWindowFocus: false` and `retry: 1` for optimal UX
 - Implement proper query keys with parameters for cache invalidation
-- Never use Service Worker caching for API data - React Query handles this efficiently
+- Never use Service Worker caching for API data - React Query handles this
+  efficiently
 
 **🧰 Redis Usage Policy**
 
@@ -226,12 +242,14 @@ useEffect(() => {
 Follow these patterns for all complex data fetching (lists, forms, mutations):
 
 **📋 Query Hook Structure:**
+
 ```typescript
 // Query Keys - Hierarchical and parameterized
 export const PROPOSALS_QUERY_KEYS = {
   all: ['proposals'] as const,
   lists: () => [...PROPOSALS_QUERY_KEYS.all, 'list'] as const,
-  list: (params: ProposalsQueryParams) => [...PROPOSALS_QUERY_KEYS.lists(), params] as const,
+  list: (params: ProposalsQueryParams) =>
+    [...PROPOSALS_QUERY_KEYS.lists(), params] as const,
   details: () => [...PROPOSALS_QUERY_KEYS.all, 'detail'] as const,
   detail: (id: string) => [...PROPOSALS_QUERY_KEYS.details(), id] as const,
   stats: () => [...PROPOSALS_QUERY_KEYS.all, 'stats'] as const,
@@ -248,8 +266,8 @@ export function useProposals(params: ProposalsQueryParams = {}) {
       const response = await apiClient.get(`/proposals?${searchParams}`);
       return extractProposalsResponse(response);
     },
-    staleTime: 30000,      // 30s - data considered fresh
-    gcTime: 120000,        // 2min - cache garbage collection
+    staleTime: 30000, // 30s - data considered fresh
+    gcTime: 120000, // 2min - cache garbage collection
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -257,21 +275,26 @@ export function useProposals(params: ProposalsQueryParams = {}) {
 ```
 
 **⚙️ Configuration Standards:**
+
 - **staleTime**: 30 seconds for list data, 5 minutes for static data
 - **gcTime**: 2 minutes for lists, 5 minutes for details
 - **refetchOnWindowFocus**: false (avoid unnecessary refetches)
 - **retry**: 1 (single retry on failure)
 
 **🔑 Query Key Patterns:**
+
 - Hierarchical: `['resource', 'type', params]`
 - Parameterized: Include all query parameters that affect results
 - Consistent: Use factory pattern for maintainability
 
 **🎯 When to Use React Query vs useApiClient:**
-- **React Query**: Lists, forms, mutations, any data needing caching/invalidation
+
+- **React Query**: Lists, forms, mutations, any data needing
+  caching/invalidation
 - **useApiClient**: Simple one-time fetches, fire-and-forget operations
 
 **📊 Pagination & Search Patterns:**
+
 ```typescript
 // Debounced search with server-side filtering
 const [debouncedSearch] = useDebounce(search, 300);
@@ -287,12 +310,14 @@ const { data, isLoading } = useProposals({
 // Cursor-based pagination for large datasets
 const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
   queryKey: PROPOSALS_QUERY_KEYS.list(params),
-  queryFn: ({ pageParam = null }) => fetchProposals({ cursor: pageParam, ...params }),
-  getNextPageParam: (lastPage) => lastPage.nextCursor,
+  queryFn: ({ pageParam = null }) =>
+    fetchProposals({ cursor: pageParam, ...params }),
+  getNextPageParam: lastPage => lastPage.nextCursor,
 });
 ```
 
 **🚫 React Query Anti-Patterns:**
+
 - Don't use React Query for simple one-time fetches
 - Don't bypass query keys - always use the factory pattern
 - Don't set staleTime to 0 unless data must be real-time
@@ -321,10 +346,13 @@ const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
 
 **📥 Deferred Data Fetching (Forms)**
 
-- Defer heavy list fetches until user intent (e.g., `onFocus` of customer select) and request small pages by default (e.g., `limit=10`, `sort=name`).
-- Do not use mock data in UI paths; always fetch from database via React Query hooks or `useApiClient`.
+- Defer heavy list fetches until user intent (e.g., `onFocus` of customer
+  select) and request small pages by default (e.g., `limit=10`, `sort=name`).
+- Do not use mock data in UI paths; always fetch from database via React Query
+  hooks or `useApiClient`.
 - Implement debounced search with 300ms delay to reduce API calls.
-- Use server-side filtering and sorting via query parameters instead of client-side processing.
+- Use server-side filtering and sorting via query parameters instead of
+  client-side processing.
 
 ### 🪝 Hook Dependency Policy (Wizard & High-Frequency Components)
 
@@ -712,17 +740,47 @@ Implementation checklist (client):
 
 **🚀 Optimization: Use existing performance infrastructure**
 
-- Data Fetching (Client): React Query for complex data (lists, forms, mutations) with built-in caching. Use useApiClient only for simple one-time fetches. Do not introduce custom client-side caches.
+- Data Fetching (Client): React Query for complex data (lists, forms, mutations)
+  with built-in caching. Use useApiClient only for simple one-time fetches. Do
+  not introduce custom client-side caches.
 - Data Access (Server/API routes/RSC): use direct data access (Prisma/fetch)
   with the same validation and error-handling standards.
 - Database: DatabaseQueryOptimizer for all queries.
 - Bundle: Lazy loading with BundleOptimizer.
 - Caching:
-  - Client: Use React Query's built-in caching for complex data. Use apiClient for simple fetches only (no custom client caches or localStorage caches).
+  - Client: Use React Query's built-in caching for complex data. Use apiClient
+    for simple fetches only (no custom client caches or localStorage caches).
   - Server/API routes: Allowed to use targeted in-memory caches with short TTLs
     and explicit invalidation where appropriate (e.g., dashboard stats,
     proposals list, auth providers/session in dev). Never cache sensitive data
     improperly.
+
+### 🧾 **Logging & Observability (Mandatory)**
+
+Structured logging is REQUIRED for all new files and refactors. Do not use
+`console.*` in product code.
+
+- Import convenience functions from `@/lib/logger`:
+  - `logDebug(message, meta?)`
+  - `logInfo(message, meta?)`
+  - `logWarn(message, meta?)`
+  - `logError(message, meta?)`
+- Minimum logging coverage:
+  - Fetch/Query: `logDebug('Fetch start', { component, operation, keys })`,
+    `logInfo('Fetch success', { loadTime })`,
+    `logError('Fetch failed', { error })`
+  - Mutation/Update: `logDebug('Update start', { payloadKeys })`,
+    `logInfo('Update success')`, `logError('Update failed', { error })`
+  - Critical UI actions/navigation: `logInfo('Action', { target, context })`
+- Metadata: include component name, operation, identifiers (e.g., `proposalId`,
+  `customerId`), and traceability fields (`userStory`, `hypothesis`) when
+  available
+- Pair logs with standardized error handling: log after
+  `ErrorHandlingService.processError()` in catch paths
+- Environments: verbose `debug` in development; keep `info/warn/error`
+  meaningful in production
+
+Compliance gate: Missing structured logs in new/modified files is non‑compliant.
 
 ## ♿ **ACCESSIBILITY & UI STANDARDS**
 
@@ -1091,7 +1149,9 @@ codebase and the rules in this document.
 
 5. Data access strategy
 
-- Client: Use React Query (`useQuery`, `useMutation`) for complex data fetching with caching, pagination, and mutations. Use `useApiClient` pattern only for simple one-time fetches under the `QueryProvider`.
+- Client: Use React Query (`useQuery`, `useMutation`) for complex data fetching
+  with caching, pagination, and mutations. Use `useApiClient` pattern only for
+  simple one-time fetches under the `QueryProvider`.
 - Server/API: Add API routes under `src/app/api/<resource>` with Zod validation,
   strict typing, and selective hydration.
 - Always request minimal fields with `fields` param and avoid heavy relation
@@ -1116,7 +1176,8 @@ codebase and the rules in this document.
 
 - Server: short‑TTL caching for derived/analytics/history endpoints (public,
   max‑age≈60–120, s‑maxage≈120–240) with correct cache keys.
-- Client: no custom caches; rely on React Query for complex data, apiClient for simple fetches. Lazy‑load heavy widgets with dynamic imports; split bundles.
+- Client: no custom caches; rely on React Query for complex data, apiClient for
+  simple fetches. Lazy‑load heavy widgets with dynamic imports; split bundles.
 - Follow list optimization rules: minimal fields, denormalized labels, single
   request per interaction.
 
@@ -1159,7 +1220,9 @@ codebase and the rules in this document.
 
 Decision helpers (from existing implementation)
 
-- Client fetch: prefer React Query (`useQuery`, `useMutation`) for lists, forms, and any data that needs caching/invalidation. Use `useApiClient` only for simple one-time fetches under `QueryProvider`.
+- Client fetch: prefer React Query (`useQuery`, `useMutation`) for lists, forms,
+  and any data that needs caching/invalidation. Use `useApiClient` only for
+  simple one-time fetches under `QueryProvider`.
 - Pagination vs virtualization: paginate by default; add virtualization for long
   on‑screen lists without increasing page size.
 - Caching: only on the server for derived data; no custom client caches. Use

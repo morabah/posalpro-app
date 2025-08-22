@@ -17,7 +17,10 @@ export function ServiceWorkerRegistration() {
             scope: '/',
           });
 
-          console.log('[PWA] Service Worker registered successfully:', registration);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          import('@/lib/logger').then(({ logInfo }) =>
+            logInfo('[PWA] Service Worker registered successfully', { scope: registration.scope })
+          );
 
           // Handle service worker updates
           registration.addEventListener('updatefound', () => {
@@ -26,7 +29,10 @@ export function ServiceWorkerRegistration() {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                   // New service worker is available
-                  console.log('[PWA] New service worker available');
+                  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                  import('@/lib/logger').then(({ logInfo }) =>
+                    logInfo('[PWA] New service worker available')
+                  );
 
                   // You can show a notification to the user here
                   if (
@@ -42,7 +48,8 @@ export function ServiceWorkerRegistration() {
 
           // Handle service worker activation
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            console.log('[PWA] Service worker activated');
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            import('@/lib/logger').then(({ logInfo }) => logInfo('[PWA] Service worker activated'));
           });
         } catch (error) {
           ErrorHandlingService.getInstance().processError(

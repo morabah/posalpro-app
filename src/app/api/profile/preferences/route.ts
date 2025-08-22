@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';import { getServerSession } from 'next-auth';
+import { logger } from '@/lib/logger';import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 

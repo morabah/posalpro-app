@@ -258,10 +258,11 @@ export const rateLimiter = RateLimiter;
 
 // Auto-cleanup (run periodically) - Note: Redis handles TTL automatically
 setInterval(
-  () => {
+  async () => {
     // Redis automatically handles cleanup via TTL
     // This interval is kept for compatibility but does minimal work
-    console.log('Security cleanup: Redis TTL handles expiration automatically');
+    const { logInfo } = await import('@/lib/logger');
+    await logInfo('Security cleanup: Redis TTL handles expiration automatically');
   },
   5 * 60 * 1000
 ); // Every 5 minutes

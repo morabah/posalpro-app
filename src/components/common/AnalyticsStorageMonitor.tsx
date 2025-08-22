@@ -44,7 +44,10 @@ export const AnalyticsStorageMonitor: React.FC = () => {
         }
       } catch (error) {
         // ✅ CRITICAL: Silent error handling to prevent violations
-        console.debug('📊 AnalyticsStorageMonitor: Storage check failed (expected)');
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        import('@/lib/logger').then(({ logDebug }) =>
+          logDebug('📊 AnalyticsStorageMonitor: Storage check failed (expected)')
+        );
       } finally {
         isMonitoringRef.current = false;
       }

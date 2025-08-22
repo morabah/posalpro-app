@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - Dashboard API
  * Comprehensive dashboard data management with role-based filtering and caching
  * Based on DASHBOARD_SCREEN.md wireframe specifications

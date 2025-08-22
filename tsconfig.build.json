@@ -7,6 +7,9 @@
   "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
   "exclude": [
     "node_modules",
+    "templates/**",
+    "docs/**",
+    "**/*.md",
     "test/**",
     "src/test/**",
     "**/*.test.ts",
@@ -18,6 +21,9 @@
     "src/test/performance/**",
     "src/components/dashboard/analytics/**",
     "src/components/dashboard/integrations/**",
-    "src/components/dashboard/personalization/**"
+    "src/components/dashboard/personalization/**",
+    "src/**/*.backup.*",
+    "src/**/*backup*.*",
+    "src/app/(dashboard)/proposals/manage/page-new.tsx"
   ]
 }

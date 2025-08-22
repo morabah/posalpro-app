@@ -5,7 +5,7 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
@@ -71,18 +71,19 @@ export async function PUT(request: NextRequest) {
         code: err.code,
       }));
 
-      // ENHANCED: Log each validation error individually for better debugging
-      console.log('🔍 DEBUG: Profile update validation errors:');
-      detailedErrors.forEach((error, index) => {
-        console.log(`  Error ${index + 1}:`, {
-          field: error.path,
-          message: error.message,
-          code: error.code,
+      // ENHANCED: Log each validation error via structured logger
+      const { logDebug } = await import('@/lib/logger');
+      await logDebug('🔍 DEBUG: Profile update validation errors');
+      for (const [index, err] of detailedErrors.entries()) {
+        await logDebug('Validation error item', {
+          index: index + 1,
+          field: err.path,
+          message: err.message,
+          code: err.code,
         });
-      });
-
-      console.log('🔍 DEBUG: Received data:', JSON.stringify(body, null, 2));
-      console.log('🔍 DEBUG: Expected schema keys:', Object.keys(profileUpdateSchema.shape));
+      }
+      await logDebug('🔍 DEBUG: Received data (keys only)', { keys: Object.keys(body || {}) });
+      await logDebug('🔍 DEBUG: Expected schema keys', { keys: Object.keys(profileUpdateSchema.shape) });
 
       logger.error('Profile update validation failed:', {
         userEmail: session.user.email,

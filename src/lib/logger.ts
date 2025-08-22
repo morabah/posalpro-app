@@ -16,7 +16,7 @@ export interface LogContext {
   timestamp: string;
   level: LogLevel;
   message: string;
-  data?: Record<string, unknown>;
+  data?: unknown;
   error?: unknown;
   environment: string;
   userAgent?: string;
@@ -74,15 +74,15 @@ class Logger {
   }
 
   private formatData(
-    data: Record<string, unknown> | undefined
-  ): Record<string, unknown> | undefined {
+    data: unknown
+  ): unknown {
     if (!data) return undefined;
 
     try {
       const serialized = JSON.stringify(data);
       if (serialized.length > this.config.maxDataSize) {
         return {
-          ...data,
+          value: data,
           _truncated: true,
           _originalSize: serialized.length,
           _maxSize: this.config.maxDataSize,
@@ -100,7 +100,7 @@ class Logger {
   private createLogContext(
     level: LogLevel,
     message: string,
-    data?: Record<string, unknown>,
+    data?: unknown,
     error?: unknown
   ): LogContext {
     const context: LogContext = {
@@ -112,7 +112,7 @@ class Logger {
     };
 
     // Add data if provided
-    if (data) {
+    if (data !== undefined) {
       context.data = this.formatData(data);
     }
 
@@ -179,7 +179,7 @@ class Logger {
   private async log(
     level: LogLevel,
     message: string,
-    data?: Record<string, unknown>,
+    data?: unknown,
     error?: unknown
   ): Promise<void> {
     if (!this.shouldLog(level)) return;
@@ -196,22 +196,22 @@ class Logger {
   }
 
   // Public logging methods
-  public async debug(message: string, data?: Record<string, unknown>): Promise<void> {
+  public async debug(message: string, data?: unknown): Promise<void> {
     await this.log(LogLevel.DEBUG, message, data);
   }
 
-  public async info(message: string, data?: Record<string, unknown>): Promise<void> {
+  public async info(message: string, data?: unknown): Promise<void> {
     await this.log(LogLevel.INFO, message, data);
   }
 
-  public async warn(message: string, data?: Record<string, unknown>): Promise<void> {
+  public async warn(message: string, data?: unknown): Promise<void> {
     await this.log(LogLevel.WARN, message, data);
   }
 
   public async error(
     message: string,
     error?: unknown,
-    data?: Record<string, unknown>
+    data?: unknown
   ): Promise<void> {
     await this.log(LogLevel.ERROR, message, data, error);
   }
@@ -264,19 +264,19 @@ class Logger {
 const logger = new Logger();
 
 // Export convenience functions for easy usage
-export const logDebug = (message: string, data?: Record<string, unknown>): Promise<void> =>
+export const logDebug = (message: string, data?: unknown): Promise<void> =>
   logger.debug(message, data);
 
-export const logInfo = (message: string, data?: Record<string, unknown>): Promise<void> =>
+export const logInfo = (message: string, data?: unknown): Promise<void> =>
   logger.info(message, data);
 
-export const logWarn = (message: string, data?: Record<string, unknown>): Promise<void> =>
+export const logWarn = (message: string, data?: unknown): Promise<void> =>
   logger.warn(message, data);
 
 export const logError = (
   message: string,
   error?: unknown,
-  data?: Record<string, unknown>
+  data?: unknown
 ): Promise<void> => logger.error(message, error, data);
 
 export const logValidation = (

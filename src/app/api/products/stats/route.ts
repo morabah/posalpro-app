@@ -2,7 +2,7 @@ import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logError } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,7 +17,10 @@ export async function GET(request: NextRequest) {
 
     // Lightweight diagnostic only in development
     if (process.env.NODE_ENV !== 'production') {
-      console.log('🚀 [OPTIMIZED] Product stats request started');
+      void logDebug('🚀 [OPTIMIZED] Product stats request started', {
+        component: 'ProductStatsAPI',
+        operation: 'GET',
+      });
     }
     const startTime = Date.now();
 
@@ -34,7 +37,11 @@ export async function GET(request: NextRequest) {
 
     const queryTime = Date.now() - startTime;
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`✅ [OPTIMIZED] Product stats completed in ${queryTime}ms`);
+      void logInfo('✅ [OPTIMIZED] Product stats completed', {
+        component: 'ProductStatsAPI',
+        operation: 'GET',
+        queryTime,
+      });
     }
 
     const result = Array.isArray(stats) ? stats[0] : stats;

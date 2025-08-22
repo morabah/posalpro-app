@@ -8,7 +8,7 @@ import { apiClient, type ApiResponse, type PaginatedResponse } from '@/lib/api/c
 import { trackAuthEvent } from '@/lib/store/authStore';
 import { createProposalSchema, proposalMetadataSchema } from '@/lib/validation';
 import { ApprovalDecision, Priority, ProposalStatus } from '@/types/enums';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
 // Infer types from validation schemas

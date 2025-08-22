@@ -11,6 +11,9 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logWarn, logInfo, logError } from '@/lib/logger';
 import { ApiResponse } from '@/types/api';
 import {
   ArrowLeftIcon,
@@ -24,10 +27,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { logDebug, logWarn } from '@/lib/logger';
-// import { toast } from 'react-hot-toast'; // Removed as per edit hint
+import { useQuery } from '@tanstack/react-query';
 
 // Simple toast function to replace react-hot-toast
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -196,22 +196,31 @@ export default function SMEContributionInterface() {
 
   const { trackOptimized: trackAction } = useOptimizedAnalytics();
 
-  const fetchSMEData = useCallback(async () => {
-    if (dataFetchedRef.current) return;
-    dataFetchedRef.current = true;
-    setIsLoading(true);
-    try {
-      logDebug('[SMEContributions] 🚀 Fetching SME data via apiClient...');
-      const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] =
-        await Promise.all([
-          apiClient.get<ApiResponse<SMEAssignment>>('/sme/assignment'),
-          apiClient.get<ApiResponse<ContributionTemplate[]>>('/sme/templates'),
-          apiClient.get<ApiResponse<ContributionResource[]>>('/sme/resources'),
-          apiClient.get<ApiResponse<VersionHistory[]>>('/sme/versions'),
-        ]);
+  const {
+    data: smeData,
+    isLoading: queryLoading,
+    error: queryError,
+    refetch: refetchSME,
+  } = useQuery({
+    queryKey: ['sme', 'contributions'],
+    queryFn: async () => {
+      const start = Date.now();
+      void logDebug('[SMEContributions] Fetch start', { component: 'SMEContributionInterface' });
+      try {
+        const [assignmentResponse, templatesResponse, resourcesResponse, versionsResponse] =
+          await Promise.all([
+            apiClient.get<ApiResponse<SMEAssignment>>('/sme/assignment'),
+            apiClient.get<ApiResponse<ContributionTemplate[]>>('/sme/templates'),
+            apiClient.get<ApiResponse<ContributionResource[]>>('/sme/resources'),
+            apiClient.get<ApiResponse<VersionHistory[]>>('/sme/versions'),
+          ]);
 
-      if (assignmentResponse.success && assignmentResponse.data) {
-        const assignment = {
+        if (!assignmentResponse.success || !assignmentResponse.data) {
+          const msg = assignmentResponse.error || 'Failed to fetch assignment data';
+          throw new Error(msg);
+        }
+
+        const assignment: SMEAssignment = {
           ...assignmentResponse.data,
           assignedAt: new Date(assignmentResponse.data.assignedAt),
           dueDate: new Date(assignmentResponse.data.dueDate),
@@ -220,62 +229,51 @@ export default function SMEContributionInterface() {
             lastSaved: new Date(assignmentResponse.data.content.lastSaved),
           },
         };
-        setAssignmentData(assignment);
-        setContent(assignment.content.draft);
-        setWordCount(assignment.content.wordCount);
-        setLastSaved(assignment.content.lastSaved);
-      } else {
-        // Handle assignment fetch failure gracefully
-        const errorMessage = assignmentResponse.error || 'Failed to fetch assignment data';
-        logWarn('[SMEContributions] ⚠️ Assignment data not available:', { error: errorMessage });
-        setFetchError(errorMessage);
-        // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
-        if (trackAction) {
-          trackAction('sme_assignment_load_failed', { error: errorMessage }, 'medium');
-        }
-      }
 
-      if (templatesResponse.success && Array.isArray(templatesResponse.data)) {
-        setTemplatesData(templatesResponse.data);
-      }
+        const templates = templatesResponse.success && Array.isArray(templatesResponse.data)
+          ? templatesResponse.data
+          : [];
+        const resources = resourcesResponse.success && Array.isArray(resourcesResponse.data)
+          ? resourcesResponse.data
+          : [];
+        const versions = versionsResponse.success && Array.isArray(versionsResponse.data)
+          ? versionsResponse.data.map(v => ({ ...v, savedAt: new Date(v.savedAt) }))
+          : [];
 
-      if (resourcesResponse.success && Array.isArray(resourcesResponse.data)) {
-        setResourcesData(resourcesResponse.data);
-      }
-
-      if (versionsResponse.success && Array.isArray(versionsResponse.data)) {
-        setVersionsData(
-          versionsResponse.data.map((v: VersionHistory) => ({
-            ...v,
-            savedAt: new Date(v.savedAt),
-          }))
+        void logInfo('[SMEContributions] Fetch success', { loadTime: Date.now() - start });
+        return { assignment, templates, resources, versions } as const;
+      } catch (err) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          err,
+          'Failed to fetch SME data',
+          ErrorCodes.DATA.FETCH_FAILED,
+          {
+            component: 'SMEContributionInterface',
+            operation: 'fetchData',
+            context: { dataType: 'sme_assignment_data' },
+          }
         );
+        void logError('[SMEContributions] Fetch failed', { error: standardError.message });
+        throw standardError;
       }
-    } catch (error) {
-      ErrorHandlingService.getInstance().processError(
-        error as Error,
-        'Failed to fetch SME data',
-        ErrorCodes.DATA.FETCH_FAILED,
-        {
-          component: 'SMEContributionInterface',
-          operation: 'fetchData',
-          context: { dataType: 'sme_assignment_data' }
-        }
-      );
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      setFetchError(errorMessage);
-      // ✅ CRITICAL FIX: Use ref to avoid infinite re-renders
-      if (trackAction) {
-        trackAction('sme_data_load_failed', { error: errorMessage }, 'high');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [apiClient]); // ✅ CRITICAL FIX: Remove unstable dependencies
+    },
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 
   useEffect(() => {
-    fetchSMEData();
-  }, [fetchSMEData]); // ✅ CRITICAL FIX: Remove unstable dependencies
+    if (!smeData) return;
+    setAssignmentData(smeData.assignment);
+    setTemplatesData(smeData.templates);
+    setResourcesData(smeData.resources);
+    setVersionsData(smeData.versions);
+    setContent(smeData.assignment.content.draft);
+    setWordCount(smeData.assignment.content.wordCount);
+    setLastSaved(smeData.assignment.content.lastSaved);
+  }, [smeData]);
 
   const handleAutoSave = useCallback(async () => {
     if (!hasUnsavedChanges) return;
@@ -458,14 +456,16 @@ export default function SMEContributionInterface() {
     };
   }, [assignmentData]); // ✅ CRITICAL FIX: Remove unstable trackAction dependency
 
-  if (isLoading) {
+  const isPageLoading = isLoading || queryLoading;
+
+  if (isPageLoading) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
-  if (fetchError) {
+  if (fetchError || queryError) {
     return (
       <div className="flex justify-center items-center h-screen text-red-500">
-        Error: {fetchError}
+        Error: {(queryError as Error)?.message || fetchError}
       </div>
     );
   }

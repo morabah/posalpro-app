@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logDebug, logInfo, logError } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  
+
   try {
+    await logDebug('[HealthAPI] GET start');
     // Simple health check with minimal database interaction
     const health = {
       status: 'healthy',
@@ -12,7 +14,7 @@ export async function GET(request: NextRequest) {
       responseTime: Date.now() - startTime
     };
 
-    return new NextResponse(JSON.stringify(health), {
+    const response = new NextResponse(JSON.stringify(health), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -20,10 +22,13 @@ export async function GET(request: NextRequest) {
         'X-Response-Time': `${Date.now() - startTime}ms`
       }
     });
+    await logInfo('[HealthAPI] GET success', { responseTime: health.responseTime });
+    return response;
   } catch (error) {
-    return NextResponse.json({ 
-      status: 'unhealthy', 
-      error: 'Health check failed' 
+    await logError('[HealthAPI] GET failed', error as unknown);
+    return NextResponse.json({
+      status: 'unhealthy',
+      error: 'Health check failed'
     }, { status: 500 });
   }
 }

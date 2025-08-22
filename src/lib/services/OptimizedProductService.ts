@@ -7,6 +7,7 @@
 import { Prisma } from '@prisma/client';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
+import { logDebug, logInfo, logWarn } from '@/lib/logger';
 
 export interface OptimizedProductStats {
   total: number;
@@ -30,7 +31,10 @@ export class OptimizedProductService {
     isActive?: boolean;
   }): Promise<OptimizedProductStats> {
     try {
-      console.log('🚀 [OptimizedProductService] Starting optimized product stats query...');
+      void logDebug('🚀 [OptimizedProductService] Starting optimized product stats query...', {
+        component: 'OptimizedProductService',
+        operation: 'getOptimizedProductStats',
+      });
       const startTime = Date.now();
 
       // Build where clause for products
@@ -116,7 +120,11 @@ export class OptimizedProductService {
       const result = await prisma.$queryRawUnsafe(rawStatsQuery);
       const queryTime = Date.now() - startTime;
 
-      console.log(`✅ [OptimizedProductService] Query completed in ${queryTime}ms`);
+      void logInfo('✅ [OptimizedProductService] Query completed', {
+        component: 'OptimizedProductService',
+        operation: 'getOptimizedProductStats',
+        queryTime,
+      });
 
       // Process the raw result
       const rawData = Array.isArray(result) ? result[0] : result;
@@ -133,7 +141,11 @@ export class OptimizedProductService {
 
       // Track performance metrics
       if (queryTime > 1000) {
-        console.warn(`⚠️ [OptimizedProductService] Slow query detected: ${queryTime}ms`);
+        void logWarn('⚠️ [OptimizedProductService] Slow query detected', {
+          component: 'OptimizedProductService',
+          operation: 'getOptimizedProductStats',
+          queryTime,
+        });
       }
 
       return stats;
@@ -219,7 +231,11 @@ export class OptimizedProductService {
       ]);
 
       const queryTime = Date.now() - startTime;
-      console.log(`✅ [OptimizedProductService] Product search completed in ${queryTime}ms`);
+      void logInfo('✅ [OptimizedProductService] Product search completed', {
+        component: 'OptimizedProductService',
+        operation: 'fastProductSearch',
+        queryTime,
+      });
 
       return {
         products: products.map(p => ({
@@ -277,7 +293,11 @@ export class OptimizedProductService {
       const result = await prisma.$queryRawUnsafe(analyticsQuery, productId);
       const queryTime = Date.now() - startTime;
 
-      console.log(`✅ [OptimizedProductService] Product analytics completed in ${queryTime}ms`);
+      void logInfo('✅ [OptimizedProductService] Product analytics completed', {
+        component: 'OptimizedProductService',
+        operation: 'getProductUsageAnalytics',
+        queryTime,
+      });
 
       const data = Array.isArray(result) ? result[0] : result;
 
@@ -365,7 +385,12 @@ export class OptimizedProductService {
       );
 
       const totalTime = Date.now() - startTime;
-      console.log(`✅ [OptimizedProductService] Batch operations completed in ${totalTime}ms`);
+      void logInfo('✅ [OptimizedProductService] Batch operations completed', {
+        component: 'OptimizedProductService',
+        operation: 'batchProductOperations',
+        totalTime,
+        operationCount: operations.length,
+      });
 
       return {
         results,

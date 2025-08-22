@@ -3,7 +3,7 @@
  * Addresses session security vulnerabilities with encrypted storage and concurrent session limits
  */
 
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 
 interface SecureSession {

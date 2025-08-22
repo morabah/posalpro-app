@@ -1,6 +1,6 @@
 'use client';
 
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * PosalPro MVP2 - Dashboard Analytics Hook
  * Specialized analytics tracking for dashboard interactions with stability improvements

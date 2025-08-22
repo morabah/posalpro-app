@@ -460,7 +460,10 @@ export function useResponsive(): ResponsiveContextType {
   const context = useContext(ResponsiveContext);
   if (!context) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('useResponsive called outside of ResponsiveBreakpointManager. Returning safe default context.');
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      import('@/lib/logger').then(({ logWarn }) =>
+        logWarn('useResponsive called outside of ResponsiveBreakpointManager. Returning safe default context.')
+      );
       return DEFAULT_RESPONSIVE_CONTEXT;
     }
     throw new Error('useResponsive must be used within ResponsiveBreakpointManager');

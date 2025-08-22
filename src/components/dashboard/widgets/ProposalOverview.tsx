@@ -232,16 +232,18 @@ export const ProposalOverview: React.FC<WidgetProps> = ({
     return baseStats;
   }, [proposalData]);
 
-  const handleProposalSelect = (proposalId: string) => {
+  const handleProposalSelect = async (proposalId: string) => {
     onInteraction?.('proposal_selected', { proposalId });
     // In a real app, this would navigate to the proposal detail page
-    console.log('Navigate to proposal:', proposalId);
+    const { logDebug } = await import('@/lib/logger');
+    void logDebug('Navigate to proposal', { proposalId });
   };
 
-  const handleCreateProposal = () => {
+  const handleCreateProposal = async () => {
     onInteraction?.('create_proposal_clicked');
     // In a real app, this would navigate to the proposal creation page
-    console.log('Navigate to create proposal');
+    const { logDebug } = await import('@/lib/logger');
+    void logDebug('Navigate to create proposal');
   };
 
   if (loading) {

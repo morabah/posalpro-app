@@ -42,7 +42,8 @@ export const CustomizationProvider = memo(
           const parsed = JSON.parse(saved);
           setPreferences(prev => ({ ...prev, ...parsed }));
         } catch (error) {
-          console.warn('Failed to load user preferences:', error);
+          const { logWarn } = await import('@/lib/logger');
+          await logWarn('Failed to load user preferences', { error: error instanceof Error ? error.message : String(error) });
         }
       }
     }, []);

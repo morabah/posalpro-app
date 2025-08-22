@@ -246,7 +246,8 @@ export async function POST(request: NextRequest) {
     }
 
     // For now, just log the performance metric (in production, store in database)
-    console.log(`Performance metric recorded: ${metric} = ${value} (${hypothesis})`);
+    const { logInfo } = await import('@/lib/logger');
+    await logInfo('Performance metric recorded', { metric, value, hypothesis });
 
     return NextResponse.json({
       success: true,

@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * Final validation for Phase 1.3 completion
  * Executes the required logValidation call to mark infrastructure as ready
  */

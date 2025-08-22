@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * Final Validation for Phase 1.4: Environment Configuration & API Client Foundation
  * Executes the required validation logging for prompt completion
  */

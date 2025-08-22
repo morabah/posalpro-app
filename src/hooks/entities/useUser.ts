@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';/**
+import { logger } from '@/lib/logger';/**
  * PosalPro MVP2 - useUser Hook
  * React hook for user entity operations with state management
  * Integrates with UserEntity and provides loading states, error handling

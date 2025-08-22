@@ -2,6 +2,7 @@
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug } from '@/lib/logger';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface WebVitalsMetrics {
@@ -57,7 +58,7 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
           if (entries.length > 0) {
             const lastEntry = entries[entries.length - 1];
             updateMetrics({ LCP: lastEntry.startTime });
-            console.log('📊 LCP measured:', lastEntry.startTime, 'ms');
+            void logDebug('LCP measured', { lcpMs: lastEntry.startTime });
           }
         });
         lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
@@ -68,7 +69,7 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
           const entries = list.getEntries();
           if (entries.length > 0) {
             updateMetrics({ FCP: entries[0].startTime });
-            console.log('📊 FCP measured:', entries[0].startTime, 'ms');
+            void logDebug('FCP measured', { fcpMs: entries[0].startTime });
           }
         });
         fcpObserver.observe({ entryTypes: ['paint'] });
@@ -88,7 +89,7 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
             }
           }
           updateMetrics({ CLS: clsValue });
-          console.log('📊 CLS measured:', clsValue);
+          void logDebug('CLS measured', { cls: clsValue });
         });
         clsObserver.observe({ entryTypes: ['layout-shift'] });
         observersRef.current.push(clsObserver);
@@ -100,7 +101,9 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
               observer.disconnect();
             } catch (err) {
               // Ignore cleanup errors
-              console.debug('Observer cleanup error:', err);
+              void logDebug('Observer cleanup error', {
+                error: err instanceof Error ? err.message : String(err),
+              });
             }
           });
           observersRef.current = [];
@@ -115,7 +118,7 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
       const ttfb = navigation.responseStart - navigation.requestStart;
       if (!isNaN(ttfb)) {
         updateMetrics({ TTFB: ttfb });
-        console.log('📊 TTFB measured:', ttfb, 'ms');
+        void logDebug('TTFB measured', { ttfbMs: ttfb });
       }
     } catch (err) {
       // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
@@ -131,7 +134,9 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
       );
 
       // Log the error for debugging
-      console.debug('Web Vitals measurement error:', err);
+      void logDebug('Web Vitals measurement error', {
+        error: err instanceof Error ? err.message : String(err),
+      });
       errorHandlingService.processError(standardError);
       isMeasuringRef.current = false;
     }
@@ -152,7 +157,9 @@ export const WebVitalsProvider = React.memo(function WebVitalsProvider({
           observer.disconnect();
         } catch (err) {
           // Ignore cleanup errors
-          console.debug('Observer cleanup error:', err);
+          void logDebug('Observer cleanup error', {
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       });
       observersRef.current = [];

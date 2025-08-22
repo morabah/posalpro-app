@@ -26,6 +26,9 @@
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": [
     "node_modules",
+    "templates/**",
+    "docs/**",
+    "**/*.md",
     "scripts/**",
     "src/lib/testing/**",
     "src/test/**",
@@ -34,6 +37,9 @@
     "**/*.test.tsx",
     "src/components/dashboard/analytics/**",
     "src/components/dashboard/integrations/**",
-    "src/components/dashboard/personalization/**"
+    "src/components/dashboard/personalization/**",
+    "src/**/*.backup.*",
+    "src/**/*backup*.*",
+    "src/app/(dashboard)/proposals/manage/page-new.tsx"
   ]
 }

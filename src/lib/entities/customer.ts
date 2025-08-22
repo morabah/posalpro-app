@@ -1,9 +1,9 @@
 /**
  * PosalPro MVP2 - Customer Entity
  * Customer entity class for interacting with the customers API
-import { logger } from '@/utils/logger'; */
+import { logger } from '@/lib/logger'; */
 
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 
 // This is a simplified CustomerData interface.
 // A full implementation would have this defined in types and schemas.

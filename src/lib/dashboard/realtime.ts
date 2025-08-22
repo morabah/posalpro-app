@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 /**
  * PosalPro MVP2 - Real-time Dashboard Infrastructure
  * WebSocket-based real-time data synchronization and event management
