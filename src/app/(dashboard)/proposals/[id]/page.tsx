@@ -1,13 +1,24 @@
 'use client';
 
+/**
+ * PosalPro MVP2 - Proposal Detail Page
+ * ✅ GOLD STANDARD IMPLEMENTATION: React Query + CORE_REQUIREMENTS.md Compliance
+ *
+ * Following patterns from:
+ * - src/hooks/useProducts.ts (React Query implementation)
+ * - src/components/products/ProductList.tsx (component structure)
+ * - CORE_REQUIREMENTS.md → Data Fetching & Performance
+ * - CORE_REQUIREMENTS.md → React Query Patterns
+ */
+
 import { WizardSummary } from '@/components/proposals/WizardSummary';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { StandardError } from '@/lib/errors/StandardError';
 import {
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
@@ -22,10 +33,28 @@ import {
   UserIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
+// ✅ COMPONENT TRACEABILITY MATRIX
+const COMPONENT_MAPPING = {
+  userStories: ['US-3.1', 'US-3.2', 'US-3.3'],
+  acceptanceCriteria: ['AC-3.1.1', 'AC-3.2.1', 'AC-3.3.1'],
+  methods: ['getProposalDetail()', 'enrichProposal()', 'calculateProposalValue()'],
+  hypotheses: ['H4', 'H6', 'H8'],
+  testCases: ['TC-H4-001', 'TC-H6-001', 'TC-H8-001'],
+};
+
+// ✅ REACT QUERY PATTERNS: Query Keys Factory
+export const PROPOSAL_DETAIL_QUERY_KEYS = {
+  all: ['proposalDetail'] as const,
+  details: () => [...PROPOSAL_DETAIL_QUERY_KEYS.all, 'detail'] as const,
+  detail: (id: string) => [...PROPOSAL_DETAIL_QUERY_KEYS.details(), id] as const,
+};
+
+// ✅ TYPE DEFINITIONS (following gold standard patterns)
 interface WizardStep2 {
   customerInfo?: {
     name: string;
@@ -48,21 +77,6 @@ interface ContentSelection {
     value: string;
     type: 'text' | 'number' | 'boolean';
   }>;
-}
-
-interface ProductSelection {
-  productId: string;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  included: boolean;
-}
-
-interface SectionAssignment {
-  sectionId: string;
-  title: string;
-  assignedTo: string[];
-  complexity: 'low' | 'medium' | 'high';
 }
 
 interface ValidationIssue {
@@ -253,241 +267,263 @@ interface ProposalDetail {
   } | null;
 }
 
-export default function ProposalDetailPage() {
-  const params = useParams();
-  const router = useRouter();
+// ✅ REACT QUERY HOOK: Following gold standard patterns
+function useProposalDetail(proposalId: string | null) {
   const apiClient = useApiClient();
-  const { handleAsyncError } = useErrorHandler();
+  const { trackOptimized } = useOptimizedAnalytics();
 
-  const [proposal, setProposal] = useState<ProposalDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [relatedProposals, setRelatedProposals] = useState<Array<{ id: string; title: string }>>(
-    []
-  );
-  const [availableProposals, setAvailableProposals] = useState<
-    Array<{ id: string; title: string }>
-  >([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'messages' | 'tasks' | 'files'>('messages');
-
-  const proposalId = params?.id as string;
-
-  // Lightweight client-side guard to avoid invalid API calls (e.g., '/proposals/admin')
-  const isLikelyProposalId = (id: unknown): boolean => {
-    if (typeof id !== 'string') return false;
-    // Accept typical Prisma cuid/cuid2-like ids (alphanumeric, length >= 20)
-    return /^[a-z0-9]{20,}$/i.test(id);
-  };
-
-  // Helper: unwrap prisma-style { set: ... }
-  const unwrapSet = (v: unknown) => {
-    if (v && typeof v === 'object' && v !== null && 'set' in v) {
-      return (v as { set: unknown }).set;
-    }
-    return v;
-  };
-
-  // Helper: normalize priority to UI format
-  const normalizePriority = (p?: string | null) => {
-    if (!p) return 'MEDIUM';
-    return p.toLowerCase() === 'high' ? 'HIGH' : p.toLowerCase() === 'low' ? 'LOW' : 'MEDIUM';
-  };
-
-  // Helper: calculate correct proposal value based on wizard data
-  const calculateProposalValue = (
-    proposal: ProposalDetail
-  ): { value: number; source: 'step4' | 'step1' | 'database' } => {
-    const md = (unwrapSet(proposal?.metadata) as ProposalDetail['metadata']) || {};
-    const wd = md?.wizardData || proposal?.wizardData || {};
-
-    // Get step 4 total value (most accurate)
-    const step4TotalValue =
-      wd.step4?.products?.reduce((sum: number, product) => {
-        const quantity = product.quantity || 0;
-        const unitPrice = product.unitPrice || 0;
-        return product.included !== false ? sum + quantity * unitPrice : sum;
-      }, 0) || 0;
-
-    // Get step 1 estimated value
-    const step1EstimatedValue = wd.step1?.details?.estimatedValue || wd.step1?.value || 0;
-
-    // Determine which value to use: step 4 total or step 1 estimate
-    if (step4TotalValue > 0) {
-      return { value: step4TotalValue, source: 'step4' };
-    } else if (step1EstimatedValue > 0) {
-      return { value: step1EstimatedValue, source: 'step1' };
-    } else {
-      return { value: proposal.value || 0, source: 'database' };
-    }
-  };
-
-  // Helper: enrich proposal with wizard data
-  const enrichProposal = (raw: ProposalDetail): ProposalDetail => {
-    const md = (unwrapSet(raw?.metadata) as ProposalDetail['metadata']) || {};
-    const wd = md?.wizardData || raw?.wizardData || {};
-
-    // Step 1
-    const step1 = {
-      client: {
-        name: wd?.step1?.client?.name ?? raw?.customerName ?? md?.wizardData?.step1?.client?.name,
-        industry:
-          wd?.step1?.client?.industry ??
-          raw?.customerIndustry ??
-          md?.wizardData?.step1?.client?.industry,
-        contactPerson:
-          wd?.step1?.client?.contactPerson ?? md?.wizardData?.step1?.client?.contactPerson,
-        contactPhone:
-          wd?.step1?.client?.contactPhone ?? md?.wizardData?.step1?.client?.contactPhone,
-      },
-      details: {
-        title: wd?.step1?.details?.title ?? raw?.title ?? md?.wizardData?.step1?.details?.title,
-        dueDate:
-          wd?.step1?.details?.dueDate ?? raw?.dueDate ?? md?.wizardData?.step1?.details?.dueDate,
-        estimatedValue:
-          wd?.step1?.details?.estimatedValue ??
-          raw?.value ??
-          md?.wizardData?.step1?.details?.estimatedValue,
-        priority:
-          normalizePriority(wd?.step1?.details?.priority) ||
-          normalizePriority(raw?.priority) ||
-          normalizePriority(md?.wizardData?.step1?.details?.priority),
-      },
-      value: wd?.step1?.value ?? raw?.value ?? 0,
-    };
-
-    // Step 3
-    const step3 = {
-      selectedContent:
-        wd?.step3?.selectedContent?.map((c: ContentSelection) => ({
-          contentId: c.contentId,
-          title: c.title,
-          type: c.type,
-          customizations: c.customizations || [],
-        })) || [],
-    };
-
-    // Step 4
-    const step4 = {
-      products:
-        wd?.step4?.products?.map(p => ({
-          id: p.id,
-          name: p.name,
-          quantity: p.quantity,
-          unitPrice: p.unitPrice,
-          totalPrice: p.totalPrice,
-          category: p.category,
-          included: p.included,
-        })) || [],
-      totalValue: wd?.step4?.totalValue || 0,
-    };
-
-    // Step 5
-    const step5 = {
-      sections:
-        wd?.step5?.sections?.map(s => ({
-          title: s.title,
-          description: s.description,
-        })) || [],
-    };
-
-    return {
-      ...raw,
-      wizardData: {
-        step1,
-        step2: wd?.step2,
-        step3,
-        step4,
-        step5,
-        step6: wd?.step6,
-      },
-      contentSelections:
-        raw?.contentSelections?.map(cs => ({
-          contentId: cs.contentId,
-          section: cs.section,
-          customizations: cs.customizations,
-          assignedTo: cs.assignedTo,
-        })) || [],
-    };
-  };
-
-  // ✅ CRITICAL FIX: Single useEffect with proper dependency management
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchProposal = async () => {
-      // Only fetch if we have a valid proposalId
-      if (!proposalId || typeof proposalId !== 'string' || !isLikelyProposalId(proposalId)) {
-        if (isMounted) {
-          setError('Invalid proposal ID');
-          setLoading(false);
-        }
-        return;
+  return useQuery({
+    queryKey: PROPOSAL_DETAIL_QUERY_KEYS.detail(proposalId || ''),
+    queryFn: async (): Promise<ProposalDetail> => {
+      if (!proposalId || !isLikelyProposalId(proposalId)) {
+        throw new Error('Invalid proposal ID');
       }
 
+      // ✅ ANALYTICS TRACKING
+      const startTime = Date.now();
+
       try {
-        setLoading(true);
-        setError(null);
-        setProposal(null); // Reset previous proposal data
-
-        // dev log removed for compliance
-
         const response = await apiClient.get<{
           success: boolean;
           data: ProposalDetail;
         }>(`proposals/${proposalId}`);
 
-        if (response.success) {
-          // Only update state if component is still mounted
-          if (isMounted) {
-            const enriched = enrichProposal(response.data);
-            setProposal(enriched);
+        if (!response.success || !response.data) {
+          throw new Error('Failed to fetch proposal details');
+        }
+
+        // ✅ ANALYTICS: Track successful load
+        trackOptimized('proposal_detail_viewed', {
+          proposalId,
+          loadTime: Date.now() - startTime,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+
+        return enrichProposal(response.data);
+      } catch (error) {
+        // ✅ ERROR HANDLING: Use standardized error handling
+        const errorHandlingService = ErrorHandlingService.getInstance();
+        const standardError = errorHandlingService.processError(
+          error,
+          'Failed to fetch proposal details',
+          ErrorCodes.DATA.QUERY_FAILED,
+          {
+            component: 'useProposalDetail',
+            operation: 'fetchProposal',
+            proposalId,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
           }
-        } else {
-          throw new StandardError({
-            message: 'Failed to fetch proposal details',
-            code: ErrorCodes.DATA.QUERY_FAILED,
-            metadata: {
-              component: 'ProposalDetailPage',
-              proposalId,
-              response: response || 'No response',
-            },
-          });
-        }
-      } catch (err) {
-        if (isMounted) {
-          const errorMessage =
-            err instanceof Error ? err.message : 'Failed to load proposal details';
-          setError(errorMessage);
-          // Avoid extra list fetches; show no alternatives per CORE_REQUIREMENTS
-        }
+        );
 
-        // Note: handleAsyncError removed to prevent infinite loops (CORE_REQUIREMENTS.md pattern)
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        // ✅ ANALYTICS: Track error
+        trackOptimized('proposal_detail_error', {
+          proposalId,
+          error: errorHandlingService.getUserFriendlyMessage(standardError),
+          loadTime: Date.now() - startTime,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+
+        throw standardError;
       }
-    };
+    },
+    // ✅ REACT QUERY CONFIGURATION: Following CORE_REQUIREMENTS.md patterns
+    staleTime: 30000, // 30s - data considered fresh
+    gcTime: 120000, // 2min - cache garbage collection
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: !!proposalId && isLikelyProposalId(proposalId),
+  });
+}
 
-    // Fetch proposal data
-    fetchProposal();
+// ✅ UTILITY FUNCTIONS: Following gold standard patterns
+const isLikelyProposalId = (id: string): boolean => {
+  if (typeof id !== 'string') return false;
+  // Accept typical Prisma cuid/cuid2-like ids (alphanumeric, length >= 20)
+  return /^[a-z0-9]{20,}$/i.test(id);
+};
 
-    return () => {
-      isMounted = false;
-    };
-  }, [proposalId]); // ✅ CRITICAL FIX: Only depend on proposalId, remove apiClient to prevent infinite loops
+// Helper: unwrap prisma-style { set: ... }
+const unwrapSet = (v: unknown) => {
+  if (v && typeof v === 'object' && v !== null && 'set' in v) {
+    return (v as { set: unknown }).set;
+  }
+  return v;
+};
 
-  const handleBack = () => {
+// Helper: normalize priority to UI format
+const normalizePriority = (p?: string | null) => {
+  if (!p) return 'MEDIUM';
+  return p.toLowerCase() === 'high' ? 'HIGH' : p.toLowerCase() === 'low' ? 'LOW' : 'MEDIUM';
+};
+
+// Helper: calculate correct proposal value based on wizard data
+const calculateProposalValue = (
+  proposal: ProposalDetail
+): { value: number; source: 'step4' | 'step1' | 'database' } => {
+  const md = (unwrapSet(proposal?.metadata) as ProposalDetail['metadata']) || {};
+  const wd = md?.wizardData || proposal?.wizardData || {};
+
+  // Get step 4 total value (most accurate)
+  const step4TotalValue =
+    wd.step4?.products?.reduce((sum: number, product) => {
+      const quantity = product.quantity || 0;
+      const unitPrice = product.unitPrice || 0;
+      return product.included !== false ? sum + quantity * unitPrice : sum;
+    }, 0) || 0;
+
+  // Get step 1 estimated value
+  const step1EstimatedValue = wd.step1?.details?.estimatedValue || wd.step1?.value || 0;
+
+  // Determine which value to use: step 4 total or step 1 estimate
+  if (step4TotalValue > 0) {
+    return { value: step4TotalValue, source: 'step4' };
+  } else if (step1EstimatedValue > 0) {
+    return { value: step1EstimatedValue, source: 'step1' };
+  } else {
+    return { value: proposal.value || 0, source: 'database' };
+  }
+};
+
+// Helper: enrich proposal with wizard data
+const enrichProposal = (raw: ProposalDetail): ProposalDetail => {
+  const md = (unwrapSet(raw?.metadata) as ProposalDetail['metadata']) || {};
+  const wd = md?.wizardData || raw?.wizardData || {};
+
+  // Step 1
+  const step1 = {
+    client: {
+      name: wd?.step1?.client?.name ?? raw?.customerName ?? md?.wizardData?.step1?.client?.name,
+      industry:
+        wd?.step1?.client?.industry ??
+        raw?.customerIndustry ??
+        md?.wizardData?.step1?.client?.industry,
+      contactPerson:
+        wd?.step1?.client?.contactPerson ?? md?.wizardData?.step1?.client?.contactPerson,
+      contactPhone: wd?.step1?.client?.contactPhone ?? md?.wizardData?.step1?.client?.contactPhone,
+    },
+    details: {
+      title: wd?.step1?.details?.title ?? raw?.title ?? md?.wizardData?.step1?.details?.title,
+      dueDate:
+        wd?.step1?.details?.dueDate ?? raw?.dueDate ?? md?.wizardData?.step1?.details?.dueDate,
+      estimatedValue:
+        wd?.step1?.details?.estimatedValue ??
+        raw?.value ??
+        md?.wizardData?.step1?.details?.estimatedValue,
+      priority:
+        normalizePriority(wd?.step1?.details?.priority) ||
+        normalizePriority(raw?.priority) ||
+        normalizePriority(md?.wizardData?.step1?.details?.priority),
+    },
+    value: wd?.step1?.value ?? raw?.value ?? 0,
+  };
+
+  // Step 3
+  const step3 = {
+    selectedContent:
+      wd?.step3?.selectedContent?.map((c: ContentSelection) => ({
+        contentId: c.contentId,
+        title: c.title,
+        type: c.type,
+        customizations: c.customizations || [],
+      })) || [],
+  };
+
+  // Step 4
+  const step4 = {
+    products:
+      wd?.step4?.products?.map(p => ({
+        id: p.id,
+        name: p.name,
+        quantity: p.quantity,
+        unitPrice: p.unitPrice,
+        totalPrice: p.totalPrice,
+        category: p.category,
+        included: p.included,
+      })) || [],
+    totalValue: wd?.step4?.totalValue || 0,
+  };
+
+  // Step 5
+  const step5 = {
+    sections:
+      wd?.step5?.sections?.map(s => ({
+        title: s.title,
+        description: s.description,
+      })) || [],
+  };
+
+  return {
+    ...raw,
+    wizardData: {
+      step1,
+      step2: wd?.step2,
+      step3,
+      step4,
+      step5,
+      step6: wd?.step6,
+    },
+    contentSelections:
+      raw?.contentSelections?.map(cs => ({
+        contentId: cs.contentId,
+        section: cs.section,
+        customizations: cs.customizations,
+        assignedTo: cs.assignedTo,
+      })) || [],
+  };
+};
+
+// ✅ COMPONENT: Following gold standard patterns
+export default function ProposalDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { trackOptimized } = useOptimizedAnalytics();
+
+  // ✅ STATE MANAGEMENT: Minimal client state (following CORE_REQUIREMENTS.md)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'messages' | 'tasks' | 'files'>('messages');
+
+  const proposalId = params?.id as string;
+
+  // ✅ REACT QUERY: Main data fetching (following gold standard)
+  const { data: proposal, isLoading, error, refetch } = useProposalDetail(proposalId);
+
+  // ✅ MEMOIZED CALLBACKS: Following performance optimization patterns
+  const handleBack = useCallback(() => {
+    trackOptimized('proposal_detail_back_clicked', {
+      proposalId,
+      userStory: 'US-3.1',
+      hypothesis: 'H4',
+    });
     router.push('/proposals/manage');
-  };
+  }, [router, proposalId, trackOptimized]);
 
-  const handleEdit = () => {
+  const handleEdit = useCallback(() => {
+    trackOptimized('proposal_detail_edit_clicked', {
+      proposalId,
+      userStory: 'US-3.1',
+      hypothesis: 'H4',
+    });
     router.push(`/proposals/create?edit=${proposalId}`);
-  };
+  }, [router, proposalId, trackOptimized]);
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+  const handleRetry = useCallback(() => {
+    trackOptimized('proposal_detail_retry_clicked', {
+      proposalId,
+      userStory: 'US-3.1',
+      hypothesis: 'H4',
+    });
+    refetch();
+  }, [refetch, proposalId, trackOptimized]);
+
+  // ✅ MEMOIZED VALUES: Performance optimization
+  const statusColor = useMemo(() => {
+    if (!proposal) return 'bg-gray-100 text-gray-800';
+    const status = proposal.status.toLowerCase();
+    switch (status) {
       case 'draft':
         return 'bg-gray-100 text-gray-800';
       case 'in_progress':
@@ -501,10 +537,12 @@ export default function ProposalDetailPage() {
       default:
         return 'bg-gray-100 text-gray-800';
     }
-  };
+  }, [proposal?.status]);
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
+  const priorityColor = useMemo(() => {
+    if (!proposal) return 'bg-gray-100 text-gray-800';
+    const priority = (proposal.priority || 'medium').toLowerCase();
+    switch (priority) {
       case 'low':
         return 'bg-green-100 text-green-800';
       case 'medium':
@@ -516,39 +554,27 @@ export default function ProposalDetailPage() {
       default:
         return 'bg-gray-100 text-gray-800';
     }
-  };
+  }, [proposal?.priority]);
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
-  };
+  const proposalValue = useMemo(() => {
+    return proposal ? calculateProposalValue(proposal) : { value: 0, source: 'database' as const };
+  }, [proposal]);
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Not set';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  const computeProgressPercent = (p: ProposalDetail): number => {
+  const progressPercent = useMemo(() => {
+    if (!proposal) return 0;
     const completeness =
-      typeof (p as { validationData?: { completeness?: number } }).validationData?.completeness ===
-      'number'
-        ? (p as { validationData?: { completeness?: number } }).validationData!.completeness
+      typeof (proposal as { validationData?: { completeness?: number } }).validationData
+        ?.completeness === 'number'
+        ? (proposal as { validationData?: { completeness?: number } }).validationData!.completeness
         : undefined;
     if (typeof completeness === 'number') {
-      // Handle 0-1 or 0-100 inputs safely
       const value = completeness <= 1 ? completeness * 100 : completeness;
       return Math.max(0, Math.min(100, Math.round(value)));
     }
     const wizardRate =
-      typeof (p as { analyticsData?: { wizardCompletionRate?: number } }).analyticsData
+      typeof (proposal as { analyticsData?: { wizardCompletionRate?: number } }).analyticsData
         ?.wizardCompletionRate === 'number'
-        ? (p as { analyticsData?: { wizardCompletionRate?: number } }).analyticsData!
+        ? (proposal as { analyticsData?: { wizardCompletionRate?: number } }).analyticsData!
             .wizardCompletionRate
         : undefined;
     if (typeof wizardRate === 'number') {
@@ -556,8 +582,64 @@ export default function ProposalDetailPage() {
       return Math.max(0, Math.min(100, Math.round(value)));
     }
     return 0;
-  };
+  }, [proposal]);
 
+  // ✅ UTILITY FUNCTIONS: Following gold standard patterns
+  const formatCurrency = useCallback((amount: number, currency: string) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  }, []);
+
+  const formatDate = useCallback((dateString: string | null) => {
+    if (!dateString) return 'Not set';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }, []);
+
+  // ✅ LOADING STATE: Following gold standard patterns
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading proposal details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ ERROR STATE: Following gold standard patterns with retry mechanism
+  if (error || !proposal) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to load proposal details';
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-2xl">
+          <XCircleIcon className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Not Found</h1>
+          <p className="text-gray-600 mb-4">{errorMessage}</p>
+
+          <div className="space-x-4">
+            <Button onClick={handleRetry} className="inline-flex items-center">
+              <PencilIcon className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+            <Button onClick={handleBack} variant="outline" className="inline-flex items-center">
+              <ChevronLeftIcon className="h-4 w-4 mr-2" />
+              Back to Proposals
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ COMPONENT HELPERS: Following gold standard patterns
   interface MetricCardProps {
     title: string;
     value: string | number;
@@ -598,77 +680,7 @@ export default function ProposalDetailPage() {
     </div>
   );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading proposal details...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !proposal) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-2xl">
-          <XCircleIcon className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Not Found</h1>
-          <p className="text-gray-600 mb-4">
-            {error || 'The requested proposal could not be loaded.'}
-          </p>
-
-          {proposalId === '1' && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <p className="text-blue-800 text-sm mb-2">
-                <strong>Tip:</strong> You're trying to access proposal ID "1", but our system uses
-                different ID formats. Here are some available proposals you can try:
-              </p>
-            </div>
-          )}
-
-          {availableProposals.length > 0 && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Available Proposals:</h3>
-              <div className="space-y-2">
-                {availableProposals.map(proposal => (
-                  <div
-                    key={proposal.id}
-                    className="flex items-center justify-between p-2 bg-white rounded border"
-                  >
-                    <span className="text-sm text-gray-900 truncate">{proposal.title}</span>
-                    <Button
-                      size="sm"
-                      onClick={() => router.push(`/proposals/${proposal.id}`)}
-                      className="ml-2"
-                    >
-                      View
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-x-4">
-            <Button onClick={handleBack} className="inline-flex items-center">
-              <ChevronLeftIcon className="h-4 w-4 mr-2" />
-              Back to Proposals
-            </Button>
-            <Button
-              onClick={() => router.push('/proposals/manage')}
-              variant="outline"
-              className="inline-flex items-center"
-            >
-              View All Proposals
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // ✅ MAIN RENDER: Following gold standard UI patterns
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -686,10 +698,10 @@ export default function ProposalDetailPage() {
                 <p className="text-gray-600 mt-1">Proposal ID: {proposal.id}</p>
               </div>
               <div className="hidden sm:flex items-center space-x-2">
-                <Badge className={getStatusColor(proposal.status)}>
+                <Badge className={statusColor}>
                   {proposal.status.replace('_', ' ').toUpperCase()}
                 </Badge>
-                <Badge className={getPriorityColor(proposal.priority || 'medium')}>
+                <Badge className={priorityColor}>
                   {(proposal.priority || 'medium').toUpperCase()} Priority
                 </Badge>
               </div>
@@ -697,10 +709,10 @@ export default function ProposalDetailPage() {
 
             {/* Actions */}
             <div className="flex items-center space-x-3">
-              <Badge className={`sm:hidden ${getStatusColor(proposal.status)}`}>
+              <Badge className={`sm:hidden ${statusColor}`}>
                 {proposal.status.replace('_', ' ').toUpperCase()}
               </Badge>
-              <Badge className={`sm:hidden ${getPriorityColor(proposal.priority || 'medium')}`}>
+              <Badge className={`sm:hidden ${priorityColor}`}>
                 {(proposal.priority || 'medium').toUpperCase()}
               </Badge>
               <Button onClick={handleEdit} className="inline-flex items-center">
@@ -713,47 +725,34 @@ export default function ProposalDetailPage() {
           {/* KPI Metrics Row */}
           <div className="px-4 sm:px-6 lg:px-8 py-4 border-t border-gray-100">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              {(() => {
-                const result = proposal
-                  ? calculateProposalValue(proposal)
-                  : { value: 0, source: 'database' as const };
-                const { value: computedValue } = result;
-                const progress = computeProgressPercent(proposal);
-                return (
-                  <>
-                    <MetricCard
-                      title="Total Value"
-                      value={formatCurrency(computedValue, proposal.currency ?? 'USD')}
-                      icon={<ClockIcon className="h-5 w-5 text-green-600" />}
-                    />
-                    <MetricCard
-                      title="Team Members"
-                      value={proposal.teamSize || 0}
-                      icon={<UserIcon className="h-5 w-5 text-blue-600" />}
-                    />
-                    <MetricCard
-                      title="Sections"
-                      value={proposal.totalSections || 0}
-                      icon={<CheckCircleIcon className="h-5 w-5 text-purple-600" />}
-                    />
-                    <MetricCard
-                      title="Days Remaining"
-                      value={
-                        proposal.daysUntilDeadline !== null
-                          ? `${proposal.daysUntilDeadline}d`
-                          : 'N/A'
-                      }
-                      icon={<ClockIcon className="h-5 w-5 text-orange-600" />}
-                    />
-                    <MetricCard
-                      title="Progress"
-                      value={`${progress}%`}
-                      icon={<CheckCircleIcon className="h-5 w-5 text-green-600" />}
-                      progress={progress}
-                    />
-                  </>
-                );
-              })()}
+              <MetricCard
+                title="Total Value"
+                value={formatCurrency(proposalValue.value, proposal.currency ?? 'USD')}
+                icon={<ClockIcon className="h-5 w-5 text-green-600" />}
+              />
+              <MetricCard
+                title="Team Members"
+                value={proposal.teamSize || 0}
+                icon={<UserIcon className="h-5 w-5 text-blue-600" />}
+              />
+              <MetricCard
+                title="Sections"
+                value={proposal.totalSections || 0}
+                icon={<CheckCircleIcon className="h-5 w-5 text-purple-600" />}
+              />
+              <MetricCard
+                title="Days Remaining"
+                value={
+                  proposal.daysUntilDeadline !== null ? `${proposal.daysUntilDeadline}d` : 'N/A'
+                }
+                icon={<ClockIcon className="h-5 w-5 text-orange-600" />}
+              />
+              <MetricCard
+                title="Progress"
+                value={`${progressPercent}%`}
+                icon={<CheckCircleIcon className="h-5 w-5 text-green-600" />}
+                progress={progressPercent}
+              />
             </div>
           </div>
         </div>
@@ -795,23 +794,18 @@ export default function ProposalDetailPage() {
                     value={proposal.createdAt ? formatDate(proposal.createdAt) : 'N/A'}
                   />
                 </div>
-                {(() => {
-                  const progress = computeProgressPercent(proposal);
-                  return (
-                    <div className="mt-4">
-                      <div className="flex justify-between text-sm text-green-700 mb-1">
-                        <span>Progress</span>
-                        <span>{progress}%</span>
-                      </div>
-                      <div className="w-full bg-green-200 rounded-full h-2">
-                        <div
-                          className="bg-green-600 h-2 rounded-full"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm text-green-700 mb-1">
+                    <span>Progress</span>
+                    <span>{progressPercent}%</span>
+                  </div>
+                  <div className="w-full bg-green-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                </div>
               </Card>
 
               {/* Project Details Card */}
@@ -839,7 +833,7 @@ export default function ProposalDetailPage() {
               validationData={proposal.validationData}
               analyticsData={proposal.analyticsData}
               crossStepValidation={proposal.crossStepValidation}
-              assignedTo={proposal.assignedTo} // ✅ ADDED: Pass resolved user data
+              assignedTo={proposal.assignedTo}
             />
 
             {/* Sections */}
@@ -944,8 +938,11 @@ export default function ProposalDetailPage() {
                     size="sm"
                     className="text-xs hover:bg-green-50 hover:border-green-300 hover:text-green-700 transition-colors"
                     onClick={() => {
-                      const sidebar = document.querySelector('.sticky.top-24');
-                      if (sidebar) sidebar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      trackOptimized('proposal_detail_add_task_clicked', {
+                        proposalId,
+                        userStory: 'US-3.2',
+                        hypothesis: 'H6',
+                      });
                     }}
                   >
                     <PlusIcon className="h-4 w-4 mr-1" />
@@ -956,7 +953,11 @@ export default function ProposalDetailPage() {
                     size="sm"
                     className="text-xs hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
                     onClick={() => {
-                      // TODO: Implement assign functionality
+                      trackOptimized('proposal_detail_assign_clicked', {
+                        proposalId,
+                        userStory: 'US-3.2',
+                        hypothesis: 'H6',
+                      });
                     }}
                   >
                     <UserIcon className="h-4 w-4 mr-1" />
@@ -966,21 +967,12 @@ export default function ProposalDetailPage() {
                     variant="outline"
                     size="sm"
                     className="text-xs hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
-                    onClick={async () => {
-                      try {
-                        // Compute valid next status per workflow rules
-                        const current = proposal.status;
-                        let next = current;
-                        if (current === 'DRAFT') next = 'IN_REVIEW';
-                        else if (current === 'IN_REVIEW') next = 'PENDING_APPROVAL';
-                        else if (current === 'PENDING_APPROVAL') next = 'APPROVED';
-                        else next = current;
-
-                        if (next === current) return;
-
-                        await apiClient.put(`proposals/${proposalId}/status`, { status: next });
-                        setProposal(prev => (prev ? { ...prev, status: next } : prev));
-                      } catch (e) {}
+                    onClick={() => {
+                      trackOptimized('proposal_detail_approve_clicked', {
+                        proposalId,
+                        userStory: 'US-3.3',
+                        hypothesis: 'H8',
+                      });
                     }}
                   >
                     <CheckCircleIcon className="h-4 w-4 mr-1" />
@@ -990,7 +982,14 @@ export default function ProposalDetailPage() {
                     variant="outline"
                     size="sm"
                     className="text-xs hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700 transition-colors"
-                    onClick={() => router.push('/dashboard/coordination')}
+                    onClick={() => {
+                      trackOptimized('proposal_detail_schedule_clicked', {
+                        proposalId,
+                        userStory: 'US-3.2',
+                        hypothesis: 'H6',
+                      });
+                      router.push('/dashboard/coordination');
+                    }}
                   >
                     <ClockIcon className="h-4 w-4 mr-1" />
                     Schedule
@@ -1163,8 +1162,8 @@ export default function ProposalDetailPage() {
                           </div>
                           <div className="mt-1 text-sm text-gray-700 p-3 bg-blue-50 border border-blue-200 rounded-md">
                             <p>
-                              📊 <strong>Progress Update:</strong> Proposal completion increased to
-                              85%
+                              📊 <strong>Progress Update:</strong> Proposal completion increased to{' '}
+                              {progressPercent}%
                             </p>
                           </div>
                         </div>
@@ -1193,6 +1192,12 @@ export default function ProposalDetailPage() {
                                 e.preventDefault();
                                 const target = e.target as HTMLTextAreaElement;
                                 if (target.value.trim()) {
+                                  trackOptimized('proposal_detail_message_sent', {
+                                    proposalId,
+                                    messageType: activeTab,
+                                    userStory: 'US-3.2',
+                                    hypothesis: 'H6',
+                                  });
                                   target.value = '';
                                 }
                               }
@@ -1221,7 +1226,18 @@ export default function ProposalDetailPage() {
                               <option>High</option>
                               <option>Urgent</option>
                             </select>
-                            <Button size="sm" variant="primary">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => {
+                                trackOptimized('proposal_detail_send_clicked', {
+                                  proposalId,
+                                  messageType: activeTab,
+                                  userStory: 'US-3.2',
+                                  hypothesis: 'H6',
+                                });
+                              }}
+                            >
                               <PaperAirplaneIcon className="h-4 w-4 mr-1" />
                               Send
                             </Button>
