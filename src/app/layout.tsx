@@ -73,7 +73,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <head>
         {/* ✅ CRITICAL: Resource hints for LCP optimization */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -181,7 +181,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-192x192.png" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="mask-icon" href="/icons/icon.svg" color="#2563eb" />
-        <link rel="shortcut icon" href="/favicon.ico" />
+        {/* Use existing PWA icons as favicon to avoid 404 in dev */}
+        <link rel="shortcut icon" href="/icons/icon-192x192.png" />
 
         {/* ✅ CRITICAL: PWA splash screens */}
         <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />

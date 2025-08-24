@@ -4,9 +4,9 @@
  */
 
 import { logger } from '@/lib/logger'; // Environment-aware API base URL resolution
+import { requestDeduplicator } from '@/lib/utils/requestDeduplication';
 import { authInterceptor, type ApiRequest } from './interceptors/authInterceptor';
 import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/errorInterceptor';
-import { requestDeduplicator } from '@/lib/utils/requestDeduplication';
 
 function getApiBaseUrl(): string {
   // Client-side: use current window location
@@ -121,7 +121,7 @@ class EnhancedApiClient {
         ttl: 300000, // 5 minutes
         enabled: false,
       },
-      timeout: 10000,
+      timeout: 15000, // Increased from 10s to 15s for dashboard performance
       ...config,
     };
   }
@@ -265,7 +265,7 @@ class EnhancedApiClient {
               headers: interceptedRequest.headers,
               body: interceptedRequest.body ? JSON.stringify(interceptedRequest.body) : undefined,
             }),
-            config.timeout || 10000
+            config.timeout || 15000
           );
           logger.debug('[ApiClient] Raw response:', response);
 
@@ -274,7 +274,9 @@ class EnhancedApiClient {
           if (!contentType || !contentType.includes('application/json')) {
             logger.warn('[ApiClient] Non-JSON response received:', contentType);
             logger.warn(`[ApiClient] Response status: ${response.status} ${response.statusText}`);
-            throw new Error(`Invalid response format: Expected JSON, got ${contentType || 'unknown'}`);
+            throw new Error(
+              `Invalid response format: Expected JSON, got ${contentType || 'unknown'}`
+            );
           }
 
           const data: unknown = await response.json();
@@ -329,9 +331,8 @@ class EnhancedApiClient {
     // Use request deduplication for GET requests to prevent duplicate calls
     const deduplicationKey = requestDeduplicator.generateKey('GET', url, config);
 
-    return requestDeduplicator.deduplicate(
-      deduplicationKey,
-      () => this.makeRequest<T>(url, {
+    return requestDeduplicator.deduplicate(deduplicationKey, () =>
+      this.makeRequest<T>(url, {
         ...config,
         method: 'GET',
         cache: { enabled: true, ...config?.cache },

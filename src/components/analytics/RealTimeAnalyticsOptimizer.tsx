@@ -423,19 +423,24 @@ export default function RealTimeAnalyticsOptimizer({
    * Initialize and set up real-time updates
    */
   useEffect(() => {
-    refreshAnalyticsData();
+    // ✅ CRITICAL: Move function calls inside useEffect to prevent infinite loops
+    const initializeComponent = () => {
+      refreshAnalyticsData();
 
-    // Track component initialization
-    analytics('real_time_analytics_optimizer_initialized', {
-      userStories: COMPONENT_MAPPING.userStories,
-      hypotheses: COMPONENT_MAPPING.hypotheses,
-      enableRealTimeUpdates,
-      enableOptimization,
-      enablePredictions,
-      userRole,
-      deviceType: deviceInfo?.deviceType,
-      componentMapping: COMPONENT_MAPPING,
-    });
+      // Track component initialization
+      analytics('real_time_analytics_optimizer_initialized', {
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+        enableRealTimeUpdates,
+        enableOptimization,
+        enablePredictions,
+        userRole,
+        deviceType: deviceInfo?.deviceType,
+        componentMapping: COMPONENT_MAPPING,
+      });
+    };
+
+    initializeComponent();
 
     // Set up real-time updates
     if (enableRealTimeUpdates) {
@@ -445,13 +450,11 @@ export default function RealTimeAnalyticsOptimizer({
   }, [
     enableRealTimeUpdates,
     refreshInterval,
-    refreshAnalyticsData,
-    analytics,
     enableOptimization,
     enablePredictions,
     userRole,
     deviceInfo?.deviceType,
-  ]);
+  ]); // ✅ CRITICAL: Removed unstable function dependencies
 
   // Generate mobile classes
   const mobileClasses = getMobileClasses();

@@ -13,6 +13,7 @@ import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizatio
 import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
 import { ServiceWorkerWrapper } from '@/components/pwa/ServiceWorkerWrapper';
 import { authOptions } from '@/lib/auth';
+import { GlobalStateProvider } from '@/lib/bridges/StateBridge';
 import { getServerSession } from 'next-auth';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <QueryProvider>
               <ToastProvider position="top-right" maxToasts={5}>
                 <AuthProvider session={session}>
-                  <ProtectedLayout>{children}</ProtectedLayout>
+                  <GlobalStateProvider>
+                    <ProtectedLayout>{children}</ProtectedLayout>
+                  </GlobalStateProvider>
                 </AuthProvider>
               </ToastProvider>
             </QueryProvider>

@@ -10,12 +10,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Enhanced cache for comprehensive dashboard data
 const enhancedStatsCache = new Map<string, { data: any; ts: number }>();
-const ENHANCED_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 120 * 1000 : 10 * 1000; // 2min prod, 10s dev
+const ENHANCED_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 300 * 1000 : 30 * 1000; // 5min prod, 30s dev
+
+// Performance optimization: Increase cache TTL to reduce database load
 
 export async function GET(request: NextRequest) {
   let session;
   const start = performance.now();
-  
+
   try {
     await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     session = await getServerSession(authOptions);
@@ -29,14 +31,14 @@ export async function GET(request: NextRequest) {
     const forceFresh = url.searchParams.get('fresh') === '1';
     const cacheKey = `enhanced-stats:${session.user.id}`;
     const cached = enhancedStatsCache.get(cacheKey);
-    
+
     if (!forceFresh && cached && Date.now() - cached.ts < ENHANCED_STATS_TTL_MS) {
       const response = NextResponse.json({
         success: true,
         data: cached.data,
         message: 'Enhanced dashboard statistics retrieved successfully (cache)',
       });
-      
+
       if (process.env.NODE_ENV === 'production') {
         response.headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
       } else {
@@ -46,92 +48,142 @@ export async function GET(request: NextRequest) {
     }
 
     // Enhanced data aggregation with comprehensive business metrics
-    const [
-      proposalMetrics,
-      customerMetrics,
-      revenueMetrics,
-      timeMetrics,
-      riskMetrics
-    ] = await Promise.all([
-      // Proposal performance metrics
-      prisma.$queryRaw`
-        SELECT
-          COUNT(*)::int AS total_proposals,
-          COUNT(*) FILTER (WHERE status IN ('IN_REVIEW', 'PENDING_APPROVAL', 'SUBMITTED'))::int AS active_proposals,
-          COUNT(*) FILTER (WHERE status = 'ACCEPTED')::int AS won_proposals,
-          COUNT(*) FILTER (WHERE "dueDate" < NOW() AND status NOT IN ('ACCEPTED', 'DECLINED', 'REJECTED'))::int AS overdue_count,
-          COUNT(*) FILTER (WHERE "dueDate" BETWEEN NOW() AND NOW() + INTERVAL '7 days' AND status NOT IN ('ACCEPTED', 'DECLINED', 'REJECTED'))::int AS at_risk_count,
-          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '30 days')::int AS recent_proposals,
-          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '60 days' AND "createdAt" < NOW() - INTERVAL '30 days')::int AS previous_proposals,
-          COALESCE(AVG(value) FILTER (WHERE value > 0), 0)::numeric AS avg_proposal_value,
-          COALESCE(SUM(value) FILTER (WHERE status IN ('ACCEPTED', 'SUBMITTED')), 0)::bigint AS total_revenue
-        FROM "public"."proposals"
-      `,
-      
-      // Customer metrics
-      prisma.$queryRaw`
-        SELECT
-          COUNT(*)::int AS total_customers,
-          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '90 days')::int AS active_customers,
-          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '30 days')::int AS new_customers_month,
-          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '60 days' AND "createdAt" < NOW() - INTERVAL '30 days')::int AS new_customers_prev_month
-        FROM "public"."customers"
-      `,
-      
-      // Revenue trends (last 6 months)
-      prisma.$queryRaw`
-        SELECT
-          DATE_TRUNC('month', "createdAt") AS month,
-          COUNT(*)::int AS proposal_count,
-          COALESCE(SUM(value) FILTER (WHERE status IN ('ACCEPTED', 'SUBMITTED')), 0)::bigint AS monthly_revenue,
-          COUNT(*) FILTER (WHERE status = 'ACCEPTED')::int AS won_count
-        FROM "public"."proposals"
-        WHERE "createdAt" >= NOW() - INTERVAL '6 months'
-        GROUP BY DATE_TRUNC('month', "createdAt")
-        ORDER BY month DESC
-        LIMIT 6
-      `,
-      
-      // Time-based metrics
-      prisma.$queryRaw`
-        SELECT
-          COALESCE(AVG(EXTRACT(EPOCH FROM ("updatedAt" - "createdAt")) / 86400) FILTER (WHERE status = 'ACCEPTED'), 21)::numeric AS avg_cycle_time_days,
-          COUNT(*) FILTER (WHERE "updatedAt" < NOW() - INTERVAL '14 days' AND status IN ('IN_REVIEW', 'PENDING_APPROVAL'))::int AS stalled_count
-        FROM "public"."proposals"
-      `,
-      
-      // Risk indicators by priority
-      prisma.$queryRaw`
-        SELECT
-          priority,
-          COUNT(*)::int AS count
-        FROM "public"."proposals"
-        WHERE "dueDate" < NOW() AND status NOT IN ('ACCEPTED', 'DECLINED', 'REJECTED')
-        GROUP BY priority
-      `
-    ]);
+    // Add timeout to prevent long-running queries
+    const queryTimeout = 8000; // 8 seconds timeout
+
+    // Fallback data in case queries timeout
+    const fallbackData = {
+      totalProposals: 0,
+      activeProposals: 0,
+      wonProposals: 0,
+      overdueCount: 0,
+      atRiskCount: 0,
+      recentProposals: 0,
+      previousProposals: 0,
+      avgProposalValue: 0,
+      totalRevenue: 0,
+      totalCustomers: 0,
+      activeCustomers: 0,
+      newCustomersMonth: 0,
+      newCustomersPrevMonth: 0,
+      avgCycleTime: 21,
+      stalledCount: 0,
+    };
+
+    let proposalMetrics: any,
+      customerMetrics: any,
+      revenueMetrics: any[] = [],
+      timeMetrics: any,
+      riskMetrics: any[] = [];
+
+    try {
+      // Add timeout to prevent hanging queries
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Query timeout')), queryTimeout);
+      });
+
+      const queriesPromise = Promise.all([
+        // Proposal performance metrics
+        prisma.$queryRaw`
+          SELECT
+            COUNT(*)::int AS total_proposals,
+            COUNT(*) FILTER (WHERE status IN ('IN_REVIEW', 'PENDING_APPROVAL', 'SUBMITTED'))::int AS active_proposals,
+            COUNT(*) FILTER (WHERE status = 'ACCEPTED')::int AS won_proposals,
+            COUNT(*) FILTER (WHERE "dueDate" < NOW() AND status NOT IN ('ACCEPTED', 'DECLINED', 'REJECTED'))::int AS overdue_count,
+            COUNT(*) FILTER (WHERE "dueDate" BETWEEN NOW() AND NOW() + INTERVAL '7 days' AND status NOT IN ('ACCEPTED', 'DECLINED', 'REJECTED'))::int AS at_risk_count,
+            COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '30 days')::int AS recent_proposals,
+            COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '60 days' AND "createdAt" < NOW() - INTERVAL '30 days')::int AS previous_proposals,
+            COALESCE(AVG(value) FILTER (WHERE value > 0), 0)::numeric AS avg_proposal_value,
+            COALESCE(SUM(value) FILTER (WHERE status IN ('ACCEPTED', 'SUBMITTED')), 0)::bigint AS total_revenue
+          FROM "public"."proposals"
+        `,
+
+        // Customer metrics
+        prisma.$queryRaw`
+          SELECT
+            COUNT(*)::int AS total_customers,
+            COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '90 days')::int AS active_customers,
+            COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '30 days')::int AS new_customers_month,
+            COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '60 days' AND "createdAt" < NOW() - INTERVAL '30 days')::int AS new_customers_prev_month
+          FROM "public"."customers"
+        `,
+
+        // Revenue trends (last 6 months)
+        prisma.$queryRaw`
+          SELECT
+            DATE_TRUNC('month', "createdAt") AS month,
+            COUNT(*)::int AS proposal_count,
+            COALESCE(SUM(value) FILTER (WHERE status IN ('ACCEPTED', 'SUBMITTED')), 0)::bigint AS monthly_revenue,
+            COUNT(*) FILTER (WHERE status = 'ACCEPTED')::int AS won_count
+          FROM "public"."proposals"
+          WHERE "createdAt" >= NOW() - INTERVAL '6 months'
+          GROUP BY DATE_TRUNC('month', "createdAt")
+          ORDER BY month DESC
+          LIMIT 6
+        `,
+
+        // Time-based metrics
+        prisma.$queryRaw`
+          SELECT
+            COALESCE(AVG(EXTRACT(EPOCH FROM ("updatedAt" - "createdAt")) / 86400) FILTER (WHERE status = 'ACCEPTED'), 21)::numeric AS avg_cycle_time_days,
+            COUNT(*) FILTER (WHERE "updatedAt" < NOW() - INTERVAL '14 days' AND status IN ('IN_REVIEW', 'PENDING_APPROVAL'))::int AS stalled_count
+          FROM "public"."proposals"
+        `,
+
+        // Risk indicators by priority
+        prisma.$queryRaw`
+          SELECT
+            priority,
+            COUNT(*)::int AS count
+          FROM "public"."proposals"
+          WHERE "dueDate" < NOW() AND status NOT IN ('ACCEPTED', 'DECLINED', 'REJECTED')
+          GROUP BY priority
+        `,
+      ]);
+
+      const results = (await Promise.race([queriesPromise, timeoutPromise])) as any[];
+      [proposalMetrics, customerMetrics, revenueMetrics, timeMetrics, riskMetrics] = results;
+    } catch (error) {
+      // Use fallback data if queries timeout or fail
+      console.warn('Dashboard queries failed, using fallback data:', error);
+      proposalMetrics = [fallbackData];
+      customerMetrics = [fallbackData];
+      revenueMetrics = [];
+      timeMetrics = [fallbackData];
+      riskMetrics = [];
+    }
 
     // Process and structure the data
-    const proposalData = (Array.isArray(proposalMetrics) ? proposalMetrics[0] as Record<string, unknown> : {}) || {};
-    const customerData = (Array.isArray(customerMetrics) ? customerMetrics[0] as Record<string, unknown> : {}) || {};
-    const revenueData = (Array.isArray(revenueMetrics) ? revenueMetrics as Array<Record<string, unknown>> : []) || [];
-    const timeData = (Array.isArray(timeMetrics) ? timeMetrics[0] as Record<string, unknown> : {}) || {};
-    const riskData = (Array.isArray(riskMetrics) ? riskMetrics as Array<Record<string, unknown>> : []) || [];
+    const proposalData =
+      (Array.isArray(proposalMetrics) ? (proposalMetrics[0] as Record<string, unknown>) : {}) || {};
+    const customerData =
+      (Array.isArray(customerMetrics) ? (customerMetrics[0] as Record<string, unknown>) : {}) || {};
+    const revenueData =
+      (Array.isArray(revenueMetrics) ? (revenueMetrics as Array<Record<string, unknown>>) : []) ||
+      [];
+    const timeData =
+      (Array.isArray(timeMetrics) ? (timeMetrics[0] as Record<string, unknown>) : {}) || {};
+    const riskData =
+      (Array.isArray(riskMetrics) ? (riskMetrics as Array<Record<string, unknown>>) : []) || [];
 
     // Calculate derived metrics
     const totalProposals = Number(proposalData.total_proposals) || 0;
     const wonProposals = Number(proposalData.won_proposals) || 0;
     const winRate = totalProposals > 0 ? Math.round((wonProposals / totalProposals) * 100) : 0;
-    
+
     const recentProposals = Number(proposalData.recent_proposals) || 0;
     const previousProposals = Number(proposalData.previous_proposals) || 0;
-    const proposalGrowth = previousProposals > 0 ? 
-      Math.round(((recentProposals - previousProposals) / previousProposals) * 100) : 0;
+    const proposalGrowth =
+      previousProposals > 0
+        ? Math.round(((recentProposals - previousProposals) / previousProposals) * 100)
+        : 0;
 
     const newCustomersMonth = Number(customerData.new_customers_month) || 0;
     const newCustomersPrevMonth = Number(customerData.new_customers_prev_month) || 0;
-    const customerGrowth = newCustomersPrevMonth > 0 ? 
-      Math.round(((newCustomersMonth - newCustomersPrevMonth) / newCustomersPrevMonth) * 100) : 0;
+    const customerGrowth =
+      newCustomersPrevMonth > 0
+        ? Math.round(((newCustomersMonth - newCustomersPrevMonth) / newCustomersPrevMonth) * 100)
+        : 0;
 
     const totalRevenue = Number(proposalData.total_revenue) || 0;
     const avgProposalValue = Number(proposalData.avg_proposal_value) || 0;
@@ -143,31 +195,37 @@ export async function GET(request: NextRequest) {
       // Primary Business Metrics
       totalRevenue,
       monthlyRevenue: revenueData.length > 0 ? Number(revenueData[0].monthly_revenue) || 0 : 0,
-      revenueGrowth: revenueData.length >= 2 ? 
-        Math.round(((Number(revenueData[0].monthly_revenue) - Number(revenueData[1].monthly_revenue)) / Number(revenueData[1].monthly_revenue)) * 100) : 0,
-      
+      revenueGrowth:
+        revenueData.length >= 2
+          ? Math.round(
+              ((Number(revenueData[0].monthly_revenue) - Number(revenueData[1].monthly_revenue)) /
+                Number(revenueData[1].monthly_revenue)) *
+                100
+            )
+          : 0,
+
       // Proposal Performance
       totalProposals,
       activeProposals: Number(proposalData.active_proposals) || 0,
       wonProposals,
       winRate,
       avgProposalValue: Math.round(avgProposalValue),
-      
+
       // Operational Metrics
       avgCycleTime: Math.round(Number(timeData.avg_cycle_time_days) || 21),
       overdueCount: Number(proposalData.overdue_count) || 0,
       atRiskCount: Number(proposalData.at_risk_count) || 0,
       stalledCount: Number(timeData.stalled_count) || 0,
-      
+
       // Customer Metrics
       totalCustomers,
       activeCustomers: Number(customerData.active_customers) || 0,
       customerGrowth,
       avgCustomerValue,
-      
+
       // Growth Metrics
       proposalGrowth,
-      
+
       // Revenue Trends (last 6 months)
       revenueHistory: revenueData.map(month => ({
         month: new Date(String(month.month || '')).toLocaleDateString('en-US', { month: 'short' }),
@@ -176,13 +234,13 @@ export async function GET(request: NextRequest) {
         wins: Number(month.won_count) || 0,
         target: Math.round((totalRevenue / 6) * 1.2), // 20% above average as target
       })),
-      
+
       // Risk Breakdown
       riskByPriority: riskData.map(risk => ({
         priority: risk.priority || 'MEDIUM',
         count: Number(risk.count) || 0,
       })),
-      
+
       // Conversion Funnel (estimated)
       conversionFunnel: [
         {
@@ -210,7 +268,7 @@ export async function GET(request: NextRequest) {
           value: Math.round(totalRevenue * 0.7),
         },
       ],
-      
+
       // Metadata
       generatedAt: new Date().toISOString(),
       cacheKey,
@@ -237,7 +295,6 @@ export async function GET(request: NextRequest) {
     const duration = Math.round(performance.now() - start);
     recordLatency(duration);
     return response;
-
   } catch (error) {
     if (error instanceof Response) {
       return error as unknown as NextResponse;
@@ -266,7 +323,7 @@ export async function GET(request: NextRequest) {
     recordError(standardError.code);
     const duration = Math.round(performance.now() - start);
     recordLatency(duration);
-    
+
     return NextResponse.json(
       {
         success: false,

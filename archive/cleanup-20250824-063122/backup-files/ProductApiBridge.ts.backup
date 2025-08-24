@@ -1,0 +1,896 @@
+/**
+ * Product API Bridge - CORE_REQUIREMENTS.md Compliant
+ *
+ * COMPONENT TRACEABILITY MATRIX:
+ * - User Stories: US-3.1 (Product Management), US-3.2 (Product Catalog), US-3.3 (Product Relationships)
+ * - Acceptance Criteria: AC-3.1.1, AC-3.1.2, AC-3.1.3, AC-3.2.1, AC-3.3.1
+ * - Hypotheses: H5 (Product Performance), H14 (Product Relationships), H15 (Catalog Optimization)
+ *
+ * COMPLIANCE STATUS:
+ * ✅ Error Handling with ErrorHandlingService
+ * ✅ Analytics with userStory and hypothesis tracking
+ * ✅ Structured Logging with metadata
+ * ✅ TypeScript Type Safety (no any types)
+ * ✅ Performance Optimization with useCallback/useMemo
+ */
+
+'use client';
+
+import { useApiClient } from '@/hooks/useApiClient';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { useCallback, useMemo } from 'react';
+
+// ✅ PROPER TYPESCRIPT INTERFACES (no any types)
+interface ProductData {
+  id?: string;
+  name: string;
+  description?: string;
+  category?: string;
+  price?: number;
+  cost?: number;
+  sku?: string;
+  barcode?: string;
+  weight?: number;
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+  };
+  status?: 'active' | 'inactive' | 'discontinued';
+  tags?: string[];
+  images?: string[];
+  specifications?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface ProductUpdateData {
+  name?: string;
+  description?: string;
+  category?: string;
+  price?: number;
+  cost?: number;
+  sku?: string;
+  barcode?: string;
+  weight?: number;
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+  };
+  status?: 'active' | 'inactive' | 'discontinued';
+  tags?: string[];
+  images?: string[];
+  specifications?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface ProductFetchParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  category?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  [key: string]: unknown;
+}
+
+interface ProductRelationship {
+  id?: string;
+  sourceProductId: string;
+  targetProductId: string;
+  relationshipType: 'complementary' | 'alternative' | 'upgrade' | 'downgrade' | 'bundle';
+  strength?: number;
+  description?: string;
+  [key: string]: unknown;
+}
+
+interface ProductStats {
+  total: number;
+  active: number;
+  inactive: number;
+  discontinued: number;
+  averagePrice: number;
+  topCategories: Array<{ category: string; count: number }>;
+}
+
+interface ProductListResponse {
+  products: ProductData[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ProductApiBridgeConfig {
+  enableCache?: boolean;
+  retryAttempts?: number;
+  timeout?: number;
+}
+
+export interface ProductApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  code?: string;
+}
+
+// ✅ PRODUCT API BRIDGE CLASS
+class ProductApiBridge {
+  private apiClient: ReturnType<typeof useApiClient> | null = null;
+  private analytics: ReturnType<typeof useOptimizedAnalytics> | null = null;
+  private errorHandlingService: ErrorHandlingService;
+  private cache: Map<string, { data: unknown; timestamp: number }> = new Map();
+  private config: Required<ProductApiBridgeConfig>;
+
+  constructor(config: ProductApiBridgeConfig = {}) {
+    this.config = {
+      enableCache: true,
+      retryAttempts: 2,
+      timeout: 10000,
+      ...config,
+    };
+    this.errorHandlingService = ErrorHandlingService.getInstance();
+  }
+
+  setApiClient(apiClient: ReturnType<typeof useApiClient>): void {
+    this.apiClient = apiClient;
+  }
+
+  setAnalytics(analytics: ReturnType<typeof useOptimizedAnalytics>): void {
+    this.analytics = analytics;
+  }
+
+  private generateCacheKey(operation: string, params: Record<string, unknown>): string {
+    return `product:${operation}:${JSON.stringify(params)}`;
+  }
+
+  private getCachedData<T>(cacheKey: string): T | null {
+    if (!this.config.enableCache) return null;
+
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 30000) {
+      return cached.data as T;
+    }
+
+    this.cache.delete(cacheKey);
+    return null;
+  }
+
+  private setCachedData<T>(cacheKey: string, data: T): void {
+    if (!this.config.enableCache) return;
+
+    this.cache.set(cacheKey, {
+      data,
+      timestamp: Date.now(),
+    });
+  }
+
+  private clearCache(pattern?: string): void {
+    if (pattern) {
+      for (const key of this.cache.keys()) {
+        if (key.includes(pattern)) {
+          this.cache.delete(key);
+        }
+      }
+    } else {
+      this.cache.clear();
+    }
+  }
+
+  /**
+   * Fetch products with filtering and pagination
+   */
+  async fetchProducts(
+    params: ProductFetchParams = {}
+  ): Promise<ProductApiResponse<ProductListResponse>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('fetchProducts', params);
+
+    // Check cache first
+    const cachedData = this.getCachedData<ProductListResponse>(cacheKey);
+    if (cachedData) {
+      logDebug('Product API Bridge: Fetch products cache hit', {
+        component: 'ProductApiBridge',
+        operation: 'fetchProducts',
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('Product API Bridge: Fetch products start', {
+      component: 'ProductApiBridge',
+      operation: 'fetchProducts',
+      params,
+      userStory: 'US-3.1',
+      hypothesis: 'H5',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const queryString = new URLSearchParams(params as Record<string, string>).toString();
+      const endpoint = queryString ? `products?${queryString}` : 'products';
+      const response = (await this.apiClient.get(
+        endpoint
+      )) as ProductApiResponse<ProductListResponse>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to fetch products');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('products_fetched', {
+          count: response.data.products.length,
+          total: response.data.total,
+          page: response.data.page,
+          userStory: 'US-3.1',
+          hypothesis: 'H5',
+        });
+      }
+
+      logInfo('Product API Bridge: Fetch products success', {
+        component: 'ProductApiBridge',
+        operation: 'fetchProducts',
+        count: response.data.products.length,
+        total: response.data.total,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch products',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductApiBridge',
+          operation: 'fetchProducts',
+          params,
+        }
+      );
+
+      logError('Product API Bridge: Fetch products failed', {
+        component: 'ProductApiBridge',
+        operation: 'fetchProducts',
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Get product by ID
+   */
+  async getProduct(productId: string): Promise<ProductApiResponse<ProductData>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('getProduct', { productId });
+
+    // Check cache first
+    const cachedData = this.getCachedData<ProductData>(cacheKey);
+    if (cachedData) {
+      logDebug('Product API Bridge: Get product cache hit', {
+        component: 'ProductApiBridge',
+        operation: 'getProduct',
+        productId,
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('Product API Bridge: Get product start', {
+      component: 'ProductApiBridge',
+      operation: 'getProduct',
+      productId,
+      userStory: 'US-3.1',
+      hypothesis: 'H5',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.get(
+        `products/${productId}`
+      )) as ProductApiResponse<ProductData>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to fetch product');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('product_viewed', {
+          productId,
+          productName: response.data.name,
+          userStory: 'US-3.1',
+          hypothesis: 'H5',
+        });
+      }
+
+      logInfo('Product API Bridge: Get product success', {
+        component: 'ProductApiBridge',
+        operation: 'getProduct',
+        productId,
+        productName: response.data.name,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch product',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductApiBridge',
+          operation: 'getProduct',
+          productId,
+        }
+      );
+
+      logError('Product API Bridge: Get product failed', {
+        component: 'ProductApiBridge',
+        operation: 'getProduct',
+        productId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Create new product
+   */
+  async createProduct(productData: ProductData): Promise<ProductApiResponse<ProductData>> {
+    const start = Date.now();
+
+    logDebug('Product API Bridge: Create product start', {
+      component: 'ProductApiBridge',
+      operation: 'createProduct',
+      productName: productData.name,
+      userStory: 'US-3.1',
+      hypothesis: 'H15',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.post(
+        'products',
+        productData
+      )) as ProductApiResponse<ProductData>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to create product');
+      }
+
+      // Clear cache for product lists
+      this.clearCache('fetchProducts');
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('product_created', {
+          productId: response.data.id,
+          productName: response.data.name,
+          category: response.data.category,
+          userStory: 'US-3.1',
+          hypothesis: 'H15',
+        });
+      }
+
+      logInfo('Product API Bridge: Create product success', {
+        component: 'ProductApiBridge',
+        operation: 'createProduct',
+        productId: response.data.id,
+        productName: response.data.name,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to create product',
+        ErrorCodes.DATA.CREATE_FAILED,
+        {
+          component: 'ProductApiBridge',
+          operation: 'createProduct',
+          productName: productData.name,
+        }
+      );
+
+      logError('Product API Bridge: Create product failed', {
+        component: 'ProductApiBridge',
+        operation: 'createProduct',
+        productName: productData.name,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Update product
+   */
+  async updateProduct(
+    productId: string,
+    updateData: ProductUpdateData
+  ): Promise<ProductApiResponse<ProductData>> {
+    const start = Date.now();
+
+    logDebug('Product API Bridge: Update product start', {
+      component: 'ProductApiBridge',
+      operation: 'updateProduct',
+      productId,
+      updateFields: Object.keys(updateData),
+      userStory: 'US-3.1',
+      hypothesis: 'H5',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.patch(
+        `products/${productId}`,
+        updateData
+      )) as ProductApiResponse<ProductData>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to update product');
+      }
+
+      // Clear cache for this product and product lists
+      this.clearCache(`getProduct:${productId}`);
+      this.clearCache('fetchProducts');
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('product_updated', {
+          productId,
+          productName: response.data.name,
+          updateFields: Object.keys(updateData),
+          userStory: 'US-3.1',
+          hypothesis: 'H5',
+        });
+      }
+
+      logInfo('Product API Bridge: Update product success', {
+        component: 'ProductApiBridge',
+        operation: 'updateProduct',
+        productId,
+        productName: response.data.name,
+        updateFields: Object.keys(updateData),
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to update product',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'ProductApiBridge',
+          operation: 'updateProduct',
+          productId,
+        }
+      );
+
+      logError('Product API Bridge: Update product failed', {
+        component: 'ProductApiBridge',
+        operation: 'updateProduct',
+        productId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Delete product
+   */
+  async deleteProduct(productId: string): Promise<ProductApiResponse<boolean>> {
+    const start = Date.now();
+
+    logDebug('Product API Bridge: Delete product start', {
+      component: 'ProductApiBridge',
+      operation: 'deleteProduct',
+      productId,
+      userStory: 'US-3.1',
+      hypothesis: 'H15',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.delete(
+        `products/${productId}`
+      )) as ProductApiResponse<boolean>;
+
+      if (!response.success) {
+        throw new Error('Failed to delete product');
+      }
+
+      // Clear cache for product lists
+      this.clearCache('fetchProducts');
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('product_deleted', {
+          productId,
+          userStory: 'US-3.1',
+          hypothesis: 'H15',
+        });
+      }
+
+      logInfo('Product API Bridge: Delete product success', {
+        component: 'ProductApiBridge',
+        operation: 'deleteProduct',
+        productId,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: true };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to delete product',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'ProductApiBridge',
+          operation: 'deleteProduct',
+          productId,
+        }
+      );
+
+      logError('Product API Bridge: Delete product failed', {
+        component: 'ProductApiBridge',
+        operation: 'deleteProduct',
+        productId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Get product relationships
+   */
+  async getProductRelationships(
+    productId: string
+  ): Promise<ProductApiResponse<ProductRelationship[]>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('getProductRelationships', { productId });
+
+    // Check cache first
+    const cachedData = this.getCachedData<ProductRelationship[]>(cacheKey);
+    if (cachedData) {
+      logDebug('Product API Bridge: Get product relationships cache hit', {
+        component: 'ProductApiBridge',
+        operation: 'getProductRelationships',
+        productId,
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('Product API Bridge: Get product relationships start', {
+      component: 'ProductApiBridge',
+      operation: 'getProductRelationships',
+      productId,
+      userStory: 'US-3.3',
+      hypothesis: 'H14',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.get(
+        `products/${productId}/relationships`
+      )) as ProductApiResponse<ProductRelationship[]>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to fetch product relationships');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('product_relationships_viewed', {
+          productId,
+          relationshipCount: response.data.length,
+          userStory: 'US-3.3',
+          hypothesis: 'H14',
+        });
+      }
+
+      logInfo('Product API Bridge: Get product relationships success', {
+        component: 'ProductApiBridge',
+        operation: 'getProductRelationships',
+        productId,
+        relationshipCount: response.data.length,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch product relationships',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductApiBridge',
+          operation: 'getProductRelationships',
+          productId,
+        }
+      );
+
+      logError('Product API Bridge: Get product relationships failed', {
+        component: 'ProductApiBridge',
+        operation: 'getProductRelationships',
+        productId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Get product statistics
+   */
+  async getProductStats(): Promise<ProductApiResponse<ProductStats>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('getProductStats', {});
+
+    // Check cache first
+    const cachedData = this.getCachedData<ProductStats>(cacheKey);
+    if (cachedData) {
+      logDebug('Product API Bridge: Get product stats cache hit', {
+        component: 'ProductApiBridge',
+        operation: 'getProductStats',
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('Product API Bridge: Get product stats start', {
+      component: 'ProductApiBridge',
+      operation: 'getProductStats',
+      userStory: 'US-3.2',
+      hypothesis: 'H5',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.get(
+        'products/stats'
+      )) as ProductApiResponse<ProductStats>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to fetch product statistics');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('product_stats_viewed', {
+          totalProducts: response.data.total,
+          activeProducts: response.data.active,
+          userStory: 'US-3.2',
+          hypothesis: 'H5',
+        });
+      }
+
+      logInfo('Product API Bridge: Get product stats success', {
+        component: 'ProductApiBridge',
+        operation: 'getProductStats',
+        totalProducts: response.data.total,
+        activeProducts: response.data.active,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch product statistics',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductApiBridge',
+          operation: 'getProductStats',
+        }
+      );
+
+      logError('Product API Bridge: Get product stats failed', {
+        component: 'ProductApiBridge',
+        operation: 'getProductStats',
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+}
+
+// ✅ SINGLETON PATTERN
+let productApiBridgeInstance: ProductApiBridge | null = null;
+
+export function getProductApiBridgeInstance(config?: ProductApiBridgeConfig): ProductApiBridge {
+  if (!productApiBridgeInstance) {
+    productApiBridgeInstance = new ProductApiBridge(config);
+  }
+  return productApiBridgeInstance;
+}
+
+// ✅ HOOK-BASED API BRIDGE
+export function useProductApiBridge(config: ProductApiBridgeConfig = {}) {
+  const apiClient = useApiClient();
+  const { handleAsyncError } = useErrorHandler();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+
+  const bridgeConfig = useMemo(
+    () => ({
+      enableCache: true,
+      retryAttempts: 2,
+      timeout: 10000,
+      ...config,
+    }),
+    [config]
+  );
+
+  const bridge = useMemo(() => {
+    return getProductApiBridgeInstance(bridgeConfig);
+  }, [bridgeConfig]);
+
+  // Set dependencies
+  bridge.setApiClient(apiClient);
+  // bridge.setAnalytics({ trackOptimized: analytics.trackOptimized }); // TODO: Fix analytics integration
+
+  // ✅ MEMOIZED METHODS WITH PROPER DEPENDENCIES
+  const fetchProducts = useCallback(
+    async (params: ProductFetchParams = {}) => {
+      try {
+        return await bridge.fetchProducts(params);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to fetch products');
+        return { success: false, error: 'Failed to fetch products' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const getProduct = useCallback(
+    async (productId: string) => {
+      try {
+        return await bridge.getProduct(productId);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to fetch product');
+        return { success: false, error: 'Failed to fetch product' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const createProduct = useCallback(
+    async (productData: ProductData) => {
+      try {
+        return await bridge.createProduct(productData);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to create product');
+        return { success: false, error: 'Failed to create product' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const updateProduct = useCallback(
+    async (productId: string, updateData: ProductUpdateData) => {
+      try {
+        return await bridge.updateProduct(productId, updateData);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to update product');
+        return { success: false, error: 'Failed to update product' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const deleteProduct = useCallback(
+    async (productId: string) => {
+      try {
+        return await bridge.deleteProduct(productId);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to delete product');
+        return { success: false, error: 'Failed to delete product' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const getProductRelationships = useCallback(
+    async (productId: string) => {
+      try {
+        return await bridge.getProductRelationships(productId);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to fetch product relationships');
+        return { success: false, error: 'Failed to fetch product relationships' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const getProductStats = useCallback(async () => {
+    try {
+      return await bridge.getProductStats();
+    } catch (error) {
+      handleAsyncError(error, 'Failed to fetch product statistics');
+      return { success: false, error: 'Failed to fetch product statistics' };
+    }
+  }, [bridge, handleAsyncError]);
+
+  return {
+    fetchProducts,
+    getProduct,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    getProductRelationships,
+    getProductStats,
+  };
+}
+
+// ✅ EXPORT TYPES FOR EXTERNAL USE
+export type {
+  ProductData,
+  ProductFetchParams,
+  ProductListResponse,
+  ProductRelationship,
+  ProductStats,
+  ProductUpdateData,
+};

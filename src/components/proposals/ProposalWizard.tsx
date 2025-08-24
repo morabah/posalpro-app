@@ -443,7 +443,7 @@ export function ProposalWizard({
     [visibleSteps]
   );
 
-  // ✅ FIXED: Add missing dependencies to useEffect
+  // ✅ FIXED: Memory observation on mount only (no dependencies to prevent infinite loops)
   useEffect(() => {
     // ✅ CRITICAL: Memory observation on mount (no error processing)
     const initialMemoryUsage = getMemoryUsageMB();
@@ -451,7 +451,7 @@ export function ProposalWizard({
     if (initialMemoryUsage > 280) {
       optimizeComponentMemory('ProposalWizard');
     }
-  }, [getMemoryUsageMB, optimizeComponentMemory]);
+  }, []); // ✅ CRITICAL: Empty dependency array to prevent infinite loops
 
   // Dispose all lazy-loaded components and clear dynamic import tracker on unmount
   useEffect(() => {

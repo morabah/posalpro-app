@@ -212,19 +212,46 @@ const ProposalQuerySchema = z.object({
 
   // Search and filtering
   search: z.string().optional(),
-  status: z
-    .enum([
-      'DRAFT',
-      'IN_REVIEW',
-      'PENDING_APPROVAL',
-      'APPROVED',
-      'REJECTED',
-      'SUBMITTED',
-      'ACCEPTED',
-      'DECLINED',
-    ])
-    .optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+  status: z.preprocess(
+    val => {
+      if (!val || typeof val !== 'string') return undefined;
+      // Convert to uppercase to match API expectations
+      const upperVal = val.toUpperCase();
+      const validStatuses = [
+        'DRAFT',
+        'IN_REVIEW',
+        'PENDING_APPROVAL',
+        'APPROVED',
+        'REJECTED',
+        'SUBMITTED',
+        'ACCEPTED',
+        'DECLINED',
+      ];
+      return validStatuses.includes(upperVal) ? upperVal : undefined;
+    },
+    z
+      .enum([
+        'DRAFT',
+        'IN_REVIEW',
+        'PENDING_APPROVAL',
+        'APPROVED',
+        'REJECTED',
+        'SUBMITTED',
+        'ACCEPTED',
+        'DECLINED',
+      ])
+      .optional()
+  ),
+  priority: z.preprocess(
+    val => {
+      if (!val || typeof val !== 'string') return undefined;
+      // Convert to uppercase to match API expectations
+      const upperVal = val.toUpperCase();
+      const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+      return validPriorities.includes(upperVal) ? upperVal : undefined;
+    },
+    z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional()
+  ),
   customerId: databaseIdSchema.optional(),
   createdBy: databaseIdSchema.optional(),
 

@@ -1,0 +1,474 @@
+/**
+ * Proposal API Bridge - CORE_REQUIREMENTS.md Compliant
+ *
+ * COMPONENT TRACEABILITY MATRIX:
+ * - User Stories: US-2.1 (Proposal Management), US-2.2 (Proposal Creation), US-2.3 (Proposal Updates)
+ * - Acceptance Criteria: AC-2.1.1, AC-2.1.2, AC-2.2.1, AC-2.3.1
+ * - Hypotheses: H2 (Proposal Efficiency), H5 (User Productivity), H7 (Data Quality)
+ *
+ * COMPLIANCE STATUS:
+ * ✅ Error Handling with ErrorHandlingService
+ * ✅ Analytics with userStory and hypothesis tracking
+ * ✅ Structured Logging with metadata
+ * ✅ TypeScript Type Safety (no any types)
+ * ✅ Performance Optimization with useCallback/useMemo
+ */
+
+'use client';
+
+import { useApiClient } from '@/hooks/useApiClient';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { useCallback, useMemo } from 'react';
+
+// Proper TypeScript interfaces (no any types)
+interface ProposalData {
+  id?: string;
+  title: string;
+  client: string;
+  status?: string;
+  priority?: string;
+  dueDate: string;
+  estimatedValue?: number;
+  [key: string]: unknown;
+}
+
+interface ProposalUpdateData {
+  title?: string;
+  client?: string;
+  status?: string;
+  priority?: string;
+  dueDate?: string;
+  estimatedValue?: number;
+  [key: string]: unknown;
+}
+
+interface ProposalFetchParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  priority?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+interface ProposalStats {
+  total: number;
+  inProgress: number;
+  completed: number;
+  overdue: number;
+  winRate: number;
+}
+
+interface ProposalListResponse {
+  proposals: ProposalData[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ProposalApiBridgeConfig {
+  enableCache?: boolean;
+  retryAttempts?: number;
+  timeout?: number;
+}
+
+export interface ProposalApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  code?: string;
+}
+
+// Hook-based API bridge
+export function useProposalApiBridge(config: ProposalApiBridgeConfig = {}) {
+  const apiClient = useApiClient();
+  const { handleAsyncError } = useErrorHandler();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+
+  const bridgeConfig = useMemo(
+    () => ({
+      enableCache: true,
+      retryAttempts: 2,
+      timeout: 10000,
+      ...config,
+    }),
+    [config]
+  );
+
+  // In-memory cache (component-level)
+  const cache = useMemo(() => new Map<string, { data: unknown; timestamp: number }>(), []);
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  const fetchProposals = useCallback(
+    async (params: ProposalFetchParams): Promise<ProposalApiResponse<ProposalListResponse>> => {
+      const cacheKey = `proposals:${JSON.stringify(params)}`;
+
+      try {
+        logDebug('ProposalApiBridge: Fetching proposals', {
+          component: 'ProposalApiBridge',
+          operation: 'fetchProposals',
+          params,
+        });
+
+        // Check cache first
+        if (bridgeConfig.enableCache) {
+          const cached = cache.get(cacheKey);
+          if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            logInfo('ProposalApiBridge: Returning cached data', {
+              component: 'ProposalApiBridge',
+              operation: 'fetchProposals',
+              cacheHit: true,
+            });
+            return { success: true, data: cached.data as ProposalListResponse };
+          }
+        }
+
+        const queryParams = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined) {
+            queryParams.set(key, String(value));
+          }
+        });
+
+        const response = (await apiClient.get(
+          `/proposals?${queryParams.toString()}`
+        )) as ProposalApiResponse<ProposalListResponse>;
+
+        if (response?.success && response?.data) {
+          // Cache the response
+          if (bridgeConfig.enableCache) {
+            cache.set(cacheKey, {
+              data: response.data as unknown,
+              timestamp: Date.now(),
+            });
+          }
+
+          analytics(
+            'proposals_fetched',
+            {
+              count: response.data.proposals?.length || 0,
+              userStory: 'US-2.1',
+              hypothesis: 'H2',
+            },
+            'medium'
+          );
+
+          logInfo('ProposalApiBridge: Successfully fetched proposals', {
+            component: 'ProposalApiBridge',
+            operation: 'fetchProposals',
+            count: response.data.proposals?.length || 0,
+          });
+
+          return { success: true, data: response.data as ProposalListResponse };
+        } else {
+          throw new StandardError({
+            message: response?.error || 'Failed to fetch proposals',
+            code: ErrorCodes.DATA.FETCH_FAILED,
+          });
+        }
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to fetch proposals',
+          ErrorCodes.DATA.QUERY_FAILED,
+          {
+            component: 'ProposalApiBridge',
+            operation: 'fetchProposals',
+            params,
+          }
+        );
+
+        analytics(
+          'proposals_fetch_error',
+          {
+            error: standardError.message,
+            userStory: 'US-2.1',
+            hypothesis: 'H2',
+          },
+          'high'
+        );
+
+        logError('ProposalApiBridge: Failed to fetch proposals', {
+          component: 'ProposalApiBridge',
+          operation: 'fetchProposals',
+          error: standardError.message,
+          userStory: 'US-2.1',
+          hypothesis: 'H2',
+        });
+
+        return { success: false, error: standardError.message };
+      }
+    },
+    [apiClient, analytics, bridgeConfig.enableCache, cache]
+  );
+
+  const fetchProposalStats = useCallback(async (): Promise<ProposalApiResponse<ProposalStats>> => {
+    try {
+      logDebug('ProposalApiBridge: Fetching proposal stats', {
+        component: 'ProposalApiBridge',
+        operation: 'fetchProposalStats',
+      });
+
+      const response = (await apiClient.get(
+        '/proposals/stats?fresh=1'
+      )) as ProposalApiResponse<ProposalStats>;
+
+      if (response?.success && response?.data) {
+        analytics(
+          'proposal_stats_fetched',
+          {
+            userStory: 'US-2.1',
+            hypothesis: 'H2',
+          },
+          'medium'
+        );
+
+        logInfo('ProposalApiBridge: Successfully fetched proposal stats', {
+          component: 'ProposalApiBridge',
+          operation: 'fetchProposalStats',
+        });
+
+        return { success: true, data: response.data as ProposalStats };
+      } else {
+        throw new StandardError({
+          message: response?.error || 'Failed to fetch proposal stats',
+          code: ErrorCodes.DATA.FETCH_FAILED,
+        });
+      }
+    } catch (error) {
+      const ehs = ErrorHandlingService.getInstance();
+      const standardError = ehs.processError(
+        error,
+        'Failed to fetch proposal stats',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProposalApiBridge',
+          operation: 'fetchProposalStats',
+        }
+      );
+
+      analytics(
+        'proposal_stats_fetch_error',
+        {
+          error: standardError.message,
+          userStory: 'US-2.1',
+          hypothesis: 'H2',
+        },
+        'high'
+      );
+
+      logError('ProposalApiBridge: Failed to fetch proposal stats', {
+        component: 'ProposalApiBridge',
+        operation: 'fetchProposalStats',
+        error: standardError.message,
+        userStory: 'US-2.1',
+        hypothesis: 'H2',
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }, [apiClient, analytics]);
+
+  const createProposal = useCallback(
+    async (proposalData: ProposalData): Promise<ProposalApiResponse<ProposalData>> => {
+      try {
+        logDebug('ProposalApiBridge: Creating proposal', {
+          component: 'ProposalApiBridge',
+          operation: 'createProposal',
+          proposalData: { title: proposalData.title, client: proposalData.client },
+        });
+
+        const response = (await apiClient.post(
+          '/proposals',
+          proposalData
+        )) as ProposalApiResponse<ProposalData>;
+
+        if (response?.success && response?.data) {
+          // Invalidate cache
+          invalidateCache('proposals');
+
+          analytics(
+            'proposal_created',
+            {
+              proposalId: response.data.id,
+              userStory: 'US-2.2',
+              hypothesis: 'H5',
+            },
+            'high'
+          );
+
+          logInfo('ProposalApiBridge: Successfully created proposal', {
+            component: 'ProposalApiBridge',
+            operation: 'createProposal',
+            proposalId: response.data.id,
+          });
+
+          return { success: true, data: response.data as ProposalData };
+        } else {
+          throw new StandardError({
+            message: response?.error || 'Failed to create proposal',
+            code: ErrorCodes.DATA.CREATE_FAILED,
+          });
+        }
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to create proposal',
+          ErrorCodes.DATA.CREATE_FAILED,
+          {
+            component: 'ProposalApiBridge',
+            operation: 'createProposal',
+            proposalData,
+          }
+        );
+
+        analytics(
+          'proposal_create_error',
+          {
+            error: standardError.message,
+            userStory: 'US-2.2',
+            hypothesis: 'H5',
+          },
+          'high'
+        );
+
+        logError('ProposalApiBridge: Failed to create proposal', {
+          component: 'ProposalApiBridge',
+          operation: 'createProposal',
+          error: standardError.message,
+          userStory: 'US-2.2',
+          hypothesis: 'H5',
+        });
+
+        return { success: false, error: standardError.message };
+      }
+    },
+    [apiClient, analytics]
+  );
+
+  const updateProposal = useCallback(
+    async (
+      proposalId: string,
+      updateData: ProposalUpdateData
+    ): Promise<ProposalApiResponse<ProposalData>> => {
+      try {
+        logDebug('ProposalApiBridge: Updating proposal', {
+          component: 'ProposalApiBridge',
+          operation: 'updateProposal',
+          proposalId,
+          updateData,
+        });
+
+        const response = (await apiClient.put(
+          `/proposals/${proposalId}`,
+          updateData
+        )) as ProposalApiResponse<ProposalData>;
+
+        if (response?.success && response?.data) {
+          // Invalidate cache
+          invalidateCache('proposals');
+
+          analytics(
+            'proposal_updated',
+            {
+              proposalId,
+              userStory: 'US-2.3',
+              hypothesis: 'H7',
+            },
+            'medium'
+          );
+
+          logInfo('ProposalApiBridge: Successfully updated proposal', {
+            component: 'ProposalApiBridge',
+            operation: 'updateProposal',
+            proposalId,
+          });
+
+          return { success: true, data: response.data as ProposalData };
+        } else {
+          throw new StandardError({
+            message: response?.error || 'Failed to update proposal',
+            code: ErrorCodes.DATA.UPDATE_FAILED,
+          });
+        }
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to update proposal',
+          ErrorCodes.DATA.UPDATE_FAILED,
+          {
+            component: 'ProposalApiBridge',
+            operation: 'updateProposal',
+            proposalId,
+            updateData,
+          }
+        );
+
+        analytics(
+          'proposal_update_error',
+          {
+            proposalId,
+            error: standardError.message,
+            userStory: 'US-2.3',
+            hypothesis: 'H7',
+          },
+          'high'
+        );
+
+        logError('ProposalApiBridge: Failed to update proposal', {
+          component: 'ProposalApiBridge',
+          operation: 'updateProposal',
+          proposalId,
+          error: standardError.message,
+          userStory: 'US-2.3',
+          hypothesis: 'H7',
+        });
+
+        return { success: false, error: standardError.message };
+      }
+    },
+    [apiClient, analytics]
+  );
+
+  const invalidateCache = useCallback(
+    (pattern: string): void => {
+      for (const key of cache.keys()) {
+        if (key.includes(pattern)) {
+          cache.delete(key);
+        }
+      }
+      logDebug('ProposalApiBridge: Invalidated cache', {
+        component: 'ProposalApiBridge',
+        operation: 'invalidateCache',
+        pattern,
+      });
+    },
+    [cache]
+  );
+
+  const clearCache = useCallback((): void => {
+    cache.clear();
+    logDebug('ProposalApiBridge: Cleared all cache', {
+      component: 'ProposalApiBridge',
+      operation: 'clearCache',
+    });
+  }, [cache]);
+
+  return {
+    fetchProposals,
+    fetchProposalStats,
+    createProposal,
+    updateProposal,
+    invalidateCache,
+    clearCache,
+  };
+}

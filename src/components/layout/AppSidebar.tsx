@@ -7,6 +7,8 @@
 'use client';
 
 import { Button } from '@/components/ui/forms/Button';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { useTierSettings } from '@/hooks/useTierSettings';
 import {
   AdjustmentsHorizontalIcon,
   ArchiveBoxIcon,
@@ -26,8 +28,6 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAnalytics } from '@/hooks/useAnalytics';
-import { useTierSettings } from '@/hooks/useTierSettings';
 
 interface NavigationItem {
   id: string;
@@ -257,6 +257,13 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     href: '/about',
     icon: DocumentTextIcon,
   },
+  {
+    id: 'bridge-demo',
+    name: 'Bridge Demo',
+    href: '/bridge-example',
+    icon: DocumentTextIcon,
+    badge: 1,
+  },
 ];
 
 export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps) {
@@ -340,10 +347,10 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
   // Filter navigation items by user role and tier settings
   const getFilteredNavigation = useCallback(() => {
     const allowedSidebarItems = getSidebarItems();
-    
+
     // Start with role-based filtering
     let filteredItems = NAVIGATION_ITEMS;
-    
+
     if (user?.role) {
       filteredItems = NAVIGATION_ITEMS.filter(item => {
         // If no roles specified, show to everyone
@@ -364,9 +371,7 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
 
     // Apply tier-based filtering
     if (!allowedSidebarItems.includes('all')) {
-      filteredItems = filteredItems.filter(item => 
-        allowedSidebarItems.includes(item.id)
-      );
+      filteredItems = filteredItems.filter(item => allowedSidebarItems.includes(item.id));
     }
 
     return filteredItems;

@@ -6,11 +6,11 @@
 
 'use client';
 
+import { useDashboardBridge } from '@/components/bridges/DashboardManagementBridge';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
@@ -90,7 +90,7 @@ export default function RecentProposals() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const apiClient = useApiClient();
+  const bridge = useDashboardBridge();
   const { handleAsyncError } = useErrorHandler();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
@@ -133,32 +133,21 @@ export default function RecentProposals() {
         // across auth/session changes. The lightweight API and server cache
         // make duplicate fetches inexpensive in development.
 
-        // Fetch real data from lightweight list API to avoid heavy counts/selects
-        // NOTE: Leading slash is required so baseURL '/api' resolves to '/api/proposals/list'
-        const response = await apiClient.get<ProposalsApiResponse>('/proposals/list');
+        // Fetch recent proposals using bridge pattern
+        const result = (await bridge.fetchRecentProposals({ limit: 10 })) as any;
 
-        // Structured dev log
-        // void logInfo('[RecentProposals] Response received');
-
-        // Normalize response shapes:
-        // - API route returns { success, data: Proposal[] }
-        // - Older shapes might return { success, data: { proposals: Proposal[] } } or nested data.data
-        const dataAny = (response as unknown as { data?: unknown }).data as
-          | Proposal[]
-          | { proposals?: Proposal[]; data?: { proposals?: Proposal[] } }
-          | undefined;
-
+        // Handle bridge response
         let proposals: Proposal[] = [];
-        if (Array.isArray(dataAny)) {
-          proposals = dataAny as Proposal[];
-        } else if (dataAny && Array.isArray((dataAny as { proposals?: Proposal[] }).proposals)) {
-          proposals = (dataAny as { proposals?: Proposal[] }).proposals as Proposal[];
-        } else if (
-          dataAny &&
-          Array.isArray((dataAny as { data?: { proposals?: Proposal[] } }).data?.proposals)
-        ) {
-          proposals = ((dataAny as { data?: { proposals?: Proposal[] } }).data!.proposals ||
-            []) as Proposal[];
+        if (result.success && result.data) {
+          const data = result.data as any;
+          // Handle different response shapes from bridge
+          if (Array.isArray(data)) {
+            proposals = data as Proposal[];
+          } else if (data && Array.isArray(data.proposals)) {
+            proposals = data.proposals as Proposal[];
+          } else if (data && Array.isArray(data.data?.proposals)) {
+            proposals = data.data.proposals as Proposal[];
+          }
         }
 
         if (proposals.length > 0) {
@@ -175,7 +164,7 @@ export default function RecentProposals() {
     };
 
     fetchProposals();
-  }, [apiClient, handleAsyncError, analytics, isAuthenticated, authLoading]);
+  }, [bridge, handleAsyncError, analytics, isAuthenticated, authLoading]);
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {

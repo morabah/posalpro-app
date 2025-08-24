@@ -68,6 +68,199 @@
 
 ## 🏗️ **ARCHITECTURE & PROVIDERS** {#architecture--providers}
 
+### Bridge Pattern & API Bridges (MANDATORY)
+
+**🎯 Bridge Pattern (Service Bridge Architecture)**
+
+- **Purpose**: Decouple React UI components from backend APIs and state backends
+  by introducing a small, well-typed service layer called _bridges_.
+- **Location**: Implement bridge classes under `src/lib/bridges/` and expose
+  hook wrappers under the same module (e.g., `useProposalBridge`,
+  `useCustomerBridge`).
+- **Shape**: Bridges MUST be implemented as singletons with a `getInstance()` or
+  exported factory and provide a `useXBridge()` hook that:
+  - sets the `apiClient` via `setApiClient(apiClient)`
+  - optionally sets analytics via `setAnalytics(analytics)`
+  - exposes memoized methods for fetch/mutate operations (use `useCallback` /
+    `useMemo`)
+- **API Contract**:
+  - Use standardized response wrapper `AdminApiResponse<T>` /
+    `WorkflowApiResponse<T>` for typed responses where applicable.
+  - Do not return raw `any` — enforce strict interfaces for requests and
+    responses.
+- **Error Handling & Logging**:
+  - All bridge catch blocks MUST call `ErrorHandlingService.processError()` and
+    then log using `logError`/`logInfo`/`logDebug` with metadata: `component`,
+    `operation`, IDs (e.g., `proposalId`), and traceability (`userStory`,
+    `hypothesis`).
+  - Never use `console.*` in bridges or new production code.
+- **Caching**:
+  - Bridges may implement short in-memory caches (TTL ≤ 30s) for derived or
+    heavy endpoints but **do not** replace React Query; prefer React Query for
+    list caching/invalidation.
+  - Cache keys MUST include parameters and, for user-scoped data, the
+    user/session id when appropriate.
+- **Analytics**:
+  - Bridges should call `analytics.trackOptimized()` where meaningful, including
+    `userStory` and `hypothesis` context; if analytics types mismatch, comment
+    with a `TODO` and avoid unsafe casts.
+
+**📋 Bridge Pattern Templates (MANDATORY)**
+
+**Use the comprehensive bridge templates for all new bridge implementations:**
+
+- **Template Location**: `templates/design-patterns/bridge/`
+- **Documentation**: `templates/design-patterns/bridge/README.md` - Complete
+  architecture overview
+- **Usage Guide**: `templates/design-patterns/bridge/USAGE_GUIDE.md` -
+  Step-by-step implementation
+- **Quick Reference**: `templates/design-patterns/bridge/BRIDGE_SUMMARY.md` -
+  Implementation guide and benefits
+
+**🔧 Template Implementation Workflow:**
+
+```bash
+# 1. Create API Bridge
+cp templates/design-patterns/bridge/api-bridge.template.ts src/lib/bridges/CustomerApiBridge.ts
+
+# 2. Create Management Bridge
+cp templates/design-patterns/bridge/management-bridge.template.tsx src/components/bridges/CustomerManagementBridge.tsx
+
+# 3. Create Bridge Hook (Optional)
+cp templates/design-patterns/bridge/bridge-hook.template.ts src/hooks/useCustomer.ts
+
+# 4. Create Bridge Component
+cp templates/design-patterns/bridge/bridge-component.template.tsx src/components/CustomerList.tsx
+
+# 5. Create Bridge Page
+cp templates/design-patterns/bridge/bridge-page.template.tsx src/app/(dashboard)/customers/page.tsx
+
+# Replace placeholders:
+# __BRIDGE_NAME__ → CustomerManagement
+# __ENTITY_TYPE__ → Customer
+# __RESOURCE_NAME__ → customers
+# __USER_STORY__ → US-3.1
+# __HYPOTHESIS__ → H4
+```
+
+**🏗️ Bridge Architecture Flow:**
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Components    │───▶│ Management       │───▶│   API Bridge    │
+│                 │    │ Bridge           │    │                 │
+│ - CustomerList  │    │ (React Context)  │    │ - CRUD Ops      │
+│ - CustomerForm  │    │                  │    │ - Caching       │
+│ - CustomerPage  │    │ - State Mgmt     │    │ - Error Handle  │
+└─────────────────┘    │ - Event System   │    │ - Analytics     │
+                       │ - Analytics      │    └─────────────────┘
+                       └──────────────────┘             │
+                                                        ▼
+                                                ┌─────────────────┐
+                                                │   API Routes    │
+                                                │                 │
+                                                │ - /customers    │
+                                                │ - /products     │
+                                                │ - /proposals    │
+                                                └─────────────────┘
+```
+
+**🎯 Template Features:**
+
+- **✅ Production-Ready**: 2,000+ lines of production-ready code with full
+  CORE_REQUIREMENTS.md compliance
+- **✅ Type Safety**: 50+ TypeScript interfaces for complete type safety
+- **✅ Performance**: Request deduplication, intelligent caching, and
+  optimization
+- **✅ Error Handling**: Full ErrorHandlingService integration throughout
+- **✅ Analytics**: Component Traceability Matrix with hypothesis tracking
+- **✅ Accessibility**: WCAG 2.1 AA compliance with 44px touch targets
+- **✅ Mobile Optimization**: Touch-optimized components with proper gesture
+  handling
+
+**📚 Template Documentation:**
+
+- **README.md**: Complete bridge architecture overview and benefits
+- **USAGE_GUIDE.md**: Step-by-step implementation with real examples
+- **BRIDGE_SUMMARY.md**: Implementation guide and benefits summary
+- **api-bridge.template.ts**: Singleton API service with caching and error
+  handling
+- **management-bridge.template.tsx**: React context provider with state
+  management
+- **bridge-hook.template.ts**: React Query integration hooks
+- **bridge-component.template.tsx**: Complete CRUD component implementation
+- **bridge-page.template.tsx**: Full page with SSR optimization
+- **bridge-types.template.ts**: Comprehensive TypeScript interfaces
+
+**When to create a Bridge vs. using existing hooks**
+
+- **Create a Bridge when**: a logical service is used by multiple
+  pages/components, when advanced caching/invalidation or complex translation is
+  needed, or when you need a stable service API for both UI and non-UI consumers
+  (e.g., background jobs, CLI).
+- **Prefer existing `useX` hooks** under `src/hooks` for simple, single-consumer
+  logic.
+
+**Provider Hierarchy & Bridge Hooks (CRITICAL)**
+
+- Bridge hooks may rely on Shared Providers (e.g., `GlobalStateProvider`,
+  `QueryProvider`, `AuthProvider`). When migrating pages/components to
+  bridge-based hooks, **ensure the route-group layout includes required
+  providers**.
+- Example required order in `(dashboard)/layout.tsx`:
+  - `TTFBOptimizationProvider` → `WebVitalsProvider` → `SharedAnalyticsProvider`
+    → `ClientLayoutWrapper` → `QueryProvider` → `ToastProvider` → `AuthProvider`
+    → `GlobalStateProvider` → `ProtectedLayout`.
+- If a bridge hook calls `useGlobalState()` or `useUIState()`, the
+  `GlobalStateProvider` must wrap the component tree before those hooks execute.
+  Missing provider is a migration blocker (see LESSONS_LEARNED.md: Bridge
+  Provider Issue).
+
+**Bridge Implementation Checklist (Pre-Implementation, MANDATORY)**
+
+- [ ] **Use Bridge Templates**: Copy and customize templates from
+      `templates/design-patterns/bridge/`
+- [ ] **Replace Placeholders**: Update all template placeholders with
+      entity-specific values
+- [ ] `npm run type-check` → 0 errors
+- [ ] `npm run audit:duplicates` → no duplicate functionality with existing
+      services/hooks
+- [ ] Confirm existing patterns in `src/lib/services`, `src/hooks`,
+      `src/components` and reuse before creating a bridge
+- [ ] Design the bridge API with explicit TypeScript interfaces for
+      requests/responses
+- [ ] Implement singleton pattern with lazy initialization (`getInstance()`),
+      and expose a `useXBridge()` hook
+- [ ] Ensure `ErrorHandlingService` + `ErrorCodes` usage in all catch blocks
+- [ ] Add structured logs using `logDebug` / `logInfo` / `logError` including
+      traceability metadata
+- [ ] Add unit tests and a small integration test using `npm run app:cli` for
+      critical RBAC flows
+- [ ] Update `docs/IMPLEMENTATION_LOG.md` and add a short entry to
+      `docs/LESSONS_LEARNED.md` if the migration required layout/provider
+      changes
+- [ ] **Verify Template Compliance**: Ensure all template features are properly
+      implemented
+
+**API Route & RBAC Requirements for Bridges**
+
+- All server-side endpoints used by bridges that are sensitive MUST call
+  `validateApiPermission({ resource, action, scope?, context? })` at the top of
+  handlers.
+- Bridges must map to existing, RESTful endpoints. If an endpoint does not
+  exist, update the bridge to call the correct endpoint or add the server route;
+  do not invent new client-side-only endpoints.
+
+**Quality & Compliance**
+
+- Every bridge addition or refactor must pass the standard quality gates (build,
+  type-check, audit duplicates, lints, and basic smoke tests). Document the
+  change in `PROJECT_REFERENCE.md` if a new public API or route is added.
+- **Template Compliance**: All bridges must follow the template patterns for
+  consistency and maintainability.
+
+---
+
 ### ⚡ **DATA FETCHING & PERFORMANCE (CRITICAL)** {#data-fetching--performance-critical}
 
 **🚀 MANDATORY: React Query for complex data fetching, useApiClient for simple

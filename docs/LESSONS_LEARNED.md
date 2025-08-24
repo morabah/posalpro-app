@@ -3,6 +3,743 @@
 This document captures key insights, patterns, and solutions discovered during
 development.
 
+## Critical RBAC Role Extraction Issue - January 2025
+
+### **🚨 CRITICAL LESSON: Frontend Session Role Structure vs Backend Role Mapping**
+
+#### **Problem Encountered:**
+
+Administrators were getting "Access Denied" on customer pages despite having
+proper permissions. The API endpoint returned 200 OK for admin users, but the
+frontend `RBACGuard` was denying access.
+
+#### **Root Cause:**
+
+The session data structure in the frontend was different from what the role
+extraction logic expected:
+
+- **Expected**: `session.user.roles` as array of objects with `name` property
+- **Actual**: `session.user.roles` as array of strings
+  `["System Administrator"]`
+- **Result**: Role extraction failed, returning `[undefined]` instead of
+  `["SYSTEM_ADMINISTRATOR"]`
+
+#### **Technical Details:**
+
+```typescript
+// ❌ BEFORE: Expected object structure
+const roleName = role.name; // role.name was undefined for string roles
+
+// ✅ AFTER: Handle both object and string role structures
+let roleName = role.name || role.role || role.roleName || role.title;
+if (!roleName && typeof role === 'string') {
+  roleName = role; // Extract from string directly
+}
+```
+
+#### **Debugging Process:**
+
+1. **API vs Frontend Isolation**: Used `app-cli` to confirm API endpoint worked
+   (200 OK)
+2. **Session Analysis**: Added extensive `logDebug` statements to inspect
+   session structure
+3. **Role Mapping**: Discovered `originalRoles: [undefined]` in debug logs
+4. **Root Cause**: Role extraction logic didn't handle string-based role arrays
+
+#### **Solution:**
+
+Implemented robust role extraction logic in `getUserRoles` function:
+
+```typescript
+// ✅ COMPREHENSIVE FIX: Handle multiple role structures
+const getUserRoles = (session: Session | null): string[] => {
+  if (!session?.user?.roles || !Array.isArray(session.user.roles)) {
+    return [];
+  }
+
+  const mappedRoles = session.user.roles
+    .map((role: any) => {
+      // ✅ RBAC: Try different possible role name properties
+      let roleName = role.name || role.role || role.roleName || role.title;
+
+      // ✅ RBAC: If still undefined, try to extract from the role object itself
+      if (!roleName && typeof role === 'string') {
+        roleName = role;
+      }
+
+      // ✅ RBAC: If still undefined, skip this role
+      if (!roleName) {
+        return null;
+      }
+
+      return mapBackendRoleToRBACRole(roleName);
+    })
+    .filter(Boolean); // Remove null values
+
+  return mappedRoles;
+};
+```
+
+#### **Implementation Changes:**
+
+1. **Enhanced Role Extraction**: Try multiple properties (`name`, `role`,
+   `roleName`, `title`)
+2. **String Role Handling**: Handle cases where role itself is a string
+3. **Defensive Filtering**: Filter out roles that cannot be extracted
+4. **Comprehensive Logging**: Added detailed debug logs for troubleshooting
+5. **Applied to Both Pages**: Fixed in both `customers/page.tsx` and
+   `customers/create/page.tsx`
+
+#### **Prevention Strategy:**
+
+- **✅ Always handle multiple session data structures** in role extraction
+- **✅ Add comprehensive debug logging** for RBAC troubleshooting
+- **✅ Test role extraction with different session formats**
+- **✅ Use defensive programming** with fallbacks and null filtering
+- **✅ Verify role mapping** works for both object and string role formats
+
+#### **RBAC Debugging Checklist:**
+
+1. **Session Analysis**
+   - Log raw session structure: `session.user.roles`
+   - Check if roles is array and has expected structure
+   - Verify role extraction attempts each property
+
+2. **Role Mapping Verification**
+   - Log original roles before mapping
+   - Log mapped roles after transformation
+   - Verify `mapBackendRoleToRBACRole` function works
+
+3. **Permission Validation**
+   - Check if mapped roles include required permissions
+   - Verify RBAC cache hits/misses
+   - Confirm permission validation logic
+
+#### **Key Takeaway:**
+
+**Session data structures can vary between frontend and backend contexts. Role
+extraction logic must be robust enough to handle multiple formats (objects with
+properties, plain strings, etc.) and include comprehensive debugging to identify
+structural mismatches.**
+
+This lesson prevents **hours of debugging** for RBAC issues by ensuring role
+extraction handles all possible session data formats and provides detailed
+logging for troubleshooting.
+
+## Critical Bridge Migration Provider Issue - January 2025
+
+### **🚨 CRITICAL LESSON: Bridge Architecture Requires Proper Provider Hierarchy**
+
+#### **Problem Encountered:**
+
+After successfully migrating the dashboard page to use
+`DashboardManagementBridge`, the application crashed with the error:
+
+```
+Error: useGlobalState must be used within a GlobalStateProvider
+```
+
+#### **Root Cause:**
+
+The `DashboardManagementBridge` uses `useStateBridge()` which internally calls
+`useGlobalState()`. However, the `GlobalStateProvider` was not included in the
+dashboard layout hierarchy, causing all bridge-related hooks to fail.
+
+#### **Technical Details:**
+
+- **Component Flow**: `DashboardManagementBridge` → `useStateBridge()` →
+  `useGlobalState()` → **Missing Provider** ❌
+- **Error Location**: During component initialization when bridge hooks are
+  called
+- **Impact**: Complete dashboard page crash, preventing any bridge functionality
+
+#### **Solution:**
+
+Add `GlobalStateProvider` to the dashboard layout hierarchy:
+
+```tsx
+// BEFORE (❌ Missing GlobalStateProvider):
+<AuthProvider session={session}>
+  <ProtectedLayout>{children}</ProtectedLayout>
+</AuthProvider>
+
+// AFTER (✅ With GlobalStateProvider):
+<AuthProvider session={session}>
+  <GlobalStateProvider>
+    <ProtectedLayout>{children}</ProtectedLayout>
+  </GlobalStateProvider>
+</AuthProvider>
+```
+
+#### **Implementation Steps:**
+
+1. **Import the provider**:
+   `import { GlobalStateProvider } from '@/lib/bridges/StateBridge';`
+2. **Add to layout hierarchy**: Wrap `ProtectedLayout` with
+   `GlobalStateProvider`
+3. **Verify placement**: Must be inside `AuthProvider` but outside
+   `ProtectedLayout`
+
+#### **Prevention Strategy:**
+
+- **✅ Always check provider dependencies** when migrating components to bridge
+  architecture
+- **✅ Update layout files** before migrating page components
+- **✅ Test provider hierarchy** in development before deploying
+- **✅ Document provider requirements** in bridge migration checklist
+
+#### **Bridge Migration Checklist (Updated):**
+
+1. **Provider Setup** ✅ **CRITICAL FIRST STEP**
+   - Ensure `GlobalStateProvider` is in layout hierarchy
+   - Verify provider placement and nesting order
+   - Test that `useGlobalState()` hook works
+
+2. **Component Migration**
+   - Wrap pages with bridge providers (e.g., `DashboardManagementBridge`)
+   - Replace direct API calls with bridge hooks
+   - Add error handling and analytics
+
+3. **Testing & Validation**
+   - Verify no provider-related errors
+   - Test all bridge functionality
+   - Confirm TypeScript compliance
+
+#### **Key Takeaway:**
+
+**Bridge architecture is a system-wide change that requires updating both the
+layout provider hierarchy AND individual components. Always start with the
+provider setup before migrating any components to bridges.**
+
+This lesson prevents **8+ hours of debugging** for future bridge migrations by
+ensuring the provider hierarchy is correctly established from the start.
+
+## Critical API URL Construction Issue - January 2025
+
+### **🚨 CRITICAL LESSON: API Client Base URL vs Endpoint URL Prefixing**
+
+#### **Problem Encountered:**
+
+After fixing the provider hierarchy issue, the dashboard was still failing with
+404 errors. The API client was constructing URLs with double `/api` prefixes:
+
+```
+❌ http://localhost:3000/api/api/dashboard/proposals/active?limit=10
+✅ http://localhost:3000/api/dashboard/proposals/active?limit=10
+```
+
+#### **Root Cause:**
+
+The dashboard API (`src/lib/dashboard/api.ts`) was calling `apiClient.get()`
+with URLs that already started with `/api/`, but the API client's base URL was
+already `/api`, causing double prefixing.
+
+#### **Technical Details:**
+
+- **API Client Base URL**: `/api` (configured in `src/lib/api/client.ts`)
+- **Dashboard API Calls**: `/api/dashboard/...` (incorrect - double prefix)
+- **Correct Calls**: `/dashboard/...` (correct - single prefix)
+
+#### **Solution:**
+
+Remove the `/api` prefix from all dashboard API calls:
+
+```typescript
+// BEFORE (❌ Double /api prefix):
+const response = await apiClient.get<ProposalSummary[]>(
+  `/api/dashboard/proposals/active?${queryParams.toString()}`
+);
+
+// AFTER (✅ Single /api prefix):
+const response = await apiClient.get<ProposalSummary[]>(
+  `/dashboard/proposals/active?${queryParams.toString()}`
+);
+```
+
+#### **Files Fixed:**
+
+- `src/lib/dashboard/api.ts` - All 8 API calls updated:
+  - `/api/dashboard/proposals/active` → `/dashboard/proposals/active`
+  - `/api/dashboard/proposals/activity` → `/dashboard/proposals/activity`
+  - `/api/dashboard/proposals/metrics` → `/dashboard/proposals/metrics`
+  - `/api/dashboard/activity` → `/dashboard/activity`
+  - `/api/dashboard/team` → `/dashboard/team`
+  - `/api/dashboard/deadlines` → `/dashboard/deadlines`
+  - `/api/dashboard/performance` → `/dashboard/performance`
+  - `/api/dashboard/notifications` → `/dashboard/notifications`
+  - `/api/dashboard/notifications/${id}` → `/dashboard/notifications/${id}`
+
+#### **Prevention Strategy:**
+
+- **✅ Always check API client base URL** before constructing endpoint URLs
+- **✅ Use relative paths** when API client already has base URL configured
+- **✅ Test API endpoints** in development to catch URL construction issues
+- **✅ Document URL construction patterns** for each API client configuration
+
+#### **API URL Construction Rules:**
+
+1. **If API client base URL is `/api`**: Use `/endpoint` (not `/api/endpoint`)
+2. **If API client base URL is empty**: Use `/api/endpoint`
+3. **If API client base URL is absolute**: Use `/endpoint` (relative to base)
+
+#### **Key Takeaway:**
+
+**API URL construction must account for the API client's base URL configuration.
+Double prefixing causes 404 errors and breaks all API functionality.**
+
+This lesson prevents **API endpoint failures** and ensures proper URL
+construction across all API integrations.
+
+## Critical Dashboard API Endpoint Mapping Issue - January 2025
+
+### **🚨 CRITICAL LESSON: Dashboard API Must Use Existing Endpoints**
+
+#### **Problem Encountered:**
+
+After fixing the double `/api` prefix issue, the dashboard was still failing
+with 404 errors because the dashboard API was trying to call endpoints that
+don't exist on the server.
+
+#### **Root Cause:**
+
+The dashboard API in `src/lib/dashboard/api.ts` was calling non-existent
+endpoints:
+
+- **❌ Called**: `/dashboard/proposals/active`, `/dashboard/activity`,
+  `/dashboard/team`, `/dashboard/deadlines`, `/dashboard/performance`,
+  `/dashboard/notifications`
+- **✅ Available**: `/dashboard/enhanced-stats`, `/dashboard/executive`,
+  `/dashboard/stats`
+
+#### **Technical Details:**
+
+- **API Directory Structure**: Only 3 endpoints exist in
+  `src/app/api/dashboard/`
+- **Dashboard API Logic**: Tried to fetch 6 separate endpoints in parallel
+- **Result**: All API calls returned 404 errors, causing complete dashboard
+  failure
+
+#### **Solution:**
+
+Replace multiple non-existent endpoint calls with a single call to the existing
+`/dashboard/enhanced-stats` endpoint:
+
+```typescript
+// BEFORE (❌ Multiple non-existent endpoints):
+const [
+  proposalData,
+  activityData,
+  teamData,
+  deadlineData,
+  performanceData,
+  notificationData,
+] = await Promise.allSettled([
+  this.getProposalData(options), // → /dashboard/proposals/active (404)
+  this.getActivityFeed(options), // → /dashboard/activity (404)
+  this.getTeamStatus(options), // → /dashboard/team (404)
+  this.getUpcomingDeadlines(options), // → /dashboard/deadlines (404)
+  this.getPerformanceMetrics(options), // → /dashboard/performance (404)
+  this.getNotifications(options), // → /dashboard/notifications (404)
+]);
+
+// AFTER (✅ Single existing endpoint):
+const response = await apiClient.get<any>(
+  `/dashboard/enhanced-stats?${queryParams.toString()}`
+);
+const enhancedStats = response.data;
+
+// Transform enhanced stats data to dashboard data format
+const dashboardData: DashboardData = {
+  proposals: {
+    metrics: {
+      total: enhancedStats.totalProposals || 0,
+      active: enhancedStats.activeProposals || 0,
+      completed: enhancedStats.wonProposals || 0,
+      winRate: enhancedStats.winRate || 0,
+      // ... other fields mapped from enhancedStats
+    },
+  },
+  // ... other sections
+};
+```
+
+#### **Implementation Changes:**
+
+1. **Main Dashboard Method**: Uses `/dashboard/enhanced-stats` endpoint
+   exclusively
+2. **Individual Methods**: Now delegate to main dashboard method instead of
+   separate API calls
+3. **Data Transformation**: Maps enhanced stats response to expected dashboard
+   data format
+4. **Caching**: Maintained existing caching logic but with single endpoint
+5. **Error Handling**: Simplified error handling with single point of failure
+
+#### **Prevention Strategy:**
+
+- **✅ Always verify API endpoints exist** before implementing frontend API
+  calls
+- **✅ Check `src/app/api/` directory structure** to see what routes are
+  available
+- **✅ Use existing comprehensive endpoints** instead of creating multiple
+  granular calls
+- **✅ Test API endpoints in development** to catch missing routes early
+
+#### **API Endpoint Verification Process:**
+
+1. **Check Directory Structure**: `ls src/app/api/dashboard/`
+2. **Verify Route Files**: Ensure `route.ts` files exist in each subdirectory
+3. **Test Endpoints**: Use CLI or browser to verify endpoints return data
+4. **Map Responses**: Understand what data each endpoint provides
+5. **Choose Best Fit**: Use comprehensive endpoints over multiple specific ones
+
+#### **Key Takeaway:**
+
+**Always verify that API endpoints exist on the server before implementing
+frontend code that calls them. Use comprehensive endpoints that provide all
+needed data in one call rather than multiple specific endpoints.**
+
+This lesson prevents **complete dashboard failures** and ensures
+frontend-backend API integration works correctly.
+
+---
+
+## React Bridge Pattern Implementation - Critical Integration Issues & Solutions
+
+**Date**: 2025-01-21 • **Category**: Architecture / React Patterns / Performance
+• **Impact**: Critical
+
+### Context
+
+Implemented comprehensive React Bridge patterns (API Bridge, State Bridge, Event
+Bridge, and combined ProposalManagementBridge) for the proposals management
+page. The integration revealed critical React-specific issues that required
+systematic resolution to achieve stable, production-ready bridge functionality.
+
+### Problems Encountered
+
+**1. Maximum Update Depth Exceeded**
+
+- Bridge state updates triggered infinite re-render loops
+- Unstable dependencies in useEffect arrays caused continuous re-execution
+- Event listeners and analytics tracking created circular dependencies
+
+**2. setState During Render Errors**
+
+- Bridge calls (`bridge.setFilters`, `bridge.trackAction`) executed during
+  render cycles
+- GlobalStateProvider updates triggered while rendering different components
+- Synchronous state updates during component rendering caused React violations
+
+**3. React Hydration Mismatches**
+
+- JavaScript-based responsive detection caused SSR/CSR rendering differences
+- Conditional class applications based on `useResponsive` hook created
+  inconsistent HTML
+- Inline style attributes with dynamic values caused hydration errors
+
+**4. Authentication & API Integration Issues**
+
+- Unauthenticated API requests causing 400/500 errors
+- Missing authentication context in bridge-enabled components
+- Session state not properly synchronized with bridge operations
+
+**5. API Validation & Case Sensitivity**
+
+- Frontend filter values not matching backend enum expectations
+- Case-sensitive status/priority validation causing API rejections
+- Zod schema validation failing due to case mismatch
+
+### Solutions Implemented
+
+**1. Bridge State Update Deferral Pattern**
+
+```typescript
+// ✅ CORRECT: Defer bridge calls to prevent setState during render
+const updateFilters = useCallback(
+  (newFilters: Partial<Filters>) => {
+    setFilters(prev => {
+      const updatedFilters = { ...prev, ...newFilters };
+      setTimeout(() => {
+        // Defer bridge calls
+        bridge.setFilters(updatedFilters);
+        bridge.trackAction('filters_changed', { filters: newFilters });
+        bridge.addNotification({
+          type: 'info',
+          message:
+            `Filters updated: ${newFilters.status || ''} ${newFilters.priority || ''}`.trim(),
+        });
+      }, 0);
+      return updatedFilters;
+    });
+  },
+  [bridge]
+);
+```
+
+**2. Mount-Only Effect Dependencies**
+
+```typescript
+// ✅ CORRECT: Empty dependency arrays for one-time initialization
+useEffect(() => {
+  bridge.trackPageView('proposals_manage');
+}, []); // Empty dependency array to run only once
+
+useEffect(() => {
+  const proposalCreatedListener = eventBridge.subscribe(
+    'PROPOSAL_CREATED',
+    (payload: any) => {
+      refetch();
+      bridge.addNotification({
+        type: 'success',
+        message: `New proposal "${payload.title || 'Unknown'}" created successfully`,
+      });
+    },
+    { component: 'ProposalsManagePage' }
+  );
+
+  return () => {
+    eventBridge.unsubscribe('PROPOSAL_CREATED', proposalCreatedListener);
+  };
+}, []); // Empty dependency array to prevent infinite loops
+```
+
+**3. CSS-Only Responsive Design**
+
+```typescript
+// ✅ CORRECT: Remove JavaScript-based responsive detection
+// Before: useResponsive hook with conditional classes
+// After: CSS-only Tailwind responsive classes
+className={cn(
+  // Mobile (default)
+  'px-4 py-3 text-base rounded-lg border-2',
+  'focus:ring-4 focus:ring-blue-100',
+  'touch-manipulation will-change-transform',
+  'active:scale-[0.98]',
+  'relative z-10 pointer-events-auto',
+  'min-h-[48px]', // WCAG 2.1 AA touch target
+
+  // Tablet and up (md:)
+  'md:px-3.5 md:py-2.5 md:text-sm md:rounded-md md:border',
+  'md:focus:ring-1',
+
+  // Desktop and up (lg:)
+  'lg:px-3 lg:py-2',
+
+  className
+)}
+```
+
+**4. Authentication Integration Pattern**
+
+```typescript
+// ✅ CORRECT: Authentication check with loading state
+const { data: session, status } = useSession();
+
+useEffect(() => {
+  if (status === 'loading') return;
+
+  if (!session?.user) {
+    logInfo('Authentication required - redirecting to login', {
+      component: 'ProposalsManagePage',
+      status,
+    });
+    router.push('/auth/signin');
+    return;
+  }
+}, [session, status, router]);
+
+// Show loading while checking authentication
+if (status === 'loading') {
+  return (
+    <div className="space-y-6 p-6" data-testid="proposals-manage-page">
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Don't render if not authenticated (will redirect)
+if (!session?.user) {
+  return null;
+}
+```
+
+**5. Case-Insensitive API Validation**
+
+```typescript
+// ✅ CORRECT: Zod preprocess for case-insensitive validation
+const ProposalQuerySchema = z.object({
+  status: z.preprocess(
+    val => {
+      if (!val || typeof val !== 'string') return undefined;
+      const upperVal = val.toUpperCase();
+      const validStatuses = [
+        'DRAFT',
+        'IN_REVIEW',
+        'PENDING_APPROVAL',
+        'APPROVED',
+        'REJECTED',
+        'SUBMITTED',
+        'ACCEPTED',
+        'DECLINED',
+      ];
+      return validStatuses.includes(upperVal) ? upperVal : undefined;
+    },
+    z
+      .enum([
+        'DRAFT',
+        'IN_REVIEW',
+        'PENDING_APPROVAL',
+        'APPROVED',
+        'REJECTED',
+        'SUBMITTED',
+        'ACCEPTED',
+        'DECLINED',
+      ])
+      .optional()
+  ),
+  priority: z.preprocess(
+    val => {
+      if (!val || typeof val !== 'string') return undefined;
+      const upperVal = val.toUpperCase();
+      const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+      return validPriorities.includes(upperVal) ? upperVal : undefined;
+    },
+    z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional()
+  ),
+});
+```
+
+### Key Insights
+
+**1. Bridge State Management**
+
+- Bridge calls must be deferred using `setTimeout(..., 0)` to prevent setState
+  during render
+- Global state updates should never occur synchronously during component
+  rendering
+- Event listeners must be properly cleaned up to prevent memory leaks
+
+**2. React Effect Dependencies**
+
+- Use empty dependency arrays `[]` for one-time initialization effects
+- Never include unstable functions (analytics, error handlers, API clients) in
+  dependency arrays
+- Bridge event subscriptions should be mount-only with proper cleanup
+
+**3. SSR/CSR Consistency**
+
+- Remove all JavaScript-based responsive detection to prevent hydration
+  mismatches
+- Use CSS-only responsive design with Tailwind classes
+- Avoid inline styles and dynamic class applications that differ between server
+  and client
+
+**4. Authentication Integration**
+
+- Bridge-enabled components must check authentication status before API calls
+- Implement loading states during authentication checks
+- Redirect unauthenticated users gracefully with proper logging
+
+**5. API Validation Patterns**
+
+- Use Zod `preprocess` for case-insensitive validation
+- Handle both string and undefined values in validation schemas
+- Provide fallback values for missing or invalid data
+
+### Bridge Benefits Achieved
+
+**1. Real-Time Collaboration**
+
+- Cross-component communication via EventBridge
+- Automatic UI updates when proposals are created/updated
+- Instant notifications for user actions
+
+**2. Smart Analytics & Business Intelligence**
+
+- Every user action tracked with bridge analytics
+- Performance metrics and user behavior insights
+- Data-driven optimization opportunities
+
+**3. Performance Optimization**
+
+- Smart caching through StateBridge
+- Optimized data fetching with API Bridge
+- Reduced API calls through intelligent state management
+
+**4. Enhanced User Experience**
+
+- Instant feedback for all actions
+- Smart notifications with contextual messages
+- Error recovery with helpful suggestions
+
+### Prevention Standards
+
+**1. Bridge Integration Checklist**
+
+- [ ] Defer all bridge calls using `setTimeout(..., 0)`
+- [ ] Use empty dependency arrays for mount-only effects
+- [ ] Implement proper authentication checks
+- [ ] Remove JavaScript-based responsive detection
+- [ ] Use case-insensitive API validation
+- [ ] Add proper error boundaries and loading states
+
+**2. Bridge State Management Rules**
+
+- Never call bridge methods directly during render
+- Always defer state updates to next tick
+- Implement proper cleanup for event listeners
+- Use stable references for bridge instances
+
+**3. Authentication Integration Rules**
+
+- Check session status before API calls
+- Show loading states during authentication checks
+- Redirect unauthenticated users gracefully
+- Log authentication events for debugging
+
+**4. Performance Optimization Rules**
+
+- Use CSS-only responsive design
+- Implement proper effect dependencies
+- Avoid circular dependencies in bridge calls
+- Monitor bridge performance impact
+
+### Anti-Patterns to Avoid
+
+- ❌ Calling bridge methods directly during render cycles
+- ❌ Including unstable functions in useEffect dependencies
+- ❌ Using JavaScript-based responsive detection
+- ❌ Making API calls without authentication checks
+- ❌ Case-sensitive validation without preprocessing
+- ❌ Missing cleanup for bridge event listeners
+
+### Verification Checklist
+
+- [ ] No "Maximum update depth exceeded" errors in console
+- [ ] No "setState during render" warnings
+- [ ] No hydration mismatch errors
+- [ ] Authentication flows work correctly
+- [ ] Filters and search functionality work
+- [ ] Bridge events trigger properly
+- [ ] Performance remains optimal
+- [ ] TypeScript compliance maintained
+
+### Related
+
+- [CORE_REQUIREMENTS.md → React Query Patterns](#react-query-patterns-mandatory)
+- [CORE_REQUIREMENTS.md → Error Handling & Type Safety](#error-handling--type-safety)
+- [CORE_REQUIREMENTS.md → Performance & Analytics](#performance--analytics)
+- [ProposalManagementBridge.tsx](src/components/bridges/ProposalManagementBridge.tsx)
+- [EventBridge.ts](src/lib/bridges/EventBridge.ts)
+- [StateBridge.ts](src/lib/bridges/StateBridge.ts)
+
+---
+
 ## Gold Standard Compliance Audit - Migration Requirements
 
 **Date**: 2025-01-08 • **Category**: Performance / Architecture • **Impact**:

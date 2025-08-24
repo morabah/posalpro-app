@@ -1,24 +1,45 @@
-/**
- * PosalPro MVP2 - Proposal Management Dashboard
- * Refactored to use React Query with infinite pagination following gold standard patterns
- * Performance optimized with structured logging, error handling, and analytics
- */
-
 'use client';
 
+/**
+ * PosalPro MVP2 - Proposal Management Dashboard
+ * Compliant with CORE_REQUIREMENTS.md and design pattern templates
+ * - React Query for list fetching (useProposals)
+ * - Minimal fields + no relation hydration for list views
+ * - Cursor-based Load More (single request per interaction)
+ * - Design system components and accessibility
+ * - Structured logging + standardized error handling + analytics
+ * - Stable SSR/CSR wrapper with Breadcrumbs
+ * - Bridge Pattern Integration for enhanced state management and event handling
+ */
+
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/forms/Button';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@/hooks/useApiClient';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { logDebug, logInfo, logWarn, logError } from '@/lib/logger';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import {
+  Proposal,
+  ProposalPriority,
+  ProposalStatus,
+  useProposals,
+  useProposalStats,
+} from '@/hooks/useProposals';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+// Bridge imports
+import {
+  ProposalManagementBridge,
+  useProposalBridge,
+} from '@/components/bridges/ProposalManagementBridge';
+import { useEventBridge, type EventPayload } from '@/lib/bridges/EventBridge';
+import { GlobalStateProvider } from '@/lib/bridges/StateBridge';
 
 // Lazy-loaded icons for performance
 const ArrowPathIcon = dynamic(
@@ -36,10 +57,6 @@ const CheckCircleIcon = dynamic(
 const ClockIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.ClockIcon), {
   ssr: false,
 });
-const DocumentTextIcon = dynamic(
-  () => import('@heroicons/react/24/outline').then(m => m.DocumentTextIcon),
-  { ssr: false }
-);
 const ExclamationTriangleIcon = dynamic(
   () => import('@heroicons/react/24/outline').then(m => m.ExclamationTriangleIcon),
   { ssr: false }
@@ -60,67 +77,14 @@ const PencilIcon = dynamic(() => import('@heroicons/react/24/outline').then(m =>
 const PlusIcon = dynamic(() => import('@heroicons/react/24/outline').then(m => m.PlusIcon), {
   ssr: false,
 });
-const UserGroupIcon = dynamic(
-  () => import('@heroicons/react/24/outline').then(m => m.UserGroupIcon),
+const Squares2X2Icon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.Squares2X2Icon),
   { ssr: false }
 );
-
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-4.1', 'US-4.3'],
-  acceptanceCriteria: ['AC-4.1.1', 'AC-4.1.3', 'AC-4.3.1', 'AC-4.3.3'],
-  methods: ['trackProposalLifecycle()', 'calculatePriority()', 'trackOnTimeCompletion()'],
-  hypotheses: ['H7', 'H4'],
-  testCases: ['TC-H7-001', 'TC-H7-002', 'TC-H4-001'],
-};
-
-// Query key factory following gold standard pattern
-const PROPOSAL_QUERY_KEYS = {
-  all: ['proposals'] as const,
-  lists: () => [...PROPOSAL_QUERY_KEYS.all, 'list'] as const,
-  list: (filters: Record<string, any>) => [...PROPOSAL_QUERY_KEYS.lists(), { filters }] as const,
-  stats: () => [...PROPOSAL_QUERY_KEYS.all, 'stats'] as const,
-  detail: (id: string) => [...PROPOSAL_QUERY_KEYS.all, 'detail', id] as const,
-};
-
-// TypeScript interfaces
-enum ProposalStatus {
-  DRAFT = 'draft',
-  IN_PROGRESS = 'in_progress',
-  IN_REVIEW = 'in_review',
-  APPROVED = 'approved',
-  SUBMITTED = 'submitted',
-  WON = 'won',
-  LOST = 'lost',
-  CANCELLED = 'cancelled',
-}
-
-enum ProposalPriority {
-  HIGH = 'high',
-  MEDIUM = 'medium',
-  LOW = 'low',
-}
-
-interface Proposal {
-  id: string;
-  title: string;
-  client: string;
-  status: ProposalStatus;
-  priority: ProposalPriority;
-  dueDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  estimatedValue: number;
-  teamLead: string;
-  assignedTeam: string[];
-  progress: number;
-  stage: string;
-  riskLevel: 'low' | 'medium' | 'high';
-  tags: string[];
-  description?: string;
-  lastActivity?: string;
-  customer?: { id: string; name: string; email?: string };
-}
+const TableCellsIcon = dynamic(
+  () => import('@heroicons/react/24/outline').then(m => m.TableCellsIcon),
+  { ssr: false }
+);
 
 interface Filters {
   search: string;
@@ -128,391 +92,722 @@ interface Filters {
   priority: string;
   teamMember: string;
   dateRange: string;
-  sortBy: string;
-  sortOrder: 'asc' | 'desc';
 }
 
-interface ProposalStats {
-    total: number;
-    inProgress: number;
-    overdue: number;
-    winRate: number;
-    totalValue: number;
+interface SortConfig {
+  key: keyof Proposal | null;
+  direction: 'asc' | 'desc';
 }
 
-  // Helper functions for data transformation
-  const mapApiStatusToUIStatus = (apiStatus: string): ProposalStatus => {
-    switch (apiStatus?.toLowerCase()) {
-      case 'draft':
-        return ProposalStatus.DRAFT;
-      case 'in_review':
-      case 'pending_approval':
-        return ProposalStatus.IN_REVIEW;
-      case 'approved':
-        return ProposalStatus.APPROVED;
-      case 'submitted':
-        return ProposalStatus.SUBMITTED;
-      case 'rejected':
-        return ProposalStatus.LOST;
-      default:
-        return ProposalStatus.DRAFT;
-    }
-  };
+// Local helpers to transform API proposals (mirror of hook's transform)
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
-  const mapApiPriorityToUIPriority = (apiPriority: string): ProposalPriority => {
-    switch (apiPriority?.toLowerCase()) {
-      case 'high':
-      case 'urgent':
-        return ProposalPriority.HIGH;
-      case 'medium':
-        return ProposalPriority.MEDIUM;
-      case 'low':
-        return ProposalPriority.LOW;
-      default:
-        return ProposalPriority.MEDIUM;
-    }
-  };
+function mapApiStatusToUIStatus(apiStatus: string): ProposalStatus {
+  switch (apiStatus?.toLowerCase()) {
+    case 'draft':
+      return ProposalStatus.DRAFT;
+    case 'in_review':
+      return ProposalStatus.IN_REVIEW;
+    case 'pending_approval':
+      return ProposalStatus.IN_REVIEW;
+    case 'approved':
+      return ProposalStatus.APPROVED;
+    case 'submitted':
+      return ProposalStatus.SUBMITTED;
+    case 'rejected':
+      return ProposalStatus.LOST;
+    default:
+      return ProposalStatus.DRAFT;
+  }
+}
 
-  const calculateProgress = (status: string): number => {
-    switch (status?.toLowerCase()) {
-      case 'draft':
-        return 10;
-      case 'in_review':
-        return 50;
-      case 'pending_approval':
-        return 75;
-      case 'approved':
-        return 90;
-      case 'submitted':
-        return 100;
-      default:
-        return 10;
-    }
-  };
+function mapApiPriorityToUIPriority(apiPriority: string): ProposalPriority {
+  switch (apiPriority?.toLowerCase()) {
+    case 'high':
+    case 'urgent':
+      return ProposalPriority.HIGH;
+    case 'medium':
+      return ProposalPriority.MEDIUM;
+    case 'low':
+      return ProposalPriority.LOW;
+    default:
+      return ProposalPriority.MEDIUM;
+  }
+}
 
-  const getStageFromStatus = (status: string): string => {
-    switch (status?.toLowerCase()) {
-      case 'draft':
-        return 'Initial Draft';
-      case 'in_review':
-        return 'Under Review';
-      case 'pending_approval':
-        return 'Pending Approval';
-      case 'approved':
-        return 'Approved';
-      case 'submitted':
-        return 'Submitted';
-      case 'rejected':
-        return 'Rejected';
-      default:
-        return 'Unknown';
-    }
-  };
+function calculateProgress(status: string): number {
+  switch (status?.toLowerCase()) {
+    case 'draft':
+      return 10;
+    case 'in_review':
+      return 50;
+    case 'pending_approval':
+      return 75;
+    case 'approved':
+      return 90;
+    case 'submitted':
+      return 100;
+    default:
+      return 10;
+  }
+}
 
-  const calculateRiskLevel = (
-    proposal: Pick<Proposal, 'dueDate' | 'status' | 'priority'>
-  ): 'low' | 'medium' | 'high' => {
-    const daysUntilDeadline = Math.ceil(
-      (new Date(proposal.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    );
-    if (daysUntilDeadline < 7) return 'high';
-    if (daysUntilDeadline < 30) return 'medium';
-    return 'low';
-  };
+function getStageFromStatus(status: string): string {
+  switch (status?.toLowerCase()) {
+    case 'draft':
+      return 'Initial Draft';
+    case 'in_review':
+      return 'Under Review';
+    case 'pending_approval':
+      return 'Pending Approval';
+    case 'approved':
+      return 'Approved';
+    case 'submitted':
+      return 'Submitted';
+    case 'rejected':
+      return 'Rejected';
+    default:
+      return 'Unknown';
+  }
+}
 
-function ProposalManagementDashboardContent() {
+function calculateRiskLevel(
+  proposal: Pick<Proposal, 'dueDate' | 'status' | 'priority'>
+): 'low' | 'medium' | 'high' {
+  const daysUntilDeadline = Math.ceil(
+    (new Date(proposal.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  );
+  if (daysUntilDeadline < 7) return 'high';
+  if (daysUntilDeadline < 30) return 'medium';
+  return 'low';
+}
+
+// Main component with bridge integration
+function ProposalsManagePageContent() {
   const router = useRouter();
   const apiClient = useApiClient();
-  const { trackOptimized } = useOptimizedAnalytics();
-  const errorHandlingService = ErrorHandlingService.getInstance();
+  const { trackOptimized: trackEvent } = useOptimizedAnalytics();
+  const { handleAsyncError, errorHandlingService } = useErrorHandler();
+  const { data: session, status } = useSession();
 
-  // Filter state
-  const [filters, setFilters] = useState<Filters>({
-    search: '',
-    status: 'all',
-    priority: 'all',
-    teamMember: 'all',
-    dateRange: 'all',
-    sortBy: 'updatedAt',
-    sortOrder: 'desc',
-  });
+  // Bridge integration
+  const bridge = useProposalBridge();
+  const eventBridge = useEventBridge();
 
-  // Debounced search to reduce API calls
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Authentication check
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(filters.search);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [filters.search]);
+    if (status === 'loading') return; // Still loading
 
-  // Build query parameters for API calls
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set('limit', '20');
-    params.set('sortBy', filters.sortBy);
-    params.set('sortOrder', filters.sortOrder);
-    params.set('includeCustomer', 'false');
-    params.set('includeTeam', 'true');
-    params.set('fields', 'id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName');
-
-    if (debouncedSearch) params.set('search', debouncedSearch);
-    if (filters.status !== 'all') params.set('status', filters.status);
-    if (filters.priority !== 'all') params.set('priority', filters.priority);
-    if (filters.teamMember !== 'all') params.set('teamMember', filters.teamMember);
-    if (filters.dateRange !== 'all') params.set('dateRange', filters.dateRange);
-
-    return params.toString();
-  }, [filters, debouncedSearch]);
-
-  // React Query: Infinite pagination for proposals
-  const {
-    data: proposalsData,
-    error: proposalsError,
-    fetchNextPage,
-    hasNextPage,
-    isFetching,
-    isFetchingNextPage,
-    isLoading: isLoadingProposals,
-    refetch: refetchProposals
-  } = useInfiniteQuery({
-    queryKey: PROPOSAL_QUERY_KEYS.list({ queryParams }),
-    queryFn: async ({ pageParam }) => {
-      logDebug('Fetch proposals start', {
-        component: 'ProposalManagementDashboard',
-        operation: 'fetchProposals',
-        pageParam,
-        queryParams
+    if (!session?.user) {
+      logInfo('Authentication required - redirecting to login', {
+        component: 'ProposalsManagePage',
+        status,
       });
+      router.push('/auth/signin');
+      return;
+    }
+  }, [session, status, router]);
 
-      const url = pageParam
-        ? `/proposals?${queryParams}&cursor=${encodeURIComponent(pageParam)}`
-        : `/proposals?${queryParams}`;
+  // Optimized transform function with memoization - moved inside component
+  const transformApiProposal = useCallback((apiProposal: unknown): Proposal => {
+    const p = isObject(apiProposal) ? apiProposal : {};
 
-      try {
-        const startTime = Date.now();
-        const response = await apiClient.get(url);
-        const loadTime = Date.now() - startTime;
+    const teamLead =
+      typeof (p as Record<string, unknown>).creatorName === 'string'
+        ? ((p as Record<string, unknown>).creatorName as string)
+        : typeof (p as Record<string, unknown>).createdBy === 'string'
+          ? ((p as Record<string, unknown>).createdBy as string)
+          : 'Unassigned';
 
-        logInfo('Fetch proposals success', {
-          component: 'ProposalManagementDashboard',
-          operation: 'fetchProposals',
-          loadTime,
-          count: Array.isArray((response as any)?.proposals) ? (response as any).proposals.length : 0
-        });
-
-        const data = response as any;
-        return {
-          proposals: Array.isArray(data?.proposals) ? data.proposals : [],
-          nextCursor: data?.pagination?.nextCursor || null,
-          hasMore: data?.pagination?.hasNextPage || false,
-          total: data?.pagination?.total || 0
-        };
-      } catch (error) {
-        logError('Fetch proposals failed', error, {
-          component: 'ProposalManagementDashboard',
-          operation: 'fetchProposals',
-          pageParam,
-          queryParams
-        });
-        throw error;
+    const assignedRaw = (p as Record<string, unknown>).assignedTo;
+    const assignedTeam = Array.isArray(assignedRaw) ? assignedRaw : [];
+    const teamMembers = assignedTeam.map((member: unknown) => {
+      if (isObject(member)) {
+        const name = (member as { name?: string; id?: string }).name;
+        const id = (member as { name?: string; id?: string }).id;
+        return (typeof name === 'string' && name) || (typeof id === 'string' ? id : 'Unknown');
       }
-    },
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    staleTime: 30000, // 30 seconds
-    gcTime: 120000, // 2 minutes
-    refetchOnWindowFocus: false,
-    retry: 1,
-    initialPageParam: undefined as string | undefined,
-  });
+      return 'Unknown';
+    });
 
-  // React Query: Proposal statistics
-  const {
-    data: statsData,
-    error: statsError,
-    isLoading: isLoadingStats
-  } = useQuery({
-    queryKey: PROPOSAL_QUERY_KEYS.stats(),
-    queryFn: async (): Promise<ProposalStats> => {
-      logDebug('Fetch proposal stats start', {
-        component: 'ProposalManagementDashboard',
-        operation: 'fetchStats'
-      });
+    const totalValueRaw = (p as Record<string, unknown>).totalValue;
+    const valueRaw = (p as Record<string, unknown>).value;
+    const estimatedValue =
+      typeof valueRaw === 'number'
+        ? valueRaw
+        : typeof totalValueRaw === 'number'
+          ? totalValueRaw
+          : 0;
 
-      try {
-        const startTime = Date.now();
-        const response = await apiClient.get('/proposals/stats?fresh=1');
-        const loadTime = Date.now() - startTime;
-
-        logInfo('Fetch proposal stats success', {
-          component: 'ProposalManagementDashboard',
-          operation: 'fetchStats',
-          loadTime
-        });
-
-        const apiResponse = response as any;
-        const data = apiResponse?.data ?? apiResponse;
-        return {
-          total: Number(data?.total ?? 0),
-          inProgress: Number(data?.inProgress ?? 0),
-          overdue: Number(data?.overdue ?? 0),
-          winRate: Number(data?.winRate ?? 0),
-          totalValue: Number(data?.totalValue ?? 0),
-        };
-      } catch (error) {
-        logError('Fetch proposal stats failed', error, {
-          component: 'ProposalManagementDashboard',
-          operation: 'fetchStats'
-        });
-        throw error;
-      }
-    },
-    staleTime: 30000,
-    gcTime: 120000,
-    refetchOnWindowFocus: false,
-    retry: 1,
-  });
-
-  // Handle proposal data transformation
-  const transformProposal = useCallback((apiProposal: any): Proposal => {
-    const teamLead = apiProposal.creatorName || apiProposal.createdBy || 'Unassigned';
-    const assignedTeam = Array.isArray(apiProposal.assignedTo)
-      ? apiProposal.assignedTo.map((member: any) => member?.name || member?.id || 'Unknown')
-      : [];
-
-    const estimatedValue = apiProposal.value || apiProposal.totalValue || 0;
-    const dueDate = apiProposal.dueDate ? new Date(apiProposal.dueDate) : new Date();
+    const due = (p as Record<string, unknown>).dueDate;
+    const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
 
     return {
-      id: String(apiProposal.id || ''),
-      title: String(apiProposal.title || ''),
-      client: apiProposal.customerName || apiProposal.customer?.name || 'Unknown Client',
-      status: mapApiStatusToUIStatus(String(apiProposal.status || 'draft')),
-      priority: mapApiPriorityToUIPriority(String(apiProposal.priority || 'medium')),
-      dueDate,
-      createdAt: new Date(apiProposal.createdAt || Date.now()),
-      updatedAt: new Date(apiProposal.updatedAt || Date.now()),
-      estimatedValue: Number(estimatedValue),
+      id: String((p as Record<string, unknown>).id || ''),
+      title: String((p as Record<string, unknown>).title || ''),
+      client:
+        (typeof (p as Record<string, unknown>).customerName === 'string' &&
+          ((p as Record<string, unknown>).customerName as string)) ||
+        (isObject((p as Record<string, unknown>).customer) &&
+        typeof ((p as Record<string, unknown>).customer as Record<string, unknown>).name ===
+          'string'
+          ? String(((p as Record<string, unknown>).customer as Record<string, unknown>).name)
+          : 'Unknown Client'),
+      status: mapApiStatusToUIStatus(String((p as Record<string, unknown>).status || 'draft')),
+      priority: mapApiPriorityToUIPriority(
+        String((p as Record<string, unknown>).priority || 'medium')
+      ),
+      dueDate: new Date(dueDate),
+      createdAt: new Date(
+        String((p as Record<string, unknown>).createdAt || new Date().toISOString())
+      ),
+      updatedAt: new Date(
+        String((p as Record<string, unknown>).updatedAt || new Date().toISOString())
+      ),
+      estimatedValue,
       teamLead,
-      assignedTeam,
-      progress: calculateProgress(String(apiProposal.status || 'draft')),
-      stage: getStageFromStatus(String(apiProposal.status || 'draft')),
+      assignedTeam: teamMembers,
+      progress: calculateProgress(String((p as Record<string, unknown>).status || 'draft')),
+      stage: getStageFromStatus(String((p as Record<string, unknown>).status || 'draft')),
       riskLevel: calculateRiskLevel({
-        dueDate,
-        status: mapApiStatusToUIStatus(String(apiProposal.status || 'draft')),
-        priority: mapApiPriorityToUIPriority(String(apiProposal.priority || 'medium')),
+        dueDate: new Date(dueDate),
+        status: mapApiStatusToUIStatus(String((p as Record<string, unknown>).status || 'draft')),
+        priority: mapApiPriorityToUIPriority(
+          String((p as Record<string, unknown>).priority || 'medium')
+        ),
       }),
-      tags: Array.isArray(apiProposal.tags) ? apiProposal.tags : [],
-      description: apiProposal.description,
-      lastActivity: `Created on ${new Date(apiProposal.createdAt || Date.now()).toLocaleDateString()}`,
-      customer: apiProposal.customer ? {
-        id: String(apiProposal.customer.id || ''),
-        name: String(apiProposal.customer.name || ''),
-        email: apiProposal.customer.email
-      } : undefined,
+      tags: Array.isArray((p as Record<string, unknown>).tags)
+        ? ((p as Record<string, unknown>).tags as Array<string>)
+        : [],
+      description:
+        typeof (p as Record<string, unknown>).description === 'string'
+          ? ((p as Record<string, unknown>).description as string)
+          : undefined,
+      lastActivity: `Created on ${new Date(
+        String((p as Record<string, unknown>).createdAt || new Date().toISOString())
+      ).toLocaleDateString()}`,
+      customer: isObject((p as Record<string, unknown>).customer)
+        ? {
+            id: String(
+              ((p as Record<string, unknown>).customer as Record<string, unknown>).id || ''
+            ),
+            name: String(
+              ((p as Record<string, unknown>).customer as Record<string, unknown>).name || ''
+            ),
+          }
+        : undefined,
     };
   }, []);
 
-  // Flatten paginated proposal data
-  const allProposals = useMemo(() => {
-    if (!proposalsData?.pages) return [];
+  // Filters and UI state
+  const [filters, setFilters] = useState<Filters>({
+    search: '',
+    status: '',
+    priority: '',
+    teamMember: '',
+    dateRange: '',
+  });
+  const [sort, setSort] = useState<SortConfig>({ key: null, direction: 'desc' });
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [appendedProposals, setAppendedProposals] = useState<Array<Proposal>>([]);
+  const [hasMoreLocal, setHasMoreLocal] = useState<boolean>(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const limit = 50;
 
-    return proposalsData.pages.flatMap(page =>
-      page.proposals.map(transformProposal)
-    );
-  }, [proposalsData, transformProposal]);
+  const lastParamsRef = useRef<string>('');
 
-  // Error handling for React Query errors
+  // Debounced search
   useEffect(() => {
-    if (proposalsError) {
-      errorHandlingService.processError(
-        proposalsError,
-        'Failed to load proposals',
-        ErrorCodes.DATA.QUERY_FAILED,
-        {
-          component: 'ProposalManagementDashboard',
-          operation: 'fetchProposals',
-          userStory: COMPONENT_MAPPING.userStories[0],
-          hypothesis: COMPONENT_MAPPING.hypotheses[0]
-        }
-      );
-    }
-  }, [proposalsError, errorHandlingService]);
+    const timer = setTimeout(() => {
+      setFilters(prev => ({ ...prev, search: searchTerm }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
+  // Determine allowed sort key for API
+  const sortByParam = useMemo<
+    'title' | 'dueDate' | 'priority' | 'estimatedValue' | 'updatedAt'
+  >(() => {
+    const key = sort.key as string | null;
+    if (
+      key === 'title' ||
+      key === 'dueDate' ||
+      key === 'priority' ||
+      key === 'estimatedValue' ||
+      key === 'updatedAt'
+    ) {
+      return key;
+    }
+    return 'updatedAt';
+  }, [sort.key]);
+
+  // React Query - proposals list
+  const {
+    data: proposalsData,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useProposals({
+    page: 1,
+    limit,
+    search: filters.search || undefined,
+    status: filters.status || undefined,
+    priority: filters.priority || undefined,
+    teamMember: filters.teamMember || undefined,
+    dateRange: filters.dateRange || undefined,
+    sortBy: sortByParam,
+    sortOrder: sort.direction,
+    includeCustomer: false,
+    includeTeam: false,
+    fields:
+      'id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName',
+  });
+
+  // Stats
+  const { data: stats, isLoading: isStatsLoading, error: statsError } = useProposalStats();
+
+  // Handle stats error gracefully - don't let it break the page
+  const safeStats = useMemo(() => {
+    if (!stats || statsError) {
+      return {
+        total: 0,
+        inProgress: 0,
+        overdue: 0,
+        winRate: 0,
+        totalValue: 0,
+      };
+    }
+    return stats;
+  }, [stats, statsError]);
+
+  // Reset append state when filters/sort change
   useEffect(() => {
-    if (statsError) {
-      errorHandlingService.processError(
-        statsError,
-        'Failed to load proposal statistics',
-        ErrorCodes.DATA.QUERY_FAILED,
-        {
-          component: 'ProposalManagementDashboard',
-          operation: 'fetchStats'
-        }
-      );
+    const key = JSON.stringify({ filters, sort });
+    if (key !== lastParamsRef.current) {
+      lastParamsRef.current = key;
+      setAppendedProposals([]);
+      setHasMoreLocal(false);
+      setNextCursor(null);
     }
-  }, [statsError, errorHandlingService]);
+  }, [filters, sort]);
 
-  // Infinite scroll setup
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-
+  // Track analytics and set cursors from initial page
   useEffect(() => {
-    if (!hasNextPage || isFetchingNextPage) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          fetchNextPage();
-        }
-      },
-      { rootMargin: '400px' }
-    );
-
-    const currentRef = loadMoreRef.current;
-    if (currentRef) {
-      observer.observe(currentRef);
-    }
-
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef);
-      }
-    };
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  // Filter handlers with analytics tracking
-  const handleFilterChange = useCallback((key: keyof Filters, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-
-    trackOptimized('proposal_filter_applied', {
-      filterType: key,
-      filterValue: value,
-      userStory: COMPONENT_MAPPING.userStories[0],
-      hypothesis: COMPONENT_MAPPING.hypotheses[0]
-    }, 'low');
-  }, [trackOptimized]);
-
-  const clearFilters = useCallback(() => {
-    setFilters({
-      search: '',
-      status: 'all',
-      priority: 'all',
-      teamMember: 'all',
-      dateRange: 'all',
-      sortBy: 'updatedAt',
-      sortOrder: 'desc',
+    void logInfo('View: ProposalsManagePage', {
+      component: 'ProposalsManagePage',
+      operation: 'view',
+      userStory: 'US-3.1',
+      hypothesis: 'H3',
     });
 
-    trackOptimized('proposal_filters_cleared', {
-      userStory: COMPONENT_MAPPING.userStories[0],
-      hypothesis: COMPONENT_MAPPING.hypotheses[0]
-    }, 'low');
-  }, [trackOptimized]);
+    if (proposalsData?.proposals?.length) {
+      try {
+        trackEvent('proposals_viewed', {
+          count: proposalsData.proposals.length,
+          userStory: 'US-3.1',
+          hypothesis: 'H3',
+          component: 'ProposalsManagePage',
+        });
+      } catch (analyticsError) {
+        handleAsyncError(analyticsError, 'Failed to track proposals_viewed');
+      }
+    }
+  }, [proposalsData?.proposals?.length]); // Remove trackEvent and handleAsyncError to prevent infinite loops
 
-  // Status badge component
-  const StatusBadge = ({ status }: { status: ProposalStatus }) => {
-    const getStatusStyle = (status: ProposalStatus) => {
-      switch (status) {
+  // Update cursor/hasMore from API response
+  useEffect(() => {
+    if (proposalsData?.pagination) {
+      setHasMoreLocal(Boolean(proposalsData.pagination.hasMore));
+      setNextCursor(proposalsData.pagination.nextCursor ?? null);
+    }
+  }, [proposalsData?.pagination]);
+
+  // Error handling + logging
+  useEffect(() => {
+    if (error) {
+      errorHandlingService.processError(error, 'Failed to load proposals', undefined, {
+        context: 'ProposalsManagePage',
+        operation: 'data_fetch',
+        metadata: { filters, limit },
+      });
+      void logError('[ProposalsManagePage] Fetch failed', error, {
+        component: 'ProposalsManagePage',
+        operation: 'data_fetch',
+      });
+    }
+  }, [error, filters, limit]); // Remove errorHandlingService to prevent infinite loops
+
+  // Enhanced handlers using bridge
+  const updateFilters = useCallback(
+    (newFilters: Partial<Filters>) => {
+      // Update the local state first
+      setFilters(prev => {
+        const updatedFilters = { ...prev, ...newFilters };
+
+        // Use setTimeout to call bridge methods after the state update is complete
+        setTimeout(() => {
+          // Use bridge to track filter changes
+          bridge.setFilters({
+            status: updatedFilters.status ? [updatedFilters.status] : [],
+            priority: updatedFilters.priority ? [updatedFilters.priority] : [],
+            client: updatedFilters.teamMember ? [updatedFilters.teamMember] : [],
+            search: updatedFilters.search,
+            dateRange: updatedFilters.dateRange
+              ? { start: updatedFilters.dateRange, end: updatedFilters.dateRange }
+              : undefined,
+          });
+          bridge.trackAction('filters_changed', { filters: newFilters });
+
+          // Add notification for significant filter changes
+          if (newFilters.status || newFilters.priority) {
+            bridge.addNotification({
+              type: 'info',
+              message:
+                `Filters updated: ${newFilters.status ? `Status: ${newFilters.status}` : ''} ${newFilters.priority ? `Priority: ${newFilters.priority}` : ''}`.trim(),
+            });
+          }
+        }, 0);
+
+        return updatedFilters;
+      });
+    },
+    [bridge]
+  );
+
+  const updateSort = useCallback(
+    (key: keyof Proposal) => {
+      setSort(prev => {
+        const direction: 'asc' | 'desc' =
+          prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc';
+        const newSort = {
+          key,
+          direction,
+        };
+
+        // Use setTimeout to call bridge methods after the state update is complete
+        setTimeout(() => {
+          // Use bridge to track sort changes
+          bridge.setSort({ field: newSort.key, direction: newSort.direction });
+          bridge.trackAction('sort_changed', { key, direction });
+        }, 0);
+
+        return newSort;
+      });
+    },
+    [bridge]
+  );
+
+  const clearFilters = useCallback(() => {
+    setFilters({ search: '', status: '', priority: '', teamMember: '', dateRange: '' });
+    setSearchTerm('');
+
+    // Use setTimeout to call bridge methods after the state update is complete
+    setTimeout(() => {
+      // Use bridge to track filter clearing
+      bridge.setFilters({});
+      bridge.trackAction('filters_cleared');
+      void logInfo('Action: clear_filters', { component: 'ProposalsManagePage' });
+    }, 0);
+  }, [bridge]);
+
+  // Bridge-enhanced refresh function
+  const refreshProposals = useCallback(async () => {
+    try {
+      bridge.trackAction('proposals_refresh_started');
+
+      // Clear local state
+      setAppendedProposals([]);
+      setHasMoreLocal(false);
+      setNextCursor(null);
+
+      // Refetch data
+      await refetch();
+
+      bridge.trackAction('proposals_refresh_completed');
+      bridge.addNotification({
+        type: 'success',
+        message: 'Proposals refreshed successfully',
+      });
+    } catch (error) {
+      bridge.trackAction('proposals_refresh_failed', { error: (error as Error).message });
+      bridge.addNotification({
+        type: 'error',
+        message: 'Failed to refresh proposals',
+      });
+    }
+  }, [bridge, refetch]);
+
+  // Enhanced load more with bridge
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMoreLocal || !nextCursor || isLoading || isFetching) return;
+    try {
+      void logDebug('Load More start', {
+        component: 'ProposalsManagePage',
+        operation: 'load_more',
+        cursor: nextCursor,
+      });
+
+      const qp = new URLSearchParams();
+      qp.set('limit', String(limit));
+      if (filters.search) qp.set('search', filters.search);
+      if (filters.status) qp.set('status', filters.status);
+      if (filters.priority) qp.set('priority', filters.priority);
+      if (filters.teamMember) qp.set('teamMember', filters.teamMember);
+      if (filters.dateRange) qp.set('dateRange', filters.dateRange);
+      qp.set('sortBy', (sort.key as string) || 'updatedAt');
+      qp.set('sortOrder', sort.direction);
+      qp.set('includeCustomer', 'false');
+      qp.set('includeTeam', 'false');
+      qp.set(
+        'fields',
+        'id,title,status,priority,createdAt,updatedAt,dueDate,value,totalValue,tags,customerName,creatorName'
+      );
+      qp.set('cursor', nextCursor);
+
+      type ApiShape =
+        | {
+            success: boolean;
+            data: {
+              proposals: Array<unknown>;
+              pagination?: { hasMore?: boolean; nextCursor?: string | null };
+            };
+          }
+        | {
+            proposals: Array<unknown>;
+            pagination?: { hasMore?: boolean; nextCursor?: string | null };
+          };
+
+      const raw = await apiClient.get<ApiShape>(`/proposals?${qp.toString()}`);
+
+      let proposalsArr: Array<unknown> = [];
+      let pagination: { hasMore?: boolean; nextCursor?: string | null } | undefined;
+
+      if (isObject(raw) && 'success' in raw) {
+        const d = (
+          raw as {
+            data?: {
+              proposals?: Array<unknown>;
+              pagination?: { hasMore?: boolean; nextCursor?: string | null };
+            };
+          }
+        ).data;
+        proposalsArr = Array.isArray(d?.proposals) ? d.proposals : [];
+        pagination = d?.pagination;
+      } else if (isObject(raw)) {
+        proposalsArr = Array.isArray(
+          (
+            raw as {
+              proposals?: Array<unknown>;
+              pagination?: { hasMore?: boolean; nextCursor?: string | null };
+            }
+          ).proposals
+        )
+          ? (
+              raw as {
+                proposals?: Array<unknown>;
+                pagination?: { hasMore?: boolean; nextCursor?: string | null };
+              }
+            ).proposals || []
+          : [];
+        pagination = (
+          raw as {
+            proposals?: Array<unknown>;
+            pagination?: { hasMore?: boolean; nextCursor?: string | null };
+          }
+        ).pagination;
+      }
+
+      const more = proposalsArr.map(transformApiProposal);
+      setAppendedProposals(prev => [...prev, ...more]);
+      setHasMoreLocal(Boolean(pagination?.hasMore));
+      setNextCursor(pagination?.nextCursor ?? null);
+
+      // Use bridge to track load more
+      bridge.trackAction('proposals_load_more', {
+        appended: more.length,
+        nextCursor: pagination?.nextCursor ?? null,
+      });
+
+      // Add notification for successful load more
+      if (more.length > 0) {
+        bridge.addNotification({
+          type: 'success',
+          message: `Loaded ${more.length} more proposals`,
+        });
+      }
+
+      try {
+        trackEvent('proposals_load_more', {
+          appended: more.length,
+          nextCursor: pagination?.nextCursor ?? null,
+          userStory: 'US-3.1',
+          hypothesis: 'H3',
+        });
+      } catch (analyticsError) {
+        handleAsyncError(analyticsError, 'Failed to track proposals_load_more');
+      }
+
+      void logInfo('Load More success', {
+        component: 'ProposalsManagePage',
+        operation: 'load_more',
+        appended: more.length,
+      });
+    } catch (e) {
+      errorHandlingService.processError(e, 'Failed to load more proposals');
+      void logError('Load More failed', e, {
+        component: 'ProposalsManagePage',
+        operation: 'load_more',
+      });
+    }
+  }, [
+    hasMoreLocal,
+    nextCursor,
+    isLoading,
+    isFetching,
+    apiClient,
+    limit,
+    filters,
+    sort,
+    trackEvent,
+    handleAsyncError,
+    errorHandlingService,
+    bridge,
+  ]);
+
+  // Derived proposals list - optimized with useMemo
+  const baseProposals = proposalsData?.proposals || [];
+  const displayProposals = useMemo(() => {
+    return [...baseProposals, ...appendedProposals];
+  }, [baseProposals, appendedProposals]);
+
+  // Memoized filtered proposals for better performance
+  const filteredProposals = useMemo(() => {
+    if (!displayProposals.length) return [];
+
+    // Apply client-side filtering if needed (for additional filters not handled by API)
+    return displayProposals.filter(proposal => {
+      // Add any additional client-side filtering logic here
+      return true;
+    });
+  }, [displayProposals]);
+
+  // Optimized loading skeleton component
+  const LoadingSkeleton = memo(() => (
+    <div className="grid grid-cols-1 gap-6">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <Card key={index} className="animate-pulse">
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="h-6 bg-gray-200 rounded mb-3 w-3/4"></div>
+                <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
+                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+              </div>
+              <div className="flex space-x-2">
+                <div className="w-10 h-10 bg-gray-200 rounded"></div>
+                <div className="w-10 h-10 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  ));
+
+  // Optimized empty state component
+  const EmptyState = memo(() => (
+    <Card className="p-12">
+      <div className="text-center">
+        <CheckCircleIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No proposals found</h3>
+        <p className="text-gray-600 mb-4">
+          {Object.values(filters).some(f => f)
+            ? 'Try adjusting your filters or search terms.'
+            : 'Get started by creating your first proposal.'}
+        </p>
+        <Button
+          onClick={() => {
+            try {
+              trackEvent('create_proposal_clicked', {
+                source: 'empty_state',
+                userStory: 'US-3.1',
+                hypothesis: 'H3',
+              });
+              router.push('/proposals/create');
+            } catch (err) {
+              handleAsyncError(err, 'Failed to navigate to create proposal');
+            }
+          }}
+          className="min-h-[44px]"
+        >
+          <PlusIcon className="h-5 w-5 mr-2" />
+          Create Proposal
+        </Button>
+      </div>
+    </Card>
+  ));
+
+  // Optimized error state component
+  const ErrorState = memo(() => (
+    <Card className="p-6">
+      <div className="text-center text-red-600">
+        <ExclamationTriangleIcon className="mx-auto h-12 w-12 mb-4" />
+        <h3 className="text-lg font-medium mb-2">Error Loading Proposals</h3>
+        <p className="text-sm">{(error as Error).message}</p>
+        <Button
+          onClick={() => {
+            try {
+              trackEvent('error_retry_clicked', {
+                errorMessage: (error as Error).message,
+                context: 'ProposalsManagePage',
+                userStory: 'US-3.1',
+                hypothesis: 'H3',
+              });
+              refetch();
+            } catch (retryError) {
+              handleAsyncError(retryError, 'Failed to retry after error');
+            }
+          }}
+          className="mt-4 min-h-[44px]"
+        >
+          Try Again
+        </Button>
+      </div>
+    </Card>
+  ));
+
+  // Optimized load more button
+  const LoadMoreButton = memo(() => {
+    if (!(proposalsData?.pagination?.hasMore || hasMoreLocal)) return null;
+
+    return (
+      <div className="text-center" data-testid="proposals-load-more">
+        <Button
+          onClick={handleLoadMore}
+          disabled={isLoading || isFetching}
+          variant="outline"
+          className="min-h-[44px]"
+        >
+          {isFetching ? 'Loading...' : 'Load More'}
+        </Button>
+      </div>
+    );
+  });
+
+  // UI subcomponents
+  // Memoized components for better performance
+  const StatusBadge = memo(({ status }: { status: ProposalStatus }) => {
+    const getStatusColor = useCallback((s: ProposalStatus) => {
+      switch (s) {
         case ProposalStatus.DRAFT:
           return 'bg-gray-100 text-gray-800';
         case ProposalStatus.IN_PROGRESS:
@@ -532,661 +827,654 @@ function ProposalManagementDashboardContent() {
         default:
           return 'bg-gray-100 text-gray-800';
       }
-    };
+    }, []);
 
     return (
       <span
-        className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusStyle(status)}`}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(status)}`}
       >
-        {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+        {status.replace('_', ' ').toUpperCase()}
       </span>
     );
-  };
+  });
 
-  // Priority indicator component
-  const PriorityIndicator = ({ priority }: { priority: ProposalPriority }) => {
-    const getPriorityColor = (priority: ProposalPriority) => {
-      switch (priority) {
+  const PriorityBadge = memo(({ priority }: { priority: ProposalPriority }) => {
+    const getPriorityColor = useCallback((p: ProposalPriority) => {
+      switch (p) {
         case ProposalPriority.HIGH:
-          return 'text-red-600';
+          return 'bg-red-100 text-red-800';
         case ProposalPriority.MEDIUM:
-          return 'text-yellow-600';
+          return 'bg-yellow-100 text-yellow-800';
         case ProposalPriority.LOW:
-          return 'text-green-600';
+          return 'bg-green-100 text-green-800';
         default:
-          return 'text-gray-600';
+          return 'bg-gray-100 text-gray-800';
       }
-    };
+    }, []);
 
     return (
-      <span className={`text-sm font-medium ${getPriorityColor(priority)}`}>
-        {priority.charAt(0).toUpperCase() + priority.slice(1)}
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(priority)}`}
+      >
+        {priority.toUpperCase()}
       </span>
     );
-  };
+  });
 
-  // Calculate dashboard metrics with fallback to client-side calculation
-  const dashboardMetrics = useMemo(() => {
-    const clientStats = {
-      total: allProposals.length,
-      inProgress: allProposals.filter(p => p.status === ProposalStatus.IN_PROGRESS).length,
-      overdue: allProposals.filter(p =>
-        p.dueDate < new Date() &&
-        ![ProposalStatus.SUBMITTED, ProposalStatus.WON, ProposalStatus.LOST, ProposalStatus.CANCELLED].includes(p.status)
-      ).length,
-      totalValue: allProposals.reduce((sum, p) => sum + p.estimatedValue, 0),
-      winRate: allProposals.length > 0
-        ? Math.round((allProposals.filter(p => p.status === ProposalStatus.WON).length / allProposals.length) * 100)
-        : 0,
-    };
+  // Memoized stats cards
+  const StatsCards = memo(() => (
+    <div
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+      data-testid="proposals-stats"
+    >
+      <Card className="p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+              <CheckCircleIcon className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <div className="ml-5 w-0 flex-1">
+            <dl>
+              <dt className="text-sm font-medium text-gray-500 truncate">Total Proposals</dt>
+              <dd className="text-lg font-medium text-gray-900">
+                {isStatsLoading ? '...' : safeStats.total || 0}
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </Card>
 
-    return {
-      total: statsData?.total ?? clientStats.total,
-      inProgress: statsData?.inProgress ?? clientStats.inProgress,
-      overdue: statsData?.overdue ?? clientStats.overdue,
-      totalValue: statsData?.totalValue ?? clientStats.totalValue,
-      winRate: statsData?.winRate ?? clientStats.winRate,
+      <Card className="p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
+              <ClockIcon className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <div className="ml-5 w-0 flex-1">
+            <dl>
+              <dt className="text-sm font-medium text-gray-500 truncate">In Progress</dt>
+              <dd className="text-lg font-medium text-gray-900">
+                {isStatsLoading ? '...' : safeStats.inProgress || 0}
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
+              <ExclamationTriangleIcon className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <div className="ml-5 w-0 flex-1">
+            <dl>
+              <dt className="text-sm font-medium text-gray-500 truncate">Overdue</dt>
+              <dd className="text-lg font-medium text-gray-900">
+                {isStatsLoading ? '...' : safeStats.overdue || 0}
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+              <CheckCircleIcon className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <div className="ml-5 w-0 flex-1">
+            <dl>
+              <dt className="text-sm font-medium text-gray-500 truncate">Win Rate</dt>
+              <dd className="text-lg font-medium text-gray-900">
+                {isStatsLoading ? '...' : `${Math.round((safeStats.winRate || 0) * 100)}%`}
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </Card>
+    </div>
+  ));
+
+  // Optimized proposal card with memoization
+  const LegacyProposalCard = memo(({ proposal }: { proposal: Proposal }) => {
+    const isOverdue = useMemo(
+      () =>
+        new Date(proposal.dueDate) < new Date() &&
+        !['submitted', 'won', 'lost', 'cancelled'].includes(proposal.status),
+      [proposal.dueDate, proposal.status]
+    );
+
+    const daysUntilDue = useMemo(
+      () =>
+        Math.ceil(
+          (new Date(proposal.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+        ),
+      [proposal.dueDate]
+    );
+
+    const riskClass = useMemo(
+      () =>
+        isOverdue
+          ? 'border-l-4 border-l-red-500 bg-red-50'
+          : daysUntilDue <= 7 && daysUntilDue > 0
+            ? 'border-l-4 border-l-yellow-500 bg-yellow-50'
+            : proposal.priority === 'high'
+              ? 'border-l-4 border-l-orange-500'
+              : 'border-l-4 border-l-blue-500',
+      [isOverdue, daysUntilDue, proposal.priority]
+    );
+
+    const handleViewClick = useCallback(() => {
+      try {
+        // Use bridge to track view action
+        bridge.trackAction('proposal_view_clicked', {
+          proposalId: proposal.id,
+          proposalTitle: proposal.title,
+        });
+
+        trackEvent('proposal_view_clicked', {
+          proposalId: proposal.id,
+          userStory: 'US-3.1',
+          hypothesis: 'H3',
+        });
+        router.push(`/proposals/${proposal.id}`);
+      } catch (err) {
+        handleAsyncError(err, 'Failed to navigate to proposal view');
+      }
+    }, [proposal.id, proposal.title, trackEvent, router, handleAsyncError, bridge]);
+
+    const handleEditClick = useCallback(() => {
+      try {
+        // Use bridge to track edit action
+        bridge.trackAction('proposal_edit_clicked', {
+          proposalId: proposal.id,
+          proposalTitle: proposal.title,
+        });
+
+        trackEvent('proposal_edit_clicked', {
+          proposalId: proposal.id,
+          userStory: 'US-3.1',
+          hypothesis: 'H3',
+        });
+        router.push(`/proposals/create?edit=${proposal.id}`);
+      } catch (err) {
+        handleAsyncError(err, 'Failed to navigate to proposal edit');
+      }
+    }, [proposal.id, proposal.title, trackEvent, router, handleAsyncError, bridge]);
+
+    return (
+      <Card className={`hover:shadow-xl transition-all duration-200 ${riskClass}`}>
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <div className="flex items-center space-x-3 mb-3">
+                <h3
+                  className="text-xl font-bold text-gray-900 hover:text-blue-600 cursor-pointer transition-colors"
+                  onClick={handleViewClick}
+                >
+                  {proposal.title}
+                </h3>
+                <StatusBadge status={proposal.status} />
+                <PriorityBadge priority={proposal.priority} />
+                {isOverdue && (
+                  <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-red-100 text-red-800 rounded-full">
+                    <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                    OVERDUE
+                  </span>
+                )}
+                {!isOverdue && daysUntilDue <= 7 && daysUntilDue > 0 && (
+                  <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                    <ClockIcon className="w-3 h-3 mr-1" />
+                    {daysUntilDue}d left
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center space-x-4 mb-2">
+                <p className="text-lg font-semibold text-gray-800">{proposal.client}</p>
+                <div className="flex items-center text-sm text-gray-500">
+                  <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                  {proposal.stage}
+                </div>
+              </div>
+              {proposal.description && (
+                <p className="text-sm text-gray-600 line-clamp-2">{proposal.description}</p>
+              )}
+            </div>
+            <div className="flex flex-col items-end space-y-2 ml-6">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleViewClick}
+                  className="hover:bg-blue-50"
+                >
+                  <EyeIcon className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleEditClick}
+                  className="hover:bg-green-50"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                </Button>
+              </div>
+              <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-1 rounded">
+                {proposal.id.slice(0, 8)}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div
+              className={`flex items-center p-3 rounded-lg ${isOverdue ? 'bg-red-100 text-red-800' : daysUntilDue <= 7 && daysUntilDue > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-50 text-gray-700'}`}
+            >
+              <CalendarIcon className="w-5 h-5 mr-3 flex-shrink-0" />
+              <div>
+                <div className="text-xs font-medium opacity-75">Due Date</div>
+                <div className="font-semibold">
+                  {new Date(proposal.dueDate).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center p-3 rounded-lg bg-green-50 text-green-800">
+              <div className="w-5 h-5 mr-3 flex-shrink-0 flex items-center justify-center">
+                <span className="text-green-600 font-bold text-lg">$</span>
+              </div>
+              <div>
+                <div className="text-xs font-medium opacity-75">Value</div>
+                <div className="font-bold text-lg">
+                  ${Math.round((proposal.estimatedValue || 0) / 1000)}K
+                </div>
+              </div>
+            </div>
+            <div className="col-span-2 lg:col-span-2">
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${proposal.progress >= 80 ? 'bg-gradient-to-r from-green-500 to-green-600' : proposal.progress >= 50 ? 'bg-gradient-to-r from-blue-500 to-blue-600' : proposal.progress >= 25 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' : 'bg-gradient-to-r from-red-500 to-red-600'}`}
+                  style={{ width: `${proposal.progress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  });
+
+  // Stable header (SSR/CSR consistency)
+  const header = (
+    <div
+      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="proposals-header"
+    >
+      <div>
+        <Breadcrumbs />
+        <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">
+          Proposal Management
+        </h2>
+      </div>
+      <div className="mt-2 sm:mt-0 flex space-x-2">
+        <Button
+          onClick={refreshProposals}
+          variant="outline"
+          className="min-h-[44px]"
+          disabled={isLoading || isFetching}
+        >
+          <ArrowPathIcon
+            className={`h-5 w-5 mr-2 ${isLoading || isFetching ? 'animate-spin' : ''}`}
+          />
+          Refresh
+        </Button>
+        <Button onClick={() => router.push('/proposals/create')} className="min-h-[44px]">
+          <PlusIcon className="h-5 w-5 mr-2" />
+          New Proposal
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Track page view with bridge - run only once on mount
+  useEffect(() => {
+    bridge.trackPageView('proposals_manage');
+  }, []); // Empty dependency array to run only once
+
+  // Enhanced bridge integration - Event listeners for real-time updates
+  useEffect(() => {
+    // Listen for proposal creation events
+    const proposalCreatedListener = eventBridge.subscribe(
+      'PROPOSAL_CREATED',
+      (payload: EventPayload) => {
+        logInfo('Proposal created event received', {
+          component: 'ProposalsManagePage',
+          proposalId: payload.proposalId,
+        });
+
+        // Refresh the proposals list
+        refetch();
+
+        // Add notification
+        bridge.addNotification({
+          type: 'success',
+          message: `New proposal "${payload.title || 'Unknown'}" created successfully`,
+        });
+      },
+      { component: 'ProposalsManagePage' }
+    );
+
+    // Listen for proposal update events
+    const proposalUpdatedListener = eventBridge.subscribe(
+      'PROPOSAL_UPDATED',
+      (payload: EventPayload) => {
+        logInfo('Proposal updated event received', {
+          component: 'ProposalsManagePage',
+          proposalId: payload.proposalId,
+        });
+
+        // Refresh the proposals list
+        refetch();
+
+        // Add notification
+        bridge.addNotification({
+          type: 'info',
+          message: `Proposal "${payload.title || 'Unknown'}" updated successfully`,
+        });
+      },
+      { component: 'ProposalsManagePage' }
+    );
+
+    // Listen for theme changes
+    const themeChangedListener = eventBridge.subscribe(
+      'THEME_CHANGED',
+      (payload: EventPayload) => {
+        logInfo('Theme changed event received', {
+          component: 'ProposalsManagePage',
+          theme: payload.theme,
+        });
+
+        // Track theme change
+        bridge.trackAction('theme_changed', { theme: payload.theme });
+      },
+      { component: 'ProposalsManagePage' }
+    );
+
+    // Cleanup listeners on unmount
+    return () => {
+      eventBridge.unsubscribe('PROPOSAL_CREATED', proposalCreatedListener);
+      eventBridge.unsubscribe('PROPOSAL_UPDATED', proposalUpdatedListener);
+      eventBridge.unsubscribe('THEME_CHANGED', themeChangedListener);
     };
-  }, [allProposals, statsData]);
+  }, []); // Empty dependency array to prevent infinite loops
+
+  // Show loading while checking authentication
+  if (status === 'loading') {
+    return (
+      <div className="space-y-6 p-6" data-testid="proposals-manage-page">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Checking authentication...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!session?.user) {
+    return null;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Proposal Management</h1>
-              <p className="text-gray-600">Manage and track all proposals in your pipeline</p>
+    <div className="space-y-6 p-6" data-testid="proposals-manage-page">
+      {header}
+
+      {/* Stats */}
+      <StatsCards />
+
+      {/* Filters */}
+      <Card className="p-6" data-testid="proposals-filters">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search proposals..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10"
+                aria-label="Search proposals"
+              />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <Select
+              value={filters.status}
+              onChange={(value: string) => updateFilters({ status: value })}
+              options={[
+                { value: '', label: 'All Statuses' },
+                { value: ProposalStatus.DRAFT, label: 'Draft' },
+                { value: ProposalStatus.IN_PROGRESS, label: 'In Progress' },
+                { value: ProposalStatus.IN_REVIEW, label: 'In Review' },
+                { value: ProposalStatus.APPROVED, label: 'Approved' },
+                { value: ProposalStatus.SUBMITTED, label: 'Submitted' },
+                { value: ProposalStatus.WON, label: 'Won' },
+                { value: ProposalStatus.LOST, label: 'Lost' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+            <Select
+              value={filters.priority}
+              onChange={(value: string) => updateFilters({ priority: value })}
+              options={[
+                { value: '', label: 'All Priorities' },
+                { value: ProposalPriority.HIGH, label: 'High' },
+                { value: ProposalPriority.MEDIUM, label: 'Medium' },
+                { value: ProposalPriority.LOW, label: 'Low' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">View Mode</label>
+            <div className="flex rounded-md shadow-sm" role="group" aria-label="View mode">
+              <Button
+                variant={viewMode === 'cards' ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('cards')}
+                className="rounded-r-none min-h-[44px]"
+                aria-pressed={viewMode === 'cards'}
+                aria-label="Cards view"
+              >
+                <Squares2X2Icon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-l-none min-h-[44px]"
+                aria-pressed={viewMode === 'list'}
+                aria-label="List view"
+              >
+                <TableCellsIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-end space-x-2">
+            <Button variant="outline" onClick={clearFilters} size="sm" className="min-h-[44px]">
+              <FunnelIcon className="h-4 w-4 mr-2" />
+              Clear Filters
+            </Button>
             <Button
-              variant="primary"
+              variant="outline"
               onClick={() => {
-                trackOptimized('create_proposal_clicked', {
-                  userStory: COMPONENT_MAPPING.userStories[0],
-                  hypothesis: COMPONENT_MAPPING.hypotheses[0]
-                }, 'medium');
-                router.push('/proposals/create');
+                void logDebug('Action: manual_refetch', { component: 'ProposalsManagePage' });
+                refetch();
               }}
-              className="flex items-center"
+              size="sm"
+              className="min-h-[44px]"
+              aria-label="Refresh proposals"
             >
-              <PlusIcon className="w-4 h-4 mr-2" />
-              New Proposal
+              <ArrowPathIcon className="h-4 w-4" />
             </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <Card>
-            <div className="p-6">
-              <div className="flex items-center">
-                <DocumentTextIcon className="w-8 h-8 text-blue-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Proposals</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {isLoadingStats ? '...' : dashboardMetrics.total}
-                  </p>
-                </div>
-              </div>
+      {/* Content */}
+      {!isLoading && !error && (
+        <>
+          {viewMode === 'cards' ? (
+            <div className="grid grid-cols-1 gap-6" data-testid="proposals-list">
+              {filteredProposals.map(p => (
+                <LegacyProposalCard key={p.id} proposal={p} />
+              ))}
             </div>
-          </Card>
-
-          <Card>
-            <div className="p-6">
-              <div className="flex items-center">
-                <ArrowPathIcon className="w-8 h-8 text-yellow-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">In Progress</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {isLoadingStats ? '...' : dashboardMetrics.inProgress}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="p-6">
-              <div className="flex items-center">
-                <ExclamationTriangleIcon className="w-8 h-8 text-red-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Overdue</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {isLoadingStats ? '...' : dashboardMetrics.overdue}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="p-6">
-              <div className="flex items-center">
-                <CheckCircleIcon className="w-8 h-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Win Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {isLoadingStats ? '...' : `${dashboardMetrics.winRate}%`}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="p-6">
-              <div className="flex items-center">
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <span className="text-green-600 font-bold text-lg">$</span>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Value</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {isLoadingStats ? '...' : `$${((dashboardMetrics.totalValue || 0) / 1000000).toFixed(1)}M`}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Enhanced Filters and Search */}
-        <Card className="mb-8 border-0 shadow-sm bg-gradient-to-r from-white to-gray-50/30">
-          <div className="p-6">
-            <div className="flex flex-col space-y-6">
-              {/* Search Bar */}
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
-                </div>
-                <Input
-                  type="text"
-                  placeholder="Search proposals by title, client, tags, or team members..."
-                  value={filters.search}
-                  onChange={e => handleFilterChange('search', e.target.value)}
-                  className="pl-12 pr-4 py-3 text-base border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
-                  aria-label="Search proposals"
-                />
-                {filters.search && (
-                  <button
-                    onClick={() => handleFilterChange('search', '')}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center justify-center w-11 h-11 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md"
-                    aria-label="Clear search"
-                    type="button"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-
-              {/* Filter Controls */}
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-                <div className="flex flex-col sm:flex-row gap-3 flex-1">
-                  {/* Status Filter */}
-                  <div className="flex-1 sm:flex-none">
-                    <label htmlFor="status-filter" className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                    <Select
-                      id="status-filter"
-                      value={filters.status}
-                      options={[
-                        { value: 'all', label: 'All Status' },
-                        { value: 'draft', label: '📝 Draft' },
-                        { value: 'in_progress', label: '🔄 In Progress' },
-                        { value: 'in_review', label: '👀 Review' },
-                        { value: 'approved', label: '✅ Approved' },
-                        { value: 'submitted', label: '📤 Submitted' },
-                        { value: 'won', label: '🏆 Won' },
-                        { value: 'lost', label: '❌ Lost' },
-                      ]}
-                      onChange={(value: string) => handleFilterChange('status', value)}
-                      className="min-w-[140px]"
-                      aria-label="Filter by proposal status"
-                    />
-                  </div>
-
-                  {/* Priority Filter */}
-                  <div className="flex-1 sm:flex-none">
-                    <label htmlFor="priority-filter" className="block text-xs font-medium text-gray-700 mb-1">Priority</label>
-                    <Select
-                      id="priority-filter"
-                      value={filters.priority}
-                      options={[
-                        { value: 'all', label: 'All Priority' },
-                        { value: 'high', label: '🔴 High' },
-                        { value: 'medium', label: '🟡 Medium' },
-                        { value: 'low', label: '🟢 Low' },
-                      ]}
-                      onChange={(value: string) => handleFilterChange('priority', value)}
-                      className="min-w-[140px]"
-                      aria-label="Filter by proposal priority"
-                    />
-                  </div>
-
-                  {/* Sort By */}
-                  <div className="flex-1 sm:flex-none">
-                    <label htmlFor="sort-filter" className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-                    <Select
-                      id="sort-filter"
-                      value={filters.sortBy}
-                      options={[
-                        { value: 'updatedAt', label: '🕒 Last Updated' },
-                        { value: 'dueDate', label: '📅 Due Date' },
-                        { value: 'priority', label: '⚡ Priority' },
-                        { value: 'estimatedValue', label: '💰 Value' },
-                        { value: 'title', label: '📄 Title' },
-                      ]}
-                      onChange={(value: string) => handleFilterChange('sortBy', value)}
-                      className="min-w-[140px]"
-                      aria-label="Sort proposals by"
-                    />
-                  </div>
-                </div>
-
-                {/* Action Buttons and Results Count */}
-                <div className="flex items-center justify-between lg:justify-end space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="secondary"
-                      onClick={clearFilters}
-                      size="sm"
-                      className="px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm min-h-[44px]"
-                      aria-label="Clear all filters"
-                    >
-                      <FunnelIcon className="w-4 h-4 mr-2" />
-                      Clear Filters
-                    </Button>
-                  </div>
-
-                  {/* Results Count */}
-                  <div className="flex items-center space-x-2 text-sm">
-                    <span className="text-gray-500">Showing</span>
-                    <span className="font-semibold text-gray-900">{allProposals.length}</span>
-                    <span className="text-gray-500">proposals</span>
-                    {(filters.search || filters.status !== 'all' || filters.priority !== 'all') && (
-                      <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                        🔍 Filtered
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Proposals List */}
-        <div className="grid grid-cols-1 gap-6">
-          {isLoadingProposals ? (
-            // Loading skeleton
-            Array.from({ length: 3 }).map((_, index) => (
-              <Card key={index}>
-                <div className="p-6 animate-pulse">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-                    <div className="h-6 bg-gray-200 rounded w-20"></div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="h-4 bg-gray-200 rounded w-full"></div>
-                    <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                </div>
-              </Card>
-            ))
-          ) : proposalsError ? (
-            // Error state
-            <Card>
-              <div className="p-12 text-center">
-                <ExclamationTriangleIcon className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load proposals</h3>
-                <p className="text-gray-600 mb-6">
-                  There was an error loading the proposals. Please try again.
-                </p>
-                <Button
-                  variant="primary"
-                  onClick={() => refetchProposals()}
-                  disabled={isFetching}
-                >
-                  {isFetching ? 'Retrying...' : 'Retry'}
-                </Button>
-              </div>
-            </Card>
-          ) : allProposals.length === 0 ? (
-            // Empty state
-            <Card>
-              <div className="p-12 text-center">
-                <DocumentTextIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No proposals found</h3>
-                <p className="text-gray-600 mb-6">
-                  {filters.search || filters.status !== 'all' || filters.priority !== 'all'
-                    ? 'Try adjusting your filters to see more results.'
-                    : 'Get started by creating your first proposal.'}
-                </p>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (filters.search || filters.status !== 'all' || filters.priority !== 'all') {
-                      clearFilters();
-                    } else {
-                      router.push('/proposals/create');
-                    }
-                  }}
-                >
-                  {filters.search || filters.status !== 'all' || filters.priority !== 'all'
-                    ? 'Clear Filters'
-                    : 'Create First Proposal'}
-                </Button>
-              </div>
-            </Card>
           ) : (
-            // Proposal cards
-            allProposals.map(proposal => {
-              const isOverdue =
-                new Date(proposal.dueDate) < new Date() &&
-                !['submitted', 'won', 'lost', 'cancelled'].includes(proposal.status);
-
-              const daysUntilDue = Math.ceil(
-                (new Date(proposal.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-              );
-
-              const getRiskStyling = () => {
-                if (isOverdue) return 'border-l-4 border-l-red-500 bg-red-50';
-                if (daysUntilDue <= 7 && daysUntilDue > 0) return 'border-l-4 border-l-yellow-500 bg-yellow-50';
-                if (proposal.priority === 'high') return 'border-l-4 border-l-orange-500';
-                return 'border-l-4 border-l-blue-500';
-              };
-
-              return (
-                <Card
-                  key={proposal.id}
-                  className={`hover:shadow-xl transition-all duration-200 ${getRiskStyling()}`}
-                >
-                  <div className="p-6">
-                    {/* Header with status indicators */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-3">
-                          <h3
-                            className="text-xl font-bold text-gray-900 hover:text-blue-600 cursor-pointer transition-colors"
-                            onClick={() => {
-                              trackOptimized('view_proposal', {
-                                proposalId: proposal.id,
-                                userStory: COMPONENT_MAPPING.userStories[0],
-                                hypothesis: COMPONENT_MAPPING.hypotheses[0]
-                              }, 'medium');
-                              router.push(`/proposals/${proposal.id}`);
-                            }}
-                          >
-                            {proposal.title}
-                          </h3>
-                          <StatusBadge status={proposal.status} />
-                          <PriorityIndicator priority={proposal.priority} />
-
-                          {isOverdue && (
-                            <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-red-100 text-red-800 rounded-full animate-pulse">
-                              <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                              OVERDUE
-                            </span>
-                          )}
-                          {!isOverdue && daysUntilDue <= 7 && daysUntilDue > 0 && (
-                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                              <ClockIcon className="w-3 h-3 mr-1" />
-                              {daysUntilDue}d left
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center space-x-4 mb-2">
-                          <p className="text-lg font-semibold text-gray-800">{proposal.client}</p>
-                          <div className="flex items-center text-sm text-gray-500">
-                            <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-                            {proposal.stage}
-                          </div>
-                        </div>
-
-                        {proposal.description && (
-                          <p className="text-sm text-gray-600 line-clamp-2">
-                            {proposal.description}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col items-end space-y-2 ml-6">
-                        <div className="flex items-center space-x-2">
+            <Card className="overflow-hidden" data-testid="proposals-list">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Proposal
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Client
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Priority
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Due Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Value
+                    </th>
+                    <th className="relative px-6 py-3">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredProposals.map(p => (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{p.title}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{p.client}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <StatusBadge status={p.status} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <PriorityBadge priority={p.priority} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(p.dueDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${p.estimatedValue.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex space-x-2">
                           <Button
-                            variant="secondary"
+                            variant="outline"
                             size="sm"
                             onClick={() => {
-                              trackOptimized('view_proposal', {
-                                proposalId: proposal.id,
-                                userStory: COMPONENT_MAPPING.userStories[0],
-                                hypothesis: COMPONENT_MAPPING.hypotheses[0]
-                              }, 'medium');
-                              router.push(`/proposals/${proposal.id}`);
+                              try {
+                                trackEvent('proposal_view_clicked', {
+                                  proposalId: p.id,
+                                  proposalTitle: p.title,
+                                  proposalStatus: p.status,
+                                  viewMode: 'list',
+                                  userStory: 'US-3.1',
+                                  hypothesis: 'H3',
+                                });
+                                router.push(`/proposals/${p.id}`);
+                              } catch (err) {
+                                handleAsyncError(err, 'Failed to navigate to proposal view');
+                              }
                             }}
-                            className="hover:bg-blue-50"
+                            className="min-h-[44px] min-w-[44px]"
+                            aria-label={`View ${p.title}`}
+                            title={`View ${p.title}`}
                           >
-                            <EyeIcon className="w-4 h-4" />
+                            <EyeIcon className="h-4 w-4" />
                           </Button>
                           <Button
-                            variant="secondary"
+                            variant="outline"
                             size="sm"
-                            onClick={() => router.push(`/proposals/create?edit=${proposal.id}`)}
-                            className="hover:bg-green-50"
+                            onClick={() => {
+                              try {
+                                trackEvent('proposal_edit_clicked', {
+                                  proposalId: p.id,
+                                  proposalTitle: p.title,
+                                  proposalStatus: p.status,
+                                  viewMode: 'list',
+                                  userStory: 'US-3.1',
+                                  hypothesis: 'H3',
+                                });
+                                router.push(`/proposals/create?edit=${p.id}`);
+                              } catch (err) {
+                                handleAsyncError(err, 'Failed to navigate to proposal edit');
+                              }
+                            }}
+                            className="min-h-[44px] min-w-[44px]"
+                            aria-label={`Edit ${p.title}`}
+                            title={`Edit ${p.title}`}
                           >
-                            <PencilIcon className="w-4 h-4" />
+                            <PencilIcon className="h-4 w-4" />
                           </Button>
                         </div>
-                        <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-1 rounded">
-                          {proposal.id.slice(0, 8)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Key metrics */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                      <div
-                        className={`flex items-center p-3 rounded-lg ${
-                          isOverdue
-                            ? 'bg-red-100 text-red-800'
-                            : daysUntilDue <= 7 && daysUntilDue > 0
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-gray-50 text-gray-700'
-                        }`}
-                      >
-                        <CalendarIcon className="w-5 h-5 mr-3 flex-shrink-0" />
-                        <div>
-                          <div className="text-xs font-medium opacity-75">Due Date</div>
-                          <div className="font-semibold">
-                            {proposal.dueDate.toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center p-3 rounded-lg bg-blue-50 text-blue-800">
-                        <UserGroupIcon className="w-5 h-5 mr-3 flex-shrink-0" />
-                        <div>
-                          <div className="text-xs font-medium opacity-75">Team Size</div>
-                          <div className="font-bold text-lg">
-                            {proposal.assignedTeam.length}
-                            <span className="text-sm font-normal ml-1">members</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center p-3 rounded-lg bg-green-50 text-green-800">
-                        <div className="w-5 h-5 mr-3 flex-shrink-0 flex items-center justify-center">
-                          <span className="text-green-600 font-bold text-lg">$</span>
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium opacity-75">Value</div>
-                          <div className="font-bold text-lg">
-                            ${Math.round((proposal.estimatedValue || 0) / 1000)}K
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center p-3 rounded-lg bg-purple-50 text-purple-800">
-                        <div className="w-5 h-5 mr-3 flex-shrink-0 relative">
-                          <div className="w-5 h-5 rounded-full border-2 border-current opacity-25"></div>
-                          <div
-                            className="absolute inset-0 rounded-full border-2 border-current border-r-transparent"
-                            style={{
-                              transform: `rotate(${(proposal.progress / 100) * 360}deg)`,
-                            }}
-                          ></div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium opacity-75">Progress</div>
-                          <div className="font-bold text-lg">{proposal.progress}%</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="mb-6">
-                      <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            proposal.progress >= 80
-                              ? 'bg-gradient-to-r from-green-500 to-green-600'
-                              : proposal.progress >= 50
-                                ? 'bg-gradient-to-r from-blue-500 to-blue-600'
-                                : proposal.progress >= 25
-                                  ? 'bg-gradient-to-r from-yellow-500 to-yellow-600'
-                                  : 'bg-gradient-to-r from-red-500 to-red-600'
-                          }`}
-                          style={{ width: `${proposal.progress}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Team and Tags */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-semibold text-blue-800">
-                              {proposal.teamLead
-                                .split(' ')
-                                .map((n: string) => n[0])
-                                .join('')
-                                .slice(0, 2)}
-                            </span>
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-500">Team Lead</div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {proposal.teamLead}
-                            </div>
-                          </div>
-                        </div>
-
-                        {proposal.assignedTeam.length > 1 && (
-                          <div className="flex items-center space-x-1">
-                            {proposal.assignedTeam.slice(1, 4).map((member: string, index: number) => (
-                              <div
-                                key={index}
-                                className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center border-2 border-white"
-                                title={member}
-                              >
-                                <span className="text-xs font-medium text-gray-600">
-                                  {member
-                                    .split(' ')
-                                    .map((n: string) => n[0])
-                                    .join('')
-                                    .slice(0, 1)}
-                                </span>
-                              </div>
-                            ))}
-                            {proposal.assignedTeam.length > 4 && (
-                              <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center border-2 border-white">
-                                <span className="text-xs font-bold text-gray-600">
-                                  +{proposal.assignedTeam.length - 4}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        {proposal.tags.slice(0, 2).map((tag: string) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                        {proposal.tags.length > 2 && (
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                            +{proposal.tags.length - 2}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Last Activity */}
-                    {proposal.lastActivity && (
-                      <div className="pt-4 border-t border-gray-100">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                            <p className="text-sm text-gray-600">
-                              <span className="font-medium">Last activity:</span> {proposal.lastActivity}
-                            </p>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {proposal.updatedAt.toLocaleDateString()} •{' '}
-                            {proposal.updatedAt.toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              );
-            })
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
           )}
 
-          {/* Infinite scroll sentinel and load more button */}
-          <div ref={loadMoreRef} />
-          {hasNextPage && !isLoadingProposals && (
-            <div className="flex justify-center mt-6">
-              <Button
-                variant="secondary"
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-              >
-                {isFetchingNextPage ? 'Loading...' : 'Load More'}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+          <LoadMoreButton />
+
+          {/* Empty State */}
+          {filteredProposals.length === 0 && <EmptyState />}
+        </>
+      )}
+
+      {/* Loading */}
+      {isLoading && <LoadingSkeleton />}
+
+      {/* Error */}
+      {error && <ErrorState />}
     </div>
   );
 }
 
-export default function ProposalManagementDashboard() {
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  if (!isClient) {
-    return null; // Prevent hydration mismatch
-  }
-
-  return <ProposalManagementDashboardContent />;
+// Wrapper component with bridge providers
+export default function ProposalsManagePage() {
+  return (
+    <GlobalStateProvider>
+      <ProposalManagementBridge>
+        <ProposalsManagePageContent />
+      </ProposalManagementBridge>
+    </GlobalStateProvider>
+  );
 }

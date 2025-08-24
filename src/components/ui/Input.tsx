@@ -1,8 +1,7 @@
 'use client';
 
-import { useResponsive } from '@/hooks/useResponsive';
 import { cn } from '@/lib/utils';
-import { forwardRef, useCallback } from 'react';
+import { forwardRef } from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
@@ -12,23 +11,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, error, label, helpText, ...props }, ref) => {
-    // ✅ MOBILE OPTIMIZATION: Use centralized responsive detection
-    const { isMobile, isTablet } = useResponsive();
-
-    // ✅ CRITICAL FIX: Touch event handler to ensure proper mobile interaction
-    const handleTouchStart = useCallback((e: React.TouchEvent<HTMLInputElement>) => {
-      // Prevent parent touch handlers from interfering
-      e.stopPropagation();
-
-      // Add visual feedback for touch
-      const target = e.currentTarget;
-      target.style.transform = 'scale(0.995)';
-
-      // Reset transform after short delay
-      setTimeout(() => {
-        target.style.transform = '';
-      }, 100);
-    }, []);
+    // ✅ HYDRATION FIX: Remove JavaScript-based responsive detection to prevent SSR/CSR mismatch
+    // Use CSS-only responsive design with Tailwind classes for consistent hydration
 
     return (
       <div className="w-full">
@@ -36,8 +20,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <label
             className={cn(
               'form-label mb-2 block text-sm font-medium text-gray-700',
-              // Mobile-specific typography optimization
-              isMobile && 'text-base font-semibold',
+              // Mobile-responsive typography using CSS only
+              'sm:text-sm md:text-base',
               error && 'text-red-700'
             )}
           >
@@ -47,62 +31,49 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           type={type}
           className={cn(
-            // Base responsive styles
-            'form-field w-full border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400',
+            // Base responsive styles using CSS-only responsive design
+            'form-field w-full border border-gray-300 bg-white text-sm placeholder:text-gray-400',
             'focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
             'disabled:cursor-not-allowed disabled:opacity-50',
             'transition-colors duration-200',
 
-            // ✅ MOBILE-FIRST OPTIMIZATIONS
-            isMobile && [
-              'text-base', // Prevents iOS zoom
-              'py-3', // Larger touch target (48px minimum)
-              'px-4', // Better mobile padding
-              'rounded-lg', // Mobile-friendly corners
-              'border-2', // More visible border on mobile
-              'focus:ring-4 focus:ring-blue-100', // Enhanced focus visibility
-              'active:scale-[0.98]', // Touch feedback
-              'touch-manipulation', // Optimize touch handling
-              'will-change-transform', // GPU acceleration
-              // ✅ CRITICAL FIX: Ensure touch events work properly
-              'relative z-10 pointer-events-auto',
-            ],
+            // ✅ MOBILE-FIRST OPTIMIZATIONS using Tailwind responsive classes
+            // Mobile (default)
+            'px-4 py-3 text-base rounded-lg border-2',
+            'focus:ring-4 focus:ring-blue-100',
+            'touch-manipulation will-change-transform',
+            'active:scale-[0.98]',
+            'relative z-10 pointer-events-auto',
+            'min-h-[48px]', // WCAG 2.1 AA touch target
+            'text-base', // Prevents iOS zoom
+            'touch-manipulation', // Optimize touch handling
 
-            // Tablet optimizations
-            isTablet && ['py-2.5', 'px-3.5', 'rounded-md'],
+            // Tablet and up (md:)
+            'md:px-3.5 md:py-2.5 md:text-sm md:rounded-md md:border',
+            'md:focus:ring-1',
+
+            // Desktop and up (lg:)
+            'lg:px-3 lg:py-2',
 
             // Error states
             error && [
               'border-red-300 focus:border-red-500 focus:ring-red-500',
-              isMobile && 'border-red-400 focus:ring-red-200',
+              'sm:border-red-400 sm:focus:ring-red-200',
             ],
 
             className
           )}
           ref={ref}
-          onTouchStart={isMobile ? handleTouchStart : undefined}
-          style={
-            isMobile
-              ? {
-                  minHeight: '48px', // WCAG 2.1 AA touch target
-                  fontSize: '16px', // Prevents iOS zoom
-                  // ✅ CRITICAL FIX: Ensure touch events are captured
-                  touchAction: 'manipulation',
-                  WebkitTapHighlightColor: 'rgba(59, 130, 246, 0.1)',
-                }
-              : undefined
-          }
+          // Remove inline styles to prevent hydration mismatch
+          // Use CSS classes for consistent SSR/CSR rendering
           {...props}
         />
         {helpText && !error && (
-          <p className={cn('mt-1 text-xs text-gray-500', isMobile && 'text-sm')}>{helpText}</p>
+          <p className={cn('mt-1 text-xs text-gray-500', 'sm:text-sm')}>{helpText}</p>
         )}
         {error && (
           <p
-            className={cn(
-              'mt-1 text-xs text-red-600',
-              isMobile && 'text-sm font-medium text-red-700'
-            )}
+            className={cn('mt-1 text-xs text-red-600', 'sm:text-sm sm:font-medium sm:text-red-700')}
             role="alert"
           >
             {error}

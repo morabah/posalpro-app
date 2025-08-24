@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useApiClient } from '@/hooks/useApiClient';
+import { useExecutiveDashboard } from '@/hooks/useDashboard';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
@@ -88,8 +88,6 @@ interface ExecutiveDashboardResponse {
 
 // Main Executive Dashboard Component
 const ExecutiveDashboard = memo(() => {
-  // API and Error Handling
-  const apiClient = useApiClient();
   const { handleAsyncError } = useErrorHandler();
 
   // State Management
@@ -97,7 +95,6 @@ const ExecutiveDashboard = memo(() => {
   const [revenueData, setRevenueData] = useState<RevenueChart[]>([]);
   const [teamData, setTeamData] = useState<TeamPerformance[]>([]);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
-  const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'3M' | '6M' | '1Y'>('3M');
   const [includeForecasts, setIncludeForecasts] = useState(true);
 
@@ -105,32 +102,15 @@ const ExecutiveDashboard = memo(() => {
   const [isMobile, setIsMobile] = useState(false);
   const [liveUpdatesEnabled, setLiveUpdatesEnabled] = useState(false);
 
-  // Data Fetching
+  const { data, isLoading } = useExecutiveDashboard(timeframe, includeForecasts);
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-
-        const response = (await apiClient.get(
-          `/api/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}`
-        )) as ExecutiveDashboardResponse;
-
-        if (response.success) {
-          const data = response.data;
-          setMetrics(data.metrics);
-          setRevenueData(data.revenueChart); // Fixed: was data.revenueData
-          setTeamData(data.teamPerformance); // Fixed: was data.teamData
-          setPipelineStages(data.pipelineStages);
-        }
-      } catch (error) {
-        handleAsyncError(error, 'Failed to load dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, [timeframe, includeForecasts, apiClient, handleAsyncError]);
+    if (data) {
+      setMetrics(data.metrics);
+      setRevenueData(data.revenueChart);
+      setTeamData(data.teamPerformance);
+      setPipelineStages(data.pipelineStages);
+    }
+  }, [data]);
 
   // Mobile Detection
   useEffect(() => {
@@ -151,25 +131,13 @@ const ExecutiveDashboard = memo(() => {
 
   const handleRefreshPredictions = useCallback(async () => {
     try {
-      setLoading(true);
-      // Trigger data refetch
-      const response = (await apiClient.get(
-        `/api/dashboard/executive?timeframe=${timeframe}&includeForecasts=${includeForecasts}&refresh=true`
-      )) as ExecutiveDashboardResponse;
-
-      if (response.success) {
-        const data = response.data;
-        setMetrics(data.metrics);
-        setRevenueData(data.revenueChart);
-        setTeamData(data.teamPerformance);
-        setPipelineStages(data.pipelineStages);
-      }
+      // React Query will auto-refetch when key changes; toggle includeForecasts to refetch
+      setIncludeForecasts(prev => !prev);
+      setTimeout(() => setIncludeForecasts(prev => !prev), 0);
     } catch (error) {
       handleAsyncError(error, 'Failed to refresh predictions');
-    } finally {
-      setLoading(false);
     }
-  }, [timeframe, includeForecasts, apiClient, handleAsyncError]);
+  }, [handleAsyncError]);
 
   // Main Render
   return (
@@ -292,7 +260,7 @@ const ExecutiveDashboard = memo(() => {
 
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-          {loading
+          {isLoading
             ? // Loading skeletons
               Array.from({ length: 4 }).map((_, index) => <MetricCardSkeleton key={index} />)
             : [
@@ -422,7 +390,7 @@ const ExecutiveDashboard = memo(() => {
                 </div>
               </div>
               <div className="h-80 lg:h-96">
-                <InteractiveRevenueChart data={revenueData} loading={loading} />
+                <InteractiveRevenueChart data={revenueData} loading={isLoading} />
               </div>
             </div>
           </div>
@@ -454,7 +422,7 @@ const ExecutiveDashboard = memo(() => {
               </div>
             </div>
             <div className="h-80 lg:h-96">
-              <TeamPerformanceHeatmap data={teamData} loading={loading} />
+              <TeamPerformanceHeatmap data={teamData} loading={isLoading} />
             </div>
           </div>
 
@@ -482,7 +450,7 @@ const ExecutiveDashboard = memo(() => {
               </div>
             </div>
             <div className="h-80 lg:h-96">
-              <PipelineHealthVisualization stages={pipelineStages} loading={loading} />
+              <PipelineHealthVisualization stages={pipelineStages} loading={isLoading} />
             </div>
           </div>
         </div>

@@ -23,9 +23,39 @@ import readline from 'node:readline';
 import { URLSearchParams } from 'node:url';
 import { prisma } from '../src/lib/db/prisma';
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+// ✅ ENHANCED: Structured logging integration
+import { logDebug, logError, logInfo, logWarn } from '../src/lib/logger';
+
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
 const BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
+
+// ✅ ENHANCED: CLI-specific error class
+class CLIError extends Error {
+  constructor(
+    message: string,
+    public operation: string,
+    public component: string = 'AppCLI',
+    public metadata?: Record<string, any>
+  ) {
+    super(message);
+    this.name = 'CLIError';
+  }
+}
+
+// ✅ ENHANCED: Performance tracking utility
+function trackPerformance<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+  const startTime = performance.now();
+  return fn().finally(() => {
+    const duration = performance.now() - startTime;
+    logDebug('CLI: Performance tracked', {
+      component: 'AppCLI',
+      operation,
+      duration: Math.round(duration),
+      timestamp: new Date().toISOString(),
+    });
+  });
+}
 function slugify(value: string): string {
   return (
     String(value)
@@ -109,60 +139,173 @@ class ApiClient {
   }
 
   async login(email: string, password: string, role?: string) {
-    // 1) Get CSRF token
-    const csrfRes = await fetchOrig(`${this.baseUrl}/api/auth/csrf`, {
-      method: 'GET',
-    });
-    const rawSetCookie: string[] | undefined = (csrfRes.headers as any).raw?.()['set-cookie'];
-    this.jar.setFromSetCookie(rawSetCookie);
-    const csrfData = (await csrfRes.json()) as { csrfToken: string };
+    try {
+      logInfo('CLI: Login attempt started', {
+        component: 'AppCLI',
+        operation: 'login',
+        email,
+        role,
+        baseUrl: this.baseUrl,
+      });
 
-    // 2) Post credentials to NextAuth callback to obtain session cookie
-    const params = new URLSearchParams();
-    params.set('csrfToken', csrfData.csrfToken);
-    params.set('email', email);
-    params.set('password', password);
-    if (role) params.set('role', role);
-    params.set('callbackUrl', `${this.baseUrl}/dashboard`);
+      // 1) Get CSRF token
+      const csrfRes = await fetchOrig(`${this.baseUrl}/api/auth/csrf`, {
+        method: 'GET',
+      });
 
-    const loginRes = await fetchOrig(`${this.baseUrl}/api/auth/callback/credentials`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: this.jar.getCookieHeader(),
-      },
-      body: params.toString(),
-      redirect: 'manual',
-    });
-    const loginSetCookie: string[] | undefined = (loginRes.headers as any).raw?.()['set-cookie'];
-    this.jar.setFromSetCookie(loginSetCookie);
+      if (!csrfRes.ok) {
+        throw new CLIError(
+          `CSRF token fetch failed (${csrfRes.status})`,
+          'login_csrf_fetch',
+          'AppCLI',
+          { status: csrfRes.status, baseUrl: this.baseUrl }
+        );
+      }
 
-    if (loginRes.status !== 302 && loginRes.status !== 200) {
-      const text = await loginRes.text();
-      throw new Error(`Login failed (${loginRes.status}): ${text}`);
+      const rawSetCookie: string[] | undefined = (csrfRes.headers as any).raw?.()['set-cookie'];
+      this.jar.setFromSetCookie(rawSetCookie);
+      const csrfData = (await csrfRes.json()) as { csrfToken: string };
+
+      logDebug('CLI: CSRF token obtained', {
+        component: 'AppCLI',
+        operation: 'login_csrf_success',
+        hasCsrfToken: !!csrfData.csrfToken,
+      });
+
+      // 2) Post credentials to NextAuth callback to obtain session cookie
+      const params = new URLSearchParams();
+      params.set('csrfToken', csrfData.csrfToken);
+      params.set('email', email);
+      params.set('password', password);
+      if (role) params.set('role', role);
+      params.set('callbackUrl', `${this.baseUrl}/dashboard`);
+
+      const loginRes = await fetchOrig(`${this.baseUrl}/api/auth/callback/credentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: this.jar.getCookieHeader(),
+        },
+        body: params.toString(),
+        redirect: 'manual',
+      });
+      const loginSetCookie: string[] | undefined = (loginRes.headers as any).raw?.()['set-cookie'];
+      this.jar.setFromSetCookie(loginSetCookie);
+
+      if (loginRes.status !== 302 && loginRes.status !== 200) {
+        const text = await loginRes.text();
+        throw new CLIError(
+          `Login failed (${loginRes.status}): ${text}`,
+          'login_credentials_failed',
+          'AppCLI',
+          { status: loginRes.status, email, role }
+        );
+      }
+
+      logDebug('CLI: Credentials accepted', {
+        component: 'AppCLI',
+        operation: 'login_credentials_success',
+        status: loginRes.status,
+      });
+
+      // 3) Verify session by calling NextAuth session endpoint (stable across roles)
+      const verifyRes = await this.request('GET', '/api/auth/session');
+      if (!verifyRes.ok) {
+        throw new CLIError(
+          `Login verification failed (${verifyRes.status})`,
+          'login_verification_failed',
+          'AppCLI',
+          { status: verifyRes.status }
+        );
+      }
+
+      logInfo('CLI: Login successful', {
+        component: 'AppCLI',
+        operation: 'login_success',
+        email,
+        role,
+        sessionVerified: true,
+      });
+
+      return true;
+    } catch (error) {
+      logError('CLI: Login failed', {
+        component: 'AppCLI',
+        operation: 'login_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        email,
+        role,
+        baseUrl: this.baseUrl,
+      });
+      throw error;
     }
-
-    // 3) Verify session by calling NextAuth session endpoint (stable across roles)
-    const verifyRes = await this.request('GET', '/api/auth/session');
-    if (!verifyRes.ok) {
-      throw new Error(`Login verification failed (${verifyRes.status})`);
-    }
-    return true;
   }
 
   async request(method: HttpMethod, path: string, body?: any) {
-    const url = path.startsWith('http') ? path : `${this.baseUrl}${path}`;
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-      Cookie: this.jar.getCookieHeader(),
-    };
-    let fetchBody: any = undefined;
-    if (body !== undefined && method !== 'GET') {
-      headers['Content-Type'] = 'application/json';
-      fetchBody = typeof body === 'string' ? body : JSON.stringify(body);
-    }
-    const res = await fetchOrig(url, { method, headers, body: fetchBody });
-    return res;
+    return trackPerformance(`api_request_${method.toLowerCase()}`, async () => {
+      try {
+        const url = path.startsWith('http') ? path : `${this.baseUrl}${path}`;
+        const headers: Record<string, string> = {
+          Accept: 'application/json',
+          Cookie: this.jar.getCookieHeader(),
+        };
+        let fetchBody: any = undefined;
+        if (body !== undefined && method !== 'GET') {
+          headers['Content-Type'] = 'application/json';
+          fetchBody = typeof body === 'string' ? body : JSON.stringify(body);
+        }
+
+        logDebug('CLI: API request started', {
+          component: 'AppCLI',
+          operation: 'api_request',
+          method,
+          path,
+          url,
+          hasBody: !!body,
+          bodySize: body ? JSON.stringify(body).length : 0,
+        });
+
+        const res = await fetchOrig(url, { method, headers, body: fetchBody });
+
+        logDebug('CLI: API request completed', {
+          component: 'AppCLI',
+          operation: 'api_request_complete',
+          method,
+          path,
+          status: res.status,
+          statusText: res.statusText,
+          ok: res.ok,
+        });
+
+        if (!res.ok) {
+          logWarn('CLI: API request failed', {
+            component: 'AppCLI',
+            operation: 'api_request_failed',
+            method,
+            path,
+            status: res.status,
+            statusText: res.statusText,
+          });
+        }
+
+        return res;
+      } catch (error) {
+        logError('CLI: API request error', {
+          component: 'AppCLI',
+          operation: 'api_request_error',
+          method,
+          path,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        throw new CLIError(
+          `API request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          'api_request_error',
+          'AppCLI',
+          { method, path, originalError: error }
+        );
+      }
+    });
   }
 }
 
@@ -747,36 +890,112 @@ async function execute(tokens: string[], api: ApiClient) {
       } else if (sub === 'run-set') {
         const file = tokens[2] || '.posalpro-rbac-set.json';
         try {
+          logInfo('CLI: RBAC set test started', {
+            component: 'AppCLI',
+            operation: 'rbac_run_set',
+            file,
+          });
+
           const raw = fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
           const items = JSON.parse(raw);
           if (!Array.isArray(items)) {
-            console.log('RBAC set file must be an array of {method,path,body,expect}');
-            break;
+            throw new CLIError(
+              'RBAC set file must be an array of {method,path,body,expect}',
+              'rbac_invalid_format',
+              'AppCLI',
+              { file, itemCount: items?.length }
+            );
           }
+
           let pass = 0,
             fail = 0;
+
+          logDebug('CLI: RBAC set test processing', {
+            component: 'AppCLI',
+            operation: 'rbac_set_processing',
+            totalTests: items.length,
+          });
+
           for (const it of items) {
-            const method = (it.method || 'GET').toUpperCase();
-            const res = await api.request(method as HttpMethod, it.path, it.body);
-            const allowed = res.status < 400;
-            const statusTxt = `${res.status}`;
-            const ok =
-              typeof it.expect === 'number'
-                ? res.status === it.expect
-                : typeof it.expect === 'string'
-                  ? statusTxt.startsWith(it.expect)
-                  : allowed;
-            console.log(
-              `[RBAC] ${method} ${it.path} → ${allowed ? 'Allowed' : 'Denied'} (${res.status})${
-                it.expect !== undefined ? ` expect=${it.expect} ${ok ? '✓' : '✗'}` : ''
-              }`
-            );
-            ok ? pass++ : fail++;
+            try {
+              const method = (it.method || 'GET').toUpperCase();
+              const res = await api.request(method as HttpMethod, it.path, it.body);
+              const allowed = res.status < 400;
+              const statusTxt = `${res.status}`;
+              const ok =
+                typeof it.expect === 'number'
+                  ? res.status === it.expect
+                  : typeof it.expect === 'string'
+                    ? statusTxt.startsWith(it.expect)
+                    : allowed;
+
+              console.log(
+                `[RBAC] ${method} ${it.path} → ${allowed ? 'Allowed' : 'Denied'} (${res.status})${
+                  it.expect !== undefined ? ` expect=${it.expect} ${ok ? '✓' : '✗'}` : ''
+                }`
+              );
+
+              if (ok) {
+                pass++;
+                logDebug('CLI: RBAC test passed', {
+                  component: 'AppCLI',
+                  operation: 'rbac_test_passed',
+                  method,
+                  path: it.path,
+                  status: res.status,
+                  expected: it.expect,
+                });
+              } else {
+                fail++;
+                logWarn('CLI: RBAC test failed', {
+                  component: 'AppCLI',
+                  operation: 'rbac_test_failed',
+                  method,
+                  path: it.path,
+                  status: res.status,
+                  expected: it.expect,
+                  actual: res.status,
+                });
+              }
+            } catch (error) {
+              fail++;
+              logError('CLI: RBAC test error', {
+                component: 'AppCLI',
+                operation: 'rbac_test_error',
+                method: it.method,
+                path: it.path,
+                error: error instanceof Error ? error.message : 'Unknown error',
+              });
+              console.log(
+                `❌ [RBAC] ${it.method || 'GET'} ${it.path} → Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+              );
+            }
           }
+
           console.log(`RBAC set results: ${pass} passed, ${fail} failed`);
+
+          logInfo('CLI: RBAC set test completed', {
+            component: 'AppCLI',
+            operation: 'rbac_run_set_complete',
+            file,
+            passed: pass,
+            failed: fail,
+            total: pass + fail,
+            successRate: pass / (pass + fail),
+          });
+
           if (fail > 0) process.exitCode = 1;
         } catch (e) {
-          console.log(`Failed to read set file: ${file} (${(e as Error).message})`);
+          const error = e as Error;
+          logError('CLI: RBAC set test failed', {
+            component: 'AppCLI',
+            operation: 'rbac_run_set_error',
+            file,
+            error: error.message,
+            stack: error.stack,
+          });
+          console.error(`❌ Failed to read set file: ${file} (${error.message})`);
+          process.exitCode = 1;
         }
       } else if (sub === 'test-roles') {
         const file = tokens[2] || '.posalpro-rbac-roles.json';
@@ -909,9 +1128,28 @@ async function main() {
   rl.on('line', async line => {
     const tokens = tokenize(line.trim());
     try {
+      logDebug('CLI: Interactive command received', {
+        component: 'AppCLI',
+        operation: 'interactive_command',
+        command: tokens[0],
+        args: tokens.slice(1),
+      });
       await execute(tokens, api);
     } catch (err) {
-      console.error('Error:', (err as Error)?.message);
+      const error = err as Error;
+      logError('CLI: Interactive command error', {
+        component: 'AppCLI',
+        operation: 'interactive_command_error',
+        command: tokens[0],
+        args: tokens.slice(1),
+        error: error.message,
+        stack: error.stack,
+      });
+      console.error(`❌ Error: ${error.message}`);
+      if (error instanceof CLIError) {
+        console.error(`   Operation: ${error.operation}`);
+        console.error(`   Component: ${error.component}`);
+      }
     }
     rl.prompt();
   });
@@ -923,6 +1161,14 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('Fatal:', err);
+  const error = err as Error;
+  logError('CLI: Fatal error', {
+    component: 'AppCLI',
+    operation: 'fatal_error',
+    error: error.message,
+    stack: error.stack,
+  });
+  console.error(`💥 Fatal: ${error.message}`);
+  console.error(`   Stack: ${error.stack?.split('\n').slice(1, 4).join('\n   ')}`);
   process.exit(1);
 });

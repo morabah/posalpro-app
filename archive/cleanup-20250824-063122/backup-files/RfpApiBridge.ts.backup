@@ -1,0 +1,992 @@
+/**
+ * RFP API Bridge - CORE_REQUIREMENTS.md Compliant
+ *
+ * COMPONENT TRACEABILITY MATRIX:
+ * - User Stories: US-4.1 (RFP Management), US-4.2 (RFP Analysis), US-4.3 (RFP Parser)
+ * - Acceptance Criteria: AC-4.1.1, AC-4.1.2, AC-4.1.3, AC-4.2.1, AC-4.3.1
+ * - Hypotheses: H6 (RFP Intelligence), H16 (Automated Analysis), H17 (Parser Accuracy)
+ *
+ * COMPLIANCE STATUS:
+ * ✅ Error Handling with ErrorHandlingService
+ * ✅ Analytics with userStory and hypothesis tracking
+ * ✅ Structured Logging with metadata
+ * ✅ TypeScript Type Safety (no any types)
+ * ✅ Performance Optimization with useCallback/useMemo
+ */
+
+'use client';
+
+import { useApiClient } from '@/hooks/useApiClient';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { useCallback, useMemo } from 'react';
+
+// ✅ PROPER TYPESCRIPT INTERFACES (no any types)
+interface RfpData {
+  id?: string;
+  title: string;
+  description?: string;
+  issuer?: string;
+  deadline?: string;
+  budget?: number;
+  status?: 'draft' | 'published' | 'closed' | 'awarded';
+  category?: string;
+  requirements?: string[];
+  attachments?: string[];
+  analysisData?: RfpAnalysisData;
+  [key: string]: unknown;
+}
+
+interface RfpUpdateData {
+  title?: string;
+  description?: string;
+  issuer?: string;
+  deadline?: string;
+  budget?: number;
+  status?: 'draft' | 'published' | 'closed' | 'awarded';
+  category?: string;
+  requirements?: string[];
+  attachments?: string[];
+  analysisData?: RfpAnalysisData;
+  [key: string]: unknown;
+}
+
+interface RfpFetchParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  category?: string;
+  issuer?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  [key: string]: unknown;
+}
+
+interface RfpAnalysisData {
+  complexityScore?: number;
+  estimatedValue?: number;
+  keyRequirements?: string[];
+  riskFactors?: string[];
+  opportunityAreas?: string[];
+  competitorAnalysis?: {
+    competitors?: string[];
+    marketPosition?: string;
+    differentiationOpportunities?: string[];
+  };
+  technicalRequirements?: {
+    mandatory?: string[];
+    preferred?: string[];
+    optional?: string[];
+  };
+  timelineAnalysis?: {
+    preparationTime?: number;
+    submissionDeadline?: string;
+    evaluationPeriod?: number;
+  };
+  [key: string]: unknown;
+}
+
+interface RfpParserResult {
+  extractedData: {
+    title?: string;
+    issuer?: string;
+    deadline?: string;
+    budget?: number;
+    requirements?: string[];
+    contactInfo?: {
+      name?: string;
+      email?: string;
+      phone?: string;
+    };
+  };
+  confidence: number;
+  processingTime: number;
+  [key: string]: unknown;
+}
+
+interface RfpStats {
+  total: number;
+  draft: number;
+  published: number;
+  closed: number;
+  awarded: number;
+  averageBudget: number;
+  topIssuers: Array<{ issuer: string; count: number }>;
+}
+
+interface RfpListResponse {
+  rfps: RfpData[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface RfpApiBridgeConfig {
+  enableCache?: boolean;
+  retryAttempts?: number;
+  timeout?: number;
+}
+
+export interface RfpApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  code?: string;
+}
+
+// ✅ RFP API BRIDGE CLASS
+class RfpApiBridge {
+  private apiClient: ReturnType<typeof useApiClient> | null = null;
+  private analytics: ReturnType<typeof useOptimizedAnalytics> | null = null;
+  private errorHandlingService: ErrorHandlingService;
+  private cache: Map<string, { data: unknown; timestamp: number }> = new Map();
+  private config: Required<RfpApiBridgeConfig>;
+
+  constructor(config: RfpApiBridgeConfig = {}) {
+    this.config = {
+      enableCache: true,
+      retryAttempts: 2,
+      timeout: 10000,
+      ...config,
+    };
+    this.errorHandlingService = ErrorHandlingService.getInstance();
+  }
+
+  setApiClient(apiClient: ReturnType<typeof useApiClient>): void {
+    this.apiClient = apiClient;
+  }
+
+  setAnalytics(analytics: ReturnType<typeof useOptimizedAnalytics>): void {
+    this.analytics = analytics;
+  }
+
+  private generateCacheKey(operation: string, params: Record<string, unknown>): string {
+    return `rfp:${operation}:${JSON.stringify(params)}`;
+  }
+
+  private getCachedData<T>(cacheKey: string): T | null {
+    if (!this.config.enableCache) return null;
+
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 30000) {
+      return cached.data as T;
+    }
+
+    this.cache.delete(cacheKey);
+    return null;
+  }
+
+  private setCachedData<T>(cacheKey: string, data: T): void {
+    if (!this.config.enableCache) return;
+
+    this.cache.set(cacheKey, {
+      data,
+      timestamp: Date.now(),
+    });
+  }
+
+  private clearCache(pattern?: string): void {
+    if (pattern) {
+      for (const key of this.cache.keys()) {
+        if (key.includes(pattern)) {
+          this.cache.delete(key);
+        }
+      }
+    } else {
+      this.cache.clear();
+    }
+  }
+
+  /**
+   * Fetch RFPs with filtering and pagination
+   */
+  async fetchRfps(params: RfpFetchParams = {}): Promise<RfpApiResponse<RfpListResponse>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('fetchRfps', params);
+
+    // Check cache first
+    const cachedData = this.getCachedData<RfpListResponse>(cacheKey);
+    if (cachedData) {
+      logDebug('RFP API Bridge: Fetch RFPs cache hit', {
+        component: 'RfpApiBridge',
+        operation: 'fetchRfps',
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('RFP API Bridge: Fetch RFPs start', {
+      component: 'RfpApiBridge',
+      operation: 'fetchRfps',
+      params,
+      userStory: 'US-4.1',
+      hypothesis: 'H6',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const queryString = new URLSearchParams(params as Record<string, string>).toString();
+      const endpoint = queryString ? `rfp?${queryString}` : 'rfp';
+      const response = (await this.apiClient.get(endpoint)) as RfpApiResponse<RfpListResponse>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to fetch RFPs');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfps_fetched', {
+          count: response.data.rfps.length,
+          total: response.data.total,
+          page: response.data.page,
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+      }
+
+      logInfo('RFP API Bridge: Fetch RFPs success', {
+        component: 'RfpApiBridge',
+        operation: 'fetchRfps',
+        count: response.data.rfps.length,
+        total: response.data.total,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch RFPs',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'fetchRfps',
+          params,
+        }
+      );
+
+      logError('RFP API Bridge: Fetch RFPs failed', {
+        component: 'RfpApiBridge',
+        operation: 'fetchRfps',
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Get RFP by ID
+   */
+  async getRfp(rfpId: string): Promise<RfpApiResponse<RfpData>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('getRfp', { rfpId });
+
+    // Check cache first
+    const cachedData = this.getCachedData<RfpData>(cacheKey);
+    if (cachedData) {
+      logDebug('RFP API Bridge: Get RFP cache hit', {
+        component: 'RfpApiBridge',
+        operation: 'getRfp',
+        rfpId,
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('RFP API Bridge: Get RFP start', {
+      component: 'RfpApiBridge',
+      operation: 'getRfp',
+      rfpId,
+      userStory: 'US-4.1',
+      hypothesis: 'H6',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.get(`rfp/${rfpId}`)) as RfpApiResponse<RfpData>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to fetch RFP');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfp_viewed', {
+          rfpId,
+          rfpTitle: response.data.title,
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+      }
+
+      logInfo('RFP API Bridge: Get RFP success', {
+        component: 'RfpApiBridge',
+        operation: 'getRfp',
+        rfpId,
+        rfpTitle: response.data.title,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch RFP',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'getRfp',
+          rfpId,
+        }
+      );
+
+      logError('RFP API Bridge: Get RFP failed', {
+        component: 'RfpApiBridge',
+        operation: 'getRfp',
+        rfpId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Create new RFP
+   */
+  async createRfp(rfpData: RfpData): Promise<RfpApiResponse<RfpData>> {
+    const start = Date.now();
+
+    logDebug('RFP API Bridge: Create RFP start', {
+      component: 'RfpApiBridge',
+      operation: 'createRfp',
+      rfpTitle: rfpData.title,
+      userStory: 'US-4.1',
+      hypothesis: 'H6',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.post('rfp', rfpData)) as RfpApiResponse<RfpData>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to create RFP');
+      }
+
+      // Clear cache for RFP lists
+      this.clearCache('fetchRfps');
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfp_created', {
+          rfpId: response.data.id,
+          rfpTitle: response.data.title,
+          issuer: response.data.issuer,
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+      }
+
+      logInfo('RFP API Bridge: Create RFP success', {
+        component: 'RfpApiBridge',
+        operation: 'createRfp',
+        rfpId: response.data.id,
+        rfpTitle: response.data.title,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to create RFP',
+        ErrorCodes.DATA.CREATE_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'createRfp',
+          rfpTitle: rfpData.title,
+        }
+      );
+
+      logError('RFP API Bridge: Create RFP failed', {
+        component: 'RfpApiBridge',
+        operation: 'createRfp',
+        rfpTitle: rfpData.title,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Update RFP
+   */
+  async updateRfp(rfpId: string, updateData: RfpUpdateData): Promise<RfpApiResponse<RfpData>> {
+    const start = Date.now();
+
+    logDebug('RFP API Bridge: Update RFP start', {
+      component: 'RfpApiBridge',
+      operation: 'updateRfp',
+      rfpId,
+      updateFields: Object.keys(updateData),
+      userStory: 'US-4.1',
+      hypothesis: 'H6',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.patch(
+        `rfp/${rfpId}`,
+        updateData
+      )) as RfpApiResponse<RfpData>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to update RFP');
+      }
+
+      // Clear cache for this RFP and RFP lists
+      this.clearCache(`getRfp:${rfpId}`);
+      this.clearCache('fetchRfps');
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfp_updated', {
+          rfpId,
+          rfpTitle: response.data.title,
+          updateFields: Object.keys(updateData),
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+      }
+
+      logInfo('RFP API Bridge: Update RFP success', {
+        component: 'RfpApiBridge',
+        operation: 'updateRfp',
+        rfpId,
+        rfpTitle: response.data.title,
+        updateFields: Object.keys(updateData),
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to update RFP',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'updateRfp',
+          rfpId,
+        }
+      );
+
+      logError('RFP API Bridge: Update RFP failed', {
+        component: 'RfpApiBridge',
+        operation: 'updateRfp',
+        rfpId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Delete RFP
+   */
+  async deleteRfp(rfpId: string): Promise<RfpApiResponse<boolean>> {
+    const start = Date.now();
+
+    logDebug('RFP API Bridge: Delete RFP start', {
+      component: 'RfpApiBridge',
+      operation: 'deleteRfp',
+      rfpId,
+      userStory: 'US-4.1',
+      hypothesis: 'H6',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.delete(`rfp/${rfpId}`)) as RfpApiResponse<boolean>;
+
+      if (!response.success) {
+        throw new Error('Failed to delete RFP');
+      }
+
+      // Clear cache for RFP lists
+      this.clearCache('fetchRfps');
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfp_deleted', {
+          rfpId,
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+      }
+
+      logInfo('RFP API Bridge: Delete RFP success', {
+        component: 'RfpApiBridge',
+        operation: 'deleteRfp',
+        rfpId,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: true };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to delete RFP',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'deleteRfp',
+          rfpId,
+        }
+      );
+
+      logError('RFP API Bridge: Delete RFP failed', {
+        component: 'RfpApiBridge',
+        operation: 'deleteRfp',
+        rfpId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Analyze RFP
+   */
+  async analyzeRfp(rfpId: string): Promise<RfpApiResponse<RfpAnalysisData>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('analyzeRfp', { rfpId });
+
+    // Check cache first
+    const cachedData = this.getCachedData<RfpAnalysisData>(cacheKey);
+    if (cachedData) {
+      logDebug('RFP API Bridge: Analyze RFP cache hit', {
+        component: 'RfpApiBridge',
+        operation: 'analyzeRfp',
+        rfpId,
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('RFP API Bridge: Analyze RFP start', {
+      component: 'RfpApiBridge',
+      operation: 'analyzeRfp',
+      rfpId,
+      userStory: 'US-4.2',
+      hypothesis: 'H16',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.post(
+        `rfp/${rfpId}/analyze`
+      )) as RfpApiResponse<RfpAnalysisData>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to analyze RFP');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfp_analyzed', {
+          rfpId,
+          complexityScore: response.data.complexityScore,
+          estimatedValue: response.data.estimatedValue,
+          userStory: 'US-4.2',
+          hypothesis: 'H16',
+        });
+      }
+
+      logInfo('RFP API Bridge: Analyze RFP success', {
+        component: 'RfpApiBridge',
+        operation: 'analyzeRfp',
+        rfpId,
+        complexityScore: response.data.complexityScore,
+        estimatedValue: response.data.estimatedValue,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to analyze RFP',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'analyzeRfp',
+          rfpId,
+        }
+      );
+
+      logError('RFP API Bridge: Analyze RFP failed', {
+        component: 'RfpApiBridge',
+        operation: 'analyzeRfp',
+        rfpId,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Parse RFP document
+   */
+  async parseRfpDocument(file: File): Promise<RfpApiResponse<RfpParserResult>> {
+    const start = Date.now();
+
+    logDebug('RFP API Bridge: Parse RFP document start', {
+      component: 'RfpApiBridge',
+      operation: 'parseRfpDocument',
+      fileName: file.name,
+      fileSize: file.size,
+      userStory: 'US-4.3',
+      hypothesis: 'H17',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = (await this.apiClient.post(
+        'rfp/parse',
+        formData
+      )) as RfpApiResponse<RfpParserResult>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to parse RFP document');
+      }
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfp_document_parsed', {
+          fileName: file.name,
+          fileSize: file.size,
+          confidence: response.data.confidence,
+          processingTime: response.data.processingTime,
+          userStory: 'US-4.3',
+          hypothesis: 'H17',
+        });
+      }
+
+      logInfo('RFP API Bridge: Parse RFP document success', {
+        component: 'RfpApiBridge',
+        operation: 'parseRfpDocument',
+        fileName: file.name,
+        confidence: response.data.confidence,
+        processingTime: response.data.processingTime,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to parse RFP document',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'parseRfpDocument',
+          fileName: file.name,
+        }
+      );
+
+      logError('RFP API Bridge: Parse RFP document failed', {
+        component: 'RfpApiBridge',
+        operation: 'parseRfpDocument',
+        fileName: file.name,
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+
+  /**
+   * Get RFP statistics
+   */
+  async getRfpStats(): Promise<RfpApiResponse<RfpStats>> {
+    const start = Date.now();
+    const cacheKey = this.generateCacheKey('getRfpStats', {});
+
+    // Check cache first
+    const cachedData = this.getCachedData<RfpStats>(cacheKey);
+    if (cachedData) {
+      logDebug('RFP API Bridge: Get RFP stats cache hit', {
+        component: 'RfpApiBridge',
+        operation: 'getRfpStats',
+        cacheKey,
+        loadTime: Date.now() - start,
+      });
+      return { success: true, data: cachedData };
+    }
+
+    logDebug('RFP API Bridge: Get RFP stats start', {
+      component: 'RfpApiBridge',
+      operation: 'getRfpStats',
+      userStory: 'US-4.1',
+      hypothesis: 'H6',
+    });
+
+    try {
+      if (!this.apiClient) {
+        throw new Error('API client not initialized');
+      }
+
+      const response = (await this.apiClient.get('rfp/stats')) as RfpApiResponse<RfpStats>;
+
+      if (!response.success || !response.data) {
+        throw new Error('Failed to fetch RFP statistics');
+      }
+
+      // Cache the result
+      this.setCachedData(cacheKey, response.data);
+
+      // Track analytics
+      if (this.analytics) {
+        this.analytics.trackOptimized('rfp_stats_viewed', {
+          totalRfps: response.data.total,
+          publishedRfps: response.data.published,
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+      }
+
+      logInfo('RFP API Bridge: Get RFP stats success', {
+        component: 'RfpApiBridge',
+        operation: 'getRfpStats',
+        totalRfps: response.data.total,
+        publishedRfps: response.data.published,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      const standardError = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch RFP statistics',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'RfpApiBridge',
+          operation: 'getRfpStats',
+        }
+      );
+
+      logError('RFP API Bridge: Get RFP stats failed', {
+        component: 'RfpApiBridge',
+        operation: 'getRfpStats',
+        error: standardError.message,
+        loadTime: Date.now() - start,
+      });
+
+      return { success: false, error: standardError.message };
+    }
+  }
+}
+
+// ✅ SINGLETON PATTERN
+let rfpApiBridgeInstance: RfpApiBridge | null = null;
+
+export function getRfpApiBridgeInstance(config?: RfpApiBridgeConfig): RfpApiBridge {
+  if (!rfpApiBridgeInstance) {
+    rfpApiBridgeInstance = new RfpApiBridge(config);
+  }
+  return rfpApiBridgeInstance;
+}
+
+// ✅ HOOK-BASED API BRIDGE
+export function useRfpApiBridge(config: RfpApiBridgeConfig = {}) {
+  const apiClient = useApiClient();
+  const { handleAsyncError } = useErrorHandler();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+
+  const bridgeConfig = useMemo(
+    () => ({
+      enableCache: true,
+      retryAttempts: 2,
+      timeout: 10000,
+      ...config,
+    }),
+    [config]
+  );
+
+  const bridge = useMemo(() => {
+    return getRfpApiBridgeInstance(bridgeConfig);
+  }, [bridgeConfig]);
+
+  // Set dependencies
+  bridge.setApiClient(apiClient);
+  // bridge.setAnalytics({ trackOptimized: analytics.trackOptimized }); // TODO: Fix analytics integration
+
+  // ✅ MEMOIZED METHODS WITH PROPER DEPENDENCIES
+  const fetchRfps = useCallback(
+    async (params: RfpFetchParams = {}) => {
+      try {
+        return await bridge.fetchRfps(params);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to fetch RFPs');
+        return { success: false, error: 'Failed to fetch RFPs' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const getRfp = useCallback(
+    async (rfpId: string) => {
+      try {
+        return await bridge.getRfp(rfpId);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to fetch RFP');
+        return { success: false, error: 'Failed to fetch RFP' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const createRfp = useCallback(
+    async (rfpData: RfpData) => {
+      try {
+        return await bridge.createRfp(rfpData);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to create RFP');
+        return { success: false, error: 'Failed to create RFP' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const updateRfp = useCallback(
+    async (rfpId: string, updateData: RfpUpdateData) => {
+      try {
+        return await bridge.updateRfp(rfpId, updateData);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to update RFP');
+        return { success: false, error: 'Failed to update RFP' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const deleteRfp = useCallback(
+    async (rfpId: string) => {
+      try {
+        return await bridge.deleteRfp(rfpId);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to delete RFP');
+        return { success: false, error: 'Failed to delete RFP' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const analyzeRfp = useCallback(
+    async (rfpId: string) => {
+      try {
+        return await bridge.analyzeRfp(rfpId);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to analyze RFP');
+        return { success: false, error: 'Failed to analyze RFP' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const parseRfpDocument = useCallback(
+    async (file: File) => {
+      try {
+        return await bridge.parseRfpDocument(file);
+      } catch (error) {
+        handleAsyncError(error, 'Failed to parse RFP document');
+        return { success: false, error: 'Failed to parse RFP document' };
+      }
+    },
+    [bridge, handleAsyncError]
+  );
+
+  const getRfpStats = useCallback(async () => {
+    try {
+      return await bridge.getRfpStats();
+    } catch (error) {
+      handleAsyncError(error, 'Failed to fetch RFP statistics');
+      return { success: false, error: 'Failed to fetch RFP statistics' };
+    }
+  }, [bridge, handleAsyncError]);
+
+  return {
+    fetchRfps,
+    getRfp,
+    createRfp,
+    updateRfp,
+    deleteRfp,
+    analyzeRfp,
+    parseRfpDocument,
+    getRfpStats,
+  };
+}
+
+// ✅ EXPORT TYPES FOR EXTERNAL USE
+export type {
+  RfpAnalysisData,
+  RfpData,
+  RfpFetchParams,
+  RfpListResponse,
+  RfpParserResult,
+  RfpStats,
+  RfpUpdateData,
+};

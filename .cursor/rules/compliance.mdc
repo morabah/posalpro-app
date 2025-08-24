@@ -1,20 +1,26 @@
 ---
 alwaysApply: true
 ---
+
 # Context
+
 You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all implementations.
 
 ## Must‑read references
+
 - Tier 1: `PROJECT_REFERENCE.md`, `WIREFRAME_INTEGRATION_GUIDE.md`, `DEVELOPMENT_STANDARDS.md` (see CORE_REQUIREMENTS.md → Duplicate Prevention & Critical Reference Documents)
 - Tier 2: `USER_STORY_TRACEABILITY_MATRIX.md`, `COMPONENT_STRUCTURE.md`, `DATA_MODEL.md`
 
 ## Pre‑Implementation Checklist
+
 - `npm run type-check` → 0 errors; `npm run audit:duplicates` (see CORE_REQUIREMENTS.md → Pre‑Implementation Checklist)
 - Review patterns in `src/lib/services`, `src/hooks`, `src/components`
 - Use `npm run dev:smart` during development
 
 ## Implementation Standards
-- **React Query & Data Fetching**: server-side filtering/sorting/pagination; `staleTime: 30000`, `gcTime: 120000`; cursor-based “Load More”; use `useApiClient` only for simple one-time fetches. Request minimal `fields`, avoid relation hydration by default. (CORE_REQUIREMENTS.md → Data Fetching & Performance; React Query Patterns)
+
+- **Bridge Pattern & API Bridges**: Use bridge templates from `templates/design-patterns/bridge/` for all new bridge implementations. Follow three-layer architecture: Components → Management Bridge → API Bridge → API Routes. Replace all placeholders (**BRIDGE_NAME**, **ENTITY_TYPE**, **RESOURCE_NAME**, **USER_STORY**, **HYPOTHESIS**). (CORE_REQUIREMENTS.md → Bridge Pattern & API Bridges)
+- **React Query & Data Fetching**: server-side filtering/sorting/pagination; `staleTime: 30000`, `gcTime: 120000`; cursor-based "Load More"; use `useApiClient` only for simple one-time fetches. Request minimal `fields`, avoid relation hydration by default. (CORE_REQUIREMENTS.md → Data Fetching & Performance; React Query Patterns)
 - **Advanced Filtering**: debounced search (300ms), reset pagination on filter change, contextual empty states. (CORE_REQUIREMENTS.md → Pagination & Search Patterns)
 - **Error Handling**: use `ErrorHandlingService.processError()` and centralized hooks; user-friendly errors + retry. (CORE_REQUIREMENTS.md → Error Handling & Type Safety)
 - **Performance**: lazy-load icons/components, memoize callbacks/values, proper effect dependencies. (CORE_REQUIREMENTS.md → Performance & Analytics; Development Build Stability)
@@ -26,7 +32,27 @@ You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all 
 - **Documentation**: update `docs/IMPLEMENTATION_LOG.md`; add to `docs/LESSONS_LEARNED.md` when applicable; update `PROJECT_REFERENCE.md` for new routes/components. (CORE_REQUIREMENTS.md → Documentation & Validation)
 - **Quality Gates**: no TypeScript errors; follow lint rules; verify performance and accessibility. (CORE_REQUIREMENTS.md → Quality Gates)
 
+## Bridge Pattern Implementation (MANDATORY)
+
+- **Template Usage**: Always use bridge templates from `templates/design-patterns/bridge/` for new bridge implementations
+- **Template Workflow**:
+  1. Copy `api-bridge.template.ts` → `src/lib/bridges/EntityApiBridge.ts`
+  2. Copy `management-bridge.template.tsx` → `src/components/bridges/EntityManagementBridge.tsx`
+  3. Copy `bridge-hook.template.ts` → `src/hooks/useEntity.ts` (optional)
+  4. Copy `bridge-component.template.tsx` → `src/components/EntityList.tsx`
+  5. Copy `bridge-page.template.tsx` → `src/app/(dashboard)/entities/page.tsx`
+- **Placeholder Replacement**: Replace all template placeholders:
+  - `__BRIDGE_NAME__` → EntityManagement
+  - `__ENTITY_TYPE__` → Entity
+  - `__RESOURCE_NAME__` → entities
+  - `__USER_STORY__` → US-X.X
+  - `__HYPOTHESIS__` → HX
+- **Bridge Architecture**: Follow three-layer pattern: Components → Management Bridge (React Context) → API Bridge (Singleton) → API Routes
+- **Provider Requirements**: Ensure `GlobalStateProvider` wraps components using bridge hooks that call `useGlobalState()` or `useUIState()`
+- **Template Compliance**: All bridges must follow template patterns for consistency and maintainability
+
 ## Logging & Observability (Mandatory)
+
 - **Use structured logger** from `@/lib/logger`: `logDebug`, `logInfo`, `logWarn`, `logError`. No `console.*` in product code. (CORE_REQUIREMENTS.md → Logging & Observability)
 - **Minimum coverage**:
   - Fetch/Query: `logDebug('Fetch start', { component, operation, keys })` → `logInfo('Fetch success', { loadTime })` → `logError('Fetch failed', { error })`
@@ -37,4 +63,71 @@ You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all 
 - **Env guidance**: verbose `debug` in dev; keep `info/warn/error` meaningful in prod.
 
 ## Reference Implementation
+
 - Use `/products` page and `ProductList` as the gold standard for data fetching, error handling, performance, structure, and logging.
+- Use bridge templates from `templates/design-patterns/bridge/` as the gold standard for bridge pattern implementation.
+
+# Context
+
+You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all implementations.
+
+## Must‑read references
+
+- Tier 1: `PROJECT_REFERENCE.md`, `WIREFRAME_INTEGRATION_GUIDE.md`, `DEVELOPMENT_STANDARDS.md` (see CORE_REQUIREMENTS.md → Duplicate Prevention & Critical Reference Documents)
+- Tier 2: `USER_STORY_TRACEABILITY_MATRIX.md`, `COMPONENT_STRUCTURE.md`, `DATA_MODEL.md`
+
+## Pre‑Implementation Checklist
+
+- `npm run type-check` → 0 errors; `npm run audit:duplicates` (see CORE_REQUIREMENTS.md → Pre‑Implementation Checklist)
+- Review patterns in `src/lib/services`, `src/hooks`, `src/components`
+- Use `npm run dev:smart` during development
+
+## Implementation Standards
+
+- **Bridge Pattern & API Bridges**: Use bridge templates from `templates/design-patterns/bridge/` for all new bridge implementations. Follow three-layer architecture: Components → Management Bridge → API Bridge → API Routes. Replace all placeholders (**BRIDGE_NAME**, **ENTITY_TYPE**, **RESOURCE_NAME**, **USER_STORY**, **HYPOTHESIS**). (CORE_REQUIREMENTS.md → Bridge Pattern & API Bridges)
+- **React Query & Data Fetching**: server-side filtering/sorting/pagination; `staleTime: 30000`, `gcTime: 120000`; cursor-based "Load More"; use `useApiClient` only for simple one-time fetches. Request minimal `fields`, avoid relation hydration by default. (CORE_REQUIREMENTS.md → Data Fetching & Performance; React Query Patterns)
+- **Advanced Filtering**: debounced search (300ms), reset pagination on filter change, contextual empty states. (CORE_REQUIREMENTS.md → Pagination & Search Patterns)
+- **Error Handling**: use `ErrorHandlingService.processError()` and centralized hooks; user-friendly errors + retry. (CORE_REQUIREMENTS.md → Error Handling & Type Safety)
+- **Performance**: lazy-load icons/components, memoize callbacks/values, proper effect dependencies. (CORE_REQUIREMENTS.md → Performance & Analytics; Development Build Stability)
+- **Analytics & Traceability**: use optimized analytics; include `userStory`, `hypothesis`; track views, edits, navigation, errors, pagination. (CORE_REQUIREMENTS.md → Analytics & Hypothesis Validation)
+- **Security & RBAC**: guard sensitive API routes with `validateApiPermission` and scope; use centralized middleware. (CORE_REQUIREMENTS.md → RBAC Authorization)
+- **Accessibility**: WCAG 2.1 AA; 44px touch targets; full keyboard and screen reader support. (CORE_REQUIREMENTS.md → Accessibility & UI Standards)
+- **Architecture**: maintain SSR/CSR hydration consistency; use route-group layout provider stack; avoid unstable effect deps. (CORE_REQUIREMENTS.md → Architecture & Providers)
+- **UI Design System**: use components from `src/components/ui` and tokens from `src/design-system`. (CORE_REQUIREMENTS.md → Design System Usage)
+- **Documentation**: update `docs/IMPLEMENTATION_LOG.md`; add to `docs/LESSONS_LEARNED.md` when applicable; update `PROJECT_REFERENCE.md` for new routes/components. (CORE_REQUIREMENTS.md → Documentation & Validation)
+- **Quality Gates**: no TypeScript errors; follow lint rules; verify performance and accessibility. (CORE_REQUIREMENTS.md → Quality Gates)
+
+## Bridge Pattern Implementation (MANDATORY)
+
+- **Template Usage**: Always use bridge templates from `templates/design-patterns/bridge/` for new bridge implementations
+- **Template Workflow**:
+  1. Copy `api-bridge.template.ts` → `src/lib/bridges/EntityApiBridge.ts`
+  2. Copy `management-bridge.template.tsx` → `src/components/bridges/EntityManagementBridge.tsx`
+  3. Copy `bridge-hook.template.ts` → `src/hooks/useEntity.ts` (optional)
+  4. Copy `bridge-component.template.tsx` → `src/components/EntityList.tsx`
+  5. Copy `bridge-page.template.tsx` → `src/app/(dashboard)/entities/page.tsx`
+- **Placeholder Replacement**: Replace all template placeholders:
+  - `__BRIDGE_NAME__` → EntityManagement
+  - `__ENTITY_TYPE__` → Entity
+  - `__RESOURCE_NAME__` → entities
+  - `__USER_STORY__` → US-X.X
+  - `__HYPOTHESIS__` → HX
+- **Bridge Architecture**: Follow three-layer pattern: Components → Management Bridge (React Context) → API Bridge (Singleton) → API Routes
+- **Provider Requirements**: Ensure `GlobalStateProvider` wraps components using bridge hooks that call `useGlobalState()` or `useUIState()`
+- **Template Compliance**: All bridges must follow template patterns for consistency and maintainability
+
+## Logging & Observability (Mandatory)
+
+- **Use structured logger** from `@/lib/logger`: `logDebug`, `logInfo`, `logWarn`, `logError`. No `console.*` in product code. (CORE_REQUIREMENTS.md → Logging & Observability)
+- **Minimum coverage**:
+  - Fetch/Query: `logDebug('Fetch start', { component, operation, keys })` → `logInfo('Fetch success', { loadTime })` → `logError('Fetch failed', { error })`
+  - Mutation/Update: `logDebug('Update start', { payloadKeys })` → `logInfo('Update success')` → `logError('Update failed', { error })`
+  - Critical UI/navigation: `logInfo('Action', { target, context })`
+- **Metadata**: include `component`, `operation`, ids (e.g., `proposalId`, `customerId`), and traceability (`userStory`, `hypothesis`).
+- **Pair with ErrorHandlingService**: log after `ErrorHandlingService.processError()` in catch blocks.
+- **Env guidance**: verbose `debug` in dev; keep `info/warn/error` meaningful in prod.
+
+## Reference Implementation
+
+- Use `/products` page and `ProductList` as the gold standard for data fetching, error handling, performance, structure, and logging.
+- Use bridge templates from `templates/design-patterns/bridge/` as the gold standard for bridge pattern implementation.

@@ -14,8 +14,8 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import {
   ArrowPathIcon,
   ArrowTrendingDownIcon,
@@ -240,14 +240,52 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
     }
   }, [timeRange, selectedHypothesis, analytics, handleAsyncError, generateMockData]);
 
-  // Auto-refresh effect
+  // Auto-refresh effect - Fixed infinite loop by removing unstable dependencies
   useEffect(() => {
-    fetchDashboardData();
+    // Initial data fetch
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Simulate API call delay for realistic experience
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const mockData = generateMockData();
+        setOverview(mockData.overview);
+        setHypotheses(mockData.hypotheses);
+        setSummary(mockData.summary);
+
+        // Track analytics for dashboard load
+        analytics('hypothesis_dashboard_loaded', {
+          timeRange,
+          hypothesisCount: mockData.hypotheses.length,
+          component: 'HypothesisTrackingDashboard',
+          phase: 'Phase 2',
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
+        setError(errorMessage);
+
+        await handleAsyncError(err, 'Hypothesis tracking dashboard data fetch failed', {
+          context: 'hypothesis_tracking_dashboard',
+          operation: 'fetchDashboardData',
+          timeRange,
+          selectedHypothesis,
+          userStories: COMPONENT_MAPPING.userStories,
+          hypotheses: COMPONENT_MAPPING.hypotheses,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
 
     let intervalId: NodeJS.Timeout | null = null;
 
     if (autoRefreshEnabled && refreshInterval > 0) {
-      intervalId = setInterval(fetchDashboardData, refreshInterval);
+      intervalId = setInterval(loadData, refreshInterval);
     }
 
     return () => {
@@ -255,9 +293,9 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
         clearInterval(intervalId);
       }
     };
-  }, [fetchDashboardData, autoRefreshEnabled, refreshInterval]);
+  }, []); // Empty dependency array to prevent infinite loops
 
-  // Handle manual refresh
+  // Handle manual refresh - Fixed to avoid infinite loop dependencies
   const handleRefresh = useCallback(() => {
     analytics('dashboard_refreshed', {
       timeRange,
@@ -265,10 +303,11 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
       component: 'HypothesisTrackingDashboard',
     });
 
+    // Call fetchDashboardData directly to avoid dependency issues
     fetchDashboardData();
-  }, [analytics, timeRange, autoRefreshEnabled, fetchDashboardData]);
+  }, [timeRange, autoRefreshEnabled]); // Removed unstable dependencies
 
-  // Handle export functionality
+  // Handle export functionality - Fixed to avoid infinite loop dependencies
   const handleExport = useCallback(() => {
     analytics('dashboard_export', {
       timeRange,
@@ -295,9 +334,9 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-  }, [analytics, timeRange, hypotheses]);
+  }, [timeRange, hypotheses]); // Removed unstable analytics dependency
 
-  // Handle hypothesis selection
+  // Handle hypothesis selection - Fixed to avoid infinite loop dependencies
   const handleHypothesisSelect = useCallback(
     (hypothesis: string | null) => {
       setSelectedHypothesis(hypothesis);
@@ -307,7 +346,7 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
         component: 'HypothesisTrackingDashboard',
       });
     },
-    [analytics, selectedHypothesis]
+    [] // Empty dependency array to prevent infinite loops
   );
 
   // Get status color and icon

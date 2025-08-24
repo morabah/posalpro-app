@@ -14,8 +14,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalyticsDashboard, useHypothesisTracking } from '@/hooks/useAnalytics';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useState } from 'react';
 import { logDebug } from '@/lib/logger';
+import { useState } from 'react';
 
 // Inline SVG components to replace Heroicons and prevent webpack chunk loading issues
 const ArrowPathIcon = ({ className = 'h-5 w-5' }) => (
@@ -324,7 +324,9 @@ export const AnalyticsDashboard: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => {
-                  setActiveTab(tab.id as 'overview' | 'hypothesis' | 'metrics' | 'stories' | 'components');
+                  setActiveTab(
+                    tab.id as 'overview' | 'hypothesis' | 'metrics' | 'stories' | 'components'
+                  );
                   trackAnalyticsEvent('tab_changed', { tab: tab.id });
                 }}
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${

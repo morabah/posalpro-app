@@ -31,6 +31,8 @@ How to use
 
 Placeholders to replace
 
+**Universal Placeholders:**
+
 - **FILE_DESCRIPTION**
 - **USER_STORY**
 - **HYPOTHESIS**
@@ -42,7 +44,17 @@ Placeholders to replace
 - **PROVIDER_NAME** / **MIDDLEWARE_NAME** / **LAYOUT_NAME**
 - **ERROR_HANDLER_NAME** / **ANALYTICS_HOOK_NAME** / **MOBILE_COMPONENT_NAME**
 
+**Bridge Pattern Placeholders:**
+
+- **BRIDGE_NAME** (e.g., "CustomerManagement", "ProductCatalog")
+- **API_BRIDGE_NAME** (e.g., "CustomerApi", "ProductApi")
+- **RESOURCE_NAME** (e.g., "customers", "products")
+- **ENTITY_TYPE** (e.g., "Customer", "Product")
+- **PAGE_NAME** (e.g., "CustomerManagement", "ProductCatalog")
+
 Notes
+
+**General Guidelines:**
 
 - Prefer React Query hooks for lists/forms/mutations; use `useApiClient` for
   simple one-off fetches.
@@ -58,6 +70,17 @@ Notes
 - Mobile components must have 44px+ touch targets and proper gesture handling.
 - Add data-testid attributes for reliable testing.
 - Include analytics tracking for hypothesis validation.
+
+**Bridge Pattern Guidelines:**
+
+- Use bridge templates for centralized data management and API operations
+- Implement singleton pattern for API bridges to ensure consistent caching
+- Wrap pages/sections with Management Bridge providers for state coordination
+- Replace `useApiClient` calls with bridge hooks for standardized error handling
+- Include analytics tracking in all bridge operations for hypothesis validation
+- Use TypeScript interfaces from bridge-types.template.ts for type safety
+- Follow the three-layer architecture: API Bridge → Management Bridge →
+  Components
 
 Templates included
 
@@ -77,6 +100,21 @@ Templates included
 - layout.template.tsx - Route-group layouts with provider stacks
 - error-handler-hook.template.ts - Centralized error handling hooks
 - analytics-hook.template.ts - Component Traceability Matrix tracking
+
+**Bridge Pattern Templates:**
+
+- bridge/api-bridge.template.ts - Singleton API service with caching and error
+  handling
+- bridge/management-bridge.template.tsx - React context provider with state
+  management
+- bridge/bridge-hook.template.ts - Custom hook for bridge access with React
+  Query integration
+- bridge/bridge-component.template.tsx - Component using bridge pattern with
+  full CRUD operations
+- bridge/bridge-page.template.tsx - Page with complete bridge integration and
+  SSR optimization
+- bridge/bridge-types.template.ts - TypeScript interfaces and types for bridge
+  implementation
 
 **Mobile & Testing:**
 

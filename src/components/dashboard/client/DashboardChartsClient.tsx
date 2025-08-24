@@ -2,7 +2,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useApiClient } from '@/hooks/useApiClient';
+import { useDashboardAnalytics } from '@/hooks/useDashboard';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { useEffect, useMemo, useState } from 'react';
@@ -70,9 +70,7 @@ interface OverduePriorityResponse extends ApiResponse<PriorityOverdue[]> {}
 interface BundleResponse extends ApiResponse<{ pairs: ProductBundle[] }> {}
 
 export default function DashboardChartsClient() {
-  const apiClient = useApiClient();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, error } = useDashboardAnalytics();
 
   const [nearDue, setNearDue] = useState<ChartDataPoint[]>([]);
   const [byEmployee, setByEmployee] = useState<EmployeePerformance[]>([]);
@@ -83,59 +81,16 @@ export default function DashboardChartsClient() {
   const [bundles, setBundles] = useState<ProductBundle[]>([]);
 
   useEffect(() => {
-    const run = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [nearDueRes, empRes, prodRes, funnelRes, overduePrioRes, bundlesRes] =
-          await Promise.all([
-            apiClient.get('/proposals/analytics/near-due?days=14'),
-            apiClient.get('/proposals/analytics/by-employee'),
-            apiClient.get('/proposals/analytics/products'),
-            apiClient.get('/proposals/analytics/funnel'),
-            apiClient.get('/proposals/analytics/overdue-by-priority'),
-            apiClient.get('/proposals/analytics/product-bundles'),
-          ]);
-
-        const nd = (nearDueRes as NearDueResponse)?.data?.nearDueByDay ?? [];
-        const be = (empRes as EmployeeResponse)?.data?.byEmployee ?? [];
-        const pr = (prodRes as ProductResponse)?.data?.products ?? [];
-        const tw = (prodRes as ProductResponse)?.data?.topWinning ?? [];
-
-        setNearDue(Array.isArray(nd) ? nd : []);
-        setByEmployee(Array.isArray(be) ? be : []);
-        setProducts(Array.isArray(pr) ? pr : []);
-        setTopWinning(Array.isArray(tw) ? tw : []);
-        const stages = (funnelRes as FunnelResponse)?.data?.stages ?? [];
-        setFunnel(Array.isArray(stages) ? stages : []);
-        const obp = (overduePrioRes as OverduePriorityResponse)?.data ?? [];
-        setOverdueByPriority(Array.isArray(obp) ? obp : []);
-        const pb = (bundlesRes as BundleResponse)?.data?.pairs ?? [];
-        setBundles(
-          Array.isArray(pb)
-            ? pb.map((x: ProductBundle) => ({
-                aId: String(x.aId),
-                bId: String(x.bId),
-                aName: String(x.aName),
-                bName: String(x.bName),
-                count: Number(x.count || 0),
-              }))
-            : []
-        );
-      } catch (err) {
-        const ehs = ErrorHandlingService.getInstance();
-        ehs.processError(err, 'Failed to load dashboard charts', ErrorCodes.DATA.FETCH_FAILED, {
-          component: 'DashboardChartsClient',
-          operation: 'loadCharts',
-        });
-        setError('Failed to load charts');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    run();
-  }, []);
+    if (data) {
+      setNearDue(data.nearDueByDay ?? []);
+      setByEmployee(data.byEmployee ?? []);
+      setProducts(data.products ?? []);
+      setTopWinning(data.topWinning ?? []);
+      setFunnel(data.funnelStages ?? []);
+      setOverdueByPriority(data.overdueByPriority ?? []);
+      setBundles(data.bundles ?? []);
+    }
+  }, [data]);
 
   const topEmployees = useMemo(() => byEmployee.slice(0, 8), [byEmployee]);
   const topProducts = useMemo(() => products.slice(0, 8), [products]);
@@ -151,7 +106,7 @@ export default function DashboardChartsClient() {
     window.print();
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {[...Array(4)].map((_, i) => (
@@ -164,7 +119,7 @@ export default function DashboardChartsClient() {
   }
 
   if (error) {
-    return <Card className="p-4 text-red-600">{error}</Card>;
+    return <Card className="p-4 text-red-600">{error.message}</Card>;
   }
 
   return (
