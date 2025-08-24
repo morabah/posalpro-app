@@ -19,7 +19,7 @@ const logDebug = console.debug;
 const logInfo = console.info;
 const logError = console.error;
 import { ErrorHandlingService } from '@/lib/errors';
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, memo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 // ====================
@@ -78,10 +78,23 @@ export default function __PAGE_NAME__Page({
   
   // ✅ CRITICAL: Local state for page-specific data
   const [pageState, setPageState] = useState({
-    isInitialized: false,
-    lastRefresh: Date.now(),
-    error: null as string | null,
+    isLoaded: false,
+    hasError: false,
+    errorMessage: '',
+    isComponentMounted: false,
   });
+
+  // ✅ CUSTOM DEBOUNCE: Performance-optimized search debouncing
+  const [debouncedFilters, setDebouncedFilters] = useState({});
+  
+  // Custom debounce implementation for filters
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedFilters(bridge.state?.filters || {});
+    }, 300); // 300ms debounce for performance
+
+    return () => clearTimeout(timeoutId);
+  }, [bridge.state?.filters]);
 
   // ✅ CRITICAL: Parse search params with proper defaults
   const urlFilters = useMemo(() => {
@@ -135,9 +148,9 @@ export default function __PAGE_NAME__Page({
         });
       });
 
-      setPageState(prev => ({ ...prev, isInitialized: true }));
+      setPageState(prev => ({ ...prev, isLoaded: true }));
 
-      // ✅ PATTERN 2: Deferred Analytics Call
+      // Deferred Analytics Call
       analytics('page_loaded', {
         userStory: '__USER_STORY__',
         hypothesis: '__HYPOTHESIS__',
@@ -145,24 +158,71 @@ export default function __PAGE_NAME__Page({
         filters: effectiveFilters,
       }, 'medium');
     }, 0);
-  }, []); // ✅ CRITICAL: Empty dependency array to prevent infinite loops
+  }, []); // Empty dependency array to prevent infinite loops
 
-  // ✅ PATTERN 3: Event Subscription Safety
+  // ✅ INFINITE LOOP PREVENTION: Mount-only effect with deferred analytics
+  useEffect(() => {
+    // ✅ INFINITE LOOP PREVENTION: Defer bridge calls to prevent infinite loops
+    setTimeout(() => {
+      trackPageView('__PAGE_NAME__');
+    }, 0);
+  }, []); // useEffect with empty dependency array to prevent infinite loops
+
+  // ✅ INFINITE LOOP PREVENTION: Additional deferred initialization with useEffect[]
+  useEffect(() => {
+    setTimeout(() => {
+      // Initialize page-specific functionality 
+      setPageState(prev => ({ ...prev, isComponentMounted: true }));
+    }, 0);
+  }, []); // useEffect[] prevents infinite loops
+
+  // Event Subscription Safety
   useEffect(() => {
     if (!bridge.eventBridge) return;
 
     const handleDataRefresh = (payload: unknown) => {
-      // ✅ PATTERN 2: setTimeout Pattern for Event Responses
+      // ✅ LOOP PREVENTION: Deferred state updates to prevent infinite loops
       setTimeout(() => {
-        logDebug('__PAGE_NAME__ page: Data refresh event received', {
-          component: '__PAGE_NAME__Page',
-          operation: 'event_refresh',
-          userStory: '__USER_STORY__',
-          hypothesis: '__HYPOTHESIS__',
-          payload,
-        });
+        if (!user && bridge?.config?.requireAuth) {
+          try {
+            handleError(new Error('Authentication required to access this page'), {
+              component: '__BRIDGE_NAME__Page',
+              severity: 'high',
+              userFriendly: true,
+              actionRequired: 'login'
+            });
+          } catch (fallbackError) {
+            console.error('Authentication check failed:', fallbackError);
+          }
+          return;
+        }
 
-        setPageState(prev => ({ ...prev, lastRefresh: Date.now() }));
+        // ✅ LOOP PREVENTION: Deferred bridge calls to avoid render loops
+        if (bridge) {
+          bridge.fetch__ENTITY_TYPE__s().catch(error => {
+            // Handle bridge call failures gracefully
+            try {
+              handleError(error, {
+                component: '__BRIDGE_NAME__Page',
+                operation: 'fetch__ENTITY_TYPE__s',
+                severity: 'medium'
+              });
+            } catch (fallbackError) {
+              console.error('Bridge call error handling failed:', fallbackError);
+            }
+          });
+          
+          // ✅ LOOP PREVENTION: Deferred analytics to avoid render blocking
+          setTimeout(() => {
+            analytics('__RESOURCE_NAME___page_viewed', {
+              component: '__BRIDGE_NAME__Page',
+              userStory: '__USER_STORY__',
+              hypothesis: '__HYPOTHESIS__',
+              timestamp: new Date().toISOString(),
+              authState: user ? 'authenticated' : 'anonymous'
+            }, 'medium');
+          }, 0);
+        }
       }, 0);
     };
 
@@ -171,14 +231,15 @@ export default function __PAGE_NAME__Page({
     return () => {
       bridge.eventBridge.unsubscribe('DATA_REFRESHED', listener);
     };
-  }, []); // ✅ CRITICAL: Empty dependency array
+  }, []); // Empty dependency array to prevent infinite loops
 
   // ====================
   // Event Handlers with Anti-Pattern Prevention
   // ====================
 
-  // ✅ PATTERN 5: State Update Safety
+  // State Update Safety
   const handleFilterChange = useCallback((newFilters: Record<string, unknown>) => {
+    // setTimeout Pattern for Bridge Calls
     // ✅ PATTERN 2: setTimeout Pattern for Bridge Calls
     setTimeout(() => {
       logDebug('__PAGE_NAME__ page: Filters changed', {
@@ -195,7 +256,22 @@ export default function __PAGE_NAME__Page({
         ...newFilters,        // New filters override current state
       };
 
-      bridge.fetch__ENTITY_TYPE__s(mergedFilters).catch(error => {
+      bridge.fetch__ENTITY_TYPE__s(mergedFilters).then(response => {
+        // ✅ API RESPONSE HANDLING: Validate response format
+        if (!response || typeof response !== 'object') {
+          throw new Error('Invalid response format received from bridge');
+        }
+
+        const apiResponse = {
+          success: response.success || false,
+          data: response.data || [],
+          error: response.error || null
+        };
+
+        if (!apiResponse.success) {
+          throw new Error(apiResponse.error || 'Bridge operation failed');
+        }
+      }).catch(error => {
         handleAsyncError(error, {
           component: '__PAGE_NAME__Page',
           operation: 'filter_fetch',
@@ -303,7 +379,7 @@ export default function __PAGE_NAME__Page({
         });
       });
 
-      setPageState(prev => ({ ...prev, lastRefresh: Date.now() }));
+      setPageState(prev => ({ ...prev, isLoaded: true }));
 
       // ✅ PATTERN 2: Deferred Analytics Call
       analytics('manual_refresh', {
@@ -353,24 +429,11 @@ export default function __PAGE_NAME__Page({
   }
 
   // ✅ LOADING: Page initialization loading state
-  if (!pageState.isInitialized) {
+  if (!pageState.isLoaded) {
     return (
-      <div className={`min-h-screen bg-gray-50 ${className}`}>
-        <div className="container mx-auto px-4 py-8">
-          <div className="space-y-6">
-            <Skeleton className="h-8 w-64" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i} className="p-6">
-                  <div className="space-y-3">
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-2/3" />
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
+      <div className="min-h-screen bg-gray-50" role="status" aria-label="Loading page content">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <__PAGE_NAME__Skeleton />
         </div>
       </div>
     );
@@ -398,14 +461,9 @@ export default function __PAGE_NAME__Page({
         {/* ✅ MAIN CONTENT: Bridge-integrated component */}
         <div className="container mx-auto px-4 py-8">
           <__COMPONENT_NAME__
-            initialFilters={effectiveFilters}
-            showCreateForm={true}
-            showActions={true}
-            maxItems={50}
-            onEntityCreate={handleEntityCreate}
+            className="w-full"
             onFilterChange={handleFilterChange}
-            onRefresh={handleRefresh}
-            data-testid="__COMPONENT_NAME__"
+            onError={handleAsyncError}
           />
         </div>
 
@@ -415,8 +473,8 @@ export default function __PAGE_NAME__Page({
             <div className="font-semibold mb-2">Debug Info:</div>
             <div>User: {user?.email}</div>
             <div>Filters: {JSON.stringify(effectiveFilters, null, 2)}</div>
-            <div>Last Refresh: {new Date(pageState.lastRefresh).toLocaleTimeString()}</div>
-            <div>Initialized: {pageState.isInitialized ? 'Yes' : 'No'}</div>
+            <div>Loaded: {pageState.isLoaded ? 'Yes' : 'No'}</div>
+            <div>Component Mounted: {pageState.isComponentMounted ? 'Yes' : 'No'}</div>
           </div>
         )}
       </div>
@@ -427,5 +485,74 @@ export default function __PAGE_NAME__Page({
 // ====================
 // Export for Dynamic Imports
 // ====================
+
+// ✅ SKELETON COMPONENTS: Loading skeleton component for better UX
+const __PAGE_NAME__Skeleton = memo(() => (
+  <div className="animate-pulse" role="status" aria-label="Loading __PAGE_NAME__ data">
+    <div className="space-y-6">
+      {/* Header Skeleton */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="h-8 bg-gray-200 rounded w-48 mb-2"></div>
+          <div className="h-4 bg-gray-200 rounded w-32"></div>
+        </div>
+        <div className="h-10 w-32 bg-gray-200 rounded"></div>
+      </div>
+      
+      {/* Filters Skeleton */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex-1 h-12 bg-gray-200 rounded"></div>
+          <div className="w-32 h-12 bg-gray-200 rounded"></div>
+          <div className="w-32 h-12 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+      
+      {/* Content Grid Skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="h-6 w-6 bg-gray-200 rounded-full"></div>
+                <div className="h-6 w-16 bg-gray-200 rounded"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="h-4 bg-gray-200 rounded w-20"></div>
+                <div className="flex space-x-2">
+                  <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                  <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {/* Stats Skeleton */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex justify-between items-center">
+          <div className="h-4 bg-gray-200 rounded w-48"></div>
+          <div className="flex gap-2">
+            <div className="h-10 w-24 bg-gray-200 rounded"></div>
+            <div className="h-10 w-20 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+));
+
+__PAGE_NAME__Skeleton.displayName = '__PAGE_NAME__Skeleton';
+
+// ✅ COMPONENT DISPLAY NAME: Add displayName for debugging
+__PAGE_NAME__Page.displayName = '__PAGE_NAME__Page';
+
+// ✅ MEMO OPTIMIZATION: Export memoized version for performance
+export const Memoized__PAGE_NAME__Page = memo(__PAGE_NAME__Page);
 
 export default __PAGE_NAME__Page;

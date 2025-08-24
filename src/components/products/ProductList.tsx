@@ -6,15 +6,15 @@
 
 'use client';
 
+import { useProductManagementBridge } from '@/components/bridges/ProductManagementBridge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { Product, useProducts } from '@/hooks/useProducts';
+import type { Product } from '@/lib/bridges/ProductApiBridge';
 import { debounce } from '@/lib/utils';
 import { EyeIcon, PencilIcon } from '@heroicons/react/24/outline';
-import { memo, useCallback, useMemo, useState } from 'react';
 import Image from 'next/image';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 
 // ✅ FIXED: Remove unused COMPONENT_MAPPING
 
@@ -71,7 +71,20 @@ const ProductList = memo((props: ProductListProps = {}) => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const apiClient = useApiClient();
+  let bridge;
+  try {
+    bridge = useProductManagementBridge();
+  } catch (error) {
+    // Bridge context not available yet - return loading state
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Loading product list...</p>
+        </div>
+      </div>
+    );
+  }
 
   // ✅ FIXED: Fix debounced search function with proper dependencies
   const debouncedSearchFunction = useCallback((term: string) => {
@@ -84,23 +97,82 @@ const ProductList = memo((props: ProductListProps = {}) => {
 
   // Use React Query hook for data fetching with caching
   const effectiveSearch = props.search !== undefined ? props.search : debouncedSearch || undefined;
-  const categoryParam = props.categories && props.categories.length > 0 ? props.categories.join(',') : undefined;
+  const categoryParam =
+    props.categories && props.categories.length > 0 ? props.categories.join(',') : undefined;
   const tagsParam = props.tags && props.tags.length > 0 ? props.tags.join(',') : undefined;
-  const priceRangeParam = props.priceRange && props.priceRange.min !== null && props.priceRange.max !== null
-    ? `${props.priceRange.min},${props.priceRange.max}`
-    : undefined;
+  const priceRangeParam =
+    props.priceRange && props.priceRange.min !== null && props.priceRange.max !== null
+      ? `${props.priceRange.min},${props.priceRange.max}`
+      : undefined;
 
-  const { data, isLoading, refetch, isFetching, isError } = useProducts({
-    page: currentPage,
-    limit: 50,
-    search: effectiveSearch,
-    category: categoryParam,
-    tags: tagsParam,
-    priceRange: priceRangeParam,
-    isActive: props.isActive,
-    sortBy: props.sortBy ?? 'createdAt',
-    sortOrder: props.sortOrder ?? 'desc',
-  });
+  // Use bridge for product fetching with proper error handling and loading states
+  const [productsData, setProductsData] = useState<{
+    products: Product[];
+    pagination?: any;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+
+  // Fetch products using bridge pattern
+  const fetchProductsData = useCallback(async () => {
+    setIsLoading(true);
+    setIsError(false);
+
+    try {
+      const params = {
+        page: currentPage,
+        limit: 50,
+        search: effectiveSearch,
+        category: categoryParam,
+        tags: tagsParam,
+        priceRange: priceRangeParam,
+        isActive: props.isActive,
+        sortBy: props.sortBy ?? 'createdAt',
+        sortOrder: props.sortOrder ?? 'desc',
+      };
+
+      const result = await bridge.fetchProducts(params);
+
+      if (result.success && result.data) {
+        setProductsData({
+          products: result.data,
+          pagination: result.pagination,
+        });
+      } else {
+        setIsError(true);
+        setProductsData(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+      setIsError(true);
+      setProductsData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    bridge,
+    currentPage,
+    effectiveSearch,
+    categoryParam,
+    tagsParam,
+    priceRangeParam,
+    props.isActive,
+    props.sortBy,
+    props.sortOrder,
+  ]);
+
+  // Refetch function for manual refresh
+  const refetch = useCallback(() => {
+    fetchProductsData();
+  }, [fetchProductsData]);
+
+  // Load data on mount and when dependencies change
+  React.useEffect(() => {
+    fetchProductsData();
+  }, [fetchProductsData]);
+
+  const data = productsData;
+  const isFetching = isLoading;
 
   // ✅ FIXED: Fix analytics call with proper type
   const handleProductView = useCallback(
@@ -128,10 +200,11 @@ const ProductList = memo((props: ProductListProps = {}) => {
 
   // ✅ FIXED: Remove unnecessary optional chaining
   const products = useMemo(() => data?.products || [], [data?.products]);
-  const displayProducts = useMemo(
-    () => [...products, ...appendedProducts],
-    [products, appendedProducts]
-  );
+  const displayProducts = useMemo(() => {
+    const safeProducts = Array.isArray(products) ? products : [];
+    const safeAppendedProducts = Array.isArray(appendedProducts) ? appendedProducts : [];
+    return [...safeProducts, ...safeAppendedProducts];
+  }, [products, appendedProducts]);
   const totalPages = data?.pagination?.totalPages || 1;
   const totalProducts = data?.pagination?.total || 0;
 
@@ -161,16 +234,39 @@ const ProductList = memo((props: ProductListProps = {}) => {
           pagination?: { hasMore?: boolean; nextCursor?: string | null };
         };
       }
-      const res = await apiClient.get<ProductsPage>(`products?${qp.toString()}`);
-      if (res?.success) {
-        const newItems = Array.isArray(res.data.products) ? res.data.products : [];
-        setAppendedProducts(prev => [...prev, ...newItems]);
-        setHasMore(Boolean(res.data.pagination?.hasMore));
+      const result = await bridge.fetchProducts({
+        page: currentPage + 1,
+        limit: 50,
+        search: effectiveSearch,
+        category: categoryParam,
+        tags: tagsParam,
+        priceRange: priceRangeParam,
+        isActive: props.isActive,
+        sortBy: props.sortBy ?? 'createdAt',
+        sortOrder: props.sortOrder ?? 'desc',
+      });
+
+      if (result.success && result.data) {
+        // ✅ FIXED: Safe array spread with proper type checking
+        const newItems = Array.isArray(result.data) ? result.data : [];
+        const prevItems = Array.isArray(appendedProducts) ? appendedProducts : [];
+        setAppendedProducts([...prevItems, ...newItems]);
+        setHasMore(Boolean(result.pagination?.hasNextPage));
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      console.error('Failed to load more products:', error);
     }
-  }, [data?.pagination?.nextCursor, effectiveSearch, categoryParam, tagsParam, priceRangeParam, props.isActive, props.sortBy, props.sortOrder, apiClient]);
+  }, [
+    bridge,
+    currentPage,
+    effectiveSearch,
+    categoryParam,
+    tagsParam,
+    priceRangeParam,
+    props.isActive,
+    props.sortBy,
+    props.sortOrder,
+  ]);
 
   if (isLoading) {
     return (
@@ -209,28 +305,37 @@ const ProductList = memo((props: ProductListProps = {}) => {
       )}
 
       {/* Product Grid / List */}
-      <div className={
-        props.viewMode === 'list'
-          ? 'divide-y divide-gray-200 bg-white rounded-lg border'
-          : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-      }>
-        {displayProducts.map((product: Product) => (
+      <div
+        className={
+          props.viewMode === 'list'
+            ? 'divide-y divide-gray-200 bg-white rounded-lg border'
+            : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+        }
+      >
+        {displayProducts.map((product: Product) =>
           props.viewMode === 'list' ? (
-            <div key={product.id} className="px-3 py-2 md:px-4 md:py-3 hover:bg-gray-50 focus-within:bg-gray-50 transition-colors">
+            <div
+              key={product.id}
+              className="px-3 py-2 md:px-4 md:py-3 hover:bg-gray-50 focus-within:bg-gray-50 transition-colors"
+            >
               <div className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-5 md:col-span-4 min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">{product.name}</div>
-                  <div className="text-[11px] text-gray-500 truncate">{product.category.join(', ')}</div>
+                  <div className="text-[11px] text-gray-500 truncate">
+                    {product.category || 'No category'}
+                  </div>
                 </div>
                 <div className="col-span-3 md:col-span-2 text-sm text-gray-700">
-                  {product.currency} {product.price}
+                  {(product.currency as string) || 'USD'} {(product.price as number) || 0}
                 </div>
                 <div className="col-span-4 md:col-span-2 text-[11px] text-gray-500 truncate">
                   SKU: {product.sku}
                 </div>
                 <div className="hidden md:block md:col-span-2">
-                  <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${getStatusBadgeColor(product.isActive)}`}>
-                    {product.isActive ? 'Active' : 'Inactive'}
+                  <span
+                    className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${getStatusBadgeColor(Boolean(product.isActive))}`}
+                  >
+                    {Boolean(product.isActive) ? 'Active' : 'Inactive'}
                   </span>
                 </div>
                 <div className="col-span-4 md:col-span-2 flex justify-end space-x-1">
@@ -289,23 +394,25 @@ const ProductList = memo((props: ProductListProps = {}) => {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-gray-900">{product.name}</h3>
-                    <p className="text-sm text-gray-500">{product.category.join(', ')}</p>
+                    <p className="text-sm text-gray-500">{product.category || 'No category'}</p>
                   </div>
                   <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(product.isActive)}`}
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(Boolean(product.isActive))}`}
                   >
-                    {product.isActive ? 'Active' : 'Inactive'}
+                    {Boolean(product.isActive) ? 'Active' : 'Inactive'}
                   </span>
                 </div>
                 <div className="space-y-1.5">
                   <div className="text-sm text-gray-600">
-                    <span className="font-medium">Price:</span> {product.currency} {product.price}
+                    <span className="font-medium">Price:</span>{' '}
+                    {(product.currency as string) || 'USD'} {(product.price as number) || 0}
                   </div>
                   <div className="text-sm text-gray-600">
-                    <span className="font-medium">SKU:</span> {product.sku}
+                    <span className="font-medium">SKU:</span> {(product.sku as string) || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">
-                    <span className="font-medium">Version:</span> {product.version}
+                    <span className="font-medium">Version:</span>{' '}
+                    {(product.version as string) || '1.0'}
                   </div>
                 </div>
                 <div className="flex justify-between items-center mt-4">
@@ -347,7 +454,7 @@ const ProductList = memo((props: ProductListProps = {}) => {
               </div>
             </Card>
           )
-        ))}
+        )}
       </div>
 
       {/* Load More */}

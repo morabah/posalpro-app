@@ -473,3 +473,4 @@ export const use__ENTITY_TYPE__Mobile = () => {
 // ✅ BRIDGE PATTERN: Mobile component export
 export default __ENTITY_TYPE__Mobile;
 
+

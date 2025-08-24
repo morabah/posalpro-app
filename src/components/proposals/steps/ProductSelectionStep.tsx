@@ -257,18 +257,20 @@ export function ProductSelectionStep({
 
       const response = await apiClient.get<{
         success: boolean;
-        data: {
-          products: Product[];
-          total: number;
+        data: Product[];
+        pagination: {
           page: number;
           limit: number;
+          total: number;
+          totalPages: number;
         };
+        filters: Record<string, unknown>;
+        message: string;
       }>('/api/products?page=1&limit=100&isActive=true');
 
       if (response.success) {
-        setProducts(response.data.products);
-        setFilteredProducts(response.data.products);
-        // dev logs removed for compliance
+        setProducts(response.data);
+        setFilteredProducts(response.data);
       } else {
         throw new Error('Failed to load products');
       }
@@ -528,6 +530,11 @@ export function ProductSelectionStep({
 
   // Filter products based on search and category
   const filterProducts = useCallback(() => {
+    if (!products || !Array.isArray(products)) {
+      setFilteredProducts([]);
+      return;
+    }
+
     let filtered = products.filter(product => product.isActive);
 
     // Apply search filter
@@ -565,9 +572,17 @@ export function ProductSelectionStep({
   // Get unique categories from products
   const categories = useMemo(() => {
     const categorySet = new Set<string>();
-    products.forEach(product => {
-      product.category.forEach(cat => categorySet.add(cat));
-    });
+    if (products && Array.isArray(products)) {
+      products.forEach(product => {
+        if (product && product.category && Array.isArray(product.category)) {
+          product.category.forEach(cat => {
+            if (cat && typeof cat === 'string') {
+              categorySet.add(cat);
+            }
+          });
+        }
+      });
+    }
     return ['All', ...Array.from(categorySet).sort()];
   }, [products]);
 
@@ -631,7 +646,10 @@ export function ProductSelectionStep({
         const selected = selectedProducts.get(productOrId);
         if (selected) base = selected;
         else {
-          const p = products.find(pp => pp.id === productOrId);
+          const p =
+            products && Array.isArray(products)
+              ? products.find(pp => pp.id === productOrId)
+              : undefined;
           if (p) {
             base = {
               id: p.id,
@@ -711,7 +729,8 @@ export function ProductSelectionStep({
 
   const handleAddFromRecommendation = useCallback(
     (productId: string) => {
-      const p = products.find(pp => pp.id === productId);
+      const p =
+        products && Array.isArray(products) ? products.find(pp => pp.id === productId) : undefined;
       if (p) {
         handleProductSelect(p);
         trackProductSelection('ai_recommendation_accepted', productId, {
@@ -1065,7 +1084,7 @@ export function ProductSelectionStep({
 
       {/* Products List with inline selection controls */}
       <div className="border border-gray-200 rounded-md divide-y divide-gray-200">
-        {filteredProducts.map(product => {
+        {(filteredProducts || []).map(product => {
           const isSelected = selectedProducts.has(product.id);
           const selected = isSelected ? selectedProducts.get(product.id)! : null;
           return (
@@ -1303,7 +1322,7 @@ export function ProductSelectionStep({
       </div>
 
       {/* No products found */}
-      {filteredProducts.length === 0 && !loading && (
+      {(filteredProducts || []).length === 0 && !loading && (
         <div className="text-center py-8">
           <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
@@ -1318,8 +1337,10 @@ export function ProductSelectionStep({
             <div>
               <h4 className="text-base font-semibold text-gray-900">{detailProduct.name}</h4>
               <p className="text-sm text-gray-600 mt-1">
-                {products.find(p => p.id === detailProduct.id)?.description ||
-                  'Configure quantity and notes.'}
+                {products && Array.isArray(products)
+                  ? products.find(p => p.id === detailProduct.id)?.description ||
+                    'Configure quantity and notes.'
+                  : 'Configure quantity and notes.'}
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

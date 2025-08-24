@@ -24,6 +24,7 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useEventBridge } from '@/lib/bridges/EventBridge';
 import {
   useProductManagementApiBridge,
+  type ApiResponse,
   type Product,
   type ProductFetchParams,
 } from '@/lib/bridges/ProductApiBridge';
@@ -73,12 +74,31 @@ interface ActionMetadata {
 
 interface ProductManagementBridgeContextValue {
   // Data operations
-  fetchProducts: (params?: ProductFetchParams) => Promise<void>;
+  fetchProducts: (params?: ProductFetchParams) => Promise<ApiResponse<Product[]>>;
   refreshProducts: () => Promise<void>;
   getProduct: (id: string) => Promise<Product | null>;
   createProduct: (payload: Record<string, unknown>) => Promise<Product | null>;
   updateProduct: (id: string, payload: Record<string, unknown>) => Promise<Product | null>;
   deleteProduct: (id: string) => Promise<boolean>;
+
+  // ✅ PRODUCT VALIDATION: Add SKU validation methods
+  validateSku: (
+    sku: string,
+    excludeId?: string
+  ) => Promise<{ exists: boolean; conflictingProduct?: Product }>;
+  createProductWithValidation: (payload: Record<string, unknown>) => Promise<Product | null>;
+
+  // ✅ PRODUCT RELATIONSHIPS: Add relationship methods
+  getProductCategories: () => Promise<string[]>;
+  simulateProductRelationships: (payload: {
+    skus: string[];
+    mode?: string;
+  }) => Promise<{ simulationResults: any[]; recommendations: any[] }>;
+  createRelationshipRule: (payload: {
+    name: string;
+    conditions: any[];
+    actions: any[];
+  }) => Promise<{ id: string; name: string; isActive: boolean }>;
 
   // State management
   setFilters: (filters: ProductManagementFilters) => void;
@@ -280,9 +300,11 @@ export function ProductManagementManagementBridge({
           hypothesis: 'H5',
         });
 
-        // Refresh data if it matches our resource
+        // ✅ CRITICAL: Defer bridge calls to prevent infinite loops
         if (payload.entityType === 'products' || !payload.entityType) {
-          refreshProducts();
+          setTimeout(() => {
+            refreshProducts();
+          }, 0);
         }
       },
       { component: 'ProductManagementManagementBridge' }
@@ -291,7 +313,7 @@ export function ProductManagementManagementBridge({
     return () => {
       eventBridge.unsubscribe('DATA_REFRESHED', dataRefreshedListener);
     };
-  }, []);
+  }, []); // ✅ EMPTY DEPENDENCY ARRAY
 
   // ====================
   // Auto-refresh Setup
@@ -306,7 +328,10 @@ export function ProductManagementManagementBridge({
         operation: 'autoRefresh',
         interval: refreshInterval,
       });
-      refreshProducts();
+      // ✅ CRITICAL: Defer bridge calls to prevent infinite loops
+      setTimeout(() => {
+        refreshProducts();
+      }, 0);
     }, refreshInterval);
 
     return () => clearInterval(interval);
@@ -330,8 +355,8 @@ export function ProductManagementManagementBridge({
         });
 
         const fetchParams = {
-          ...params,
           ...state.filters,
+          ...params, // ✅ CRITICAL: params override state.filters to allow direct parameter passing
           fields: 'id,name,status,updatedAt', // Minimal fields per CORE_REQUIREMENTS
         };
 
@@ -360,6 +385,8 @@ export function ProductManagementManagementBridge({
             operation: 'fetchProducts',
             resultCount: result.data.length,
           });
+
+          return result; // Return the API response
         } else {
           throw new Error('Failed to fetch data');
         }
@@ -403,6 +430,13 @@ export function ProductManagementManagementBridge({
           title: 'Fetch Error',
           message: ehs.getUserFriendlyMessage(error),
         });
+
+        // Return error response
+        return {
+          success: false,
+          error: standardError.message,
+          data: [],
+        };
       }
     },
     [apiBridge, analytics, state.filters]
@@ -411,7 +445,7 @@ export function ProductManagementManagementBridge({
   const refreshProducts = useCallback(async () => {
     apiBridge.clearCache('list');
     await fetchProducts();
-  }, [apiBridge, fetchProducts]);
+  }, [apiBridge, fetchProducts]); // ✅ STABLE DEPENDENCIES
 
   const getProduct = useCallback(
     async (id: string): Promise<Product | null> => {
@@ -568,6 +602,417 @@ export function ProductManagementManagementBridge({
       }
     },
     [apiBridge, analytics, refreshProducts]
+  );
+
+  // ✅ PRODUCT VALIDATION: Add SKU validation method
+  const validateSku = useCallback(
+    async (
+      sku: string,
+      excludeId?: string
+    ): Promise<{ exists: boolean; conflictingProduct?: Product }> => {
+      try {
+        logDebug('ProductManagementManagementBridge: Validate SKU start', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'validateSku',
+          sku,
+          excludeId,
+          userStory: 'US-3.1',
+          hypothesis: 'H8',
+        });
+
+        const result = await apiBridge.validateSku(sku, excludeId);
+
+        if (result.success && result.data) {
+          analytics(
+            'products_sku_validated',
+            {
+              sku,
+              exists: result.data.exists,
+              userStory: 'US-3.1',
+              hypothesis: 'H8',
+            },
+            'medium'
+          );
+
+          logInfo('ProductManagementManagementBridge: Validate SKU success', {
+            component: 'ProductManagementManagementBridge',
+            operation: 'validateSku',
+            sku,
+            exists: result.data.exists,
+          });
+
+          return result.data;
+        }
+
+        return { exists: false };
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to validate SKU',
+          ErrorCodes.VALIDATION.OPERATION_FAILED,
+          {
+            component: 'ProductManagementManagementBridge',
+            operation: 'validateSku',
+            sku,
+          }
+        );
+
+        analytics(
+          'products_sku_validation_error',
+          {
+            sku,
+            error: standardError.message,
+            userStory: 'US-3.1',
+            hypothesis: 'H8',
+          },
+          'high'
+        );
+
+        logError('ProductManagementManagementBridge: Validate SKU failed', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'validateSku',
+          sku,
+          error: standardError.message,
+        });
+
+        // Return safe default on error
+        return { exists: false };
+      }
+    },
+    [apiBridge, analytics]
+  );
+
+  // ✅ PRODUCT VALIDATION: Add create with validation method
+  const createProductWithValidation = useCallback(
+    async (payload: Record<string, unknown>): Promise<Product | null> => {
+      try {
+        logDebug('ProductManagementManagementBridge: Create with validation start', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'createProductWithValidation',
+          payloadKeys: Object.keys(payload),
+          userStory: 'US-3.1',
+          hypothesis: 'H8',
+        });
+
+        const result = await apiBridge.createProductWithValidation(payload as any);
+
+        if (result.success && result.data) {
+          // Refresh list to include new entity
+          await refreshProducts();
+
+          analytics(
+            'products_created_with_validation',
+            {
+              id: result.data.id,
+              sku: (payload as any).sku,
+              name: (payload as any).name,
+              userStory: 'US-3.1',
+              hypothesis: 'H8',
+            },
+            'high'
+          );
+
+          logInfo('ProductManagementManagementBridge: Create with validation success', {
+            component: 'ProductManagementManagementBridge',
+            operation: 'createProductWithValidation',
+            id: result.data.id,
+            sku: (payload as any).sku,
+          });
+
+          addNotification({
+            type: 'success',
+            title: 'Success',
+            message: 'Product created successfully with validation',
+          });
+
+          return result.data;
+        }
+
+        return null;
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to create product with validation',
+          ErrorCodes.DATA.CREATE_FAILED,
+          {
+            component: 'ProductManagementManagementBridge',
+            operation: 'createProductWithValidation',
+            payloadKeys: Object.keys(payload),
+          }
+        );
+
+        analytics(
+          'products_create_validation_error',
+          {
+            error: standardError.message,
+            sku: (payload as any).sku,
+            userStory: 'US-3.1',
+            hypothesis: 'H8',
+          },
+          'high'
+        );
+
+        logError('ProductManagementManagementBridge: Create with validation failed', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'createProductWithValidation',
+          error: standardError.message,
+        });
+
+        // ✅ CRITICAL: Handle 409 Conflict errors specifically for better user experience
+        const errorMessage = ehs.getUserFriendlyMessage(error);
+        const isConflictError =
+          errorMessage.includes('already exists') ||
+          errorMessage.includes('duplicate') ||
+          errorMessage.includes('409');
+
+        addNotification({
+          type: 'error',
+          title: isConflictError ? 'SKU Already Exists' : 'Validation Error',
+          message: isConflictError
+            ? `A product with SKU "${(payload as any).sku}" already exists. Please choose a different SKU.`
+            : errorMessage,
+        });
+
+        return null;
+      }
+    },
+    [apiBridge, analytics, refreshProducts]
+  );
+
+  // ✅ PRODUCT RELATIONSHIPS: Add get categories method
+  const getProductCategories = useCallback(async (): Promise<string[]> => {
+    try {
+      logDebug('ProductManagementManagementBridge: Get categories start', {
+        component: 'ProductManagementManagementBridge',
+        operation: 'getProductCategories',
+        userStory: 'US-3.1',
+        hypothesis: 'H1',
+      });
+
+      const result = await apiBridge.getProductCategories();
+
+      if (result.success && result.data) {
+        analytics(
+          'products_categories_fetched',
+          {
+            count: result.data.length,
+            userStory: 'US-3.1',
+            hypothesis: 'H1',
+          },
+          'medium'
+        );
+
+        logInfo('ProductManagementManagementBridge: Get categories success', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'getProductCategories',
+          count: result.data.length,
+        });
+
+        return result.data;
+      }
+
+      return [];
+    } catch (error) {
+      const ehs = ErrorHandlingService.getInstance();
+      const standardError = ehs.processError(
+        error,
+        'Failed to get product categories',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductManagementManagementBridge',
+          operation: 'getProductCategories',
+        }
+      );
+
+      analytics(
+        'products_categories_error',
+        {
+          error: standardError.message,
+          userStory: 'US-3.1',
+          hypothesis: 'H1',
+        },
+        'high'
+      );
+
+      logError('ProductManagementManagementBridge: Get categories failed', {
+        component: 'ProductManagementManagementBridge',
+        operation: 'getProductCategories',
+        error: standardError.message,
+      });
+
+      return [];
+    }
+  }, [apiBridge, analytics]);
+
+  // ✅ PRODUCT RELATIONSHIPS: Add simulate relationships method
+  const simulateProductRelationships = useCallback(
+    async (payload: {
+      skus: string[];
+      mode?: string;
+    }): Promise<{ simulationResults: any[]; recommendations: any[] }> => {
+      try {
+        logDebug('ProductManagementManagementBridge: Simulate relationships start', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'simulateProductRelationships',
+          skuCount: payload.skus.length,
+          mode: payload.mode,
+          userStory: 'US-3.1',
+          hypothesis: 'H1',
+        });
+
+        const result = await apiBridge.simulateProductRelationships(payload);
+
+        if (result.success && result.data) {
+          analytics(
+            'products_relationships_simulated',
+            {
+              skuCount: payload.skus.length,
+              mode: payload.mode,
+              resultCount: result.data.simulationResults?.length || 0,
+              userStory: 'US-3.1',
+              hypothesis: 'H1',
+            },
+            'medium'
+          );
+
+          logInfo('ProductManagementManagementBridge: Simulate relationships success', {
+            component: 'ProductManagementManagementBridge',
+            operation: 'simulateProductRelationships',
+            skuCount: payload.skus.length,
+            resultCount: result.data.simulationResults?.length || 0,
+          });
+
+          return result.data;
+        }
+
+        return { simulationResults: [], recommendations: [] };
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to simulate product relationships',
+          ErrorCodes.DATA.QUERY_FAILED,
+          {
+            component: 'ProductManagementManagementBridge',
+            operation: 'simulateProductRelationships',
+            skuCount: payload.skus.length,
+          }
+        );
+
+        analytics(
+          'products_relationships_simulation_error',
+          {
+            skuCount: payload.skus.length,
+            error: standardError.message,
+            userStory: 'US-3.1',
+            hypothesis: 'H1',
+          },
+          'high'
+        );
+
+        logError('ProductManagementManagementBridge: Simulate relationships failed', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'simulateProductRelationships',
+          skuCount: payload.skus.length,
+          error: standardError.message,
+        });
+
+        return { simulationResults: [], recommendations: [] };
+      }
+    },
+    [apiBridge, analytics]
+  );
+
+  // ✅ PRODUCT RELATIONSHIPS: Add create relationship rule method
+  const createRelationshipRule = useCallback(
+    async (payload: {
+      name: string;
+      conditions: any[];
+      actions: any[];
+    }): Promise<{ id: string; name: string; isActive: boolean }> => {
+      try {
+        logDebug('ProductManagementManagementBridge: Create relationship rule start', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'createRelationshipRule',
+          ruleName: payload.name,
+          userStory: 'US-3.1',
+          hypothesis: 'H1',
+        });
+
+        const result = await apiBridge.createRelationshipRule(payload);
+
+        if (result.success && result.data) {
+          analytics(
+            'products_relationship_rule_created',
+            {
+              ruleId: result.data.id,
+              ruleName: payload.name,
+              userStory: 'US-3.1',
+              hypothesis: 'H1',
+            },
+            'high'
+          );
+
+          logInfo('ProductManagementManagementBridge: Create relationship rule success', {
+            component: 'ProductManagementManagementBridge',
+            operation: 'createRelationshipRule',
+            ruleId: result.data.id,
+            ruleName: payload.name,
+          });
+
+          addNotification({
+            type: 'success',
+            title: 'Success',
+            message: `Relationship rule "${payload.name}" created successfully`,
+          });
+
+          return result.data;
+        }
+
+        throw new Error('Failed to create relationship rule');
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to create relationship rule',
+          ErrorCodes.DATA.CREATE_FAILED,
+          {
+            component: 'ProductManagementManagementBridge',
+            operation: 'createRelationshipRule',
+            ruleName: payload.name,
+          }
+        );
+
+        analytics(
+          'products_relationship_rule_create_error',
+          {
+            ruleName: payload.name,
+            error: standardError.message,
+            userStory: 'US-3.1',
+            hypothesis: 'H1',
+          },
+          'high'
+        );
+
+        logError('ProductManagementManagementBridge: Create relationship rule failed', {
+          component: 'ProductManagementManagementBridge',
+          operation: 'createRelationshipRule',
+          ruleName: payload.name,
+          error: standardError.message,
+        });
+
+        addNotification({
+          type: 'error',
+          title: 'Rule Creation Error',
+          message: ehs.getUserFriendlyMessage(error),
+        });
+
+        throw standardError;
+      }
+    },
+    [apiBridge, analytics]
   );
 
   const updateProduct = useCallback(
@@ -928,6 +1373,15 @@ export function ProductManagementManagementBridge({
       updateProduct,
       deleteProduct,
 
+      // ✅ PRODUCT VALIDATION: Add validation methods
+      validateSku,
+      createProductWithValidation,
+
+      // ✅ PRODUCT RELATIONSHIPS: Add relationship methods
+      getProductCategories,
+      simulateProductRelationships,
+      createRelationshipRule,
+
       // State management
       setFilters,
       setSelectedEntity,
@@ -960,6 +1414,11 @@ export function ProductManagementManagementBridge({
       createProduct,
       updateProduct,
       deleteProduct,
+      validateSku,
+      createProductWithValidation,
+      getProductCategories,
+      simulateProductRelationships,
+      createRelationshipRule,
       setFilters,
       setSelectedEntity,
       clearError,

@@ -2227,6 +2227,360 @@ Applied the same provider wrapping pattern to both edit routes:
 
 ---
 
+## Critical API Response Structure Mismatch - Product Selection Step
+
+**Date**: 2025-08-24 • **Category**: API Integration / Data Fetching / Debugging
+• **Impact**: Critical
+
+### Context
+
+The ProductSelectionStep component was failing with "Failed to load products"
+error and "undefined is not an object (evaluating
+'response.data.products.length')" runtime errors. This occurred during product
+selection in proposal creation workflows.
+
+### Problem
+
+The component expected an API response structure with nested `products` array:
+
+```json
+{
+  "success": true,
+  "data": {
+    "products": [...], // Expected nested structure
+    "total": number,
+    "page": number,
+    "limit": number
+  }
+}
+```
+
+But the actual API response structure was:
+
+```json
+{
+  "success": true,
+  "data": [...], // Direct array - no nested "products" property
+  "pagination": {
+    "page": number,
+    "limit": number,
+    "total": number,
+    "totalPages": number
+  },
+  "filters": {},
+  "message": "Products retrieved successfully"
+}
+```
+
+### Root Cause
+
+- **TypeScript Interface Mismatch**: Component's TypeScript interface didn't
+  match actual API response structure
+- **Data Access Pattern**: Component tried to access `response.data.products`
+  when data was directly `response.data`
+- **API Evolution**: API response structure had evolved but component wasn't
+  updated to match
+
+### Solution
+
+**1. Updated TypeScript Interface**
+
+```typescript
+// BEFORE (❌ Incorrect structure):
+const response = await apiClient.get<{
+  success: boolean;
+  data: {
+    products: Product[];
+    total: number;
+    page: number;
+    limit: number;
+  };
+}>('/api/products?page=1&limit=100&isActive=true');
+
+// AFTER (✅ Correct structure):
+const response = await apiClient.get<{
+  success: boolean;
+  data: Product[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  filters: Record<string, unknown>;
+  message: string;
+}>('/api/products?page=1&limit=100&isActive=true');
+```
+
+**2. Fixed Data Access Pattern**
+
+```typescript
+// BEFORE (❌ Accessing non-existent nested property):
+setProducts(response.data.products);
+setFilteredProducts(response.data.products);
+console.log('Products loaded:', response.data.products.length, 'products');
+
+// AFTER (✅ Accessing direct array):
+setProducts(response.data);
+setFilteredProducts(response.data);
+console.log('Products loaded:', response.data.length, 'products');
+```
+
+**3. Added Defensive Programming**
+
+Enhanced the component with defensive checks to prevent similar issues:
+
+- Added `if (products && Array.isArray(products))` checks before iteration
+- Used `(filteredProducts || []).map(...)` to ensure arrays are always defined
+- Added `products && Array.isArray(products) ? products.find(...) : undefined`
+  for safe property access
+
+### Key Insights
+
+1. **API Response Structure Validation**: Always verify actual API response
+   structure before implementing TypeScript interfaces
+2. **Defensive Programming**: Use defensive checks for array operations and
+   property access
+3. **API Evolution Tracking**: Keep TypeScript interfaces synchronized with
+   actual API responses
+4. **Debugging Strategy**: Use CLI tools to inspect actual API responses when
+   debugging structure mismatches
+
+### Prevention Standards
+
+- **✅ Always verify API response structure** using CLI tools before
+  implementing TypeScript interfaces
+- **✅ Use defensive programming patterns** for array operations and property
+  access
+- **✅ Keep TypeScript interfaces synchronized** with actual API responses
+- **✅ Test API integration** with real endpoints during development
+- **✅ Add comprehensive error handling** for data structure mismatches
+
+### Debugging Process
+
+1. **API Response Inspection**: Used
+   `npx tsx scripts/app-cli.ts --command "get /api/products"` to inspect actual
+   response
+2. **Structure Comparison**: Compared expected vs actual response structure
+3. **TypeScript Interface Update**: Updated interface to match actual API
+   response
+4. **Data Access Pattern Fix**: Changed from `response.data.products` to
+   `response.data`
+5. **Defensive Programming**: Added safety checks for array operations
+
+### Verification Checklist
+
+- [ ] API response structure verified using CLI tools
+- [ ] TypeScript interface matches actual API response
+- [ ] Data access patterns use correct property paths
+- [ ] Defensive checks implemented for array operations
+- [ ] Component loads products successfully without errors
+- [ ] Product selection functionality works correctly
+
+### Anti-Patterns to Avoid
+
+- ❌ Assuming API response structure without verification
+- ❌ Using TypeScript interfaces that don't match actual API responses
+- ❌ Accessing nested properties that don't exist
+- ❌ Missing defensive checks for array operations
+- ❌ Not testing API integration with real endpoints
+
+### Related
+
+- [API Integration Patterns][memory:api-integration]
+- [TypeScript Interface Standards][memory:typescript-standards]
+- [Defensive Programming Patterns][memory:defensive-programming]
+- [Debugging API Issues][memory:api-debugging]
+
+---
+
+## UI Component Redundancy Elimination - Products Page Layout Cleanup
+
+**Date**: 2025-08-24 • **Category**: UI/UX / Component Architecture •
+**Impact**: High
+
+### Context
+
+The Products page had a messy layout with redundant search inputs, duplicate
+filter controls, and scattered UI elements that created visual clutter and poor
+user experience.
+
+### Problem
+
+- **Duplicate Search Inputs**: Two identical search bars (one in header, one in
+  ProductListBridge)
+- **Redundant Filter Controls**: Status and category dropdowns appeared in
+  multiple locations
+- **Scattered Controls**: Sort, view mode, and filter toggles were split across
+  different sections
+- **Poor Visual Hierarchy**: No clear separation between header, controls, and
+  content areas
+
+### Root Cause
+
+- **Component Responsibility Overlap**: ProductListBridge component had its own
+  search/filter state instead of using props from parent
+- **Inconsistent Layout Structure**: Header and content areas had competing
+  control sections
+- **Missing Single Source of Truth**: Search and filter state was managed in
+  multiple places
+
+### Solution
+
+**1. Eliminated Redundant Controls**
+
+```typescript
+// BEFORE: ProductListBridge had its own search/filter controls
+<div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+  <div className="flex flex-col sm:flex-row gap-4">
+    <input placeholder="Search products..." />
+    <select>All Status</select>
+    <select>All Categories</select>
+  </div>
+</div>
+
+// AFTER: Removed redundant controls, use props from parent
+// ProductListBridge now only renders the product grid
+```
+
+**2. Consolidated Header Layout**
+
+```typescript
+// BEFORE: Scattered controls across multiple sections
+<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+  {/* Title and redundant controls mixed together */}
+</div>
+
+// AFTER: Clean, organized header structure
+<div className="flex items-center justify-between mb-6">
+  {/* Title and Create button only */}
+</div>
+<div className="flex flex-col lg:flex-row gap-4">
+  {/* Single search and controls bar */}
+</div>
+```
+
+**3. Single Source of Truth for State**
+
+```typescript
+// BEFORE: Multiple state management locations
+const [searchTerm, setSearchTerm] = useState(props.search || '');
+const [statusFilter, setStatusFilter] = useState<string>('');
+
+// AFTER: Use props from parent component
+const searchTerm = props.search || '';
+const statusFilter =
+  props.isActive !== undefined ? (props.isActive ? 'active' : 'inactive') : '';
+```
+
+### Key Insights
+
+1. **Component Responsibility**: Child components should not duplicate parent
+   functionality
+2. **Single Source of Truth**: State should be managed at the appropriate level
+   and passed down as props
+3. **Visual Hierarchy**: Clear separation between header, controls, and content
+   improves UX
+4. **Layout Consistency**: Unified control placement creates better user
+   experience
+
+### Prevention Standards
+
+- **✅ Single Control Section**: All search, sort, and filter controls in one
+  location
+- **✅ Props Over Local State**: Child components use props instead of
+  duplicating parent state
+- **✅ Clear Visual Hierarchy**: Header → Controls → Content structure
+- **✅ Responsive Design**: Controls adapt properly to different screen sizes
+- **✅ Consistent Spacing**: Proper padding and margins between sections
+
+### Verification Checklist
+
+- [ ] Only one search input visible on page
+- [ ] All controls consolidated in single section
+- [ ] No duplicate filter dropdowns
+- [ ] Clean visual hierarchy maintained
+- [ ] Responsive design working correctly
+- [ ] State management simplified
+
+### Anti-Patterns to Avoid
+
+- ❌ Duplicate search inputs in different components
+- ❌ Child components managing their own search/filter state
+- ❌ Scattered controls across multiple sections
+- ❌ Inconsistent visual hierarchy
+- ❌ Redundant UI elements
+
+### Related
+
+- [Component Architecture Patterns][memory:component-architecture]
+- [State Management Best Practices][memory:state-management]
+- [UI/UX Design Standards][memory:ui-standards]
+
+---
+
+## Collapsible Sidebar Design Pattern - State Management & Responsive Behavior
+
+**Date**: 2025-08-24 • **Category**: UI/UX / Navigation • **Impact**: High
+
+### Context
+
+When implementing collapsible navigation components, proper state management and
+responsive behavior are critical for user experience and accessibility.
+
+### Problem
+
+- **State Management**: Collapse state needs to be managed at the layout level,
+  not component level
+- **Responsive Design**: Collapse functionality should be disabled on mobile to
+  avoid conflicts with mobile navigation patterns
+- **Accessibility**: Icon-only mode requires tooltips and keyboard shortcuts for
+  usability
+- **Content Adaptation**: Main content area must adjust margins when sidebar
+  collapses
+
+### Key Insights
+
+1. **Layout-Level State Management**: Collapse state should be managed in the
+   parent layout component (AppLayout) and passed down as props to child
+   components
+2. **Responsive Behavior**: Collapse functionality should only be available on
+   desktop (lg+ screens) to avoid conflicts with mobile overlay navigation
+3. **Icon Centering**: Use `mx-auto` class for centered icons in collapsed state
+   instead of manual positioning
+4. **Tooltip Integration**: Native HTML `title` attribute provides accessible
+   tooltips without additional complexity
+5. **Keyboard Accessibility**: Include keyboard shortcuts (Alt+C) for power
+   users while maintaining mouse/touch functionality
+
+### Prevention Standards
+
+- **✅ Layout-Level State**: Manage collapse state in parent layout, not child
+  components
+- **✅ Responsive Guards**: Disable collapse functionality on mobile devices
+- **✅ Icon Centering**: Use CSS classes for consistent icon positioning
+- **✅ Tooltip Support**: Provide tooltips for icon-only navigation states
+- **✅ Keyboard Shortcuts**: Include keyboard alternatives for accessibility
+- **✅ Content Adaptation**: Adjust main content margins when sidebar state
+  changes
+
+### Anti-Patterns to Avoid
+
+- ❌ Managing collapse state in child components instead of parent layout
+- ❌ Enabling collapse functionality on mobile devices
+- ❌ Manual icon positioning instead of CSS classes
+- ❌ Missing tooltips in icon-only navigation modes
+- ❌ No keyboard shortcuts for accessibility
+- ❌ Fixed content margins that don't adapt to sidebar state
+
+### Related
+
+- [Responsive Design Patterns][memory:responsive-design]
+- [Accessibility Standards][memory:accessibility]
+- [State Management Best Practices][memory:state-management]
+
+---
+
 ## Critical Fix: QueryClient Provider & React Query Mutations
 
 **Date**: 2025-01-21 **Phase**: 2.7 - Infrastructure Stability **Context**:

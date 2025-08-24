@@ -1,13 +1,26 @@
 'use client';
+import { useProductManagementBridge } from '@/components/bridges/ProductManagementBridge';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/forms/Button';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { useApiClient } from '@/hooks/useApiClient';
 import useErrorHandler from '@/hooks/useErrorHandler';
 import { useCallback, useState } from 'react';
 
 export default function InlineTestPanel({ productId }: { productId: string }) {
-  const apiClient = useApiClient();
+  let bridge;
+  try {
+    bridge = useProductManagementBridge();
+  } catch (error) {
+    // Bridge context not available yet - return loading state
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Loading test panel...</p>
+        </div>
+      </div>
+    );
+  }
   const { handleAsyncError } = useErrorHandler();
   const analytics = useAnalytics();
   const [skus, setSkus] = useState('');
@@ -21,18 +34,18 @@ export default function InlineTestPanel({ productId }: { productId: string }) {
         .split(',')
         .map(s => s.trim())
         .filter(Boolean);
-      const res = await apiClient.patch<{ success: boolean; data: unknown }>(
-        '/products/relationships/rules',
-        { selectedSkus, attributes: {}, mode: 'advisory' }
-      );
-      setOutput((res as any)?.data || null);
+      const res = await bridge.simulateProductRelationships({
+        skus: selectedSkus,
+        mode: 'advisory',
+      });
+      setOutput(res.simulationResults || null);
       analytics.track('relationships_inline_test_run', { skus: selectedSkus.length });
     } catch (error) {
       handleAsyncError(error, 'Test failed', { component: 'InlineTestPanel', phase: 'run' });
     } finally {
       setRunning(false);
     }
-  }, [analytics, apiClient, handleAsyncError, skus]);
+  }, [analytics, bridge, handleAsyncError, skus]);
 
   return (
     <div className="p-4 space-y-2">

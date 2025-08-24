@@ -1,9 +1,9 @@
 'use client';
+import { useProductManagementBridge } from '@/components/bridges/ProductManagementBridge';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/Input';
-import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import {
   CheckCircleIcon,
@@ -37,7 +37,20 @@ interface ApiFailure {
 type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
 export default function ProductSimulator() {
-  const apiClient = useApiClient();
+  let bridge;
+  try {
+    bridge = useProductManagementBridge();
+  } catch (error) {
+    // Bridge context not available yet - return loading state
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Loading simulator...</p>
+        </div>
+      </div>
+    );
+  }
   const { handleAsyncError } = useErrorHandler();
 
   const [skus, setSkus] = useState<string[]>([]);
@@ -74,15 +87,11 @@ export default function ProductSimulator() {
     if (skus.length === 0) return;
     setLoading(true);
     try {
-      const res = await apiClient.post<ApiResponse<SimulationResult>>(
-        '/products/relationships/simulate',
-        { skus, mode }
-      );
-      if (!res.success) {
-        throw new Error(res.error || 'Simulation failed');
-      }
-      const result: SimulationResult = res.data;
-      setResults(result);
+      const result = await bridge.simulateProductRelationships({
+        skus,
+        mode,
+      });
+      setResults(result.simulationResults as any);
 
       // Add to history
       const historyItem = {
@@ -91,9 +100,9 @@ export default function ProductSimulator() {
         mode,
         timestamp: new Date(),
         status:
-          result?.valid === false
+          result.simulationResults?.length === 0
             ? ('error' as const)
-            : (result?.warnings?.length ?? 0) > 0
+            : result.recommendations?.length > 0
               ? ('warning' as const)
               : ('success' as const),
       };

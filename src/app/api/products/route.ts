@@ -15,6 +15,8 @@ import {
 } from '@/lib/errors';
 import { logError } from '@/lib/logger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
+import { securityAuditManager } from '@/lib/security/audit';
+import { apiRateLimiter } from '@/lib/security/hardening';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
@@ -69,8 +71,64 @@ const ProductCreateSchema = z.object({
 export async function GET(request: NextRequest) {
   const start = Date.now();
   try {
-    await validateApiPermission(request, { resource: 'products', action: 'read' });
-    // Authentication check
+    // ✅ RATE LIMITING: Apply rate limiting to prevent abuse
+    const clientIp =
+      request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    if (!apiRateLimiter.isAllowed(clientIp)) {
+      logError('Rate limit exceeded for products GET request', {
+        component: 'ProductsRoute',
+        operation: 'getProducts',
+        clientIp,
+      });
+
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Rate limit exceeded',
+          code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'getProducts',
+            clientIp,
+          },
+        }),
+        'Too many requests',
+        ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        429,
+        {
+          userFriendlyMessage: 'Too many requests. Please try again later.',
+          retryAfter: Math.ceil(apiRateLimiter.getResetTime(clientIp) / 1000),
+        }
+      );
+    }
+
+    // Handle authentication and permission validation
+    let authContext;
+    try {
+      authContext = await validateApiPermission(request, { resource: 'products', action: 'read' });
+    } catch (error) {
+      // validateApiPermission throws NextResponse for auth errors
+      if (error instanceof Response) {
+        return error;
+      }
+      throw error;
+    }
+
+    // ✅ SECURITY AUDIT: Log the access attempt
+    securityAuditManager.logAccess({
+      userId: authContext.userId,
+      resource: 'products',
+      action: 'read',
+      scope: 'TEAM',
+      success: true,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        operationType: 'api_access',
+        component: 'ProductsRoute',
+        userRoles: authContext.roles,
+      },
+    });
+
+    // Authentication check (redundant but kept for safety)
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return createApiErrorResponse(
@@ -330,21 +388,19 @@ export async function GET(request: NextRequest) {
       const products = hasMore ? list.slice(0, -1) : list;
       const res = NextResponse.json({
         success: true,
-        data: {
-          products,
-          pagination: {
-            limit: validatedQuery.limit,
-            hasMore,
-            nextCursor: hasMore ? (products[products.length - 1]?.id ?? null) : null,
-          },
-          filters: {
-            search: validatedQuery.search,
-            category: validatedQuery.category?.split(','),
-            tags: validatedQuery.tags?.split(','),
-            priceRange: validatedQuery.priceRange,
-            isActive: validatedQuery.isActive,
-            sku: validatedQuery.sku,
-          },
+        data: products, // Return products array directly
+        pagination: {
+          limit: validatedQuery.limit,
+          hasMore,
+          nextCursor: hasMore ? (products[products.length - 1]?.id ?? null) : null,
+        },
+        filters: {
+          search: validatedQuery.search,
+          category: validatedQuery.category?.split(','),
+          tags: validatedQuery.tags?.split(','),
+          priceRange: validatedQuery.priceRange,
+          isActive: validatedQuery.isActive,
+          sku: validatedQuery.sku,
         },
         message: 'Products retrieved successfully',
       });
@@ -377,22 +433,20 @@ export async function GET(request: NextRequest) {
     recordLatency(duration);
     const res = NextResponse.json({
       success: true,
-      data: {
-        products,
-        pagination: {
-          page: validatedQuery.page,
-          limit: validatedQuery.limit,
-          total: totalProducts,
-          totalPages: Math.ceil(totalProducts / validatedQuery.limit),
-        },
-        filters: {
-          search: validatedQuery.search,
-          category: validatedQuery.category?.split(','),
-          tags: validatedQuery.tags?.split(','),
-          priceRange: validatedQuery.priceRange,
-          isActive: validatedQuery.isActive,
-          sku: validatedQuery.sku,
-        },
+      data: products, // Return products array directly
+      pagination: {
+        page: validatedQuery.page,
+        limit: validatedQuery.limit,
+        total: totalProducts,
+        totalPages: Math.ceil(totalProducts / validatedQuery.limit),
+      },
+      filters: {
+        search: validatedQuery.search,
+        category: validatedQuery.category?.split(','),
+        tags: validatedQuery.tags?.split(','),
+        priceRange: validatedQuery.priceRange,
+        isActive: validatedQuery.isActive,
+        sku: validatedQuery.sku,
       },
       message: 'Products retrieved successfully',
     });
@@ -492,6 +546,36 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // ✅ RATE LIMITING: Apply rate limiting to prevent abuse
+    const clientIp =
+      request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    if (!apiRateLimiter.isAllowed(clientIp)) {
+      logError('Rate limit exceeded for products POST request', {
+        component: 'ProductsRoute',
+        operation: 'createProduct',
+        clientIp,
+      });
+
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Rate limit exceeded',
+          code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+          metadata: {
+            component: 'ProductsRoute',
+            operation: 'createProduct',
+            clientIp,
+          },
+        }),
+        'Too many requests',
+        ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        429,
+        {
+          userFriendlyMessage: 'Too many requests. Please try again later.',
+          retryAfter: Math.ceil(apiRateLimiter.getResetTime(clientIp) / 1000),
+        }
+      );
+    }
+
     await validateApiPermission(request, { resource: 'products', action: 'create' });
     // Authentication check
     const session = await getServerSession(authOptions);

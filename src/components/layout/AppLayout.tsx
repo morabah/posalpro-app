@@ -68,6 +68,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, user }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // ✅ FIXED: Use centralized responsive hook
   const { state } = useResponsive();
   const { isMobile } = state;
@@ -92,11 +93,17 @@ export function AppLayout({ children, user }: AppLayoutProps) {
         event.preventDefault();
         setSidebarOpen(!sidebarOpen);
       }
+
+      // Alt+C to toggle sidebar collapse (desktop only)
+      if (event.altKey && event.key === 'c' && !isMobile) {
+        event.preventDefault();
+        setSidebarCollapsed(!sidebarCollapsed);
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isMobile, sidebarOpen]);
+  }, [isMobile, sidebarOpen, sidebarCollapsed]);
 
   // Prevent scroll when sidebar is open on mobile
   useEffect(() => {
@@ -125,20 +132,26 @@ export function AppLayout({ children, user }: AppLayoutProps) {
       <div className="flex h-full">
         {/* Sidebar */}
         <div
-          className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-white shadow-lg transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`fixed inset-y-0 left-0 z-30 transform bg-white shadow-lg transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 ${
+            sidebarCollapsed ? 'w-16' : 'w-64'
+          } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
         >
           <AppSidebar
             isOpen={sidebarOpen}
             isMobile={isMobile}
+            isCollapsed={sidebarCollapsed}
             onClose={() => setSidebarOpen(false)}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
             user={user}
           />
         </div>
 
         {/* Main content area */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div
+          className={`flex flex-1 flex-col overflow-hidden transition-all duration-300 ease-in-out ${
+            sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-0'
+          }`}
+        >
           {/* Header */}
           <AppHeader
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}

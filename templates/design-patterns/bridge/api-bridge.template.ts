@@ -95,12 +95,18 @@
  * @since 2024-01-01
  */
 
+import { useMemo, useState, useEffect } from 'react';
+
+// Custom hooks and services
 import { useApiClient } from '@/hooks/useApiClient';
-import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
-import { logDebug, logError, logInfo } from '@/lib/logger';
-import { securityAuditManager } from '@/lib/security/audit';
+import { logDebug, logInfo, logError } from '@/lib/logger';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors/ErrorHandlingService';
+import { securityAuditManager } from '@/lib/security/SecurityAuditManager';
 import { validateApiPermission } from '@/lib/security/rbac';
-import { useMemo } from 'react';
+
+// Types
+import type { ApiResponse } from '@/types/api';
+import type { PaginatedResponse } from '@/types/common';
 
 // ====================
 // TypeScript Interfaces
@@ -161,8 +167,20 @@ export interface ApiResponse<T> {
 }
 
 // ====================
-// API Bridge Class
+// Bridge Error Types
 // ====================
+
+/**
+ * Bridge error wrapper for standardized error handling
+ */
+interface BridgeError extends ApiResponse<never> {
+  success: false;
+  error: string;
+  code?: string;
+  operation: string;
+  timestamp: string;
+  retryable: boolean;
+}
 
 /**
  * __BRIDGE_NAME__ API Bridge - Singleton Pattern
@@ -217,6 +235,41 @@ class __BRIDGE_NAME__ApiBridge {
       __BRIDGE_NAME__ApiBridge.instance = new __BRIDGE_NAME__ApiBridge(config);
     }
     return __BRIDGE_NAME__ApiBridge.instance;
+  }
+
+  // ✅ BRIDGE ERROR WRAPPING: Standardized error wrapping
+  private wrapBridgeError(error: unknown, operation: string): BridgeError {
+    return {
+      success: false,
+      data: null as never,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      code: this.getErrorCode(error),
+      operation,
+      timestamp: new Date().toISOString(),
+      retryable: this.isRetryableError(error),
+    };
+  }
+
+  // ✅ BRIDGE ERROR WRAPPING: Error code extraction
+  private getErrorCode(error: unknown): string {
+    if (error instanceof Error && 'code' in error) {
+      return String(error.code);
+    }
+    return 'UNKNOWN_ERROR';
+  }
+
+  // ✅ BRIDGE ERROR WRAPPING: Retryable error detection
+  private isRetryableError(error: unknown): boolean {
+    if (error instanceof Error) {
+      // Network errors, timeouts, and server errors are retryable
+      return (
+        error.message.includes('timeout') ||
+        error.message.includes('network') ||
+        error.message.includes('500') ||
+        error.message.includes('503')
+      );
+    }
+    return false;
   }
 
   // ====================
@@ -305,15 +358,24 @@ class __BRIDGE_NAME__ApiBridge {
     // ✅ SECURITY: RBAC validation for sensitive operations
     if (this.config.requireAuth && session?.user) {
       try {
+        const sessionData = session.user ? {
+          user: {
+            id: session.user.id || '',
+            roles: Array.isArray(session.user.roles) ? session.user.roles : [],
+            permissions: Array.isArray(session.user.permissions) ? session.user.permissions : [],
+          },
+        } : undefined;
+        
+        // Handle authentication errors gracefully
+        if (!sessionData && this.config.requireAuth) {
+          throw new Error('Authentication required but no valid session found');
+        }
+        
         await validateApiPermission({
           resource: '__RESOURCE_NAME__',
           action: 'read',
           scope: this.config.defaultScope,
-          context: {
-            userId: session.user.id,
-            userRoles: session.user.roles,
-            userPermissions: session.user.permissions,
-          },
+          context: sessionData,
         });
 
         // ✅ SECURITY: Audit log for successful authorization
@@ -326,25 +388,41 @@ class __BRIDGE_NAME__ApiBridge {
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        // ✅ SECURITY: Audit log for authorization failure
-        securityAuditManager.logAccess({
-          userId: session.user.id,
-          resource: '__RESOURCE_NAME__',
-          action: 'read',
-          scope: this.config.defaultScope,
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: new Date().toISOString(),
-        });
+        // ✅ AUTHENTICATION ERROR HANDLING: Enhanced error context and user-friendly messages
+        const userId = session?.user?.id || 'anonymous';
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        
+        // ✅ SECURITY: Audit log for authorization failure with safe user ID handling
+        try {
+          securityAuditManager.logAccess({
+            userId,
+            resource: '__RESOURCE_NAME__',
+            action: 'read',
+            scope: this.config.defaultScope,
+            success: false,
+            error: errorMessage,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (auditError) {
+          // Fallback logging if audit manager fails
+          logError('Audit logging failed', { auditError, originalError: errorMessage });
+        }
 
         logError('__BRIDGE_NAME__ API Bridge: Authorization failed', {
           component: '__BRIDGE_NAME__ApiBridge',
           operation: 'fetch__ENTITY_TYPE__s',
-          userId: session.user.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          userId,
+          error: errorMessage,
         });
 
-        throw new Error('Access denied: Insufficient permissions');
+        // Provide user-friendly error messages based on error type
+        if (errorMessage.includes('token') || errorMessage.includes('expired')) {
+          throw new Error('Your session has expired. Please log in again.');
+        } else if (errorMessage.includes('permission') || errorMessage.includes('access')) {
+          throw new Error('You do not have permission to access this resource.');
+        } else {
+          throw new Error('Access denied: Authentication failed');
+        }
       }
     }
 
@@ -382,9 +460,33 @@ class __BRIDGE_NAME__ApiBridge {
         const fields = params.fields || 'id,name,status,updatedAt';
         queryParams.set('fields', fields);
 
-        const response = await apiClient.get<ApiResponse<__ENTITY_TYPE__[]>>(
+        let response = await apiClient.get<ApiResponse<__ENTITY_TYPE__[]>>(
           `/__RESOURCE_NAME__?${queryParams.toString()}`
         );
+
+        // ✅ ARRAY SAFETY: Always use Array.isArray() before operations (Customer Bridge Pattern)
+        if (response && typeof response === 'object') {
+          // Handle flattened API response format (direct array from backend)
+          if (Array.isArray(response)) {
+            // Direct array response - wrap in standard format
+            response = {
+              success: true,
+              data: response as __ENTITY_TYPE__[],
+              message: 'Success'
+            } as ApiResponse<__ENTITY_TYPE__[]>;
+          } else if (!Array.isArray(response.data)) {
+            // ✅ ARRAY SAFETY: Ensure data is always an array using Array.isArray() check
+            response.data = Array.isArray(response.data) ? response.data : 
+                            (response.data && typeof response.data === 'object' ? [response.data] : []);
+          }
+        } else {
+          // Handle completely invalid response with safe empty array
+          return {
+            success: false,
+            data: [], // ✅ ARRAY SAFETY: Always return empty array for failed responses
+            message: 'Invalid API response format'
+          };
+        }
 
         // Cache successful response
         this.setCachedData(cacheKey, response);
@@ -473,9 +575,29 @@ class __BRIDGE_NAME__ApiBridge {
           return cached;
         }
 
-        const response = await apiClient.get<ApiResponse<__ENTITY_TYPE__>>(
+        let response = await apiClient.get<ApiResponse<__ENTITY_TYPE__>>(
           `/__RESOURCE_NAME__/${id}`
         );
+
+        // ✅ API RESPONSE FORMAT: Handle flattened single entity responses
+        if (!response || typeof response !== 'object') {
+          throw new Error('Invalid API response format');
+        }
+
+        // Handle flattened API response format for single entities
+        if (!response.data && (response as any).id) {
+          // Direct entity response - wrap in standard format
+          const entityData = response as unknown as __ENTITY_TYPE__;
+          response = {
+            success: true,
+            data: entityData,
+            message: 'Success'
+          } as ApiResponse<__ENTITY_TYPE__>;
+        }
+
+        if (!response.data) {
+          throw new Error('Entity not found in response');
+        }
 
         // Cache successful response
         this.setCachedData(cacheKey, response);
@@ -567,25 +689,40 @@ class __BRIDGE_NAME__ApiBridge {
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        // ✅ SECURITY: Audit log for authorization failure
-        securityAuditManager.logAccess({
-          userId: session.user.id,
-          resource: '__RESOURCE_NAME__',
-          action: 'create',
-          scope: this.config.defaultScope,
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: new Date().toISOString(),
-        });
+        // ✅ AUTHENTICATION ERROR HANDLING: Enhanced create operation error handling
+        const userId = session?.user?.id || 'anonymous';
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        
+        // ✅ SECURITY: Safe audit logging for create operations
+        try {
+          securityAuditManager.logAccess({
+            userId,
+            resource: '__RESOURCE_NAME__',
+            action: 'create',
+            scope: this.config.defaultScope,
+            success: false,
+            error: errorMessage,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (auditError) {
+          logError('Audit logging failed for create operation', { auditError, originalError: errorMessage });
+        }
 
         logError('__BRIDGE_NAME__ API Bridge: Authorization failed for create', {
           component: '__BRIDGE_NAME__ApiBridge',
           operation: 'create__ENTITY_TYPE__',
-          userId: session.user.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          userId,
+          error: errorMessage,
         });
 
-        throw new Error('Access denied: Insufficient permissions to create');
+        // User-friendly error messages for create operations
+        if (errorMessage.includes('token') || errorMessage.includes('expired')) {
+          throw new Error('Your session has expired. Please log in again to create items.');
+        } else if (errorMessage.includes('permission') || errorMessage.includes('access')) {
+          throw new Error('You do not have permission to create new items.');
+        } else {
+          throw new Error('Access denied: Unable to create item');
+        }
       }
     }
 
@@ -598,18 +735,43 @@ class __BRIDGE_NAME__ApiBridge {
     });
 
     try {
-      const response = await apiClient.post<ApiResponse<__ENTITY_TYPE__>>(
+      let response = await apiClient.post<ApiResponse<__ENTITY_TYPE__>>(
         `/__RESOURCE_NAME__`,
         payload
       );
 
+      // ✅ API RESPONSE FORMAT: Handle flattened create responses
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid API response format');
+      }
+
+      // Handle flattened API response format for create operations
+      if (!response.data && (response as any).id) {
+        const entityData = response as unknown as __ENTITY_TYPE__;
+        response = {
+          success: true,
+          data: entityData,
+          message: 'Created successfully'
+        } as ApiResponse<__ENTITY_TYPE__>;
+      }
+
+      if (!response.data) {
+        throw new Error('Created entity not found in response');
+      }
+
+      // ✅ ARRAY SAFETY: Validate updated entity before operations  
+      if (!response.data || typeof response.data !== 'object') {
+        throw new Error('Invalid updated entity data received from server');
+      }
+
       // Clear relevant cache entries
       this.clearCache('list');
+      this.clearCache(`detail:${response.data.id}`);
 
       this.analytics?.(
         '__RESOURCE_NAME___created',
         {
-          id: response.data?.id,
+          id: response.data.id,
           userStory: '__USER_STORY__',
           hypothesis: '__HYPOTHESIS__',
           loadTime: performance.now() - start,
@@ -676,10 +838,29 @@ class __BRIDGE_NAME__ApiBridge {
     });
 
     try {
-      const response = await apiClient.patch<ApiResponse<__ENTITY_TYPE__>>(
+      let response = await apiClient.patch<ApiResponse<__ENTITY_TYPE__>>(
         `/__RESOURCE_NAME__/${id}`,
         payload
       );
+
+      // ✅ API RESPONSE FORMAT: Handle flattened update responses
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid API response format');
+      }
+
+      // Handle flattened API response format for update operations
+      if (!response.data && (response as any).id) {
+        const entityData = response as unknown as __ENTITY_TYPE__;
+        response = {
+          success: true,
+          data: entityData,
+          message: 'Updated successfully'
+        } as ApiResponse<__ENTITY_TYPE__>;
+      }
+
+      if (!response.data) {
+        throw new Error('Updated entity not found in response');
+      }
 
       // Clear relevant cache entries
       this.clearCache('list');
@@ -756,7 +937,22 @@ class __BRIDGE_NAME__ApiBridge {
     });
 
     try {
-      const response = await apiClient.delete<ApiResponse<void>>(`/__RESOURCE_NAME__/${id}`);
+      let response = await apiClient.delete<ApiResponse<void>>(`/__RESOURCE_NAME__/${id}`);
+
+      // ✅ API RESPONSE FORMAT: Handle delete responses with proper status
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid API response format');
+      }
+
+      // Handle delete response - ensure proper success indication
+      if (response.success === undefined) {
+        // For delete operations, HTTP 200/204 typically indicates success
+        response = {
+          success: true,
+          data: undefined,
+          message: 'Deleted successfully'
+        } as ApiResponse<void>;
+      }
 
       // Clear relevant cache entries
       this.clearCache('list');
@@ -839,30 +1035,104 @@ class __BRIDGE_NAME__ApiBridge {
 export function use__BRIDGE_NAME__ApiBridge(config?: __BRIDGE_NAME__ApiBridgeConfig) {
   const apiClient = useApiClient();
 
+  // ✅ INFINITE LOOP PREVENTION: Deferred bridge initialization
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  useEffect(() => {
+    // ✅ INFINITE LOOP PREVENTION: Deferred initialization to prevent render loops
+    setTimeout(() => {
+      setIsInitialized(true);
+    }, 0);
+  }, []); // Empty dependency array prevents infinite loops
+  
+  // ✅ INFINITE LOOP PREVENTION: Deferred analytics setup with setTimeout 0
+  useEffect(() => {
+    setTimeout(() => {
+      if (config && isInitialized) {
+        const bridge = __BRIDGE_NAME__ApiBridge.getInstance(config);
+        // Setup analytics if available
+      }
+    }, 0);
+  }, []); // useEffect with empty dependency array
+
   return useMemo(() => {
     const bridge = __BRIDGE_NAME__ApiBridge.getInstance(config);
 
-    return {
-      // Fetch operations
-      fetch__ENTITY_TYPE__s: (params?: __ENTITY_TYPE__FetchParams) =>
-        bridge.fetch__ENTITY_TYPE__s(params, apiClient),
-      get__ENTITY_TYPE__: (id: string) => bridge.get__ENTITY_TYPE__(id, apiClient),
-
-      // CRUD operations
-      create__ENTITY_TYPE__: (payload: __ENTITY_TYPE__CreatePayload) =>
-        bridge.create__ENTITY_TYPE__(payload, apiClient),
-      update__ENTITY_TYPE__: (id: string, payload: __ENTITY_TYPE__UpdatePayload) =>
-        bridge.update__ENTITY_TYPE__(id, payload, apiClient),
-      delete__ENTITY_TYPE__: (id: string) => bridge.delete__ENTITY_TYPE__(id, apiClient),
-
-      // Cache management
-      clearCache: (pattern?: string) => bridge.clearCache(pattern),
-
-      // Analytics
-      setAnalytics: (analytics: Parameters<typeof bridge.setAnalytics>[0]) =>
-        bridge.setAnalytics(analytics),
+    // ✅ ERROR FALLBACKS: Wrap all operations with try-catch fallbacks
+    const safeOperation = <T>(operation: () => Promise<T>, fallbackValue: T, operationName: string) => {
+      return async (): Promise<T> => {
+        try {
+          return await operation();
+        } catch (error) {
+          logError(`__BRIDGE_NAME__ApiBridge: ${operationName} failed`, {
+            error,
+            component: '__BRIDGE_NAME__ApiBridge',
+            operation: operationName
+          });
+          
+          // ✅ ERROR FALLBACKS: Return safe fallback value
+          return fallbackValue;
+        }
+      };
     };
-  }, [apiClient, config]);
+
+    return {
+      // Fetch operations with error fallbacks
+      fetch__ENTITY_TYPE__s: (params?: __ENTITY_TYPE__FetchParams) =>
+        safeOperation(
+          () => bridge.fetch__ENTITY_TYPE__s(params, apiClient),
+          { success: false, data: [], total: 0, error: 'Bridge operation failed' } as any,
+          'fetch__ENTITY_TYPE__s'
+        )(),
+      get__ENTITY_TYPE__: (id: string) => 
+        safeOperation(
+          () => bridge.get__ENTITY_TYPE__(id, apiClient),
+          { success: false, data: null, error: 'Bridge operation failed' } as any,
+          'get__ENTITY_TYPE__'
+        )(),
+
+      // CRUD operations with error fallbacks
+      create__ENTITY_TYPE__: (payload: __ENTITY_TYPE__CreatePayload) =>
+        safeOperation(
+          () => bridge.create__ENTITY_TYPE__(payload, apiClient),
+          { success: false, data: null, error: 'Create operation failed' } as any,
+          'create__ENTITY_TYPE__'
+        )(),
+      update__ENTITY_TYPE__: (id: string, payload: __ENTITY_TYPE__UpdatePayload) =>
+        safeOperation(
+          () => bridge.update__ENTITY_TYPE__(id, payload, apiClient),
+          { success: false, data: null, error: 'Update operation failed' } as any,
+          'update__ENTITY_TYPE__'
+        )(),
+      delete__ENTITY_TYPE__: (id: string) => 
+        safeOperation(
+          () => bridge.delete__ENTITY_TYPE__(id, apiClient),
+          { success: false, error: 'Delete operation failed' } as any,
+          'delete__ENTITY_TYPE__'
+        )(),
+
+      // Cache management with error fallbacks
+      clearCache: (pattern?: string) => {
+        try {
+          bridge.clearCache(pattern);
+        } catch (error) {
+          logError('Cache clear failed', { error, pattern });
+        }
+      },
+
+      // Analytics with error fallbacks
+      setAnalytics: (analytics: Parameters<typeof bridge.setAnalytics>[0]) => {
+        try {
+          bridge.setAnalytics(analytics);
+        } catch (error) {
+          logError('Analytics setup failed', { error });
+        }
+      },
+
+      // Bridge state
+      isInitialized,
+    };
+  }, [apiClient, config, isInitialized]);
 }
 
 export type Use__BRIDGE_NAME__ApiBridgeReturn = ReturnType<typeof use__BRIDGE_NAME__ApiBridge>;

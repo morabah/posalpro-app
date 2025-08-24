@@ -89,6 +89,7 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 // ====================
 // TypeScript Interfaces
@@ -148,6 +149,43 @@ interface __BRIDGE_NAME__BridgeContextValue {
   trackPageView: (page: string) => void;
   trackAction: (action: string, metadata?: ActionMetadata) => void;
 
+  // ✅ FORM HANDLING: Add form state management
+  formState: {
+    isLoading: boolean;
+    isSubmitting: boolean;
+    errors: Record<string, string>;
+  };
+
+  // ✅ LOADING STATES: Add loading state management
+  loadingStates: {
+    entities: boolean;
+    operations: Record<string, boolean>;
+  };
+
+  // ✅ FORM HANDLING: Add form methods
+  formMethods: ReturnType<
+    typeof useForm<{
+      search: string;
+      status: string;
+      type: string;
+    }>
+  >;
+  handleFormSubmit: (data: Record<string, unknown>) => Promise<void>;
+
+  // ✅ ACCESSIBILITY: Add accessibility features
+  accessibility: {
+    announceUpdate: (message: string) => void;
+    setFocusTo: (elementId: string) => void;
+    getAriaLabel: (context: string, item?: __ENTITY_TYPE__) => string;
+  };
+
+  // ✅ MOBILE OPTIMIZATION: Add mobile responsive features
+  mobile: {
+    isMobileView: boolean;
+    touchOptimized: boolean;
+    orientation: 'portrait' | 'landscape';
+  };
+
   // State access
   state: __BRIDGE_NAME__State;
   uiState: unknown;
@@ -159,6 +197,8 @@ interface __BRIDGE_NAME__ManagementBridgeProps {
   autoRefresh?: boolean;
   refreshInterval?: number;
 }
+
+// ✅ CONTEXT SAFETY: Default props are now handled in function parameters
 
 // ====================
 // Context Setup
@@ -174,33 +214,73 @@ const __BRIDGE_NAME__BridgeContext = React.createContext<__BRIDGE_NAME__BridgeCo
 
 export function __BRIDGE_NAME__ManagementBridge({
   children,
+  initialFilters = {},
+  autoRefresh = false,
+  refreshInterval = 30000,
 }: __BRIDGE_NAME__ManagementBridgeProps) {
   // ====================
   // Hooks and Dependencies
   // ====================
 
-  const apiBridge = use__BRIDGE_NAME__ApiBridge({
-    enableCache: true,
-    retryAttempts: 3,
-    timeout: 15000,
-    // ✅ SECURITY: RBAC configuration
-    requireAuth: true,
-    requiredPermissions: [
-      `__RESOURCE_NAME__:read`,
-      `__RESOURCE_NAME__:create`,
-      `__RESOURCE_NAME__:update`,
-      `__RESOURCE_NAME__:delete`,
-    ],
-    defaultScope: 'TEAM',
-  });
+  // ✅ CONTEXT SAFETY: Wrap bridge hooks in try-catch with fallbacks
+  let apiBridge;
+  try {
+    apiBridge = use__BRIDGE_NAME__ApiBridge({
+      enableCache: true,
+      retryAttempts: 3,
+      timeout: 15000,
+      // ✅ SECURITY: RBAC configuration
+      requireAuth: true,
+      requiredPermissions: [
+        `__RESOURCE_NAME__:read`,
+        `__RESOURCE_NAME__:create`,
+        `__RESOURCE_NAME__:update`,
+        `__RESOURCE_NAME__:delete`,
+      ],
+      defaultScope: 'TEAM',
+    });
+  } catch (apiBridgeError) {
+    logError('Failed to initialize API bridge', {
+      component: '__BRIDGE_NAME__ManagementBridge',
+      error: apiBridgeError,
+    });
+    // Fallback: Create minimal bridge interface
+    apiBridge = {
+      fetch__ENTITY_TYPE__s: async () => ({ success: false, error: 'Bridge initialization failed', data: [], total: 0 }),
+      create__ENTITY_TYPE__: async () => ({ success: false, error: 'Bridge initialization failed' }),
+      update__ENTITY_TYPE__: async () => ({ success: false, error: 'Bridge initialization failed' }),
+      delete__ENTITY_TYPE__: async () => ({ success: false, error: 'Bridge initialization failed' }),
+      config: { requireAuth: true }
+    };
+  }
 
-  const stateBridge = useStateBridge();
-  const uiState = useUIState();
-  const eventBridge = useEventBridge();
-  const { trackOptimized: analytics } = useOptimizedAnalytics();
+  // CONTEXT SAFETY: Wrap auth hook with fallback
+  let user;
+  try {
+    const authContext = useAuth();
+    user = authContext?.user;
+  } catch (authError) {
+    logError('Auth context failed', { error: authError, component: '__BRIDGE_NAME__ManagementBridge' });
+    user = null; // Safe fallback
+  }
 
-  // ✅ SECURITY: Authentication and authorization
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  // CONTEXT SAFETY: Wrap analytics hook with fallback
+  let analytics;
+  try {
+    const analyticsContext = useOptimizedAnalytics();
+    analytics = analyticsContext?.trackOptimized;
+  } catch (analyticsError) {
+    logError('Analytics context failed', { error: analyticsError, component: '__BRIDGE_NAME__ManagementBridge' });
+    analytics = () => {}; // Safe fallback - no-op function
+  }
+
+  // SECURITY: Authentication and authorization with context safety
+  const authContext = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = authContext || {
+    user: null,
+    isAuthenticated: false,
+    isLoading: true
+  };
 
   // ====================
   // Local State
@@ -213,7 +293,176 @@ export function __BRIDGE_NAME__ManagementBridge({
     error: null,
   });
 
+  // ✅ FORM HANDLING: React Hook Form integration
+  const formMethods = useForm<{
+    search: string;
+    status: string;
+    type: string;
+  }>({
+    defaultValues: {
+      search: '',
+      status: '',
+      type: '',
+    },
+    mode: 'onChange',
+  });
+
+  // ✅ FORM HANDLING: Form state management
+  const [formState, setFormState] = useState({
+    isLoading: false,
+    isSubmitting: false,
+    errors: {} as Record<string, string>,
+  });
+
+  // ✅ LOADING STATES: Loading state management
+  const [loadingStates, setLoadingStates] = useState({
+    entities: false,
+    operations: {} as Record<string, boolean>,
+  });
+
+  // ✅ MOBILE OPTIMIZATION: Mobile state detection
+  const [mobile] = useState({
+    isMobileView: typeof window !== 'undefined' && window.innerWidth < 768,
+    touchOptimized: typeof window !== 'undefined' && 'ontouchstart' in window,
+    orientation:
+      typeof window !== 'undefined' && window.innerHeight > window.innerWidth
+        ? ('portrait' as const)
+        : ('landscape' as const),
+  });
+
+  // ✅ ACCESSIBILITY: Accessibility utilities
+  const accessibility = useMemo(
+    () => ({
+      announceUpdate: (message: string) => {
+        // Create or update ARIA live region for announcements
+        if (typeof window !== 'undefined') {
+          let liveRegion = document.getElementById('__RESOURCE_NAME__-bridge-announcements');
+          if (!liveRegion) {
+            liveRegion = document.createElement('div');
+            liveRegion.id = '__RESOURCE_NAME__-bridge-announcements';
+            liveRegion.setAttribute('aria-live', 'polite');
+            liveRegion.setAttribute('aria-atomic', 'true');
+            liveRegion.style.position = 'absolute';
+            liveRegion.style.left = '-10000px';
+            liveRegion.style.width = '1px';
+            liveRegion.style.height = '1px';
+            liveRegion.style.overflow = 'hidden';
+            document.body.appendChild(liveRegion);
+          }
+          liveRegion.textContent = message;
+        }
+      },
+      setFocusTo: (elementId: string) => {
+        if (typeof window !== 'undefined') {
+          const element = document.getElementById(elementId);
+          element?.focus();
+        }
+      },
+      getAriaLabel: (context: string, item?: __ENTITY_TYPE__) => {
+        switch (context) {
+          case '__RESOURCE_NAME__-item':
+            return item ? `__ENTITY_TYPE__: ${item.name}, Status: ${item.status}` : '__ENTITY_TYPE__ item';
+          case '__RESOURCE_NAME__-list':
+            return `__ENTITY_TYPE__s list, ${state.entities.length} items`;
+          case '__RESOURCE_NAME__-actions':
+            return item ? `Actions for ${item.name}` : '__ENTITY_TYPE__ actions';
+          default:
+            return context;
+        }
+      },
+    }),
+    [state.entities.length]
+  );
+
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
+
+  // ✅ FORM HANDLING: Form submission handler
+  const handleFormSubmit = useCallback(
+    async (data: Record<string, unknown>) => {
+      try {
+        logDebug('__BRIDGE_NAME__ form submit', {
+          component: '__BRIDGE_NAME__Bridge',
+          operation: 'form_submit',
+          formDataKeys: Object.keys(data),
+        });
+
+        setFormState(prev => ({ ...prev, isSubmitting: true, errors: {} }));
+
+        // ✅ SECURITY: Sanitize form input
+        const sanitizedData = {
+          search: typeof data.search === 'string' ? data.search.trim().slice(0, 100) : '',
+          status: typeof data.status === 'string' ? data.status : '',
+          type: typeof data.type === 'string' ? data.type : '',
+        };
+
+        // Apply form data as filters
+        const newFilters = {
+          search: sanitizedData.search,
+          status: sanitizedData.status ? [sanitizedData.status] : [],
+          type: sanitizedData.type,
+        };
+
+        setFilters(newFilters);
+        await fetch__ENTITY_TYPE__s(newFilters);
+
+        // ✅ ACCESSIBILITY: Announce form submission success
+        accessibility.announceUpdate(
+          `Filters applied successfully. Showing ${state.entities.length} __RESOURCE_NAME__s.`
+        );
+
+        analytics(
+          '__RESOURCE_NAME___form_submitted',
+          {
+            userStory: '__USER_STORY__',
+            hypothesis: '__HYPOTHESIS__',
+            formType: 'filter',
+            isMobile: mobile.isMobileView,
+          },
+          'medium'
+        );
+
+        logInfo('__BRIDGE_NAME__ form submit success', {
+          component: '__BRIDGE_NAME__Bridge',
+          operation: 'form_submit',
+        });
+      } catch (error) {
+        const ehs = ErrorHandlingService.getInstance();
+        const standardError = ehs.processError(
+          error,
+          'Failed to submit form',
+          ErrorCodes.VALIDATION.OPERATION_FAILED,
+          {
+            component: '__BRIDGE_NAME__Bridge',
+            operation: 'form_submit',
+          }
+        );
+
+        setFormState(prev => ({
+          ...prev,
+          errors: { general: standardError.message },
+        }));
+
+        // ✅ ACCESSIBILITY: Announce form submission error
+        accessibility.announceUpdate(`Error: ${standardError.message}`);
+
+        logError('__BRIDGE_NAME__ form submit failed', {
+          component: '__BRIDGE_NAME__Bridge',
+          operation: 'form_submit',
+          error: standardError.message,
+        });
+      } finally {
+        setFormState(prev => ({ ...prev, isSubmitting: false }));
+      }
+    },
+    [
+      analytics,
+      fetch__ENTITY_TYPE__s,
+      setFilters,
+      accessibility,
+      mobile.isMobileView,
+      state.entities.length,
+    ]
+  );
 
   // ====================
   // Event Subscriptions
@@ -276,16 +525,70 @@ export function __BRIDGE_NAME__ManagementBridge({
   // ====================
 
   const fetch__ENTITY_TYPE__s = useCallback(
-    async (params?: __ENTITY_TYPE__FetchParams) => {
-      // ✅ SECURITY: Check authentication before proceeding
-      if (!isAuthenticated || authLoading) {
-        logDebug('__BRIDGE_NAME__ManagementBridge: Authentication check', {
+    async (params: __ENTITY_TYPE__FetchParams = {}) => {
+      // ✅ AUTHENTICATION ERROR HANDLING: Enhanced auth state validation with user-friendly messages
+      if (!user && apiBridge.config.requireAuth) {
+        const errorMessage = 'Please log in to access this data';
+        logError('__BRIDGE_NAME__ Management Bridge: Authentication required', {
           component: '__BRIDGE_NAME__ManagementBridge',
           operation: 'fetch__ENTITY_TYPE__s',
-          isAuthenticated,
-          authLoading,
+          error: errorMessage,
+          authState: user ? 'authenticated' : 'unauthenticated',
         });
+        
+        // ✅ AUTHENTICATION ERROR HANDLING: Graceful error handling with multiple fallback layers
+        try {
+          await ErrorHandlingService.handleError(new Error(errorMessage), {
+            component: '__BRIDGE_NAME__ManagementBridge',
+            operation: 'fetch__ENTITY_TYPE__s',
+            severity: 'high',
+            userFriendly: true,
+            actionRequired: 'login',
+          });
+        } catch (handlingError) {
+          // First fallback: Try basic notification
+          try {
+            eventBridge.emit('notification:show', {
+              type: 'warning',
+              title: 'Authentication Required',
+              message: 'Please log in to continue',
+              timestamp: new Date().toISOString(),
+            } as NotificationData);
+          } catch (notificationError) {
+            // Final fallback: Direct state update
+            logError('All error handling methods failed', { handlingError, notificationError });
+            setState(prev => ({ ...prev, error: errorMessage, loading: false }));
+          }
+        }
         return;
+      }
+      
+      // ✅ AUTHENTICATION ERROR HANDLING: Validate user session integrity
+      if (user && apiBridge.config.requireAuth) {
+        const sessionValid = user.id && (user.roles?.length || user.permissions?.length);
+        if (!sessionValid) {
+          const errorMessage = 'Your session appears to be invalid. Please log in again.';
+          logError('__BRIDGE_NAME__ Management Bridge: Invalid session detected', {
+            component: '__BRIDGE_NAME__ManagementBridge',
+            operation: 'fetch__ENTITY_TYPE__s',
+            userId: user.id || 'unknown',
+            hasRoles: Boolean(user.roles?.length),
+            hasPermissions: Boolean(user.permissions?.length),
+          });
+          
+          try {
+            await ErrorHandlingService.handleError(new Error(errorMessage), {
+              component: '__BRIDGE_NAME__ManagementBridge',
+              operation: 'fetch__ENTITY_TYPE__s',
+              severity: 'high',
+              userFriendly: true,
+              actionRequired: 'reauth',
+            });
+          } catch (handlingError) {
+            setState(prev => ({ ...prev, error: errorMessage, loading: false }));
+          }
+          return;
+        }
       }
 
       try {
@@ -305,19 +608,51 @@ export function __BRIDGE_NAME__ManagementBridge({
           fields: 'id,name,status,updatedAt', // Minimal fields per CORE_REQUIREMENTS
         };
 
-        // ✅ SECURITY: Pass session data to API bridge for RBAC validation
-        const result = await apiBridge.fetch__ENTITY_TYPE__s(fetchParams, {
-          user: {
-            id: user?.id,
-            roles: user?.roles || [],
-            permissions: user?.permissions || [],
-          },
-        });
+        // ✅ AUTHENTICATION ERROR HANDLING: Comprehensive session data validation
+        const sessionData = user ? {
+          id: user.id || '',
+          roles: Array.isArray(user.roles) ? user.roles : [],
+          permissions: Array.isArray(user.permissions) ? user.permissions : [],
+        } : undefined;
+        
+        // Additional validation for required session fields
+        if (apiBridge.config.requireAuth && sessionData) {
+          if (!sessionData.id) {
+            throw new Error('User ID is required but missing from session');
+          }
+          if (sessionData.roles.length === 0 && sessionData.permissions.length === 0) {
+            throw new Error('User has no roles or permissions assigned');
+          }
+        }
+        
+        const result = await apiBridge.fetch__ENTITY_TYPE__s(params, apiClient, sessionData ? { user: sessionData } : undefined);
 
-        if (result.success && result.data) {
+        // ✅ API RESPONSE HANDLING: Validate response format
+        if (!result || typeof result !== 'object') {
+          throw new Error('Invalid response format received from API');
+        }
+
+        const response = {
+          success: result.success || false,
+          data: result.data || [],
+          error: result.error || null
+        };
+
+        // ✅ ARRAY SAFETY: Ensure result.data is always an array
+        let entities: __ENTITY_TYPE__[] = [];
+        if (response.success && response.data) {
+          if (Array.isArray(response.data)) {
+            entities = response.data;
+          } else if (response.data && typeof response.data === 'object') {
+            // Handle single entity response - wrap in array
+            entities = [response.data as __ENTITY_TYPE__];
+          }
+        }
+
+        if (response.success) {
           setState(prev => ({
             ...prev,
-            entities: result.data,
+            entities,
             loading: false,
             lastFetch: new Date(),
           }));
@@ -325,7 +660,7 @@ export function __BRIDGE_NAME__ManagementBridge({
           analytics(
             '__RESOURCE_NAME___fetched',
             {
-              count: result.data.length,
+              count: entities.length,
               userStory: '__USER_STORY__',
               hypothesis: '__HYPOTHESIS__',
             },
@@ -335,51 +670,58 @@ export function __BRIDGE_NAME__ManagementBridge({
           logInfo('__BRIDGE_NAME__ManagementBridge: Fetch success', {
             component: '__BRIDGE_NAME__ManagementBridge',
             operation: 'fetch__ENTITY_TYPE__s',
-            resultCount: result.data.length,
+            resultCount: entities.length,
           });
         } else {
           throw new Error('Failed to fetch data');
         }
       } catch (error) {
-        const ehs = ErrorHandlingService.getInstance();
-        const standardError = ehs.processError(
-          error,
-          'Failed to fetch __RESOURCE_NAME__',
-          ErrorCodes.DATA.QUERY_FAILED,
-          {
-            component: '__BRIDGE_NAME__ManagementBridge',
-            operation: 'fetch__ENTITY_TYPE__s',
-            params,
-          }
-        );
-
-        setState(prev => ({
-          ...prev,
-          loading: false,
-          error: standardError.message,
-        }));
-
-        analytics(
-          '__RESOURCE_NAME___fetch_error',
-          {
-            error: standardError.message,
-            userStory: '__USER_STORY__',
-            hypothesis: '__HYPOTHESIS__',
-          },
-          'high'
-        );
-
-        logError('__BRIDGE_NAME__ManagementBridge: Fetch failed', {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch data';
+        
+        // ✅ AUTHENTICATION ERROR HANDLING: Categorize and handle different error types
+        const isAuthError = errorMessage.includes('token') || 
+                           errorMessage.includes('expired') || 
+                           errorMessage.includes('permission') || 
+                           errorMessage.includes('unauthorized') ||
+                           errorMessage.includes('session');
+        
+        logError('__BRIDGE_NAME__ Management Bridge: Fetch failed', {
           component: '__BRIDGE_NAME__ManagementBridge',
           operation: 'fetch__ENTITY_TYPE__s',
-          error: standardError.message,
+          error: errorMessage,
+          isAuthError,
+          params,
+          userId: user?.id || 'anonymous',
         });
 
-        addNotification({
-          type: 'error',
-          title: 'Fetch Error',
-          message: ehs.getUserFriendlyMessage(error),
-        });
+        // ✅ AUTHENTICATION ERROR HANDLING: Enhanced error handling with auth-specific responses
+        try {
+          await ErrorHandlingService.handleError(error instanceof Error ? error : new Error(errorMessage), {
+            component: '__BRIDGE_NAME__ManagementBridge',
+            operation: 'fetch__ENTITY_TYPE__s',
+            severity: isAuthError ? 'high' : 'medium',
+            userFriendly: true,
+            actionRequired: isAuthError ? 'reauth' : 'retry',
+          });
+        } catch (handlingError) {
+          // Enhanced fallback with auth-specific messaging
+          try {
+            const fallbackMessage = isAuthError 
+              ? 'Authentication issue detected. Please refresh the page or log in again.'
+              : errorMessage;
+              
+            eventBridge.emit('notification:show', {
+              type: isAuthError ? 'warning' : 'error',
+              title: isAuthError ? 'Authentication Issue' : 'Data Loading Error',
+              message: fallbackMessage,
+              timestamp: new Date().toISOString(),
+            } as NotificationData);
+          } catch (notificationError) {
+            logError('All error handling methods failed', { handlingError, notificationError });
+          } finally {
+            setState(prev => ({ ...prev, error: errorMessage, loading: false }));
+          }
+        }
       }
     },
     [apiBridge, analytics, state.filters]
@@ -401,7 +743,8 @@ export function __BRIDGE_NAME__ManagementBridge({
 
         const result = await apiBridge.get__ENTITY_TYPE__(id);
 
-        if (result.success && result.data) {
+        // ✅ ARRAY SAFETY: Validate single entity response
+        if (result.success && result.data && typeof result.data === 'object') {
           analytics(
             '__RESOURCE_NAME___detail_fetched',
             {
@@ -476,7 +819,8 @@ export function __BRIDGE_NAME__ManagementBridge({
 
         const result = await apiBridge.create__ENTITY_TYPE__(payload);
 
-        if (result.success && result.data) {
+        // ✅ ARRAY SAFETY: Validate create response
+        if (result.success && result.data && typeof result.data === 'object') {
           // Refresh list to include new entity
           await refresh__ENTITY_TYPE__s();
 
@@ -559,11 +903,14 @@ export function __BRIDGE_NAME__ManagementBridge({
 
         const result = await apiBridge.update__ENTITY_TYPE__(id, payload);
 
-        if (result.success && result.data) {
-          // Update entity in local state
+        // ✅ ARRAY SAFETY: Validate update response and safely update state
+        if (result.success && result.data && typeof result.data === 'object') {
+          // Update entity in local state with array safety
           setState(prev => ({
             ...prev,
-            entities: prev.entities.map(entity => (entity.id === id ? result.data! : entity)),
+            entities: Array.isArray(prev.entities) 
+              ? prev.entities.map(entity => (entity.id === id ? result.data! : entity))
+              : [result.data!],
           }));
 
           analytics(
@@ -648,10 +995,12 @@ export function __BRIDGE_NAME__ManagementBridge({
         const result = await apiBridge.delete__ENTITY_TYPE__(id);
 
         if (result.success) {
-          // Remove entity from local state
+          // ✅ ARRAY SAFETY: Remove entity from local state with array check
           setState(prev => ({
             ...prev,
-            entities: prev.entities.filter(entity => entity.id !== id),
+            entities: Array.isArray(prev.entities) 
+              ? prev.entities.filter(entity => entity.id !== id)
+              : [],
           }));
 
           analytics(
@@ -841,6 +1190,18 @@ export function __BRIDGE_NAME__ManagementBridge({
       trackPageView,
       trackAction,
 
+      // ✅ FORM HANDLING: Add form state and methods
+      formState,
+      loadingStates,
+      formMethods,
+      handleFormSubmit,
+
+      // ✅ ACCESSIBILITY: Add accessibility features
+      accessibility,
+
+      // ✅ MOBILE OPTIMIZATION: Add mobile responsive features
+      mobile,
+
       // State access
       state,
       uiState,
@@ -857,6 +1218,12 @@ export function __BRIDGE_NAME__ManagementBridge({
       clearError,
       trackPageView,
       trackAction,
+      formState,
+      loadingStates,
+      formMethods,
+      handleFormSubmit,
+      accessibility,
+      mobile,
       state,
       uiState,
     ]

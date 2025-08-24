@@ -14,6 +14,7 @@ import {
   ArchiveBoxIcon,
   ChartBarIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
   CircleStackIcon,
   ClockIcon,
   CogIcon,
@@ -42,7 +43,9 @@ interface NavigationItem {
 interface AppSidebarProps {
   isOpen: boolean;
   isMobile: boolean;
+  isCollapsed?: boolean;
   onClose: () => void;
+  onToggleCollapse?: () => void;
   user?: {
     id: string;
     name: string;
@@ -266,7 +269,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
 ];
 
-export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps) {
+export function AppSidebar({
+  isOpen,
+  isMobile,
+  isCollapsed = false,
+  onClose,
+  onToggleCollapse,
+  user,
+}: AppSidebarProps) {
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['dashboard']));
   const navigationThrottleRef = useRef(new Map<string, number>());
@@ -424,27 +434,42 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
     <>
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out ${
-          isOpen || !isMobile ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}
+        className={`fixed inset-y-0 left-0 z-30 bg-white border-r border-gray-200 transform transition-all duration-300 ease-in-out ${
+          isCollapsed ? 'w-16' : 'w-64'
+        } ${isOpen || !isMobile ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
       >
         <div className="flex flex-col h-full">
           {/* Sidebar header */}
           <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
             <div className="flex items-center space-x-2">
-              <h2 className="text-lg font-semibold text-gray-900">Navigation</h2>
+              {!isCollapsed && <h2 className="text-lg font-semibold text-gray-900">Navigation</h2>}
             </div>
-            {isMobile && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={onClose}
-                className="p-1"
-                aria-label="Close navigation"
-              >
-                <XMarkIcon className="w-5 h-5" />
-              </Button>
-            )}
+            <div className="flex items-center space-x-2">
+              {!isMobile && onToggleCollapse && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onToggleCollapse}
+                  className="p-1"
+                  aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                  <ChevronLeftIcon
+                    className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`}
+                  />
+                </Button>
+              )}
+              {isMobile && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onClose}
+                  className="p-1"
+                  aria-label="Close navigation"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Navigation menu */}
@@ -463,11 +488,12 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
                 <div key={item.id}>
                   {/* Main navigation item */}
                   <div
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md cursor-pointer transition-colors duration-150 ${
+                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md cursor-pointer transition-colors duration-150 relative ${
                       isItemActive
                         ? 'bg-blue-100 text-blue-900 border-r-2 border-blue-600'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
+                    title={isCollapsed ? item.name : undefined}
                   >
                     <Link
                       href={item.href}
@@ -477,15 +503,15 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
                       aria-label={`Navigate to ${item.name}`}
                     >
                       <IconComponent
-                        className={`mr-3 flex-shrink-0 h-6 w-6 transition-colors duration-150 ${
+                        className={`flex-shrink-0 h-6 w-6 transition-colors duration-150 ${
                           isItemActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
-                        }`}
+                        } ${!isCollapsed ? 'mr-3' : 'mx-auto'}`}
                         aria-hidden="true"
                       />
-                      <span className="flex-1">{item.name}</span>
+                      {!isCollapsed && <span className="flex-1">{item.name}</span>}
                     </Link>
 
-                    {hasChildren && (
+                    {hasChildren && !isCollapsed && (
                       <button
                         type="button"
                         onClick={e => {
@@ -509,7 +535,7 @@ export function AppSidebar({ isOpen, isMobile, onClose, user }: AppSidebarProps)
                     )}
                   </div>
 
-                  {hasChildren && isExpanded && (
+                  {hasChildren && isExpanded && !isCollapsed && (
                     <div className="ml-6 mt-1 space-y-1" role="group" aria-labelledby={item.id}>
                       {item.children?.map(child => {
                         const ChildIconComponent = child.icon;

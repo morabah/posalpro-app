@@ -1,4 +1,4 @@
-import { logger } from '@/lib/logger'; /**
+/**
  * PosalPro MVP2 - Individual Product API Routes
  * Enhanced product operations with authentication and analytics
  * Component Traceability: US-3.1, US-3.2, H3, H4
@@ -13,6 +13,9 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { logError, logInfo, logWarn } from '@/lib/logger';
+import { securityAuditManager } from '@/lib/security/audit';
+import { apiRateLimiter } from '@/lib/security/hardening';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -48,9 +51,42 @@ const ProductUpdateSchema = z.object({
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   await validateApiPermission(request, { resource: 'products', action: 'read' });
+
   try {
     const params = await context.params;
     const { id } = params;
+
+    // ✅ RATE LIMITING: Apply rate limiting to prevent abuse
+    const clientIp =
+      request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    if (!apiRateLimiter.isAllowed(clientIp)) {
+      logWarn('Rate limit exceeded for product GET request', {
+        component: 'ProductsIdRoute',
+        operation: 'getProductById',
+        clientIp,
+        productId: id,
+      });
+
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Rate limit exceeded',
+          code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+          metadata: {
+            component: 'ProductsIdRoute',
+            operation: 'getProductById',
+            clientIp,
+            productId: id,
+          },
+        }),
+        'Too many requests',
+        ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        429,
+        {
+          userFriendlyMessage: 'Too many requests. Please try again later.',
+          retryAfter: Math.ceil(apiRateLimiter.getResetTime(clientIp) / 1000),
+        }
+      );
+    }
 
     // Authentication check
     const session = await getServerSession(authOptions);
@@ -68,9 +104,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
         401,
-        { userFriendlyMessage: 'You must be logged in to access this resource' }
+        { userFriendlyMessage: 'You must be logged in to view this product' }
       );
     }
+
+    // ✅ SECURITY AUDIT: Log the access attempt
+    securityAuditManager.logAccess({
+      userId: session.user.id,
+      resource: 'products',
+      action: 'read',
+      scope: 'TEAM',
+      success: true,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        productId: id,
+        operationType: 'api_access',
+        component: 'ProductsIdRoute',
+      },
+    });
 
     // Fetch product with comprehensive relationships
     const product = await prisma.product.findUnique({
@@ -186,11 +237,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // Track product view for analytics
     await trackProductViewEvent(session.user.id, id, product.name);
 
-    return NextResponse.json({
-      success: true,
-      data: transformedProduct,
-      message: 'Product retrieved successfully',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: transformedProduct,
+        message: 'Product retrieved successfully',
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (error) {
     const params = await context.params;
     // Log the error using ErrorHandlingService
@@ -485,7 +545,7 @@ async function trackProductViewEvent(userId: string, productId: string, productN
       },
     });
   } catch (error) {
-    logger.warn('Failed to track product view event:', error);
+    logWarn('Failed to track product view event:', error);
   }
 }
 
@@ -520,7 +580,7 @@ async function trackProductUpdateEvent(
       },
     });
   } catch (error) {
-    logger.warn('Failed to track product update event:', error);
+    logWarn('Failed to track product update event:', error);
   }
 }
 
@@ -555,6 +615,244 @@ async function trackProductArchiveEvent(
       },
     });
   } catch (error) {
-    logger.warn('Failed to track product archive event:', error);
+    logWarn('Failed to track product archive event:', error);
+  }
+}
+
+/**
+ * PATCH /api/products/[id] - Update specific product
+ */
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  await validateApiPermission(request, { resource: 'products', action: 'update' });
+
+  let productId = 'unknown';
+
+  // Log that PATCH method is being called
+  logInfo('PATCH method called for product update', {
+    component: 'ProductsIdRoute',
+    operation: 'updateProduct',
+    url: request.url,
+    method: request.method,
+  });
+
+  try {
+    const params = await context.params;
+    const { id } = params;
+    productId = id;
+
+    // Authentication check
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Unauthorized access attempt',
+          code: ErrorCodes.AUTH.UNAUTHORIZED,
+          metadata: {
+            component: 'ProductsIdRoute',
+            operation: 'updateProduct',
+            productId: id,
+          },
+        }),
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401,
+        { userFriendlyMessage: 'You must be logged in to update products' }
+      );
+    }
+
+    // ✅ SECURITY AUDIT: Log the update attempt
+    securityAuditManager.logAccess({
+      userId: session.user.id,
+      resource: 'products',
+      action: 'update',
+      scope: 'TEAM',
+      success: true,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        productId: id,
+        operationType: 'api_access',
+        component: 'ProductsIdRoute',
+      },
+    });
+
+    // ✅ RATE LIMITING: Apply rate limiting to prevent abuse
+    const clientIp =
+      request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    if (!apiRateLimiter.isAllowed(clientIp)) {
+      logWarn('Rate limit exceeded for product PATCH request', {
+        component: 'ProductsIdRoute',
+        operation: 'updateProduct',
+        clientIp,
+        productId: id,
+      });
+
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Rate limit exceeded',
+          code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+          metadata: {
+            component: 'ProductsIdRoute',
+            operation: 'updateProduct',
+            clientIp,
+            productId: id,
+          },
+        }),
+        'Too many requests',
+        ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        429,
+        {
+          userFriendlyMessage: 'Too many requests. Please try again later.',
+          retryAfter: Math.ceil(apiRateLimiter.getResetTime(clientIp) / 1000),
+        }
+      );
+    }
+
+    // Parse and validate request body
+    const body = await request.json();
+
+    // Debug logging
+    logInfo('Product update request received', {
+      component: 'ProductsIdRoute',
+      operation: 'updateProduct',
+      productId: id,
+      body: JSON.stringify(body),
+    });
+
+    const validatedData = ProductUpdateSchema.parse(body);
+
+    // Update product
+    const updatedProduct = await prisma.product.update({
+      where: { id },
+      data: {
+        ...validatedData,
+        updatedAt: new Date(),
+      },
+      include: {
+        relationships: {
+          include: {
+            targetProduct: {
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                price: true,
+                currency: true,
+                isActive: true,
+              },
+            },
+          },
+        },
+        relatedFrom: {
+          include: {
+            sourceProduct: {
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                price: true,
+                currency: true,
+                isActive: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Track analytics event
+    await trackProductUpdateEvent(
+      session.user.id,
+      id,
+      updatedProduct.name,
+      Object.keys(validatedData)
+    );
+
+    logInfo('Product updated successfully', {
+      component: 'ProductsIdRoute',
+      operation: 'updateProduct',
+      productId: id,
+      updatedFields: Object.keys(validatedData),
+      userId: session.user.id,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: updatedProduct,
+        message: 'Product updated successfully',
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
+  } catch (error) {
+    const ehs = errorHandlingService;
+
+    // Log the full error for debugging
+    logError('Product update error details', {
+      component: 'ProductsIdRoute',
+      operation: 'updateProduct',
+      productId: productId || 'unknown',
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      errorType: error?.constructor?.name,
+    });
+
+    // Handle Zod validation errors specifically
+    if (error instanceof z.ZodError) {
+      logError('Product update validation failed', {
+        component: 'ProductsIdRoute',
+        operation: 'updateProduct',
+        productId: productId || 'unknown',
+        validationErrors: error.errors,
+      });
+
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Invalid product data',
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          metadata: {
+            component: 'ProductsIdRoute',
+            operation: 'updateProduct',
+            productId: productId || 'unknown',
+            validationErrors: error.errors,
+          },
+        }),
+        'Invalid product data',
+        ErrorCodes.DATA.QUERY_FAILED,
+        400,
+        { userFriendlyMessage: 'Please check your input and try again.' }
+      );
+    }
+
+    const standardError = ehs.processError(
+      error,
+      'Failed to update product',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      {
+        component: 'ProductsIdRoute',
+        operation: 'updateProduct',
+        productId: productId || 'unknown',
+      }
+    );
+
+    logError('Product update failed', {
+      component: 'ProductsIdRoute',
+      operation: 'updateProduct',
+      error: standardError.message,
+      productId: productId || 'unknown',
+    });
+
+    return createApiErrorResponse(
+      standardError,
+      'Failed to update product',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      500,
+      { userFriendlyMessage: 'Failed to update product. Please try again.' }
+    );
   }
 }

@@ -1,4 +1,5 @@
 'use client';
+import { useProductManagementBridge } from '@/components/bridges/ProductManagementBridge';
 import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
@@ -8,7 +9,6 @@ import {
 } from '@/components/ui/forms/Select';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { useApiClient } from '@/hooks/useApiClient';
 import useErrorHandler from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import type { RuleDSL } from '@/lib/services/productRelationshipEngine';
@@ -57,7 +57,20 @@ export default function RuleBuilder({
   initialRule?: RuleDTO;
   onCancel?: () => void;
 }) {
-  const apiClient = useApiClient();
+  let bridge;
+  try {
+    bridge = useProductManagementBridge();
+  } catch (error) {
+    // Bridge context not available yet - return loading state
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Loading rule builder...</p>
+        </div>
+      </div>
+    );
+  }
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { handleAsyncError, getUserFriendlyMessage } = useErrorHandler();
   const toast = useToast();
@@ -243,14 +256,11 @@ export default function RuleBuilder({
         }
 
         const payload = {
-          productId,
           name: values.name,
-          ruleType: type,
-          rule: base,
-          precedence: values.precedence,
-          explain: values.explain,
+          conditions: [base], // Convert rule to conditions array
+          actions: [], // Actions would need to be derived from ruleType
         };
-        await apiClient.post('/products/relationships/rules', payload);
+        await bridge.createRelationshipRule(payload);
         analytics('rule_created', { productId, ruleType: type }, 'medium');
         toast.success('Rule created successfully', { title: 'Success' });
         reset();
@@ -265,7 +275,7 @@ export default function RuleBuilder({
       }
     },
     [
-      apiClient,
+      bridge,
       analytics,
       handleAsyncError,
       getUserFriendlyMessage,
@@ -304,14 +314,12 @@ export default function RuleBuilder({
     (async () => {
       try {
         setLoadingProducts(true);
-        const res = await apiClient.get<any>('/products?limit=100&sortBy=name&sortOrder=asc');
-        const list = Array.isArray((res as any)?.data?.products)
-          ? (res as any).data.products
-          : Array.isArray((res as any)?.data)
-            ? (res as any).data
-            : Array.isArray(res)
-              ? res
-              : [];
+        const res = await bridge.fetchProducts({
+          limit: 100,
+          sortBy: 'name',
+          sortOrder: 'asc',
+        });
+        const list = res.success && res.data ? res.data : [];
         if (!isMounted) return;
         const options: AdvOption[] = list.map((p: any) => ({
           value: String(p.sku || p.id),

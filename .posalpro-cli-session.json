@@ -1,0 +1,7 @@
+{
+  "cookies": {
+    "next-auth.csrf-token": "788b3b057b67c7df909dc56e51d5aac5c9dc773a4ec32e684b49fb6bfcdb4f6b%7Cfe045e00dca2d25a80c3890b1fc4e9176868db4cfbfadf4725bde65430c14a0b",
+    "next-auth.callback-url": "http%3A%2F%2Flocalhost%3A3000%2Fdashboard",
+    "next-auth.session-token": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..OsdVls_fNm49A79m.-Q_pIin9Y4Z9fzwNIZpGr46GBxIXTCsLiTjdHEaK9VU1pZMcNSqn46pVePRQpVEisztyra_U0O_ta7fRffv39LboNTboxnz17TiRCw27x_9jv43KCH4xlKfCmicGhbW55nr2mjdik1p_suNrLIzGSM7rDefuWlUi38ipnDPc3SxskA2kqCO0ePB4y0qLCsZ_3V-VBa9PYTb2dVhBMDMaVQaUsbVbSL8DezAmwohg8nqLKWdFD_eGJ6kjyYd-CcPEQkdDxBsY9Sb1x9VhXVm3n8dFYu0NDqnyZTxW-LbsBoDV2IwR5PKosMAHNIgWyv7Gl3vOO05dRABFNULaPwpKoLMejj9JJ6F7YLyMBJMl8rBQy990ft_BpGA8JptCzJ7Ty9gFO1y7bHKVmBJKjcH-XiI7IpaE4e16jAHfK2Qr9tg8z7IDHWP4cwHga6kNzpoadwBrdjPcGWApvL9MQg.9Pufl3XKObKFfIDrCknaFA"
+  }
+}

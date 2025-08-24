@@ -79,40 +79,51 @@ const CORE_REQUIREMENTS_PATTERNS = {
 
 // Enhanced verification patterns for all bridge types
 const UNIVERSAL_BRIDGE_PATTERNS = {
-  // API Bridge Patterns (Enhanced from original)
+  // API Bridge Patterns (Enhanced from Customer Bridge)
   API_BRIDGE: {
     // Core Requirements
     SINGLETON_PATTERN: /static\s+getInstance|private\s+static\s+instance/,
     BRIDGE_CLASS_STRUCTURE: /class\s+(\w+)ApiBridge/,
     API_CLIENT_INTEGRATION: /setApiClient|apiClient/,
 
-    // Error Handling
-    ERROR_HANDLING_SERVICE: /ErrorHandlingService/,
-    PROCESS_ERROR: /processError/,
+    // Error Handling (Enhanced from Customer Bridge - Functional Detection)
+    ERROR_HANDLING_SERVICE: /\bErrorHandlingService\b|\berrorHandler\b/,
+    PROCESS_ERROR: /\bprocessError\s*\(|\bhandleError\s*\(/,
+    BRIDGE_ERROR_INTERFACE: /\binterface\s+\w*Error\b|\btype\s+\w*Error\s*=/,
+    ERROR_CONTEXT_WRAPPING: /\boriginalError\b|\bcontext\s*:\s*\{|\berror\s*\?\.|\berrorContext\b/,
+    RETRYABLE_ERROR_DETECTION: /\bisRetryable\w*\s*\(|\bretry\w*Error\b|\bcanRetry\s*\(/,
+    ERROR_CODE_EXTRACTION: /\bgetErrorCode\s*\(|\berror\s*\?\s*\.\s*code|\berrorCode\b/,
     NO_CONSOLE_LOGS: /console\.(log|error|warn|info)/,
+
+    // Performance & Timing (From Customer Bridge)
+    PERFORMANCE_TIMING: /performance\.now\(\)|performance.*timing/,
+    TIMING_MEASUREMENTS: /const\s+startTime|endTime.*startTime/,
 
     // TypeScript Compliance
     TYPE_INTERFACES: /interface\s+\w+/,
-    NO_ANY_TYPES: /:\s*any\b|as\s+any\b|\bany\s*\[/,
+    NO_ANY_TYPES: /(?<!\w):\s*any(?!\w)|(?<!\w)as\s+any(?!\w)|(?<!\w)any\s*\[|(?<!\w)any\s*</,
 
-    // Security & RBAC
-    RBAC_VALIDATION: /validateApiPermission/,
-    SECURITY_AUDIT: /securityAuditManager/,
+    // Security & RBAC (Enhanced - Functional Detection)
+    RBAC_VALIDATION: /\bvalidateApiPermission\s*\(|\bcheckPermission\s*\(|\bhasPermission\s*\(/,
+    SECURITY_AUDIT: /\bsecurityAuditManager\b|\bauditManager\b/,
+    AUDIT_LOGGING: /\blogAccess\s*\(|\bauditLog\s*\(|\bsecurityAudit\s*\(/,
 
-    // Analytics & Performance
+    // Analytics & Performance (Functional Detection)
     ANALYTICS_TRACKING:
-      /analytics|track|this\.analytics|setAnalytics|trackOptimized|trackPageView|trackAction/,
-    CACHING_IMPLEMENTATION: /cache.*TTL|Map\(\)|cache.*30s/,
-    STRUCTURED_LOGGING: /logError|logInfo/,
+      /\b(analytics|track)\s*\.|\bsetAnalytics\s*\(|\btrackOptimized\s*\(|\btrackPageView\s*\(|\btrackAction\s*\(/,
+    CACHING_IMPLEMENTATION: /\bcache\s*\.|\bTTL\b|\bnew\s+Map\s*\(|\bcache.*30s/,
+    CACHE_DEDUPLICATION: /\bdeduplication\b|\bdedupe\b.*\bcache\b|\bcache\b.*\bdedupe\b/,
+    STRUCTURED_LOGGING: /\blogError\s*\(|\blogInfo\s*\(|\blogDebug\s*\(/,
 
-    // Bridge Response Wrapper
-    API_RESPONSE_WRAPPER: /ApiResponse<|AdminApiResponse<|WorkflowApiResponse/,
+    // Bridge Response Wrapper (Functional Detection)
+    API_RESPONSE_WRAPPER: /\b(Api|Admin|Workflow)Response\s*<|\bresponse\s*:\s*\w+Response/,
+    RESPONSE_VALIDATION: /\bArray\.isArray\s*\(|\bresponse\s*\?\.|\bdata\s*\?\.|\b\w+\.length\s*>/,
 
     // Template Compliance
     CRUD_METHODS: /fetch\w+|create\w+|update\w+|delete\w+/,
     REQUIRED_IMPORTS: /import.*ErrorHandlingService.*from/,
 
-    // Advanced Bridge Patterns (CORE_REQUIREMENTS.md)
+    // Advanced Bridge Patterns (Customer Bridge Implementation)
     BRIDGE_SINGLETON: /static\s+getInstance|private\s+static\s+instance/,
     BRIDGE_HOOK_WRAPPER: /use\w*Bridge|use\w*ApiBridge/,
     BRIDGE_ANALYTICS_SETTER: /setAnalytics|analytics/,
@@ -120,7 +131,7 @@ const UNIVERSAL_BRIDGE_PATTERNS = {
     BRIDGE_RESPONSE_WRAPPER: /ApiResponse<|AdminApiResponse<|WorkflowApiResponse/,
   },
 
-  // Management Bridge Patterns (Enhanced)
+  // Management Bridge Patterns (Enhanced from Customer Bridge)
   MANAGEMENT_BRIDGE: {
     REACT_CONTEXT: /React\.createContext/,
     USE_CONTEXT: /useContext/,
@@ -134,31 +145,76 @@ const UNIVERSAL_BRIDGE_PATTERNS = {
     ANALYTICS_INTEGRATION: /useOptimizedAnalytics/,
     RBAC_VALIDATION: /validateApiPermission/,
     PERFORMANCE_OPTIMIZATION: /useMemo|useCallback/,
-    NO_ANY_TYPES: /:\s*any\b|as\s+any\b|\bany\s*\[/,
+    NO_ANY_TYPES: /:s*any\b|as\s+any\b|\bany\s*\[/,
     NO_CONSOLE_LOGS: /console\.(log|error|warn|info)/,
 
-    // Advanced Management Bridge Patterns (CORE_REQUIREMENTS.md)
-    CONTEXT_PROVIDER_PATTERN: /Provider.*children|createContext.*Provider/,
-    STATE_MANAGEMENT_PATTERN: /useState|useReducer|useContext/,
-    EVENT_SYSTEM_PATTERN: /subscribe|publish|emit|eventBus/,
-    BRIDGE_INTEGRATION_PATTERN: /ApiBridge.*getInstance|ManagementBridge/,
+    // React Hook Form Integration (From Customer Bridge - Functional Detection)
+    FORM_HANDLING: /\buseForm\s*\(|\bhandleSubmit\s*\(|\bsetValue\s*\(|\bgetValues\s*\(/,
+    FORM_VALIDATION: /\bformState\b|\berrors\s*\.|\bisValid\b|\btrigger\s*\(/,
+    FORM_SUBMISSION: /\bonSubmit\s*:|\bhandleSubmit\s*\(|\bformData\b/,
+    INPUT_SANITIZATION: /\bsanitize\s*\(|\btrim\s*\(\)|\bclean\w*Input\b/,
+
+    // Loading State Management (From Customer Bridge - Functional Detection)
+    GRANULAR_LOADING_STATES: /\bisLoading\w*\b|\bloading\w*State\b|\bsetLoading\s*\(/,
+    LOADING_STATE_TYPES: /\bLoadingStates\b|\bEntityLoadingState\b|\bisLoading\s*:/,
+
+    // Accessibility Features (From Customer Bridge - Functional Detection)
+    ARIA_LIVE_REGIONS: /aria-live\s*=|\blive\s*region\b|\bannounce\w*ToScreenReader\b/,
+    FOCUS_MANAGEMENT: /\.focus\s*\(\)|\bfocusManagement\b|\btabIndex\s*=/,
+    ACCESSIBILITY_ANNOUNCEMENTS: /\bscreenReader\b|\bannounce\w*Accessibility\b/,
+    DYNAMIC_ARIA_LABELS: /aria-label\s*=\s*[`"'].*\$|\$.*aria-label/,
+
+    // Mobile Optimization (From Customer Bridge - Functional Detection)
+    DEVICE_DETECTION: /\bisMobile\b|\bmobile\w*Detect\b|\bdevice\w*Detection\b/,
+    RESPONSIVE_STATE: /\bmobile\w*State\b|\bresponsive\w*Behavior\b/,
+    TOUCH_OPTIMIZATION: /\btouch\w*Target\b|\b44px\b|\btouch\w*Friendly\b/,
+
+    // Notification System (From Customer Bridge - Functional Detection)
+    NOTIFICATION_MANAGEMENT: /\bnotification\b|\btoast\b|\balert\w*System\b/,
+    USER_FEEDBACK: /\bfeedback\b|\bsuccess\w*Message\b|\berror\w*Message\b/,
+
+    // Component Display Name (From Customer Bridge - Functional Detection)
+    COMPONENT_DISPLAY_NAME: /\bdisplayName\s*=|\.displayName\s*=/,
+
+    // Advanced Management Bridge Patterns (Customer Bridge Implementation - Functional Detection)
+    CONTEXT_PROVIDER_PATTERN: /\bProvider\b.*\bchildren\b|\bcreateContext\b.*\bProvider\b/,
+    STATE_MANAGEMENT_PATTERN: /\buseState\s*\(|\buseReducer\s*\(|\buseContext\s*\(/,
+    EVENT_SYSTEM_PATTERN: /\bsubscribe\s*\(|\bpublish\s*\(|\bemit\s*\(|\beventBus\b/,
+    BRIDGE_INTEGRATION_PATTERN: /\bApiBridge\b.*\bgetInstance\b|\bManagementBridge\b/,
+    DEFERRED_BRIDGE_CALLS: /\bsetTimeout\s*\([^,]*bridge\b[^,]*,|\bsetTimeout\s*\([^,]+,\s*0\s*\)/,
   },
 
-  // Bridge Component Patterns (Enhanced)
+    // Bridge Component Patterns (Enhanced from Customer Bridge - Functional Detection)
   BRIDGE_COMPONENT: {
-    BRIDGE_HOOK_USAGE: /useBridge|useApi|bridge\.|useOptimizedAnalytics|useErrorHandler/,
-    CRUD_OPERATIONS: /fetch|create|update|delete|get|post|put|patch/,
-    FORM_HANDLING: /useForm|handleSubmit|onSubmit|formData/,
-    LOADING_STATES: /loading|isLoading|pending|Suspense|setLoading/,
-    ERROR_HANDLING: /ErrorBoundary|try.*catch|error|ErrorHandlingService/,
-    ACCESSIBILITY: /aria-label|aria-labelledby|role=|tabIndex|aria-/,
-    MOBILE_OPTIMIZATION: /responsive|mobile|sm:|md:|lg:|className.*sm:|className.*md:/,
-    ANALYTICS_EVENTS: /analytics|track|trackOptimized|trackPageView|trackAction/,
-    MEMO_OPTIMIZATION: /memo\(|useMemo|useCallback|React\.memo/,
-    TYPESCRIPT_INTERFACES: /interface\s+\w+|type\s+\w+\s*=/,
-    COMPONENT_DISPLAY_NAME: /displayName\s*=|\.displayName\s*=/,
+    BRIDGE_HOOK_USAGE: /\buse\w*Bridge\s*\(|\buseApi\s*\(|\bbridge\s*\.|\buseOptimizedAnalytics\s*\(|\buseErrorHandler\s*\(/,
+    CRUD_OPERATIONS: /\b(fetch|create|update|delete|get|post|put|patch)\w*\s*\(/,
+    FORM_HANDLING: /\buseForm\s*\(|\bhandleSubmit\s*\(|\bonSubmit\s*:|\bformData\b/,
+    LOADING_STATES: /\b(loading|isLoading|pending)\b|\bSuspense\b|\bsetLoading\s*\(/,
+    ERROR_HANDLING: /\bErrorBoundary\b|\btry\s*\{[\s\S]*catch\b|\berror\b|\bErrorHandlingService\b/,
+    ACCESSIBILITY: /\baria-[a-z]+\s*=|\brole\s*=|\btabIndex\s*=/,
+    MOBILE_OPTIMIZATION: /\bresponsive\b|\bmobile\b|\b(sm|md|lg):/,
+    ANALYTICS_EVENTS: /\banalytics\b|\btrack\w*\s*\(|\btrackOptimized\s*\(/,
+    MEMO_OPTIMIZATION: /\bmemo\s*\(|\buseMemo\s*\(|\buseCallback\s*\(|\bReact\.memo\s*\(/,
+    TYPESCRIPT_INTERFACES: /\binterface\s+\w+|\btype\s+\w+\s*=/,
+    COMPONENT_DISPLAY_NAME: /\bdisplayName\s*=|\.displayName\s*=/,
 
-    // Advanced Component Patterns (CORE_REQUIREMENTS.md)
+    // Array Safety (From Customer Bridge - Functional Detection)
+    ARRAY_SAFETY_CHECKS: /\bArray\.isArray\s*\(|\?\.|&&\s*Array\.isArray/,
+    SAFE_ARRAY_OPERATIONS: /\?\.\s*(map|filter|forEach|reduce)\s*\(|\b\w+\s*\?\s*\./,
+
+    // Context Safety (From Customer Bridge - Functional Detection)
+    CONTEXT_ERROR_HANDLING: /\btry\s*\{[\s\S]*useContext\b|\bcatch\s*\([^)]*\)[\s\S]*context/,
+    BRIDGE_HOOK_SAFETY: /\btry\s*\{[\s\S]*use\w*Bridge\b|\bcatch\s*\([^)]*\)[\s\S]*bridge/,
+
+    // Infinite Loop Prevention (From Customer Bridge - Functional Detection)
+    DEFERRED_OPERATIONS: /\bsetTimeout\s*\([^,]+,\s*0\s*\)|\buseEffect\s*\([^,]+,\s*\[\s*\]\s*\)/,
+    USEEFFECT_SAFETY: /\buseEffect\s*\([^,]+,\s*\[\s*\]\s*\)/,
+
+    // Enhanced Error Handling (From Customer Bridge - Functional Detection)
+    ERROR_FALLBACK_UI: /\berror\w*Fallback\b|\bfallback\w*Error\b|\berror\w*Boundary\b/,
+    USER_FRIENDLY_ERRORS: /\buser\w*Friendly\b|\bfriendly\w*Error\b|\breadable\w*Error\b/,
+
+    // Advanced Component Patterns (Customer Bridge Implementation)
     BRIDGE_HOOK_USAGE: /useBridge|useApi|bridge\.|useOptimizedAnalytics|useErrorHandler/,
     FORM_VALIDATION: /zod|validate|schema|validation/,
     LOADING_STATE_MANAGEMENT: /loading|isLoading|pending|Suspense/,
@@ -167,7 +223,7 @@ const UNIVERSAL_BRIDGE_PATTERNS = {
     MOBILE_RESPONSIVE: /responsive|mobile|sm:|md:|lg:|className.*sm:/,
   },
 
-  // Bridge Page Patterns (Enhanced)
+  // Bridge Page Patterns (Enhanced from Customer Bridge)
   BRIDGE_PAGE: {
     // Page Structure
     PAGE_EXPORT: /export\s+default\s+(function\s+)?\w+Page/,
@@ -201,8 +257,8 @@ const UNIVERSAL_BRIDGE_PATTERNS = {
     ACCESSIBILITY_FEATURES: /aria-label|aria-labelledby|role=|id=.*heading/,
 
     // TypeScript Compliance
-    NO_ANY_TYPES: /:\s*any\b|as\s+any\b|\bany\s*\[/,
-    NO_CONSOLE_LOGS: /console\.(log|error|warn|info)/,
+    NO_ANY_TYPES: /:\s*any(?!\w)|as\s+any(?!\w)|any\s*\[|any\s*</,
+    NO_CONSOLE_LOGS: /(?<!\.)console\.(log|error|warn|info)\s*\(/,
 
     // Client Component Detection (Next.js App Router)
     CLIENT_COMPONENT: /'use client'|"use client"/,
@@ -213,13 +269,34 @@ const UNIVERSAL_BRIDGE_PATTERNS = {
     // Metadata in Layout Detection
     METADATA_IN_LAYOUT: /export.*metadata.*=|export.*const.*metadata/,
 
-    // Advanced Data & Pagination Patterns (CORE_REQUIREMENTS.md)
+    // Custom Debounce Implementation (From Customer Bridge - Functional Detection)
+    CUSTOM_DEBOUNCE: /\bfunction\s+\w*debounce\w*\b|\bconst\s+\w*debounce\w*\s*=|\bdebounce\w*Implementation\b/,
+    DEBOUNCE_USAGE: /\bdebounce\s*\(|\bdebounced\w+\b/,
+
+    // Skeleton Loading Components (From Customer Bridge)
+    SKELETON_COMPONENTS: /Skeleton|skeleton.*component|loading.*skeleton/,
+    SKELETON_ACCESSIBILITY: /skeleton.*aria|aria.*skeleton/,
+    MEMOIZED_SKELETON: /memo\(.*Skeleton|Skeleton.*memo/,
+
+    // React Memo Optimization (From Customer Bridge)
+    COMPONENT_MEMOIZATION: /React\.memo\(|memo\(.*component/,
+    MEMOIZED_EXPORT: /export.*memo\(|memo\(.*export/,
+
+    // Deferred Analytics Calls (From Customer Bridge)
+    DEFERRED_ANALYTICS: /setTimeout\(.*analytics|setTimeout\(.*track/,
+    ANALYTICS_LOOP_PREVENTION: /setTimeout\([^,]*analytics[^,]*,\s*0\)/,
+
+    // Enhanced Filter and Search UI (From Customer Bridge)
+    FILTER_SEARCH_UI: /filter|search.*input|search.*field/,
+    ENHANCED_UI_PATTERNS: /enhanced.*ui|improved.*ux|user.*experience/,
+
+    // Advanced Data & Pagination Patterns (Customer Bridge Implementation)
     DEBOUNCED_SEARCH: /debounce\(|useDebounced|debouncedSearch|debouncedQuery/,
     CURSOR_PAGINATION: /cursorPagination|endCursor|startCursor|hasMore|pageInfo|loadMore|cursor/,
     REACT_QUERY_OPTIONS: /staleTime|gcTime|keepPreviousData|refetchOnWindowFocus|enabled:/,
     RESET_PAGINATION_ON_FILTER_CHANGE:
       /resetPage|resetPagination|onFilterChange.*reset|resetCursor/,
-    API_FIELDS_PARAM: /fields=|\\bfields\\b\s*[:=]/,
+    API_FIELDS_PARAM: /fields=|\bfields\b\s*[:=]/,
   },
 
   // Bridge Hook Patterns (Updated based on actual implementations)
@@ -1336,7 +1413,7 @@ function analyzeApiRoute(filePath, content) {
     hasTransaction: /prisma\.\$transaction/.test(content),
     hasAuth: /auth|session|token/.test(content),
     methods: extractHttpMethods(content),
-    bridgeCompliance: verifyBridgeTemplateCompliance(content, 'API_ROUTE'),
+    bridgeCompliance: verifyBridgeTemplateCompliance(content, 'BRIDGE_API_ROUTE', filePath),
   };
 }
 
@@ -1398,7 +1475,7 @@ function analyzeFrontendPage(filePath, content) {
     hasAuth: /useAuth|session/.test(content),
     hasAnalytics: /useOptimizedAnalytics|analytics/.test(content),
     apiCalls: extractApiCalls(content),
-    bridgeCompliance: verifyBridgeTemplateCompliance(content, 'BRIDGE_PAGE'),
+    bridgeCompliance: verifyBridgeTemplateCompliance(content, 'BRIDGE_PAGE', filePath),
   };
 }
 
