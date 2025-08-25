@@ -1,0 +1,1666 @@
+# Product Migration Assessment & Plan
+
+## 🎯 **Current Product Implementation Analysis**
+
+### **Existing Product Architecture (Bridge Pattern)**
+
+#### **✅ What We Have (Current State)**
+
+**Infrastructure Files:**
+
+- `src/lib/bridges/ProductApiBridge.ts` - API Bridge singleton (1,200+ lines)
+- `src/components/bridges/ProductManagementBridge.tsx` - Context provider (600+
+  lines)
+- `src/lib/services/productService.ts` - Service layer (900+ lines)
+- `src/hooks/useProduct.ts` - Bridge hook (600+ lines)
+- `src/hooks/useProducts.ts` - Direct API hook (300+ lines)
+
+**UI Components:**
+
+- `src/components/products/ProductList.tsx` - Main list component (1,300+ lines)
+- `src/components/products/ProductListBridge.tsx` - Bridge-compliant list (800+
+  lines)
+- `src/components/products/ProductCreationSidebar.tsx` - Creation sidebar (600+
+  lines)
+- `src/components/products/ProductMenu.tsx` - Menu component (80+ lines)
+- `src/components/products/relationships/ProductSimulator.tsx` - Relationship
+  simulator (400+ lines)
+- `src/components/products/relationships/RuleBuilder.tsx` - Rule builder (300+
+  lines)
+
+**Pages:**
+
+- `src/app/(dashboard)/products/page.tsx` - Main products page (700+ lines)
+- `src/app/(dashboard)/products/create/page.tsx` - Create product page (800+
+  lines)
+- `src/app/(dashboard)/products/[id]/page.tsx` - Product detail page
+- `src/app/(dashboard)/products/management/page.tsx` - Management page (600+
+  lines)
+- `src/app/(dashboard)/products/relationships/page.tsx` - Relationships page
+  (800+ lines)
+
+**API Routes:**
+
+- `src/app/api/products/route.ts` - Main CRUD operations (700+ lines)
+- `src/app/api/products/[id]/route.ts` - Individual product operations
+- `src/app/api/products/search/route.ts` - Search functionality
+- `src/app/api/products/relationships/route.ts` - Relationship operations
+
+**Types & Validation:**
+
+- `src/types/entities/product.ts` - Product type definitions
+- `src/lib/validation/schemas/product.ts` - Zod validation schemas
+- `src/lib/entities/product.ts` - Entity definitions
+
+#### **❌ Current Issues Identified**
+
+1. **Over-Engineered Architecture:**
+   - Complex bridge pattern with multiple abstraction layers
+   - ProductApiBridge singleton (1,200+ lines) - too complex
+   - ProductManagementBridge context (600+ lines) - causing re-renders
+   - Duplicate functionality between bridge and direct hooks
+
+2. **Performance Issues:**
+   - Large context causing unnecessary re-renders
+   - Complex state management through bridge pattern
+   - Multiple layers of caching (bridge + React Query)
+   - Virtual scrolling implemented but not optimized
+
+3. **Maintainability Problems:**
+   - Hard to understand data flow
+   - Multiple ways to fetch product data (bridge vs direct)
+   - Complex error handling across layers
+   - Difficult to debug and modify
+
+4. **Code Duplication:**
+   - ProductList.tsx vs ProductListBridge.tsx (similar functionality)
+   - useProduct.ts vs useProducts.ts (overlapping hooks)
+   - Multiple validation schemas
+
+## 🚀 **Migration Strategy (Enhanced from Customer Migration)**
+
+### **Phase 1: Infrastructure Setup (Week 1)**
+
+#### **1.1 Leverage Existing Infrastructure (Customer Migration Success)**
+
+**✅ Already Available (No Need to Create):**
+
+- `src/lib/errors.ts` - Error handling infrastructure ✅
+- `src/lib/logger.ts` - Structured logging ✅
+- `src/lib/requestId.ts` - Request correlation IDs ✅
+- `src/lib/api/route.ts` - Route wrapper with RBAC ✅
+- `src/lib/http.ts` - HTTP client helper ✅
+- `src/lib/api/response.ts` - Typed response envelopes ✅
+- `src/lib/analytics/index.ts` - Analytics integration ✅
+- `src/app/(dashboard)/layout.tsx` - Provider stack order ✅
+
+**Required Files to Create:**
+
+- `src/lib/transactions/productTransactions.ts` - Database transactions
+
+**Templates to Use:**
+
+- `templates/migration/transaction.template.ts`
+
+#### **1.2 Enhanced Infrastructure Benefits**
+
+**✅ Customer Migration Success Patterns:**
+
+- **createRoute wrapper**: Proven to work with RBAC, logging, x-request-id,
+  error JSON
+- **StandardError + errorToJson**: Centralized error handling
+- **Stable query keys**: Primitive-only query keys for optimal caching
+- **Zustand selectors + shallow**: Optimized state management
+- **Provider stack**: Correct order (QueryProvider → SessionProvider → Toaster)
+
+### **Phase 2: Service Layer Migration (Week 2)**
+
+#### **2.1 Create New Service Layer**
+
+**File to Create:**
+
+- `src/services/productService_new.ts` - New service layer
+
+**Template to Use:**
+
+- `templates/migration/service.template.ts`
+
+**Migration Strategy:**
+
+- **REFACTOR** existing `src/lib/services/productService.ts` (900+ lines)
+- Extract reusable business logic
+- Keep existing Prisma operations
+- Add cursor pagination support
+- Add bulk operations support
+- **ENHANCED**: Add relationship management operations
+
+**What to Keep:**
+
+- ✅ All existing Prisma operations
+- ✅ Error handling patterns
+- ✅ Type definitions
+- ✅ Business logic
+- ✅ Relationship management logic
+
+**What to Change:**
+
+- ❌ Remove bridge dependencies
+- ❌ Simplify API structure
+- ❌ Add cursor pagination
+- ❌ Add bulk operations
+- ❌ **ENHANCED**: Add transaction support for complex operations
+
+**Enhanced Features (from Customer Migration):**
+
+```typescript
+// ✅ ENHANCED: Zod schemas in service layer
+export const ProductSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Name is required'),
+  description: z.string().optional(),
+  price: z.number().positive(),
+  category: z.string().optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'DRAFT']),
+  // ... other fields
+});
+
+export const ProductCreateSchema = ProductSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const ProductUpdateSchema = ProductCreateSchema.partial();
+export const ProductQuerySchema = z.object({
+  search: z.string().trim().default(''),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  cursor: z.string().nullable().optional(),
+  sortBy: z.enum(['createdAt', 'name', 'price', 'status']).default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  category: z.string().optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'DRAFT']).optional(),
+});
+
+export const ProductListSchema = z.object({
+  items: z.array(ProductSchema),
+  nextCursor: z.string().nullable(),
+});
+```
+
+#### **2.2 Global Form Verification (Enhanced from Customer Migration)**
+
+**File to Create:**
+
+- `src/lib/validation/productValidation.ts` - Global form verification
+
+**Migration Strategy:**
+
+- **CREATE NEW** - Leverage proven Customer validation pattern
+- Use `useFormValidation` hook for consistent form handling
+- Implement product-specific validation schemas
+- Add relationship validation support
+
+**Enhanced Features (from Customer Migration):**
+
+```typescript
+// ✅ ENHANCED: Global form verification pattern
+import {
+  createValidationSchema,
+  VALIDATION_MESSAGES,
+  VALIDATION_PATTERNS,
+} from '@/hooks/useFormValidation';
+
+// ✅ Product Edit Data Interface
+export interface ProductEditData {
+  name: string;
+  description?: string;
+  price: number;
+  category?: string;
+  status: string;
+  sku?: string;
+  weight?: number;
+  dimensions?: string;
+  tags: string[];
+  relationships?: ProductRelationship[];
+}
+
+// ✅ Product Validation Schema
+export const productValidationSchema = createValidationSchema({
+  name: {
+    required: true,
+    minLength: 2,
+    maxLength: 100,
+    pattern: VALIDATION_PATTERNS.alphanumeric,
+    message: 'Please enter a valid product name (2-100 characters)',
+  },
+
+  description: {
+    required: false,
+    maxLength: 500,
+    message: 'Description must be less than 500 characters',
+  },
+
+  price: {
+    required: true,
+    custom: (value: any) => {
+      if (value === undefined || value === null || value === '') {
+        return 'Product price is required';
+      }
+      if (value <= 0) return VALIDATION_MESSAGES.positiveNumber;
+      return null;
+    },
+  },
+
+  category: {
+    required: false,
+    maxLength: 50,
+    message: 'Category must be less than 50 characters',
+  },
+
+  status: {
+    required: true,
+    message: 'Please select a product status',
+  },
+
+  sku: {
+    required: false,
+    pattern: /^[A-Z0-9\-_]+$/,
+    message:
+      'SKU must contain only uppercase letters, numbers, hyphens, and underscores',
+  },
+
+  weight: {
+    required: false,
+    custom: (value: any) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (value < 0) return VALIDATION_MESSAGES.positiveNumber;
+      }
+      return null;
+    },
+  },
+
+  dimensions: {
+    required: false,
+    maxLength: 50,
+    message: 'Dimensions must be less than 50 characters',
+  },
+});
+
+// ✅ Product Create Validation Schema (for new products)
+export const productCreateValidationSchema = createValidationSchema({
+  name: {
+    required: true,
+    minLength: 2,
+    maxLength: 100,
+    pattern: VALIDATION_PATTERNS.alphanumeric,
+    message: 'Please enter a valid product name (2-100 characters)',
+  },
+
+  price: {
+    required: true,
+    custom: (value: any) => {
+      if (value === undefined || value === null || value === '') {
+        return 'Product price is required';
+      }
+      if (value <= 0) return VALIDATION_MESSAGES.positiveNumber;
+      return null;
+    },
+  },
+
+  status: {
+    required: true,
+    message: 'Please select a product status',
+  },
+});
+
+// ✅ Product Search Validation Schema
+export const productSearchValidationSchema = createValidationSchema({
+  search: {
+    required: false,
+    maxLength: 100,
+    message: 'Search term must be less than 100 characters',
+  },
+
+  category: {
+    required: false,
+    maxLength: 50,
+    message: 'Category filter must be less than 50 characters',
+  },
+
+  status: {
+    required: false,
+    message: 'Please select a valid status filter',
+  },
+});
+
+// ✅ Product Relationship Validation Schema
+export const productRelationshipValidationSchema = createValidationSchema({
+  relatedProductId: {
+    required: true,
+    message: 'Please select a related product',
+  },
+
+  relationshipType: {
+    required: true,
+    message: 'Please select a relationship type',
+  },
+
+  strength: {
+    required: false,
+    custom: (value: any) => {
+      if (value !== undefined && value !== null) {
+        if (value < 0 || value > 1) return 'Strength must be between 0 and 1';
+      }
+      return null;
+    },
+  },
+});
+
+// ✅ Helper function to validate product data
+export function validateProductData(data: Partial<ProductEditData>): string[] {
+  const errors: string[] = [];
+
+  // Validate required fields
+  if (!data.name?.trim()) {
+    errors.push('Product name is required');
+  } else if (data.name.length < 2) {
+    errors.push('Product name must be at least 2 characters');
+  } else if (data.name.length > 100) {
+    errors.push('Product name must be less than 100 characters');
+  }
+
+  if (data.price === undefined || data.price === null || data.price === '') {
+    errors.push('Product price is required');
+  } else if (data.price <= 0) {
+    errors.push(VALIDATION_MESSAGES.positiveNumber);
+  }
+
+  // Validate optional fields
+  if (data.description && data.description.length > 500) {
+    errors.push('Description must be less than 500 characters');
+  }
+
+  if (data.category && data.category.length > 50) {
+    errors.push('Category must be less than 50 characters');
+  }
+
+  if (data.sku && !/^[A-Z0-9\-_]+$/.test(data.sku)) {
+    errors.push(
+      'SKU must contain only uppercase letters, numbers, hyphens, and underscores'
+    );
+  }
+
+  if (data.weight !== undefined && data.weight !== null && data.weight < 0) {
+    errors.push(VALIDATION_MESSAGES.positiveNumber);
+  }
+
+  if (data.dimensions && data.dimensions.length > 50) {
+    errors.push('Dimensions must be less than 50 characters');
+  }
+
+  if (!data.status) {
+    errors.push('Product status is required');
+  }
+
+  return errors;
+}
+
+// ✅ Helper function to get field-specific validation rules
+export function getProductFieldValidation(fieldName: keyof ProductEditData) {
+  return productValidationSchema[fieldName] || null;
+}
+
+// ✅ Helper function to validate a single product field
+export function validateProductField(
+  fieldName: keyof ProductEditData,
+  value: any
+): string | null {
+  const rule = productValidationSchema[fieldName];
+  if (!rule) return null;
+
+  // Required validation
+  if (
+    rule.required &&
+    (!value || (typeof value === 'string' && !value.trim()))
+  ) {
+    return rule.message || VALIDATION_MESSAGES.required;
+  }
+
+  // Skip other validations if value is empty and not required
+  if (!value || (typeof value === 'string' && !value.trim())) {
+    return null;
+  }
+
+  // Min length validation
+  if (
+    rule.minLength &&
+    typeof value === 'string' &&
+    value.length < rule.minLength
+  ) {
+    return rule.message || VALIDATION_MESSAGES.minLength(rule.minLength);
+  }
+
+  // Max length validation
+  if (
+    rule.maxLength &&
+    typeof value === 'string' &&
+    value.length > rule.maxLength
+  ) {
+    return rule.message || VALIDATION_MESSAGES.maxLength(rule.maxLength);
+  }
+
+  // Pattern validation
+  if (rule.pattern && typeof value === 'string' && !rule.pattern.test(value)) {
+    return rule.message || 'Invalid format';
+  }
+
+  // Custom validation
+  if (rule.custom) {
+    const customError = rule.custom(value);
+    if (customError) {
+      return rule.message || customError;
+    }
+  }
+
+  return null;
+}
+```
+
+### **Phase 3: React Query Hooks Migration (Week 3)**
+
+#### **3.1 Create New Hooks**
+
+**File to Create:**
+
+- `src/hooks/useProducts_new.ts` - New React Query hooks
+
+**Template to Use:**
+
+- `templates/migration/hook.template.ts`
+
+**Migration Strategy:**
+
+- **REPLACE** existing `src/hooks/useProduct.ts` (600+ lines)
+- **REPLACE** existing `src/hooks/useProducts.ts` (300+ lines)
+- Consolidate into single, modern hook file
+
+**What to Keep:**
+
+- ✅ React Query patterns
+- ✅ Query key structure
+- ✅ Error handling
+- ✅ Analytics tracking
+
+**What to Change:**
+
+- ❌ Remove bridge dependencies
+- ❌ Simplify hook structure
+- ❌ Add infinite queries
+- ❌ Add bulk operations
+- ❌ Use stable query keys
+
+**Enhanced Features (from Customer Migration):**
+
+```typescript
+// ✅ ENHANCED: Stable primitive query keys
+export const qk = {
+  products: {
+    all: ['products'] as const,
+    lists: () => [...qk.products.all, 'list'] as const,
+    list: (search: string, limit: number, sortBy: string, sortOrder: string) =>
+      [...qk.products.lists(), search, limit, sortBy, sortOrder] as const, // primitives only
+    details: () => [...qk.products.all, 'detail'] as const,
+    detail: (id: string) => [...qk.products.details(), id] as const,
+    search: (query: string, limit: number) =>
+      [...qk.products.all, 'search', query, limit] as const,
+    relationships: (productId: string) =>
+      [...qk.products.detail(productId), 'relationships'] as const,
+  },
+};
+
+// ✅ ENHANCED: useInfiniteProducts with cursor pagination
+export function useInfiniteProducts({
+  search = '',
+  limit = 20,
+  sortBy = 'createdAt',
+  sortOrder = 'desc',
+  category,
+  status,
+}: ProductQuery) {
+  return useInfiniteQuery({
+    queryKey: qk.products.list(search, limit, sortBy, sortOrder),
+    queryFn: ({ pageParam }) =>
+      productService.getProducts({
+        search,
+        limit,
+        sortBy,
+        sortOrder,
+        category,
+        status,
+        cursor: pageParam as string | null,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: any) => lastPage.data?.nextCursor || undefined,
+    staleTime: 60_000, // 1 minute
+    gcTime: 120_000, // 2 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
+
+// ✅ ENHANCED: useProductsByIds with useQueries
+export function useProductsByIds(ids: string[]) {
+  const results = useQueries({
+    queries: ids.map(id => ({
+      queryKey: qk.products.detail(id),
+      queryFn: () => productService.getProduct(id),
+      enabled: !!id,
+      staleTime: 60_000,
+      gcTime: 120_000,
+    })),
+  });
+
+  return {
+    data: results
+      .map(r => (r.data?.ok ? r.data.data : null))
+      .filter(Boolean) as Product[],
+    isLoading: results.some(r => r.isLoading),
+    isError: results.some(r => r.isError),
+    errors: results.filter(r => r.error).map(r => r.error),
+  };
+}
+
+// ✅ ENHANCED: Bulk operations with analytics
+export function useDeleteProductsBulk() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => productService.deleteProductsBulk(ids),
+    onSuccess: (response, ids) => {
+      // Invalidate all product queries
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'products_bulk_deleted',
+        {
+          deletedCount: response.ok ? response.data?.deleted || 0 : 0,
+          productIds: ids,
+        },
+        'US-4.3',
+        'H5'
+      );
+    },
+  });
+}
+```
+
+### **Phase 4: Zustand Store Migration (Week 4)**
+
+#### **4.1 Create New Store**
+
+**File to Create:**
+
+- `src/lib/store/productStore_new.ts` - New Zustand store
+
+**Template to Use:**
+
+- `templates/migration/store.template.ts`
+
+**Migration Strategy:**
+
+- **CREATE NEW** - Extract UI state from ProductManagementBridge
+- Simplify state structure
+- Add proper selectors
+- **ENHANCED**: Add relationship management state
+
+**What to Extract:**
+
+- ✅ Filters and search state
+- ✅ View mode and sorting
+- ✅ Selection state
+- ✅ Dialog states
+- ✅ **ENHANCED**: Relationship management state
+
+**Enhanced Features (from Customer Migration):**
+
+```typescript
+// ✅ ENHANCED: Zustand store with selectors + shallow
+// src/lib/store/productStore_new.ts
+import { create } from 'zustand';
+import { persist, subscribeWithSelector } from 'zustand/middleware';
+
+type Sorting = {
+  sortBy: 'createdAt' | 'name' | 'price' | 'status';
+  sortOrder: 'asc' | 'desc';
+};
+type State = {
+  filters: { search?: string; category?: string; status?: string };
+  sorting: Sorting;
+  view: {
+    mode: 'table' | 'list' | 'grid' | 'relationships';
+    compact?: boolean;
+  };
+  pagination: { limit: number };
+  selection: { selectedIds: string[] };
+  relationships: {
+    selectedProductId?: string;
+    relationshipMode: 'view' | 'edit';
+  };
+  setFilters: (f: Partial<State['filters']>) => void;
+  setSorting: (s: Partial<Sorting>) => void;
+  setView: (v: Partial<State['view']>) => void;
+  setLimit: (n: number) => void;
+  setSelectedIds: (ids: string[]) => void;
+  clearSelection: () => void;
+  setRelationshipMode: (mode: 'view' | 'edit') => void;
+  setSelectedProductId: (id: string) => void;
+};
+
+export const useProductStore = create<State>()(
+  subscribeWithSelector(
+    persist(
+      set => ({
+        filters: { search: '', category: '', status: '' },
+        sorting: { sortBy: 'createdAt', sortOrder: 'desc' },
+        view: { mode: 'table', compact: false },
+        pagination: { limit: 20 },
+        selection: { selectedIds: [] },
+        relationships: {
+          selectedProductId: undefined,
+          relationshipMode: 'view',
+        },
+        setFilters: f => set(s => ({ filters: { ...s.filters, ...f } })),
+        setSorting: o => set(s => ({ sorting: { ...s.sorting, ...o } })),
+        setView: v => set(s => ({ view: { ...s.view, ...v } })),
+        setLimit: n =>
+          set(s => ({ pagination: { ...s.pagination, limit: n } })),
+        setSelectedIds: ids =>
+          set(() => ({ selection: { selectedIds: Array.from(new Set(ids)) } })),
+        clearSelection: () => set(() => ({ selection: { selectedIds: [] } })),
+        setRelationshipMode: mode =>
+          set(s => ({
+            relationships: { ...s.relationships, relationshipMode: mode },
+          })),
+        setSelectedProductId: id =>
+          set(s => ({
+            relationships: { ...s.relationships, selectedProductId: id },
+          })),
+      }),
+      {
+        name: 'products-ui',
+        partialize: s => ({
+          filters: s.filters,
+          sorting: s.sorting,
+          view: s.view,
+          pagination: s.pagination,
+        }),
+      }
+    )
+  )
+);
+
+export const productSelectors = {
+  filters: (s: State) => s.filters,
+  sorting: (s: State) => s.sorting,
+  view: (s: State) => s.view,
+  limit: (s: State) => s.pagination.limit,
+  selection: (s: State) => s.selection,
+  relationships: (s: State) => s.relationships,
+};
+
+// ✅ ENHANCED: Usage in components with shallow
+import { shallow } from 'zustand/shallow';
+const filters = useProductStore(productSelectors.filters, shallow);
+const sorting = useProductStore(productSelectors.sorting, shallow);
+const view = useProductStore(productSelectors.view, shallow);
+const limit = useProductStore(productSelectors.limit);
+const selection = useProductStore(productSelectors.selection, shallow);
+const relationships = useProductStore(productSelectors.relationships, shallow);
+```
+
+### **Phase 5: Component Migration (Week 5)**
+
+#### **5.1 Create New Components**
+
+**Files to Create:**
+
+- `src/components/products_new/ProductList_new.tsx` - New list component
+- `src/components/products_new/ProductForm_new.tsx` - New form component
+- `src/components/products_new/ProductRelationships_new.tsx` - New relationships
+  component
+
+**Template to Use:**
+
+- `templates/migration/component.template.tsx`
+
+**Migration Strategy:**
+
+- **REFACTOR** existing `src/components/products/ProductList.tsx` (1,300+ lines)
+- **REFACTOR** existing `src/components/products/ProductCreationSidebar.tsx`
+  (600+ lines)
+- **REFACTOR** existing
+  `src/components/products/relationships/ProductSimulator.tsx` (400+ lines)
+- Extract reusable parts
+- Simplify component structure
+
+**What to Keep:**
+
+- ✅ UI/UX design and styling
+- ✅ Virtual scrolling implementation
+- ✅ Form validation logic
+- ✅ Accessibility features
+- ✅ Relationship management UI
+
+**What to Change:**
+
+- ❌ Remove bridge dependencies
+- ❌ Simplify state management
+- ❌ Use new hooks and store
+- ❌ Improve performance
+
+**Enhanced Features (from Customer Migration):**
+
+```typescript
+// ✅ ENHANCED: Component with proper hydration guidance
+export default function ProductList_new() {
+  const { data, isLoading, isError, error, fetchNextPage } = useInfiniteProducts({
+    search: filters.search,
+    limit: pagination.limit,
+    sortBy: sorting.sortBy,
+    sortOrder: sorting.sortOrder,
+    category: filters.category,
+    status: filters.status,
+  });
+
+  // ✅ ENHANCED: Consistent page shell across loading/success/error
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <ProductListHeader />
+          <ProductFilters />
+          <ProductTable /> {/* Client-side fetching */}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ✅ ENHANCED: Form component with global validation
+export function ProductForm_new() {
+  const {
+    formData,
+    validationErrors,
+    isValid,
+    handleFieldChange,
+    handleFieldBlur,
+    validateAll,
+    getFieldError,
+    getFieldValidationClass,
+  } = useFormValidation(
+    initialProductData,
+    productValidationSchema,
+    {
+      validateOnChange: true,
+      validateOnBlur: true,
+      debounceMs: 300,
+    }
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const errors = validateAll();
+    if (Object.keys(errors).length > 0) {
+      return; // Form has validation errors
+    }
+
+    // Submit form data
+    await createProduct(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+          Product Name *
+        </label>
+        <input
+          type="text"
+          id="name"
+          value={formData.name}
+          onChange={(e) => handleFieldChange('name', e.target.value)}
+          onBlur={() => handleFieldBlur('name')}
+          className={`mt-1 block w-full rounded-md border px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getFieldValidationClass('name')}`}
+        />
+        {getFieldError('name') && (
+          <p className="mt-1 text-sm text-red-600">{getFieldError('name')}</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="price" className="block text-sm font-medium text-gray-700">
+          Price *
+        </label>
+        <input
+          type="number"
+          id="price"
+          step="0.01"
+          value={formData.price}
+          onChange={(e) => handleFieldChange('price', parseFloat(e.target.value))}
+          onBlur={() => handleFieldBlur('price')}
+          className={`mt-1 block w-full rounded-md border px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${getFieldValidationClass('price')}`}
+        />
+        {getFieldError('price') && (
+          <p className="mt-1 text-sm text-red-600">{getFieldError('price')}</p>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={!isValid}
+        className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
+      >
+        Create Product
+      </button>
+    </form>
+  );
+}
+```
+
+### **Phase 6: API Routes Migration (Week 6)**
+
+#### **6.1 Update API Routes**
+
+**Files to Update:**
+
+- `src/app/api/products/route.ts` - Main CRUD operations
+- `src/app/api/products/bulk-delete/route.ts` - Bulk delete (new)
+- `src/app/api/products/relationships/route.ts` - Relationship operations
+
+**Templates to Use:**
+
+- `templates/migration/route.template.ts`
+- `templates/migration/bulk-delete-route.template.ts`
+
+**Migration Strategy:**
+
+- **REFACTOR** existing API routes
+- Add createRoute wrapper
+- Add cursor pagination
+- Add bulk operations
+- Improve error handling
+
+**Enhanced Features (from Customer Migration):**
+
+```typescript
+// ✅ ENHANCED: API route with createRoute wrapper
+export const GET = createRoute(
+  {
+    roles: [
+      'admin',
+      'sales',
+      'viewer',
+      'System Administrator',
+      'Administrator',
+    ],
+    query: ProductQuerySchema,
+  },
+  async ({ query, user }) => {
+    try {
+      logInfo('Fetching products', {
+        component: 'ProductAPI',
+        operation: 'getProducts',
+        userId: user.id,
+        query: query,
+      });
+
+      // ✅ ENHANCED: Cursor pagination implementation
+      const rows = await prisma.product.findMany({
+        where: buildWhereClause(query!),
+        select: {
+          /* fields */
+        },
+        orderBy: buildOrderBy(query!),
+        take: query!.limit + 1, // Take one extra to check if there are more
+        ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
+      });
+
+      // Determine if there are more pages
+      const hasNextPage = rows.length > query!.limit;
+      const nextCursor = hasNextPage ? rows[query!.limit - 1].id : null;
+      const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
+
+      // ✅ ENHANCED: Analytics tracking
+      analytics.trackOptimized(
+        'products_fetched',
+        {
+          count: items.length,
+          hasNextPage,
+          userId: user.id,
+        },
+        'US-4.1',
+        'H5'
+      );
+
+      logInfo('Products fetched successfully', {
+        component: 'ProductAPI',
+        operation: 'getProducts',
+        count: items.length,
+        hasNextPage,
+      });
+
+      return Response.json(ok({ items, nextCursor }));
+    } catch (error) {
+      // ✅ ENHANCED: Automatic error handling with errorToJson
+      throw error; // createRoute handles errorToJson automatically
+    }
+  }
+);
+
+// ✅ ENHANCED: Bulk delete endpoint
+export const POST = createRoute(
+  {
+    roles: ['admin', 'System Administrator', 'Administrator'],
+    body: BulkDeleteSchema,
+  },
+  async ({ body, user }) => {
+    try {
+      logInfo('Bulk deleting products', {
+        component: 'ProductAPI',
+        operation: 'bulkDelete',
+        userId: user.id,
+        count: body!.ids.length,
+      });
+
+      const result = await prisma.product.deleteMany({
+        where: { id: { in: body!.ids } },
+      });
+
+      logInfo('Products bulk deleted successfully', {
+        component: 'ProductAPI',
+        operation: 'bulkDelete',
+        deletedCount: result.count,
+      });
+
+      return Response.json(ok({ deleted: result.count }));
+    } catch (error) {
+      throw error; // createRoute handles errorToJson automatically
+    }
+  }
+);
+```
+
+### **Phase 7: Page Migration (Week 7)**
+
+#### **7.1 Create New Pages**
+
+**Files to Create:**
+
+- `src/app/(dashboard)/products_new/page.tsx` - New products page
+- `src/app/(dashboard)/products_new/[id]/page.tsx` - New detail page
+- `src/app/(dashboard)/products_new/relationships/page.tsx` - New relationships
+  page
+
+**Template to Use:**
+
+- `templates/migration/page.template.tsx`
+
+**Migration Strategy:**
+
+- **REFACTOR** existing pages
+- Implement SSR/CSR hydration
+- Use new components and hooks
+- Maintain existing functionality
+
+**Enhanced Features (from Customer Migration):**
+
+```typescript
+// ✅ ENHANCED: Page with proper SSR/CSR hydration
+export default function ProductsPage() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <ProductList_new />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ✅ ENHANCED: Client component for interactive features
+'use client';
+
+export function ProductList_new() {
+  // Client-side fetching with React Query
+  const { data, isLoading, isError, error, fetchNextPage } = useInfiniteProducts(params);
+
+  // Client-side state management with Zustand
+  const filters = useProductStore(productSelectors.filters, shallow);
+  const sorting = useProductStore(productSelectors.sorting, shallow);
+
+  return (
+    <>
+      <ProductListHeader />
+      <ProductFilters />
+      <ProductTable />
+    </>
+  );
+}
+```
+
+## 📊 **File Migration Matrix**
+
+### **Files to Create (New Architecture)**
+
+| File                                                       | Template                        | Status    | Priority |
+| ---------------------------------------------------------- | ------------------------------- | --------- | -------- |
+| `src/lib/transactions/productTransactions.ts`              | `transaction.template.ts`       | 🔴 Create | Medium   |
+| `src/services/productService_new.ts`                       | `service.template.ts`           | 🔴 Create | High     |
+| `src/lib/validation/productValidation.ts`                  | `validation.template.ts`        | 🔴 Create | High     |
+| `src/hooks/useProducts_new.ts`                             | `hook.template.ts`              | 🔴 Create | High     |
+| `src/lib/store/productStore_new.ts`                        | `store.template.ts`             | 🔴 Create | High     |
+| `src/components/products_new/ProductList_new.tsx`          | `component.template.tsx`        | 🔴 Create | High     |
+| `src/components/products_new/ProductForm_new.tsx`          | `component.template.tsx`        | 🔴 Create | High     |
+| `src/components/products_new/ProductRelationships_new.tsx` | `component.template.tsx`        | 🔴 Create | Medium   |
+| `src/app/api/products/bulk-delete/route.ts`                | `bulk-delete-route.template.ts` | 🔴 Create | Medium   |
+| `src/app/(dashboard)/products_new/page.tsx`                | `page.template.tsx`             | 🔴 Create | High     |
+| `src/app/(dashboard)/products_new/[id]/page.tsx`           | `page.template.tsx`             | 🔴 Create | High     |
+| `src/app/(dashboard)/products_new/relationships/page.tsx`  | `page.template.tsx`             | 🔴 Create | Medium   |
+
+### **Files to Refactor (Existing Architecture)**
+
+| File                                                         | Action      | Status             | Priority |
+| ------------------------------------------------------------ | ----------- | ------------------ | -------- |
+| `src/lib/services/productService.ts`                         | 🔄 Refactor | 🟡 Keep Logic      | High     |
+| `src/app/api/products/route.ts`                              | 🔄 Refactor | 🟡 Keep Operations | High     |
+| `src/app/api/products/relationships/route.ts`                | 🔄 Refactor | 🟡 Keep Operations | Medium   |
+| `src/components/products/ProductList.tsx`                    | 🔄 Refactor | 🟡 Keep UI         | High     |
+| `src/components/products/ProductCreationSidebar.tsx`         | 🔄 Refactor | 🟡 Keep UI         | Medium   |
+| `src/components/products/relationships/ProductSimulator.tsx` | 🔄 Refactor | 🟡 Keep UI         | Medium   |
+| `src/app/(dashboard)/products/page.tsx`                      | 🔄 Refactor | 🟡 Keep Structure  | High     |
+| `src/app/(dashboard)/products/relationships/page.tsx`        | 🔄 Refactor | 🟡 Keep Structure  | Medium   |
+
+### **Files to Remove (Bridge Pattern)**
+
+| File                                                 | Action    | Status    | Priority |
+| ---------------------------------------------------- | --------- | --------- | -------- |
+| `src/lib/bridges/ProductApiBridge.ts`                | ❌ Remove | 🔴 Delete | Low      |
+| `src/components/bridges/ProductManagementBridge.tsx` | ❌ Remove | 🔴 Delete | Low      |
+| `src/hooks/useProduct.ts`                            | ❌ Remove | 🔴 Delete | Low      |
+| `src/components/products/ProductListBridge.tsx`      | ❌ Remove | 🔴 Delete | Low      |
+
+## 🏷️ **Naming Convention Plan**
+
+### **Naming Strategy: `_new` Suffix for Parallel Development**
+
+**Rule**: All new migration files use `_new` suffix to avoid conflicts with
+existing files during parallel development.
+
+### **Directory Structure**
+
+```
+src/
+├── services/
+│   ├── productService.ts          # OLD (keep during migration)
+│   └── productService_new.ts      # NEW (migration target)
+├── hooks/
+│   ├── useProduct.ts              # OLD (keep during migration)
+│   └── useProducts_new.ts         # NEW (migration target)
+├── components/
+│   ├── products/                  # OLD directory
+│   │   ├── ProductList.tsx
+│   │   ├── ProductCreationSidebar.tsx
+│   │   └── relationships/
+│   │       ├── ProductSimulator.tsx
+│   │       └── RuleBuilder.tsx
+│   └── products_new/              # NEW directory
+│       ├── ProductList_new.tsx
+│       ├── ProductForm_new.tsx
+│       └── ProductRelationships_new.tsx
+├── app/(dashboard)/
+│   ├── products/                  # OLD directory
+│   │   ├── page.tsx
+│   │   ├── [id]/page.tsx
+│   │   └── relationships/page.tsx
+│   └── products_new/              # NEW directory
+│       ├── page.tsx
+│       ├── [id]/page.tsx
+│       └── relationships/page.tsx
+└── lib/
+    ├── store/
+    │   └── productStore_new.ts    # NEW (no existing store)
+    └── transactions/
+        └── productTransactions.ts # NEW (no existing file)
+```
+
+### **Testing Strategy**
+
+#### **Parallel Testing**
+
+```
+OLD: http://localhost:3000/products          # Existing implementation
+NEW: http://localhost:3000/products_new      # New implementation
+```
+
+## 🎯 **Enhanced Migration Benefits (from Customer Migration)**
+
+### **Performance Improvements**
+
+- **Bundle Size**: Reduce from ~3.0MB to ~2.1MB (30% reduction)
+- **Initial Load**: Reduce from ~3.5s to ~2.3s (34% improvement)
+- **Memory Usage**: Reduce from ~200MB to ~140MB (30% reduction)
+- **Re-renders**: Significantly reduced through simplified state
+
+### **Maintainability Improvements**
+
+- **Code Complexity**: Reduce from 6,000+ lines to ~2,500 lines
+- **Architecture Layers**: Reduce from 4 layers to 2 layers
+- **Debugging**: Much easier with direct data flow
+- **Testing**: Simpler with fewer abstractions
+
+### **Developer Experience**
+
+- **Learning Curve**: Reduced from complex bridge pattern to simple hooks
+- **Code Reuse**: Better with standardized templates
+- **Type Safety**: Improved with better TypeScript patterns
+- **Error Handling**: Simplified with standardized approach
+
+### **Enhanced Features (from Customer Migration Success)**
+
+- ✅ **createRoute wrapper**: Automatic RBAC, logging, x-request-id, error JSON
+- ✅ **StandardError + errorToJson**: Centralized error handling
+- ✅ **Stable primitive query keys**: Optimal caching performance
+- ✅ **Zustand selectors + shallow**: Optimized state management
+- ✅ **Cursor pagination**: Efficient data loading
+- ✅ **Bulk operations**: Improved user experience
+- ✅ **Analytics integration**: Comprehensive tracking
+- ✅ **Transaction support**: Data consistency
+- ✅ **SSR/CSR hydration**: Proper server/client rendering
+- ✅ **Global Form Verification**: Consistent form validation with
+  useFormValidation hook
+
+## ✅ **Enhanced Validation Checklist (from Customer Migration)**
+
+### **Infrastructure & Core**
+
+- [ ] TypeScript compilation: `npm run type-check`
+- [ ] Build test: `npm run build`
+- [ ] Route handler logs requests with correlation IDs
+- [ ] Error responses have consistent JSON format
+- [ ] RBAC works correctly for different roles
+- [ ] Provider stack order is correct in layout
+- [ ] SSR/CSR hydration works without warnings
+
+### **Data & API**
+
+- [ ] Cursor pagination works end-to-end
+- [ ] Query keys are stable (no unnecessary refetches)
+- [ ] Bulk operations work without API spam
+- [ ] Multi-ID fetching uses useQueries
+- [ ] Infinite scroll with "Load More" works
+- [ ] API routes use createRoute wrapper
+- [ ] Typed response envelopes work correctly
+- [ ] **ENHANCED**: Relationship management works correctly
+
+### **State Management**
+
+- [ ] Zustand subscriptions use shallow comparison
+- [ ] No getState() calls in render paths
+- [ ] Store selectors work correctly
+- [ ] State persistence works as expected
+- [ ] **ENHANCED**: Relationship state management works
+
+### **Functionality**
+
+- [ ] All CRUD operations work
+- [ ] Search and filtering work
+- [ ] Sorting works correctly
+- [ ] Bulk delete operations work
+- [ ] Error handling shows proper messages
+- [ ] Loading states work correctly
+- [ ] **ENHANCED**: Relationship management works
+- [ ] **ENHANCED**: Product simulator works
+- [ ] **ENHANCED**: Form validation works correctly
+- [ ] **ENHANCED**: Form validation shows proper error messages
+
+### **Enhanced Exit Criteria (from Customer Migration Success)**
+
+#### **✅ 1. All routes use createRoute(...) with roles, logging, x-request-id, and error JSON**
+
+```typescript
+export const GET = createRoute(
+  {
+    roles: [
+      'admin',
+      'sales',
+      'viewer',
+      'System Administrator',
+      'Administrator',
+    ],
+    query: ProductQuerySchema,
+  },
+  async ({ query, user }) => {
+    // Automatic: logging, x-request-id, error handling, RBAC
+  }
+);
+```
+
+#### **✅ 2. Server boundary: AppError / errorToJson**
+
+```typescript
+// createRoute automatically uses errorToJson on failure
+export const GET = createRoute(
+  { roles: ['admin'] },
+  async ({ query, user }) => {
+    try {
+      // Route logic
+    } catch (error) {
+      // createRoute automatically calls errorToJson(error)
+      throw error;
+    }
+  }
+);
+```
+
+#### **✅ 3. Zod input/output schemas**
+
+```typescript
+export const ProductSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Name is required'),
+  // ... other fields
+});
+
+export const ProductQuerySchema = z.object({
+  search: z.string().trim().default(''),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  cursor: z.string().nullable().optional(),
+  // ... other fields
+});
+```
+
+#### **✅ 3.1 Global Form Verification (Enhanced from Customer Migration)**
+
+```typescript
+// ✅ ENHANCED: Global form verification with useFormValidation
+import {
+  createValidationSchema,
+  VALIDATION_MESSAGES,
+  VALIDATION_PATTERNS,
+} from '@/hooks/useFormValidation';
+
+export const productValidationSchema = createValidationSchema({
+  name: {
+    required: true,
+    minLength: 2,
+    maxLength: 100,
+    pattern: VALIDATION_PATTERNS.alphanumeric,
+    message: 'Please enter a valid product name (2-100 characters)',
+  },
+  price: {
+    required: true,
+    custom: (value: any) => {
+      if (value === undefined || value === null || value === '') {
+        return 'Product price is required';
+      }
+      if (value <= 0) return VALIDATION_MESSAGES.positiveNumber;
+      return null;
+    },
+  },
+  // ... other fields
+});
+
+// ✅ ENHANCED: Form component usage
+export function ProductForm_new() {
+  const {
+    formData,
+    validationErrors,
+    isValid,
+    handleFieldChange,
+    handleFieldBlur,
+    validateAll,
+    getFieldError,
+    getFieldValidationClass,
+  } = useFormValidation(
+    initialProductData,
+    productValidationSchema,
+    {
+      validateOnChange: true,
+      validateOnBlur: true,
+      debounceMs: 300,
+    }
+  );
+
+  // Form submission with validation
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errors = validateAll();
+    if (Object.keys(errors).length > 0) return;
+    await createProduct(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        value={formData.name}
+        onChange={(e) => handleFieldChange('name', e.target.value)}
+        onBlur={() => handleFieldBlur('name')}
+        className={getFieldValidationClass('name')}
+      />
+      {getFieldError('name') && (
+        <p className="text-red-600">{getFieldError('name')}</p>
+      )}
+    </form>
+  );
+}
+```
+
+#### **✅ 4. List endpoint implements cursor pagination**
+
+```typescript
+const rows = await prisma.product.findMany({
+  where,
+  select: {
+    /* fields */
+  },
+  orderBy,
+  take: query!.limit + 1, // Take one extra to check if there are more
+  ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
+});
+
+const hasNextPage = rows.length > query!.limit;
+const nextCursor = hasNextPage ? rows[query!.limit - 1].id : null;
+const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
+
+return Response.json(ok({ items, nextCursor }));
+```
+
+#### **✅ 5. Bulk delete endpoint exists**
+
+```typescript
+export const POST = createRoute(
+  {
+    roles: ['admin', 'System Administrator', 'Administrator'],
+    body: BulkDeleteSchema,
+  },
+  async ({ body, user }) => {
+    const result = await prisma.product.deleteMany({
+      where: { id: { in: body!.ids } },
+    });
+    return Response.json(ok({ deleted: result.count }));
+  }
+);
+```
+
+#### **✅ 6. Multi-write mutations use db.$transaction where needed**
+
+```typescript
+const result = await prisma.$transaction(async tx => {
+  const deleteResult = await tx.product.deleteMany({
+    where: { id: { in: body!.ids } },
+  });
+  return deleteResult;
+});
+```
+
+#### **✅ 7. React Query keys: Stable primitive query keys**
+
+```typescript
+export const qk = {
+  products: {
+    all: ['products'] as const,
+    list: (search: string, limit: number, sortBy: string, sortOrder: string) =>
+      [...qk.products.lists(), search, limit, sortBy, sortOrder] as const, // primitives only
+    detail: (id: string) => [...qk.products.details(), id] as const,
+  },
+};
+```
+
+#### **✅ 8. useInfiniteProducts with stable query keys**
+
+```typescript
+export function useInfiniteProducts(params: ProductQuery) {
+  return useInfiniteQuery({
+    queryKey: qk.products.list(search, limit, sortBy, sortOrder),
+    queryFn: ({ pageParam }) =>
+      productService.getProducts({
+        ...params,
+        cursor: pageParam as string | null,
+      }),
+    getNextPageParam: (lastPage: any) => lastPage.data?.nextCursor || undefined,
+  });
+}
+```
+
+#### **✅ 9. useProductsByIds via useQueries**
+
+```typescript
+export function useProductsByIds(ids: string[]) {
+  const results = useQueries({
+    queries: ids.map(id => ({
+      queryKey: qk.products.detail(id),
+      queryFn: () => productService.getProduct(id),
+      enabled: !!id,
+    })),
+  });
+  // ... return aggregated results
+}
+```
+
+#### **✅ 10. useDeleteProductsBulk()**
+
+```typescript
+export function useDeleteProductsBulk() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => productService.deleteProductsBulk(ids),
+    onSuccess: (response, ids) => {
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
+      analytics.trackOptimized('products_bulk_deleted', {
+        deletedCount: response.data?.deleted || 0,
+        productIds: ids,
+      });
+    },
+  });
+}
+```
+
+#### **✅ 11. Client state (Zustand): Selectors + shallow**
+
+```typescript
+export const useProductStore = create<State>()(
+  subscribeWithSelector(
+    persist(
+      set => ({
+        filters: { search: '', category: '', status: '' },
+        sorting: { sortBy: 'createdAt', sortOrder: 'desc' },
+        // ... other state
+        setFilters: f => set(s => ({ filters: { ...s.filters, ...f } })),
+        // ... other actions
+      }),
+      { name: 'products-ui' }
+    )
+  )
+);
+
+// Usage with shallow
+import { shallow } from 'zustand/shallow';
+const filters = useProductStore(productSelectors.filters, shallow);
+```
+
+#### **✅ 12. Provider order in layout**
+
+```typescript
+<QueryProvider>                    {/* ✅ QueryProvider first */}
+  <ToastProvider position="top-right" maxToasts={5}>
+    <AuthProvider session={session}> {/* ✅ SessionProvider */}
+      <GlobalStateProvider>
+        <ProtectedLayout>{children}</ProtectedLayout>
+      </GlobalStateProvider>
+    </AuthProvider>
+  </ToastProvider>                  {/* ✅ Toaster */}
+</QueryProvider>
+```
+
+#### **✅ 13. Hydration notes; stable shell**
+
+```typescript
+// ✅ Page shell identical across loading/success/error
+export default function ProductsPage() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <ProductListHeader />
+          <ProductFilters />
+          <ProductTable /> {/* Client-side fetching */}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+#### **✅ 14. Analytics hook-in; rate limiting**
+
+```typescript
+onSuccess: (response, ids) => {
+  analytics.trackOptimized(
+    'products_bulk_deleted',
+    {
+      deletedCount: response.ok ? response.data?.deleted || 0 : 0,
+      productIds: ids,
+    },
+    'US-4.3',
+    'H5'
+  );
+},
+
+// Rate limiting handled by dev middleware
+// TODO: Implement production rate limiter
+```
+
+## 🚨 **Risk Mitigation (Enhanced from Customer Migration)**
+
+### **High Risk Areas**
+
+1. **Data Loss**: Ensure all existing functionality is preserved
+2. **Performance Regression**: Test thoroughly with real data
+3. **User Experience**: Maintain existing UI/UX patterns
+4. **Integration Issues**: Test with other components
+5. **Relationship Management**: Ensure complex product relationships work
+   correctly
+
+### **Mitigation Strategies**
+
+1. **Parallel Development**: Keep old and new implementations running
+2. **Feature Flags**: Use feature flags to switch between implementations
+3. **Comprehensive Testing**: Test all product workflows including relationships
+4. **Gradual Rollout**: Migrate one component at a time
+5. **Rollback Plan**: Keep old code until new implementation is stable
+6. **Enhanced Testing**: Focus on relationship management functionality
+
+## 📅 **Timeline (Enhanced from Customer Migration)**
+
+### **Week 1: Infrastructure**
+
+- Leverage existing infrastructure (already available from Customer migration)
+- Create product-specific transaction patterns
+- Test basic setup
+
+### **Week 2: Service Layer**
+
+- Create new service layer
+- Refactor existing service
+- Test service operations
+- **ENHANCED**: Add relationship management operations
+
+### **Week 3: React Query Hooks**
+
+- Create new hooks
+- Test data fetching
+- Validate caching
+- **ENHANCED**: Add relationship management hooks
+
+### **Week 4: Zustand Store**
+
+- Create new store
+- Test state management
+- Validate persistence
+- **ENHANCED**: Add relationship management state
+
+### **Week 5: Components**
+
+- Create new components
+- Test UI functionality
+- Validate performance
+- **ENHANCED**: Test relationship management components
+
+### **Week 6: API Routes**
+
+- Update API routes
+- Test endpoints
+- Validate pagination
+- **ENHANCED**: Test relationship management endpoints
+
+### **Week 7: Pages**
+
+- Create new pages
+- Test full workflow
+- Validate SSR/CSR
+- **ENHANCED**: Test relationship management pages
+
+### **Week 8: Testing & Cleanup**
+
+- Comprehensive testing
+- Performance validation
+- Remove old code
+- **ENHANCED**: Focus on relationship management testing
+
+## 🎯 **Success Criteria (Enhanced from Customer Migration)**
+
+1. **Functionality**: All existing product features work including relationships
+2. **Performance**: Improved load times and reduced memory usage
+3. **Maintainability**: Code is easier to understand and modify
+4. **Developer Experience**: Faster development and debugging
+5. **User Experience**: No regression in UI/UX
+6. **Testing**: All tests pass with new implementation
+7. **Enhanced**: Relationship management works correctly
+8. **Enhanced**: Product simulator functionality preserved
+9. **Enhanced**: Global form verification works consistently across all forms
+10. **Enhanced**: Form validation provides excellent user experience with
+    real-time feedback
+
+## 🏆 **Customer Migration Success Patterns to Apply**
+
+### **✅ Proven Success Patterns**
+
+1. **createRoute wrapper**: ✅ Works perfectly with RBAC, logging, x-request-id,
+   error JSON
+2. **StandardError + errorToJson**: ✅ Centralized error handling works
+   flawlessly
+3. **Stable primitive query keys**: ✅ Optimal caching performance achieved
+4. **Zustand selectors + shallow**: ✅ Optimized state management proven
+5. **Cursor pagination**: ✅ Efficient data loading implemented
+6. **Bulk operations**: ✅ Improved user experience delivered
+7. **Analytics integration**: ✅ Comprehensive tracking working
+8. **Transaction support**: ✅ Data consistency maintained
+9. **SSR/CSR hydration**: ✅ Proper server/client rendering achieved
+
+### **✅ Lessons Learned from Customer Migration**
+
+1. **Parallel Development**: `_new` suffix strategy works perfectly
+2. **Feature Flags**: Easy switching between implementations
+3. **Gradual Migration**: One component at a time approach
+4. **Comprehensive Testing**: All functionality preserved
+5. **Performance Improvement**: Significant gains achieved
+6. **Developer Experience**: Much improved with simplified architecture
+
+This enhanced Product Migration Assessment leverages all the successful patterns
+and lessons learned from the Customer migration, ensuring a smooth and
+successful transition to the modern architecture while preserving all existing
+functionality including the complex relationship management features.
