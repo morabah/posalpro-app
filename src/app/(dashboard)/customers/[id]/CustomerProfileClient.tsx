@@ -379,7 +379,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       [CustomerTier.PLATINUM]: { label: 'Platinum', color: 'text-purple-600', bg: 'bg-purple-100' },
       [CustomerTier.ENTERPRISE]: { label: 'Enterprise', color: 'text-blue-600', bg: 'bg-blue-100' },
     } as const;
-    return displays[tier];
+    return displays[tier] || displays[CustomerTier.BRONZE]; // Fallback to BRONZE if tier not found
   };
 
   const getHealthColor = (score: number) => {
@@ -433,7 +433,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     );
   }
 
-  const tierDisplay = getTierDisplay(customer.tier);
+  const tierDisplay = getTierDisplay(customer.tier || CustomerTier.BRONZE);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -702,9 +702,9 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 </div>
                 <div className="flex items-center justify-between mt-4">
                   <span
-                    className={`px-3 py-1 text-sm rounded-full ${tierDisplay.bg} ${tierDisplay.color}`}
+                    className={`px-3 py-1 text-sm rounded-full ${tierDisplay?.bg || 'bg-gray-100'} ${tierDisplay?.color || 'text-gray-600'}`}
                   >
-                    {tierDisplay.label}
+                    {tierDisplay?.label || 'Unknown Tier'}
                   </span>
                   <span className="text-sm text-gray-600">{customer.industry}</span>
                 </div>
