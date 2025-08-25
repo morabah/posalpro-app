@@ -52,18 +52,30 @@ function logToConsole(entry: LogEntry): void {
 }
 
 // Main logging functions
-export const logDebug = (message: string, metadata: LogMetadata = {}): void => {
-  const entry = formatLogEntry('debug', message, metadata);
+export const logDebug = (message: string, metadata: LogMetadata | unknown = {}): void => {
+  const entry = formatLogEntry(
+    'debug',
+    message,
+    typeof metadata === 'object' && metadata !== null ? (metadata as LogMetadata) : {}
+  );
   logToConsole(entry);
 };
 
-export const logInfo = (message: string, metadata: LogMetadata = {}): void => {
-  const entry = formatLogEntry('info', message, metadata);
+export const logInfo = (message: string, metadata: LogMetadata | unknown = {}): void => {
+  const entry = formatLogEntry(
+    'info',
+    message,
+    typeof metadata === 'object' && metadata !== null ? (metadata as LogMetadata) : {}
+  );
   logToConsole(entry);
 };
 
-export const logWarn = (message: string, metadata: LogMetadata = {}): void => {
-  const entry = formatLogEntry('warn', message, metadata);
+export const logWarn = (message: string, metadata: LogMetadata | unknown = {}): void => {
+  const entry = formatLogEntry(
+    'warn',
+    message,
+    typeof metadata === 'object' && metadata !== null ? (metadata as LogMetadata) : {}
+  );
   logToConsole(entry);
 };
 

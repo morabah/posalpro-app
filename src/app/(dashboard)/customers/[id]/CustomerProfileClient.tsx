@@ -113,19 +113,19 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   const [isEditing, setIsEditing] = useState(false);
 
   // ✅ REUSABLE VALIDATION HOOK
-  const validation = useFormValidation(
+  const validation = useFormValidation<CustomerEditData>(
     {
       name: '',
       email: '',
-      phone: '',
-      website: '',
-      address: '',
-      industry: '',
+      phone: undefined,
+      website: undefined,
+      address: undefined,
+      industry: undefined,
       annualRevenue: undefined,
       employeeCount: undefined,
       tier: 'bronze',
       tags: [],
-    } as CustomerEditData,
+    },
     customerValidationSchema,
     {
       validateOnChange: false, // Don't validate on change initially

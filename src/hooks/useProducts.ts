@@ -1,299 +1,807 @@
-/**
- * PosalPro MVP2 - Products Data Hook
- * React Query hook for fetching and caching products data
- * Performance optimized with caching and pagination
- */
+// Product React Query Hooks - New Architecture
+// User Story: US-4.1 (Product Management)
+// Hypothesis: H5 (Modern data fetching improves performance and user experience)
 
-import { CreateProductData, Product as EntityProduct } from '@/types/entities/product';
-import { useMutation, useQuery, useQueryClient, UseQueryResult } from '@tanstack/react-query';
-import { useApiClient } from './useApiClient';
+import { useApiClient } from '@/hooks/useApiClient';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { Product, ProductCreate, ProductUpdate, productService } from '@/services/productService';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
-// ✅ FIXED: Use entity Product type with proper Date types, extend with API-specific fields
-export interface Product extends Omit<EntityProduct, 'createdAt' | 'updatedAt'> {
-  createdAt: string; // API returns ISO strings, converted to Date when needed
-  updatedAt: string;
-  usage: {
-    proposalsCount: number;
-    relationshipsCount: number;
-  };
-  analytics?: Record<string, unknown>;
-}
+// ====================
+// Query Keys
+// ====================
 
-export interface ProductsResponse {
-  products: Product[];
-  pagination: {
-    page?: number;
-    limit: number;
-    total?: number;
-    totalPages?: number;
-    hasMore?: boolean;
-    nextCursor?: string | null;
-  };
-  filters: {
-    search?: string;
-    category?: string[];
-    tags?: string[];
-    priceRange?: string;
-    isActive?: boolean;
-    sku?: string;
-  };
-}
-
-export interface ProductsQueryParams {
-  page?: number;
-  limit?: number;
-  search?: string;
-  category?: string;
-  tags?: string;
-  priceRange?: string;
-  isActive?: boolean;
-  sku?: string;
-  sortBy?: 'name' | 'price' | 'createdAt' | 'updatedAt';
-  sortOrder?: 'asc' | 'desc';
-  cursor?: string;
-}
-
-// Query keys for React Query
-export const PRODUCTS_QUERY_KEYS = {
-  all: ['products'] as const,
-  lists: () => [...PRODUCTS_QUERY_KEYS.all, 'list'] as const,
-  list: (params: ProductsQueryParams) => [...PRODUCTS_QUERY_KEYS.lists(), params] as const,
-  details: () => [...PRODUCTS_QUERY_KEYS.all, 'detail'] as const,
-  detail: (id: string) => [...PRODUCTS_QUERY_KEYS.details(), id] as const,
+export const qk = {
+  products: {
+    all: ['products'] as const,
+    list: (
+      search: string,
+      limit: number,
+      sortBy: 'createdAt' | 'name' | 'price' | 'isActive',
+      sortOrder: 'asc' | 'desc',
+      category?: string,
+      isActive?: boolean
+    ) => ['products', 'list', search, limit, sortBy, sortOrder, category, isActive] as const,
+    byId: (id: string) => ['products', 'byId', id] as const,
+    search: (query: string, limit: number) => ['products', 'search', query, limit] as const,
+    relationships: (productId: string) => ['products', 'relationships', productId] as const,
+    stats: () => ['products', 'stats'] as const,
+    categories: () => ['products', 'categories'] as const,
+    tags: () => ['products', 'tags'] as const,
+  },
 };
 
-/**
- * Hook for fetching products list with pagination and filtering
- * ✅ PERFORMANCE: Integrated with cache manager to prevent timeouts
- */
-export function useProducts(
-  params: ProductsQueryParams = {}
-): UseQueryResult<ProductsResponse, Error> {
+// ====================
+// Infinite Query Hook
+// ====================
+
+export function useInfiniteProductsMigrated({
+  search = '',
+  limit = 20,
+  sortBy = 'createdAt',
+  sortOrder = 'desc',
+  category,
+  isActive,
+}: {
+  search?: string;
+  limit?: number;
+  sortBy?: 'createdAt' | 'name' | 'price' | 'isActive';
+  sortOrder?: 'asc' | 'desc';
+  category?: string;
+  isActive?: boolean;
+} = {}) {
   const apiClient = useApiClient();
 
-  return useQuery({
-    queryKey: PRODUCTS_QUERY_KEYS.list(params),
-    queryFn: async (): Promise<ProductsResponse> => {
-      // ✅ FOLLOWS CORE_REQUIREMENTS.md: Use pure useApiClient pattern (like BasicInformationStep.tsx)
-      const searchParams = new URLSearchParams();
+  return useInfiniteQuery({
+    queryKey: qk.products.list(search, limit, sortBy, sortOrder, category, isActive),
+    queryFn: async ({ pageParam }) => {
+      logDebug('Fetching products with cursor pagination', {
+        component: 'useInfiniteProductsMigrated',
+        operation: 'queryFn',
+        search,
+        limit,
+        sortBy,
+        sortOrder,
+        category,
+        isActive,
+        cursor: pageParam,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
 
-      // Add parameters to search params
-      if (params.page) searchParams.set('page', params.page.toString());
-      if (params.limit) searchParams.set('limit', params.limit.toString());
-      if (params.search) searchParams.set('search', params.search);
-      if (params.category) searchParams.set('category', params.category);
-      if (params.tags) searchParams.set('tags', params.tags);
-      if (params.priceRange) searchParams.set('priceRange', params.priceRange);
-      if (params.isActive !== undefined) searchParams.set('isActive', params.isActive.toString());
-      if (params.sku) searchParams.set('sku', params.sku);
-      if (params.sortBy) searchParams.set('sortBy', params.sortBy);
-      if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
-      if (params.cursor) searchParams.set('cursor', params.cursor);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (limit) params.append('limit', limit.toString());
+      if (sortBy) params.append('sortBy', sortBy);
+      if (sortOrder) params.append('sortOrder', sortOrder);
+      if (category) params.append('category', category);
+      if (isActive !== undefined) params.append('isActive', isActive.toString());
+      if (pageParam) params.append('cursor', pageParam);
 
-      try {
-        const response = await apiClient.get<{
-          success: boolean;
-          data: ProductsResponse;
-          message: string;
-        }>(`products?${searchParams.toString()}`);
-
-        if (!response.success) {
-          throw new Error(response.message || 'Failed to fetch products');
-        }
-
-        return response.data;
-      } catch (error) {
-        // Surface error to React Query; no mock fallback per CORE_REQUIREMENTS.md
-        throw error instanceof Error ? error : new Error('Failed to fetch products');
-      }
-    },
-    // ✅ PERFORMANCE: Optimized for speed (following BasicInformationStep.tsx pattern)
-    staleTime: 30 * 1000, // 30 seconds for fast updates
-    gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false, // Prevent automatic refetches
-    retry: 1,
-    retryDelay: 250,
-  });
-}
-
-/**
- * Hook for fetching a single product by ID
- */
-export function useProduct(id: string): UseQueryResult<Product, Error> {
-  const apiClient = useApiClient();
-
-  return useQuery({
-    queryKey: PRODUCTS_QUERY_KEYS.detail(id),
-    queryFn: async (): Promise<Product> => {
       const response = await apiClient.get<{
-        success: boolean;
-        data: Product;
-        message: string;
-      }>(`products/${id}`);
+        ok: boolean;
+        data: { items: Product[]; nextCursor: string | null };
+      }>(`/api/products?${params.toString()}`);
 
-      if (!response.success) {
-        // Let React Query handle the error state
-        throw new Error(response.message || 'Failed to fetch product');
-      }
+      logInfo('Products fetched successfully', {
+        component: 'useInfiniteProductsMigrated',
+        operation: 'queryFn',
+        count: response.data?.items?.length || 0,
+        hasNextPage: !!response.data?.nextCursor,
+        loadTime: Date.now(),
+      });
 
       return response.data;
     },
-    // Cache single products for longer since they change less frequently
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    enabled: !!id, // Only run query if ID is provided
-    retry: 2,
+    initialPageParam: null as string | null,
+    getNextPageParam: lastPage => lastPage.nextCursor || undefined,
+    staleTime: 30000, // 30 seconds
+    gcTime: 120000, // 2 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
 
-/**
- * Hook for search products with debouncing
- */
-export function useProductSearch(
-  searchTerm: string,
-  options: Omit<ProductsQueryParams, 'search'> = {}
-): UseQueryResult<ProductsResponse, Error> {
+// ====================
+// Single Product Hook
+// ====================
+
+export function useProductMigrated(id: string) {
   const apiClient = useApiClient();
 
   return useQuery({
-    queryKey: PRODUCTS_QUERY_KEYS.list({ ...options, search: searchTerm }),
-    queryFn: async (): Promise<ProductsResponse> => {
-      const searchParams = new URLSearchParams();
-      searchParams.set('search', searchTerm);
-
-      // Add other options (Object.entries won't include undefined values)
-      Object.entries(options).forEach(([key, value]) => {
-        searchParams.set(key, String(value));
+    queryKey: qk.products.byId(id),
+    queryFn: async () => {
+      logDebug('Fetching single product', {
+        component: 'useProductMigrated',
+        operation: 'queryFn',
+        productId: id,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
       });
 
       const response = await apiClient.get<{
         success: boolean;
-        data: ProductsResponse;
+        data: Product;
         message: string;
-      }>(`products?${searchParams.toString()}`);
-
-      if (!response.success) {
-        // Surface error; React Query will manage the error state
-        throw new Error(response.message || 'Failed to search products');
-      }
-
-      return response.data;
+      }>(`/api/products/${id}`);
+      return response;
     },
-    // Only search if there's a search term (at least 2 characters)
-    enabled: searchTerm.length >= 2,
-    // Shorter cache for search results
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
-    retry: 1,
+    enabled: !!id,
+    staleTime: 30000,
+    gcTime: 120000,
   });
 }
 
-/**
- * Product mutation hooks using useApiClient pattern
- * ✅ FOLLOWING CORE_REQUIREMENTS.md: Use useApiClient for all data operations
- */
+// ====================
+// Product with Relationships Hook
+// ====================
+
+export function useProductWithRelationshipsMigrated(id: string) {
+  const apiClient = useApiClient();
+
+  return useQuery({
+    queryKey: qk.products.relationships(id),
+    queryFn: async () => {
+      logDebug('Fetching product with relationships', {
+        component: 'useProductWithRelationshipsMigrated',
+        operation: 'queryFn',
+        productId: id,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const response = await apiClient.get(`/api/products/${id}/relationships`);
+      return response;
+    },
+    enabled: !!id,
+    staleTime: 30000,
+    gcTime: 120000,
+  });
+}
+
+// ====================
+// Product Stats Hook
+// ====================
+
+export function useProductStatsMigrated() {
+  const apiClient = useApiClient();
+
+  return useQuery({
+    queryKey: qk.products.stats(),
+    queryFn: async () => {
+      logDebug('Fetching product stats', {
+        component: 'useProductStatsMigrated',
+        operation: 'queryFn',
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const response = await apiClient.get('/api/products/stats');
+      return response;
+    },
+    staleTime: 60000, // 1 minute
+    gcTime: 300000, // 5 minutes
+  });
+}
+
+// ====================
+// Product Search Hook
+// ====================
+
+export function useProductSearchMigrated(query: string, limit: number = 10) {
+  const apiClient = useApiClient();
+
+  return useQuery({
+    queryKey: qk.products.search(query, limit),
+    queryFn: async () => {
+      logDebug('Searching products', {
+        component: 'useProductSearchMigrated',
+        operation: 'queryFn',
+        query,
+        limit,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const response = await apiClient.get(
+        `/api/products/search?q=${encodeURIComponent(query)}&limit=${limit}`
+      );
+      return response;
+    },
+    enabled: !!query && query.length >= 2,
+    staleTime: 30000,
+    gcTime: 120000,
+  });
+}
+// Create Product Hook
+// ====================
+
 export function useCreateProduct() {
-  const apiClient = useApiClient();
   const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
 
   return useMutation({
-    mutationFn: async (data: CreateProductData): Promise<Product> => {
-      const response = await apiClient.post<{
-        success: boolean;
-        data: Product;
-        message: string;
-      }>('products', data);
+    mutationFn: async (data: ProductCreate) => {
+      analytics.trackOptimized('product_create_attempt', {
+        name: data.name,
+        category: data.category,
+        userStories: ['US-4.1'],
+        hypotheses: ['H5'],
+        priority: 'medium',
+      });
 
-      if (!response.success) {
-        // Surface error to caller; centralized error handling at UI layer
-        throw new Error(response.message || 'Failed to create product');
-      }
+      logDebug('Creating product', {
+        component: 'useCreateProduct',
+        operation: 'mutationFn',
+        dataKeys: Object.keys(data),
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
 
-      return response.data;
-    },
-    onSuccess: () => {
-      // Invalidate and refetch products queries
-      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEYS.all });
-    },
-  });
-}
+      const response = await productService.createProduct(data);
 
-export function useUpdateProduct() {
-  const apiClient = useApiClient();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: { id: string } & Partial<CreateProductData>): Promise<Product> => {
-      const { id, ...updateData } = data;
-      const response = await apiClient.put<{
-        success: boolean;
-        data: Product;
-        message: string;
-      }>(`products/${id}`, updateData);
-
-      if (!response.success) {
-        // Surface error to caller; centralized error handling at UI layer
-        throw new Error(response.message || 'Failed to update product');
-      }
-
-      return response.data;
-    },
-    onSuccess: data => {
-      // Update the cache with the new data
-      queryClient.setQueryData(PRODUCTS_QUERY_KEYS.detail(data.id), data);
-      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEYS.all });
-    },
-  });
-}
-
-export function useDeleteProduct() {
-  const apiClient = useApiClient();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string): Promise<{ success: boolean; message: string }> => {
-      const response = await apiClient.delete<{
-        success: boolean;
-        message: string;
-      }>(`products/${id}`);
-
-      if (!response.success) {
-        // Log error but let the mutation error handling manage it
-        const { logWarn } = await import('@/lib/logger');
-        await logWarn('[useProducts] Product deletion failed', {
-          error: response.message || 'Failed to delete product',
+      if (response.ok && response.data) {
+        analytics.trackOptimized('product_create_success', {
+          productId: response.data.id,
+          name: data.name,
+          userStories: ['US-4.1'],
+          hypotheses: ['H5'],
+          priority: 'medium',
         });
-        throw new Error(response.message || 'Failed to delete product');
       }
 
       return response;
     },
-    onSuccess: (_, id) => {
-      // Remove the deleted product from cache
-      queryClient.removeQueries({ queryKey: PRODUCTS_QUERY_KEYS.detail(id) });
-      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEYS.all });
+    onSuccess: response => {
+      // Invalidate all product queries
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
+
+      logInfo('Product created successfully', {
+        component: 'useCreateProduct',
+        operation: 'onSuccess',
+        productId: response.ok ? response.data?.id : undefined,
+      });
+    },
+    onError: (error, variables) => {
+      logError('Product creation failed', {
+        component: 'useCreateProductMigrated',
+        operation: 'onError',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        dataKeys: Object.keys(variables),
+      });
     },
   });
 }
 
-/**
- * Generate mock products data for fallback when API fails
- * Following the pattern established in useCustomers.ts
- */
-// Removed all mock product generation; all data must come from live API/database
+// ====================
+// Update Product Hook
+// ====================
 
-export function useProductsManager() {
+export function useUpdateProduct() {
+  const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: ProductUpdate }) => {
+      analytics.trackOptimized('product_update_attempt', {
+        productId: id,
+        name: data.name,
+        userStories: ['US-4.1'],
+        hypotheses: ['H5'],
+        priority: 'medium',
+      });
+
+      logDebug('Updating product', {
+        component: 'useUpdateProduct',
+        operation: 'mutationFn',
+        productId: id,
+        dataKeys: Object.keys(data),
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const response = await productService.updateProduct(id, data);
+
+      if (response.ok && response.data) {
+        analytics.trackOptimized('product_update_success', {
+          productId: response.data.id,
+          name: data.name,
+          userStories: ['US-4.1'],
+          hypotheses: ['H5'],
+          priority: 'medium',
+        });
+      }
+
+      return response;
+    },
+    onSuccess: (response, { id }) => {
+      // Invalidate all product queries
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
+
+      logInfo('Product updated successfully', {
+        component: 'useUpdateProduct',
+        operation: 'onSuccess',
+        productId: id,
+      });
+    },
+    onError: (error, { id, data }) => {
+      logError('Product update failed', {
+        component: 'useUpdateProduct',
+        operation: 'onError',
+        productId: id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        dataKeys: Object.keys(data),
+      });
+    },
+  });
+}
+
+// ====================
+// Delete Product Hook
+// ====================
+
+export function useDeleteProductMigrated() {
+  const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
+  const apiClient = useApiClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      analytics.trackOptimized('product_delete_attempt', {
+        productId: id,
+        userStories: ['US-4.1'],
+        hypotheses: ['H5'],
+        priority: 'high',
+      });
+
+      logDebug('Deleting product', {
+        component: 'useDeleteProductMigrated',
+        operation: 'mutationFn',
+        productId: id,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const response = await apiClient.delete(`/api/products/${id}`);
+      return response;
+    },
+    onSuccess: (response, id) => {
+      // Invalidate all product queries
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'product_deleted',
+        {
+          productId: id,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        },
+        'high'
+      );
+
+      logInfo('Product deleted successfully', {
+        component: 'useDeleteProductMigrated',
+        operation: 'onSuccess',
+        productId: id,
+      });
+    },
+    onError: (error, id) => {
+      logError('Product deletion failed', {
+        component: 'useDeleteProductMigrated',
+        operation: 'onError',
+        productId: id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    },
+  });
+}
+
+// ====================
+// Bulk Delete Products Hook
+// ====================
+
+export function useDeleteProductsBulkMigrated() {
+  const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
+  const apiClient = useApiClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      analytics.trackOptimized('products_bulk_delete_attempt', {
+        productIds: ids,
+        count: ids.length,
+        userStories: ['US-4.1'],
+        hypotheses: ['H5'],
+        priority: 'high',
+      });
+
+      logDebug('Bulk deleting products', {
+        component: 'useDeleteProductsBulkMigrated',
+        operation: 'mutationFn',
+        productIds: ids,
+        count: ids.length,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const response = await apiClient.post('/api/products/bulk-delete', { ids });
+      return response;
+    },
+    onSuccess: (response, ids) => {
+      // Invalidate all product queries
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'products_bulk_deleted',
+        {
+          deletedCount: 0, // TODO: Fix response typing
+          productIds: ids,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        },
+        'high'
+      );
+
+      logInfo('Products bulk deleted successfully', {
+        component: 'useDeleteProductsBulkMigrated',
+        operation: 'onSuccess',
+        deletedCount: 0, // TODO: Fix response typing
+        productIds: ids,
+      });
+    },
+    onError: (error: unknown, ids: string[]) => {
+      logError('Products bulk deletion failed', {
+        component: 'useDeleteProductsBulkMigrated',
+        operation: 'onError',
+        productIds: ids,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    },
+  });
+}
+
+// ====================
+// Product Relationship Hooks
+// ====================
+
+export function useCreateProductRelationshipMigrated() {
+  const queryClient = useQueryClient();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+
+  return useMutation({
+    mutationFn: async ({
+      sourceProductId,
+      targetProductId,
+      relationshipType,
+    }: {
+      sourceProductId: string;
+      targetProductId: string;
+      relationshipType: 'RELATED' | 'BUNDLE' | 'SUBSTITUTE' | 'UPGRADE';
+    }) => {
+      const response = await fetch('/api/products/relationships', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sourceProductId,
+          targetProductId,
+          relationshipType,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create product relationship');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({
+        queryKey: ['product-relationships', variables.sourceProductId],
+      });
+
+      analytics(
+        'product_relationship_created',
+        {
+          sourceProductId: variables.sourceProductId,
+          targetProductId: variables.targetProductId,
+          relationshipType: variables.relationshipType,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        },
+        'medium'
+      );
+    },
+  });
+}
+
+export function useDeleteProductRelationshipMigrated() {
+  const queryClient = useQueryClient();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+
+  return useMutation({
+    mutationFn: async ({
+      sourceProductId,
+      targetProductId,
+    }: {
+      sourceProductId: string;
+      targetProductId: string;
+    }) => {
+      const response = await fetch(
+        `/api/products/relationships?sourceProductId=${sourceProductId}&targetProductId=${targetProductId}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to delete product relationship');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({
+        queryKey: ['product-relationships', variables.sourceProductId],
+      });
+
+      analytics(
+        'product_relationship_deleted',
+        {
+          sourceProductId: variables.sourceProductId,
+          targetProductId: variables.targetProductId,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        },
+        'medium'
+      );
+
+      logInfo('Product relationship deleted successfully', {
+        component: 'useDeleteProductRelationshipMigrated',
+        operation: 'onSuccess',
+        sourceProductId: variables.sourceProductId,
+        targetProductId: variables.targetProductId,
+      });
+    },
+    onError: (error: unknown, variables) => {
+      logError('Product relationship deletion failed', {
+        component: 'useDeleteProductRelationshipMigrated',
+        operation: 'onError',
+        sourceProductId: variables.sourceProductId,
+        targetProductId: variables.targetProductId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    },
+  });
+}
+
+// ... (rest of the code remains the same)
+// ====================
+// Utility Hooks
+// ====================
+
+export function useProductsByIdsMigrated(ids: string[]) {
+  const apiClient = useApiClient();
+
+  const results = useQueries({
+    queries: ids.map(id => ({
+      queryKey: qk.products.byId(id),
+      queryFn: async () => {
+        logDebug('Fetching product by ID', {
+          component: 'useProductsByIdsMigrated',
+          operation: 'queryFn',
+          productId: id,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+
+        const response = await productService.getProduct(id);
+        return response;
+      },
+      enabled: !!id,
+      staleTime: 30000,
+      gcTime: 120000,
+    })),
+  });
+
   return {
-    products: [] as Product[],
-    pagination: null,
-    isLoading: false,
-    error: null,
-    updateFilters: () => {},
-    clearFilters: () => {},
-    updateSort: () => {},
-    setPage: () => {},
-    setLimit: () => {},
-    refetch: () => {},
+    data: results.map(r => (r.data?.ok ? r.data.data : null)).filter(Boolean) as Product[],
+    isLoading: results.some(r => r.isLoading),
+    isError: results.some(r => r.isError),
+    errors: results.filter(r => r.error).map(r => r.error),
   };
 }
+
+export function useProductByIdOrSearchMigrated(id?: string, searchTerm?: string) {
+  const apiClient = useApiClient();
+
+  return useQuery({
+    queryKey: ['products', 'byIdOrSearch', id, searchTerm],
+    queryFn: async () => {
+      if (id) {
+        logDebug('Fetching product by ID', {
+          component: 'useProductByIdOrSearchMigrated',
+          operation: 'queryFn',
+          productId: id,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+
+        const response = await productService.getProduct(id);
+        return response;
+      } else if (searchTerm) {
+        logDebug('Searching products', {
+          component: 'useProductByIdOrSearchMigrated',
+          operation: 'queryFn',
+          searchTerm,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+
+        const response = await productService.searchProducts(searchTerm);
+        return response;
+      }
+      return null;
+    },
+    enabled: !!(id || searchTerm),
+    staleTime: 30000,
+    gcTime: 120000,
+  });
+}
+
+// ====================
+// Categories and Tags Hooks
+// ====================
+
+export function useProductCategories(search?: string) {
+  const apiClient = useApiClient();
+
+  return useQuery({
+    queryKey: qk.products.categories(),
+    queryFn: async () => {
+      logDebug('Fetching product categories', {
+        component: 'useProductCategories',
+        operation: 'queryFn',
+        search,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+
+      const response = await apiClient.get<{
+        success: boolean;
+        data: {
+          categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
+        };
+      }>(`/api/products/categories?${params.toString()}`);
+
+      logInfo('Product categories fetched successfully', {
+        component: 'useProductCategories',
+        operation: 'queryFn',
+        count: response.data?.categories?.length || 0,
+        search,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      return response.data;
+    },
+    staleTime: 30000,
+    gcTime: 120000,
+  });
+}
+
+export function useProductTags(search?: string) {
+  const apiClient = useApiClient();
+
+  return useQuery({
+    queryKey: qk.products.tags(),
+    queryFn: async () => {
+      logDebug('Fetching product tags', {
+        component: 'useProductTags',
+        operation: 'queryFn',
+        search,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+
+      const response = await apiClient.get<{
+        success: boolean;
+        data: {
+          tags: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
+        };
+      }>(`/api/products/tags?${params.toString()}`);
+
+      logInfo('Product tags fetched successfully', {
+        component: 'useProductTags',
+        operation: 'queryFn',
+        count: response.data?.tags?.length || 0,
+        search,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      return response.data;
+    },
+    staleTime: 30000,
+    gcTime: 120000,
+  });
+}
+
+// ====================
+// Options Hooks
+// ====================
+
+export function useProductCategoriesMigrated() {
+  const apiClient = useApiClient();
+
+  return useQuery({
+    queryKey: qk.products.categories(),
+    queryFn: async () => {
+      logDebug('Fetching product categories', {
+        component: 'useProductCategoriesMigrated',
+        operation: 'queryFn',
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+
+      // This would typically come from the product service
+      // For now, return a static list
+      return {
+        ok: true,
+        data: ['Electronics', 'Clothing', 'Books', 'Home & Garden', 'Sports', 'Toys'],
+      };
+    },
+    staleTime: 300000, // 5 minutes
+    gcTime: 600000, // 10 minutes
+  });
+}
+
+export function useProductStatusOptionsMigrated() {
+  return {
+    data: [
+      { value: true, label: 'Active' },
+      { value: false, label: 'Inactive' },
+    ],
+    isLoading: false,
+    isError: false,
+  };
+}
+
+export function useRelationshipTypeOptionsMigrated() {
+  return {
+    data: [
+      { value: 'COMPLEMENTARY', label: 'Complementary' },
+      { value: 'SUBSTITUTE', label: 'Substitute' },
+      { value: 'ACCESSORY', label: 'Accessory' },
+      { value: 'UPSELL', label: 'Upsell' },
+      { value: 'CROSS_SELL', label: 'Cross-sell' },
+    ],
+    isLoading: false,
+    isError: false,
+  };
+}
+
+// ====================
+// Exports
+// ====================
+
+// All functions are already exported above

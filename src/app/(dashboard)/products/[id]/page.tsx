@@ -1,25 +1,54 @@
-// Product Detail Page - Bridge Pattern Implementation
-// User Story: US-3.1 (Product Management)
-// Hypothesis: H5 (Bridge pattern improves maintainability and performance)
+/**
+ * Product View Page
+ * User Story: US-4.1 (Product Management)
+ * Hypothesis: H5 (Modern data fetching improves performance and user experience)
+ */
 
-import { ProductErrorFallback } from '@/components/products/ProductErrorFallback';
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { ProductDetailPageContent } from './ProductDetailPageContent';
+import { ProductDetail } from '@/components/products/ProductDetail';
+import { analytics } from '@/lib/analytics';
+import { logInfo } from '@/lib/logger';
+import { Suspense } from 'react';
 
-// ====================
-// Product Detail Page (Server Component)
-// ====================
-
-interface ProductDetailPageProps {
-  params: Promise<{ id: string }>;
+// Loading component
+function ProductDetailLoading() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading product details...</p>
+      </div>
+    </div>
+  );
 }
 
-export default async function ProductDetailPage({ params }: ProductDetailPageProps) {
-  const resolvedParams = await params;
+// Main page component
+export default async function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  logInfo('Product view page viewed', {
+    component: 'app/(dashboard)/products/[id]/page',
+    operation: 'page_view',
+    productId: id,
+    userStory: 'US-4.1',
+    hypothesis: 'H5',
+  });
+
+  analytics.trackOptimized(
+    'page_viewed',
+    {
+      page: `/products/${id}`,
+      productId: id,
+      userStory: 'medium',
+      timestamp: new Date().toISOString(),
+    },
+    'high'
+  );
 
   return (
-    <ErrorBoundary FallbackComponent={ProductErrorFallback}>
-      <ProductDetailPageContent params={resolvedParams} />
-    </ErrorBoundary>
+    <div className="container mx-auto px-4 py-8">
+      <Suspense fallback={<ProductDetailLoading />}>
+        <ProductDetail productId={id} />
+      </Suspense>
+    </div>
   );
 }

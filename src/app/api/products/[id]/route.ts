@@ -545,7 +545,7 @@ async function trackProductViewEvent(userId: string, productId: string, productN
       },
     });
   } catch (error) {
-    logWarn('Failed to track product view event:', error);
+    logWarn('Failed to track product view event:', { error: String(error) });
   }
 }
 
@@ -580,7 +580,7 @@ async function trackProductUpdateEvent(
       },
     });
   } catch (error) {
-    logWarn('Failed to track product update event:', error);
+    logWarn('Failed to track product update event:', { error: String(error) });
   }
 }
 
@@ -615,7 +615,7 @@ async function trackProductArchiveEvent(
       },
     });
   } catch (error) {
-    logWarn('Failed to track product archive event:', error);
+    logWarn('Failed to track product archive event:', { error: String(error) });
   }
 }
 

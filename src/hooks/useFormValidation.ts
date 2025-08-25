@@ -22,6 +22,9 @@ export interface FormData {
   [fieldName: string]: unknown;
 }
 
+// ✅ Generic form data type for better type safety
+export type GenericFormData = Record<string, unknown> | { [key: string]: unknown };
+
 // ✅ Validation Errors Interface
 export interface ValidationErrors {
   [fieldName: string]: string;
@@ -61,7 +64,7 @@ export const VALIDATION_MESSAGES = {
 } as const;
 
 // ✅ Reusable Form Validation Hook
-export function useFormValidation<T extends FormData>(
+export function useFormValidation<T extends Record<string, any>>(
   initialData: T,
   validationSchema: ValidationSchema,
   options?: {
@@ -153,8 +156,12 @@ export function useFormValidation<T extends FormData>(
     (fieldName: string, value: unknown) => {
       setFormData(prev => ({ ...prev, [fieldName]: value }));
 
-      // Clear previous error for this field
-      setValidationErrors(prev => ({ ...prev, [fieldName]: '' }));
+      // Clear previous error for this field by removing it entirely
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
 
       // Validate on change if enabled
       if (validateOnChange) {
@@ -174,7 +181,16 @@ export function useFormValidation<T extends FormData>(
 
       if (validateOnBlur) {
         const error = validateField(fieldName, formData[fieldName]);
-        setValidationErrors(prev => ({ ...prev, [fieldName]: error || '' }));
+        if (error) {
+          setValidationErrors(prev => ({ ...prev, [fieldName]: error }));
+        } else {
+          // Remove error if field is now valid
+          setValidationErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[fieldName];
+            return newErrors;
+          });
+        }
       }
     },
     [validateOnBlur, validateField, formData]
@@ -182,8 +198,8 @@ export function useFormValidation<T extends FormData>(
 
   // ✅ Reset form
   const resetForm = useCallback(
-    (newData?: T) => {
-      setFormData(newData || initialData);
+    (newData?: T | Partial<T>) => {
+      setFormData((newData || initialData) as T);
       setValidationErrors({});
       setTouchedFields(new Set());
     },

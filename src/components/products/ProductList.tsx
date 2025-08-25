@@ -1,485 +1,461 @@
-/**
- * PosalPro MVP2 - Product List Component
- * Enhanced with React Query for caching and performance optimization
- * Component Traceability: US-3.1, US-3.2, H3, H4
- */
-
 'use client';
 
-import { useProductManagementBridge } from '@/components/bridges/ProductManagementBridge';
+import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Input } from '@/components/ui/Input';
+import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import type { Product } from '@/lib/bridges/ProductApiBridge';
-import { debounce } from '@/lib/utils';
-import { EyeIcon, PencilIcon } from '@heroicons/react/24/outline';
-import Image from 'next/image';
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import { useInfiniteProductsMigrated } from '@/hooks/useProducts';
+import { logError, logInfo } from '@/lib/logger';
+import type { Product } from '@/services/productService';
+import useProductStore from '@/stores/productStore';
+import { useRouter } from 'next/navigation';
+import React, { useCallback, useMemo } from 'react';
 
-// ✅ FIXED: Remove unused COMPONENT_MAPPING
+// Product List Header Component
+function ProductListHeader() {
+  const router = useRouter();
+  const selectedProducts = useProductStore(state => state.selectedProducts);
+  const clearSelection = useProductStore(state => state.clearSelection);
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
 
-// Skeleton component for loading state
-const ProductSkeleton = memo(() => (
-  <div className="animate-pulse">
-    <Card className="h-64">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-6 w-16 bg-gray-200 rounded"></div>
-        </div>
-        <div className="space-y-3">
-          <div className="h-3 bg-gray-200 rounded"></div>
-          <div className="h-3 bg-gray-200 rounded w-5/6"></div>
-          <div className="h-3 bg-gray-200 rounded w-4/6"></div>
-        </div>
-        <div className="flex justify-between items-center mt-6">
-          <div className="h-8 bg-gray-200 rounded w-24"></div>
-          <div className="flex space-x-2">
-            <div className="h-8 w-8 bg-gray-200 rounded"></div>
-            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+  const selectedCount = selectedProducts.length;
+  const hasSelection = selectedCount > 0;
+
+  const handleCreateProduct = useCallback(() => {
+    analytics('product_create_initiated', { source: 'product_list' }, 'medium');
+    router.push('/products/create');
+  }, [analytics, router]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedProducts.length === 0) return;
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedProducts.length} product(s)? This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      // TODO: Integrate useDeleteProductsBulk hook
+      analytics(
+        'product_bulk_delete_initiated',
+        {
+          count: selectedProducts.length,
+          productIds: selectedProducts,
+        },
+        'high'
+      );
+
+      // For now, just clear selection
+      clearSelection();
+
+      // Show success message
+      logInfo('Products bulk deleted successfully', {
+        component: 'ProductListHeader',
+        operation: 'handleBulkDelete',
+        count: selectedProducts.length,
+        productIds: selectedProducts,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+    } catch (error) {
+      logError('Failed to delete products', {
+        component: 'ProductListHeader',
+        operation: 'handleBulkDelete',
+        error,
+        productIds: selectedProducts,
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
+      });
+    }
+  }, [selectedProducts, analytics, clearSelection]);
+
+  return (
+    <div className="flex items-center justify-between p-6 border-b">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Products</h1>
+        <p className="text-sm text-gray-600 mt-1">Manage your product catalog and inventory</p>
+      </div>
+      <div className="flex items-center gap-3">
+        {hasSelection && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">{selectedCount} selected</span>
+            <Button onClick={handleBulkDelete} variant="danger" size="sm">
+              Delete Selected
+            </Button>
           </div>
+        )}
+        <Button onClick={handleCreateProduct}>Create Product</Button>
+      </div>
+    </div>
+  );
+}
+
+// Product Filters Component
+function ProductFilters() {
+  const filters = useProductStore(state => state.filters);
+  const setFilters = useProductStore(state => state.setFilters);
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const searchValue = e.target.value;
+      setFilters({ search: searchValue });
+
+      analytics(
+        'product_search_applied',
+        {
+          search_length: searchValue.length,
+          has_search: Boolean(searchValue),
+        },
+        'medium'
+      );
+    },
+    [setFilters, analytics]
+  );
+
+  const handleCategoryChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const categoryValue = e.target.value || undefined;
+      setFilters({ category: categoryValue });
+
+      analytics(
+        'product_category_filter_applied',
+        {
+          category: categoryValue || 'all',
+        },
+        'medium'
+      );
+    },
+    [setFilters, analytics]
+  );
+
+  const handleStatusChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const statusValue = e.target.value;
+      const isActive =
+        statusValue === 'active' ? true : statusValue === 'inactive' ? false : undefined;
+      setFilters({ isActive });
+
+      analytics(
+        'product_status_filter_applied',
+        {
+          status: statusValue || 'all',
+        },
+        'medium'
+      );
+    },
+    [setFilters, analytics]
+  );
+
+  const handleSortByChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const sortByValue = e.target.value as 'name' | 'price' | 'createdAt' | 'isActive';
+      setFilters({ sortBy: sortByValue });
+
+      analytics(
+        'product_sort_applied',
+        {
+          sort_by: sortByValue,
+        },
+        'medium'
+      );
+    },
+    [setFilters, analytics]
+  );
+
+  const handleSortOrderChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const sortOrderValue = e.target.value as 'asc' | 'desc';
+      setFilters({ sortOrder: sortOrderValue });
+
+      analytics(
+        'product_sort_order_applied',
+        {
+          sort_order: sortOrderValue,
+        },
+        'medium'
+      );
+    },
+    [setFilters, analytics]
+  );
+
+  return (
+    <Card className="p-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div>
+          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+            Search
+          </label>
+          <Input
+            id="search"
+            type="text"
+            placeholder="Search products..."
+            value={filters.search || ''}
+            onChange={handleSearchChange}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+            Category
+          </label>
+          <select
+            id="category"
+            value={filters.category || ''}
+            onChange={handleCategoryChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">All Categories</option>
+            <option value="electronics">Electronics</option>
+            <option value="clothing">Clothing</option>
+            <option value="books">Books</option>
+            <option value="home">Home & Garden</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+            Status
+          </label>
+          <select
+            id="status"
+            value={filters.isActive !== undefined ? (filters.isActive ? 'active' : 'inactive') : ''}
+            onChange={handleStatusChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 mb-1">
+            Sort By
+          </label>
+          <select
+            id="sortBy"
+            value={filters.sortBy}
+            onChange={handleSortByChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="name">Name</option>
+            <option value="price">Price</option>
+            <option value="createdAt">Created Date</option>
+            <option value="updatedAt">Updated Date</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="sortOrder" className="block text-sm font-medium text-gray-700 mb-1">
+            Sort Order
+          </label>
+          <select
+            id="sortOrder"
+            value={filters.sortOrder}
+            onChange={handleSortOrderChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
         </div>
       </div>
     </Card>
-  </div>
-));
-
-interface ExternalPriceRange {
-  min: number | null;
-  max: number | null;
+  );
 }
 
-interface ProductListProps {
-  search?: string;
-  categories?: string[];
-  tags?: string[];
-  priceRange?: ExternalPriceRange;
-  isActive?: boolean;
-  sortBy?: 'name' | 'price' | 'createdAt' | 'updatedAt';
-  sortOrder?: 'asc' | 'desc';
-  showSearch?: boolean;
-  onView?: (productId: string) => void;
-  onEdit?: (product: Product) => void;
-  viewMode?: 'cards' | 'list';
-}
+// Product Table Component
+function ProductTable() {
+  const router = useRouter();
+  const selectedProducts = useProductStore(state => state.selectedProducts);
+  const filters = useProductStore(state => state.filters);
+  const selectAllProducts = useProductStore(state => state.selectAllProducts);
+  const clearSelection = useProductStore(state => state.clearSelection);
+  const toggleProductSelection = useProductStore(state => state.toggleProductSelection);
 
-const ProductList = memo((props: ProductListProps = {}) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [appendedProducts, setAppendedProducts] = useState<Product[]>([]);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const { data, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage } =
+    useInfiniteProductsMigrated({
+      search: filters.search || undefined,
+      category: filters.category || undefined,
+      isActive: filters.isActive,
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+      limit: 50,
+    });
 
-  const { trackOptimized: analytics } = useOptimizedAnalytics();
-  let bridge;
-  try {
-    bridge = useProductManagementBridge();
-  } catch (error) {
-    // Bridge context not available yet - return loading state
+  const products = useMemo(() => {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-sm text-gray-600">Loading product list...</p>
-        </div>
+      data?.pages.flatMap((page: { items: Product[] }) => page.items || []).filter(Boolean) ?? []
+    );
+  }, [data]);
+
+  const allProductIds = useMemo(() => {
+    return products.filter((p: Product) => p && p.id).map((p: Product) => p.id);
+  }, [products]);
+
+  const isAllSelected = useMemo(() => {
+    return (
+      allProductIds.length > 0 && allProductIds.every((id: string) => selectedProducts.includes(id))
+    );
+  }, [allProductIds, selectedProducts]);
+
+  const handleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      clearSelection();
+    } else {
+      selectAllProducts();
+    }
+  }, [isAllSelected, clearSelection, selectAllProducts]);
+
+  const handleProductClick = useCallback(
+    (id: string) => {
+      router.push(`/products/${id}`);
+    },
+    [router]
+  );
+
+  if (isFetching && !data) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
-  // ✅ FIXED: Fix debounced search function with proper dependencies
-  const debouncedSearchFunction = useCallback((term: string) => {
-    const debouncedFn = debounce((searchTerm: string) => {
-      setDebouncedSearch(searchTerm);
-      setCurrentPage(1); // Reset to first page when searching
-    }, 500);
-    debouncedFn(term);
-  }, []);
-
-  // Use React Query hook for data fetching with caching
-  const effectiveSearch = props.search !== undefined ? props.search : debouncedSearch || undefined;
-  const categoryParam =
-    props.categories && props.categories.length > 0 ? props.categories.join(',') : undefined;
-  const tagsParam = props.tags && props.tags.length > 0 ? props.tags.join(',') : undefined;
-  const priceRangeParam =
-    props.priceRange && props.priceRange.min !== null && props.priceRange.max !== null
-      ? `${props.priceRange.min},${props.priceRange.max}`
-      : undefined;
-
-  // Use bridge for product fetching with proper error handling and loading states
-  const [productsData, setProductsData] = useState<{
-    products: Product[];
-    pagination?: any;
-  } | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  // Fetch products using bridge pattern
-  const fetchProductsData = useCallback(async () => {
-    setIsLoading(true);
-    setIsError(false);
-
-    try {
-      const params = {
-        page: currentPage,
-        limit: 50,
-        search: effectiveSearch,
-        category: categoryParam,
-        tags: tagsParam,
-        priceRange: priceRangeParam,
-        isActive: props.isActive,
-        sortBy: props.sortBy ?? 'createdAt',
-        sortOrder: props.sortOrder ?? 'desc',
-      };
-
-      const result = await bridge.fetchProducts(params);
-
-      if (result.success && result.data) {
-        setProductsData({
-          products: result.data,
-          pagination: result.pagination,
-        });
-      } else {
-        setIsError(true);
-        setProductsData(null);
-      }
-    } catch (error) {
-      console.error('Failed to fetch products:', error);
-      setIsError(true);
-      setProductsData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    bridge,
-    currentPage,
-    effectiveSearch,
-    categoryParam,
-    tagsParam,
-    priceRangeParam,
-    props.isActive,
-    props.sortBy,
-    props.sortOrder,
-  ]);
-
-  // Refetch function for manual refresh
-  const refetch = useCallback(() => {
-    fetchProductsData();
-  }, [fetchProductsData]);
-
-  // Load data on mount and when dependencies change
-  React.useEffect(() => {
-    fetchProductsData();
-  }, [fetchProductsData]);
-
-  const data = productsData;
-  const isFetching = isLoading;
-
-  // ✅ FIXED: Fix analytics call with proper type
-  const handleProductView = useCallback(
-    (product: Product) => {
-      analytics('product_viewed', {
-        productId: product.id,
-        productName: product.name,
-        productCategory: product.category,
-        productIsActive: product.isActive,
-      });
-    },
-    [analytics]
-  );
-
-  const handleSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = event.target.value;
-      setSearchTerm(value);
-      debouncedSearchFunction(value);
-    },
-    [debouncedSearchFunction]
-  );
-
-  // Removed unused handlePageChange to satisfy lint rules
-
-  // ✅ FIXED: Remove unnecessary optional chaining
-  const products = useMemo(() => data?.products || [], [data?.products]);
-  const displayProducts = useMemo(() => {
-    const safeProducts = Array.isArray(products) ? products : [];
-    const safeAppendedProducts = Array.isArray(appendedProducts) ? appendedProducts : [];
-    return [...safeProducts, ...safeAppendedProducts];
-  }, [products, appendedProducts]);
-  const totalPages = data?.pagination?.totalPages || 1;
-  const totalProducts = data?.pagination?.total || 0;
-
-  // Track cursor pagination
-  if (data?.pagination) {
-    // setSync inside render avoided; using derived values and button state from data
-  }
-
-  const loadMore = useCallback(async () => {
-    const cursor = data?.pagination?.nextCursor;
-    if (!cursor) return;
-    try {
-      const qp = new URLSearchParams();
-      qp.set('limit', '50');
-      if (effectiveSearch) qp.set('search', String(effectiveSearch));
-      if (categoryParam) qp.set('category', categoryParam);
-      if (tagsParam) qp.set('tags', tagsParam);
-      if (priceRangeParam) qp.set('priceRange', priceRangeParam);
-      if (props.isActive !== undefined) qp.set('isActive', String(props.isActive));
-      qp.set('sortBy', props.sortBy ?? 'createdAt');
-      qp.set('sortOrder', props.sortOrder ?? 'desc');
-      qp.set('cursor', cursor);
-      interface ProductsPage {
-        success: boolean;
-        data: {
-          products: Product[];
-          pagination?: { hasMore?: boolean; nextCursor?: string | null };
-        };
-      }
-      const result = await bridge.fetchProducts({
-        page: currentPage + 1,
-        limit: 50,
-        search: effectiveSearch,
-        category: categoryParam,
-        tags: tagsParam,
-        priceRange: priceRangeParam,
-        isActive: props.isActive,
-        sortBy: props.sortBy ?? 'createdAt',
-        sortOrder: props.sortOrder ?? 'desc',
-      });
-
-      if (result.success && result.data) {
-        // ✅ FIXED: Safe array spread with proper type checking
-        const newItems = Array.isArray(result.data) ? result.data : [];
-        const prevItems = Array.isArray(appendedProducts) ? appendedProducts : [];
-        setAppendedProducts([...prevItems, ...newItems]);
-        setHasMore(Boolean(result.pagination?.hasNextPage));
-      }
-    } catch (error) {
-      console.error('Failed to load more products:', error);
-    }
-  }, [
-    bridge,
-    currentPage,
-    effectiveSearch,
-    categoryParam,
-    tagsParam,
-    priceRangeParam,
-    props.isActive,
-    props.sortBy,
-    props.sortOrder,
-  ]);
-
-  if (isLoading) {
+  if (error) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <ProductSkeleton key={index} />
-        ))}
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="text-center py-12">
-        <div className="text-red-600 mb-4">Failed to load products</div>
-        <Button onClick={() => refetch()}>Retry</Button>
+      <div className="text-center py-8">
+        <p className="text-red-600">
+          Error loading products: {error instanceof Error ? error.message : 'Unknown error'}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Search Section (hidden when controlled by parent) */}
-      {(props.showSearch ?? true) && (
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-      )}
+    <Card className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="w-12 px-6 py-3 text-left">
+                <Checkbox checked={isAllSelected} onChange={handleSelectAll} />
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Product
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                SKU
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Category
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Price
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Created
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {products.map((product: Product) => {
+              const firstImage =
+                product.images && product.images.length > 0 ? product.images[0] : null;
+              const categoryDisplay = Array.isArray(product.category)
+                ? product.category.join(', ')
+                : product.category;
 
-      {/* Product Grid / List */}
-      <div
-        className={
-          props.viewMode === 'list'
-            ? 'divide-y divide-gray-200 bg-white rounded-lg border'
-            : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-        }
-      >
-        {displayProducts.map((product: Product) =>
-          props.viewMode === 'list' ? (
-            <div
-              key={product.id}
-              className="px-3 py-2 md:px-4 md:py-3 hover:bg-gray-50 focus-within:bg-gray-50 transition-colors"
-            >
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-5 md:col-span-4 min-w-0">
-                  <div className="text-sm font-medium text-gray-900 truncate">{product.name}</div>
-                  <div className="text-[11px] text-gray-500 truncate">
-                    {product.category || 'No category'}
-                  </div>
-                </div>
-                <div className="col-span-3 md:col-span-2 text-sm text-gray-700">
-                  {(product.currency as string) || 'USD'} {(product.price as number) || 0}
-                </div>
-                <div className="col-span-4 md:col-span-2 text-[11px] text-gray-500 truncate">
-                  SKU: {product.sku}
-                </div>
-                <div className="hidden md:block md:col-span-2">
-                  <span
-                    className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${getStatusBadgeColor(Boolean(product.isActive))}`}
-                  >
-                    {Boolean(product.isActive) ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <div className="col-span-4 md:col-span-2 flex justify-end space-x-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      handleProductView(product);
-                      if (props.onView) props.onView(product.id);
-                    }}
-                    className="p-1 min-h-[36px] min-w-[36px] md:min-h-[44px] md:min-w-[44px]"
-                    aria-label={`View ${product.name}`}
-                    title={`View ${product.name}`}
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      analytics('product_edit_clicked', {
-                        productId: product.id,
-                        productName: product.name,
-                      });
-                      if (props.onEdit) props.onEdit(product);
-                    }}
-                    className="p-1 min-h-[36px] min-w-[36px] md:min-h-[44px] md:min-w-[44px]"
-                    aria-label={`Edit ${product.name}`}
-                    title={`Edit ${product.name}`}
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <Card key={product.id} className={'hover:shadow-lg transition-shadow'}>
-              {/* Thumbnail (Next/Image for LCP/CLS per CORE_REQUIREMENTS) */}
-              {Array.isArray(product.images) && product.images.length > 0 ? (
-                <div className="relative w-full h-32 bg-gray-50 border-b">
-                  <Image
-                    src={product.images[0]}
-                    alt={`${product.name} image`}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-cover"
-                    priority={false}
-                  />
-                </div>
-              ) : (
-                <div className="w-full h-32 bg-gray-100 border-b flex items-center justify-center text-gray-400 text-xs">
-                  No image
-                </div>
-              )}
-              <div className={'p-6'}>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{product.name}</h3>
-                    <p className="text-sm text-gray-500">{product.category || 'No category'}</p>
-                  </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(Boolean(product.isActive))}`}
-                  >
-                    {Boolean(product.isActive) ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <div className="space-y-1.5">
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">Price:</span>{' '}
-                    {(product.currency as string) || 'USD'} {(product.price as number) || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">SKU:</span> {(product.sku as string) || 'N/A'}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">Version:</span>{' '}
-                    {(product.version as string) || '1.0'}
-                  </div>
-                </div>
-                <div className="flex justify-between items-center mt-4">
-                  <span className="text-xs text-gray-500">
-                    Updated {new Date(product.updatedAt).toLocaleDateString()}
-                  </span>
-                  <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        handleProductView(product);
-                        if (props.onView) props.onView(product.id);
-                      }}
-                      className="p-1 min-h-[44px] min-w-[44px]"
-                      aria-label={`View ${product.name}`}
-                      title={`View ${product.name}`}
-                    >
-                      <EyeIcon className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        analytics('product_edit_clicked', {
-                          productId: product.id,
-                          productName: product.name,
-                        });
-                        if (props.onEdit) props.onEdit(product);
-                      }}
-                      className="p-1 min-h-[44px] min-w-[44px]"
-                      aria-label={`Edit ${product.name}`}
-                      title={`Edit ${product.name}`}
-                    >
-                      <PencilIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )
-        )}
+              return (
+                <tr
+                  key={product.id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleProductClick(product.id)}
+                >
+                  <td className="w-12 px-6 py-4" onClick={e => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedProducts.includes(product.id)}
+                      onChange={() => toggleProductSelection(product.id)}
+                    />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10">
+                        {firstImage ? (
+                          <img
+                            className="h-10 w-10 rounded-lg object-cover"
+                            src={firstImage}
+                            alt={product.name}
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-500 text-xs font-medium">
+                              {product.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                        <div className="text-sm text-gray-500">{product.description}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {product.sku}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {categoryDisplay}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${product.price.toFixed(2)} {product.currency}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Badge variant={product.isActive ? 'success' : 'secondary'}>
+                      {product.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(product.createdAt).toLocaleDateString()}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
-      {/* Load More */}
-      {(data?.pagination?.hasMore || hasMore) && (
-        <div className="flex justify-center">
-          <Button onClick={loadMore} variant="secondary">
-            Load More
+      {hasNextPage && (
+        <div className="px-6 py-4 border-t border-gray-200">
+          <Button
+            variant="outline"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="w-full"
+          >
+            {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
           </Button>
         </div>
       )}
+    </Card>
+  );
+}
 
-      {/* Results Summary */}
-      <div className="text-center text-sm text-gray-500">
-        Showing {products.length} of {totalProducts} products
-        {isFetching && <span className="ml-2">(Refreshing...)</span>}
-      </div>
+// Main Product List Component
+export default function ProductList() {
+  return (
+    <div className="space-y-6">
+      <ProductListHeader />
+      <ProductFilters />
+      <ProductTable />
     </div>
   );
-});
-
-// ✅ FIXED: Remove unnecessary conditional and use boolean for isActive
-const getStatusBadgeColor = (isActive: boolean) => {
-  return isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-};
-
-ProductList.displayName = 'ProductList';
-
-export default ProductList;
+}

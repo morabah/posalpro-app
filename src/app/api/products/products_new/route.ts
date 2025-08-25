@@ -1,17 +1,16 @@
 /**
- * Product API Routes - Modern Architecture
- * User Story: US-4.1 (Product Management)
- * Hypothesis: H5 (Modern data fetching improves performance and user experience)
+ * PosalPro MVP2 - Products API Routes (New Architecture)
+ * Enhanced product management with authentication, RBAC, and analytics
+ * Component Traceability: US-4.1, H5
  */
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
-// Static schemas for API routes
+// Validation schemas
 const ProductQuerySchema = z.object({
   search: z.string().trim().default(''),
   limit: z.coerce.number().min(1).max(100).default(20),
@@ -19,12 +18,12 @@ const ProductQuerySchema = z.object({
   sortBy: z.enum(['createdAt', 'name', 'price', 'isActive']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   category: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
+  isActive: z.boolean().optional(),
 });
 
 const ProductCreateSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
+  name: z.string().min(1, 'Product name is required').max(200),
+  description: z.string().max(1000).optional(),
   price: z.number().positive('Price must be positive'),
   currency: z.string().default('USD'),
   sku: z.string().min(1, 'SKU is required'),
@@ -38,10 +37,12 @@ const ProductCreateSchema = z.object({
   userStoryMappings: z.array(z.string()).default([]),
 });
 
-// GET /api/products - Retrieve products with filtering and cursor pagination
+const ProductUpdateSchema = ProductCreateSchema.partial();
+
+// GET /api/products_new - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(
   {
-    roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+    roles: ['admin', 'sales', 'viewer', 'System Administrator', 'Administrator'],
     query: ProductQuerySchema,
   },
   async ({ query, user }) => {
@@ -54,13 +55,12 @@ export const GET = createRoute(
       });
 
       // Build where clause
-      const where: Record<string, unknown> = {};
+      const where: any = {};
 
       if (query!.search) {
         where.OR = [
           { name: { contains: query!.search, mode: 'insensitive' } },
           { description: { contains: query!.search, mode: 'insensitive' } },
-          { sku: { contains: query!.search, mode: 'insensitive' } },
         ];
       }
 
@@ -73,7 +73,7 @@ export const GET = createRoute(
       }
 
       // Build order by
-      const orderBy: Array<Record<string, string>> = [{ [query!.sortBy]: query!.sortOrder }];
+      const orderBy: any = [{ [query!.sortBy]: query!.sortOrder }];
 
       // Add secondary sort for cursor pagination
       if (query!.sortBy !== 'createdAt') {
@@ -89,7 +89,6 @@ export const GET = createRoute(
           description: true,
           price: true,
           currency: true,
-          sku: true,
           category: true,
           tags: true,
           attributes: true,
@@ -102,26 +101,27 @@ export const GET = createRoute(
           updatedAt: true,
         },
         orderBy,
-        take: query!.limit + 1,
-        cursor: query!.cursor ? { id: query!.cursor } : undefined,
-        skip: query!.cursor ? 1 : 0,
+        take: query!.limit + 1, // Take one extra to check if there are more
+        ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
       });
 
-      const hasMore = rows.length > query!.limit;
-      const items = hasMore ? rows.slice(0, -1) : rows;
-      const nextCursor = hasMore ? items[items.length - 1]?.id || null : null;
+      // Determine if there are more pages
+      const hasNextPage = rows.length > query!.limit;
+      const nextCursor = hasNextPage ? rows[query!.limit - 1].id : null;
+      const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
 
-      return Response.json(
-        ok({
-          items,
-          nextCursor,
-        })
-      );
+      logInfo('Products fetched successfully', {
+        component: 'ProductAPI',
+        operation: 'GET',
+        count: items.length,
+        hasNextPage,
+      });
+
+      return Response.json(ok({ items, nextCursor }));
     } catch (error) {
       logError('Failed to fetch products', {
         component: 'ProductAPI',
         operation: 'GET',
-        userId: user.id,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
@@ -129,10 +129,10 @@ export const GET = createRoute(
   }
 );
 
-// POST /api/products - Create new product
+// POST /api/products_new - Create new product
 export const POST = createRoute(
   {
-    roles: ['admin', 'manager', 'System Administrator', 'Administrator'],
+    roles: ['admin', 'sales', 'System Administrator', 'Administrator'],
     body: ProductCreateSchema,
   },
   async ({ body, user }) => {
@@ -144,27 +144,23 @@ export const POST = createRoute(
         productName: body!.name,
       });
 
-      // Check for duplicate SKU
-      const existingProduct = await prisma.product.findUnique({
-        where: { sku: body!.sku },
-        select: { id: true },
-      });
-
-      if (existingProduct) {
-        throw new Error(`Product with SKU ${body!.sku} already exists`);
-      }
-
-      // Create product
       const product = await prisma.product.create({
         data: {
-          ...body!,
-          attributes: body!.attributes ? (body!.attributes as Prisma.InputJsonValue) : undefined,
-          usageAnalytics: {
-            createdBy: user.id,
-            createdAt: new Date().toISOString(),
-            hypothesis: ['H5'],
-            userStories: ['US-4.1'],
-          },
+          name: body!.name,
+          description: body!.description,
+          price: body!.price,
+          currency: body!.currency,
+          sku: body!.sku,
+          category: body!.category,
+          tags: body!.tags,
+          attributes: body!.attributes ? JSON.parse(JSON.stringify(body!.attributes)) : undefined,
+          images: body!.images,
+          isActive: body!.isActive,
+          version: body!.version,
+          usageAnalytics: body!.usageAnalytics
+            ? JSON.parse(JSON.stringify(body!.usageAnalytics))
+            : undefined,
+          userStoryMappings: body!.userStoryMappings,
         },
         select: {
           id: true,
@@ -172,7 +168,6 @@ export const POST = createRoute(
           description: true,
           price: true,
           currency: true,
-          sku: true,
           category: true,
           tags: true,
           attributes: true,
@@ -186,12 +181,17 @@ export const POST = createRoute(
         },
       });
 
-      return Response.json(ok(product), { status: 201 });
+      logInfo('Product created successfully', {
+        component: 'ProductAPI',
+        operation: 'POST',
+        productId: product.id,
+      });
+
+      return Response.json(ok(product));
     } catch (error) {
       logError('Failed to create product', {
         component: 'ProductAPI',
         operation: 'POST',
-        userId: user.id,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
