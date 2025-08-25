@@ -41,6 +41,10 @@
     "src/**/*.backup.*",
     "src/**/*backup*.*",
     "src/**/*backup*",
-    "src/app/(dashboard)/proposals/manage/page-new.tsx"
+    "src/app/(dashboard)/proposals/manage/page-new.tsx",
+    "archive/**",
+    "src/archived/**",
+    "temp-migration/**",
+    "backups/**"
   ]
 }

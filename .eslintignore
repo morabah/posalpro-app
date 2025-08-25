@@ -6,3 +6,12 @@
 **/__tests__/**
 **/__mocks__/**
 **/__snapshots__/**
+
+# Ignore archived and backup files
+archive/**
+src/archived/**
+temp-migration/**
+backups/**
+**/*.backup.*
+**/*backup*.*
+**/*backup*

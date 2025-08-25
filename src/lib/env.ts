@@ -288,10 +288,8 @@ class EnvironmentManager {
       const apiBaseUrl = this.getEnvVar('API_BASE_URL', {
         required: false,
         default: isDevelopment
-          ? 'http://localhost:3000/api'
-          : isProduction
-            ? 'https://posalpro-mvp2.windsurf.build/api'
-            : '/api',
+          ? `http://localhost:3000/api` // Standard development port
+          : '/api',
         type: 'string',
       }) as string;
 

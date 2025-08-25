@@ -55,6 +55,19 @@ const baseConfig = {
 
   // ✅ CRITICAL: Simplified webpack configuration for stability
   webpack: (config, { dev, isServer }) => {
+    // Exclude archived files from build
+    config.module.rules.push({
+      test: /\.(ts|tsx|js|jsx)$/,
+      exclude: [
+        /archive\//,
+        /src\/archived\//,
+        /temp-migration\//,
+        /backups\//,
+        /\.backup\./,
+        /backup/,
+      ],
+    });
+
     // Harden dev rebuild behavior to avoid Chrome-only Fast Refresh module issues
     if (dev) {
       // Disable persistent file cache and snapshots that can go stale in Chrome HMR cycles
@@ -108,7 +121,10 @@ const baseConfig = {
           { key: 'Cache-Control', value: 'public, max-age=60, s-maxage=300' },
           { key: 'Access-Control-Allow-Origin', value: '*' },
           { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, PATCH, OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-Requested-With' },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization, X-Requested-With',
+          },
           { key: 'Access-Control-Max-Age', value: '86400' },
         ],
       },

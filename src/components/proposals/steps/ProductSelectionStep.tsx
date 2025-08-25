@@ -256,21 +256,17 @@ export function ProductSelectionStep({
       setError(null);
 
       const response = await apiClient.get<{
-        success: boolean;
-        data: Product[];
-        pagination: {
-          page: number;
-          limit: number;
-          total: number;
-          totalPages: number;
+        ok: boolean;
+        data: {
+          items: Product[];
+          nextCursor: string | null;
         };
-        filters: Record<string, unknown>;
         message: string;
-      }>('/api/products?page=1&limit=100&isActive=true');
+      }>('/api/products?limit=100&isActive=true');
 
-      if (response.success) {
-        setProducts(response.data);
-        setFilteredProducts(response.data);
+      if (response.ok) {
+        setProducts(response.data.items);
+        setFilteredProducts(response.data.items);
       } else {
         throw new Error('Failed to load products');
       }

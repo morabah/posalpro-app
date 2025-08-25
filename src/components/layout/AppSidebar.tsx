@@ -110,7 +110,12 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     href: '/products',
     icon: CircleStackIcon,
     children: [
-      { id: 'products-catalog', name: 'Product Catalog', href: '/products', icon: CircleStackIcon },
+      {
+        id: 'products-catalog',
+        name: 'Product Catalog',
+        href: '/products',
+        icon: CircleStackIcon,
+      },
       {
         id: 'products-create',
         name: 'Create Product',

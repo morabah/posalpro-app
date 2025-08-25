@@ -15,6 +15,26 @@ export default tseslint.config(
 
   // TypeScript ESLint configurations (untyped base)
   ...tseslint.configs.recommended, // Base untyped TS rules
+
+  // Global ignores for archived and backup files
+  {
+    ignores: [
+      'archive/**',
+      'src/archived/**',
+      'temp-migration/**',
+      'backups/**',
+      '**/*.backup.*',
+      '**/*backup*.*',
+      '**/*backup*',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
+      '**/__tests__/**',
+      '**/__mocks__/**',
+      '**/__snapshots__/**',
+    ],
+  },
   {
     // Customizations for TypeScript rules and ensuring project path
     files: ['**/*.ts', '**/*.tsx'],
@@ -103,7 +123,14 @@ export default tseslint.config(
   },
   // Broader test override: match common Jest patterns
   {
-    files: ['**/__tests__/**', '**/*.test.*', 'src/lib/testing/**', 'src/components/dashboard/analytics/**', 'src/components/dashboard/integrations/**', 'src/components/dashboard/personalization/**'],
+    files: [
+      '**/__tests__/**',
+      '**/*.test.*',
+      'src/lib/testing/**',
+      'src/components/dashboard/analytics/**',
+      'src/components/dashboard/integrations/**',
+      'src/components/dashboard/personalization/**',
+    ],
     languageOptions: {
       parserOptions: {
         // Disable TypeScript project parsing for test files to avoid tsconfig exclusion errors

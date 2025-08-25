@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useProductCategories } from '@/hooks/useProduct';
+import { useProductCategoriesMigrated } from '@/hooks/useProducts';
 import { logDebug } from '@/lib/logger';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -42,7 +42,7 @@ export function CategoryDropdown({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch categories from the system
-  const { data: categoriesData, isLoading, error: fetchError } = useProductCategories();
+  const { data: categoriesData, isLoading, error: fetchError } = useProductCategoriesMigrated();
 
   // Debug logging
   useEffect(() => {
