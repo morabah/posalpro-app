@@ -188,11 +188,11 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       void logDebug('[CustomerProfile] Fetch start', { customerId });
       try {
         const response = await apiClient.get<{
-          success: boolean;
+          ok: boolean;
           data?: CustomerApiResponse;
         }>(`customers/${customerId}`);
 
-        if (!response?.success || !response.data) {
+        if (!response?.ok || !response.data) {
           throw new Error('Failed to fetch customer');
         }
 
