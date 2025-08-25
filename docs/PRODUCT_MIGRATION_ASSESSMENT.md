@@ -502,23 +502,25 @@ export function validateProductField(
 **Enhanced Features (from Customer Migration):**
 
 ```typescript
-// ✅ ENHANCED: Stable primitive query keys
+// ✅ ENHANCED: Stable primitive query keys (IMPORTANT: No objects in queryKey)
 export const qk = {
   products: {
     all: ['products'] as const,
-    lists: () => [...qk.products.all, 'list'] as const,
-    list: (search: string, limit: number, sortBy: string, sortOrder: string) =>
-      [...qk.products.lists(), search, limit, sortBy, sortOrder] as const, // primitives only
-    details: () => [...qk.products.all, 'detail'] as const,
-    detail: (id: string) => [...qk.products.details(), id] as const,
+    list: (
+      search: string,
+      limit: number,
+      sortBy: 'createdAt' | 'name' | 'price' | 'status',
+      sortOrder: 'asc' | 'desc'
+    ) => ['products', 'list', search, limit, sortBy, sortOrder] as const,
+    byId: (id: string) => ['products', 'byId', id] as const,
     search: (query: string, limit: number) =>
-      [...qk.products.all, 'search', query, limit] as const,
+      ['products', 'search', query, limit] as const,
     relationships: (productId: string) =>
-      [...qk.products.detail(productId), 'relationships'] as const,
+      ['products', 'relationships', productId] as const,
   },
 };
 
-// ✅ ENHANCED: useInfiniteProducts with cursor pagination
+// ✅ ENHANCED: useInfiniteProducts with stable query keys
 export function useInfiniteProducts({
   search = '',
   limit = 20,
@@ -552,7 +554,7 @@ export function useInfiniteProducts({
 export function useProductsByIds(ids: string[]) {
   const results = useQueries({
     queries: ids.map(id => ({
-      queryKey: qk.products.detail(id),
+      queryKey: qk.products.byId(id),
       queryFn: () => productService.getProduct(id),
       enabled: !!id,
       staleTime: 60_000,
@@ -1145,6 +1147,180 @@ OLD: http://localhost:3000/products          # Existing implementation
 NEW: http://localhost:3000/products_new      # New implementation
 ```
 
+## 🎯 **Domain-Specific Notes for Products**
+
+### **Transactions: Complex Product Operations**
+
+**When to use `$transaction`:**
+
+1. **Inventory adjustments** - Update product stock and create audit log
+2. **Price changes** - Update price and create price change history
+3. **Variant updates** - Update product variants and relationships
+4. **Bulk operations** - Multiple product updates with consistency
+
+**Example Transaction Pattern:**
+
+```typescript
+await db.$transaction(async (tx) => {
+  // Update product price
+  await tx.product.update({
+    where: { id },
+    data: { price: body.price }
+  });
+
+  // Create price change audit log
+  await tx.priceChange.create({
+    data: {
+      productId: id,
+      newPrice: body.price,
+      userId: user.id,
+      previousPrice: currentProduct.price,
+      changeDate: new Date()
+    }
+  });
+
+  // Update related products if needed
+  if (body.updateRelated) {
+    await tx.product.updateMany({
+      where: { categoryId: currentProduct.categoryId },
+      data: { priceUpdatedAt: new Date() }
+    });
+  }
+});
+```
+
+### **Idempotency for Imports/Bulk Operations**
+
+**For product imports and bulk upserts:**
+
+```typescript
+// Use natural key (SKU) for deduplication
+const existingProduct = await prisma.product.findUnique({
+  where: { sku: productData.sku }
+});
+
+if (existingProduct) {
+  // Update existing product
+  await prisma.product.update({
+    where: { id: existingProduct.id },
+    data: productData
+  });
+} else {
+  // Create new product
+  await prisma.product.create({
+    data: productData
+  });
+}
+
+// Alternative: Use idempotency key
+const idempotencyKey = `${productData.sku}-${Date.now()}`;
+await prisma.product.upsert({
+  where: { sku: productData.sku },
+  update: productData,
+  create: { ...productData, idempotencyKey }
+});
+```
+
+### **Numeric Precision for Prices**
+
+**Database Schema:**
+```sql
+-- Use DECIMAL for prices, avoid FLOAT
+price DECIMAL(10,2) NOT NULL,
+cost DECIMAL(10,2),
+weight DECIMAL(8,3),
+```
+
+**Client-Side Formatting:**
+```typescript
+// Format currency client-side post-mount to avoid hydration drift
+const formatPrice = (price: number) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(price);
+};
+
+// Use in component after mount
+const [formattedPrice, setFormattedPrice] = useState('');
+
+useEffect(() => {
+  setFormattedPrice(formatPrice(product.price));
+}, [product.price]);
+```
+
+### **Cursor Pagination Best Practices**
+
+**Keep consistent contract:**
+```typescript
+// Always return { items, nextCursor } format
+return Response.json(ok({
+  items: products,
+  nextCursor: hasNextPage ? lastProduct.id : null
+}));
+```
+
+**Avoid page/limit arithmetic in UI:**
+```typescript
+// ❌ Don't do this
+const currentPage = Math.floor(offset / limit) + 1;
+
+// ✅ Use "Load more" pattern
+const { data, fetchNextPage, hasNextPage } = useInfiniteProducts(params);
+```
+
+### **Bulk Operations Strategy**
+
+**Single endpoint for bulk updates:**
+```typescript
+// POST /api/products/bulk-update
+export const POST = createRoute(
+  {
+    roles: ['admin'],
+    body: BulkUpdateSchema,
+  },
+  async ({ body, user }) => {
+    const results = await prisma.$transaction(async (tx) => {
+      const updates = body!.updates.map(async (update) => {
+        return await tx.product.update({
+          where: { id: update.id },
+          data: update.data
+        });
+      });
+      return Promise.all(updates);
+    });
+
+    return Response.json(ok({ updated: results.length }));
+  }
+);
+```
+
+**Avoid N API calls:**
+```typescript
+// ❌ Don't do this
+const updatePromises = productIds.map(id =>
+  updateProduct(id, updateData)
+);
+
+// ✅ Do this
+const result = await bulkUpdateProducts(productIds, updateData);
+```
+
+### **Zustand Usage in Product Components**
+
+**Use selectors + shallow:**
+```typescript
+// ✅ Correct usage
+import { shallow } from 'zustand/shallow';
+
+const filters = useProductStore(productSelectors.filters, shallow);
+const sorting = useProductStore(productSelectors.sorting, shallow);
+const view = useProductStore(productSelectors.view, shallow);
+
+// ❌ Avoid broad subscriptions
+const { filters, sorting, view } = useProductStore(); // This causes unnecessary re-renders
+```
+
 ## 🎯 **Enhanced Migration Benefits (from Customer Migration)**
 
 ### **Performance Improvements**
@@ -1664,3 +1840,88 @@ This enhanced Product Migration Assessment leverages all the successful patterns
 and lessons learned from the Customer migration, ensuring a smooth and
 successful transition to the modern architecture while preserving all existing
 functionality including the complex relationship management features.
+
+## 🚀 **Quick Acceptance Gate for Products**
+
+### **Server Boundary Verification**
+
+```bash
+# Check all routes use createRoute wrapper
+rg -n "export const (GET|POST|PATCH|DELETE)" src/app/api/products | rg -v "createRoute\\("
+
+# Verify RBAC roles are defined
+rg -n "roles:\\s*\\[" src/app/api/products
+
+# Verify x-request-id is included
+rg -n "x-request-id" src/app/api/products
+
+# Verify Zod schemas are defined
+rg -n "z\\.object\\(" src/features/products/schemas.ts
+
+# Verify ApiResponse/ok wrapper is used
+rg -n "ApiResponse<|ok\\(" src/app/api/products
+```
+
+### **Pagination & Hooks Verification**
+
+```bash
+# Verify cursor pagination implementation
+rg -n "nextCursor" src/app/api/products src/features/products
+
+# Verify useInfiniteQuery usage
+rg -n "useInfiniteQuery\\(" src/features/products
+
+# Verify stable primitive query keys (no objects)
+rg -n "queryKey:\\s*\\[" src/features/products | rg -v "{"
+
+# Verify useQueries for multi-ID fetching
+rg -n "useQueries\\(" src/features/products
+
+# Verify bulk delete endpoint exists
+rg -n "/bulk-delete" src/app/api/products src/features/products
+```
+
+### **Zustand & Layout Verification**
+
+```bash
+# Verify shallow comparison usage
+rg -n "from 'zustand/shallow'|from \"zustand/shallow\"" src/features/products
+
+# Verify provider stack order
+rg -n "QueryProvider|SessionProvider|Toaster" src/app/\(dashboard\)/layout.tsx
+```
+
+### **Expected Results**
+
+- **Server boundary commands**: First command should produce no lines; others should show usage in product routes
+- **Pagination & hooks commands**: Should show implementation of cursor pagination, infinite queries, stable keys, and bulk operations
+- **Zustand & layout commands**: Should show shallow usage and correct provider order
+
+### **Domain-Specific Verification for Products**
+
+```bash
+# Verify transaction usage for complex operations
+rg -n "\\$transaction\\(" src/app/api/products
+
+# Verify relationship management endpoints
+rg -n "relationships" src/app/api/products src/features/products
+
+# Verify product-specific validation schemas
+rg -n "productValidationSchema" src/lib/validation
+
+# Verify form validation hook usage
+rg -n "useFormValidation" src/components/products
+```
+
+### **Success Criteria**
+
+✅ **All server boundary commands pass** - Routes use createRoute, RBAC, logging, schemas, and response wrappers
+✅ **All pagination & hooks commands pass** - Cursor pagination, infinite queries, stable keys, bulk operations implemented
+✅ **All Zustand & layout commands pass** - Shallow comparison and correct provider order
+✅ **All domain-specific commands pass** - Transactions, relationships, validation, and form handling implemented
+✅ **Zero TypeScript errors** - `npm run type-check` passes
+✅ **Zero linting errors** - `npm run lint` passes
+✅ **All tests pass** - `npm test` passes
+✅ **Performance benchmarks met** - Bundle size, load times, memory usage within targets
+✅ **User experience preserved** - All existing functionality works including relationship management
+✅ **Enhanced features working** - Global form verification, analytics, error handling all functional
