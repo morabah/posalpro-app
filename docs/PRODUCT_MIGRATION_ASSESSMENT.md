@@ -77,6 +77,12 @@
    - useProduct.ts vs useProducts.ts (overlapping hooks)
    - Multiple validation schemas
 
+5. **Type Safety Issues:**
+   - Extensive use of "any" types throughout the codebase
+   - API response format mismatches between routes and components
+   - Inconsistent type definitions between bridge and direct implementations
+   - Missing TypeScript strict mode compliance
+
 ## 🚀 **Migration Strategy (Enhanced from Customer Migration)**
 
 ### **Phase 1: Infrastructure Setup (Week 1)**
@@ -1147,6 +1153,226 @@ OLD: http://localhost:3000/products          # Existing implementation
 NEW: http://localhost:3000/products_new      # New implementation
 ```
 
+## 🚨 **CRITICAL: API Response Format Consistency & Type Safety**
+
+### **⚠️ Customer Migration Lessons Learned - AVOID THESE ERRORS**
+
+#### **❌ Common API Response Format Mismatch Error**
+
+```typescript
+// ❌ WRONG: Component expects old format
+const response = await apiClient.get<{
+  success: boolean;
+  data?: CustomerApiResponse;
+}>(`customers/${customerId}`);
+
+if (!response?.success || !response.data) {
+  throw new Error('Failed to fetch customer');
+}
+
+// ✅ CORRECT: Component uses new ApiResponse format
+const response = await apiClient.get<{
+  ok: boolean;
+  data?: CustomerApiResponse;
+}>(`customers/${customerId}`);
+
+if (!response?.ok || !response.data) {
+  throw new Error('Failed to fetch customer');
+}
+```
+
+#### **❌ "any" Type Usage - STRICTLY FORBIDDEN**
+
+```typescript
+// ❌ WRONG: Using "any" types
+const handleFieldChange = (fieldName: string, value: any) => {
+  // ...
+};
+
+const customValidation = (value: any) => {
+  // ...
+};
+
+// ✅ CORRECT: Proper TypeScript types
+const handleFieldChange = (fieldName: string, value: unknown) => {
+  // ...
+};
+
+const customValidation = (value: unknown) => {
+  if (typeof value === 'number') {
+    return value > 0 ? null : 'Value must be positive';
+  }
+  return 'Invalid value type';
+};
+```
+
+### **✅ Product Migration Type Safety Requirements**
+
+#### **1. API Response Format Standardization**
+
+```typescript
+// ✅ MANDATORY: All API routes MUST use ApiResponse format
+export const GET = createRoute(
+  { roles: ['admin', 'sales'] },
+  async ({ req, user }) => {
+    const product = await prisma.product.findUnique({ where: { id } });
+    return Response.json(ok(product)); // { ok: true, data: product }
+  }
+);
+
+// ✅ MANDATORY: All components MUST expect ApiResponse format
+const response = await apiClient.get<{
+  ok: boolean;
+  data?: ProductApiResponse;
+}>(`products/${productId}`);
+
+if (!response?.ok || !response.data) {
+  throw new Error('Failed to fetch product');
+}
+```
+
+#### **2. Strict TypeScript Compliance**
+
+```typescript
+// ✅ MANDATORY: No "any" types allowed
+// ❌ Forbidden: value: any, data: any, response: any
+// ✅ Required: value: unknown, data: ProductData, response: ApiResponse<ProductData>
+
+// ✅ MANDATORY: Proper type guards
+const validateProductData = (data: unknown): data is ProductData => {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'id' in data &&
+    'name' in data &&
+    'price' in data
+  );
+};
+
+// ✅ MANDATORY: Type-safe form validation
+const productValidationSchema = createValidationSchema({
+  name: {
+    required: true,
+    minLength: 2,
+    maxLength: 100,
+    custom: (value: unknown) => {
+      if (typeof value !== 'string') return 'Name must be a string';
+      if (value.length < 2) return 'Name must be at least 2 characters';
+      return null;
+    },
+  },
+  price: {
+    required: true,
+    custom: (value: unknown) => {
+      if (typeof value !== 'number') return 'Price must be a number';
+      if (value <= 0) return 'Price must be positive';
+      return null;
+    },
+  },
+});
+```
+
+#### **3. Response Type Definitions**
+
+```typescript
+// ✅ MANDATORY: Define explicit response types
+export interface ProductApiResponse {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category?: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'DRAFT';
+  sku?: string;
+  weight?: number;
+  dimensions?: string;
+  tags: string[];
+  relationships?: ProductRelationship[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProductListResponse {
+  items: ProductApiResponse[];
+  nextCursor: string | null;
+}
+
+// ✅ MANDATORY: Use in API routes
+return Response.json(ok<ProductApiResponse>(product));
+return Response.json(ok<ProductListResponse>({ items, nextCursor }));
+```
+
+#### **4. Component Type Safety**
+
+```typescript
+// ✅ MANDATORY: Type-safe React Query hooks
+export function useProduct(productId: string) {
+  return useQuery({
+    queryKey: qk.products.byId(productId),
+    queryFn: async (): Promise<ProductApiResponse> => {
+      const response = await apiClient.get<{
+        ok: boolean;
+        data?: ProductApiResponse;
+      }>(`products/${productId}`);
+
+      if (!response?.ok || !response.data) {
+        throw new Error('Failed to fetch product');
+      }
+
+      return response.data;
+    },
+  });
+}
+
+// ✅ MANDATORY: Type-safe form handling
+export function ProductForm() {
+  const { formData, validationErrors, handleFieldChange, handleFieldBlur } =
+    useFormValidation<ProductEditData>(
+      initialProductData,
+      productValidationSchema
+    );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Type-safe validation
+    const errors = validateProductData(formData);
+    if (Object.keys(errors).length > 0) return;
+
+    await updateProduct(formData);
+  };
+}
+```
+
+### **🔍 Verification Commands for Type Safety**
+
+```bash
+# Check for "any" types (should return no results)
+grep -r "any" src/features/products src/components/products src/hooks/useProducts.ts | grep -v "//.*any"
+
+# Check API response format consistency
+grep -r "success.*boolean" src/features/products src/components/products
+grep -r "ok.*boolean" src/app/api/products
+
+# Check TypeScript strict mode compliance
+npm run type-check
+
+# Check for proper type imports
+grep -r "import.*ProductApiResponse" src/features/products src/components/products
+```
+
+### **🚨 Type Safety Checklist**
+
+- [ ] **Zero "any" types** in Product migration code
+- [ ] **All API routes** use `ok()` wrapper and return `{ ok: true, data: ... }`
+- [ ] **All components** expect `{ ok: boolean, data?: ... }` format
+- [ ] **Explicit type definitions** for all API responses
+- [ ] **Type guards** for runtime validation
+- [ ] **Strict TypeScript compliance** with no errors
+- [ ] **Form validation** uses proper types (not "any")
+- [ ] **React Query hooks** have explicit return types
+- [ ] **Error handling** uses typed error objects
+
 ## 🎯 **Domain-Specific Notes for Products**
 
 ### **Transactions: Complex Product Operations**
@@ -1161,11 +1387,11 @@ NEW: http://localhost:3000/products_new      # New implementation
 **Example Transaction Pattern:**
 
 ```typescript
-await db.$transaction(async (tx) => {
+await db.$transaction(async tx => {
   // Update product price
   await tx.product.update({
     where: { id },
-    data: { price: body.price }
+    data: { price: body.price },
   });
 
   // Create price change audit log
@@ -1175,15 +1401,15 @@ await db.$transaction(async (tx) => {
       newPrice: body.price,
       userId: user.id,
       previousPrice: currentProduct.price,
-      changeDate: new Date()
-    }
+      changeDate: new Date(),
+    },
   });
 
   // Update related products if needed
   if (body.updateRelated) {
     await tx.product.updateMany({
       where: { categoryId: currentProduct.categoryId },
-      data: { priceUpdatedAt: new Date() }
+      data: { priceUpdatedAt: new Date() },
     });
   }
 });
@@ -1196,19 +1422,19 @@ await db.$transaction(async (tx) => {
 ```typescript
 // Use natural key (SKU) for deduplication
 const existingProduct = await prisma.product.findUnique({
-  where: { sku: productData.sku }
+  where: { sku: productData.sku },
 });
 
 if (existingProduct) {
   // Update existing product
   await prisma.product.update({
     where: { id: existingProduct.id },
-    data: productData
+    data: productData,
   });
 } else {
   // Create new product
   await prisma.product.create({
-    data: productData
+    data: productData,
   });
 }
 
@@ -1217,13 +1443,14 @@ const idempotencyKey = `${productData.sku}-${Date.now()}`;
 await prisma.product.upsert({
   where: { sku: productData.sku },
   update: productData,
-  create: { ...productData, idempotencyKey }
+  create: { ...productData, idempotencyKey },
 });
 ```
 
 ### **Numeric Precision for Prices**
 
 **Database Schema:**
+
 ```sql
 -- Use DECIMAL for prices, avoid FLOAT
 price DECIMAL(10,2) NOT NULL,
@@ -1232,12 +1459,13 @@ weight DECIMAL(8,3),
 ```
 
 **Client-Side Formatting:**
+
 ```typescript
 // Format currency client-side post-mount to avoid hydration drift
 const formatPrice = (price: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD'
+    currency: 'USD',
   }).format(price);
 };
 
@@ -1252,15 +1480,19 @@ useEffect(() => {
 ### **Cursor Pagination Best Practices**
 
 **Keep consistent contract:**
+
 ```typescript
 // Always return { items, nextCursor } format
-return Response.json(ok({
-  items: products,
-  nextCursor: hasNextPage ? lastProduct.id : null
-}));
+return Response.json(
+  ok({
+    items: products,
+    nextCursor: hasNextPage ? lastProduct.id : null,
+  })
+);
 ```
 
 **Avoid page/limit arithmetic in UI:**
+
 ```typescript
 // ❌ Don't do this
 const currentPage = Math.floor(offset / limit) + 1;
@@ -1272,6 +1504,7 @@ const { data, fetchNextPage, hasNextPage } = useInfiniteProducts(params);
 ### **Bulk Operations Strategy**
 
 **Single endpoint for bulk updates:**
+
 ```typescript
 // POST /api/products/bulk-update
 export const POST = createRoute(
@@ -1280,11 +1513,11 @@ export const POST = createRoute(
     body: BulkUpdateSchema,
   },
   async ({ body, user }) => {
-    const results = await prisma.$transaction(async (tx) => {
-      const updates = body!.updates.map(async (update) => {
+    const results = await prisma.$transaction(async tx => {
+      const updates = body!.updates.map(async update => {
         return await tx.product.update({
           where: { id: update.id },
-          data: update.data
+          data: update.data,
         });
       });
       return Promise.all(updates);
@@ -1296,11 +1529,10 @@ export const POST = createRoute(
 ```
 
 **Avoid N API calls:**
+
 ```typescript
 // ❌ Don't do this
-const updatePromises = productIds.map(id =>
-  updateProduct(id, updateData)
-);
+const updatePromises = productIds.map(id => updateProduct(id, updateData));
 
 // ✅ Do this
 const result = await bulkUpdateProducts(productIds, updateData);
@@ -1309,6 +1541,7 @@ const result = await bulkUpdateProducts(productIds, updateData);
 ### **Zustand Usage in Product Components**
 
 **Use selectors + shallow:**
+
 ```typescript
 // ✅ Correct usage
 import { shallow } from 'zustand/shallow';
@@ -1720,6 +1953,43 @@ onSuccess: (response, ids) => {
 // TODO: Implement production rate limiter
 ```
 
+#### **✅ 15. Type Safety Compliance (CRITICAL)**
+
+```typescript
+// ✅ MANDATORY: Zero "any" types
+// ❌ Forbidden: value: any, data: any, response: any
+// ✅ Required: value: unknown, data: ProductData, response: ApiResponse<ProductData>
+
+// ✅ MANDATORY: API Response Format Consistency
+const response = await apiClient.get<{
+  ok: boolean;
+  data?: ProductApiResponse;
+}>(`products/${productId}`);
+
+if (!response?.ok || !response.data) {
+  throw new Error('Failed to fetch product');
+}
+
+// ✅ MANDATORY: Type-safe form validation
+const productValidationSchema = createValidationSchema({
+  name: {
+    required: true,
+    custom: (value: unknown) => {
+      if (typeof value !== 'string') return 'Name must be a string';
+      return null;
+    },
+  },
+});
+
+// ✅ MANDATORY: Explicit type definitions
+export interface ProductApiResponse {
+  id: string;
+  name: string;
+  price: number;
+  // ... other fields
+}
+```
+
 ## 🚨 **Risk Mitigation (Enhanced from Customer Migration)**
 
 ### **High Risk Areas**
@@ -1893,9 +2163,12 @@ rg -n "QueryProvider|SessionProvider|Toaster" src/app/\(dashboard\)/layout.tsx
 
 ### **Expected Results**
 
-- **Server boundary commands**: First command should produce no lines; others should show usage in product routes
-- **Pagination & hooks commands**: Should show implementation of cursor pagination, infinite queries, stable keys, and bulk operations
-- **Zustand & layout commands**: Should show shallow usage and correct provider order
+- **Server boundary commands**: First command should produce no lines; others
+  should show usage in product routes
+- **Pagination & hooks commands**: Should show implementation of cursor
+  pagination, infinite queries, stable keys, and bulk operations
+- **Zustand & layout commands**: Should show shallow usage and correct provider
+  order
 
 ### **Domain-Specific Verification for Products**
 
@@ -1911,17 +2184,33 @@ rg -n "productValidationSchema" src/lib/validation
 
 # Verify form validation hook usage
 rg -n "useFormValidation" src/components/products
+
+# Verify type safety (should return no results)
+grep -r "any" src/features/products src/components/products src/hooks/useProducts.ts | grep -v "//.*any"
+
+# Verify API response format consistency
+grep -r "success.*boolean" src/features/products src/components/products
+grep -r "ok.*boolean" src/app/api/products
+
+# Verify explicit type definitions
+grep -r "import.*ProductApiResponse" src/features/products src/components/products
 ```
 
 ### **Success Criteria**
 
-✅ **All server boundary commands pass** - Routes use createRoute, RBAC, logging, schemas, and response wrappers
-✅ **All pagination & hooks commands pass** - Cursor pagination, infinite queries, stable keys, bulk operations implemented
-✅ **All Zustand & layout commands pass** - Shallow comparison and correct provider order
-✅ **All domain-specific commands pass** - Transactions, relationships, validation, and form handling implemented
-✅ **Zero TypeScript errors** - `npm run type-check` passes
-✅ **Zero linting errors** - `npm run lint` passes
-✅ **All tests pass** - `npm test` passes
-✅ **Performance benchmarks met** - Bundle size, load times, memory usage within targets
-✅ **User experience preserved** - All existing functionality works including relationship management
-✅ **Enhanced features working** - Global form verification, analytics, error handling all functional
+✅ **All server boundary commands pass** - Routes use createRoute, RBAC,
+logging, schemas, and response wrappers ✅ **All pagination & hooks commands
+pass** - Cursor pagination, infinite queries, stable keys, bulk operations
+implemented ✅ **All Zustand & layout commands pass** - Shallow comparison and
+correct provider order ✅ **All domain-specific commands pass** - Transactions,
+relationships, validation, and form handling implemented ✅ **Zero TypeScript
+errors** - `npm run type-check` passes ✅ **Zero linting errors** -
+`npm run lint` passes ✅ **All tests pass** - `npm test` passes ✅ **Performance
+benchmarks met** - Bundle size, load times, memory usage within targets ✅
+**User experience preserved** - All existing functionality works including
+relationship management ✅ **Enhanced features working** - Global form
+verification, analytics, error handling all functional ✅ **Type safety
+compliance** - Zero "any" types, strict TypeScript compliance ✅ **API response
+format consistency** - All routes use `ok()` wrapper, all components expect
+`{ ok: boolean, data?: ... }` ✅ **Runtime type safety** - Type guards, proper
+validation, no runtime type errors

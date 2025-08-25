@@ -306,12 +306,12 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       });
 
       try {
-        const response = await apiClient.put<{ success: boolean; data?: CustomerApiResponse }>(
+        const response = await apiClient.put<{ ok: boolean; data?: CustomerApiResponse }>(
           `customers/${customerId}`,
           payload
         );
 
-        if (!response?.success || !response.data) {
+        if (!response?.ok || !response.data) {
           throw new Error('Failed to update customer');
         }
 
