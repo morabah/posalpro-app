@@ -68,42 +68,63 @@
 
 ## 🏗️ **ARCHITECTURE & PROVIDERS** {#architecture--providers}
 
-### Bridge Pattern & API Bridges (MANDATORY)
+### Modern Architecture Pattern (MANDATORY)
 
-**🎯 Bridge Pattern (Service Bridge Architecture)**
+**🎯 New Architecture (Service Layer + React Query + Zustand)**
 
-- **Purpose**: Decouple React UI components from backend APIs and state backends
-  by introducing a small, well-typed service layer called _bridges_.
-- **Location**: Implement bridge classes under `src/lib/bridges/` and expose
-  hook wrappers under the same module (e.g., `useProposalBridge`,
-  `useCustomerBridge`).
-- **Shape**: Bridges MUST be implemented as singletons with a `getInstance()` or
-  exported factory and provide a `useXBridge()` hook that:
-  - sets the `apiClient` via `setApiClient(apiClient)`
-  - optionally sets analytics via `setAnalytics(analytics)`
-  - exposes memoized methods for fetch/mutate operations (use `useCallback` /
-    `useMemo`)
+- **Purpose**: Decouple React UI components from backend APIs using a modern,
+  type-safe service layer with React Query for data management and Zustand for
+  UI state.
+- **Location**: Implement service classes under `src/services/` and expose React
+  Query hooks under `src/hooks/` (e.g., `useCustomers`, `useProducts`).
+- **Shape**: Services MUST be implemented as stateless functions with:
+  - Zod validation for all inputs/outputs
+  - Standardized error handling with `ErrorHandlingService`
+  - Structured logging with correlation IDs
+  - RBAC enforcement at API boundaries
 - **API Contract**:
-  - Use standardized response wrapper `AdminApiResponse<T>` /
-    `WorkflowApiResponse<T>` for typed responses where applicable.
-  - Do not return raw `any` — enforce strict interfaces for requests and
-    responses.
+  - Use Zod schemas for request/response validation
+  - Return typed responses with proper error handling
+  - Never return raw `any` — enforce strict interfaces
 - **Error Handling & Logging**:
-  - All bridge catch blocks MUST call `ErrorHandlingService.processError()` and
+  - All service catch blocks MUST call `ErrorHandlingService.processError()` and
     then log using `logError`/`logInfo`/`logDebug` with metadata: `component`,
     `operation`, IDs (e.g., `proposalId`), and traceability (`userStory`,
     `hypothesis`).
-  - Never use `console.*` in bridges or new production code.
+  - Never use `console.*` in services or new production code.
 - **Caching**:
-  - Bridges may implement short in-memory caches (TTL ≤ 30s) for derived or
-    heavy endpoints but **do not** replace React Query; prefer React Query for
-    list caching/invalidation.
-  - Cache keys MUST include parameters and, for user-scoped data, the
-    user/session id when appropriate.
+  - Use React Query for all data caching and invalidation
+  - Implement short-TTL caching (60-120s) for derived/aggregate endpoints only
+  - Cache keys MUST include parameters and user/session context where
+    appropriate
 - **Analytics**:
-  - Bridges should call `analytics.trackOptimized()` where meaningful, including
-    `userStory` and `hypothesis` context; if analytics types mismatch, comment
-    with a `TODO` and avoid unsafe casts.
+  - Call `analytics.trackOptimized()` where meaningful, including `userStory`
+    and `hypothesis` context
+  - Track key interactions via mutation `onSuccess` callbacks
+
+**🔄 Migration Compatibility (Bridge Pattern Legacy Support)**
+
+For teams transitioning from Bridge Pattern, provide compatibility shims:
+
+```typescript
+// src/compat/{{domains}}/{{Domain}}Bridge.ts
+// Wraps {{domain}}Service + hooks and re-exports with "Bridge" naming
+export * from "@/services/{{domain}}Service";
+export * from "@/hooks/use{{Domain}}s";
+export * from "@/lib/store/{{domain}}Store";
+
+// Legacy Bridge compatibility
+export const {{Domain}}Bridge = {
+  getInstance: () => {{domain}}Service,
+  use{{Domain}}Bridge: () => ({
+    ...use{{Domain}}s(),
+    ...use{{Domain}}Store(),
+  }),
+};
+```
+
+This maintains backward compatibility while enabling modern architecture
+adoption.
 
 **📋 Bridge Pattern Templates (MANDATORY)**
 
@@ -201,36 +222,36 @@ cp templates/design-patterns/bridge/bridge-page.template.tsx src/app/(dashboard)
 - **Prefer existing `useX` hooks** under `src/hooks` for simple, single-consumer
   logic.
 
-**Provider Hierarchy & Bridge Hooks (CRITICAL)**
+**Provider Hierarchy & Modern Architecture (CRITICAL)**
 
-- Bridge hooks may rely on Shared Providers (e.g., `GlobalStateProvider`,
-  `QueryProvider`, `AuthProvider`). When migrating pages/components to
-  bridge-based hooks, **ensure the route-group layout includes required
-  providers**.
-- Example required order in `(dashboard)/layout.tsx`:
+- Modern architecture hooks rely on a specific provider stack order. **Ensure
+  the route-group layout includes required providers in the correct order**.
+- Required order in `(dashboard)/layout.tsx`:
   - `TTFBOptimizationProvider` → `WebVitalsProvider` → `SharedAnalyticsProvider`
     → `ClientLayoutWrapper` → `QueryProvider` → `ToastProvider` → `AuthProvider`
-    → `GlobalStateProvider` → `ProtectedLayout`.
-- If a bridge hook calls `useGlobalState()` or `useUIState()`, the
-  `GlobalStateProvider` must wrap the component tree before those hooks execute.
-  Missing provider is a migration blocker (see LESSONS_LEARNED.md: Bridge
-  Provider Issue).
+    → `ProtectedLayout`.
+- **Zustand for UI State**: No provider required for Zustand stores, but if
+  legacy hooks assume a context, add a tiny wrapper or refactor those hooks.
+- **Analytics**: Export a small analytics client and add its provider if needed.
+- Missing providers are migration blockers (see LESSONS_LEARNED.md: Provider
+  Stack Issues).
 
-**Bridge Implementation Checklist (Pre-Implementation, MANDATORY)**
+**Modern Architecture Implementation Checklist (Pre-Implementation, MANDATORY)**
 
-- [ ] **Use Bridge Templates**: Copy and customize templates from
-      `templates/design-patterns/bridge/`
-- [ ] **Replace Placeholders**: Update all template placeholders with
-      entity-specific values
+- [ ] **Use Service Layer Pattern**: Create services under `src/services/` with
+      Zod validation
+- [ ] **Create React Query Hooks**: Implement hooks under `src/hooks/` with
+      proper caching and invalidation
+- [ ] **Implement Zustand Store**: Create UI state stores under `src/lib/store/`
+      with shallow subscriptions
 - [ ] `npm run type-check` → 0 errors
 - [ ] `npm run audit:duplicates` → no duplicate functionality with existing
       services/hooks
-- [ ] Confirm existing patterns in `src/lib/services`, `src/hooks`,
-      `src/components` and reuse before creating a bridge
-- [ ] Design the bridge API with explicit TypeScript interfaces for
-      requests/responses
-- [ ] Implement singleton pattern with lazy initialization (`getInstance()`),
-      and expose a `useXBridge()` hook
+- [ ] Confirm existing patterns in `src/services`, `src/hooks`, `src/components`
+      and reuse before creating new implementations
+- [ ] Design the service API with explicit TypeScript interfaces and Zod schemas
+      for requests/responses
+- [ ] Implement stateless service functions with proper error handling
 - [ ] Ensure `ErrorHandlingService` + `ErrorCodes` usage in all catch blocks
 - [ ] Add structured logs using `logDebug` / `logInfo` / `logError` including
       traceability metadata
@@ -239,25 +260,27 @@ cp templates/design-patterns/bridge/bridge-page.template.tsx src/app/(dashboard)
 - [ ] Update `docs/IMPLEMENTATION_LOG.md` and add a short entry to
       `docs/LESSONS_LEARNED.md` if the migration required layout/provider
       changes
-- [ ] **Verify Template Compliance**: Ensure all template features are properly
-      implemented
+- [ ] **Verify Architecture Compliance**: Ensure all modern patterns are
+      properly implemented
 
-**API Route & RBAC Requirements for Bridges**
+**API Route & RBAC Requirements for Modern Architecture**
 
-- All server-side endpoints used by bridges that are sensitive MUST call
+- All server-side endpoints that are sensitive MUST call
   `validateApiPermission({ resource, action, scope?, context? })` at the top of
   handlers.
-- Bridges must map to existing, RESTful endpoints. If an endpoint does not
-  exist, update the bridge to call the correct endpoint or add the server route;
-  do not invent new client-side-only endpoints.
+- Services must map to existing, RESTful endpoints. If an endpoint does not
+  exist, update the service to call the correct endpoint or add the server
+  route; do not invent new client-side-only endpoints.
+- Use the standardized route wrapper (`createRoute`) for all API routes to
+  ensure consistent logging, error handling, and RBAC enforcement.
 
 **Quality & Compliance**
 
-- Every bridge addition or refactor must pass the standard quality gates (build,
-  type-check, audit duplicates, lints, and basic smoke tests). Document the
-  change in `PROJECT_REFERENCE.md` if a new public API or route is added.
-- **Template Compliance**: All bridges must follow the template patterns for
-  consistency and maintainability.
+- Every service addition or refactor must pass the standard quality gates
+  (build, type-check, audit duplicates, lints, and basic smoke tests). Document
+  the change in `PROJECT_REFERENCE.md` if a new public API or route is added.
+- **Architecture Compliance**: All services must follow the modern architecture
+  patterns for consistency and maintainability.
 
 ---
 
@@ -274,7 +297,23 @@ cases**
   for React Query implementation
 - **Never**: Custom caching systems, direct fetch() calls, complex manual
   loading states
-- Reference: [Lesson #12 in LESSONS_LEARNED.md][memory:3929430536446174589]]
+- Reference: [Lesson #12 in LESSONS_LEARNED.md][memory:3929430536446174589]
+
+**📊 Analytics Integration (MANDATORY)**
+
+- **Analytics Client**: Provide a thin analytics adapter for tracking:
+  ```typescript
+  // src/lib/analytics/index.ts
+  export const analytics = {
+    trackOptimized: (event: string, props?: Record<string, unknown>) => {
+      // route to your analytics (PostHog, Amplitude, etc.)
+    },
+  };
+  ```
+- **Usage**: Call `analytics.trackOptimized()` inside UI handlers
+  (create/update/delete success) or in mutation `onSuccess` callbacks
+- **Context**: Include `userStory`, `hypothesis`, and other traceability
+  metadata
 
 **⚡ List View Performance Optimization (CRITICAL)**
 
@@ -479,6 +518,16 @@ export function useProposals(params: ProposalsQueryParams = {}) {
 - Hierarchical: `['resource', 'type', params]`
 - Parameterized: Include all query parameters that affect results
 - Consistent: Use factory pattern for maintainability
+- **Stable Keys**: Avoid putting raw params objects in keys (identity changes
+  cause extra refetches). Normalize to primitives:
+  ```typescript
+  export const customerKeys = {
+    all: ['customers'] as const,
+    list: (search: string, limit: number, sortBy: string, sortOrder: string) =>
+      ['customers', 'list', search, limit, sortBy, sortOrder] as const,
+    byId: (id: string) => ['customers', 'byId', id] as const,
+  };
+  ```
 
 **🎯 When to Use React Query vs useApiClient:**
 
@@ -507,6 +556,15 @@ const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
     fetchProposals({ cursor: pageParam, ...params }),
   getNextPageParam: lastPage => lastPage.nextCursor,
 });
+
+// Bulk operations (avoid API spam)
+export function useDeleteCustomersBulk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => customerService.deleteBulk(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: customerKeys.all }),
+  });
+}
 ```
 
 **🚫 React Query Anti-Patterns:**
@@ -516,6 +574,8 @@ const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
 - Don't set staleTime to 0 unless data must be real-time
 - Don't use enabled: false without clear UX reasoning
 - Don't mix React Query with manual loading states
+- Don't loop `mutate(id)` for N items - use bulk endpoints and hooks
+- Don't use `getState()` in render paths - use selectors with shallow comparison
 
 ## 🧠 **WIZARD & MEMORY OPTIMIZATION (MANDATORY)**
 
@@ -591,6 +651,9 @@ const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
   for elements that affect structure.
 - Prefer explicit breadcrumb items during SSR for dynamic routes; avoid
   path-dependent branching that yields different trees.
+- **Keep shared wrappers (headers/breadcrumbs) identical across
+  loading/error/success**. Our list component templates do this; ensure your
+  pages keep the same scaffolding.
 
 ### 🧩 Development Build Stability (Chrome Fast Refresh / Webpack)
 
@@ -847,6 +910,9 @@ To guarantee edits persist and reload correctly across create/edit:
     query parameters
   - Caching must be transparent (never serve stale sensitive data)
   - Silent cache failures (no user impact)
+- **Implementation**: Add Cache-Control headers and optional in-memory/Redis
+  60–120s cache for dashboards/history endpoints. Keep auth-scoped keys. Not
+  required for CRUD list/detail routes; do it only where the doc asks.
 
 **✅ Single‑Request Per Interaction (List Views)**
 
@@ -1506,6 +1572,10 @@ class CSRFProtection {
 - Add comprehensive tests with mock implementations
 - Plan graceful fallback for infrastructure failures
 - Follow Security-First Architecture philosophy from Lesson #32
+- **Provider Stack Order**: Wire providers once in layout with correct order:
+  `QueryProvider` → `AuthProvider` → `Analytics` → `Toast` → `Global UI state`
+- **Template Layout**: Copy `(app)/(dashboard)/layout.tsx` to match the doc's
+  order
 
 **🔧 Database Transaction Best Practices:**
 
@@ -1521,11 +1591,23 @@ const [items, count] = await Promise.all([
   prisma.item.findMany({ where: { status: 'ACTIVE' } }),
   prisma.item.count({ where: { status: 'ACTIVE' } }),
 ]);
+
+// ✅ CORRECT: Multi-step writes with idempotency
+const result = await prisma.$transaction(async tx => {
+  const step1 = await tx.step1.create({ data: step1Data });
+  const step2 = await tx.step2.create({
+    data: { ...step2Data, step1Id: step1.id },
+    // Add idempotency key if calling external services
+  });
+  return { step1, step2 };
+});
 ```
 
 **📋 Implementation Requirements:**
 
 - All related database queries MUST use `prisma.$transaction`
+- For multi-step writes add `$transaction()` and (if calling external services)
+  an idempotency key
 - Add indexes on frequently searched text fields
 - Eliminate redundant aggregation calls
 - Monitor database round-trips and connection pool usage

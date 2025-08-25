@@ -369,19 +369,15 @@ class CustomerManagementApiBridge {
         const apiResponse = await apiClient.get<{
           success: boolean;
           data: {
-            customers: Customer[];
-            pagination: {
-              total: number;
-              hasMore: boolean;
-              nextCursor: string | null;
-            };
+            items: Customer[];
+            nextCursor: string | null;
           };
         }>(finalUrl);
 
         // Transform the response to match expected ApiResponse<Customer[]> format
         const response: ApiResponse<Customer[]> = {
           success: apiResponse.success,
-          data: apiResponse.data?.customers || [],
+          data: apiResponse.data?.items || [],
           message: 'Customers fetched successfully',
         };
 

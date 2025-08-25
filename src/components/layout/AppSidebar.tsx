@@ -267,6 +267,12 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     icon: DocumentTextIcon,
     badge: 1,
   },
+  {
+    id: 'validation-demo',
+    name: 'Validation Demo',
+    href: '/validation-demo',
+    icon: DocumentTextIcon,
+  },
 ];
 
 export function AppSidebar({

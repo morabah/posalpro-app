@@ -1,643 +1,318 @@
 /**
- * PosalPro MVP2 - Customers API Routes
- * Enhanced customer management with authentication and analytics
+ * PosalPro MVP2 - Customers API Routes (New Architecture)
+ * Enhanced customer management with authentication, RBAC, and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
- *
- * 🚀 PHASE 6 OPTIMIZATION: Aggressive caching and query optimization
- * Target: Reduce response time from 537ms to <200ms
  */
 
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { ok } from '@/lib/api/response';
+import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
-import {
-  createApiErrorResponse,
-  ErrorCodes,
-  errorHandlingService,
-  StandardError,
-} from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
-import { recordDbLatency, recordError, recordLatency } from '@/lib/observability/metricsStore';
-import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-// ✅ CRITICAL: Performance optimization - Customer cache
-interface CustomerCacheData {
-  success: boolean;
-  data: {
-    customers: Array<{
-      id: string;
-      name: string;
-      email: string | null;
-      status: string;
-      tier: string;
-      industry: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-    }>;
-    pagination: {
-      total: number;
-      hasMore: boolean;
-      nextCursor: string | null;
-    };
-  };
-}
-
-const customerCache = new Map<string, { data: CustomerCacheData; timestamp: number }>();
-const CUSTOMER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_SIZE = 50;
-
-// ✅ CRITICAL: Cache cleanup function
-function cleanupCache() {
-  if (customerCache.size > MAX_CACHE_SIZE) {
-    const entries = Array.from(customerCache.entries());
-    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-    const toDelete = entries.slice(0, Math.floor(MAX_CACHE_SIZE * 0.2));
-    toDelete.forEach(([key]) => customerCache.delete(key));
-  }
-}
-
-// ✅ CRITICAL: Generate cache key for customer queries
-function generateCacheKey(params: Record<string, unknown>): string {
-  return `customers:${JSON.stringify(params)}`;
-}
-
-// ✅ CRITICAL: Get cached customer data
-function getCachedCustomers(cacheKey: string): CustomerCacheData | null {
-  const now = Date.now();
-  const cached = customerCache.get(cacheKey);
-
-  if (cached && now - cached.timestamp < CUSTOMER_CACHE_TTL) {
-    return cached.data;
-  }
-
-  return null;
-}
-
-// ✅ CRITICAL: Cache customer data
-function cacheCustomers(cacheKey: string, data: CustomerCacheData) {
-  customerCache.set(cacheKey, { data, timestamp: Date.now() });
-  cleanupCache();
-}
-
-/**
- * Component Traceability Matrix:
- * - User Stories: US-4.1 (Customer Management), US-4.2 (Customer Relationship)
- * - Acceptance Criteria: AC-4.1.1, AC-4.1.2, AC-4.2.1, AC-4.2.2
- * - Hypotheses: H4 (Cross-Department Coordination), H6 (Requirement Extraction)
- * - Methods: getCustomers(), createCustomer(), searchCustomers()
- * - Test Cases: TC-H4-006, TC-H6-002
- */
-
-/**
- * Validation schemas
- */
-// Database-agnostic ID validation (CORE_REQUIREMENTS.md)
-const databaseIdSchema = z
-  .string()
-  .min(1, 'ID is required')
-  .refine(id => id !== 'undefined' && id !== 'null', {
-    message: 'Valid database ID required',
-  });
-
+// Validation schemas
 const CustomerQuerySchema = z.object({
-  cursor: z.preprocess(val => (val === '' ? undefined : val), databaseIdSchema.nullish()),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(50),
-  search: z.string().optional(),
-  status: z.string().optional(),
-  tier: z.string().optional(),
-  industry: z.string().optional(),
-  fields: z.string().optional(),
-  sortBy: z.enum(['name', 'createdAt', 'updatedAt', 'tier']).default('createdAt'),
+  search: z.string().trim().default(''),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  cursor: z.string().nullable().optional(),
+  sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'status', 'revenue']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  segmentation: z.record(z.unknown()).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']).optional(),
+  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']).optional(),
+  industry: z.string().optional(),
 });
 
 const CustomerCreateSchema = z.object({
   name: z.string().min(1, 'Customer name is required').max(200),
-  email: z.string().email('Invalid email format').optional(),
+  email: z.string().email('Invalid email format'),
   phone: z.string().max(20).optional(),
-  website: z.string().url('Invalid website URL').optional(),
+  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
   address: z.string().max(500).optional(),
   industry: z.string().max(100).optional(),
   companySize: z.string().max(50).optional(),
   revenue: z.number().min(0).optional(),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
+  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']).default('STANDARD'),
   tags: z.array(z.string()).default([]),
-  metadata: z.any().optional(), // Prisma JSON type
-  segmentation: z.any().optional(), // Prisma JSON type
+  metadata: z.record(z.unknown()).optional(),
 });
 
-// Database query interfaces
-interface CustomerWhereClause {
-  status?: string;
-  name?: {
-    contains: string;
-    mode: 'insensitive';
-  };
-  industry?: {
-    contains: string;
-    mode: 'insensitive';
-  };
-  id?: {
-    gt: string;
-  };
-  tier?: string;
-  [key: string]: unknown;
-}
+const CustomerUpdateSchema = CustomerCreateSchema.partial();
 
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-  tier: string;
-  industry: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  [key: string]: unknown;
-}
-
-interface CustomerPaginationResult {
-  customers: Customer[];
-  total: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
-
-/**
- * GET /api/customers - Retrieve customers with filtering and pagination
- */
-export async function GET(request: NextRequest) {
-  await validateApiPermission(request, { resource: 'customers', action: 'read' });
-  const queryStartTime = Date.now();
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  try {
-    const url = new URL(request.url);
-    const searchParams = url.searchParams;
-    const query = CustomerQuerySchema.parse(Object.fromEntries(searchParams));
-
-    // ✅ CRITICAL: Check cache first for performance optimization
-    const cacheKey = generateCacheKey(query);
-    const cachedResult = getCachedCustomers(cacheKey);
-    if (cachedResult) {
-      await logInfo('Customer API cache hit', { cacheKey });
-      return NextResponse.json(cachedResult, {
-        headers: {
-          'Cache-Control': 'public, max-age=300',
-          'X-Cache': 'HIT',
-        },
+// GET /api/customers - Retrieve customers with filtering and cursor pagination
+export const GET = createRoute(
+  {
+    roles: ['admin', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+    query: CustomerQuerySchema,
+  },
+  async ({ query, user }) => {
+    try {
+      logInfo('Fetching customers', {
+        component: 'CustomerAPI',
+        operation: 'GET',
+        userId: user.id,
+        params: query,
       });
-    }
 
-    await logInfo('Customer API fetching from database', { cacheKey });
+      // Build where clause
+      const where: any = {};
 
-    // Build where clause
-    const where: CustomerWhereClause = {};
-
-    if (query.search && query.search.trim() !== '') {
-      where.OR = [
-        { name: { contains: query.search, mode: 'insensitive' } },
-        { email: { contains: query.search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (query.status) {
-      where.status = query.status;
-    }
-
-    if (query.tier) {
-      where.tier = query.tier;
-    }
-
-    if (query.industry) {
-      where.industry = { contains: query.industry, mode: 'insensitive' };
-    }
-
-    // Determine pagination strategy: prefer cursor when provided or when 'page' is absent (future-proof)
-    const useCursorPagination = query.cursor !== undefined || !searchParams.has('page');
-
-    let customers: Customer[];
-    let pagination: CustomerPaginationResult;
-
-    if (useCursorPagination) {
-      const dbStart = Date.now();
-      if (query.cursor) {
-        where.id = { gt: query.cursor };
+      if (query!.search) {
+        where.OR = [
+          { name: { contains: query!.search, mode: 'insensitive' } },
+          { email: { contains: query!.search, mode: 'insensitive' } },
+          { industry: { contains: query!.search, mode: 'insensitive' } },
+        ];
       }
 
-      // ✅ PERFORMANCE FIX: Use selective fields and remove expensive counts for cursor pagination
-      const results = await prisma.customer.findMany({
-        where: where as any, // Prisma compatibility
-        take: query.limit + 1,
-        orderBy: { [query.sortBy]: query.sortOrder },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          industry: true,
-          tier: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+      if (query!.status) {
+        where.status = query!.status;
+      }
 
-      const hasMore = results.length > query.limit;
-      recordDbLatency(Date.now() - dbStart);
-      customers = hasMore ? (results.slice(0, -1) as Customer[]) : (results as Customer[]);
-      const nextCursor = hasMore ? results[results.length - 2]?.id || null : null;
+      if (query!.tier) {
+        where.tier = query!.tier;
+      }
 
-      pagination = {
-        customers,
-        total: customers.length,
-        hasMore,
-        nextCursor,
-      };
-    } else {
-      const dbStart = Date.now();
-      const skip = (query.page - 1) * query.limit;
+      if (query!.industry) {
+        where.industry = query!.industry;
+      }
 
-      // ✅ OPTIMIZATION: Avoid expensive total count; infer hasMore via limit+1
-      const results = await prisma.customer.findMany({
-        where: where as any,
-        skip,
-        take: query.limit + 1,
-        orderBy: { [query.sortBy]: query.sortOrder },
+      // Build order by
+      const orderBy: any = [{ [query!.sortBy]: query!.sortOrder }];
+
+      // Add secondary sort for cursor pagination
+      if (query!.sortBy !== 'createdAt') {
+        orderBy.push({ id: query!.sortOrder });
+      }
+
+      // Execute query with cursor pagination
+      const rows = await prisma.customer.findMany({
+        where,
         select: {
           id: true,
           name: true,
           email: true,
           phone: true,
+          website: true,
+          address: true,
           industry: true,
-          tier: true,
+          companySize: true,
+          revenue: true,
           status: true,
+          tier: true,
+          tags: true,
+          metadata: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy,
+        take: query!.limit + 1, // Take one extra to check if there are more
+        ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
+      });
+
+      // Determine if there are more pages
+      const hasNextPage = rows.length > query!.limit;
+      const nextCursor = hasNextPage ? rows[query!.limit - 1].id : null;
+
+      // Remove the extra item if it exists
+      const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
+
+      logInfo('Customers fetched successfully', {
+        component: 'CustomerAPI',
+        operation: 'GET',
+        userId: user.id,
+        count: items.length,
+        hasNextPage,
+      });
+
+      return Response.json(
+        ok({
+          items,
+          nextCursor,
+        })
+      );
+    } catch (error) {
+      logError('Failed to fetch customers', {
+        component: 'CustomerAPI',
+        operation: 'GET',
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+);
+
+// POST /api/customers - Create a new customer
+export const POST = createRoute(
+  {
+    roles: ['admin', 'sales', 'System Administrator', 'Administrator'],
+    body: CustomerCreateSchema,
+  },
+  async ({ body, user }) => {
+    try {
+      logInfo('Creating customer', {
+        component: 'CustomerAPI',
+        operation: 'POST',
+        userId: user.id,
+        customerName: body!.name,
+      });
+
+      const customer = await prisma.customer.create({
+        data: {
+          ...body!,
+          status: 'ACTIVE',
+          metadata: body!.metadata ? JSON.parse(JSON.stringify(body!.metadata)) : null,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          website: true,
+          address: true,
+          industry: true,
+          companySize: true,
+          revenue: true,
+          status: true,
+          tier: true,
+          tags: true,
+          metadata: true,
           createdAt: true,
           updatedAt: true,
         },
       });
 
-      const hasMore = results.length > query.limit;
-      recordDbLatency(Date.now() - dbStart);
-      customers = hasMore ? (results.slice(0, -1) as Customer[]) : (results as Customer[]);
+      logInfo('Customer created successfully', {
+        component: 'CustomerAPI',
+        operation: 'POST',
+        userId: user.id,
+        customerId: customer.id,
+        customerName: customer.name,
+      });
 
-      pagination = {
-        customers,
-        total: customers.length,
-        hasMore,
-        nextCursor: null,
-      };
+      return Response.json(ok(customer), { status: 201 });
+    } catch (error) {
+      logError('Failed to create customer', {
+        component: 'CustomerAPI',
+        operation: 'POST',
+        userId: user.id,
+        customerName: body!.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
-
-    const response = {
-      success: true,
-      data: {
-        customers: pagination.customers,
-        pagination: {
-          total: pagination.total,
-          hasMore: pagination.hasMore,
-          nextCursor: pagination.nextCursor,
-        },
-      },
-    };
-
-    // ✅ CRITICAL: Cache the result for future requests
-    cacheCustomers(cacheKey, response);
-
-    const queryTime = Date.now() - queryStartTime;
-    await logInfo('Customer API query completed', { durationMs: queryTime });
-
-    const duration = Date.now() - queryStartTime;
-    recordLatency(duration);
-    const res = NextResponse.json(response);
-    if (process.env.NODE_ENV === 'production') {
-      res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
-    } else {
-      res.headers.set('Cache-Control', 'no-store');
-    }
-    res.headers.set('X-Cache', 'MISS');
-    res.headers.set('X-Query-Time', queryTime.toString());
-    res.headers.set('Server-Timing', `app;dur=${duration}`);
-    return res;
-  } catch (error) {
-    errorHandlingService.processError(error, 'Customers GET failed', ErrorCodes.DATA.QUERY_FAILED, {
-      component: 'CustomersRoute',
-      operation: 'GET',
-    });
-    await logError('[Customer API] Error', error as unknown, { operation: 'GET' });
-    recordError(ErrorCodes.DATA.QUERY_FAILED);
-    const duration = Date.now() - queryStartTime;
-    recordLatency(duration);
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to retrieve customers',
-        code: ErrorCodes.DATA.QUERY_FAILED,
-        cause: error as unknown,
-        metadata: { component: 'CustomersRoute', operation: 'GET' },
-      })
-    );
   }
-}
+);
 
-/**
- * POST /api/customers - Create a new customer
- */
-export async function POST(request: NextRequest) {
-  try {
-    // Require customers:create permission
-    await validateApiPermission(request, { resource: 'customers', action: 'create' });
-    // Check authentication
-    const session = await getServerSession(authOptions);
+// PUT /api/customers/[id] - Update a customer
+export const PUT = createRoute(
+  {
+    roles: ['admin', 'sales', 'System Administrator', 'Administrator'],
+    body: CustomerUpdateSchema,
+  },
+  async ({ body, user, req }) => {
+    try {
+      const url = new URL(req.url);
+      const customerId = url.pathname.split('/').pop();
 
-    // [AUTH_FIX] Enhanced session validation with detailed logging
-    await logInfo('[AUTH_FIX] Session validation', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      hasUserId: !!session?.user?.id,
-      userEmail: session?.user?.email,
-      userRoles: session?.user?.roles,
-      timestamp: new Date().toISOString(),
-    });
+      if (!customerId) {
+        throw new Error('Customer ID is required');
+      }
 
-    // [AUTH_FIX] Enhanced session validation with detailed logging
-    await logInfo('[AUTH_FIX] Session validation (dup)', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      hasUserId: !!session?.user?.id,
-      userEmail: session?.user?.email,
-      userRoles: session?.user?.roles,
-      timestamp: new Date().toISOString(),
-    });
-    if (!session?.user?.id) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
-    }
+      logInfo('Updating customer', {
+        component: 'CustomerAPI',
+        operation: 'PUT',
+        userId: user.id,
+        customerId,
+      });
 
-    // Parse and validate request body
-    const body = await request.json();
-    const validatedData = CustomerCreateSchema.parse(body);
-
-    // Check if customer with email already exists
-    if (validatedData.email) {
-      const existingCustomer = await prisma.customer.findFirst({
-        where: {
-          email: validatedData.email,
+      const customer = await prisma.customer.update({
+        where: { id: customerId },
+        data: {
+          ...body!,
+          metadata: body!.metadata ? JSON.parse(JSON.stringify(body!.metadata)) : null,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          website: true,
+          address: true,
+          industry: true,
+          companySize: true,
+          revenue: true,
+          status: true,
+          tier: true,
+          tags: true,
+          metadata: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
 
-      if (existingCustomer) {
-        return createApiErrorResponse(
-          new StandardError({
-            message: `Customer with email ${validatedData.email} already exists`,
-            code: ErrorCodes.VALIDATION.DUPLICATE_ENTRY,
-            metadata: {
-              component: 'CustomersRoute',
-              operation: 'createCustomer',
-              email: validatedData.email,
-              existingCustomerId: existingCustomer.id,
-            },
-          }),
-          'Customer already exists',
-          ErrorCodes.VALIDATION.DUPLICATE_ENTRY,
-          409,
-          { userFriendlyMessage: 'A customer with this email address already exists.' }
-        );
+      logInfo('Customer updated successfully', {
+        component: 'CustomerAPI',
+        operation: 'PUT',
+        userId: user.id,
+        customerId: customer.id,
+        customerName: customer.name,
+      });
+
+      return Response.json(ok(customer));
+    } catch (error) {
+      logError('Failed to update customer', {
+        component: 'CustomerAPI',
+        operation: 'PUT',
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+);
+
+// DELETE /api/customers/[id] - Delete a customer
+export const DELETE = createRoute(
+  {
+    roles: ['admin'],
+  },
+  async ({ user, req }) => {
+    try {
+      const url = new URL(req.url);
+      const customerId = url.pathname.split('/').pop();
+
+      if (!customerId) {
+        throw new Error('Customer ID is required');
       }
+
+      logInfo('Deleting customer', {
+        component: 'CustomerAPI',
+        operation: 'DELETE',
+        userId: user.id,
+        customerId,
+      });
+
+      await prisma.customer.delete({
+        where: { id: customerId },
+      });
+
+      logInfo('Customer deleted successfully', {
+        component: 'CustomerAPI',
+        operation: 'DELETE',
+        userId: user.id,
+        customerId,
+      });
+
+      return Response.json(ok(null));
+    } catch (error) {
+      logError('Failed to delete customer', {
+        component: 'CustomerAPI',
+        operation: 'DELETE',
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
-
-    // Create customer
-    const customer = await prisma.customer.create({
-      data: {
-        name: validatedData.name,
-        email: validatedData.email,
-        phone: validatedData.phone,
-        website: validatedData.website,
-        address: validatedData.address,
-        industry: validatedData.industry,
-        companySize: validatedData.companySize,
-        revenue: validatedData.revenue,
-        tier: validatedData.tier,
-        tags: validatedData.tags,
-        metadata: validatedData.metadata || {},
-        segmentation: validatedData.segmentation || {},
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      include: {
-        _count: {
-          select: {
-            proposals: true,
-          },
-        },
-      },
-    });
-
-    // Track customer creation event for analytics (async, non-blocking)
-    trackCustomerCreationEvent(session.user.id, customer.id, customer.name).catch(error => {
-      // use standardized logger from error handling service
-      errorHandlingService.processError(
-        error,
-        'Analytics tracking failed but not blocking request',
-        ErrorCodes.ANALYTICS.TRACKING_ERROR,
-        { component: 'CustomersRoute', operation: 'trackCustomerCreationEvent' }
-      );
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Customer created successfully',
-      data: {
-        customer,
-      },
-    });
-  } catch (error) {
-    // Log the error using ErrorHandlingService
-    errorHandlingService.processError(error);
-
-    if (error instanceof z.ZodError) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Validation failed for customer creation',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          cause: error,
-          metadata: {
-            component: 'CustomersRoute',
-            operation: 'createCustomer',
-            validationErrors: error.errors,
-          },
-        }),
-        'Validation failed',
-        ErrorCodes.VALIDATION.INVALID_INPUT,
-        400,
-        { userFriendlyMessage: 'Please check your customer information and try again.' }
-      );
-    }
-
-    if (isPrismaError(error)) {
-      const errorCode = error.code.startsWith('P2')
-        ? ErrorCodes.DATA.DATABASE_ERROR
-        : ErrorCodes.DATA.CREATE_FAILED;
-      return createApiErrorResponse(
-        new StandardError({
-          message: `Database error when creating customer: ${getPrismaErrorMessage(error.code)}`,
-          code: errorCode,
-          cause: error,
-          metadata: {
-            component: 'CustomersRoute',
-            operation: 'createCustomer',
-            prismaErrorCode: error.code,
-          },
-        }),
-        'Database error',
-        errorCode,
-        500,
-        {
-          userFriendlyMessage:
-            'An error occurred while creating the customer. Please try again later.',
-        }
-      );
-    }
-
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to create customer',
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        cause: error,
-        metadata: {
-          component: 'CustomersRoute',
-          operation: 'createCustomer',
-        },
-      }),
-      'Internal server error',
-      ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500,
-      {
-        userFriendlyMessage:
-          'An unexpected error occurred while creating the customer. Please try again later.',
-      }
-    );
   }
-}
-
-/**
- * Track customer search event for analytics
- */
-async function trackCustomerSearchEvent(userId: string, query: string, resultsCount: number) {
-  try {
-    await prisma.userStoryMetrics.upsert({
-      where: { userStoryId: 'US-4.1' },
-      update: {
-        actualPerformance: {
-          resultsCount,
-          timestamp: new Date().toISOString(),
-          lastSearchQuery: query,
-        },
-        lastUpdated: new Date(),
-      },
-      create: {
-        userStoryId: 'US-4.1',
-        hypothesis: ['H4'],
-        acceptanceCriteria: ['AC-4.1.1'],
-        performanceTargets: {
-          searchQuery: query,
-          userId,
-          timestamp: new Date().toISOString(),
-        },
-        actualPerformance: {
-          resultsCount,
-          timestamp: new Date().toISOString(),
-        },
-      },
-    });
-
-    await prisma.hypothesisValidationEvent.create({
-      data: {
-        userId,
-        hypothesis: 'H4',
-        userStoryId: 'US-4.1',
-        componentId: 'CustomerSearch',
-        action: 'customer_search',
-        measurementData: {
-          searchQuery: query,
-          resultsCount,
-          timestamp: new Date().toISOString(),
-        },
-        targetValue: 1.0,
-        actualValue: resultsCount > 0 ? 1.0 : 0.0,
-        performanceImprovement: resultsCount > 0 ? 1 : 0,
-        userRole: 'user',
-        sessionId: `customer_search_${Date.now()}`,
-      },
-    });
-  } catch (error) {
-    await logError('Failed to track customer search event', error as unknown);
-    // Don't throw error as this is non-critical
-  }
-}
-
-/**
- * Track customer creation event for analytics
- */
-async function trackCustomerCreationEvent(
-  userId: string,
-  customerId: string,
-  customerName: string
-) {
-  try {
-    await prisma.userStoryMetrics.upsert({
-      where: { userStoryId: 'US-4.1' },
-      update: {
-        actualPerformance: {
-          created: true,
-          timestamp: new Date().toISOString(),
-          lastCustomerCreated: customerName,
-        },
-        lastUpdated: new Date(),
-      },
-      create: {
-        userStoryId: 'US-4.1',
-        hypothesis: ['H4'],
-        acceptanceCriteria: ['AC-4.1.1'],
-        performanceTargets: {
-          customerId,
-          customerName,
-          userId,
-          timestamp: new Date().toISOString(),
-        },
-        actualPerformance: {
-          created: true,
-          timestamp: new Date().toISOString(),
-        },
-      },
-    });
-
-    await prisma.hypothesisValidationEvent.create({
-      data: {
-        userId,
-        hypothesis: 'H4',
-        userStoryId: 'US-4.1',
-        componentId: 'CustomerCreation',
-        action: 'customer_created',
-        measurementData: {
-          customerId,
-          customerName,
-          timestamp: new Date().toISOString(),
-        },
-        targetValue: 1.0,
-        actualValue: 1.0,
-        performanceImprovement: 1,
-        userRole: 'user',
-        sessionId: `customer_creation_${Date.now()}`,
-      },
-    });
-  } catch (error) {
-    await logError('Failed to track customer creation event', error as unknown);
-    // Don't throw error as this is non-critical
-  }
-}
+);

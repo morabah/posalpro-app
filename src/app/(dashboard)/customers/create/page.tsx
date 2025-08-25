@@ -2,6 +2,7 @@
  * PosalPro MVP2 - Customer Creation Page
  * Enhanced with Bridge Pattern for centralized state management
  * Based on CUSTOMER_PROFILE_SCREEN.md wireframe specifications
+ * ✅ INTEGRATED: New Validation Library
  *
  * User Stories: US-2.1, US-2.2
  * Hypothesis Coverage: H4 (Cross-Department Coordination - 40% reduction)
@@ -10,17 +11,20 @@
 
 'use client';
 
-import { CustomerManagementManagementBridge } from '@/components/bridges/CustomerManagementBridge';
+// Removed old bridge import - using new architecture
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
-import { Input } from '@/components/ui/forms/Input';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useFormValidation } from '@/hooks/useFormValidation';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { validateApiPermission } from '@/lib/security/rbac';
+import type { CustomerEditData } from '@/lib/validation/customerValidation';
+import { customerValidationSchema } from '@/lib/validation/customerValidation';
 import { ApiResponse } from '@/types/api';
 import { ArrowLeftIcon, UserPlusIcon } from '@heroicons/react/24/outline';
 import { useSession } from 'next-auth/react';
@@ -28,24 +32,12 @@ import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-
-interface CustomerFormData {
-  name: string;
-  email: string;
-  phone: string;
-  company: string;
-  industry: string;
-  address: string;
-  notes: string;
-}
+import { Suspense, useCallback, useEffect, useState } from 'react';
 
 interface CustomerResponse {
-  customer: {
-    id: string;
-    name: string;
-    email: string;
-  };
+  id: string;
+  name: string;
+  email: string;
 }
 
 // ✅ SEO METADATA: Page metadata component
@@ -285,15 +277,27 @@ function CustomerCreationPageComponent() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<CustomerFormData>({
-    name: '',
-    email: '',
-    phone: '',
-    company: '',
-    industry: '',
-    address: '',
-    notes: '',
-  });
+
+  // ✅ REUSABLE VALIDATION HOOK
+  const validation = useFormValidation(
+    {
+      name: '',
+      email: '',
+      phone: '',
+      website: '',
+      address: '',
+      industry: '',
+      annualRevenue: undefined,
+      employeeCount: undefined,
+      tier: 'bronze',
+      tags: [],
+    } as CustomerEditData,
+    customerValidationSchema,
+    {
+      validateOnChange: true,
+      validateOnBlur: true,
+    }
+  );
 
   // ✅ ANALYTICS INTEGRATION: Page view tracking
   useEffect(() => {
@@ -325,28 +329,32 @@ function CustomerCreationPageComponent() {
     });
   }, [analytics]);
 
-  // ✅ PERFORMANCE: Memoized input change handler
-  const handleInputChange = useCallback((field: keyof CustomerFormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  }, []);
-
-  // ✅ PERFORMANCE: Memoized form validation
-  const isFormValid = useMemo(() => {
-    return formData.name.trim() !== '' && formData.email.trim() !== '';
-  }, [formData.name, formData.email]);
-
   // ✅ SECURITY: Input sanitization for form submission
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      if (!isFormValid) {
+      // Use the validation hook to check for errors
+      if (validation.hasErrors) {
         handleAsyncError(
           new StandardError({
-            message: 'Please fill in all required fields',
+            message: 'Please fix the validation errors before creating the customer',
+            code: ErrorCodes.VALIDATION.INVALID_INPUT,
+            metadata: {
+              component: 'CustomerCreationPage',
+              operation: 'form_validation',
+            },
+          })
+        );
+        return;
+      }
+
+      // Validate all fields
+      const errors = validation.validateAll();
+      if (Object.keys(errors).length > 0) {
+        handleAsyncError(
+          new StandardError({
+            message: `Validation failed: ${Object.values(errors).join(', ')}`,
             code: ErrorCodes.VALIDATION.INVALID_INPUT,
             metadata: {
               component: 'CustomerCreationPage',
@@ -384,12 +392,12 @@ function CustomerCreationPageComponent() {
           operation: 'customer_create',
           userStory: 'US-2.1',
           hypothesis: 'H4',
-          formData: { name: formData.name, email: formData.email, company: formData.company },
+          formData: { name: validation.formData.name, email: validation.formData.email },
         });
 
         const response = await apiClient.post<ApiResponse<CustomerResponse>>(
           '/api/customers',
-          formData
+          validation.formData
         );
 
         if (response.success) {
@@ -398,7 +406,7 @@ function CustomerCreationPageComponent() {
             operation: 'customer_create_success',
             userStory: 'US-2.1',
             hypothesis: 'H4',
-            customerId: response.data!.customer.id,
+            customerId: response.data!.id,
           });
 
           // ✅ ANALYTICS: Track successful creation
@@ -408,14 +416,14 @@ function CustomerCreationPageComponent() {
               userStory: 'US-2.1',
               hypothesis: 'H4',
               component: 'CustomerCreationPage',
-              customerId: response.data!.customer.id,
-              customerName: response.data!.customer.name,
+              customerId: response.data!.id,
+              customerName: response.data!.name,
             },
             'high'
           );
 
           // Navigate to the newly created customer
-          router.push(`/customers/${response.data!.customer.id}`);
+          router.push(`/customers/${response.data!.id}`);
         }
       } catch (error) {
         logError('Customer creation: Failed', {
@@ -441,7 +449,7 @@ function CustomerCreationPageComponent() {
         setLoading(false);
       }
     },
-    [formData, isFormValid, apiClient, router, handleAsyncError, analytics]
+    [validation, apiClient, router, handleAsyncError, analytics]
   );
 
   // ✅ PERFORMANCE METRICS: Performance monitoring
@@ -480,251 +488,191 @@ function CustomerCreationPageComponent() {
         <AuthenticationGuard>
           <RBACGuard>
             <ErrorBoundary FallbackComponent={CustomerCreationErrorFallback}>
-              <CustomerManagementManagementBridge>
-                <div className="min-h-screen bg-gray-50" data-testid="customer-creation-page">
-                  <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    {/* Header */}
-                    <div className="mb-8">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <Link
-                            href="/customers"
-                            className="inline-flex items-center text-gray-600 hover:text-gray-900"
-                            aria-label="Back to customers list"
-                          >
-                            <ArrowLeftIcon className="w-5 h-5 mr-2" />
-                            Back to Customers
-                          </Link>
-                          <div>
-                            <h1 className="text-3xl font-bold text-gray-900">
-                              Create New Customer
-                            </h1>
-                            <p className="mt-2 text-gray-600">
-                              Add a new customer to your database
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Form */}
-                    <div className="bg-white shadow-sm rounded-lg">
-                      <div className="px-6 py-4 border-b border-gray-200">
-                        <h2 className="text-lg font-medium text-gray-900">Customer Information</h2>
-                      </div>
-
-                      <form
-                        onSubmit={handleSubmit}
-                        className="p-6 space-y-6"
-                        role="form"
-                        aria-label="Customer creation form"
-                      >
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Basic Information */}
-                          <div className="space-y-4">
-                            <div>
-                              <label
-                                htmlFor="name"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Full Name *
-                              </label>
-                              <Input
-                                id="name"
-                                type="text"
-                                value={formData.name}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  handleInputChange('name', e.target.value)
-                                }
-                                required
-                                placeholder="Enter customer's full name"
-                                aria-describedby="name-help"
-                                className="min-h-[44px]" // ✅ ACCESSIBILITY: 44px touch target
-                              />
-                              <p id="name-help" className="mt-1 text-sm text-gray-500">
-                                Enter the customer's full name as it should appear in records
-                              </p>
-                            </div>
-
-                            <div>
-                              <label
-                                htmlFor="email"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Email Address *
-                              </label>
-                              <Input
-                                id="email"
-                                type="email"
-                                value={formData.email}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  handleInputChange('email', e.target.value)
-                                }
-                                required
-                                placeholder="customer@example.com"
-                                aria-describedby="email-help"
-                                className="min-h-[44px]" // ✅ ACCESSIBILITY: 44px touch target
-                              />
-                              <p id="email-help" className="mt-1 text-sm text-gray-500">
-                                Primary contact email address
-                              </p>
-                            </div>
-
-                            <div>
-                              <label
-                                htmlFor="phone"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Phone Number
-                              </label>
-                              <Input
-                                id="phone"
-                                type="tel"
-                                value={formData.phone}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  handleInputChange('phone', e.target.value)
-                                }
-                                placeholder="+1 (555) 123-4567"
-                                aria-describedby="phone-help"
-                                className="min-h-[44px]" // ✅ ACCESSIBILITY: 44px touch target
-                              />
-                              <p id="phone-help" className="mt-1 text-sm text-gray-500">
-                                Contact phone number (optional)
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Company Information */}
-                          <div className="space-y-4">
-                            <div>
-                              <label
-                                htmlFor="company"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Company Name *
-                              </label>
-                              <Input
-                                id="company"
-                                type="text"
-                                value={formData.company}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  handleInputChange('company', e.target.value)
-                                }
-                                required
-                                placeholder="Enter company name"
-                                aria-describedby="company-help"
-                                className="min-h-[44px]" // ✅ ACCESSIBILITY: 44px touch target
-                              />
-                              <p id="company-help" className="mt-1 text-sm text-gray-500">
-                                The company or organization name
-                              </p>
-                            </div>
-
-                            <div>
-                              <label
-                                htmlFor="industry"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Industry
-                              </label>
-                              <Input
-                                id="industry"
-                                type="text"
-                                value={formData.industry}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  handleInputChange('industry', e.target.value)
-                                }
-                                placeholder="Technology, Healthcare, Finance, etc."
-                                aria-describedby="industry-help"
-                                className="min-h-[44px]" // ✅ ACCESSIBILITY: 44px touch target
-                              />
-                              <p id="industry-help" className="mt-1 text-sm text-gray-500">
-                                Industry or sector (optional)
-                              </p>
-                            </div>
-
-                            <div>
-                              <label
-                                htmlFor="address"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Address
-                              </label>
-                              <Input
-                                id="address"
-                                type="text"
-                                value={formData.address}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  handleInputChange('address', e.target.value)
-                                }
-                                placeholder="Enter full address"
-                                aria-describedby="address-help"
-                                className="min-h-[44px]" // ✅ ACCESSIBILITY: 44px touch target
-                              />
-                              <p id="address-help" className="mt-1 text-sm text-gray-500">
-                                Physical address (optional)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Additional Information */}
+              <div className="min-h-screen bg-gray-50" data-testid="customer-creation-page">
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                  {/* Header */}
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <Link
+                          href="/customers"
+                          className="inline-flex items-center text-gray-600 hover:text-gray-900"
+                          aria-label="Back to customers list"
+                        >
+                          <ArrowLeftIcon className="w-5 h-5 mr-2" />
+                          Back to Customers
+                        </Link>
                         <div>
-                          <label
-                            htmlFor="notes"
-                            className="block text-sm font-medium text-gray-700"
-                          >
-                            Notes
-                          </label>
-                          <textarea
-                            id="notes"
-                            value={formData.notes}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                              handleInputChange('notes', e.target.value)
-                            }
-                            rows={4}
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                            placeholder="Additional notes about the customer..."
-                            aria-describedby="notes-help"
-                          />
-                          <p id="notes-help" className="mt-1 text-sm text-gray-500">
-                            Any additional information about the customer
-                          </p>
+                          <h1 className="text-3xl font-bold text-gray-900">Create New Customer</h1>
+                          <p className="mt-2 text-gray-600">Add a new customer to your database</p>
                         </div>
-
-                        {/* Form Actions */}
-                        <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-                          <Link
-                            href="/customers"
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                          >
-                            Cancel
-                          </Link>
-                          <Button
-                            type="submit"
-                            disabled={loading || !isFormValid}
-                            className="inline-flex items-center min-h-[44px] px-4 py-2" // ✅ ACCESSIBILITY: 44px touch target
-                            aria-label={loading ? 'Creating customer...' : 'Create customer'}
-                            data-testid="create-customer-submit"
-                          >
-                            {loading ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Creating...
-                              </>
-                            ) : (
-                              <>
-                                <UserPlusIcon className="w-4 h-4 mr-2" />
-                                Create Customer
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </form>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Form */}
+                  <div className="bg-white shadow-sm rounded-lg">
+                    <div className="px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-lg font-medium text-gray-900">Customer Information</h2>
+                    </div>
+
+                    <form
+                      onSubmit={handleSubmit}
+                      className="p-6 space-y-6"
+                      role="form"
+                      aria-label="Customer creation form"
+                    >
+                      {/* Validation Error Summary */}
+                      {validation.hasErrors && (
+                        <FormErrorSummary errors={validation.validationErrors} />
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Basic Information */}
+                        <div className="space-y-4">
+                          <FormField
+                            name="name"
+                            label="Company Name"
+                            value={validation.formData.name}
+                            onChange={value => validation.handleFieldChange('name', value)}
+                            onBlur={() => validation.handleFieldBlur('name')}
+                            error={validation.getFieldError('name')}
+                            touched={validation.isFieldTouched('name')}
+                            required
+                            placeholder="Enter company name"
+                            className="min-h-[44px]"
+                          />
+
+                          <FormField
+                            name="email"
+                            label="Email Address"
+                            type="email"
+                            value={validation.formData.email}
+                            onChange={value => validation.handleFieldChange('email', value)}
+                            onBlur={() => validation.handleFieldBlur('email')}
+                            error={validation.getFieldError('email')}
+                            touched={validation.isFieldTouched('email')}
+                            required
+                            placeholder="customer@example.com"
+                            className="min-h-[44px]"
+                          />
+
+                          <FormField
+                            name="phone"
+                            label="Phone Number"
+                            type="tel"
+                            value={validation.formData.phone}
+                            onChange={value => validation.handleFieldChange('phone', value)}
+                            onBlur={() => validation.handleFieldBlur('phone')}
+                            error={validation.getFieldError('phone')}
+                            touched={validation.isFieldTouched('phone')}
+                            placeholder="+1 (555) 123-4567"
+                            className="min-h-[44px]"
+                          />
+                        </div>
+
+                        {/* Company Information */}
+                        <div className="space-y-4">
+                          <FormField
+                            name="industry"
+                            label="Industry"
+                            value={validation.formData.industry}
+                            onChange={value => validation.handleFieldChange('industry', value)}
+                            onBlur={() => validation.handleFieldBlur('industry')}
+                            error={validation.getFieldError('industry')}
+                            touched={validation.isFieldTouched('industry')}
+                            placeholder="Technology, Healthcare, Finance, etc."
+                            className="min-h-[44px]"
+                          />
+
+                          <FormField
+                            name="address"
+                            label="Address"
+                            value={validation.formData.address}
+                            onChange={value => validation.handleFieldChange('address', value)}
+                            onBlur={() => validation.handleFieldBlur('address')}
+                            error={validation.getFieldError('address')}
+                            touched={validation.isFieldTouched('address')}
+                            placeholder="Enter full address"
+                            className="min-h-[44px]"
+                          />
+
+                          <FormField
+                            name="website"
+                            label="Website"
+                            type="url"
+                            value={validation.formData.website}
+                            onChange={value => validation.handleFieldChange('website', value)}
+                            onBlur={() => validation.handleFieldBlur('website')}
+                            error={validation.getFieldError('website')}
+                            touched={validation.isFieldTouched('website')}
+                            placeholder="https://example.com"
+                            className="min-h-[44px]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Additional Information */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          name="annualRevenue"
+                          label="Annual Revenue"
+                          type="number"
+                          value={validation.formData.annualRevenue}
+                          onChange={value => validation.handleFieldChange('annualRevenue', value)}
+                          onBlur={() => validation.handleFieldBlur('annualRevenue')}
+                          error={validation.getFieldError('annualRevenue')}
+                          touched={validation.isFieldTouched('annualRevenue')}
+                          placeholder="0"
+                          className="min-h-[44px]"
+                        />
+
+                        <FormField
+                          name="employeeCount"
+                          label="Employee Count"
+                          type="number"
+                          value={validation.formData.employeeCount}
+                          onChange={value => validation.handleFieldChange('employeeCount', value)}
+                          onBlur={() => validation.handleFieldBlur('employeeCount')}
+                          error={validation.getFieldError('employeeCount')}
+                          touched={validation.isFieldTouched('employeeCount')}
+                          placeholder="0"
+                          className="min-h-[44px]"
+                        />
+                      </div>
+
+                      {/* Form Actions */}
+                      <FormActions>
+                        <Link
+                          href="/customers"
+                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Cancel
+                        </Link>
+                        <Button
+                          type="submit"
+                          disabled={loading || validation.hasErrors || !validation.isValid}
+                          className="inline-flex items-center min-h-[44px] px-4 py-2"
+                          aria-label={loading ? 'Creating customer...' : 'Create customer'}
+                          data-testid="create-customer-submit"
+                        >
+                          {loading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              <UserPlusIcon className="w-4 h-4 mr-2" />
+                              Create Customer
+                            </>
+                          )}
+                        </Button>
+                      </FormActions>
+                    </form>
+                  </div>
                 </div>
-              </CustomerManagementManagementBridge>
+              </div>
             </ErrorBoundary>
           </RBACGuard>
         </AuthenticationGuard>

@@ -1,107 +1,301 @@
 'use client';
 
-import { logger } from '@/lib/logger';
-/**
- * PosalPro MVP2 - Form Validation Hook
- * React Hook Form + Zod integration for enhanced form validation
- * Simplified version for H2.3 implementation
- */
+import { useCallback, useMemo, useState } from 'react';
 
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useCallback, useState } from 'react';
-import { useForm, type FieldValues, type DefaultValues } from 'react-hook-form';
-import type { ZodSchema } from 'zod';
-
-interface UseFormValidationOptions<T extends FieldValues> {
-  schema: ZodSchema<T>;
-  formName: string;
-  enableAnalytics?: boolean;
-  defaultValues?: Partial<T>;
+// ✅ Validation Rules Interface
+export interface ValidationRule {
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: RegExp;
+  custom?: (value: any) => string | null;
+  message?: string;
 }
 
-/**
- * Enhanced form validation hook with Zod
- */
-export function useFormValidation<T extends FieldValues>({
-  schema,
-  formName,
-  enableAnalytics = false,
-  defaultValues,
-}: UseFormValidationOptions<T>) {
-  const form = useForm<T>({
-    resolver: zodResolver(schema),
-    defaultValues: defaultValues as DefaultValues<T> | undefined,
-    mode: 'onChange',
-  });
+// ✅ Validation Schema Interface
+export interface ValidationSchema {
+  [fieldName: string]: ValidationRule;
+}
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+// ✅ Form Data Interface
+export interface FormData {
+  [fieldName: string]: any;
+}
 
-  // Track field interactions (simplified for now)
-  const trackFieldFocus = useCallback(
-    (fieldName: string) => {
-      if (enableAnalytics) {
-        logger.info(`Field focus: ${formName}.${fieldName}`);
+// ✅ Validation Errors Interface
+export interface ValidationErrors {
+  [fieldName: string]: string;
+}
+
+// ✅ Built-in Validation Patterns
+export const VALIDATION_PATTERNS = {
+  email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  phone: /^[\+]?[1-9][\d]{0,15}$/,
+  url: /^https?:\/\/.+/,
+  numeric: /^\d+$/,
+  alphanumeric: /^[a-zA-Z0-9\s]+$/,
+  date: /^\d{4}-\d{2}-\d{2}$/,
+  time: /^\d{2}:\d{2}$/,
+  zipCode: /^\d{5}(-\d{4})?$/,
+  currency: /^\d+(\.\d{1,2})?$/,
+} as const;
+
+// ✅ Built-in Validation Messages
+export const VALIDATION_MESSAGES = {
+  required: 'This field is required',
+  email: 'Please enter a valid email address (e.g., contact@company.com)',
+  phone: 'Please enter a valid phone number (e.g., +1234567890 or 123-456-7890)',
+  url: 'Please enter a valid website URL starting with http:// or https://',
+  numeric: 'Please enter numbers only',
+  alphanumeric: 'Please enter letters and numbers only',
+  date: 'Please enter a valid date (YYYY-MM-DD)',
+  time: 'Please enter a valid time (HH:MM)',
+  zipCode: 'Please enter a valid ZIP code',
+  currency: 'Please enter a valid amount',
+  minLength: (min: number) => `Must be at least ${min} characters`,
+  maxLength: (max: number) => `Must be no more than ${max} characters`,
+  minValue: (min: number) => `Must be at least ${min}`,
+  maxValue: (max: number) => `Must be no more than ${max}`,
+  positiveNumber: 'Please enter a positive number',
+  nonZero: 'This value cannot be zero - please enter a positive number or leave empty',
+} as const;
+
+// ✅ Reusable Form Validation Hook
+export function useFormValidation<T extends FormData>(
+  initialData: T,
+  validationSchema: ValidationSchema,
+  options?: {
+    validateOnChange?: boolean;
+    validateOnBlur?: boolean;
+    debounceMs?: number;
+  }
+) {
+  const [formData, setFormData] = useState<T>(initialData);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+
+  const { validateOnChange = true, validateOnBlur = true, debounceMs = 300 } = options || {};
+
+  // ✅ Validate a single field
+  const validateField = useCallback(
+    (fieldName: string, value: any): string | null => {
+      const rule = validationSchema[fieldName];
+      if (!rule) return null;
+
+      // Required validation
+      if (rule.required && (!value || (typeof value === 'string' && !value.trim()))) {
+        return rule.message || VALIDATION_MESSAGES.required;
       }
-    },
-    [enableAnalytics, formName]
-  );
 
-  const trackFieldBlur = useCallback(
-    (fieldName: string) => {
-      if (enableAnalytics) {
-        logger.info(`Field blur: ${formName}.${fieldName}`);
+      // Skip other validations if value is empty and not required
+      if (!value || (typeof value === 'string' && !value.trim())) {
+        return null;
       }
-    },
-    [enableAnalytics, formName]
-  );
 
-  const trackFieldChange = useCallback(
-    (fieldName: string) => {
-      if (enableAnalytics) {
-        logger.info(`Field change: ${formName}.${fieldName}`);
+      // Min length validation
+      if (rule.minLength && typeof value === 'string' && value.length < rule.minLength) {
+        return rule.message || VALIDATION_MESSAGES.minLength(rule.minLength);
       }
-    },
-    [enableAnalytics, formName]
-  );
 
-  // Enhanced submit handler with validation
-  const submitWithValidation = useCallback(
-    (onValidSubmit: (data: T) => Promise<void>) => {
-      return form.handleSubmit(async (data: T) => {
-        if (isSubmitting) return;
+      // Max length validation
+      if (rule.maxLength && typeof value === 'string' && value.length > rule.maxLength) {
+        return rule.message || VALIDATION_MESSAGES.maxLength(rule.maxLength);
+      }
 
-        setIsSubmitting(true);
+      // Pattern validation
+      if (rule.pattern && typeof value === 'string' && !rule.pattern.test(value)) {
+        return rule.message || 'Invalid format';
+      }
 
-        try {
-          if (enableAnalytics) {
-            logger.info(`Form submit attempt: ${formName}`);
-          }
-
-          await onValidSubmit(data);
-
-          if (enableAnalytics) {
-            logger.info(`Form submit success: ${formName}`);
-          }
-        } catch (error) {
-          if (enableAnalytics) {
-            logger.error(`Form submit error: ${formName}`, error);
-          }
-
-          throw error;
-        } finally {
-          setIsSubmitting(false);
+      // Custom validation
+      if (rule.custom) {
+        const customError = rule.custom(value);
+        if (customError) {
+          return rule.message || customError;
         }
-      });
+      }
+
+      return null;
     },
-    [form, isSubmitting, enableAnalytics, formName]
+    [validationSchema]
+  );
+
+  // ✅ Validate all fields
+  const validateAll = useCallback((): ValidationErrors => {
+    const errors: ValidationErrors = {};
+
+    Object.keys(validationSchema).forEach(fieldName => {
+      const error = validateField(fieldName, formData[fieldName]);
+      if (error) {
+        errors[fieldName] = error;
+      }
+    });
+
+    setValidationErrors(errors);
+    return errors;
+  }, [formData, validationSchema, validateField]);
+
+  // ✅ Check if form is valid
+  const isValid = useMemo(() => {
+    return Object.keys(validationSchema).every(fieldName => {
+      const error = validateField(fieldName, formData[fieldName]);
+      return !error;
+    });
+  }, [formData, validationSchema, validateField]);
+
+  // ✅ Check if form has any errors
+  const hasErrors = useMemo(() => {
+    return Object.keys(validationErrors).length > 0;
+  }, [validationErrors]);
+
+  // ✅ Handle field change with validation
+  const handleFieldChange = useCallback(
+    (fieldName: string, value: any) => {
+      setFormData(prev => ({ ...prev, [fieldName]: value }));
+
+      // Clear previous error for this field
+      setValidationErrors(prev => ({ ...prev, [fieldName]: '' }));
+
+      // Validate on change if enabled
+      if (validateOnChange) {
+        const error = validateField(fieldName, value);
+        if (error) {
+          setValidationErrors(prev => ({ ...prev, [fieldName]: error }));
+        }
+      }
+    },
+    [validateOnChange, validateField]
+  );
+
+  // ✅ Handle field blur with validation
+  const handleFieldBlur = useCallback(
+    (fieldName: string) => {
+      setTouchedFields(prev => new Set(prev).add(fieldName));
+
+      if (validateOnBlur) {
+        const error = validateField(fieldName, formData[fieldName]);
+        setValidationErrors(prev => ({ ...prev, [fieldName]: error || '' }));
+      }
+    },
+    [validateOnBlur, validateField, formData]
+  );
+
+  // ✅ Reset form
+  const resetForm = useCallback(
+    (newData?: T) => {
+      setFormData(newData || initialData);
+      setValidationErrors({});
+      setTouchedFields(new Set());
+    },
+    [initialData]
+  );
+
+  // ✅ Set form data
+  const setData = useCallback((data: T) => {
+    setFormData(data);
+  }, []);
+
+  // ✅ Get field error
+  const getFieldError = useCallback(
+    (fieldName: string): string => {
+      return validationErrors[fieldName] || '';
+    },
+    [validationErrors]
+  );
+
+  // ✅ Check if field is touched
+  const isFieldTouched = useCallback(
+    (fieldName: string): boolean => {
+      return touchedFields.has(fieldName);
+    },
+    [touchedFields]
+  );
+
+  // ✅ Get field validation class
+  const getFieldValidationClass = useCallback(
+    (fieldName: string): string => {
+      const error = validationErrors[fieldName];
+      const touched = touchedFields.has(fieldName);
+
+      if (error && touched) {
+        return 'border-red-500 focus:border-red-500';
+      }
+      return 'border-gray-300 focus:border-blue-500';
+    },
+    [validationErrors, touchedFields]
   );
 
   return {
-    ...form,
-    isSubmitting,
-    submitWithValidation,
-    trackFieldFocus,
-    trackFieldBlur,
-    trackFieldChange,
+    // Data
+    formData,
+    validationErrors,
+    touchedFields,
+
+    // State
+    isValid,
+    hasErrors,
+
+    // Actions
+    handleFieldChange,
+    handleFieldBlur,
+    validateField,
+    validateAll,
+    resetForm,
+    setData,
+
+    // Utilities
+    getFieldError,
+    isFieldTouched,
+    getFieldValidationClass,
   };
+}
+
+// ✅ Predefined Validation Schemas
+export const COMMON_VALIDATION_SCHEMAS = {
+  email: {
+    required: true,
+    pattern: VALIDATION_PATTERNS.email,
+    message: VALIDATION_MESSAGES.email,
+  },
+
+  phone: {
+    required: false,
+    pattern: VALIDATION_PATTERNS.phone,
+    message: VALIDATION_MESSAGES.phone,
+  },
+
+  website: {
+    required: false,
+    pattern: VALIDATION_PATTERNS.url,
+    message: VALIDATION_MESSAGES.url,
+  },
+
+  name: {
+    required: true,
+    minLength: 2,
+    maxLength: 100,
+    pattern: VALIDATION_PATTERNS.alphanumeric,
+    message: 'Please enter a valid name (2-100 characters)',
+  },
+
+  positiveNumber: {
+    required: false,
+    custom: (value: any) => {
+      if (value !== undefined && value !== null) {
+        if (value < 0) return VALIDATION_MESSAGES.positiveNumber;
+        if (value === 0) return VALIDATION_MESSAGES.nonZero;
+      }
+      return null;
+    },
+  },
+
+  required: {
+    required: true,
+    message: VALIDATION_MESSAGES.required,
+  },
+} as const;
+
+// ✅ Helper function to create validation schema
+export function createValidationSchema(schema: ValidationSchema): ValidationSchema {
+  return schema;
 }

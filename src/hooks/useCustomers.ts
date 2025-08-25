@@ -1,215 +1,291 @@
-/**
- * PosalPro MVP2 - Customers Data Hook
- * React Query hook for fetching and caching customers data
- * Performance optimized with caching and pagination
- */
+// React Query hooks for customers - New Architecture
+import { analytics } from '@/lib/analytics';
+import {
+  Customer,
+  CustomerCreate,
+  CustomerQuery,
+  customerService,
+  CustomerUpdate,
+} from '@/services/customerService';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logWarn } from '@/lib/logger';
-import { useQuery, UseQueryResult } from '@tanstack/react-query';
-import { useApiClient } from './useApiClient';
-
-export interface Customer {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  website?: string;
-  address?: string;
-  industry?: string;
-  companySize?: string;
-  revenue?: number;
-  tier: 'STANDARD' | 'PREMIUM' | 'ENTERPRISE' | 'VIP';
-  status: 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'CHURNED';
-  tags: string[];
-  metadata?: Record<string, unknown>;
-  segmentation?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-  proposalsCount?: number;
-  contactsCount?: number;
-}
-
-export interface CustomersResponse {
-  customers: Customer[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages?: number;
-    hasMore: boolean;
-    nextCursor?: string | null;
-  };
-  filters?: {
-    search?: string;
-    status?: string;
-    tier?: string;
-    industry?: string;
-  };
-}
-
-export interface CustomersQueryParams {
-  page?: number;
-  limit?: number;
-  search?: string;
-  status?: string;
-  tier?: string;
-  industry?: string;
-  cursor?: string;
-  sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'tier';
-  sortOrder?: 'asc' | 'desc';
-}
-
-// Query keys for React Query
-export const CUSTOMERS_QUERY_KEYS = {
-  all: ['customers'] as const,
-  lists: () => [...CUSTOMERS_QUERY_KEYS.all, 'list'] as const,
-  list: (params: CustomersQueryParams) => [...CUSTOMERS_QUERY_KEYS.lists(), params] as const,
-  details: () => [...CUSTOMERS_QUERY_KEYS.all, 'detail'] as const,
-  detail: (id: string) => [...CUSTOMERS_QUERY_KEYS.details(), id] as const,
-  search: (query: string) => [...CUSTOMERS_QUERY_KEYS.all, 'search', query] as const,
+// Stable query keys
+export const qk = {
+  customers: {
+    all: ['customers'] as const,
+    lists: () => [...qk.customers.all, 'list'] as const,
+    list: (search: string, limit: number, sortBy: string, sortOrder: string) =>
+      [...qk.customers.lists(), search, limit, sortBy, sortOrder] as const,
+    details: () => [...qk.customers.all, 'detail'] as const,
+    detail: (id: string) => [...qk.customers.details(), id] as const,
+    search: (query: string, limit: number) =>
+      [...qk.customers.all, 'search', query, limit] as const,
+  },
 };
 
-/**
- * Hook for fetching customers list with pagination and filtering
- * ✅ PERFORMANCE: Integrated with cache manager to prevent timeouts
- */
-export function useCustomers(
-  params: CustomersQueryParams = {}
-): UseQueryResult<CustomersResponse, Error> {
-  const apiClient = useApiClient();
-
-  return useQuery({
-    queryKey: CUSTOMERS_QUERY_KEYS.list(params),
-    queryFn: async (): Promise<CustomersResponse> => {
-      // ✅ FOLLOWS CORE_REQUIREMENTS.md: Use pure useApiClient pattern (like BasicInformationStep.tsx)
-      const searchParams = new URLSearchParams();
-
-      // Add parameters to search params
-      if (params.page) searchParams.set('page', params.page.toString());
-      if (params.limit) searchParams.set('limit', params.limit.toString());
-      if (params.search) searchParams.set('search', params.search);
-      if (params.status) searchParams.set('status', params.status);
-      if (params.tier) searchParams.set('tier', params.tier);
-      if (params.industry) searchParams.set('industry', params.industry);
-      if (params.cursor) searchParams.set('cursor', params.cursor);
-      if (params.sortBy) searchParams.set('sortBy', params.sortBy);
-      if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
-
-      try {
-        const response = await apiClient.get<{
-          success: boolean;
-          data: CustomersResponse;
-          message: string;
-        }>(`customers?${searchParams.toString()}`);
-
-        if (!response.success) {
-          throw new Error(response.message || 'Failed to fetch customers');
-        }
-
-        return response.data;
-      } catch (error) {
-        logWarn('Failed to fetch customers:', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        ErrorHandlingService.getInstance().processError(
-          error as Error,
-          'Failed to fetch customers',
-          ErrorCodes.API.REQUEST_FAILED,
-          {
-            component: 'useCustomers',
-            operation: 'fetchCustomers',
-          }
-        );
-        throw error;
-      }
-    },
-    // ✅ PERFORMANCE: Optimized for speed with minimal resilience to dev rebuilds
-    staleTime: 30 * 1000, // 30 seconds for fast updates
-    gcTime: 2 * 60 * 1000, // 2 minutes
+// Infinite query for customer list with cursor pagination
+export function useInfiniteCustomers({
+  search = '',
+  limit = 20,
+  sortBy = 'createdAt',
+  sortOrder = 'desc',
+  status,
+  tier,
+  industry,
+}: CustomerQuery) {
+  return useInfiniteQuery({
+    queryKey: qk.customers.list(search, limit, sortBy, sortOrder),
+    queryFn: ({ pageParam }) =>
+      customerService.getCustomers({
+        search,
+        limit,
+        sortBy,
+        sortOrder,
+        status,
+        tier,
+        industry,
+        cursor: pageParam as string | null,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: any) => lastPage.data?.nextCursor || undefined,
+    staleTime: 60_000, // 1 minute
+    gcTime: 120_000, // 2 minutes
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false, // Keep disabled; use targeted retry below
-    retry: (failureCount, error) => {
-      // Only retry transient network errors (e.g., during Fast Refresh)
-      const isNetworkError =
-        error instanceof TypeError || /Failed to fetch|load failed/i.test(String(error));
-      return isNetworkError && failureCount < 2;
-    },
-    retryDelay: 300,
+    retry: 1,
   });
 }
 
-/**
- * Hook for fetching a single customer by ID
- */
-export function useCustomer(id: string): UseQueryResult<Customer, Error> {
-  const apiClient = useApiClient();
-
+// Single customer query
+export function useCustomer(id: string) {
   return useQuery({
-    queryKey: CUSTOMERS_QUERY_KEYS.detail(id),
-    queryFn: async (): Promise<Customer> => {
-      const response = await apiClient.get<{
-        success: boolean;
-        data: Customer;
-        message: string;
-      }>(`customers/${id}`);
-
-      if (!response.success) {
-        // Log error but let React Query handle the error state
-        logWarn('[useCustomers] Customer fetch failed:', {
-          message: response.message || 'Failed to fetch customer',
-        });
-        throw new Error(response.message || 'Failed to fetch customer');
-      }
-
-      return response.data;
-    },
-    // Cache single customers for longer since they change less frequently
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    enabled: !!id, // Only run query if ID is provided
-    retry: 2,
+    queryKey: qk.customers.detail(id),
+    queryFn: () => customerService.getCustomer(id),
+    enabled: !!id,
+    staleTime: 60_000,
+    gcTime: 120_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
 
-/**
- * Hook for searching customers with debouncing
- */
-export function useCustomerSearch(
-  searchTerm: string,
-  options: Omit<CustomersQueryParams, 'search'> = {}
-): UseQueryResult<CustomersResponse, Error> {
-  const apiClient = useApiClient();
-
+// Customer search query
+export function useCustomerSearch(query: string, limit: number = 10) {
   return useQuery({
-    queryKey: CUSTOMERS_QUERY_KEYS.search(searchTerm),
-    queryFn: async (): Promise<CustomersResponse> => {
-      const searchParams = new URLSearchParams();
-      searchParams.set('search', searchTerm);
+    queryKey: qk.customers.search(query, limit),
+    queryFn: () => customerService.searchCustomers(query, limit),
+    enabled: !!query && query.length >= 2,
+    staleTime: 30_000, // 30 seconds for search results
+    gcTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
 
-      // Add other options (entries only includes present keys)
-      Object.entries(options).forEach(([key, value]) => {
-        searchParams.set(key, String(value));
+// Multiple customers by IDs using useQueries
+export function useCustomersByIds(ids: string[]) {
+  const results = useQueries({
+    queries: ids.map(id => ({
+      queryKey: qk.customers.detail(id),
+      queryFn: () => customerService.getCustomer(id),
+      enabled: !!id,
+      staleTime: 60_000,
+      gcTime: 120_000,
+    })),
+  });
+
+  return {
+    data: results.map(r => (r.data?.ok ? r.data.data : null)).filter(Boolean) as Customer[],
+    isLoading: results.some(r => r.isLoading),
+    isError: results.some(r => r.isError),
+    errors: results.filter(r => r.error).map(r => r.error),
+  };
+}
+
+// Create customer mutation
+export function useCreateCustomer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CustomerCreate) => customerService.createCustomer(data),
+    onSuccess: response => {
+      // Invalidate all customer lists
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'customer_created',
+        {
+          customerId: response.ok ? response.data?.id : undefined,
+          customerName: response.ok ? response.data?.name : undefined,
+        },
+        'US-3.1',
+        'H4'
+      );
+    },
+    onError: error => {
+      analytics.trackOptimized(
+        'customer_creation_failed',
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'US-3.1',
+        'H4'
+      );
+    },
+  });
+}
+
+// Update customer mutation
+export function useUpdateCustomer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CustomerUpdate }) =>
+      customerService.updateCustomer(id, data),
+    onSuccess: (response, { id }) => {
+      // Invalidate specific customer and all lists
+      queryClient.invalidateQueries({ queryKey: qk.customers.detail(id) });
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'customer_updated',
+        {
+          customerId: id,
+          customerName: response.ok ? response.data?.name : undefined,
+        },
+        'US-3.2',
+        'H4'
+      );
+    },
+    onError: (error, { id }) => {
+      analytics.trackOptimized(
+        'customer_update_failed',
+        {
+          customerId: id,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'US-3.2',
+        'H4'
+      );
+    },
+  });
+}
+
+// Delete customer mutation
+export function useDeleteCustomer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => customerService.deleteCustomer(id),
+    onSuccess: (_, id) => {
+      // Invalidate all customer queries
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+
+      // Remove from cache
+      queryClient.removeQueries({ queryKey: qk.customers.detail(id) });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'customer_deleted',
+        {
+          customerId: id,
+        },
+        'US-3.3',
+        'H4'
+      );
+    },
+    onError: (error, id) => {
+      analytics.trackOptimized(
+        'customer_deletion_failed',
+        {
+          customerId: id,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'US-3.3',
+        'H4'
+      );
+    },
+  });
+}
+
+// Bulk delete customers mutation
+export function useDeleteCustomersBulk() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => customerService.deleteCustomersBulk(ids),
+    onSuccess: (response, ids) => {
+      // Invalidate all customer queries
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+
+      // Remove from cache
+      ids.forEach(id => {
+        queryClient.removeQueries({ queryKey: qk.customers.detail(id) });
       });
 
-      const response = await apiClient.get<{
-        success: boolean;
-        data: CustomersResponse;
-        message: string;
-      }>(`customers?${searchParams.toString()}`);
-
-      if (!response.success) {
-        throw new Error(response.message || 'Failed to search customers');
-      }
-
-      return response.data;
+      // Track analytics
+      analytics.trackOptimized(
+        'customers_bulk_deleted',
+        {
+          deletedCount: response.ok ? response.data?.deleted || 0 : 0,
+          customerIds: ids,
+        },
+        'US-3.4',
+        'H4'
+      );
     },
-    // Only search if there's a search term (at least 2 characters)
-    enabled: searchTerm.length >= 2,
-    // Shorter cache for search results
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
-    retry: 1,
+    onError: (error, ids) => {
+      analytics.trackOptimized(
+        'customers_bulk_deletion_failed',
+        {
+          customerCount: ids.length,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'US-3.4',
+        'H4'
+      );
+    },
+  });
+}
+
+// Optimistic updates for better UX
+export function useOptimisticCustomerUpdate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CustomerUpdate }) =>
+      customerService.updateCustomer(id, data),
+    onMutate: async ({ id, data }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: qk.customers.detail(id) });
+
+      // Snapshot previous value
+      const previousCustomer = queryClient.getQueryData(qk.customers.detail(id));
+
+      // Optimistically update
+      queryClient.setQueryData(qk.customers.detail(id), (old: any) => ({
+        ...old,
+        data: { ...old?.data, ...data, updatedAt: new Date().toISOString() },
+      }));
+
+      return { previousCustomer };
+    },
+    onError: (error, { id }, context) => {
+      // Rollback on error
+      if (context?.previousCustomer) {
+        queryClient.setQueryData(qk.customers.detail(id), context.previousCustomer);
+      }
+    },
+    onSettled: (_, __, { id }) => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: qk.customers.detail(id) });
+    },
   });
 }

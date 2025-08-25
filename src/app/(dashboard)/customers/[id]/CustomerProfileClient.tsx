@@ -3,21 +3,27 @@
 /**
  * PosalPro MVP2 - Customer Profile Client Component
  * ✅ GOLD STANDARD IMPLEMENTATION: React Query + CORE_REQUIREMENTS.md Compliance
+ * ✅ INTEGRATED: New Validation Library
  *
  * Following patterns from:
  * - src/hooks/useProducts.ts (React Query implementation)
  * - CORE_REQUIREMENTS.md → Data Fetching & Performance; React Query Patterns
+ * - Validation Library (useFormValidation + FormField components)
  */
 
 import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
+import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useFormValidation } from '@/hooks/useFormValidation';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logError, logInfo } from '@/lib/logger';
+import type { CustomerEditData } from '@/lib/validation/customerValidation';
+import { customerValidationSchema } from '@/lib/validation/customerValidation';
 import {
   BuildingOfficeIcon,
   CalendarIcon,
@@ -95,19 +101,6 @@ interface Customer {
   tags: string[];
 }
 
-interface CustomerEditData {
-  name: string;
-  industry: string;
-  address: string;
-  phone: string;
-  website: string;
-  email: string;
-  tier: CustomerTier;
-  annualRevenue: number;
-  employeeCount: number;
-  tags: string[];
-}
-
 export function CustomerProfileClient({ customerId }: { customerId: string }) {
   const router = useRouter();
   const { trackOptimized } = useOptimizedAnalytics();
@@ -118,7 +111,27 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
 
   // ✅ EDIT STATE (local, not queried)
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState<CustomerEditData | null>(null);
+
+  // ✅ REUSABLE VALIDATION HOOK
+  const validation = useFormValidation(
+    {
+      name: '',
+      email: '',
+      phone: '',
+      website: '',
+      address: '',
+      industry: '',
+      annualRevenue: undefined,
+      employeeCount: undefined,
+      tier: 'bronze',
+      tags: [],
+    } as CustomerEditData,
+    customerValidationSchema,
+    {
+      validateOnChange: false, // Don't validate on change initially
+      validateOnBlur: true,
+    }
+  );
 
   // ✅ REACT QUERY: Query Keys
   const CUSTOMER_QUERY_KEYS = useMemo(
@@ -233,7 +246,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   // ✅ Initialize edit data when entering edit mode
   const handleEditToggle = useCallback(() => {
     if (!isEditing && customer) {
-      setEditData({
+      const initialData: CustomerEditData = {
         name: customer.name,
         industry: customer.industry,
         address: customer.address,
@@ -244,34 +257,30 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         annualRevenue: customer.annualRevenue,
         employeeCount: customer.employeeCount,
         tags: [...customer.tags],
-      });
+      };
+      validation.resetForm(initialData);
       setIsEditing(true);
     } else {
       setIsEditing(false);
-      setEditData(null);
+      validation.resetForm();
     }
-  }, [isEditing, customer]);
-
-  // ✅ Validation
-  const validateEditData = useCallback((data: CustomerEditData): string[] => {
-    const errors: string[] = [];
-    if (!data.name?.trim()) errors.push('Company name is required');
-    if (!data.email?.trim()) errors.push('Email is required');
-    if (!data.phone?.trim()) errors.push('Phone number is required');
-    if (data.annualRevenue <= 0) errors.push('Annual revenue must be greater than 0');
-    if (data.employeeCount <= 0) errors.push('Employee count must be greater than 0');
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (data.email && !emailRegex.test(data.email))
-      errors.push('Please enter a valid email address');
-    return errors;
-  }, []);
+  }, [isEditing, customer, validation]);
 
   // ✅ REACT QUERY: Update customer mutation
   const { mutateAsync: saveCustomer, isPending: isSaving } = useMutation({
     mutationFn: async (data: CustomerEditData): Promise<Customer> => {
-      const validationErrors = validateEditData(data);
-      if (validationErrors.length > 0) {
-        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+      // Basic validation for required fields
+      if (!data.name?.trim()) {
+        throw new Error('Company name is required');
+      }
+      if (!data.email?.trim()) {
+        throw new Error('Email address is required');
+      }
+
+      // Validate all fields
+      const errors = validation.validateAll();
+      if (Object.keys(errors).length > 0) {
+        throw new Error(`Validation failed: ${Object.values(errors).join(', ')}`);
       }
 
       const payload: Record<string, unknown> = {
@@ -282,13 +291,25 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         address: data.address,
         industry: data.industry,
         tags: data.tags,
-        revenue: typeof data.annualRevenue === 'number' ? data.annualRevenue : undefined,
-        metadata: { employeeCount: data.employeeCount, uiTier: data.tier },
+        metadata: {
+          uiTier: data.tier,
+        },
       };
+
+      // Only add revenue if it's defined
+      if (data.annualRevenue !== undefined) {
+        payload.revenue = data.annualRevenue;
+      }
+
+      // Only add employeeCount if it's defined (as a direct field, not in metadata)
+      if (data.employeeCount !== undefined) {
+        payload.employeeCount = data.employeeCount;
+      }
 
       void logDebug('[CustomerProfile] Update start', {
         customerId,
         payloadKeys: Object.keys(payload),
+        payload,
       });
 
       try {
@@ -334,12 +355,23 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       });
       void logInfo('[CustomerProfile] onSuccess mutation', { customerId });
       setIsEditing(false);
-      setEditData(null);
+      validation.resetForm();
     },
     onError: (err: unknown) => {
       const message =
         err instanceof Error ? err.message : 'An error occurred while updating the customer';
-      toast.error(message);
+
+      // Enhanced error display
+      if (message.includes('Validation failed')) {
+        // Show validation errors in a more prominent way
+        toast.error('Please fix the following issues:', {
+          description: message.replace('Validation failed: ', ''),
+          duration: 8000,
+        });
+      } else {
+        toast.error(message);
+      }
+
       trackOptimized('save_customer_error', { customerId, error: message, userStory: 'US-2.3' });
       void logError('[CustomerProfile] onError mutation', { customerId, error: message });
     },
@@ -418,44 +450,71 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       <div className="mb-8">
         <div className="flex justify-between items-start">
           <div>
-            {isEditing && editData ? (
+            {isEditing ? (
               <div className="space-y-2">
-                <input
-                  type="text"
-                  value={editData.name || ''}
-                  onChange={e => setEditData({ ...editData, name: e.target.value })}
-                  className="text-2xl font-bold text-gray-900 border-b-2 border-blue-500 bg-transparent focus:outline-none"
-                  placeholder="Company name"
-                />
+                <div className="space-y-1">
+                  <FormField
+                    name="name"
+                    label=""
+                    value={validation.formData.name}
+                    onChange={value => validation.handleFieldChange('name', value)}
+                    onBlur={() => validation.handleFieldBlur('name')}
+                    error={validation.getFieldError('name')}
+                    touched={validation.isFieldTouched('name')}
+                    required
+                    className="text-2xl font-bold text-gray-900"
+                    inputClassName="text-2xl font-bold text-gray-900 border-b-2 bg-transparent focus:outline-none"
+                    placeholder="Company name"
+                  />
+                </div>
                 <div className="flex items-center space-x-4 text-sm">
-                  <input
-                    type="text"
-                    value={editData.industry || ''}
-                    onChange={e => setEditData({ ...editData, industry: e.target.value })}
-                    className="border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
-                    placeholder="Industry"
-                  />
+                  <div className="space-y-1">
+                    <FormField
+                      name="industry"
+                      label=""
+                      value={validation.formData.industry}
+                      onChange={value => validation.handleFieldChange('industry', value)}
+                      onBlur={() => validation.handleFieldBlur('industry')}
+                      error={validation.getFieldError('industry')}
+                      touched={validation.isFieldTouched('industry')}
+                      className="border-b bg-transparent focus:outline-none"
+                      inputClassName="border-b bg-transparent focus:outline-none"
+                      placeholder="Industry"
+                    />
+                  </div>
                   <span>•</span>
-                  <input
-                    type="number"
-                    value={editData.employeeCount || 0}
-                    onChange={e =>
-                      setEditData({ ...editData, employeeCount: parseInt(e.target.value) || 0 })
-                    }
-                    className="w-20 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
-                    placeholder="0"
-                  />
+                  <div className="space-y-1">
+                    <FormField
+                      name="employeeCount"
+                      label=""
+                      type="number"
+                      value={validation.formData.employeeCount}
+                      onChange={value => validation.handleFieldChange('employeeCount', value)}
+                      onBlur={() => validation.handleFieldBlur('employeeCount')}
+                      error={validation.getFieldError('employeeCount')}
+                      touched={validation.isFieldTouched('employeeCount')}
+                      className="w-20"
+                      inputClassName="w-20 border-b bg-transparent focus:outline-none"
+                      placeholder="0"
+                    />
+                  </div>
                   <span>employees</span>
                   <span>•</span>
-                  <input
-                    type="number"
-                    value={editData.annualRevenue || 0}
-                    onChange={e =>
-                      setEditData({ ...editData, annualRevenue: parseInt(e.target.value) || 0 })
-                    }
-                    className="w-32 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
-                    placeholder="0"
-                  />
+                  <div className="space-y-1">
+                    <FormField
+                      name="annualRevenue"
+                      label=""
+                      type="number"
+                      value={validation.formData.annualRevenue}
+                      onChange={value => validation.handleFieldChange('annualRevenue', value)}
+                      onBlur={() => validation.handleFieldBlur('annualRevenue')}
+                      error={validation.getFieldError('annualRevenue')}
+                      touched={validation.isFieldTouched('annualRevenue')}
+                      className="w-32"
+                      inputClassName="w-32 border-b bg-transparent focus:outline-none"
+                      placeholder="0"
+                    />
+                  </div>
                   <span>revenue</span>
                 </div>
               </div>
@@ -465,9 +524,12 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                   <span>{customer.industry}</span>
                   <span>•</span>
-                  <span>{customer.employeeCount.toLocaleString()} employees</span>
+                  <span>{customer.employeeCount?.toLocaleString() || 'N/A'} employees</span>
                   <span>•</span>
-                  <span>{formatLargeNumber(customer.annualRevenue)} revenue</span>
+                  <span>
+                    {customer.annualRevenue ? formatLargeNumber(customer.annualRevenue) : 'N/A'}{' '}
+                    revenue
+                  </span>
                 </div>
               </div>
             )}
@@ -498,10 +560,10 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => editData && saveCustomer(editData)}
+                  onClick={() => saveCustomer(validation.formData)}
                   variant="primary"
                   className="flex items-center min-h-[44px]"
-                  disabled={isSaving}
+                  disabled={isSaving || !validation.formData.name || !validation.formData.email}
                   aria-label="Save changes"
                 >
                   <CheckIcon className="w-4 h-4 mr-2" />
@@ -523,6 +585,13 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         </div>
       </div>
 
+      {/* Validation Error Summary */}
+      {isEditing && validation.hasErrors && (
+        <div className="mb-6">
+          <FormErrorSummary errors={validation.validationErrors} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Customer Overview */}
         <div className="lg:col-span-1 space-y-6">
@@ -533,12 +602,18 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
               <div className="space-y-3">
                 <div className="flex items-center">
                   <BuildingOfficeIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing && editData ? (
-                    <input
-                      type="text"
-                      value={editData.name || ''}
-                      onChange={e => setEditData({ ...editData, name: e.target.value })}
-                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                  {isEditing ? (
+                    <FormField
+                      name="name"
+                      label=""
+                      value={validation.formData.name}
+                      onChange={value => validation.handleFieldChange('name', value)}
+                      onBlur={() => validation.handleFieldBlur('name')}
+                      error={validation.getFieldError('name')}
+                      touched={validation.isFieldTouched('name')}
+                      required
+                      className="flex-1"
+                      inputClassName="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
                       placeholder="Company name"
                     />
                   ) : (
@@ -547,12 +622,17 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 </div>
                 <div className="flex items-center">
                   <MapPinIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing && editData ? (
-                    <input
-                      type="text"
-                      value={editData.address || ''}
-                      onChange={e => setEditData({ ...editData, address: e.target.value })}
-                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                  {isEditing ? (
+                    <FormField
+                      name="address"
+                      label=""
+                      value={validation.formData.address}
+                      onChange={value => validation.handleFieldChange('address', value)}
+                      onBlur={() => validation.handleFieldBlur('address')}
+                      error={validation.getFieldError('address')}
+                      touched={validation.isFieldTouched('address')}
+                      className="flex-1"
+                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
                       placeholder="Address"
                     />
                   ) : (
@@ -561,12 +641,18 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 </div>
                 <div className="flex items-center">
                   <PhoneIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing && editData ? (
-                    <input
-                      type="text"
-                      value={editData.phone || ''}
-                      onChange={e => setEditData({ ...editData, phone: e.target.value })}
-                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                  {isEditing ? (
+                    <FormField
+                      name="phone"
+                      label=""
+                      type="tel"
+                      value={validation.formData.phone}
+                      onChange={value => validation.handleFieldChange('phone', value)}
+                      onBlur={() => validation.handleFieldBlur('phone')}
+                      error={validation.getFieldError('phone')}
+                      touched={validation.isFieldTouched('phone')}
+                      className="flex-1"
+                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
                       placeholder="Phone number"
                     />
                   ) : (
@@ -575,12 +661,19 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 </div>
                 <div className="flex items-center">
                   <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing && editData ? (
-                    <input
+                  {isEditing ? (
+                    <FormField
+                      name="email"
+                      label=""
                       type="email"
-                      value={editData.email || ''}
-                      onChange={e => setEditData({ ...editData, email: e.target.value })}
-                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                      value={validation.formData.email}
+                      onChange={value => validation.handleFieldChange('email', value)}
+                      onBlur={() => validation.handleFieldBlur('email')}
+                      error={validation.getFieldError('email')}
+                      touched={validation.isFieldTouched('email')}
+                      required
+                      className="flex-1"
+                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
                       placeholder="Email address"
                     />
                   ) : (
@@ -589,12 +682,18 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 </div>
                 <div className="flex items-center">
                   <GlobeAltIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing && editData ? (
-                    <input
-                      type="text"
-                      value={editData.website || ''}
-                      onChange={e => setEditData({ ...editData, website: e.target.value })}
-                      className="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                  {isEditing ? (
+                    <FormField
+                      name="website"
+                      label=""
+                      type="url"
+                      value={validation.formData.website}
+                      onChange={value => validation.handleFieldChange('website', value)}
+                      onBlur={() => validation.handleFieldBlur('website')}
+                      error={validation.getFieldError('website')}
+                      touched={validation.isFieldTouched('website')}
+                      className="flex-1"
+                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
                       placeholder="Website URL"
                     />
                   ) : (

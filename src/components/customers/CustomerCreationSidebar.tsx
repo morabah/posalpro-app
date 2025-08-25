@@ -1,9 +1,9 @@
 'use client';
 
-import { Customer } from '@/hooks/useCustomers';
 import { apiClient } from '@/lib/api/client';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { Customer } from '@/services/customerService';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Building, DollarSign, Globe, Loader2, Mail, MapPin, Save, Tag, X } from 'lucide-react';
 import { useState } from 'react';

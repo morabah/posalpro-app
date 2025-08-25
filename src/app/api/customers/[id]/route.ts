@@ -1,10 +1,11 @@
-import { logger } from '@/lib/logger';/**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Individual Customer API Routes
  * Enhanced customer operations with authentication and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -15,7 +16,6 @@ import {
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -34,18 +34,22 @@ const CustomerUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   email: z.string().email('Invalid email format').optional(),
   phone: z.string().max(20).optional(),
-  website: z.string().url('Invalid website URL').optional(),
+  website: z
+    .string()
+    .url('Please enter a valid website URL (e.g., https://example.com)')
+    .optional(),
   address: z.string().max(500).optional(),
   industry: z.string().max(100).optional(),
   companySize: z.string().max(50).optional(),
-  revenue: z.number().min(0).optional(),
+  revenue: z.number().min(0).optional().or(z.undefined()),
+  employeeCount: z.number().min(0).optional().or(z.undefined()),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']).optional(),
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.any()).optional(),
   segmentation: z.record(z.any()).optional(),
-  riskScore: z.number().min(0).max(100).optional(),
-  ltv: z.number().min(0).optional(),
+  riskScore: z.number().min(0).max(100).optional().or(z.undefined()),
+  ltv: z.number().min(0).optional().or(z.undefined()),
 });
 
 /**
@@ -244,6 +248,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   await validateApiPermission(request, { resource: 'customers', action: 'update' });
+  let body: any;
   try {
     const params = await context.params;
     const { id } = params;
@@ -255,7 +260,11 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Parse and validate request body
-    const body = await request.json();
+    body = await request.json();
+
+    // Debug: Log the incoming payload
+    logger.debug('Customer update payload:', { body, customerId: id });
+
     const validatedData = CustomerUpdateSchema.parse(body);
 
     // Check if customer exists
@@ -345,8 +354,16 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     logger.error(`Failed to update customer ${params.id}:`, error);
 
     if (error instanceof z.ZodError) {
+      logger.error('Customer update validation failed:', {
+        errors: error.errors,
+        customerId: params.id,
+        receivedData: body,
+      });
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        {
+          error: 'Validation failed',
+          details: error.errors.map(err => `${err.path.join('.')}: ${err.message}`).join(', '),
+        },
         { status: 400 }
       );
     }

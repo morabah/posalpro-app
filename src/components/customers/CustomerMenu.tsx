@@ -1,7 +1,7 @@
 'use client';
 
 // Using basic button elements instead of custom components
-import { Customer } from '@/hooks/useCustomers';
+import { Customer } from '@/services/customerService';
 import { Plus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
