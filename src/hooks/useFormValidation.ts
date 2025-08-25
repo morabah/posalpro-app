@@ -8,7 +8,7 @@ export interface ValidationRule {
   minLength?: number;
   maxLength?: number;
   pattern?: RegExp;
-  custom?: (value: any) => string | null;
+  custom?: (value: unknown) => string | null;
   message?: string;
 }
 
@@ -19,7 +19,7 @@ export interface ValidationSchema {
 
 // ✅ Form Data Interface
 export interface FormData {
-  [fieldName: string]: any;
+  [fieldName: string]: unknown;
 }
 
 // ✅ Validation Errors Interface
@@ -30,7 +30,7 @@ export interface ValidationErrors {
 // ✅ Built-in Validation Patterns
 export const VALIDATION_PATTERNS = {
   email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  phone: /^[\+]?[1-9][\d]{0,15}$/,
+  phone: /^[+]?[\d][\d\s\-()]{0,20}$/,
   url: /^https?:\/\/.+/,
   numeric: /^\d+$/,
   alphanumeric: /^[a-zA-Z0-9\s]+$/,
@@ -74,11 +74,11 @@ export function useFormValidation<T extends FormData>(
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
-  const { validateOnChange = true, validateOnBlur = true, debounceMs = 300 } = options || {};
+  const { validateOnChange = true, validateOnBlur = true } = options || {};
 
   // ✅ Validate a single field
   const validateField = useCallback(
-    (fieldName: string, value: any): string | null => {
+    (fieldName: string, value: unknown): string | null => {
       const rule = validationSchema[fieldName];
       if (!rule) return null;
 
@@ -150,7 +150,7 @@ export function useFormValidation<T extends FormData>(
 
   // ✅ Handle field change with validation
   const handleFieldChange = useCallback(
-    (fieldName: string, value: any) => {
+    (fieldName: string, value: unknown) => {
       setFormData(prev => ({ ...prev, [fieldName]: value }));
 
       // Clear previous error for this field
@@ -280,10 +280,10 @@ export const COMMON_VALIDATION_SCHEMAS = {
 
   positiveNumber: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (value !== undefined && value !== null) {
-        if (value < 0) return VALIDATION_MESSAGES.positiveNumber;
-        if (value === 0) return VALIDATION_MESSAGES.nonZero;
+        if (typeof value === 'number' && value < 0) return VALIDATION_MESSAGES.positiveNumber;
+        if (typeof value === 'number' && value === 0) return VALIDATION_MESSAGES.nonZero;
       }
       return null;
     },

@@ -277,11 +277,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         throw new Error('Email address is required');
       }
 
-      // Validate all fields
-      const errors = validation.validateAll();
-      if (Object.keys(errors).length > 0) {
-        throw new Error(`Validation failed: ${Object.values(errors).join(', ')}`);
-      }
+      // Note: Validation is now handled by disabled save button state
 
       const payload: Record<string, unknown> = {
         name: data.name,
@@ -301,10 +297,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         payload.revenue = data.annualRevenue;
       }
 
-      // Only add employeeCount if it's defined (as a direct field, not in metadata)
-      if (data.employeeCount !== undefined) {
-        payload.employeeCount = data.employeeCount;
-      }
+      // Note: employeeCount field removed as it doesn't exist in Customer schema
 
       void logDebug('[CustomerProfile] Update start', {
         customerId,
@@ -563,7 +556,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   onClick={() => saveCustomer(validation.formData)}
                   variant="primary"
                   className="flex items-center min-h-[44px]"
-                  disabled={isSaving || !validation.formData.name || !validation.formData.email}
+                  disabled={isSaving || !validation.isValid}
                   aria-label="Save changes"
                 >
                   <CheckIcon className="w-4 h-4 mr-2" />

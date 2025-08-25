@@ -164,13 +164,13 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   const fetchCustomers = useCallback(async () => {
     // ✅ CRITICAL: Prevent duplicate requests
     if (isRequestInProgress.current) {
-      // dev log removed
+      console.log('[DEBUG] fetchCustomers: Request already in progress, skipping');
       return;
     }
 
     // ✅ CRITICAL: Check if we already have customers loaded
     if (customers.length > 0) {
-      // dev log removed
+      console.log('[DEBUG] fetchCustomers: Customers already loaded, skipping');
       return;
     }
 
@@ -179,29 +179,28 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       setCustomersLoading(true);
       setCustomersError(null);
 
-      // dev log removed
+      console.log('[DEBUG] fetchCustomers: Starting API call to /customers');
       const response = await apiClient.get<{
-        success: boolean;
-        data?: { customers: Customer[] };
+        ok: boolean;
+        data?: { items: Customer[]; nextCursor?: string | null };
+        code?: string;
         message?: string;
-      }>(`/customers?page=1&limit=10&sortBy=name&sortOrder=asc`);
+      }>(`/customers?limit=10&sortBy=name&sortOrder=asc`);
 
-      // dev log removed
+      console.log('[DEBUG] fetchCustomers: API response received:', response);
 
       // ✅ ENHANCED: Better response validation
       if (response && typeof response === 'object') {
-        if (
-          response.success &&
-          response.data!.customers &&
-          Array.isArray(response.data!.customers)
-        ) {
-          const customerList = response.data!.customers;
-          // dev log removed
+        if (response.ok && response.data?.items && Array.isArray(response.data.items)) {
+          const customerList = response.data.items;
+          console.log('[DEBUG] fetchCustomers: Setting customers:', customerList);
           setCustomers(customerList);
-        } else if (response.success === false) {
+        } else if (response.ok === false) {
           // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
           const standardError = errorHandlingService.processError(
-            new Error(`API returned error: ${response.message || 'Unknown error'}`),
+            new Error(
+              `API returned error: ${response.message || response.code || 'Unknown error'}`
+            ),
             'Unable to load customers. Please try again.',
             ErrorCodes.API.RESPONSE_ERROR,
             {
@@ -246,6 +245,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
       }
     } catch (error) {
+      console.log('[DEBUG] fetchCustomers: Error occurred:', error);
       // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
       const standardError = errorHandlingService.processError(
         error,
@@ -261,6 +261,7 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
       setCustomers([]);
       setCustomersError(errorHandlingService.getUserFriendlyMessage(standardError));
     } finally {
+      console.log('[DEBUG] fetchCustomers: Request completed, setting loading to false');
       setCustomersLoading(false);
       isRequestInProgress.current = false;
     }
@@ -451,8 +452,14 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
   // ✅ FIXED: Handle customer selection with proper form validation
   const handleCustomerChange = useCallback(
     (customerId: string) => {
+      console.log('[DEBUG] handleCustomerChange: Called with customerId:', customerId);
+      console.log('[DEBUG] handleCustomerChange: Available customers:', customers);
+
       const customer = customers.find((c: Customer) => c.id === customerId);
+      console.log('[DEBUG] handleCustomerChange: Found customer:', customer);
+
       if (customer) {
+        console.log('[DEBUG] handleCustomerChange: Setting selected customer:', customer);
         setSelectedCustomer(customer);
 
         // ✅ CRITICAL FIX: Update form values and trigger validation
@@ -475,6 +482,8 @@ export function BasicInformationStep({ data, onUpdate, analytics }: BasicInforma
         // This prevents infinite loops from customer selection → field change → customer selection
         const formData = collectFormData();
         debouncedHandleUpdate(formData);
+      } else {
+        console.log('[DEBUG] handleCustomerChange: Customer not found for ID:', customerId);
       }
     },
     [customers, setValue, trigger, analytics, collectFormData, debouncedHandleUpdate]

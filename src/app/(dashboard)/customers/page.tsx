@@ -1,4 +1,4 @@
-import { CustomerList_new } from '@/components/customers/CustomerList';
+import CustomerList_new from '@/components/customers/CustomerList';
 import { Metadata } from 'next';
 import { Suspense } from 'react';
 

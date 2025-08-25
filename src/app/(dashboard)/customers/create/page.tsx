@@ -22,7 +22,7 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { validateApiPermission } from '@/lib/security/rbac';
+// RBAC handled by createRoute wrapper in API routes
 import type { CustomerEditData } from '@/lib/validation/customerValidation';
 import { customerValidationSchema } from '@/lib/validation/customerValidation';
 import { ApiResponse } from '@/types/api';
@@ -68,156 +68,10 @@ const CustomerCreationPage = dynamic(() => Promise.resolve(CustomerCreationPageC
   ),
 });
 
-// ✅ RBAC VALIDATION: Permission check component
-function RBACGuard({ children }: { children: React.ReactNode }) {
-  const { data: session } = useSession();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
+// ✅ REMOVED: AuthGuard - AuthenticationGuard already handles auth
+// RBAC is handled by createRoute wrapper in API routes
 
-  // ✅ RBAC: Map backend role names to frontend RBAC role names
-  const mapBackendRoleToRBACRole = (backendRole: string): string => {
-    const roleMapping: Record<string, string> = {
-      'System Administrator': 'SYSTEM_ADMINISTRATOR',
-      'Team Manager': 'TEAM_MANAGER',
-      'Proposal Manager': 'PROPOSAL_MANAGER',
-      'SME Contributor': 'SME_CONTRIBUTOR',
-      Viewer: 'VIEWER',
-    };
-    return roleMapping[backendRole] || backendRole;
-  };
-
-  // ✅ RBAC: Get user roles from session or default based on environment
-  const getUserRoles = (user: {
-    roles?: Array<{ name?: string; role?: string; roleName?: string; title?: string } | string>;
-  }): string[] => {
-    // ✅ RBAC: Extract roles from user session and map them properly
-    if (user?.roles && Array.isArray(user.roles)) {
-      // ✅ RBAC: Handle different role structures
-      const mappedRoles = user.roles
-        .map(role => {
-          // ✅ RBAC: Try different possible role name properties
-          let roleName: string | undefined;
-
-          if (typeof role === 'string') {
-            roleName = role;
-          } else if (typeof role === 'object' && role !== null && role !== undefined) {
-            const roleObj = role as {
-              name?: string;
-              role?: string;
-              roleName?: string;
-              title?: string;
-            };
-            roleName = roleObj.name || roleObj.role || roleObj.roleName || roleObj.title;
-          }
-
-          // ✅ RBAC: If still undefined, skip this role
-          if (!roleName) {
-            return null;
-          }
-
-          return mapBackendRoleToRBACRole(roleName);
-        })
-        .filter((role): role is string => role !== null); // Remove null values and type guard
-
-      // ✅ RBAC: If we successfully mapped roles, return them
-      if (mappedRoles.length > 0) {
-        return mappedRoles;
-      }
-    }
-
-    // ✅ RBAC: Fallback for development environment
-    if (process.env.NODE_ENV === 'development') {
-      return ['SYSTEM_ADMINISTRATOR']; // Use frontend RBAC role name
-    }
-
-    // ✅ RBAC: Default fallback for production
-    return ['TEAM_MANAGER']; // Use frontend RBAC role name
-  };
-
-  useEffect(() => {
-    if (!session?.user) {
-      setHasPermission(false);
-      setIsChecking(false);
-      return;
-    }
-
-    // ✅ RBAC: Check customer creation permissions
-    const checkPermissions = async () => {
-      try {
-        const userRoles = getUserRoles(session.user);
-
-        const canCreateCustomers = await validateApiPermission({
-          resource: 'customers',
-          action: 'create',
-          scope: 'TEAM',
-          context: {
-            userId: session.user.id || session.user.email,
-            userRoles: userRoles,
-            userPermissions: [],
-          },
-        });
-        setHasPermission(canCreateCustomers);
-      } catch (error) {
-        logError('Permission check failed', {
-          component: 'RBACGuard',
-          operation: 'permission_check',
-          userStory: 'US-2.1',
-          hypothesis: 'H4',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-        setHasPermission(false);
-      } finally {
-        setIsChecking(false);
-      }
-    };
-
-    checkPermissions();
-  }, [session]);
-
-  if (isChecking) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  // ✅ RBAC: Show access denied if no permission (for testing)
-  if (!hasPermission) {
-    logDebug('RBAC: Access denied - debugging permission check', {
-      component: 'RBACGuard',
-      operation: 'access_denied_debug',
-      userStory: 'US-2.1',
-      hypothesis: 'H4',
-      userId: session?.user?.id || session?.user?.email,
-      userRoles: session?.user ? getUserRoles(session.user) : [],
-      hasPermission,
-    });
-
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
-            <p className="text-gray-600 mb-4">You don't have permission to create customers.</p>
-            <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-left">
-              <p>
-                <strong>Debug Info:</strong>
-              </p>
-              <p>User ID: {session?.user?.id || session?.user?.email}</p>
-              <p>User Roles: {session?.user ? getUserRoles(session.user).join(', ') : 'None'}</p>
-              <p>Permission Result: {hasPermission ? 'Granted' : 'Denied'}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-// ✅ BRIDGE COMPLIANCE: Add authentication check component
+// ✅ SIMPLIFIED: Single authentication guard
 function AuthenticationGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -368,24 +222,8 @@ function CustomerCreationPageComponent() {
       setLoading(true);
 
       try {
-        // ✅ SECURITY: Validate user permissions before action
-        const userRoles =
-          process.env.NODE_ENV === 'development' ? ['SYSTEM_ADMINISTRATOR'] : ['TEAM_MANAGER'];
-
-        const hasPermission = await validateApiPermission({
-          resource: 'customers',
-          action: 'create',
-          scope: 'TEAM',
-          context: {
-            userId: 'current-user', // TODO: Get from session
-            userRoles: userRoles,
-            userPermissions: [],
-          },
-        });
-
-        if (!hasPermission) {
-          throw new Error('Insufficient permissions to create customers');
-        }
+        // ✅ SECURITY: Permissions handled by createRoute wrapper in API
+        // No manual RBAC validation needed in client code
 
         logDebug('Customer creation: Starting API call', {
           component: 'CustomerCreationPage',
@@ -486,195 +324,193 @@ function CustomerCreationPageComponent() {
         }
       >
         <AuthenticationGuard>
-          <RBACGuard>
-            <ErrorBoundary FallbackComponent={CustomerCreationErrorFallback}>
-              <div className="min-h-screen bg-gray-50" data-testid="customer-creation-page">
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                  {/* Header */}
-                  <div className="mb-8">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <Link
-                          href="/customers"
-                          className="inline-flex items-center text-gray-600 hover:text-gray-900"
-                          aria-label="Back to customers list"
-                        >
-                          <ArrowLeftIcon className="w-5 h-5 mr-2" />
-                          Back to Customers
-                        </Link>
-                        <div>
-                          <h1 className="text-3xl font-bold text-gray-900">Create New Customer</h1>
-                          <p className="mt-2 text-gray-600">Add a new customer to your database</p>
-                        </div>
+          <ErrorBoundary FallbackComponent={CustomerCreationErrorFallback}>
+            <div className="min-h-screen bg-gray-50" data-testid="customer-creation-page">
+              <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Header */}
+                <div className="mb-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <Link
+                        href="/customers"
+                        className="inline-flex items-center text-gray-600 hover:text-gray-900"
+                        aria-label="Back to customers list"
+                      >
+                        <ArrowLeftIcon className="w-5 h-5 mr-2" />
+                        Back to Customers
+                      </Link>
+                      <div>
+                        <h1 className="text-3xl font-bold text-gray-900">Create New Customer</h1>
+                        <p className="mt-2 text-gray-600">Add a new customer to your database</p>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Form */}
-                  <div className="bg-white shadow-sm rounded-lg">
-                    <div className="px-6 py-4 border-b border-gray-200">
-                      <h2 className="text-lg font-medium text-gray-900">Customer Information</h2>
-                    </div>
-
-                    <form
-                      onSubmit={handleSubmit}
-                      className="p-6 space-y-6"
-                      role="form"
-                      aria-label="Customer creation form"
-                    >
-                      {/* Validation Error Summary */}
-                      {validation.hasErrors && (
-                        <FormErrorSummary errors={validation.validationErrors} />
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Basic Information */}
-                        <div className="space-y-4">
-                          <FormField
-                            name="name"
-                            label="Company Name"
-                            value={validation.formData.name}
-                            onChange={value => validation.handleFieldChange('name', value)}
-                            onBlur={() => validation.handleFieldBlur('name')}
-                            error={validation.getFieldError('name')}
-                            touched={validation.isFieldTouched('name')}
-                            required
-                            placeholder="Enter company name"
-                            className="min-h-[44px]"
-                          />
-
-                          <FormField
-                            name="email"
-                            label="Email Address"
-                            type="email"
-                            value={validation.formData.email}
-                            onChange={value => validation.handleFieldChange('email', value)}
-                            onBlur={() => validation.handleFieldBlur('email')}
-                            error={validation.getFieldError('email')}
-                            touched={validation.isFieldTouched('email')}
-                            required
-                            placeholder="customer@example.com"
-                            className="min-h-[44px]"
-                          />
-
-                          <FormField
-                            name="phone"
-                            label="Phone Number"
-                            type="tel"
-                            value={validation.formData.phone}
-                            onChange={value => validation.handleFieldChange('phone', value)}
-                            onBlur={() => validation.handleFieldBlur('phone')}
-                            error={validation.getFieldError('phone')}
-                            touched={validation.isFieldTouched('phone')}
-                            placeholder="+1 (555) 123-4567"
-                            className="min-h-[44px]"
-                          />
-                        </div>
-
-                        {/* Company Information */}
-                        <div className="space-y-4">
-                          <FormField
-                            name="industry"
-                            label="Industry"
-                            value={validation.formData.industry}
-                            onChange={value => validation.handleFieldChange('industry', value)}
-                            onBlur={() => validation.handleFieldBlur('industry')}
-                            error={validation.getFieldError('industry')}
-                            touched={validation.isFieldTouched('industry')}
-                            placeholder="Technology, Healthcare, Finance, etc."
-                            className="min-h-[44px]"
-                          />
-
-                          <FormField
-                            name="address"
-                            label="Address"
-                            value={validation.formData.address}
-                            onChange={value => validation.handleFieldChange('address', value)}
-                            onBlur={() => validation.handleFieldBlur('address')}
-                            error={validation.getFieldError('address')}
-                            touched={validation.isFieldTouched('address')}
-                            placeholder="Enter full address"
-                            className="min-h-[44px]"
-                          />
-
-                          <FormField
-                            name="website"
-                            label="Website"
-                            type="url"
-                            value={validation.formData.website}
-                            onChange={value => validation.handleFieldChange('website', value)}
-                            onBlur={() => validation.handleFieldBlur('website')}
-                            error={validation.getFieldError('website')}
-                            touched={validation.isFieldTouched('website')}
-                            placeholder="https://example.com"
-                            className="min-h-[44px]"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Additional Information */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField
-                          name="annualRevenue"
-                          label="Annual Revenue"
-                          type="number"
-                          value={validation.formData.annualRevenue}
-                          onChange={value => validation.handleFieldChange('annualRevenue', value)}
-                          onBlur={() => validation.handleFieldBlur('annualRevenue')}
-                          error={validation.getFieldError('annualRevenue')}
-                          touched={validation.isFieldTouched('annualRevenue')}
-                          placeholder="0"
-                          className="min-h-[44px]"
-                        />
-
-                        <FormField
-                          name="employeeCount"
-                          label="Employee Count"
-                          type="number"
-                          value={validation.formData.employeeCount}
-                          onChange={value => validation.handleFieldChange('employeeCount', value)}
-                          onBlur={() => validation.handleFieldBlur('employeeCount')}
-                          error={validation.getFieldError('employeeCount')}
-                          touched={validation.isFieldTouched('employeeCount')}
-                          placeholder="0"
-                          className="min-h-[44px]"
-                        />
-                      </div>
-
-                      {/* Form Actions */}
-                      <FormActions>
-                        <Link
-                          href="/customers"
-                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                          Cancel
-                        </Link>
-                        <Button
-                          type="submit"
-                          disabled={loading || validation.hasErrors || !validation.isValid}
-                          className="inline-flex items-center min-h-[44px] px-4 py-2"
-                          aria-label={loading ? 'Creating customer...' : 'Create customer'}
-                          data-testid="create-customer-submit"
-                        >
-                          {loading ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                              Creating...
-                            </>
-                          ) : (
-                            <>
-                              <UserPlusIcon className="w-4 h-4 mr-2" />
-                              Create Customer
-                            </>
-                          )}
-                        </Button>
-                      </FormActions>
-                    </form>
                   </div>
                 </div>
+
+                {/* Form */}
+                <div className="bg-white shadow-sm rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-lg font-medium text-gray-900">Customer Information</h2>
+                  </div>
+
+                  <form
+                    onSubmit={handleSubmit}
+                    className="p-6 space-y-6"
+                    role="form"
+                    aria-label="Customer creation form"
+                  >
+                    {/* Validation Error Summary */}
+                    {validation.hasErrors && (
+                      <FormErrorSummary errors={validation.validationErrors} />
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Basic Information */}
+                      <div className="space-y-4">
+                        <FormField
+                          name="name"
+                          label="Company Name"
+                          value={validation.formData.name}
+                          onChange={value => validation.handleFieldChange('name', value)}
+                          onBlur={() => validation.handleFieldBlur('name')}
+                          error={validation.getFieldError('name')}
+                          touched={validation.isFieldTouched('name')}
+                          required
+                          placeholder="Enter company name"
+                          className="min-h-[44px]"
+                        />
+
+                        <FormField
+                          name="email"
+                          label="Email Address"
+                          type="email"
+                          value={validation.formData.email}
+                          onChange={value => validation.handleFieldChange('email', value)}
+                          onBlur={() => validation.handleFieldBlur('email')}
+                          error={validation.getFieldError('email')}
+                          touched={validation.isFieldTouched('email')}
+                          required
+                          placeholder="customer@example.com"
+                          className="min-h-[44px]"
+                        />
+
+                        <FormField
+                          name="phone"
+                          label="Phone Number"
+                          type="tel"
+                          value={validation.formData.phone}
+                          onChange={value => validation.handleFieldChange('phone', value)}
+                          onBlur={() => validation.handleFieldBlur('phone')}
+                          error={validation.getFieldError('phone')}
+                          touched={validation.isFieldTouched('phone')}
+                          placeholder="+1 (555) 123-4567"
+                          className="min-h-[44px]"
+                        />
+                      </div>
+
+                      {/* Company Information */}
+                      <div className="space-y-4">
+                        <FormField
+                          name="industry"
+                          label="Industry"
+                          value={validation.formData.industry}
+                          onChange={value => validation.handleFieldChange('industry', value)}
+                          onBlur={() => validation.handleFieldBlur('industry')}
+                          error={validation.getFieldError('industry')}
+                          touched={validation.isFieldTouched('industry')}
+                          placeholder="Technology, Healthcare, Finance, etc."
+                          className="min-h-[44px]"
+                        />
+
+                        <FormField
+                          name="address"
+                          label="Address"
+                          value={validation.formData.address}
+                          onChange={value => validation.handleFieldChange('address', value)}
+                          onBlur={() => validation.handleFieldBlur('address')}
+                          error={validation.getFieldError('address')}
+                          touched={validation.isFieldTouched('address')}
+                          placeholder="Enter full address"
+                          className="min-h-[44px]"
+                        />
+
+                        <FormField
+                          name="website"
+                          label="Website"
+                          type="url"
+                          value={validation.formData.website}
+                          onChange={value => validation.handleFieldChange('website', value)}
+                          onBlur={() => validation.handleFieldBlur('website')}
+                          error={validation.getFieldError('website')}
+                          touched={validation.isFieldTouched('website')}
+                          placeholder="https://example.com"
+                          className="min-h-[44px]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Additional Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        name="annualRevenue"
+                        label="Annual Revenue"
+                        type="number"
+                        value={validation.formData.annualRevenue}
+                        onChange={value => validation.handleFieldChange('annualRevenue', value)}
+                        onBlur={() => validation.handleFieldBlur('annualRevenue')}
+                        error={validation.getFieldError('annualRevenue')}
+                        touched={validation.isFieldTouched('annualRevenue')}
+                        placeholder="0"
+                        className="min-h-[44px]"
+                      />
+
+                      <FormField
+                        name="employeeCount"
+                        label="Employee Count"
+                        type="number"
+                        value={validation.formData.employeeCount}
+                        onChange={value => validation.handleFieldChange('employeeCount', value)}
+                        onBlur={() => validation.handleFieldBlur('employeeCount')}
+                        error={validation.getFieldError('employeeCount')}
+                        touched={validation.isFieldTouched('employeeCount')}
+                        placeholder="0"
+                        className="min-h-[44px]"
+                      />
+                    </div>
+
+                    {/* Form Actions */}
+                    <FormActions>
+                      <Link
+                        href="/customers"
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        Cancel
+                      </Link>
+                      <Button
+                        type="submit"
+                        disabled={loading || validation.hasErrors || !validation.isValid}
+                        className="inline-flex items-center min-h-[44px] px-4 py-2"
+                        aria-label={loading ? 'Creating customer...' : 'Create customer'}
+                        data-testid="create-customer-submit"
+                      >
+                        {loading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <UserPlusIcon className="w-4 h-4 mr-2" />
+                            Create Customer
+                          </>
+                        )}
+                      </Button>
+                    </FormActions>
+                  </form>
+                </div>
               </div>
-            </ErrorBoundary>
-          </RBACGuard>
+            </div>
+          </ErrorBoundary>
         </AuthenticationGuard>
       </Suspense>
     </>

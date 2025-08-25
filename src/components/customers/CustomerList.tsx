@@ -11,6 +11,8 @@ import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/hooks/useCustome
 import { analytics } from '@/lib/analytics';
 import {
   customerSelectors,
+  CustomerStatus,
+  CustomerTier,
   useCustomerQueryParams,
   useCustomerSelection,
   useCustomerStore,
@@ -87,15 +89,15 @@ function CustomerFilters() {
   );
 
   const handleStatusChange = useCallback(
-    (value: string) => {
-      setFilters({ status: (value as any) || undefined });
+    (value: unknown) => {
+      setFilters({ status: (value as CustomerStatus) || undefined });
     },
     [setFilters]
   );
 
   const handleTierChange = useCallback(
-    (value: string) => {
-      setFilters({ tier: (value as any) || undefined });
+    (value: unknown) => {
+      setFilters({ tier: (value as CustomerTier) || undefined });
     },
     [setFilters]
   );
@@ -169,7 +171,7 @@ function CustomerTable() {
 
   // Flatten all pages data
   const customers = useMemo(() => {
-    return data?.pages.flatMap((page: any) => page.data?.items || []) || [];
+    return data?.pages.flatMap(page => (page.ok ? page.data?.items || [] : [])) || [];
   }, [data]);
 
   // Get all customer IDs for select all functionality
@@ -397,3 +399,6 @@ export function CustomerList_new() {
     </div>
   );
 }
+
+// Export the main component as default for easier imports
+export default CustomerList_new;

@@ -184,12 +184,12 @@ export function validateCustomerData(data: Partial<CustomerEditData>): string[] 
     errors.push(VALIDATION_MESSAGES.email);
   }
 
-  // Validate optional fields
-  if (data.phone && !VALIDATION_PATTERNS.phone.test(data.phone)) {
+  // Validate optional fields (only if they have non-empty values)
+  if (data.phone && data.phone.trim() && !VALIDATION_PATTERNS.phone.test(data.phone)) {
     errors.push(VALIDATION_MESSAGES.phone);
   }
 
-  if (data.website && !VALIDATION_PATTERNS.url.test(data.website)) {
+  if (data.website && data.website.trim() && !VALIDATION_PATTERNS.url.test(data.website)) {
     errors.push(VALIDATION_MESSAGES.url);
   }
 
