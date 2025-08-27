@@ -1,6 +1,8 @@
 'use client';
 
 // Customer UI State Store - New Architecture
+import { CustomerIndustrySchema } from '@/features/customers/schemas';
+import { z } from 'zod';
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
 
@@ -10,13 +12,14 @@ export type CustomerSortBy = 'createdAt' | 'name' | 'status' | 'revenue';
 export type CustomerSortOrder = 'asc' | 'desc';
 export type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
 export type CustomerTier = 'STANDARD' | 'PREMIUM' | 'ENTERPRISE';
+export type CustomerIndustry = z.infer<typeof CustomerIndustrySchema>;
 
 // Filters interface
 export interface CustomerFilters {
   search: string;
   status?: CustomerStatus;
   tier?: CustomerTier;
-  industry?: string;
+  industry?: CustomerIndustry;
 }
 
 // Sorting interface

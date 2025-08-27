@@ -133,7 +133,10 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
       );
 
       if (proposal?.id) {
-        await updateProposalMutation.mutateAsync({ id: proposal.id, ...submitData });
+        await updateProposalMutation.mutateAsync({
+          id: proposal.id,
+          data: submitData
+        });
         toast.success('Proposal updated successfully');
       } else {
         await createProposalMutation.mutateAsync(submitData);

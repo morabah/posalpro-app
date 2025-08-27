@@ -85,6 +85,8 @@ export function useCustomersByIds(ids: string[]) {
       enabled: !!id,
       staleTime: 60_000,
       gcTime: 120_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
     })),
   });
 
@@ -101,31 +103,45 @@ export function useCreateCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CustomerCreate) => customerService.createCustomer(data),
-    onSuccess: response => {
-      // Invalidate all customer lists
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+    mutationFn: async (data: CustomerCreate) => {
+      analytics.trackOptimized('customer_create_attempt', {
+        name: data.name,
+        industry: data.industry,
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'medium',
+      });
 
-      // Track analytics
-      analytics.trackOptimized(
-        'customer_created',
-        {
-          customerId: response.ok ? response.data?.id : undefined,
-          customerName: response.ok ? response.data?.name : undefined,
-        },
-        'US-3.1',
-        'H4'
-      );
+      const response = await customerService.createCustomer(data);
+
+      if (response.ok) {
+        analytics.trackOptimized('customer_create_success', {
+          customerId: response.data.id,
+          name: data.name,
+          userStories: ['US-2.1'],
+          hypotheses: ['H3'],
+          priority: 'medium',
+        });
+      }
+
+      return response;
     },
-    onError: error => {
-      analytics.trackOptimized(
-        'customer_creation_failed',
-        {
-          error: error instanceof Error ? error.message : String(error),
-        },
-        'US-3.1',
-        'H4'
-      );
+    onSuccess: response => {
+      // Invalidate and refetch customers list
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+      // Set the new customer data in cache
+      if (response.ok && response.data) {
+        queryClient.setQueryData(qk.customers.detail(response.data.id), response);
+      }
+    },
+    onError: (error, variables) => {
+      analytics.trackOptimized('customer_create_failed', {
+        name: variables.name,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'high',
+      });
     },
   });
 }
@@ -135,34 +151,46 @@ export function useUpdateCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: CustomerUpdate }) =>
-      customerService.updateCustomer(id, data),
-    onSuccess: (response, { id }) => {
-      // Invalidate specific customer and all lists
-      queryClient.invalidateQueries({ queryKey: qk.customers.detail(id) });
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+    mutationFn: async ({ id, data }: { id: string; data: CustomerUpdate }) => {
+      analytics.trackOptimized('customer_update_attempt', {
+        customerId: id,
+        name: data.name,
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'medium',
+      });
 
-      // Track analytics
-      analytics.trackOptimized(
-        'customer_updated',
-        {
-          customerId: id,
-          customerName: response.ok ? response.data?.name : undefined,
-        },
-        'US-3.2',
-        'H4'
-      );
+      const response = await customerService.updateCustomer(id, data);
+
+      if (response.ok) {
+        analytics.trackOptimized('customer_update_success', {
+          customerId: response.data.id,
+          name: data.name,
+          userStories: ['US-2.1'],
+          hypotheses: ['H3'],
+          priority: 'medium',
+        });
+      }
+
+      return response;
     },
-    onError: (error, { id }) => {
-      analytics.trackOptimized(
-        'customer_update_failed',
-        {
-          customerId: id,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        'US-3.2',
-        'H4'
-      );
+    onSuccess: (response, variables) => {
+      // Update the specific customer in cache
+      if (response.ok && response.data) {
+        queryClient.setQueryData(qk.customers.detail(variables.id), response);
+      }
+      // Invalidate customers list to reflect changes
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+    },
+    onError: (error, variables) => {
+      analytics.trackOptimized('customer_update_failed', {
+        customerId: variables.id,
+        name: variables.data.name,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'high',
+      });
     },
   });
 }
@@ -172,109 +200,79 @@ export function useDeleteCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => customerService.deleteCustomer(id),
-    onSuccess: (_, id) => {
-      // Invalidate all customer queries
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+    mutationFn: async (id: string) => {
+      analytics.trackOptimized('customer_delete_attempt', {
+        customerId: id,
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'high',
+      });
 
-      // Remove from cache
-      queryClient.removeQueries({ queryKey: qk.customers.detail(id) });
+      const response = await customerService.deleteCustomer(id);
 
-      // Track analytics
-      analytics.trackOptimized(
-        'customer_deleted',
-        {
+      if (response.ok) {
+        analytics.trackOptimized('customer_delete_success', {
           customerId: id,
-        },
-        'US-3.3',
-        'H4'
-      );
+          userStories: ['US-2.1'],
+          hypotheses: ['H3'],
+          priority: 'high',
+        });
+      }
+
+      return response;
+    },
+    onSuccess: (response, id) => {
+      // Remove the customer from cache
+      queryClient.removeQueries({ queryKey: qk.customers.detail(id) });
+      // Invalidate customers list
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
     },
     onError: (error, id) => {
-      analytics.trackOptimized(
-        'customer_deletion_failed',
-        {
-          customerId: id,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        'US-3.3',
-        'H4'
-      );
+      analytics.trackOptimized('customer_delete_failed', {
+        customerId: id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'high',
+      });
     },
   });
 }
 
-// Bulk delete customers mutation
+// Bulk delete customers mutation - Note: Implement when bulk delete API is available
 export function useDeleteCustomersBulk() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (ids: string[]) => customerService.deleteCustomersBulk(ids),
-    onSuccess: (response, ids) => {
-      // Invalidate all customer queries
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+    mutationFn: async (ids: string[]) => {
+      analytics.trackOptimized('customers_bulk_delete_attempt', {
+        customerIds: ids,
+        count: ids.length,
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'high',
+      });
 
-      // Remove from cache
+      // TODO: Implement when bulk delete API is available
+      throw new Error('Bulk delete not yet implemented');
+    },
+    onSuccess: (response, ids) => {
+      // Remove all deleted customers from cache
       ids.forEach(id => {
         queryClient.removeQueries({ queryKey: qk.customers.detail(id) });
       });
-
-      // Track analytics
-      analytics.trackOptimized(
-        'customers_bulk_deleted',
-        {
-          deletedCount: response.ok ? response.data?.deleted || 0 : 0,
-          customerIds: ids,
-        },
-        'US-3.4',
-        'H4'
-      );
+      // Invalidate customers list
+      queryClient.invalidateQueries({ queryKey: qk.customers.all });
     },
     onError: (error, ids) => {
-      analytics.trackOptimized(
-        'customers_bulk_deletion_failed',
-        {
-          customerCount: ids.length,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        'US-3.4',
-        'H4'
-      );
-    },
-  });
-}
-
-// Optimistic updates for better UX
-export function useOptimisticCustomerUpdate() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: CustomerUpdate }) =>
-      customerService.updateCustomer(id, data),
-    onMutate: async ({ id, data }) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: qk.customers.detail(id) });
-
-      // Snapshot previous value
-      const previousCustomer = queryClient.getQueryData(qk.customers.detail(id));
-
-      // Optimistically update
-      queryClient.setQueryData(qk.customers.detail(id), (old: any) => ({
-        ...old,
-        data: { ...old?.data, ...data, updatedAt: new Date().toISOString() },
-      }));
-
-      return { previousCustomer };
-    },
-    onError: (error, { id }, context) => {
-      // Rollback on error
-      if (context?.previousCustomer) {
-        queryClient.setQueryData(qk.customers.detail(id), context.previousCustomer);
-      }
-    },
-    onSettled: (_, __, { id }) => {
-      // Always refetch after error or success
-      queryClient.invalidateQueries({ queryKey: qk.customers.detail(id) });
+      analytics.trackOptimized('customers_bulk_delete_failed', {
+        customerIds: ids,
+        count: ids.length,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'high',
+      });
     },
   });
 }

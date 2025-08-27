@@ -127,30 +127,18 @@ export function ProductCreateForm() {
 
       const result = await createProduct.mutateAsync(productData);
 
-      if (result && result.ok && result.data) {
-        toast.success('Product created successfully!');
-
-        logInfo('Product creation: Product created successfully', {
-          component: 'ProductCreateForm',
-          operation: 'handleSubmit',
-          productId: result.data.id,
-          userStory: 'US-4.1',
-          hypothesis: 'H5',
+      if (result) {
+        analytics.trackOptimized('product_created', {
+          productId: result.id,
+          productName: result.name,
+          productSku: result.sku,
+          userStories: ['US-4.1'],
+          hypotheses: ['H5'],
+          priority: 'medium',
         });
 
-        analytics.trackOptimized(
-          'product_created',
-          {
-            productId: result.data.id,
-            productName: result.data.name,
-            productSku: result.data.sku,
-            userStory: 'US-4.1',
-            hypothesis: 'H5',
-          },
-          'high'
-        );
-
-        router.push('/products');
+        toast.success('Product created successfully!');
+        router.push(`/products/${result.id}`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create product';

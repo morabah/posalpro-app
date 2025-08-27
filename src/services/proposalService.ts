@@ -12,57 +12,19 @@
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
 
-// Import aligned validation schemas
+// Import consolidated schemas
 import {
   ProposalCreateSchema,
   type ProposalCreateData,
   type ProposalQueryData,
-} from '@/lib/validation/proposalValidation';
+} from '@/features/proposals/schemas';
 
 // ====================
 // Type Definitions (Aligned with API schemas)
 // ====================
 
-export interface Proposal {
-  id: string;
-  title: string;
-  description?: string;
-  customerId: string;
-  customer?: {
-    id: string;
-    name: string;
-    email?: string;
-    industry?: string;
-  };
-  status: ProposalStatus;
-  priority: ProposalPriority;
-  dueDate?: Date;
-  value?: number;
-  currency: string;
-  projectType?: string;
-  tags: string[];
-  metadata?: {
-    teamData?: any;
-    contentData?: any;
-    productData?: any;
-    sectionData?: any;
-    wizardVersion?: string;
-    submittedAt?: string;
-  };
-  assignedTo?: string;
-  teamMembers?: string[];
-  progress: number;
-  stage: string;
-  riskLevel: 'low' | 'medium' | 'high';
-  sections?: ProposalSection[];
-  products?: ProposalProduct[];
-  createdAt: Date;
-  updatedAt: Date;
-  version: number;
-  userStoryMappings: string[];
-}
+// Use consolidated types from features/proposals/schemas
 
 export interface ProposalSection {
   id: string;
@@ -88,99 +50,40 @@ export interface ProposalProduct {
   configuration?: Record<string, unknown>;
 }
 
-export enum ProposalStatus {
-  DRAFT = 'DRAFT',
-  IN_PROGRESS = 'IN_PROGRESS',
-  IN_REVIEW = 'IN_REVIEW',
-  PENDING_APPROVAL = 'PENDING_APPROVAL',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  SUBMITTED = 'SUBMITTED',
-  ACCEPTED = 'ACCEPTED',
-  DECLINED = 'DECLINED',
-}
-
-export enum ProposalPriority {
-  LOW = 'LOW',
-  MEDIUM = 'MEDIUM',
-  HIGH = 'HIGH',
-  URGENT = 'URGENT',
-}
+// Use consolidated enums from features/proposals/schemas
 
 // ====================
-// Zod Schemas (Aligned with API schemas)
+// Import consolidated schemas
 // ====================
 
-export const ProposalSchema = z.object({
-  id: z.string(),
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
-  customerId: z.string().min(1, 'Customer is required'),
-  customer: z
-    .object({
-      id: z.string(),
-      name: z.string(),
-      email: z.string().optional(),
-      industry: z.string().optional(),
-    })
-    .optional(),
-  status: z.nativeEnum(ProposalStatus),
-  priority: z.nativeEnum(ProposalPriority),
-  dueDate: z.date().optional(),
-  value: z.number().min(0).optional(),
-  currency: z.string().length(3).default('USD'),
-  projectType: z.string().optional(),
-  tags: z.array(z.string()).default([]),
-  metadata: z.record(z.unknown()).optional(),
-  assignedTo: z.string().optional(),
-  teamMembers: z.array(z.string()).default([]),
-  progress: z.number().min(0).max(100).default(0),
-  stage: z.string().default('draft'),
-  riskLevel: z.enum(['low', 'medium', 'high']).default('low'),
-  sections: z
-    .array(
-      z.object({
-        id: z.string(),
-        title: z.string(),
-        content: z.string(),
-        type: z.enum(['TEXT', 'IMAGE', 'TABLE', 'CHART']),
-        order: z.number(),
-        isRequired: z.boolean().default(false),
-        assignedTo: z.string().optional(),
-        estimatedHours: z.number().min(0).optional(),
-        dueDate: z.date().optional(),
-      })
-    )
-    .optional(),
-  products: z
-    .array(
-      z.object({
-        id: z.string(),
-        productId: z.string(),
-        name: z.string(),
-        quantity: z.number().int().positive(),
-        unitPrice: z.number().positive(),
-        discount: z.number().min(0).max(100),
-        total: z.number().positive(),
-        category: z.string(),
-        configuration: z.record(z.unknown()).optional(),
-      })
-    )
-    .optional(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  version: z.number().default(1),
-  userStoryMappings: z.array(z.string()).default([]),
-});
+import { type Proposal } from '@/features/proposals/schemas';
 
-// Use the aligned schemas from validation
+// Re-export types for backward compatibility
+export type { Proposal };
+
+// Re-export enums for backward compatibility
+export const ProposalStatus = {
+  DRAFT: 'DRAFT',
+  IN_PROGRESS: 'IN_PROGRESS',
+  IN_REVIEW: 'IN_REVIEW',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  SUBMITTED: 'SUBMITTED',
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export const ProposalPriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  URGENT: 'URGENT',
+} as const;
+
+// Use the consolidated schemas from features/proposals/schemas
 export type ProposalCreate = ProposalCreateData;
 export type ProposalUpdate = Partial<ProposalCreateData>;
-
-export const ProposalListSchema = z.object({
-  items: z.array(ProposalSchema),
-  nextCursor: z.string().nullable(),
-});
 
 // ====================
 // Service Class
@@ -335,7 +238,10 @@ export class ProposalService {
     });
 
     try {
-      const data = await http.put<Proposal>(`/api/proposals/${id}`, proposal);
+      // ✅ FIXED: Database-First Field Alignment - Transform wizard payload to API schema
+      const transformedProposal = this.transformWizardPayloadForAPI(proposal);
+
+      const data = await http.put<Proposal>(`/api/proposals/${id}`, transformedProposal);
 
       logInfo('Proposal updated successfully', {
         component: 'ProposalService',
@@ -357,6 +263,33 @@ export class ProposalService {
       logError('Failed to update proposal', processed, { component: 'ProposalService' });
       throw processed;
     }
+  }
+
+  // ✅ ADDED: Database-First Field Alignment - Transform wizard payload to API schema
+  private transformWizardPayloadForAPI(proposal: any): ProposalUpdate {
+    // ✅ Handle wizard flat payload structure
+    const { teamData, contentData, productData, sectionData, reviewData, ...basicFields } =
+      proposal;
+
+    // ✅ Defensive validation - Check if wizard-specific data is present
+    if (teamData || contentData || productData || sectionData || reviewData) {
+      // ✅ Transform flat structure to nested structure under metadata
+      return {
+        ...basicFields,
+        metadata: {
+          teamData: teamData || undefined,
+          contentData: contentData || undefined,
+          productData: productData || undefined,
+          sectionData: sectionData || undefined,
+          reviewData: reviewData || undefined,
+          submittedAt: new Date().toISOString(),
+          wizardVersion: 'modern',
+        },
+      };
+    }
+
+    // ✅ If no wizard-specific data, return as-is
+    return proposal;
   }
 
   async deleteProposal(id: string) {

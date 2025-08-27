@@ -11,13 +11,13 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { useProposalStats } from '@/hooks/useProposals';
 import {
   useDeleteProposal,
   useDeleteProposalsBulk,
   useInfiniteProposals,
+  useProposalStats,
 } from '@/hooks/useProposals';
-import { Proposal, ProposalPriority, ProposalStatus } from '@/services/proposalService';
+import { ProposalPriority, ProposalStatus } from '@/services/proposalService';
 import {
   AlertTriangleIcon,
   ArrowUpDownIcon,
@@ -57,8 +57,8 @@ const formatDate = (date: Date | string) => {
 // Status Badge Component
 // ====================
 
-function StatusBadge({ status }: { status: ProposalStatus }) {
-  const getStatusConfig = (status: ProposalStatus) => {
+function StatusBadge({ status }: { status: (typeof ProposalStatus)[keyof typeof ProposalStatus] }) {
+  const getStatusConfig = (status: (typeof ProposalStatus)[keyof typeof ProposalStatus]) => {
     switch (status) {
       case 'DRAFT':
         return { label: 'Draft', className: 'bg-gray-100 text-gray-800' };
@@ -90,8 +90,14 @@ function StatusBadge({ status }: { status: ProposalStatus }) {
 // Priority Badge Component
 // ====================
 
-function PriorityBadge({ priority }: { priority: ProposalPriority }) {
-  const getPriorityConfig = (priority: ProposalPriority) => {
+function PriorityBadge({
+  priority,
+}: {
+  priority: (typeof ProposalPriority)[keyof typeof ProposalPriority];
+}) {
+  const getPriorityConfig = (
+    priority: (typeof ProposalPriority)[keyof typeof ProposalPriority]
+  ) => {
     switch (priority) {
       case 'LOW':
         return { label: 'Low', className: 'bg-green-100 text-green-800' };
@@ -437,7 +443,7 @@ function EnhancedFilters({
 // Enhanced Proposal Card Component
 // ====================
 
-function ProposalCard({ proposal }: { proposal: Proposal }) {
+function ProposalCard({ proposal }: { proposal: any }) {
   // Calculate if proposal is overdue
   const isOverdue =
     proposal.dueDate &&

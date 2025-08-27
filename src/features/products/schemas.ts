@@ -1,0 +1,265 @@
+/**
+ * PosalPro MVP2 - Consolidated Product Schemas
+ * User Story: US-4.1 (Product Management)
+ * Hypothesis: H5 (Modern data fetching improves performance and user experience)
+ *
+ * ✅ CONSOLIDATED: All product schemas in one location
+ * ✅ ALIGNS: API route schemas for consistent frontend-backend integration
+ * ✅ FOLLOWS: Feature-based organization pattern
+ */
+
+import { z } from 'zod';
+
+// ====================
+// Base Schemas (Reusable)
+// ====================
+
+export const ProductRelationshipTypeSchema = z.enum([
+  'REQUIRES',
+  'RECOMMENDS',
+  'INCOMPATIBLE',
+  'ALTERNATIVE',
+  'OPTIONAL',
+]);
+
+export const ProductStatusSchema = z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']);
+
+// ====================
+// Core Product Schemas
+// ====================
+
+export const ProductSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Name is required'),
+  description: z.string().optional(),
+  price: z.number().positive('Price must be positive').optional().or(z.null()),
+  currency: z.string().default('USD'),
+  sku: z.string(),
+  category: z.array(z.string()),
+  tags: z.array(z.string()),
+  attributes: z.record(z.unknown()).optional(),
+  images: z.array(z.string()),
+  isActive: z.boolean().default(true),
+  version: z.number().default(1),
+  usageAnalytics: z.record(z.unknown()).optional(),
+  userStoryMappings: z.array(z.string()),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const ProductCreateSchema = ProductSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const ProductUpdateSchema = ProductCreateSchema.partial();
+
+// ====================
+// Product Relationship Schemas
+// ====================
+
+export const ProductRelationshipSchema = z.object({
+  id: z.string(),
+  sourceProductId: z.string(),
+  targetProductId: z.string(),
+  type: ProductRelationshipTypeSchema,
+  quantity: z.number().optional(),
+  condition: z.record(z.unknown()).optional(),
+  validationHistory: z.record(z.unknown()).optional(),
+  performanceImpact: z.record(z.unknown()).optional(),
+  createdBy: z.string(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const ProductRelationshipCreateSchema = z.object({
+  targetProductId: z.string(),
+  type: ProductRelationshipTypeSchema,
+  quantity: z.number().optional(),
+  condition: z.record(z.unknown()).optional(),
+});
+
+export const ProductWithRelationshipsSchema = ProductSchema.extend({
+  relationships: z.array(
+    ProductRelationshipSchema.extend({
+      targetProduct: ProductSchema,
+    })
+  ),
+  relatedFrom: z.array(
+    ProductRelationshipSchema.extend({
+      sourceProduct: ProductSchema,
+    })
+  ),
+});
+
+// ====================
+// Product Configuration Schemas
+// ====================
+
+export const ProductAttributeSchema = z.object({
+  name: z.string(),
+  value: z.unknown(),
+  type: z.enum(['string', 'number', 'boolean', 'array', 'object']),
+  required: z.boolean().default(false),
+  validation: z.record(z.unknown()).optional(),
+});
+
+export const ProductOptionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  price: z.number().optional(),
+  isDefault: z.boolean().default(false),
+  dependencies: z.array(z.string()).optional(),
+});
+
+export const ProductConfigurationSchema = z.object({
+  attributes: z.array(ProductAttributeSchema),
+  options: z.array(ProductOptionSchema),
+  validationRules: z.array(z.record(z.unknown())),
+});
+
+// ====================
+// Product Validation Schemas
+// ====================
+
+export const ValidationConditionSchema = z.object({
+  field: z.string(),
+  operator: z.enum(['equals', 'not_equals', 'contains', 'greater_than', 'less_than']),
+  value: z.unknown(),
+});
+
+export const ValidationActionSchema = z.object({
+  type: z.enum(['error', 'warning', 'info']),
+  message: z.string(),
+  field: z.string().optional(),
+});
+
+export const ProductValidationRuleSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  conditions: z.array(ValidationConditionSchema),
+  actions: z.array(ValidationActionSchema),
+  isActive: z.boolean().default(true),
+});
+
+export const ProductLicenseValidationSchema = z.object({
+  licenseKey: z.string(),
+  productId: z.string(),
+  validationRules: z.array(ProductValidationRuleSchema),
+  expiresAt: z.string().datetime().optional(),
+});
+
+// ====================
+// Product Analytics Schemas
+// ====================
+
+export const ProductUsageAnalyticsSchema = z.object({
+  productId: z.string(),
+  usageCount: z.number(),
+  lastUsed: z.string().datetime(),
+  usagePattern: z.record(z.unknown()),
+  performanceMetrics: z.record(z.unknown()),
+});
+
+export const ProductResourceSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  type: z.enum(['documentation', 'tutorial', 'example', 'template']),
+  url: z.string().url(),
+  title: z.string(),
+  description: z.string().optional(),
+  tags: z.array(z.string()),
+});
+
+// ====================
+// Product Search and Query Schemas
+// ====================
+
+export const ProductQuerySchema = z.object({
+  search: z.string().trim().default(''),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  cursor: z.string().nullable().optional(),
+  sortBy: z.enum(['createdAt', 'name', 'price', 'isActive']).default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  category: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const ProductSearchSchema = z.object({
+  query: z.string().min(1, 'Search query is required'),
+  limit: z.number().min(1).max(100).default(20),
+  category: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  priceRange: z
+    .object({
+      min: z.number().optional(),
+      max: z.number().optional(),
+    })
+    .optional(),
+});
+
+// ====================
+// Product List and Response Schemas
+// ====================
+
+export const ProductListSchema = z.object({
+  items: z.array(ProductSchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const ProductSearchResponseSchema = z.object({
+  items: z.array(ProductSchema),
+  total: z.number(),
+  nextCursor: z.string().nullable(),
+});
+
+// ====================
+// Bulk Operation Schemas
+// ====================
+
+export const BulkDeleteSchema = z.object({
+  ids: z.array(z.string()).min(1),
+});
+
+export const ProductBulkOperationSchema = z.object({
+  operation: z.enum(['activate', 'deactivate', 'archive', 'delete']),
+  productIds: z.array(z.string()).min(1),
+  options: z.record(z.unknown()).optional(),
+});
+
+// ====================
+// Product License and Dependency Schemas
+// ====================
+
+export const LicenseDependencySchema = z.object({
+  productId: z.string(),
+  licenseType: z.enum(['perpetual', 'subscription', 'trial']),
+  dependencies: z.array(z.string()),
+  restrictions: z.array(z.string()),
+  validFrom: z.string().datetime(),
+  validUntil: z.string().datetime().optional(),
+});
+
+// ====================
+// Type Exports
+// ====================
+
+export type Product = z.infer<typeof ProductSchema>;
+export type ProductCreate = z.infer<typeof ProductCreateSchema>;
+export type ProductUpdate = z.infer<typeof ProductUpdateSchema>;
+export type ProductRelationship = z.infer<typeof ProductRelationshipSchema>;
+export type ProductRelationshipCreate = z.infer<typeof ProductRelationshipCreateSchema>;
+export type ProductWithRelationships = z.infer<typeof ProductWithRelationshipsSchema>;
+export type ProductList = z.infer<typeof ProductListSchema>;
+export type ProductQuery = z.infer<typeof ProductQuerySchema>;
+export type ProductSearch = z.infer<typeof ProductSearchSchema>;
+export type ProductSearchResponse = z.infer<typeof ProductSearchResponseSchema>;
+export type ProductConfiguration = z.infer<typeof ProductConfigurationSchema>;
+export type ProductValidationRule = z.infer<typeof ProductValidationRuleSchema>;
+export type ProductUsageAnalytics = z.infer<typeof ProductUsageAnalyticsSchema>;
+export type ProductBulkOperation = z.infer<typeof ProductBulkOperationSchema>;
+export type LicenseDependency = z.infer<typeof LicenseDependencySchema>;
+export type ProductRelationshipType = z.infer<typeof ProductRelationshipTypeSchema>;

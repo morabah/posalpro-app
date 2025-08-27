@@ -3,12 +3,11 @@
  * Centralized exports for all custom hooks
  */
 
-// Infinite Query Hooks
-export * from './useInfiniteProposals';
-export * from './useInfiniteCustomers';
-export * from './useInfiniteProducts';
+// React Query Hooks
+export * from './useProposals';
+export * from './useProducts';
+export * from './useCustomers';
 
-// Re-export for convenience
-export { useInfiniteProposals, useInfiniteProposalsData } from './useInfiniteProposals';
-export { useInfiniteCustomers, useInfiniteCustomersData } from './useInfiniteCustomers';
-export { useInfiniteProducts, useInfiniteProductsData } from './useInfiniteProducts';
+// Legacy exports for backward compatibility
+export { useInfiniteCustomers } from './useInfiniteCustomers';
+export { useInfiniteProducts } from './useInfiniteProducts';

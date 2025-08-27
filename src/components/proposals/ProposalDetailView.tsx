@@ -48,6 +48,34 @@ interface ProposalDetailViewProps {
   proposalId: string;
 }
 
+// Helper functions to safely access metadata
+const getProductData = (metadata: any) => {
+  if (!metadata?.productData) return null;
+  return {
+    products: Array.isArray(metadata.productData.products) ? metadata.productData.products : [],
+    totalValue: metadata.productData.totalValue || 0,
+  };
+};
+
+const getTeamData = (metadata: any) => {
+  if (!metadata?.teamData) return null;
+  return {
+    teamLead: metadata.teamData.teamLead || null,
+    salesRepresentative: metadata.teamData.salesRepresentative || null,
+    subjectMatterExperts: metadata.teamData.subjectMatterExperts || {},
+    executiveReviewers: Array.isArray(metadata.teamData.executiveReviewers)
+      ? metadata.teamData.executiveReviewers
+      : [],
+  };
+};
+
+const getSectionData = (metadata: any) => {
+  if (!metadata?.sectionData) return null;
+  return {
+    sections: Array.isArray(metadata.sectionData.sections) ? metadata.sectionData.sections : [],
+  };
+};
+
 export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
@@ -56,12 +84,16 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
 
   // Enhanced error handling with retry logic
   const handleRetry = useCallback(() => {
-    analytics('proposal_action_taken', {
-      proposalId,
-      action: 'edit',
-      userStory: 'US-2.1',
-      hypothesis: 'H2',
-    }, 'medium');
+    analytics(
+      'proposal_action_taken',
+      {
+        proposalId,
+        action: 'edit',
+        userStory: 'US-2.1',
+        hypothesis: 'H2',
+      },
+      'medium'
+    );
     refetch();
   }, [analytics, proposalId, refetch]);
 
@@ -72,13 +104,17 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
   // ====================
 
   const handleEdit = useCallback(() => {
-    analytics('proposal_navigation', {
-      from: 'proposal_detail',
-      to: 'proposal_list',
-      proposalId,
-      userStory: 'US-2.1',
-      hypothesis: 'H2',
-    }, 'medium');
+    analytics(
+      'proposal_navigation',
+      {
+        from: 'proposal_detail',
+        to: 'proposal_list',
+        proposalId,
+        userStory: 'US-2.1',
+        hypothesis: 'H2',
+      },
+      'medium'
+    );
     router.push(`/proposals/${proposalId}/edit`);
   }, [proposalId, router, analytics]);
 
@@ -396,16 +432,14 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(
                       (() => {
-                        const productData = proposal?.metadata?.productData;
+                        const productData = getProductData(proposal?.metadata);
                         if (productData?.products?.length > 0) {
-                          return productData.products.reduce(
+                          return productData?.products?.reduce(
                             (sum: number, product: any) => sum + (product.total || 0),
                             0
                           );
                         }
-                        return (
-                          proposal?.metadata?.productData?.totalValue || proposal?.value || 59760
-                        );
+                        return productData?.totalValue || proposal?.value || 59760;
                       })(),
                       proposal?.currency || 'USD'
                     )}
@@ -425,7 +459,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                   <p className="text-sm font-medium text-gray-600">Team Size</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {(() => {
-                      const teamData = proposal?.metadata?.teamData;
+                      const teamData = getTeamData(proposal?.metadata);
                       if (teamData) {
                         let count = 0;
                         if (teamData.teamLead) count++;
@@ -455,7 +489,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Products</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {proposal?.metadata?.productData?.products?.length ||
+                    {getProductData(proposal?.metadata)?.products?.length ||
                       proposal?.products?.length ||
                       3}
                   </p>
@@ -473,7 +507,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Sections</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {proposal?.metadata?.sectionData?.sections?.length ||
+                    {getSectionData(proposal?.metadata)?.sections?.length ||
                       proposal?.sections?.length ||
                       0}
                   </p>
@@ -570,25 +604,40 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                           <h3 className="text-sm font-medium text-gray-700 mb-1">
                             {(() => {
                               const hasProducts = (proposal?.products?.length || 0) > 0;
-                              const calculatedTotal = proposal?.products?.reduce((sum, product) => {
-                                return sum + (product.total || (product.quantity || 1) * (product.unitPrice || 0));
-                              }, 0) || 0;
-                              
+                              const calculatedTotal =
+                                proposal?.products?.reduce((sum, product) => {
+                                  return (
+                                    sum +
+                                    (product.total ||
+                                      (product.quantity || 1) * (product.unitPrice || 0))
+                                  );
+                                }, 0) || 0;
+
                               // Show calculated total if products exist, otherwise show estimated value
-                              return hasProducts && calculatedTotal > 0 ? 'Total Value' : 'Estimated Value';
+                              return hasProducts && calculatedTotal > 0
+                                ? 'Total Value'
+                                : 'Estimated Value';
                             })()}
                           </h3>
                           <p className="text-gray-900 flex items-center">
                             <DollarSign className="h-4 w-4 mr-1" />
                             {(() => {
                               const hasProducts = (proposal?.products?.length || 0) > 0;
-                              const calculatedTotal = proposal?.products?.reduce((sum, product) => {
-                                return sum + (product.total || (product.quantity || 1) * (product.unitPrice || 0));
-                              }, 0) || 0;
+                              const calculatedTotal =
+                                proposal?.products?.reduce((sum, product) => {
+                                  return (
+                                    sum +
+                                    (product.total ||
+                                      (product.quantity || 1) * (product.unitPrice || 0))
+                                  );
+                                }, 0) || 0;
                               const estimatedValue = proposal?.value || 0;
-                              
+
                               // Show calculated total if products exist, otherwise show estimated value
-                              const displayValue = hasProducts && calculatedTotal > 0 ? calculatedTotal : estimatedValue;
+                              const displayValue =
+                                hasProducts && calculatedTotal > 0
+                                  ? calculatedTotal
+                                  : estimatedValue;
                               return formatCurrency(displayValue, proposal?.currency || 'USD');
                             })()}
                           </p>
@@ -735,18 +784,18 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                 <h2 className="text-lg font-semibold mb-4 flex items-center">
                   <Package className="h-5 w-5 mr-2 text-purple-600" />
                   Products (
-                  {proposal?.metadata?.productData?.products?.length ||
+                  {getProductData(proposal?.metadata)?.products?.length ||
                     proposal?.products?.length ||
                     0}
                   )
                 </h2>
                 {(() => {
                   const products =
-                    proposal?.metadata?.productData?.products || proposal?.products || [];
+                    getProductData(proposal?.metadata)?.products || proposal?.products || [];
                   return products.length > 0;
                 })() ? (
                   <div className="space-y-4">
-                    {(proposal?.metadata?.productData?.products || proposal?.products || []).map(
+                    {(getProductData(proposal?.metadata)?.products || proposal?.products || []).map(
                       (product: any, index: number) => (
                         <div
                           key={index}
@@ -845,7 +894,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                   <Users className="h-5 w-5 mr-2 text-blue-600" />
                   Team Members (
                   {(() => {
-                    const teamData = proposal?.metadata?.teamData;
+                    const teamData = getTeamData(proposal?.metadata);
                     if (teamData) {
                       let count = 0;
                       if (teamData.teamLead) count++;
@@ -863,7 +912,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                   )
                 </h2>
                 {(() => {
-                  const teamData = proposal?.metadata?.teamData;
+                  const teamData = getTeamData(proposal?.metadata);
                   if (teamData) {
                     const members = [];
 
@@ -900,7 +949,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                 })() ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {(() => {
-                      const teamData = proposal?.metadata?.teamData;
+                      const teamData = getTeamData(proposal?.metadata);
                       if (teamData) {
                         const members = [];
 

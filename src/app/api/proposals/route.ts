@@ -323,6 +323,7 @@ export const POST = createRoute(
               projectType: body!.basicInfo.projectType,
               teamData: body!.teamData,
               contentData: body!.contentData,
+              productData: JSON.parse(JSON.stringify(body!.productData)),
               sectionData: body!.sectionData,
               wizardVersion: 'modern',
               submittedAt: new Date().toISOString(),

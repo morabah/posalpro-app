@@ -11,27 +11,24 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { useUnifiedProposalListData } from '@/hooks/useUnifiedProposalData';
+import type { Proposal } from '@/features/proposals/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { useInfiniteProposals } from '@/hooks/useProposals';
 import { logDebug } from '@/lib/logger';
-import type { UnifiedProposalData } from '@/hooks/useUnifiedProposalData';
 import {
   AlertTriangleIcon,
   ArrowUpDownIcon,
   CalendarIcon,
-  CheckCircleIcon,
   EditIcon,
   EyeIcon,
   FileTextIcon,
-  FunnelIcon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
   TrashIcon,
   UsersIcon,
 } from 'lucide-react';
-import Link from 'next/link';
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 // Format currency consistently
@@ -54,7 +51,9 @@ const formatDate = (date: Date | string) => {
 };
 
 // Status badge colors
-const getStatusVariant = (status: string): 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline' => {
+const getStatusVariant = (
+  status: string
+): 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline' => {
   switch (status) {
     case 'DRAFT':
       return 'secondary';
@@ -82,7 +81,9 @@ const getStatusVariant = (status: string): 'default' | 'secondary' | 'success' |
 };
 
 // Priority badge variants
-const getPriorityVariant = (priority: UnifiedProposalData['priority']): 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline' => {
+const getPriorityVariant = (
+  priority: Proposal['priority']
+): 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline' => {
   switch (priority) {
     case 'HIGH':
       return 'destructive';
@@ -96,7 +97,7 @@ const getPriorityVariant = (priority: UnifiedProposalData['priority']): 'default
 };
 
 interface ProposalCardProps {
-  proposal: UnifiedProposalData;
+  proposal: Proposal;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onView?: (id: string) => void;
@@ -109,18 +110,18 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
     analytics('proposal_viewed_from_list', {
       proposalId: proposal.id,
       status: proposal.status,
-      totalValue: proposal.totalValue,
+      totalValue: proposal.value || 0,
     }, 'low');
-    
+
     onView?.(proposal.id);
-  }, [proposal.id, proposal.status, proposal.totalValue, analytics, onView]);
+  }, [proposal.id, proposal.status, proposal.value, analytics, onView]);
 
   const handleEdit = useCallback(() => {
     analytics('proposal_edit_initiated', {
       proposalId: proposal.id,
       status: proposal.status,
     }, 'medium');
-    
+
     onEdit?.(proposal.id);
   }, [proposal.id, proposal.status, analytics, onEdit]);
 
@@ -129,7 +130,7 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
       proposalId: proposal.id,
       status: proposal.status,
     }, 'medium');
-    
+
     onDelete?.(proposal.id);
   }, [proposal.id, proposal.status, analytics, onDelete]);
 
@@ -148,24 +149,24 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
               {proposal.priority}
             </Badge>
           </div>
-          
+
           {proposal.description && (
             <p className="text-sm text-gray-600 mb-2 line-clamp-2">
               {proposal.description}
             </p>
           )}
-          
+
           <div className="flex items-center gap-4 text-sm text-gray-500">
             <div className="flex items-center gap-1">
               <UsersIcon className="h-4 w-4" />
               <span>{proposal.customer?.name || 'Unknown Customer'}</span>
             </div>
-            
+
             <div className="flex items-center gap-1">
               <FileTextIcon className="h-4 w-4" />
-              <span>{proposal.productCount} products</span>
+              <span>{proposal.products?.length || 0} products</span>
             </div>
-            
+
             {proposal.dueDate && (
               <div className="flex items-center gap-1">
                 <CalendarIcon className="h-4 w-4" />
@@ -174,50 +175,40 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
             )}
           </div>
         </div>
-        
+
         <div className="text-right ml-4">
           <div className="text-xl font-bold text-gray-900">
-            {formatCurrency(proposal.totalValue, proposal.currency)}
+            {formatCurrency(proposal.value || 0, proposal.currency)}
           </div>
           <div className="text-sm text-gray-500">
             Updated {formatDate(proposal.updatedAt)}
           </div>
         </div>
       </div>
-      
+
       <div className="flex justify-between items-center pt-4 border-t border-gray-200">
         <div className="flex items-center gap-2">
-          {proposal.tags?.slice(0, 3).map((tag) => (
-            <Badge key={tag} size="sm" variant="outline">
+          {proposal.tags?.slice(0, 3).map((tag: string) => (
+            <Badge key={tag} variant="outline" className="text-xs">
               {tag}
             </Badge>
           ))}
           {(proposal.tags?.length || 0) > 3 && (
-            <span className="text-xs text-gray-500">
-              +{(proposal.tags?.length || 0) - 3} more
-            </span>
+            <span className="text-xs text-gray-500">+{(proposal.tags?.length || 0) - 3} more</span>
           )}
         </div>
-        
+
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleView}
-          >
+          <Button variant="outline" size="sm" onClick={handleView}>
             <EyeIcon className="h-4 w-4 mr-1" />
             View
           </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-          >
+
+          <Button variant="outline" size="sm" onClick={handleEdit}>
             <EditIcon className="h-4 w-4 mr-1" />
             Edit
           </Button>
-          
+
           <Button
             variant="outline"
             size="sm"
@@ -235,10 +226,14 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
 
 export default function UnifiedProposalList() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  
+
   // Single source of truth for proposal list data
-  const { proposals, total, metrics, isLoading, error } = useUnifiedProposalListData();
-  
+  const { data, isLoading, error, fetchNextPage, hasNextPage } = useInfiniteProposals();
+
+  // Extract proposals from infinite query data
+  const proposals = data?.pages?.flatMap(page => page.items) || [];
+  const total = proposals.length;
+
   // Local state for filtering and searching
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -248,11 +243,15 @@ export default function UnifiedProposalList() {
 
   // Track component mount
   useEffect(() => {
-    analytics('unified_proposal_list_viewed', {
-      totalProposals: total,
-      userStory: 'US-3.2',
-      hypothesis: 'H4',
-    }, 'low');
+    analytics(
+      'unified_proposal_list_viewed',
+      {
+        totalProposals: total,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      },
+      'low'
+    );
 
     logDebug('Unified proposal list rendered', {
       component: 'UnifiedProposalList',
@@ -266,30 +265,31 @@ export default function UnifiedProposalList() {
 
   // Filter and sort proposals
   const filteredAndSortedProposals = useMemo(() => {
-    let filtered = proposals.filter(proposal => {
-      const matchesSearch = !searchQuery || 
+    let filtered = proposals.filter((proposal: any) => {
+      const matchesSearch =
+        !searchQuery ||
         proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         proposal.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         proposal.customer?.name.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       const matchesStatus = !statusFilter || proposal.status === statusFilter;
       const matchesPriority = !priorityFilter || proposal.priority === priorityFilter;
-      
+
       return matchesSearch && matchesStatus && matchesPriority;
     });
 
     // Sort proposals
-    filtered.sort((a, b) => {
+    filtered.sort((a: any, b: any) => {
       let aValue: any, bValue: any;
-      
+
       switch (sortBy) {
         case 'title':
           aValue = a.title.toLowerCase();
           bValue = b.title.toLowerCase();
           break;
         case 'value':
-          aValue = a.totalValue;
-          bValue = b.totalValue;
+          aValue = a.value;
+          bValue = b.value;
           break;
         case 'createdAt':
           aValue = new Date(a.createdAt);
@@ -301,7 +301,7 @@ export default function UnifiedProposalList() {
           bValue = new Date(b.updatedAt);
           break;
       }
-      
+
       if (sortOrder === 'asc') {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
       } else {
@@ -329,12 +329,16 @@ export default function UnifiedProposalList() {
   }, []);
 
   const handleCreateNew = useCallback(() => {
-    analytics('proposal_creation_initiated', {
-      source: 'proposal_list',
-      userStory: 'US-3.1',
-      hypothesis: 'H4',
-    }, 'medium');
-    
+    analytics(
+      'proposal_creation_initiated',
+      {
+        source: 'proposal_list',
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      },
+      'medium'
+    );
+
     window.location.href = '/proposals/wizard';
   }, [analytics]);
 
@@ -369,9 +373,7 @@ export default function UnifiedProposalList() {
     return (
       <Card className="p-8 text-center">
         <AlertTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-          Unable to Load Proposals
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Unable to Load Proposals</h3>
         <p className="text-gray-600 mb-4">
           {error instanceof Error ? error.message : 'An unexpected error occurred'}
         </p>
@@ -389,9 +391,7 @@ export default function UnifiedProposalList() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Proposals</h1>
-          <p className="mt-2 text-gray-600">
-            Manage your proposals with unified data consistency
-          </p>
+          <p className="mt-2 text-gray-600">Manage your proposals with unified data consistency</p>
         </div>
         <Button onClick={handleCreateNew}>
           <PlusIcon className="h-4 w-4 mr-2" />
@@ -399,46 +399,56 @@ export default function UnifiedProposalList() {
         </Button>
       </div>
 
-      {/* Metrics Summary */}
-      {metrics && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Metrics Section */}
+      {total > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card className="p-4">
             <div className="flex items-center">
-              <FileTextIcon className="h-8 w-8 text-blue-600" />
+              <span className="h-8 w-8 text-blue-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Proposals</p>
-                <p className="text-2xl font-bold text-gray-900">{metrics.totalProposals}</p>
+                <p className="text-2xl font-bold text-gray-900">{total}</p>
               </div>
             </div>
           </Card>
-          
+
           <Card className="p-4">
             <div className="flex items-center">
-              <CheckCircleIcon className="h-8 w-8 text-green-600" />
+              <span className="h-8 w-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active</p>
-                <p className="text-2xl font-bold text-gray-900">{metrics.activeProposals}</p>
+                <p className="text-sm font-medium text-gray-600">Active Proposals</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {
+                    filteredAndSortedProposals.filter(
+                      p => p.status === 'IN_REVIEW' || p.status === 'PENDING_APPROVAL'
+                    ).length
+                  }
+                </p>
               </div>
             </div>
           </Card>
-          
+
           <Card className="p-4">
             <div className="flex items-center">
-              <UsersIcon className="h-8 w-8 text-purple-600" />
+              <span className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Customers</p>
-                <p className="text-2xl font-bold text-gray-900">{metrics.totalCustomers}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {new Set(filteredAndSortedProposals.map(p => p.customerId)).size}
+                </p>
               </div>
             </div>
           </Card>
-          
+
           <Card className="p-4">
             <div className="flex items-center">
-              <div className="h-8 w-8 text-orange-600 flex items-center justify-center">$</div>
+              <span className="h-8 w-8 text-orange-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Value</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(metrics.totalRevenue)}
+                  {formatCurrency(
+                    filteredAndSortedProposals.reduce((sum, p) => sum + (p.value || 0), 0)
+                  )}
                 </p>
               </div>
             </div>
@@ -455,30 +465,30 @@ export default function UnifiedProposalList() {
               <Input
                 placeholder="Search proposals..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={e => setSearchQuery(e.target.value)}
                 className="pl-10"
               />
             </div>
           </div>
-          
+
           <Select
             value={statusFilter}
-            onChange={setStatusFilter}
+            onChange={value => setStatusFilter(value)}
             options={statusOptions}
             placeholder="Status"
           />
-          
+
           <Select
             value={priorityFilter}
-            onChange={setPriorityFilter}
+            onChange={value => setPriorityFilter(value)}
             options={priorityOptions}
             placeholder="Priority"
           />
-          
+
           <div className="flex items-center gap-2">
             <Select
               value={sortBy}
-              onChange={(value) => setSortBy(value as typeof sortBy)}
+              onChange={value => setSortBy(value as typeof sortBy)}
               options={sortOptions}
               placeholder="Sort by"
             />
@@ -514,7 +524,7 @@ export default function UnifiedProposalList() {
         </div>
       ) : filteredAndSortedProposals.length > 0 ? (
         <div className="space-y-4">
-          {filteredAndSortedProposals.map((proposal) => (
+          {filteredAndSortedProposals.map((proposal: any) => (
             <ProposalCard
               key={proposal.id}
               proposal={proposal}
@@ -527,9 +537,7 @@ export default function UnifiedProposalList() {
       ) : (
         <Card className="p-8 text-center">
           <FileTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            No Proposals Found
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Proposals Found</h3>
           <p className="text-gray-600 mb-4">
             {searchQuery || statusFilter || priorityFilter
               ? 'Try adjusting your filters to see more results.'

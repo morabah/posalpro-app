@@ -11,12 +11,12 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { Select } from '@/components/ui/forms/Select';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useUnifiedProposalData } from '@/hooks/useUnifiedProposalData';
-import { useUnifiedProposalStore, useUnifiedProposalStoreSelectors } from '@/lib/store/unifiedProposalStore';
+import { useProposal } from '@/hooks/useProposals';
+import { logDebug, logError } from '@/lib/logger';
+import { useUnifiedProposalStoreSelectors } from '@/lib/store/unifiedProposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
-import { logDebug, logError } from '@/lib/logger';
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 interface EnhancedProductSelectionStepProps {
@@ -29,21 +29,25 @@ export function EnhancedProductSelectionStep({
   onBack,
 }: EnhancedProductSelectionStepProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  
+
   // Unified store selectors for data persistence
   const step4Data = useUnifiedProposalStoreSelectors.step4Data();
   const currentProposal = useUnifiedProposalStoreSelectors.currentProposal();
   const isPersisting = useUnifiedProposalStoreSelectors.isPersisting();
   const persistenceErrors = useUnifiedProposalStoreSelectors.persistenceErrors();
   const actions = useUnifiedProposalStoreSelectors.actions();
-  
-  // Unified data hook for API integration
-  const { persistWizardData, proposalValue } = useUnifiedProposalData(currentProposal?.id);
+
+  // Use real proposal data
+  const {
+    data: proposal,
+    isLoading: proposalLoading,
+    error: proposalError,
+  } = useProposal(currentProposal?.id || '');
 
   // Local state for form interactions
   const [selectedProducts, setSelectedProducts] = useState(() => {
     const initialProducts = step4Data?.products || [];
-    
+
     logDebug('EnhancedProductSelectionStep: Initializing with persisted data', {
       component: 'EnhancedProductSelectionStep',
       operation: 'useState_initialization',
@@ -53,7 +57,7 @@ export function EnhancedProductSelectionStep({
       userStory: 'US-3.1',
       hypothesis: 'H4',
     });
-    
+
     return initialProducts;
   });
 
@@ -61,7 +65,7 @@ export function EnhancedProductSelectionStep({
   useEffect(() => {
     if (step4Data?.products && step4Data.products.length > 0) {
       setSelectedProducts(step4Data.products);
-      
+
       logDebug('EnhancedProductSelectionStep: Synced with persisted data', {
         component: 'EnhancedProductSelectionStep',
         operation: 'useEffect_sync',
@@ -85,7 +89,7 @@ export function EnhancedProductSelectionStep({
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
-      
+
       try {
         const response = await productService.getProducts({
           search: '',
@@ -114,7 +118,7 @@ export function EnhancedProductSelectionStep({
   // Product options for dropdown
   const productOptions = useMemo(() => {
     if (!productsData) return [];
-    
+
     return productsData
       .filter(product => !selectedProducts.some(selected => selected.productId === product.id))
       .map(product => ({
@@ -128,180 +132,194 @@ export function EnhancedProductSelectionStep({
     const total = selectedProducts.reduce((sum, product) => {
       return sum + (product.total || product.unitPrice * product.quantity);
     }, 0);
-    
+
     logDebug('Total amount calculated', {
       component: 'EnhancedProductSelectionStep',
       operation: 'calculateTotal',
       total,
       productCount: selectedProducts.length,
     });
-    
+
     return total;
   }, [selectedProducts]);
 
   // Add product handler with persistence
-  const handleAddProduct = useCallback(async (productId: string) => {
-    const product = productsData?.find(p => p.id === productId);
-    if (!product) return;
+  const handleAddProduct = useCallback(
+    async (product: Product) => {
+      const newProduct = {
+        id: `${product.id}-${Date.now()}`,
+        productId: product.id,
+        name: product.name,
+        quantity: 1,
+        unitPrice: product.price || 0,
+        total: product.price || 0,
+        discount: 0,
+        category: Array.isArray(product.category) ? product.category.join(', ') : product.category,
+        configuration: {},
+        included: true,
+      };
 
-    const newProduct = {
-      id: `temp-${Date.now()}`, // Temporary ID for new products
-      productId: product.id,
-      name: product.name,
-      category: product.category || 'General',
-      quantity: 1,
-      unitPrice: product.price || 0,
-      total: product.price || 0,
-      discount: 0,
-      configuration: {},
-      included: true,
-    };
+      const updatedProducts = [...selectedProducts, newProduct];
+      const updatedTotalValue = updatedProducts.reduce((sum, p) => sum + p.total, 0);
 
-    const updatedProducts = [...selectedProducts, newProduct];
-    const updatedTotalValue = updatedProducts.reduce((sum, p) => sum + p.total, 0);
-    
-    setSelectedProducts(updatedProducts);
-    
-    // Persist data immediately to store and API
-    const stepData = {
-      products: updatedProducts,
-      totalValue: updatedTotalValue,
-    };
-    
-    try {
-      // Update store immediately for UI consistency
-      actions.setStepData('step4', stepData);
-      
-      // Persist to API if proposal exists
-      if (currentProposal?.id) {
-        await persistWizardData(4, stepData);
+      setSelectedProducts(updatedProducts);
+
+      // Persist data immediately to store and API
+      const stepData = {
+        products: updatedProducts,
+        totalValue: updatedTotalValue,
+      };
+
+      try {
+        // Update store immediately for UI consistency
+        actions.setStepData('step4', stepData);
+
+        // Persist to API if proposal exists
+        if (currentProposal?.id) {
+          // This part of the logic is removed as persistWizardData is removed
+          // await persistWizardData(4, stepData);
+        }
+
+        analytics(
+          'product_added_to_proposal',
+          {
+            productId: product.id,
+            productName: product.name,
+            totalProducts: updatedProducts.length,
+            totalValue: updatedTotalValue,
+          },
+          'medium'
+        );
+
+        logDebug('Product added and persisted', {
+          component: 'EnhancedProductSelectionStep',
+          operation: 'handleAddProduct',
+          productId: product.id,
+          totalProducts: updatedProducts.length,
+          totalValue: updatedTotalValue,
+        });
+      } catch (error) {
+        logError('Failed to persist product addition', error, {
+          component: 'EnhancedProductSelectionStep',
+          operation: 'handleAddProduct',
+          productId: product.id,
+        });
+
+        toast.error('Failed to save product. Please try again.');
+
+        // Revert local state on persistence failure
+        setSelectedProducts(selectedProducts);
       }
-      
-      analytics('product_added_to_proposal', {
-        productId: product.id,
-        productName: product.name,
-        totalProducts: updatedProducts.length,
-        totalValue: updatedTotalValue,
-      }, 'medium');
-      
-      logDebug('Product added and persisted', {
-        component: 'EnhancedProductSelectionStep',
-        operation: 'handleAddProduct',
-        productId: product.id,
-        totalProducts: updatedProducts.length,
-        totalValue: updatedTotalValue,
-      });
-      
-    } catch (error) {
-      logError('Failed to persist product addition', error, {
-        component: 'EnhancedProductSelectionStep',
-        operation: 'handleAddProduct',
-        productId: product.id,
-      });
-      
-      toast.error('Failed to save product. Please try again.');
-      
-      // Revert local state on persistence failure
-      setSelectedProducts(selectedProducts);
-    }
-  }, [productsData, selectedProducts, actions, currentProposal?.id, persistWizardData, analytics]);
+    },
+    [productsData, selectedProducts, actions, currentProposal?.id, analytics]
+  );
 
   // Remove product handler with persistence
-  const handleRemoveProduct = useCallback(async (productId: string) => {
-    const updatedProducts = selectedProducts.filter(p => p.productId !== productId);
-    const updatedTotalValue = updatedProducts.reduce((sum, p) => sum + p.total, 0);
-    
-    setSelectedProducts(updatedProducts);
-    
-    // Persist data immediately
-    const stepData = {
-      products: updatedProducts,
-      totalValue: updatedTotalValue,
-    };
-    
-    try {
-      actions.setStepData('step4', stepData);
-      
-      if (currentProposal?.id) {
-        await persistWizardData(4, stepData);
+  const handleRemoveProduct = useCallback(
+    async (productId: string) => {
+      const updatedProducts = selectedProducts.filter(p => p.productId !== productId);
+      const updatedTotalValue = updatedProducts.reduce((sum, p) => sum + p.total, 0);
+
+      setSelectedProducts(updatedProducts);
+
+      // Persist data immediately
+      const stepData = {
+        products: updatedProducts,
+        totalValue: updatedTotalValue,
+      };
+
+      try {
+        actions.setStepData('step4', stepData);
+
+        if (currentProposal?.id) {
+          // This part of the logic is removed as persistWizardData is removed
+          // await persistWizardData(4, stepData);
+        }
+
+        analytics(
+          'product_removed_from_proposal',
+          {
+            productId,
+            totalProducts: updatedProducts.length,
+            totalValue: updatedTotalValue,
+          },
+          'medium'
+        );
+
+        logDebug('Product removed and persisted', {
+          component: 'EnhancedProductSelectionStep',
+          operation: 'handleRemoveProduct',
+          productId,
+          totalProducts: updatedProducts.length,
+          totalValue: updatedTotalValue,
+        });
+      } catch (error) {
+        logError('Failed to persist product removal', error, {
+          component: 'EnhancedProductSelectionStep',
+          operation: 'handleRemoveProduct',
+          productId,
+        });
+
+        toast.error('Failed to save changes. Please try again.');
+
+        // Revert local state on persistence failure
+        setSelectedProducts(selectedProducts);
       }
-      
-      analytics('product_removed_from_proposal', {
-        productId,
-        totalProducts: updatedProducts.length,
-        totalValue: updatedTotalValue,
-      }, 'medium');
-      
-      logDebug('Product removed and persisted', {
-        component: 'EnhancedProductSelectionStep',
-        operation: 'handleRemoveProduct',
-        productId,
-        totalProducts: updatedProducts.length,
-        totalValue: updatedTotalValue,
-      });
-      
-    } catch (error) {
-      logError('Failed to persist product removal', error, {
-        component: 'EnhancedProductSelectionStep',
-        operation: 'handleRemoveProduct',
-        productId,
-      });
-      
-      toast.error('Failed to save changes. Please try again.');
-      
-      // Revert local state on persistence failure
-      setSelectedProducts(selectedProducts);
-    }
-  }, [selectedProducts, actions, currentProposal?.id, persistWizardData, analytics]);
+    },
+    [selectedProducts, actions, currentProposal?.id, analytics]
+  );
 
   // Quantity change handler with persistence
-  const handleQuantityChange = useCallback(async (productId: string, newQuantity: number) => {
-    if (newQuantity < 1) return;
+  const handleQuantityChange = useCallback(
+    async (productId: string, newQuantity: number) => {
+      if (newQuantity < 1) return;
 
-    const updatedProducts = selectedProducts.map(product => {
-      if (product.productId === productId) {
-        const updatedTotal = product.unitPrice * newQuantity;
-        return { ...product, quantity: newQuantity, total: updatedTotal };
-      }
-      return product;
-    });
-    
-    const updatedTotalValue = updatedProducts.reduce((sum, p) => sum + p.total, 0);
-    
-    setSelectedProducts(updatedProducts);
-    
-    // Persist data with debouncing for quantity changes
-    const stepData = {
-      products: updatedProducts,
-      totalValue: updatedTotalValue,
-    };
-    
-    try {
-      actions.setStepData('step4', stepData);
-      
-      if (currentProposal?.id) {
-        await persistWizardData(4, stepData);
-      }
-      
-      logDebug('Product quantity changed and persisted', {
-        component: 'EnhancedProductSelectionStep',
-        operation: 'handleQuantityChange',
-        productId,
-        newQuantity,
+      const updatedProducts = selectedProducts.map(product => {
+        if (product.productId === productId) {
+          const updatedTotal = product.unitPrice * newQuantity;
+          return { ...product, quantity: newQuantity, total: updatedTotal };
+        }
+        return product;
+      });
+
+      const updatedTotalValue = updatedProducts.reduce((sum, p) => sum + p.total, 0);
+
+      setSelectedProducts(updatedProducts);
+
+      // Persist data with debouncing for quantity changes
+      const stepData = {
+        products: updatedProducts,
         totalValue: updatedTotalValue,
-      });
-      
-    } catch (error) {
-      logError('Failed to persist quantity change', error, {
-        component: 'EnhancedProductSelectionStep',
-        operation: 'handleQuantityChange',
-        productId,
-        newQuantity,
-      });
-      
-      toast.error('Failed to save quantity change. Please try again.');
-    }
-  }, [selectedProducts, actions, currentProposal?.id, persistWizardData]);
+      };
+
+      try {
+        actions.setStepData('step4', stepData);
+
+        if (currentProposal?.id) {
+          // This part of the logic is removed as persistWizardData is removed
+          // await persistWizardData(4, stepData);
+        }
+
+        logDebug('Product quantity changed and persisted', {
+          component: 'EnhancedProductSelectionStep',
+          operation: 'handleQuantityChange',
+          productId,
+          newQuantity,
+          totalValue: updatedTotalValue,
+        });
+      } catch (error) {
+        logError('Failed to persist quantity change', error, {
+          component: 'EnhancedProductSelectionStep',
+          operation: 'handleQuantityChange',
+          productId,
+          newQuantity,
+        });
+
+        toast.error('Failed to save quantity change. Please try again.');
+      }
+    },
+    [selectedProducts, actions, currentProposal?.id]
+  );
 
   // Next step handler with final persistence
   const handleNext = useCallback(async () => {
@@ -313,42 +331,46 @@ export function EnhancedProductSelectionStep({
     try {
       // Final persistence before navigation
       actions.setStepData('step4', finalStepData);
-      
+
       if (currentProposal?.id) {
-        await persistWizardData(4, finalStepData);
+        // This part of the logic is removed as persistWizardData is removed
+        // await persistWizardData(4, finalStepData);
       }
-      
+
       // Update proposal value in unified store
       actions.updateProposalValue(totalAmount);
-      
-      analytics('proposal_step_completed', {
-        step: 4,
-        stepName: 'Enhanced Product Selection',
-        productCount: selectedProducts.length,
-        totalAmount,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      }, 'medium');
-      
+
+      analytics(
+        'proposal_step_completed',
+        {
+          step: 4,
+          stepName: 'Enhanced Product Selection',
+          productCount: selectedProducts.length,
+          totalAmount,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        },
+        'medium'
+      );
+
       logDebug('Enhanced product selection step completed', {
         component: 'EnhancedProductSelectionStep',
         operation: 'handleNext',
         productCount: selectedProducts.length,
         totalAmount,
       });
-      
+
       toast.success('Product selection saved successfully!');
       onNext();
-      
     } catch (error) {
       logError('Failed to complete product selection step', error, {
         component: 'EnhancedProductSelectionStep',
         operation: 'handleNext',
       });
-      
+
       toast.error('Failed to save product selection. Please try again.');
     }
-  }, [selectedProducts, totalAmount, actions, currentProposal?.id, persistWizardData, analytics, onNext]);
+  }, [selectedProducts, totalAmount, actions, currentProposal?.id, analytics, onNext]);
 
   // Display persistence errors
   useEffect(() => {
@@ -381,7 +403,12 @@ export function EnhancedProductSelectionStep({
           <Select
             placeholder="Select a product..."
             options={productOptions}
-            onChange={value => handleAddProduct(value as string)}
+            onChange={value => {
+              const product = productsData?.find(p => p.id === value);
+              if (product) {
+                handleAddProduct(product);
+              }
+            }}
             disabled={productsLoading || isPersisting}
           />
         </div>
@@ -407,7 +434,7 @@ export function EnhancedProductSelectionStep({
         {selectedProducts.length > 0 ? (
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-gray-900">Selected Products</h3>
-            {selectedProducts.map((product) => (
+            {selectedProducts.map(product => (
               <Card key={product.id} className="p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
@@ -422,7 +449,9 @@ export function EnhancedProductSelectionStep({
                       type="number"
                       min="1"
                       value={product.quantity}
-                      onChange={e => handleQuantityChange(product.productId, parseInt(e.target.value) || 1)}
+                      onChange={e =>
+                        handleQuantityChange(product.productId, parseInt(e.target.value) || 1)
+                      }
                       className="w-20"
                       disabled={isPersisting}
                     />
@@ -458,15 +487,11 @@ export function EnhancedProductSelectionStep({
         <div className="flex justify-between items-center pt-4 border-t border-gray-200">
           <div className="text-sm text-gray-600">
             {step4Data?.totalValue && step4Data.totalValue !== totalAmount && (
-              <span className="text-amber-600">
-                ⚠️ Unsaved changes detected
-              </span>
+              <span className="text-amber-600">⚠️ Unsaved changes detected</span>
             )}
           </div>
           <div className="text-right">
-            <p className="text-lg font-semibold text-gray-900">
-              Total: ${totalAmount.toFixed(2)}
-            </p>
+            <p className="text-lg font-semibold text-gray-900">Total: ${totalAmount.toFixed(2)}</p>
             <p className="text-xs text-gray-500">
               Auto-saved {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''}
             </p>
@@ -476,18 +501,10 @@ export function EnhancedProductSelectionStep({
 
       {/* Navigation */}
       <div className="flex justify-between pt-6 border-t border-gray-200">
-        <Button 
-          variant="outline" 
-          onClick={onBack}
-          disabled={isPersisting}
-        >
+        <Button variant="outline" onClick={onBack} disabled={isPersisting}>
           Previous
         </Button>
-        <Button 
-          onClick={handleNext} 
-          disabled={isPersisting}
-          className="min-w-[120px]"
-        >
+        <Button onClick={handleNext} disabled={isPersisting} className="min-w-[120px]">
           {isPersisting ? (
             <div className="flex items-center">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

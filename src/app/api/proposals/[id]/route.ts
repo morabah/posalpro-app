@@ -4,11 +4,11 @@
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
+import { WizardProposalUpdateSchema } from '@/features/proposals/schemas';
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { ProposalUpdateSchema } from '@/types/proposals/proposalSchemas';
 
 // ====================
 // GET /api/proposals/[id] - Get individual proposal
@@ -103,7 +103,7 @@ export const GET = createRoute(
 export const PUT = createRoute(
   {
     roles: ['admin', 'manager', 'sales', 'System Administrator', 'Administrator'],
-    body: ProposalUpdateSchema, // ✅ RE-ENABLED schema validation
+    body: WizardProposalUpdateSchema, // ✅ Use wizard schema for flat payload structure
   },
   async ({ req, body, user }) => {
     const id = req.url.split('/').pop()?.split('?')[0];
@@ -138,13 +138,29 @@ export const PUT = createRoute(
         hypothesis: 'H4',
       });
 
-      // ✅ FIXED: Handle complex nested data structure
-      const { teamData, contentData, productData, sectionData, reviewData, ...basicFields } = body!;
+      // ✅ FIXED: Handle wizard flat payload structure
+      const {
+        teamData,
+        contentData,
+        productData,
+        sectionData,
+        reviewData,
+        customer,
+        customerId, // Remove customerId to prevent Prisma conflict
+        ...basicFields
+      } = body as any;
 
       const updateData: any = {
         ...basicFields,
         updatedAt: new Date(),
       };
+
+      // ✅ FIXED: Handle customer relationship properly
+      if (customer && customer.id) {
+        updateData.customer = {
+          connect: { id: customer.id },
+        };
+      }
 
       // Convert dueDate string to Date if provided
       if (basicFields.dueDate) {

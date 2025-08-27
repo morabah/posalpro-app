@@ -7,7 +7,7 @@
 'use client';
 
 import { Card } from '@/components/ui/Card';
-import { useUnifiedDashboardData } from '@/hooks/useUnifiedProposalData';
+import { useExecutiveDashboard } from '@/hooks/useDashboard';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import {
@@ -85,9 +85,11 @@ const StatCard = memo<StatCardProps>(({ title, value, icon, color, loading, tren
           <div className="flex items-center">
             <p className="text-2xl font-bold text-gray-900">{value}</p>
             {trend && (
-              <div className={`ml-2 flex items-center text-sm ${
-                trend.isPositive ? 'text-green-600' : 'text-red-600'
-              }`}>
+              <div
+                className={`ml-2 flex items-center text-sm ${
+                  trend.isPositive ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
                 {trend.isPositive ? (
                   <ArrowTrendingUpIcon className="h-4 w-4 mr-1" />
                 ) : (
@@ -128,29 +130,33 @@ const formatLargeNumber = (num: number) => {
 
 export const UnifiedDashboardStats = memo(() => {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-  
+
   // Single source of truth for dashboard data
-  const { stats, isLoading, error } = useUnifiedDashboardData();
+  const { data: dashboardData, isLoading, error } = useExecutiveDashboard('3M', false);
+  const stats = dashboardData?.metrics;
 
   // Track dashboard stats view
   useEffect(() => {
     if (stats && !isLoading) {
-      analytics('unified_dashboard_stats_viewed', {
-        totalProposals: stats.totalProposals,
-        totalRevenue: stats.totalRevenue,
-        completionRate: stats.completionRate,
-        userStory: 'US-2.2',
-        hypothesis: 'H9',
-      }, 'low');
+      analytics(
+        'unified_dashboard_stats_viewed',
+        {
+          totalProposals: stats.totalProposals,
+          totalRevenue: stats.totalRevenue,
+          winRate: stats.winRate,
+          userStory: 'US-2.2',
+          hypothesis: 'H9',
+        },
+        'low'
+      );
 
       logDebug('Unified dashboard stats rendered', {
         component: 'UnifiedDashboardStats',
         operation: 'render',
         stats: {
           totalProposals: stats.totalProposals,
-          activeProposals: stats.activeProposals,
-          totalCustomers: stats.totalCustomers,
           totalRevenue: stats.totalRevenue,
+          winRate: stats.winRate,
         },
         userStory: 'US-2.2',
         hypothesis: 'H9',
@@ -166,43 +172,41 @@ export const UnifiedDashboardStats = memo(() => {
           <div className="text-red-600 mb-2">
             <ChartBarIcon className="h-8 w-8 mx-auto" />
           </div>
-          <h3 className="text-lg font-medium text-red-800 mb-2">
-            Unable to Load Dashboard Stats
-          </h3>
+          <h3 className="text-lg font-medium text-red-800 mb-2">Unable to Load Dashboard Stats</h3>
           <p className="text-sm text-red-700">
-            {error instanceof Error ? error.message : 'An unexpected error occurred'}
+            {error && typeof error === 'object' && 'message' in error
+              ? (error as Error).message
+              : 'An unexpected error occurred'}
           </p>
         </div>
       </Card>
     );
   }
 
-  // Calculate trends (mock data for now - would be calculated from historical data)
-  const trends = stats ? {
-    proposals: {
-      value: stats.recentGrowth?.proposals ? 
-        ((stats.recentGrowth.proposals / Math.max(stats.totalProposals - stats.recentGrowth.proposals, 1)) * 100) : 0,
-      isPositive: (stats.recentGrowth?.proposals || 0) > 0,
-    },
-    revenue: {
-      value: stats.recentGrowth?.revenue ? 
-        ((stats.recentGrowth.revenue / Math.max(stats.totalRevenue - stats.recentGrowth.revenue, 1)) * 100) : 0,
-      isPositive: (stats.recentGrowth?.revenue || 0) > 0,
-    },
-    customers: {
-      value: stats.recentGrowth?.customers ? 
-        ((stats.recentGrowth.customers / Math.max(stats.totalCustomers - stats.recentGrowth.customers, 1)) * 100) : 0,
-      isPositive: (stats.recentGrowth?.customers || 0) > 0,
-    },
-  } : null;
+  // Calculate trends based on available metrics
+  const trends = stats
+    ? {
+        proposals: {
+          value:
+            stats.totalProposals > 0 ? ((stats.wonDeals || 0) / stats.totalProposals) * 100 : 0,
+          isPositive: (stats.winRate || 0) > 50,
+        },
+        revenue: {
+          value: stats.quarterlyGrowth || 0,
+          isPositive: (stats.quarterlyGrowth || 0) > 0,
+        },
+        deals: {
+          value: stats.winRate || 0,
+          isPositive: (stats.winRate || 0) > 50,
+        },
+      }
+    : null;
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
-        <p className="mt-2 text-gray-600">
-          Unified metrics from single source of truth
-        </p>
+        <p className="mt-2 text-gray-600">Unified metrics from single source of truth</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -216,23 +220,25 @@ export const UnifiedDashboardStats = memo(() => {
           trend={trends?.proposals}
         />
 
-        {/* Active Proposals */}
+
+
+        {/* Win Rate */}
         <StatCard
-          title="Active Proposals"
-          value={stats?.activeProposals || 0}
+          title="Win Rate"
+          value={`${stats?.winRate?.toFixed(1) || 0}%`}
           icon={<ChartBarIcon className="h-6 w-6" />}
           color="green"
           loading={isLoading}
+          trend={trends?.deals}
         />
 
-        {/* Total Customers */}
+        {/* Team Size */}
         <StatCard
-          title="Total Customers"
-          value={stats?.totalCustomers || 0}
+          title="Team Size"
+          value={stats?.teamSize || 0}
           icon={<UsersIcon className="h-6 w-6" />}
           color="purple"
           loading={isLoading}
-          trend={trends?.customers}
         />
 
         {/* Total Revenue */}
@@ -252,27 +258,25 @@ export const UnifiedDashboardStats = memo(() => {
           <Card className="p-6">
             <div className="text-center">
               <div className="text-3xl font-bold text-green-600">
-                {stats.completionRate.toFixed(1)}%
+                {stats.winRate?.toFixed(1) || 0}%
               </div>
-              <div className="text-sm text-gray-600 mt-1">Completion Rate</div>
+              <div className="text-sm text-gray-600 mt-1">Win Rate</div>
             </div>
           </Card>
 
           <Card className="p-6">
             <div className="text-center">
               <div className="text-3xl font-bold text-blue-600">
-                {stats.avgResponseTime.toFixed(1)}h
+                {stats.quarterlyGrowth?.toFixed(1) || 0}%
               </div>
-              <div className="text-sm text-gray-600 mt-1">Avg Response Time</div>
+              <div className="text-sm text-gray-600 mt-1">Quarterly Growth</div>
             </div>
           </Card>
 
           <Card className="p-6">
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600">
-                {formatLargeNumber(stats.recentGrowth?.proposals || 0)}
-              </div>
-              <div className="text-sm text-gray-600 mt-1">Recent Growth</div>
+              <div className="text-3xl font-bold text-purple-600">{stats.teamSize || 0}</div>
+              <div className="text-sm text-gray-600 mt-1">Team Size</div>
             </div>
           </Card>
         </div>
@@ -285,9 +289,7 @@ export const UnifiedDashboardStats = memo(() => {
             <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
             <span>Unified Data Source Active</span>
           </div>
-          <div>
-            Last updated: {new Date().toLocaleTimeString()}
-          </div>
+          <div>Last updated: {new Date().toLocaleTimeString()}</div>
         </div>
       </Card>
     </div>

@@ -114,6 +114,8 @@ export function useProductMigrated(id: string) {
     enabled: !!id,
     staleTime: 30000,
     gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
 
@@ -141,6 +143,8 @@ export function useProductWithRelationshipsMigrated(id: string) {
     enabled: !!id,
     staleTime: 30000,
     gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
 
@@ -166,6 +170,8 @@ export function useProductStatsMigrated() {
     },
     staleTime: 60000, // 1 minute
     gcTime: 300000, // 5 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
 
@@ -196,257 +202,291 @@ export function useProductSearchMigrated(query: string, limit: number = 10) {
     enabled: !!query && query.length >= 2,
     staleTime: 30000,
     gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
-// Create Product Hook
+
+// ====================
+// Multiple Products by IDs using useQueries
+// ====================
+
+export function useProductsByIds(ids: string[]) {
+  const { get } = useHttpClient();
+
+  const results = useQueries({
+    queries: ids.map(id => ({
+      queryKey: qk.products.byId(id),
+      queryFn: async () => {
+        logDebug('Fetching product by ID', {
+          component: 'useProductsByIds',
+          operation: 'queryFn',
+          productId: id,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+
+        const response = await get<Product>(`/api/products/${id}`);
+        return response;
+      },
+      enabled: !!id,
+      staleTime: 30000,
+      gcTime: 120000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    })),
+  });
+
+  return {
+    data: results.map(r => r.data).filter(Boolean) as Product[],
+    isLoading: results.some(r => r.isLoading),
+    isError: results.some(r => r.isError),
+    errors: results.filter(r => r.error).map(r => r.error),
+  };
+}
+
+// ====================
+// Product Mutations
 // ====================
 
 export function useCreateProduct() {
   const queryClient = useQueryClient();
-  const analytics = useOptimizedAnalytics();
+  const { post } = useHttpClient();
 
   return useMutation({
     mutationFn: async (data: ProductCreate) => {
-      analytics.trackOptimized('product_create_attempt', {
-        name: data.name,
-        category: data.category,
-        userStories: ['US-4.1'],
-        hypotheses: ['H5'],
-        priority: 'medium',
-      });
-
       logDebug('Creating product', {
         component: 'useCreateProduct',
-        operation: 'mutationFn',
-        dataKeys: Object.keys(data),
+        operation: 'createProduct',
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
 
-      const response = await productService.createProduct(data);
+      try {
+        const startTime = Date.now();
+        const response = await post<Product>('/api/products', data);
+        const loadTime = Date.now() - startTime;
 
-      if (response.ok) {
-        analytics.trackOptimized('product_create_success', {
-          productId: response.data.id,
-          name: data.name,
-          userStories: ['US-4.1'],
-          hypotheses: ['H5'],
-          priority: 'medium',
+        logInfo('Product created successfully', {
+          component: 'useCreateProduct',
+          operation: 'createProduct',
+          productId: response.id,
+          loadTime,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
         });
+
+        return response;
+      } catch (error) {
+        logError('Failed to create product', {
+          component: 'useCreateProduct',
+          operation: 'createProduct',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+        throw error;
       }
-
-      return response;
     },
-    onSuccess: response => {
-      // Invalidate all product queries
+    onSuccess: data => {
+      // Invalidate and refetch products list
       queryClient.invalidateQueries({ queryKey: qk.products.all });
-
-      logInfo('Product created successfully', {
-        component: 'useCreateProduct',
-        operation: 'onSuccess',
-        productId: response.ok ? response.data?.id : undefined,
-      });
+      // Set the new product data in cache
+      queryClient.setQueryData(qk.products.byId(data.id), data);
     },
-    onError: (error, variables) => {
+    onError: error => {
       logError('Product creation failed', {
-        component: 'useCreateProductMigrated',
-        operation: 'onError',
+        component: 'useCreateProduct',
+        operation: 'createProduct',
         error: error instanceof Error ? error.message : 'Unknown error',
-        dataKeys: Object.keys(variables),
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
       });
     },
   });
 }
-
-// ====================
-// Update Product Hook
-// ====================
 
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
-  const analytics = useOptimizedAnalytics();
+  const { put } = useHttpClient();
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: ProductUpdate }) => {
-      analytics.trackOptimized('product_update_attempt', {
-        productId: id,
-        name: data.name,
-        userStories: ['US-4.1'],
-        hypotheses: ['H5'],
-        priority: 'medium',
-      });
-
       logDebug('Updating product', {
         component: 'useUpdateProduct',
-        operation: 'mutationFn',
+        operation: 'updateProduct',
         productId: id,
-        dataKeys: Object.keys(data),
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
 
-      const response = await productService.updateProduct(id, data);
+      try {
+        const startTime = Date.now();
+        const response = await put<Product>(`/api/products/${id}`, data);
+        const loadTime = Date.now() - startTime;
 
-      if (response.ok) {
-        analytics.trackOptimized('product_update_success', {
-          productId: response.data.id,
-          name: data.name,
-          userStories: ['US-4.1'],
-          hypotheses: ['H5'],
-          priority: 'medium',
+        logInfo('Product updated successfully', {
+          component: 'useUpdateProduct',
+          operation: 'updateProduct',
+          productId: id,
+          loadTime,
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
         });
+
+        return response;
+      } catch (error) {
+        logError('Failed to update product', {
+          component: 'useUpdateProduct',
+          operation: 'updateProduct',
+          productId: id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+        throw error;
       }
-
-      return response;
     },
-    onSuccess: (response, { id }) => {
-      // Invalidate all product queries and specific product detail
+    onSuccess: (data, variables) => {
+      // Update the specific product in cache
+      queryClient.setQueryData(qk.products.byId(variables.id), data);
+      // Invalidate products list to reflect changes
       queryClient.invalidateQueries({ queryKey: qk.products.all });
-      queryClient.invalidateQueries({ queryKey: qk.products.byId(id) });
-
-      logInfo('Product updated successfully', {
-        component: 'useUpdateProduct',
-        operation: 'onSuccess',
-        productId: id,
-      });
     },
-    onError: (error, { id, data }) => {
+    onError: (error, variables) => {
       logError('Product update failed', {
         component: 'useUpdateProduct',
-        operation: 'onError',
-        productId: id,
+        operation: 'updateProduct',
+        productId: variables.id,
         error: error instanceof Error ? error.message : 'Unknown error',
-        dataKeys: Object.keys(data),
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
       });
     },
   });
 }
 
-// ====================
-// Delete Product Hook
-// ====================
-
-export function useDeleteProductMigrated() {
+export function useDeleteProduct() {
   const queryClient = useQueryClient();
-  const analytics = useOptimizedAnalytics();
-  const { get, post, put, delete: del } = useHttpClient();
+  const { delete: del } = useHttpClient();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      analytics.trackOptimized('product_delete_attempt', {
-        productId: id,
-        userStories: ['US-4.1'],
-        hypotheses: ['H5'],
-        priority: 'high',
-      });
-
       logDebug('Deleting product', {
-        component: 'useDeleteProductMigrated',
-        operation: 'mutationFn',
+        component: 'useDeleteProduct',
+        operation: 'deleteProduct',
         productId: id,
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
 
-      const response = await del(`/api/products/${id}`);
-      return response;
-    },
-    onSuccess: (response, id) => {
-      // Invalidate all product queries and specific product detail
-      queryClient.invalidateQueries({ queryKey: qk.products.all });
-      queryClient.invalidateQueries({ queryKey: qk.products.byId(id) });
+      try {
+        const startTime = Date.now();
+        await del(`/api/products/${id}`);
+        const loadTime = Date.now() - startTime;
 
-      // Track analytics
-      analytics.trackOptimized(
-        'product_deleted',
-        {
+        logInfo('Product deleted successfully', {
+          component: 'useDeleteProduct',
+          operation: 'deleteProduct',
           productId: id,
+          loadTime,
           userStory: 'US-4.1',
           hypothesis: 'H5',
-        },
-        'high'
-      );
+        });
 
-      logInfo('Product deleted successfully', {
-        component: 'useDeleteProductMigrated',
-        operation: 'onSuccess',
-        productId: id,
-      });
+        return id;
+      } catch (error) {
+        logError('Failed to delete product', {
+          component: 'useDeleteProduct',
+          operation: 'deleteProduct',
+          productId: id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+        throw error;
+      }
+    },
+    onSuccess: id => {
+      // Remove the product from cache
+      queryClient.removeQueries({ queryKey: qk.products.byId(id) });
+      // Invalidate products list
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
     },
     onError: (error, id) => {
       logError('Product deletion failed', {
-        component: 'useDeleteProductMigrated',
-        operation: 'onError',
+        component: 'useDeleteProduct',
+        operation: 'deleteProduct',
         productId: id,
         error: error instanceof Error ? error.message : 'Unknown error',
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
       });
     },
   });
 }
 
 // ====================
-// Bulk Delete Products Hook
+// Bulk Operations
 // ====================
 
-export function useDeleteProductsBulkMigrated() {
+export function useBulkDeleteProducts() {
   const queryClient = useQueryClient();
-  const analytics = useOptimizedAnalytics();
-  const { get, post, put, delete: del } = useHttpClient();
+  const { post } = useHttpClient();
 
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      analytics.trackOptimized('products_bulk_delete_attempt', {
-        productIds: ids,
-        count: ids.length,
-        userStories: ['US-4.1'],
-        hypotheses: ['H5'],
-        priority: 'high',
-      });
-
       logDebug('Bulk deleting products', {
-        component: 'useDeleteProductsBulkMigrated',
-        operation: 'mutationFn',
+        component: 'useBulkDeleteProducts',
+        operation: 'bulkDeleteProducts',
         productIds: ids,
-        count: ids.length,
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
 
-      const response = await post('/api/products/bulk-delete', { ids });
-      return response;
-    },
-    onSuccess: (response, ids) => {
-      // Invalidate all product queries and specific product details
-      queryClient.invalidateQueries({ queryKey: qk.products.all });
-      ids.forEach(id => {
-        queryClient.invalidateQueries({ queryKey: qk.products.byId(id) });
-      });
+      try {
+        const startTime = Date.now();
+        await post('/api/products/bulk-delete', { ids });
+        const loadTime = Date.now() - startTime;
 
-      // Track analytics
-      analytics.trackOptimized(
-        'products_bulk_deleted',
-        {
-          deletedCount: 0, // TODO: Fix response typing
+        logInfo('Products bulk deleted successfully', {
+          component: 'useBulkDeleteProducts',
+          operation: 'bulkDeleteProducts',
           productIds: ids,
+          loadTime,
           userStory: 'US-4.1',
           hypothesis: 'H5',
-        },
-        'high'
-      );
+        });
 
-      logInfo('Products bulk deleted successfully', {
-        component: 'useDeleteProductsBulkMigrated',
-        operation: 'onSuccess',
-        deletedCount: 0, // TODO: Fix response typing
-        productIds: ids,
-      });
+        return ids;
+      } catch (error) {
+        logError('Failed to bulk delete products', {
+          component: 'useBulkDeleteProducts',
+          operation: 'bulkDeleteProducts',
+          productIds: ids,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          userStory: 'US-4.1',
+          hypothesis: 'H5',
+        });
+        throw error;
+      }
     },
-    onError: (error: unknown, ids: string[]) => {
+    onSuccess: ids => {
+      // Remove all deleted products from cache
+      ids.forEach(id => {
+        queryClient.removeQueries({ queryKey: qk.products.byId(id) });
+      });
+      // Invalidate products list
+      queryClient.invalidateQueries({ queryKey: qk.products.all });
+    },
+    onError: (error, ids) => {
       logError('Products bulk deletion failed', {
-        component: 'useDeleteProductsBulkMigrated',
-        operation: 'onError',
+        component: 'useBulkDeleteProducts',
+        operation: 'bulkDeleteProducts',
         productIds: ids,
         error: error instanceof Error ? error.message : 'Unknown error',
+        userStory: 'US-4.1',
+        hypothesis: 'H5',
       });
     },
   });
@@ -570,42 +610,9 @@ export function useDeleteProductRelationshipMigrated() {
   });
 }
 
-// ... (rest of the code remains the same)
 // ====================
 // Utility Hooks
 // ====================
-
-export function useProductsByIdsMigrated(ids: string[]) {
-  const { get, post, put, delete: del } = useHttpClient();
-
-  const results = useQueries({
-    queries: ids.map(id => ({
-      queryKey: qk.products.byId(id),
-      queryFn: async () => {
-        logDebug('Fetching product by ID', {
-          component: 'useProductsByIdsMigrated',
-          operation: 'queryFn',
-          productId: id,
-          userStory: 'US-4.1',
-          hypothesis: 'H5',
-        });
-
-        const response = await productService.getProduct(id);
-        return response;
-      },
-      enabled: !!id,
-      staleTime: 30000,
-      gcTime: 120000,
-    })),
-  });
-
-  return {
-    data: results.map(r => (r.data?.ok ? r.data.data : null)).filter(Boolean) as Product[],
-    isLoading: results.some(r => r.isLoading),
-    isError: results.some(r => r.isError),
-    errors: results.filter(r => r.error).map(r => r.error),
-  };
-}
 
 export function useProductByIdOrSearchMigrated(id?: string, searchTerm?: string) {
   const { get, post, put, delete: del } = useHttpClient();

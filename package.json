@@ -95,7 +95,26 @@
     "test:proposal-edit:direct": "node scripts/direct-proposal-edit-test.js",
     "test:proposal-edit:basic": "node scripts/basic-proposal-edit-test.js",
     "test:https-cli": "node scripts/test-https-cli.js",
-    "test:edit-fixed": "node scripts/test-edit-fixed.js"
+    "test:edit-fixed": "node scripts/test-edit-fixed.js",
+    "migrate:proposals": "npx tsx scripts/migrate-existing-proposals.ts",
+    "migrate:proposals:js": "node scripts/migrate-existing-proposals.js",
+    "verify:migration": "node scripts/verify-migration.js",
+    "test:new-proposal": "node scripts/test-new-proposal.js",
+    "ui:test": "npx tsx scripts/ui-test-cli.ts",
+    "ui:test:wizard": "npx tsx scripts/ui-test-cli.ts --test=wizard",
+    "ui:test:products": "npx tsx scripts/ui-test-cli.ts --test=products",
+    "ui:test:customers": "npx tsx scripts/ui-test-cli.ts --test=customers",
+    "ui:test:dashboard": "npx tsx scripts/ui-test-cli.ts --test=dashboard",
+    "ui:test:auth": "npx tsx scripts/ui-test-cli.ts --test=auth",
+    "ui:test:performance": "npx tsx scripts/ui-test-cli.ts --test=performance",
+    "test:wizard-fix": "node scripts/test-wizard-fix.js",
+    "test:real-wizard-fix": "node scripts/test-real-wizard-fix.js",
+    "test:schema-validation": "node scripts/test-schema-validation.js",
+    "test:customer-relationship": "node scripts/test-customer-relationship.js",
+    "test:data-mapping": "node scripts/test-data-mapping-flow.js",
+    "migrate:wizard-complete": "node scripts/complete-wizard-migration.js",
+    "fix:duplicate-sections": "node scripts/fix-duplicate-section-ids.js",
+    "validate:comprehensive": "node scripts/comprehensive-data-validation.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,json,css,scss}": [

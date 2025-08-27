@@ -5,101 +5,41 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { z } from 'zod';
 
 // ====================
-// Zod Schemas
+// Import consolidated schemas
 // ====================
 
-export const ProductSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
-  price: z.number().positive('Price must be positive').optional().or(z.null()),
-  currency: z.string().default('USD'),
-  sku: z.string(),
-  category: z.array(z.string()),
-  tags: z.array(z.string()),
-  attributes: z.record(z.unknown()).optional(),
-  images: z.array(z.string()),
-  isActive: z.boolean().default(true),
-  version: z.number().default(1),
-  usageAnalytics: z.record(z.unknown()).optional(),
-  userStoryMappings: z.array(z.string()),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
+import {
+  BulkDeleteSchema,
+  ProductCreateSchema,
+  ProductQuerySchema,
+  ProductRelationshipCreateSchema,
+  ProductUpdateSchema,
+  type Product,
+  type ProductCreate,
+  type ProductList,
+  type ProductQuery,
+  type ProductRelationship,
+  type ProductRelationshipCreate,
+  type ProductUpdate,
+  type ProductWithRelationships,
+} from '@/features/products/schemas';
 
-export const ProductRelationshipSchema = z.object({
-  id: z.string(),
-  sourceProductId: z.string(),
-  targetProductId: z.string(),
-  type: z.enum(['REQUIRES', 'RECOMMENDS', 'INCOMPATIBLE', 'ALTERNATIVE', 'OPTIONAL']),
-  quantity: z.number().optional(),
-  condition: z.record(z.unknown()).optional(),
-  validationHistory: z.record(z.unknown()).optional(),
-  performanceImpact: z.record(z.unknown()).optional(),
-  createdBy: z.string(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-
-export const ProductWithRelationshipsSchema = ProductSchema.extend({
-  relationships: z.array(
-    ProductRelationshipSchema.extend({
-      targetProduct: ProductSchema,
-    })
-  ),
-  relatedFrom: z.array(
-    ProductRelationshipSchema.extend({
-      sourceProduct: ProductSchema,
-    })
-  ),
-});
-
-export const ProductListSchema = z.object({
-  items: z.array(ProductSchema),
-  nextCursor: z.string().nullable(),
-});
-
-export const ProductCreateSchema = ProductSchema.omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const ProductUpdateSchema = ProductCreateSchema.partial();
-
-export const ProductQuerySchema = z.object({
-  search: z.string().trim().default(''),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'price', 'isActive']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  category: z.string().optional(),
-  isActive: z.boolean().optional(),
-});
-
-export const ProductRelationshipCreateSchema = z.object({
-  targetProductId: z.string(),
-  type: z.enum(['REQUIRES', 'RECOMMENDS', 'INCOMPATIBLE', 'ALTERNATIVE', 'OPTIONAL']),
-  quantity: z.number().optional(),
-  condition: z.record(z.unknown()).optional(),
-});
-
-export const BulkDeleteSchema = z.object({
-  ids: z.array(z.string()).min(1),
-});
+// Re-export types for backward compatibility
+export type {
+  Product,
+  ProductCreate,
+  ProductList,
+  ProductQuery,
+  ProductRelationship,
+  ProductRelationshipCreate,
+  ProductUpdate,
+  ProductWithRelationships,
+};
 
 // ====================
-// TypeScript Types
+// Use consolidated types from features/products/schemas
 // ====================
 
-export type Product = z.infer<typeof ProductSchema>;
-export type ProductRelationship = z.infer<typeof ProductRelationshipSchema>;
-export type ProductWithRelationships = z.infer<typeof ProductWithRelationshipsSchema>;
-export type ProductList = z.infer<typeof ProductListSchema>;
-export type ProductCreate = z.infer<typeof ProductCreateSchema>;
-export type ProductUpdate = z.infer<typeof ProductUpdateSchema>;
-export type ProductQuery = z.infer<typeof ProductQuerySchema>;
-export type ProductRelationshipCreate = z.infer<typeof ProductRelationshipCreateSchema>;
 export type BulkDelete = z.infer<typeof BulkDeleteSchema>;
 
 // ====================

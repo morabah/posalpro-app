@@ -13,7 +13,7 @@ import { FormActions, FormErrorSummary } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useProductForm } from '@/hooks/useProductForm';
 import { useCreateProduct } from '@/hooks/useProducts';
-import { logInfo } from '@/lib/logger';
+import { analytics } from '@/lib/analytics';
 import { ProductCreate } from '@/services/productService';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -49,19 +49,18 @@ export function ProductCreateFormRefactored() {
     try {
       const result = await createProduct.mutateAsync(validation.formData as ProductCreate);
 
-      if (result && result.ok && result.data) {
-        toast.success('Product created successfully!');
-
-        logInfo('Product create: Product created successfully', {
-          component: 'ProductCreateFormRefactored',
-          operation: 'handleSubmit',
-          productId: result.data.id,
-          userStory: 'US-4.1',
-          hypothesis: 'H5',
+      if (result) {
+        analytics.trackOptimized('product_created', {
+          productId: result.id,
+          productName: result.name,
+          productSku: result.sku,
+          userStories: ['US-4.1'],
+          hypotheses: ['H5'],
+          priority: 'medium',
         });
 
-        // Navigate to the new product
-        router.push(`/products/${result.data.id}`);
+        toast.success('Product created successfully!');
+        router.push(`/products/${result.id}`);
       }
     } catch (error) {
       // Error handling is already done in the hook

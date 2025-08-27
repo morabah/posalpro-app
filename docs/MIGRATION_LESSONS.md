@@ -721,3 +721,134 @@ export const okPaginated = <T>(
 **Result**: **SUCCESSFUL ASSESSMENT IMPLEMENTATION** - Centralized query keys
 and cursor pagination response types provide foundation for consistent,
 maintainable codebase.
+
+---
+
+## 🔧 **Wizard Payload Data Mismatch Fix (Latest)**
+
+### **Migration Goal**: Fix wizard payload data mismatch between UI and API schema
+
+**Final Status**: ✅ **SUCCESSFUL** - Wizard payload transformation implemented.
+
+### **Core Challenge**: Flat vs Nested Data Structure Mismatch
+
+The issue involved **wizard payload structure** not matching **API schema
+expectations**:
+
+- **Wizard sends**: Flat structure with `teamData`, `contentData`,
+  `productData`, `sectionData` as top-level fields
+- **API expects**: Nested structure with wizard data under `metadata` field
+- **Result**: 500 errors with "Invalid request body" due to schema validation
+  failures
+
+### **Phase 1: Data Structure Mismatch Analysis**
+
+#### **Problem**: Schema Validation Failures
+
+**Symptoms**:
+
+- 500 Internal Server Error on proposal updates
+- "Invalid request body" error messages
+- Wizard submission failing in step 6 (Review & Submit)
+- Schema validation rejecting flat wizard payload structure
+
+**Root Cause**: Wizard sending flat data structure, API schema expecting nested
+structure under `metadata`.
+
+#### **Solution**: Database-First Field Alignment with Payload Transformation
+
+```typescript
+// ✅ IMPLEMENTED - Transform wizard payload to API-compatible format
+// src/services/proposalService.ts
+
+private transformWizardPayloadForAPI(proposal: any): ProposalUpdate {
+  const {
+    teamData,
+    contentData,
+    productData,
+    sectionData,
+    reviewData,
+    ...basicFields
+  } = proposal;
+
+  // ✅ Defensive validation - Check if wizard-specific data is present
+  if (teamData || contentData || productData || sectionData || reviewData) {
+    // ✅ Transform flat structure to nested structure under metadata
+    return {
+      ...basicFields,
+      metadata: {
+        teamData: teamData || undefined,
+        contentData: contentData || undefined,
+        productData: productData || undefined,
+        sectionData: sectionData || undefined,
+        reviewData: reviewData || undefined,
+        submittedAt: new Date().toISOString(),
+        wizardVersion: 'modern',
+      },
+    };
+  }
+
+  // ✅ If no wizard-specific data, return as-is
+  return proposal;
+}
+```
+
+### **Key Changes Made**
+
+1. **Service Layer Transformation**: ✅ Added `transformWizardPayloadForAPI`
+   method in ProposalService
+2. **API Route Compatibility**: ✅ Updated API route to handle flat wizard
+   payload structure
+3. **Defensive Validation**: ✅ Added checks for wizard-specific data presence
+4. **Schema Compliance**: ✅ Ensured transformed payload matches
+   `ProposalUpdateSchema`
+
+### **API Response Format Compatibility**
+
+Wizard payload transformation ensures compatibility:
+
+- **Wizard sends**:
+  `{ title, customerId, teamData, contentData, productData, sectionData }`
+- **Service transforms to**:
+  `{ title, customerId, metadata: { teamData, contentData, productData, sectionData } }`
+- **API accepts**: Transformed payload matches `ProposalUpdateSchema`
+
+### **Migration Success Metrics**
+
+**Before Fix**:
+
+- 500 errors on wizard submission
+- Schema validation failures
+- "Invalid request body" errors
+- Wizard step 6 submission failing
+
+**After Fix**:
+
+- ✅ Wizard payload transformation working correctly
+- ✅ Flat structure converted to nested structure
+- ✅ All wizard-specific data preserved under metadata
+- ✅ API schema compatibility achieved
+- ✅ 100% TypeScript compliance for transformation logic
+
+### **Prevention Framework for Data Structure Alignment**
+
+1. **Database-First Design** - Start with database schema, align all layers
+2. **Schema Validation** - Use Zod schemas for runtime validation
+3. **Payload Transformation** - Transform data structures when needed
+4. **Defensive Programming** - Handle both flat and nested structures
+5. **Comprehensive Testing** - Test transformation logic thoroughly
+
+### **Testing Implementation**
+
+Created comprehensive test suite:
+
+```bash
+# Test wizard payload transformation
+npm run test:wizard-fix
+
+# Test UI functionality
+npm run ui:test:wizard
+```
+
+**Result**: **SUCCESSFUL WIZARD PAYLOAD FIX** - Wizard submissions now work
+correctly with proper data structure transformation.

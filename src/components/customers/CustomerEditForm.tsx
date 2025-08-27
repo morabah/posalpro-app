@@ -17,14 +17,15 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
   const router = useRouter();
   const { data: customerData, isLoading, isError } = useCustomer(customerId);
   const updateCustomer = useUpdateCustomer();
+
   const [formData, setFormData] = useState<Partial<Customer>>({
     name: '',
     email: '',
     phone: '',
     website: '',
     address: '',
-    industry: '',
-    companySize: '',
+    industry: undefined,
+    companySize: undefined,
     revenue: undefined,
     status: 'ACTIVE',
     tier: 'STANDARD',
@@ -40,8 +41,8 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
         phone: customerData.data.phone || '',
         website: customerData.data.website || '',
         address: customerData.data.address || '',
-        industry: customerData.data.industry || '',
-        companySize: customerData.data.companySize || '',
+        industry: customerData.data.industry || undefined,
+        companySize: customerData.data.companySize || undefined,
         revenue: customerData.data.revenue,
         status: customerData.data.status || 'ACTIVE',
         tier: customerData.data.tier || 'STANDARD',

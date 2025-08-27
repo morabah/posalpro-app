@@ -2,57 +2,21 @@
 import { ApiResponse } from '@/lib/api/response';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
 
-// Zod schemas for validation
-export const CustomerSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email format'),
-  phone: z.string().optional(),
-  website: z.string().url().optional().or(z.literal('')),
-  address: z.string().optional(),
-  industry: z.string().optional(),
-  companySize: z.string().optional(),
-  revenue: z.number().optional().or(z.null()),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']).optional(),
-  tags: z.array(z.string()).optional(),
-  metadata: z.record(z.unknown()).optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
+// Import consolidated schemas
+import {
+  CustomerCreateSchema,
+  CustomerQuerySchema,
+  CustomerUpdateSchema,
+  type Customer,
+  type CustomerCreate,
+  type CustomerList,
+  type CustomerQuery,
+  type CustomerUpdate,
+} from '@/features/customers/schemas';
 
-export const CustomerCreateSchema = CustomerSchema.omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const CustomerUpdateSchema = CustomerCreateSchema.partial();
-
-export const CustomerQuerySchema = z.object({
-  search: z.string().trim().default(''),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'status', 'revenue']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']).optional(),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']).optional(),
-  industry: z.string().optional(),
-});
-
-export const CustomerListSchema = z.object({
-  items: z.array(CustomerSchema),
-  nextCursor: z.string().nullable(),
-});
-
-// Type exports
-export type Customer = z.infer<typeof CustomerSchema>;
-export type CustomerCreate = z.infer<typeof CustomerCreateSchema>;
-export type CustomerUpdate = z.infer<typeof CustomerUpdateSchema>;
-export type CustomerQuery = z.infer<typeof CustomerQuerySchema>;
-export type CustomerList = z.infer<typeof CustomerListSchema>;
+// Re-export types for backward compatibility
+export type { Customer, CustomerCreate, CustomerList, CustomerQuery, CustomerUpdate };
 
 // Service class
 export class CustomerService {

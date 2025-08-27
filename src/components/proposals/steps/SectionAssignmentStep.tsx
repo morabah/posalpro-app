@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ProposalSectionData, useProposalActions } from '@/lib/store/proposalStore';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface SectionAssignmentStepProps {
   data?: ProposalSectionData;
@@ -71,13 +71,30 @@ export function SectionAssignmentStep({
 
   // Local state for form data
   const [sections, setSections] = useState<ProposalSectionData['sections']>(data?.sections || []);
-  const [idCounter, setIdCounter] = useState(0);
 
-  // Generate stable IDs
+  // Use ref to maintain stable ID counter across re-renders
+  const idCounterRef = useRef(0);
+
+  // Initialize ID counter based on existing sections
+  useEffect(() => {
+    if (data?.sections && data.sections.length > 0) {
+      const maxId = Math.max(
+        ...data.sections.map(s => {
+          const match = s.id.match(/section-(\d+)/);
+          return match ? parseInt(match[1]) : -1;
+        }),
+        -1
+      );
+      idCounterRef.current = maxId + 1;
+    }
+  }, [data?.sections]);
+
+  // Generate unique IDs
   const generateId = useCallback(() => {
-    setIdCounter(prev => prev + 1);
-    return `section-${idCounter}`;
-  }, [idCounter]);
+    const newId = `section-${idCounterRef.current}`;
+    idCounterRef.current += 1;
+    return newId;
+  }, []);
 
   // Handle section addition
   const handleAddSection = useCallback(() => {
@@ -96,7 +113,7 @@ export function SectionAssignmentStep({
       userStory: 'US-3.1',
       hypothesis: 'H4',
     });
-  }, [sections.length, analytics]);
+  }, [sections.length, analytics, generateId]);
 
   // Handle section update
   const handleSectionUpdate = useCallback(
@@ -166,7 +183,7 @@ export function SectionAssignmentStep({
         hypothesis: 'H4',
       });
     },
-    [sections.length, analytics]
+    [sections.length, analytics, generateId]
   );
 
   const handleNext = useCallback(() => {
@@ -190,13 +207,16 @@ export function SectionAssignmentStep({
     });
 
     onNext();
-  }, [analytics, onNext, sections, setStepData]);
+  }, [sections, setStepData, analytics, onNext]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Section Assignment</h2>
-        <p className="mt-2 text-gray-600">Organize and customize proposal sections</p>
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Section Assignment</h2>
+        <p className="text-gray-600">
+          Organize your proposal content into logical sections. Add template sections or create
+          custom ones.
+        </p>
       </div>
 
       {/* Section Templates */}
