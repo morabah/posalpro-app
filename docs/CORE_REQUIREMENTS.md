@@ -1,5 +1,33 @@
 # CORE REQUIREMENTS (Non-Negotiable)
 
+## 🚨 **CRITICAL: COMPLETE ANALYSIS BEFORE IMPLEMENTATION** {#complete-analysis-before-implementation}
+
+**🔍 MANDATORY: Analyze ALL Issues Before Any Implementation**
+
+- **Step 1**: Identify ALL data mismatches, errors, and inconsistencies
+- **Step 2**: Map the complete data flow from source to display
+- **Step 3**: Identify ALL components, files, and layers affected
+- **Step 4**: Plan comprehensive solution addressing ALL issues at once
+- **Step 5**: Implement complete fix, not piece-by-piece solutions
+- **NEVER**: Implement partial fixes or create test files to "verify" incomplete
+  solutions
+
+**📋 Analysis Checklist (MANDATORY)**
+
+- [ ] Identify ALL data sources (API, database, cache, components)
+- [ ] Map ALL data transformations and field mappings
+- [ ] Identify ALL components reading/writing the data
+- [ ] Check ALL related files (services, hooks, components, schemas)
+- [ ] Verify ALL cache invalidation points
+- [ ] Plan solution addressing ALL issues simultaneously
+
+**❌ FORBIDDEN PRACTICES**
+
+- Piece-by-piece fixes that create new problems
+- Test files that don't actually fix real issues
+- "Expected results" without actual implementation
+- Partial solutions that require multiple iterations
+
 ## Priority Index (Phased Implementation Order)
 
 1. **[Core Fundamentals](#core-fundamentals)**

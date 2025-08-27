@@ -75,7 +75,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         }
 
         // Parse query parameters
-        let query: Q extends z.ZodTypeAny ? z.infer<Q> : undefined = undefined;
+        let query: Q extends z.ZodTypeAny ? z.infer<Q> : undefined;
         if (config.query) {
           try {
             const queryParams = Object.fromEntries(url.searchParams);
@@ -86,10 +86,12 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
             }
             throw error;
           }
+        } else {
+          query = undefined as any;
         }
 
         // Parse request body
-        let body: B extends z.ZodTypeAny ? z.infer<B> : undefined = undefined;
+        let body: B extends z.ZodTypeAny ? z.infer<B> : undefined;
         if (config.body && req.method !== 'GET') {
           try {
             const contentType = req.headers.get('content-type');
@@ -105,6 +107,8 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
             }
             throw error;
           }
+        } else {
+          body = undefined as any;
         }
 
         // Call the handler

@@ -156,10 +156,11 @@ export const customerSearchValidationSchema = createValidationSchema({
 export const customerImportValidationSchema = createValidationSchema({
   csvFile: {
     required: true,
-    custom: (value: File | null) => {
-      if (!value) return 'Please select a CSV file to import';
-      if (!value.name.endsWith('.csv')) return 'Please select a valid CSV file';
-      if (value.size > 5 * 1024 * 1024) return 'File size must be less than 5MB';
+    custom: (value: unknown) => {
+      const file = value as File | null;
+      if (!file) return 'Please select a CSV file to import';
+      if (!file.name.endsWith('.csv')) return 'Please select a valid CSV file';
+      if (file.size > 5 * 1024 * 1024) return 'File size must be less than 5MB';
       return null;
     },
   },

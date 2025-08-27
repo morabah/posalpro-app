@@ -1,895 +1,286 @@
 'use client';
 
 /**
- * PosalPro MVP2 - Proposal Creation Step 6: Review & Finalize
- * Based on PROPOSAL_CREATION_SCREEN.md Review Step wireframe specifications
- * Supports component traceability and analytics integration for H7 & H3 hypothesis validation
+ * PosalPro MVP2 - Modern Review Step
+ * Built from scratch using React Query and modern patterns
+ * Follows PROPOSAL_MIGRATION_ASSESSMENT.md guidelines
  */
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { Select } from '@/components/ui/Select';
-import { useProposalCreationAnalytics } from '@/hooks/proposals/useProposalCreationAnalytics';
-import { useResponsive } from '@/hooks/useResponsive';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logError } from '@/lib/logger';
-import { ProposalWizardStep6Data } from '@/lib/validation/schemas/proposal';
-import {
-  ArrowDownTrayIcon,
-  CheckCircleIcon,
-  ClockIcon,
-  DocumentTextIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  SparklesIcon,
-  UserGroupIcon,
-  XCircleIcon,
-} from '@heroicons/react/24/outline';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-
-// Removed unused COMPONENT_MAPPING to satisfy unused-vars
-
-// Validation issue interface
-interface ValidationIssue {
-  severity: 'error' | 'warning' | 'info';
-  message: string;
-  field?: string;
-  suggestions?: string[];
-}
-
-// Compliance check interface
-interface ComplianceCheck {
-  requirement: string;
-  passed: boolean;
-  details?: string;
-}
-
-// AI insights interface
-interface ProposalInsights {
-  complexity: 'low' | 'medium' | 'high';
-  winProbability: number;
-  estimatedEffort: number;
-  similarProposals: Array<{
-    id: string;
-    title: string;
-    winRate: number;
-    similarity: number;
-  }>;
-  keyDifferentiators: string[];
-  suggestedFocusAreas: string[];
-  riskFactors: string[];
-}
-
-// Approval interface
-interface Approval {
-  reviewer: string;
-  approved: boolean;
-  comments?: string;
-  timestamp?: Date;
-}
-
-// Validation schema for review step
-const reviewStepSchema = z.object({
-  finalReviewComplete: z.boolean(),
-  exportFormat: z.enum(['pdf', 'docx', 'html']),
-  additionalComments: z.string().optional(),
-});
-
-type ReviewStepFormData = z.infer<typeof reviewStepSchema>;
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logDebug } from '@/lib/logger';
+import { useProposalStepData } from '@/lib/store/proposalStore';
+import { useCallback, useMemo } from 'react';
 
 interface ReviewStepProps {
-  data: Partial<ProposalWizardStep6Data>;
-  onUpdate: (data: Partial<ProposalWizardStep6Data>) => void;
-  onNext?: () => void;
-  analytics: ReturnType<typeof useProposalCreationAnalytics>;
-  allWizardData?: {
-    step1?: { client?: { name?: string }; details?: { title?: string; dueDate?: string | Date } };
-    step3?: {
-      selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }>;
-    };
-    step4?: { products?: Array<{ id: string; quantity?: number; unitPrice?: number }> };
-    step5?: {
-      sections?: Array<{
-        title?: string;
-        assignedTo?: string | string[];
-        hours?: number;
-        priority?: unknown;
-        status?: unknown;
-      }>;
-    };
-    totalEstimatedHours?: number;
-  };
-  proposalMetadata?: { projectType?: string; budget?: number };
-  teamData?: { teamMembers?: Array<{ id?: string; name?: string; expertise?: string }> };
-  contentData?: {
-    selectedContent?: Array<{ item?: { id?: string; title?: string }; section?: string }>;
-  };
-  productData?: { products?: Array<{ id: string; quantity?: number; unitPrice?: number }> };
+  onNext: () => void;
+  onBack: () => void;
+  onSubmit?: () => void;
 }
 
-export function ReviewStep({
-  data,
-  onUpdate,
-  onNext,
-  analytics,
-  allWizardData,
-  proposalMetadata,
-  teamData,
-  contentData,
-  productData,
-}: ReviewStepProps) {
-  // ✅ MOBILE OPTIMIZATION: Add responsive detection
-  const { isMobile } = useResponsive();
+export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
+  const analytics = useOptimizedAnalytics();
 
-  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
-  const [loadingValidation, setLoadingValidation] = useState(true);
-  const [errorValidation, setErrorValidation] = useState<string | null>(null);
+  // Get data from all steps individually
+  const basicInfo = useProposalStepData(1);
+  const teamData = useProposalStepData(2);
+  const contentData = useProposalStepData(3);
+  const productData = useProposalStepData(4);
+  const sectionData = useProposalStepData(5);
 
-  const [complianceChecks, setComplianceChecks] = useState<ComplianceCheck[]>([]);
-  const [loadingCompliance, setLoadingCompliance] = useState(true);
-  const [errorCompliance, setErrorCompliance] = useState<string | null>(null);
-
-  const [insights, setInsights] = useState<ProposalInsights | null>(null);
-  const [loadingInsights, setLoadingInsights] = useState(true);
-  const [errorInsights, setErrorInsights] = useState<string | null>(null);
-
-  const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [loadingApprovals, setLoadingApprovals] = useState(true);
-  const [errorApprovals, setErrorApprovals] = useState<string | null>(null);
-
-  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
-  const [showExportOptions, setShowExportOptions] = useState(false);
-  const lastSentDataRef = useRef<string>('');
-  const onUpdateRef = useRef(onUpdate);
-  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
-  // Keep onUpdate ref current
-  useEffect(() => {
-    onUpdateRef.current = onUpdate;
-  });
-
-  // Fetch validation issues
-  useEffect(() => {
-    // Mock data instead of API call
-    setValidationIssues([
+  // Validation checklist
+  const validationChecklist = useMemo(
+    () => [
       {
-        severity: 'info',
-        message: 'All validation checks passed',
-        field: 'general',
+        id: 'basic-info',
+        title: 'Basic Information',
+        isChecked: !!basicInfo?.title && !!basicInfo?.customerId,
+        isRequired: true,
       },
-    ]);
-    setLoadingValidation(false);
-  }, []);
-
-  // Fetch compliance checks
-  useEffect(() => {
-    // Mock data instead of API call
-    setComplianceChecks([
       {
-        requirement: 'Document completeness',
-        passed: true,
-        details: 'All required sections are complete',
+        id: 'team-assignment',
+        title: 'Team Assignment',
+        isChecked:
+          !!teamData?.teamLead &&
+          !!teamData?.salesRepresentative &&
+          Object.keys(teamData?.subjectMatterExperts || {}).length > 0,
+        isRequired: true,
       },
-    ]);
-    setLoadingCompliance(false);
-  }, []);
-
-  // Fetch AI insights
-  useEffect(() => {
-    // Mock data instead of API call
-    setInsights({
-      complexity: 'medium',
-      winProbability: 75,
-      estimatedEffort: 120,
-      similarProposals: [],
-      keyDifferentiators: ['Quality assurance', 'Technical expertise'],
-      suggestedFocusAreas: ['Implementation timeline'],
-      riskFactors: ['Resource availability'],
-    });
-    setLoadingInsights(false);
-  }, []);
-
-  // Fetch approvals
-  useEffect(() => {
-    // Mock data instead of API call
-    setApprovals([
       {
-        reviewer: 'Technical Lead',
-        approved: true,
-        timestamp: new Date(),
+        id: 'content-selection',
+        title: 'Content Selection',
+        isChecked:
+          (contentData?.selectedTemplates?.length || 0) > 0 ||
+          (contentData?.customContent?.length || 0) > 0,
+        isRequired: true,
       },
-    ]);
-    setLoadingApprovals(false);
-  }, []);
+      {
+        id: 'product-selection',
+        title: 'Product Selection',
+        isChecked: (productData?.products?.length || 0) > 0,
+        isRequired: true,
+      },
+      {
+        id: 'section-assignment',
+        title: 'Section Assignment',
+        isChecked: (sectionData?.sections?.length || 0) > 0,
+        isRequired: true,
+      },
+    ],
+    [basicInfo, teamData, contentData, productData, sectionData]
+  );
 
-  const {
-    register,
-    setValue,
-    formState: { errors, isValid },
-    getValues,
-  } = useForm<ReviewStepFormData>({
-    resolver: zodResolver(reviewStepSchema),
-    defaultValues: {
-      finalReviewComplete: data.finalReviewComplete || false,
-      exportFormat: data.exportOptions?.format || 'pdf',
-      additionalComments: '',
-    },
-    // ✅ CRITICAL FIX: Mobile-optimized validation mode
-    mode: isMobile ? 'onBlur' : 'onChange',
-    reValidateMode: 'onBlur',
-    criteriaMode: 'firstError',
-  });
+  // Calculate totals
+  const totalProducts = useMemo(() => {
+    return productData?.products?.length || 0;
+  }, [productData]);
 
-  // Calculate overall validity
-  const calculateOverallValidity = useCallback(() => {
-    const hasErrors = validationIssues.some(issue => issue.severity === 'error');
-    const allPassed = complianceChecks.every(check => check.passed);
-    const hasApprovals = approvals.filter(a => a.approved).length >= 0;
-    const hasInsights = !!(insights && insights.winProbability > 50);
-
-    return !hasErrors && allPassed && hasApprovals && hasInsights;
-  }, [validationIssues, complianceChecks, approvals, insights]);
-
-  // Calculate completeness score
-  const calculateCompleteness = useCallback(() => {
-    const validationScore = 1 - validationIssues.length / 10;
-    const complianceScore =
-      complianceChecks.length > 0
-        ? complianceChecks.filter(c => c.passed).length / complianceChecks.length
-        : 1;
-    const approvalScore = approvals.length > 0 ? approvals.filter(a => a.approved).length / 5 : 1;
-    const insightScore = insights ? insights.winProbability / 100 : 0;
-
-    return Math.round(
-      ((validationScore + complianceScore + approvalScore + insightScore) / 4) * 100
+  const totalValue = useMemo(() => {
+    // ✅ FIXED: Use the saved totalValue from productData or calculate from products
+    if (productData?.totalValue) {
+      return productData.totalValue;
+    }
+    return (
+      productData?.products?.reduce((sum: number, product: any) => sum + (product.unitPrice * product.quantity), 0) || 0
     );
-  }, [validationIssues, complianceChecks, approvals, insights]);
+  }, [productData]);
 
-  // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
-  const collectFormData = useCallback((): ProposalWizardStep6Data => {
-    const currentValues = getValues();
+  const totalSections = useMemo(() => {
+    return sectionData?.sections?.length || 0;
+  }, [sectionData]);
 
-    // Create a default insights object if none exists
-    const defaultInsights = {
-      complexity: 'medium' as const,
-      winProbability: 50,
-      estimatedEffort: 100,
-      similarProposals: [],
-      keyDifferentiators: [],
-      suggestedFocusAreas: [],
-      riskFactors: [],
-    };
+  const isComplete = useMemo(() => {
+    return validationChecklist.every(item => item.isChecked);
+  }, [validationChecklist]);
 
-    return {
-      finalValidation: {
-        isValid: calculateOverallValidity(),
-        completeness: calculateCompleteness(),
-        issues: validationIssues,
-        complianceChecks: complianceChecks,
-      },
-      approvals: approvals,
-      insights: insights || defaultInsights, // Use default if insights is null
-      exportOptions: {
-        format: currentValues.exportFormat || 'pdf',
-        includeAppendices: true,
-        includeTeamDetails: true,
-        includeTimeline: true,
-      },
-      finalReviewComplete: currentValues.finalReviewComplete || false,
-    };
-  }, [
-    getValues,
-    calculateOverallValidity,
-    calculateCompleteness,
-    validationIssues,
-    complianceChecks,
-    approvals,
-    insights,
-  ]);
-
-  // Initialize data from props
-  useEffect(() => {
-    if (data.approvals) {
-      setApprovals(data.approvals);
-    }
-  }, [data]);
-
-  // Stable update function to prevent infinite loops
-  const handleUpdate = useCallback((formattedData: ProposalWizardStep6Data) => {
-    const dataHash = JSON.stringify(formattedData);
-
-    if (dataHash !== lastSentDataRef.current) {
-      lastSentDataRef.current = dataHash;
-      onUpdateRef.current(formattedData);
-    }
-  }, []);
-
-  // Update parent component when form data changes
-  useEffect(() => {
-    if (!insights) return; // Don't update parent if insights are not loaded yet
-
-    const timeoutId = setTimeout(() => {
-      const formattedData: ProposalWizardStep6Data = collectFormData();
-
-      handleUpdate(formattedData);
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [
-    collectFormData,
-    handleUpdate,
-    calculateOverallValidity,
-    calculateCompleteness,
-    validationIssues,
-    complianceChecks,
-    approvals,
-    insights,
-  ]);
-
-  // Track analytics for review step
-  const trackReviewAction = useCallback(
-    (action: 'start' | 'complete' | 'error') => {
-      analytics?.trackWizardStep?.(6, 'review', action);
-    },
-    [analytics]
-  );
-
-  // Generate AI insights
-  const generateAIInsights = useCallback(async () => {
-    if (!allWizardData) return;
-    setIsGeneratingInsights(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setInsights({
-      complexity: 'medium',
-      winProbability: Math.floor(Math.random() * 30) + 60,
-      estimatedEffort: (allWizardData.totalEstimatedHours || 100) * (0.8 + Math.random() * 0.4),
-      similarProposals: [],
-      keyDifferentiators: ['New differentiator'],
-      suggestedFocusAreas: ['New focus area'],
-      riskFactors: ['New risk factor'],
-    });
-    setIsGeneratingInsights(false);
-  }, [allWizardData]);
-
-  // Handle approval toggle
-  const toggleApproval = useCallback(
-    (reviewerName: string) => {
-      setApprovals(prev =>
-        prev.map(approval =>
-          approval.reviewer === reviewerName
-            ? {
-                ...approval,
-                approved: !approval.approved,
-                timestamp: !approval.approved ? new Date() : undefined,
-              }
-            : approval
-        )
-      );
-
-      trackReviewAction('start');
-    },
-    [trackReviewAction]
-  );
-
-  // Export proposal
-  const exportProposal = useCallback(
-    (format: 'pdf' | 'docx' | 'html') => {
-      trackReviewAction('complete');
-
-      try {
-        const WIZARD_SESSION_KEY = 'proposal-wizard-session';
-        const PREVIEW_KEY = 'proposal-preview-data';
-
-        // Prefer full wizard data from localStorage to ensure latest snapshot
-        let wizardData: any | null = null;
-        try {
-          const raw =
-            typeof window !== 'undefined' ? localStorage.getItem(WIZARD_SESSION_KEY) : null;
-          wizardData = raw ? JSON.parse(raw) : null;
-        } catch {
-          wizardData = null;
-        }
-
-        // Fallback to props snapshot if localStorage missing
-        const step1 = wizardData?.step1 || allWizardData?.step1 || {};
-        const step3 = wizardData?.step3 || allWizardData?.step3 || {};
-        const step4 = wizardData?.step4 || productData || allWizardData?.step4 || {};
-
-        const selectedProducts = (step4?.products || []).filter((p: any) => p?.included !== false);
-        const totals = selectedProducts.reduce(
-          (acc: number, p: any) => acc + (p.totalPrice || (p.quantity || 1) * (p.unitPrice || 0)),
-          0
-        );
-
-        const terms = (step3?.selectedContent || [])
-          .filter(
-            (sc: any) => typeof sc.section === 'string' && sc.section.toLowerCase().includes('term')
-          )
-          .map((sc: any) => ({
-            section: sc.section,
-            content: sc.item?.content || '',
-            title: sc.item?.title || 'Terms',
-          }));
-
-        const previewPayload = {
-          company: {
-            name: step1?.client?.name || '',
-            industry: step1?.client?.industry || '',
-            contactPerson: step1?.client?.contactPerson || '',
-            contactEmail: step1?.client?.contactEmail || '',
-            contactPhone: step1?.client?.contactPhone || '',
-          },
-          proposal: {
-            title: step1?.details?.title || '',
-            description: step1?.details?.description || '',
-            dueDate: step1?.details?.dueDate || null,
-            priority: step1?.details?.priority || 'MEDIUM',
-            rfpReferenceNumber: step1?.details?.rfpReferenceNumber || '',
-          },
-          products: selectedProducts,
-          totals: { currency: 'USD', amount: totals },
-          terms,
-        };
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(PREVIEW_KEY, JSON.stringify(previewPayload));
-          const url = format === 'pdf' ? '/proposals/preview?print=1' : '/proposals/preview';
-          window.open(url, '_blank', 'noopener,noreferrer');
-        }
-      } catch (err) {
-        // Silent fallback to avoid blocking review step
-      }
-    },
-    [trackReviewAction, allWizardData, productData]
-  );
-
-  // Summary statistics
-  const summaryStats = useMemo(() => {
-    const totalApprovals = approvals.length;
-    const completedApprovals = approvals.filter(a => a.approved).length;
-    const errorCount = validationIssues.filter(i => i.severity === 'error').length;
-    const warningCount = validationIssues.filter(i => i.severity === 'warning').length;
-    const passedCompliance = complianceChecks.filter(c => c.passed).length;
-
-    return {
-      totalApprovals,
-      completedApprovals,
-      errorCount,
-      warningCount,
-      passedCompliance,
-      totalCompliance: complianceChecks.length,
-      approvalRate: (completedApprovals / totalApprovals) * 100,
-      complianceRate: (passedCompliance / complianceChecks.length) * 100,
-      overallValid: calculateOverallValidity(),
-      completeness: calculateCompleteness(),
-    };
-  }, [
-    approvals,
-    validationIssues,
-    complianceChecks,
-    calculateOverallValidity,
-    calculateCompleteness,
-  ]);
-
-  const handleCreateProposal = () => {
-    try {
-      trackReviewAction('complete');
-
-      // Prepare the update data
-      const updateData = collectFormData();
-      onUpdate(updateData);
-
-      // Call onNext to trigger proposal creation
-      if (onNext) {
-        onNext();
-      } else {
-        // onNext is optional
-      }
-    } catch (error) {
-      // ✅ ENHANCED: Use proper logger instead of console.error
-      const errorHandlingService = ErrorHandlingService.getInstance();
-      const standardError = errorHandlingService.processError(
-        error,
-        'Failed to create proposal',
-        ErrorCodes.DATA.CREATE_FAILED,
-        {
-          component: 'ReviewStep',
-          operation: 'createProposal',
-          proposalData: JSON.stringify(allWizardData),
-        }
-      );
-
-      logError('Error during proposal creation', error, {
-        component: 'ReviewStep',
-        operation: 'createProposal',
-        proposalData: JSON.stringify(allWizardData),
-        standardError: standardError.message,
-        errorCode: standardError.code,
+  const handleSubmit = useCallback(() => {
+    if (!isComplete) {
+      analytics.trackOptimized('proposal_submission_failed', {
+        reason: 'validation_failed',
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
       });
-
-      // setError('Failed to create proposal. Please try again.'); // This line was not in the new_code, so it's removed.
+      return;
     }
-  };
+
+    // Debug logging for final submission payload
+    logDebug('Step 6 final submission payload', {
+      component: 'ReviewStep',
+      operation: 'submit_proposal',
+      stepData: {
+        basicInfo,
+        teamData,
+        contentData,
+        productData,
+        sectionData,
+      },
+      customerId: basicInfo?.customerId,
+      customer: basicInfo?.customer,
+      totalProducts,
+      totalValue,
+      totalSections,
+      validationChecklist,
+      userStory: 'US-3.1',
+      hypothesis: 'H4',
+    });
+
+    analytics.trackOptimized('proposal_submitted', {
+      totalProducts,
+      totalValue,
+      totalSections,
+      userStory: 'US-3.1',
+      hypothesis: 'H4',
+    });
+
+    onSubmit?.();
+  }, [
+    analytics,
+    isComplete,
+    totalProducts,
+    totalValue,
+    totalSections,
+    onSubmit,
+    basicInfo,
+    teamData,
+    contentData,
+    productData,
+    sectionData,
+    validationChecklist,
+  ]);
 
   return (
-    <div className="space-y-8">
-      {/* Proposal Summary */}
-      <Card>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6 flex items-center">
-            <DocumentTextIcon className="w-5 h-5 mr-2" />
-            Proposal Summary
-          </h3>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Review & Submit</h2>
+        <p className="mt-2 text-gray-600">Review your proposal before submission</p>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Title:</span>
-                <span className="font-medium">
-                  {allWizardData?.step1?.details?.title || 'Cloud Migration Services'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Client:</span>
-                <span className="font-medium">
-                  {allWizardData?.step1?.client?.name || 'Acme Corporation'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Due Date:</span>
-                <span className="font-medium">June 15, 2025</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Priority:</span>
-                <span className="font-medium text-red-600">High</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Team Lead:</span>
-                <span className="font-medium">Mohamed Rabah</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Sales Rep:</span>
-                <span className="font-medium">Sarah Johnson</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Estimated Value:</span>
-                <span className="font-medium text-green-600">$250,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Total Effort:</span>
-                <span className="font-medium">{insights?.estimatedEffort}h</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Validation Results */}
-      <Card>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6 flex items-center">
-            <CheckCircleIcon className="w-5 h-5 mr-2" />
-            Validation Results
-          </h3>
-
-          {/* Overall Status */}
-          <div className="mb-6 p-4 rounded-lg border-2 border-dashed">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-lg font-medium">Overall Status</span>
+      {/* Validation Checklist */}
+      <Card className="p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Validation Checklist</h3>
+        <div className="space-y-3">
+          {validationChecklist.map(item => (
+            <div key={item.id} className="flex items-center space-x-3">
               <div
-                className={`flex items-center ${
-                  summaryStats.overallValid ? 'text-green-600' : 'text-amber-600'
+                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  item.isChecked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'
                 }`}
               >
-                {summaryStats.overallValid ? (
-                  <CheckCircleIcon className="w-5 h-5 mr-1" />
-                ) : (
-                  <ExclamationTriangleIcon className="w-5 h-5 mr-1" />
-                )}
-                <span className="font-medium">
-                  {summaryStats.overallValid ? 'Ready to Submit' : 'Issues Need Attention'}
-                </span>
+                {item.isChecked && '✓'}
               </div>
-            </div>
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Completeness: {summaryStats.completeness.toFixed(0)}%</span>
-              <span>
-                Approvals: {summaryStats.completedApprovals}/{summaryStats.totalApprovals}
+              <span className={`text-sm ${item.isChecked ? 'text-gray-900' : 'text-gray-500'}`}>
+                {item.title}
               </span>
+              {item.isRequired && <span className="text-xs text-red-500">*Required</span>}
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-              <div
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  summaryStats.completeness >= 90
-                    ? 'bg-green-600'
-                    : summaryStats.completeness >= 70
-                      ? 'bg-amber-500'
-                      : 'bg-red-500'
-                }`}
-                style={{ width: `${summaryStats.completeness}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Compliance Checks */}
-          <div className="space-y-3 mb-6">
-            <h4 className="font-medium text-gray-900">Compliance Checks</h4>
-            {loadingCompliance ? (
-              <p>Loading compliance checks...</p>
-            ) : errorCompliance ? (
-              <p className="text-red-500">{errorCompliance}</p>
-            ) : (
-              <ul className="space-y-2">
-                {complianceChecks.map((check, index) => (
-                  <li key={index} className="flex items-center text-sm">
-                    {check.passed ? (
-                      <CheckCircleIcon className="w-5 h-5 text-green-500 mr-2" />
-                    ) : (
-                      <XCircleIcon className="w-5 h-5 text-red-500 mr-2" />
-                    )}
-                    <span>{check.requirement}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Validation Issues */}
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900">Issues & Recommendations</h4>
-            {loadingValidation ? (
-              <p>Loading validation issues...</p>
-            ) : errorValidation ? (
-              <p className="text-red-500">{errorValidation}</p>
-            ) : validationIssues.length > 0 ? (
-              <ul className="space-y-3">
-                {validationIssues.map((issue, index) => (
-                  <li key={index} className="flex items-start">
-                    <div className="flex-shrink-0">
-                      {issue.severity === 'error' && (
-                        <XCircleIcon className="w-5 h-5 text-red-500" />
-                      )}
-                      {issue.severity === 'warning' && (
-                        <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />
-                      )}
-                      {issue.severity === 'info' && (
-                        <InformationCircleIcon className="w-5 h-5 text-blue-500" />
-                      )}
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm text-gray-800">{issue.message}</p>
-                      {issue.suggestions && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Suggestion: {issue.suggestions.join(', ')}
-                        </p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No validation issues found.</p>
-            )}
-          </div>
+          ))}
         </div>
+
+        {!isComplete && (
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-sm text-yellow-800">
+              Please complete all required sections before submitting.
+            </p>
+          </div>
+        )}
       </Card>
 
-      {/* AI-Powered Insights */}
-      <Card>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-medium text-gray-900 flex items-center">
-              <SparklesIcon className="w-5 h-5 text-purple-500 mr-2" />
-              AI-Powered Insights
-            </h4>
-            <Button
-              variant="secondary"
-              onClick={generateAIInsights}
-              disabled={isGeneratingInsights}
-            >
-              {isGeneratingInsights ? 'Generating...' : 'Regenerate'}
-            </Button>
-          </div>
+      {/* Proposal Summary */}
+      <Card className="p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Proposal Summary</h3>
 
-          {loadingInsights ? (
-            <p>Loading AI insights...</p>
-          ) : errorInsights ? (
-            <p className="text-red-500">{errorInsights}</p>
-          ) : insights ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Win Probability */}
-              <div className="text-center">
-                <p className="text-4xl font-bold text-green-600">{insights.winProbability}%</p>
-                <p className="text-sm text-gray-600">Predicted Win Probability</p>
-              </div>
-
-              {/* Estimated Effort */}
-              <div className="text-center">
-                <p className="text-4xl font-bold text-blue-600">{insights.estimatedEffort}h</p>
-                <p className="text-sm text-gray-600">Estimated Effort</p>
-              </div>
-
-              {/* Key Differentiators */}
-              <div>
-                <h5 className="font-medium text-gray-800 mb-2">Key Differentiators</h5>
-                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                  {insights.keyDifferentiators.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Risk Factors */}
-              <div>
-                <h5 className="font-medium text-gray-800 mb-2">Risk Factors</h5>
-                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                  {insights.riskFactors.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <p>No AI insights available.</p>
-          )}
-        </div>
-      </Card>
-
-      {/* Approval Status */}
-      <Card>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6 flex items-center">
-            <UserGroupIcon className="w-5 h-5 mr-2" />
-            Approval Status
-          </h3>
-
-          <div className="space-y-3">
-            <div className="mt-6">
-              <h4 className="font-medium text-gray-900 mb-4">Approvals</h4>
-              {loadingApprovals ? (
-                <p>Loading approvals...</p>
-              ) : errorApprovals ? (
-                <p className="text-red-500">{errorApprovals}</p>
-              ) : (
-                <ul className="space-y-3">
-                  {approvals.map((approval, index) => (
-                    <li key={index} className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        {approval.approved ? (
-                          <CheckCircleIcon className="w-5 h-5 text-green-500 mr-2" />
-                        ) : (
-                          <ClockIcon className="w-5 h-5 text-amber-500 mr-2" />
-                        )}
-                        <span className="text-sm">{approval.reviewer}</span>
-                      </div>
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          approval.approved
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {approval.approved ? 'Approved' : 'Pending'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Export Options */}
-      <Card>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6 flex items-center">
-            <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
-            Export Options
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
-              <Select
-                value={getValues().exportFormat}
-                options={[
-                  { value: 'pdf', label: 'PDF Document' },
-                  { value: 'docx', label: 'Word Document' },
-                  { value: 'html', label: 'HTML Page' },
-                ]}
-                onChange={(value: string) =>
-                  setValue('exportFormat', value as 'pdf' | 'docx' | 'html')
-                }
-              />
-            </div>
-
-            <div className="flex items-end">
-              <div className="space-x-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => exportProposal(getValues().exportFormat)}
-                  className="flex items-center"
-                >
-                  <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                  Export Preview
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => exportProposal(getValues().exportFormat)}
-                  disabled={!summaryStats.overallValid}
-                  className="flex items-center"
-                >
-                  <DocumentTextIcon className="w-4 h-4 mr-2" />
-                  Export Final
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Final Review Confirmation */}
-      <Card>
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-neutral-900">Final Review</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Confirm that all information is accurate and complete before creating the proposal.
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Basic Info */}
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Basic Information</h4>
+            <div className="space-y-1 text-sm">
+              <p>
+                <span className="font-medium">Title:</span> {basicInfo?.title || 'Not set'}
+              </p>
+              <p>
+                <span className="font-medium">Customer:</span>{' '}
+                {basicInfo?.customer?.name || 'Not selected'}
+              </p>
+              <p>
+                <span className="font-medium">Due Date:</span> {basicInfo?.dueDate || 'Not set'}
+              </p>
+              <p>
+                <span className="font-medium">Priority:</span> {basicInfo?.priority || 'Not set'}
               </p>
             </div>
-            <div className="flex items-center space-x-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  {...register('finalReviewComplete')}
-                  className="mr-2"
-                  onChange={() => {}}
-                />
-                <span className="text-sm">I have reviewed all information</span>
-              </label>
-              <Button
-                variant="primary"
-                size="lg"
-                disabled={!getValues().finalReviewComplete || !summaryStats.overallValid}
-                onClick={() => {
-                  handleCreateProposal();
-                }}
-                className="flex items-center"
-              >
-                <CheckIcon className="w-5 h-5 mr-2" />
-                Create Proposal
-              </Button>
+          </div>
+
+          {/* Team Info */}
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Team Assignment</h4>
+            <div className="space-y-1 text-sm">
+              <p>
+                <span className="font-medium">Team Lead:</span>{' '}
+                {teamData?.teamLead || 'Not assigned'}
+              </p>
+              <p>
+                <span className="font-medium">Sales Rep:</span>{' '}
+                {teamData?.salesRepresentative || 'Not assigned'}
+              </p>
+              <p>
+                <span className="font-medium">SMEs:</span>{' '}
+                {Object.keys(teamData?.subjectMatterExperts || {}).length} assigned
+              </p>
+              <p>
+                <span className="font-medium">Executives:</span>{' '}
+                {teamData?.executiveReviewers?.length || 0} assigned
+              </p>
+            </div>
+          </div>
+
+          {/* Content Info */}
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Content & Sections</h4>
+            <div className="space-y-1 text-sm">
+              <p>
+                <span className="font-medium">Templates:</span>{' '}
+                {contentData?.selectedTemplates?.length || 0} selected
+              </p>
+              <p>
+                <span className="font-medium">Custom Content:</span>{' '}
+                {contentData?.customContent?.length || 0} sections
+              </p>
+              <p>
+                <span className="font-medium">Total Sections:</span> {totalSections}
+              </p>
+            </div>
+          </div>
+
+          {/* Product Info */}
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Products & Value</h4>
+            <div className="space-y-1 text-sm">
+              <p>
+                <span className="font-medium">Products:</span> {totalProducts} selected
+              </p>
+              <p>
+                <span className="font-medium">Total Value:</span> ${totalValue.toFixed(2)}
+              </p>
+              <p>
+                <span className="font-medium">Currency:</span> {basicInfo?.currency || 'USD'}
+              </p>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Progress Indicator */}
-      <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
-        <div className="flex items-center space-x-2">
-          <div
-            className={`w-3 h-3 rounded-full ${
-              summaryStats.overallValid ? 'bg-success-600' : 'bg-amber-500'
-            }`}
-          />
-          <span className="text-sm text-neutral-600">
-            Step 6 of 6: {summaryStats.overallValid ? 'Ready to Submit' : 'Review Required'}
-          </span>
-        </div>
-        <div className="text-sm text-neutral-600">
-          {summaryStats.completeness.toFixed(0)}% complete • {summaryStats.completedApprovals}/
-          {summaryStats.totalApprovals} approvals
-        </div>
+      <div className="flex justify-between pt-6 border-t border-gray-200">
+        <Button variant="outline" onClick={onBack}>
+          Previous
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          disabled={!isComplete}
+          className="bg-green-600 hover:bg-green-700"
+        >
+          Submit Proposal
+        </Button>
       </div>
     </div>
   );

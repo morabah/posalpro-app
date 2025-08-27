@@ -113,14 +113,18 @@ const QuickActions = memo(() => {
   };
 
   const handleActionClick = (action: QuickAction) => {
-    analytics('quick_action_clicked', {
-      component: 'QuickActions',
-      actionId: action.id,
-      actionTitle: action.title,
-      category: action.category,
-      userStories: COMPONENT_MAPPING.userStories,
-      hypotheses: COMPONENT_MAPPING.hypotheses,
-    }, 'medium');
+    analytics(
+      'quick_action_clicked',
+      {
+        component: 'QuickActions',
+        actionId: action.id,
+        actionTitle: action.title,
+        category: action.category,
+        userStories: COMPONENT_MAPPING.userStories,
+        hypotheses: COMPONENT_MAPPING.hypotheses,
+      },
+      'medium'
+    );
   };
 
   const groupedActions = quickActions.reduce(
@@ -219,5 +223,3 @@ const QuickActions = memo(() => {
 QuickActions.displayName = 'QuickActions';
 
 export default QuickActions;
-
-

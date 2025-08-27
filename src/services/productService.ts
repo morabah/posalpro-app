@@ -12,7 +12,7 @@ export const ProductSchema = z.object({
   id: z.string(),
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  price: z.number().positive('Price must be positive'),
+  price: z.number().positive('Price must be positive').optional().or(z.null()),
   currency: z.string().default('USD'),
   sku: z.string(),
   category: z.array(z.string()),
@@ -129,17 +129,15 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<ProductList>>(
-        `${this.baseUrl}?${searchParams.toString()}`
-      );
+      const response = await http.get<ProductList>(`${this.baseUrl}?${searchParams.toString()}`);
 
       logInfo('Products fetched successfully', {
         component: 'ProductService',
         operation: 'getProducts',
-        count: response.ok ? response.data?.items?.length || 0 : 0,
+        count: response?.items?.length || 0,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to fetch products', {
         component: 'ProductService',
@@ -161,7 +159,7 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<Product>>(`${this.baseUrl}/${id}`);
+      const response = await http.get<Product>(`${this.baseUrl}/${id}`);
 
       logInfo('Product fetched successfully', {
         component: 'ProductService',
@@ -169,7 +167,7 @@ export class ProductService {
         productId: id,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to fetch product', {
         component: 'ProductService',
@@ -192,7 +190,7 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<ProductWithRelationships>>(
+      const response = await http.get<ProductWithRelationships>(
         `${this.baseUrl}/${id}/relationships`
       );
 
@@ -202,7 +200,7 @@ export class ProductService {
         productId: id,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to fetch product with relationships', {
         component: 'ProductService',
@@ -227,18 +225,15 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<Product>>(this.baseUrl, {
-        method: 'POST',
-        body: JSON.stringify(validatedData),
-      });
+      const response = await http.post<Product>(this.baseUrl, validatedData);
 
       logInfo('Product created successfully', {
         component: 'ProductService',
         operation: 'createProduct',
-        productId: response.ok ? response.data?.id : undefined,
+        productId: response?.id || 'unknown',
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to create product', {
         component: 'ProductService',
@@ -260,13 +255,11 @@ export class ProductService {
       operation: 'updateProduct',
       productId: id,
       productData: validatedData,
+      dataKeys: Object.keys(validatedData),
     });
 
     try {
-      const response = await http<ApiResponse<Product>>(`${this.baseUrl}/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(validatedData),
-      });
+      const response = await http.patch<Product>(`${this.baseUrl}/${id}`, validatedData);
 
       logInfo('Product updated successfully', {
         component: 'ProductService',
@@ -274,7 +267,7 @@ export class ProductService {
         productId: id,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to update product', {
         component: 'ProductService',
@@ -297,9 +290,7 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<void>>(`${this.baseUrl}/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await http.delete(`${this.baseUrl}/${id}`);
 
       logInfo('Product deleted successfully', {
         component: 'ProductService',
@@ -307,7 +298,7 @@ export class ProductService {
         productId: id,
       });
 
-      return response;
+      return { ok: true, data: undefined };
     } catch (error) {
       logError('Failed to delete product', {
         component: 'ProductService',
@@ -332,18 +323,18 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<{ deleted: number }>>(`${this.baseUrl}/bulk-delete`, {
-        method: 'POST',
-        body: JSON.stringify(validatedData),
-      });
+      const response = await http.post<{ deleted: number }>(
+        `${this.baseUrl}/bulk-delete`,
+        validatedData
+      );
 
       logInfo('Products bulk deleted successfully', {
         component: 'ProductService',
         operation: 'deleteProductsBulk',
-        deletedCount: response.ok ? response.data?.deleted || 0 : 0,
+        deletedCount: response?.deleted || 0,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to bulk delete products', {
         component: 'ProductService',
@@ -366,7 +357,7 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<Product[]>>(
+      const response = await http.get<Product[]>(
         `${this.baseUrl}/search?q=${encodeURIComponent(query)}&limit=${limit}`
       );
 
@@ -374,10 +365,10 @@ export class ProductService {
         component: 'ProductService',
         operation: 'searchProducts',
         query,
-        resultCount: response.ok ? response.data?.length || 0 : 0,
+        resultCount: response?.length || 0,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to search products', {
         component: 'ProductService',
@@ -406,12 +397,9 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<ProductRelationship>>(
+      const response = await http.post<ProductRelationship>(
         `${this.baseUrl}/${sourceProductId}/relationships`,
-        {
-          method: 'POST',
-          body: JSON.stringify(validatedData),
-        }
+        validatedData
       );
 
       logInfo('Product relationship created successfully', {
@@ -421,7 +409,7 @@ export class ProductService {
         targetProductId: validatedData.targetProductId,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to create product relationship', {
         component: 'ProductService',
@@ -448,11 +436,8 @@ export class ProductService {
     });
 
     try {
-      const response = await http<ApiResponse<void>>(
-        `${this.baseUrl}/${sourceProductId}/relationships/${relationshipId}`,
-        {
-          method: 'DELETE',
-        }
+      const response = await http.delete(
+        `${this.baseUrl}/${sourceProductId}/relationships/${relationshipId}`
       );
 
       logInfo('Product relationship deleted successfully', {
@@ -462,7 +447,7 @@ export class ProductService {
         relationshipId,
       });
 
-      return response;
+      return { ok: true, data: undefined };
     } catch (error) {
       logError('Failed to delete product relationship', {
         component: 'ProductService',
@@ -493,22 +478,20 @@ export class ProductService {
     });
 
     try {
-      const response = await http<
-        ApiResponse<{
-          total: number;
-          active: number;
-          inactive: number;
-          draft: number;
-          categories: Record<string, number>;
-        }>
-      >(`${this.baseUrl}/stats`);
+      const response = await http.get<{
+        total: number;
+        active: number;
+        inactive: number;
+        draft: number;
+        categories: Record<string, number>;
+      }>(`${this.baseUrl}/stats`);
 
       logInfo('Product statistics fetched successfully', {
         component: 'ProductService',
         operation: 'getProductStats',
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to fetch product statistics', {
         component: 'ProductService',

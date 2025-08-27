@@ -153,7 +153,7 @@ export function useSkuValidation(options: UseSkuValidationOptions = {}) {
         try {
           const result = await validateSkuUniqueness(sku);
 
-          if (result.success) {
+          if (result.success && result.data) {
             setValidationState({
               isValidating: false,
               isValid: !result.data.exists,
@@ -167,7 +167,7 @@ export function useSkuValidation(options: UseSkuValidationOptions = {}) {
               'sku_validation_completed',
               {
                 sku,
-                exists: result.data.exists,
+                exists: result.data?.exists || false,
                 userStory: 'US-4.1',
                 hypothesis: 'H5',
               },

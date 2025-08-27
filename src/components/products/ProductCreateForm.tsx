@@ -391,7 +391,7 @@ export function ProductCreateForm() {
                   <li>No Name: {!validation.formData.name?.trim() ? 'Yes' : 'No'}</li>
                   <li>No SKU: {!validation.formData.sku?.trim() ? 'Yes' : 'No'}</li>
                   <li>No Price: {!validation.formData.price ? 'Yes' : 'No'}</li>
-                  <li>Invalid Price: {validation.formData.price <= 0 ? 'Yes' : 'No'}</li>
+                  <li>Invalid Price: {(validation.formData.price || 0) <= 0 ? 'Yes' : 'No'}</li>
                 </ul>
                 <div>Required Fields:</div>
                 <ul className="ml-4">

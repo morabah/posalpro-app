@@ -1,97 +1,129 @@
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+/**
+ * Proposal Stats API Routes - Modern Architecture
+ * User Story: US-3.2 (Proposal Management)
+ * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
+ */
+
+import { ok } from '@/lib/api/response';
+import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { logError, logInfo } from '@/lib/logger';
 
-// Cache store (process memory)
-const cache = new Map<string, { data: any; ts: number }>();
-const TTL_MS = process.env.NODE_ENV === 'production' ? 60_000 : 0;
+// ====================
+// GET /api/proposals/stats - Get proposal statistics
+// ====================
 
-export async function GET(request: NextRequest) {
-  const start = Date.now();
-  let session;
-  try {
-    await validateApiPermission(request, 'proposals:read');
-    session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const url = new URL(request.url);
-    const forceFresh = url.searchParams.get('fresh') === '1';
-    const cacheKey = 'proposals:stats';
-    const cached = cache.get(cacheKey);
-    if (!forceFresh && cached && Date.now() - cached.ts < TTL_MS) {
-      const res = NextResponse.json({ success: true, data: cached.data, message: 'ok (cache)' });
-      if (process.env.NODE_ENV === 'production') {
-        res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
-      } else {
-        res.headers.set('Cache-Control', 'no-store');
-      }
-      return res;
-    }
-
-    // Define status mapping for "In Progress" and "Won"/"Accepted"
-    const IN_PROGRESS_STATUSES = ['IN_REVIEW', 'PENDING_APPROVAL', 'SUBMITTED'] as const;
-    const WON_STATUSES = ['ACCEPTED'] as const;
-    const CLOSED_STATUSES = ['SUBMITTED', 'ACCEPTED', 'DECLINED', 'REJECTED'] as const;
-
-    const now = new Date();
-
-    const [total, inProgress, overdue, won, valueAgg] = await prisma.$transaction([
-      prisma.proposal.count(),
-      prisma.proposal.count({
-        where: { status: { in: IN_PROGRESS_STATUSES as unknown as any } },
-      }),
-      prisma.proposal.count({
-        where: {
-          dueDate: { lt: now },
-          status: { notIn: CLOSED_STATUSES as unknown as any },
-        },
-      }),
-      prisma.proposal.count({ where: { status: { in: WON_STATUSES as unknown as any } } }),
-      prisma.proposal.aggregate({ _sum: { value: true } }),
-    ]);
-
-    const totalValue = Number(valueAgg._sum.value || 0);
-    const winRate = total > 0 ? Math.round((won / total) * 100) : 0;
-
-    const data = {
-      total,
-      inProgress,
-      overdue,
-      winRate,
-      totalValue,
-      generatedAt: new Date().toISOString(),
-    };
-
-    cache.set(cacheKey, { data, ts: Date.now() });
-
-    const res = NextResponse.json({ success: true, data, message: 'ok' });
-    if (process.env.NODE_ENV === 'production') {
-      res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
-    } else {
-      res.headers.set('Cache-Control', 'no-store');
-    }
-    return res;
-  } catch (error) {
-    const standardError = ErrorHandlingService.getInstance().processError(
-      error,
-      'Failed to fetch proposal stats',
-      ErrorCodes.DATA.FETCH_FAILED,
-      {
-        component: 'ProposalsStatsAPI',
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+  },
+  async ({ user }) => {
+    try {
+      logInfo('Fetching proposal stats', {
+        component: 'ProposalStatsAPI',
         operation: 'GET',
-      }
-    );
-    return NextResponse.json(
-      { success: false, error: standardError.message, code: standardError.code },
-      { status: 500 }
-    );
-  } finally {
-    void start; // reserved for metrics if needed
+        userId: user.id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      // Get total proposals
+      const total = await prisma.proposal.count();
+
+      // Get proposals by status
+      const statusCounts = await prisma.proposal.groupBy({
+        by: ['status'],
+        _count: {
+          status: true,
+        },
+      });
+
+      // Get overdue proposals (dueDate < now and status not in final states)
+      const overdue = await prisma.proposal.count({
+        where: {
+          dueDate: {
+            lt: new Date(),
+          },
+          status: {
+            notIn: ['APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED'],
+          },
+        },
+      });
+
+      // Get total value
+      const totalValueResult = await prisma.proposal.aggregate({
+        _sum: {
+          value: true,
+        },
+        where: {
+          value: {
+            not: null,
+          },
+        },
+      });
+
+      const totalValue = totalValueResult._sum.value || 0;
+
+      // Calculate win rate (ACCEPTED / (ACCEPTED + DECLINED))
+      const acceptedCount = statusCounts.find(s => s.status === 'ACCEPTED')?._count.status || 0;
+      const declinedCount = statusCounts.find(s => s.status === 'DECLINED')?._count.status || 0;
+      const winRate =
+        acceptedCount + declinedCount > 0
+          ? (acceptedCount / (acceptedCount + declinedCount)) * 100
+          : 0;
+
+      // Get recent activity (proposals updated in last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const recentActivity = await prisma.proposal.count({
+        where: {
+          updatedAt: {
+            gte: thirtyDaysAgo,
+          },
+        },
+      });
+
+      const stats = {
+        total,
+        byStatus: statusCounts.reduce(
+          (acc, item) => {
+            acc[item.status] = item._count.status;
+            return acc;
+          },
+          {} as Record<string, number>
+        ),
+        overdue,
+        totalValue,
+        winRate: Math.round(winRate * 100) / 100, // Round to 2 decimal places
+        recentActivity,
+        averageValue: total > 0 ? Math.round((totalValue / total) * 100) / 100 : 0,
+      };
+
+      logInfo('Proposal stats fetched successfully', {
+        component: 'ProposalStatsAPI',
+        operation: 'GET',
+        userId: user.id,
+        stats: {
+          total,
+          overdue,
+          totalValue,
+          winRate: stats.winRate,
+        },
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      return Response.json(ok(stats));
+    } catch (error) {
+      logError('Failed to fetch proposal stats', error, {
+        component: 'ProposalStatsAPI',
+        operation: 'GET',
+        userId: user.id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+      throw error; // createRoute handles errorToJson automatically
+    }
   }
-}
+);

@@ -2,7 +2,7 @@
 // User Story: US-4.1 (Product Management)
 // Hypothesis: H5 (Modern data fetching improves performance and user experience)
 
-import { useApiClient } from '@/hooks/useApiClient';
+import { useHttpClient } from '@/hooks/useHttpClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { Product, ProductCreate, ProductUpdate, productService } from '@/services/productService';
@@ -15,28 +15,10 @@ import {
 } from '@tanstack/react-query';
 
 // ====================
-// Query Keys
+// Query Keys - Using centralized keys
 // ====================
 
-export const qk = {
-  products: {
-    all: ['products'] as const,
-    list: (
-      search: string,
-      limit: number,
-      sortBy: 'createdAt' | 'name' | 'price' | 'isActive',
-      sortOrder: 'asc' | 'desc',
-      category?: string,
-      isActive?: boolean
-    ) => ['products', 'list', search, limit, sortBy, sortOrder, category, isActive] as const,
-    byId: (id: string) => ['products', 'byId', id] as const,
-    search: (query: string, limit: number) => ['products', 'search', query, limit] as const,
-    relationships: (productId: string) => ['products', 'relationships', productId] as const,
-    stats: () => ['products', 'stats'] as const,
-    categories: () => ['products', 'categories'] as const,
-    tags: () => ['products', 'tags'] as const,
-  },
-};
+import { qk } from '@/features/products/keys';
 
 // ====================
 // Infinite Query Hook
@@ -57,7 +39,7 @@ export function useInfiniteProductsMigrated({
   category?: string;
   isActive?: boolean;
 } = {}) {
-  const apiClient = useApiClient();
+  const { get } = useHttpClient();
 
   return useInfiniteQuery({
     queryKey: qk.products.list(search, limit, sortBy, sortOrder, category, isActive),
@@ -85,20 +67,19 @@ export function useInfiniteProductsMigrated({
       if (isActive !== undefined) params.append('isActive', isActive.toString());
       if (pageParam) params.append('cursor', pageParam);
 
-      const response = await apiClient.get<{
-        ok: boolean;
-        data: { items: Product[]; nextCursor: string | null };
-      }>(`/api/products?${params.toString()}`);
+      const response = await get<{ items: Product[]; nextCursor: string | null }>(
+        `/api/products?${params.toString()}`
+      );
 
       logInfo('Products fetched successfully', {
         component: 'useInfiniteProductsMigrated',
         operation: 'queryFn',
-        count: response.data?.items?.length || 0,
-        hasNextPage: !!response.data?.nextCursor,
+        count: response.items?.length || 0,
+        hasNextPage: !!response.nextCursor,
         loadTime: Date.now(),
       });
 
-      return response.data;
+      return response;
     },
     initialPageParam: null as string | null,
     getNextPageParam: lastPage => lastPage.nextCursor || undefined,
@@ -114,7 +95,7 @@ export function useInfiniteProductsMigrated({
 // ====================
 
 export function useProductMigrated(id: string) {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: qk.products.byId(id),
@@ -127,11 +108,7 @@ export function useProductMigrated(id: string) {
         hypothesis: 'H5',
       });
 
-      const response = await apiClient.get<{
-        success: boolean;
-        data: Product;
-        message: string;
-      }>(`/api/products/${id}`);
+      const response = await get<Product>(`/api/products/${id}`);
       return response;
     },
     enabled: !!id,
@@ -145,7 +122,7 @@ export function useProductMigrated(id: string) {
 // ====================
 
 export function useProductWithRelationshipsMigrated(id: string) {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: qk.products.relationships(id),
@@ -158,7 +135,7 @@ export function useProductWithRelationshipsMigrated(id: string) {
         hypothesis: 'H5',
       });
 
-      const response = await apiClient.get(`/api/products/${id}/relationships`);
+      const response = await get(`/api/products/${id}/relationships`);
       return response;
     },
     enabled: !!id,
@@ -172,7 +149,7 @@ export function useProductWithRelationshipsMigrated(id: string) {
 // ====================
 
 export function useProductStatsMigrated() {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: qk.products.stats(),
@@ -184,7 +161,7 @@ export function useProductStatsMigrated() {
         hypothesis: 'H5',
       });
 
-      const response = await apiClient.get('/api/products/stats');
+      const response = await get('/api/products/stats');
       return response;
     },
     staleTime: 60000, // 1 minute
@@ -197,7 +174,7 @@ export function useProductStatsMigrated() {
 // ====================
 
 export function useProductSearchMigrated(query: string, limit: number = 10) {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: qk.products.search(query, limit),
@@ -211,7 +188,7 @@ export function useProductSearchMigrated(query: string, limit: number = 10) {
         hypothesis: 'H5',
       });
 
-      const response = await apiClient.get(
+      const response = await get(
         `/api/products/search?q=${encodeURIComponent(query)}&limit=${limit}`
       );
       return response;
@@ -248,7 +225,7 @@ export function useCreateProduct() {
 
       const response = await productService.createProduct(data);
 
-      if (response.ok && response.data) {
+      if (response.ok) {
         analytics.trackOptimized('product_create_success', {
           productId: response.data.id,
           name: data.name,
@@ -310,7 +287,7 @@ export function useUpdateProduct() {
 
       const response = await productService.updateProduct(id, data);
 
-      if (response.ok && response.data) {
+      if (response.ok) {
         analytics.trackOptimized('product_update_success', {
           productId: response.data.id,
           name: data.name,
@@ -323,8 +300,9 @@ export function useUpdateProduct() {
       return response;
     },
     onSuccess: (response, { id }) => {
-      // Invalidate all product queries
+      // Invalidate all product queries and specific product detail
       queryClient.invalidateQueries({ queryKey: qk.products.all });
+      queryClient.invalidateQueries({ queryKey: qk.products.byId(id) });
 
       logInfo('Product updated successfully', {
         component: 'useUpdateProduct',
@@ -351,7 +329,7 @@ export function useUpdateProduct() {
 export function useDeleteProductMigrated() {
   const queryClient = useQueryClient();
   const analytics = useOptimizedAnalytics();
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useMutation({
     mutationFn: async (id: string) => {
@@ -370,12 +348,13 @@ export function useDeleteProductMigrated() {
         hypothesis: 'H5',
       });
 
-      const response = await apiClient.delete(`/api/products/${id}`);
+      const response = await del(`/api/products/${id}`);
       return response;
     },
     onSuccess: (response, id) => {
-      // Invalidate all product queries
+      // Invalidate all product queries and specific product detail
       queryClient.invalidateQueries({ queryKey: qk.products.all });
+      queryClient.invalidateQueries({ queryKey: qk.products.byId(id) });
 
       // Track analytics
       analytics.trackOptimized(
@@ -412,7 +391,7 @@ export function useDeleteProductMigrated() {
 export function useDeleteProductsBulkMigrated() {
   const queryClient = useQueryClient();
   const analytics = useOptimizedAnalytics();
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useMutation({
     mutationFn: async (ids: string[]) => {
@@ -433,12 +412,15 @@ export function useDeleteProductsBulkMigrated() {
         hypothesis: 'H5',
       });
 
-      const response = await apiClient.post('/api/products/bulk-delete', { ids });
+      const response = await post('/api/products/bulk-delete', { ids });
       return response;
     },
     onSuccess: (response, ids) => {
-      // Invalidate all product queries
+      // Invalidate all product queries and specific product details
       queryClient.invalidateQueries({ queryKey: qk.products.all });
+      ids.forEach(id => {
+        queryClient.invalidateQueries({ queryKey: qk.products.byId(id) });
+      });
 
       // Track analytics
       analytics.trackOptimized(
@@ -594,7 +576,7 @@ export function useDeleteProductRelationshipMigrated() {
 // ====================
 
 export function useProductsByIdsMigrated(ids: string[]) {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   const results = useQueries({
     queries: ids.map(id => ({
@@ -626,7 +608,7 @@ export function useProductsByIdsMigrated(ids: string[]) {
 }
 
 export function useProductByIdOrSearchMigrated(id?: string, searchTerm?: string) {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: ['products', 'byIdOrSearch', id, searchTerm],
@@ -667,7 +649,7 @@ export function useProductByIdOrSearchMigrated(id?: string, searchTerm?: string)
 // ====================
 
 export function useProductCategories(search?: string) {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: qk.products.categories(),
@@ -683,23 +665,20 @@ export function useProductCategories(search?: string) {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
 
-      const response = await apiClient.get<{
-        success: boolean;
-        data: {
-          categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
-        };
+      const response = await get<{
+        categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
       }>(`/api/products/categories?${params.toString()}`);
 
       logInfo('Product categories fetched successfully', {
         component: 'useProductCategories',
         operation: 'queryFn',
-        count: response.data?.categories?.length || 0,
+        count: response.categories?.length || 0,
         search,
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
 
-      return response.data;
+      return response;
     },
     staleTime: 30000,
     gcTime: 120000,
@@ -707,7 +686,7 @@ export function useProductCategories(search?: string) {
 }
 
 export function useProductTags(search?: string) {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: qk.products.tags(),
@@ -723,23 +702,20 @@ export function useProductTags(search?: string) {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
 
-      const response = await apiClient.get<{
-        success: boolean;
-        data: {
-          tags: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
-        };
+      const response = await get<{
+        tags: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
       }>(`/api/products/tags?${params.toString()}`);
 
       logInfo('Product tags fetched successfully', {
         component: 'useProductTags',
         operation: 'queryFn',
-        count: response.data?.tags?.length || 0,
+        count: response.tags?.length || 0,
         search,
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
 
-      return response.data;
+      return response;
     },
     staleTime: 30000,
     gcTime: 120000,
@@ -751,7 +727,7 @@ export function useProductTags(search?: string) {
 // ====================
 
 export function useProductCategoriesMigrated() {
-  const apiClient = useApiClient();
+  const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
     queryKey: qk.products.categories(),

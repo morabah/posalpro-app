@@ -1,839 +1,502 @@
 'use client';
 
 /**
- * PosalPro MVP2 - Proposal Creation Step 2: Team Assignment
- * Based on PROPOSAL_CREATION_SCREEN.md wireframe specifications
- * Supports component traceability and analytics integration for H4 hypothesis validation
- * ✅ PERFORMANCE OPTIMIZED: Cached user data, memoized computations, debounced updates
+ * PosalPro MVP2 - Modern Team Assignment Step
+ * Built from scratch using React Query and modern patterns
+ * Follows PROPOSAL_MIGRATION_ASSESSMENT.md guidelines
+ * Maps to database fields: assignedTo (User[]), team members and roles
  */
 
 import { Card } from '@/components/ui/Card';
-import { Label } from '@/components/ui/Label';
 import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/forms/Select';
-import { useApiClient } from '@/hooks/useApiClient';
-import { useResponsive } from '@/hooks/useResponsive';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logError } from '@/lib/logger';
-import { ApiResponse } from '@/types/api';
-import { UserType } from '@/types/enums';
-import { ExpertiseArea, ProposalWizardStep2Data } from '@/types/proposals';
-import { PlusIcon, SparklesIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
-import { z } from 'zod';
+import { Label } from '@/components/ui/Label';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logDebug } from '@/lib/logger';
+import { ProposalTeamData, useProposalActions } from '@/lib/store/proposalStore';
+import { User, userService } from '@/services/userService';
+import { CheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
 
-// Removed unused COMPONENT_MAPPING to satisfy unused-vars
-
-// User interface for dropdowns (simplified)
-interface User {
-  id: string;
-  name: string;
-  email?: string;
-  department?: string;
-  roles?: Array<{ name: string }>;
-}
-
-// Removed mock data to comply with project rules. All data comes from API responses.
-
-// Validation schema for team assignment step
-const teamAssignmentSchema = z.object({
-  teamLead: z.string().min(1, 'Team lead is required'),
-  salesRepresentative: z.string().min(1, 'Sales representative is required'),
-  subjectMatterExperts: z
-    .record(z.string(), z.string())
-    .refine(data => Object.keys(data).length > 0, 'At least one subject matter expert is required'),
-  executiveReviewers: z.array(z.string()).min(0),
-});
-
-type TeamAssignmentFormData = z.infer<typeof teamAssignmentSchema>;
+// Expertise areas
+const EXPERTISE_AREAS = [
+  { value: 'TECHNICAL', label: 'Technical' },
+  { value: 'SECURITY', label: 'Security' },
+  { value: 'LEGAL', label: 'Legal' },
+  { value: 'PRICING', label: 'Pricing' },
+  { value: 'FINANCIAL', label: 'Financial' },
+  { value: 'OPERATIONS', label: 'Operations' },
+];
 
 interface TeamAssignmentStepProps {
-  data: Partial<ProposalWizardStep2Data>;
-  onUpdate: (data: Partial<ProposalWizardStep2Data>) => void;
-  analytics: {
-    trackWizardStep?: (
-      stepNumber: number,
-      stepName: string,
-      action: string,
-      metadata?: Record<string, unknown>
-    ) => void;
-  };
+  data?: ProposalTeamData;
+  onNext: () => void;
+  onBack: () => void;
+  onUpdate?: (data: ProposalTeamData) => void;
 }
 
-export function TeamAssignmentStep({ data, onUpdate, analytics }: TeamAssignmentStepProps) {
-  // ✅ MOBILE OPTIMIZATION: Add responsive detection
-  const { isMobile } = useResponsive();
+export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssignmentStepProps) {
+  const analytics = useOptimizedAnalytics();
+  const { setStepData } = useProposalActions();
 
-  // ✅ SIMPLIFIED: Use apiClient like customer selection
-  const apiClient = useApiClient();
-
-  interface AiSuggestions {
-    teamLead?: User | null;
-    salesRep?: User | null;
-    smes?: Partial<Record<ExpertiseArea, User | null>>;
-    executives?: User[];
-  }
-  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestions>({});
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [teamLeads, setTeamLeads] = useState<User[]>([]);
-  const [salesReps, setSalesReps] = useState<User[]>([]);
-  const [executives, setExecutives] = useState<User[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [isLoadingTeamData, setIsLoadingTeamData] = useState(false);
-  const [teamDataError, setTeamDataError] = useState<string | null>(null);
-  const [expertiseAreas, setExpertiseAreas] = useState<ExpertiseArea[]>([
-    ExpertiseArea.TECHNICAL,
-    ExpertiseArea.SECURITY,
-    ExpertiseArea.LEGAL,
-    ExpertiseArea.PRICING,
-  ]);
-  const lastSentDataRef = useRef<string>('');
-  const onUpdateRef = useRef(onUpdate);
-  const debouncedUpdateRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
-  // Normalize various stored SME representations to a clean userId
-  const normalizeUserId = useCallback((raw: unknown): string => {
-    if (!raw) return '';
-    const v = String(raw).trim();
-    const uuid = v.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (uuid) return uuid[0];
-    const cuid = v.match(/c[a-z0-9]{8,}/i);
-    if (cuid) return cuid[0];
-    if (v.toLowerCase().startsWith('user')) {
-      const last = v.split(/\s|:/).filter(Boolean).pop();
-      return last || '';
-    }
-    return v;
-  }, []);
-
-  // Keep onUpdate ref current
-  useEffect(() => {
-    onUpdateRef.current = onUpdate;
-  });
-
+  // Fetch users using React Query with the new service
   const {
-    setValue,
-    control,
-    formState: { errors },
-    getValues,
-  } = useForm<TeamAssignmentFormData>({
-    resolver: zodResolver(teamAssignmentSchema),
-    defaultValues: {
-      teamLead: data.teamLead || '',
-      salesRepresentative: data.salesRepresentative || '',
-      subjectMatterExperts: data.subjectMatterExperts || {},
-      executiveReviewers: data.executiveReviewers || [],
+    data: usersData,
+    isLoading: usersLoading,
+    error: usersError,
+  } = useQuery({
+    queryKey: ['users', 'proposal-wizard'],
+    queryFn: async () => {
+      console.log('[DEBUG] Fetching users from API...');
+      const response = await userService.getUsers({
+        search: '',
+        limit: 100,
+        status: 'ACTIVE',
+        sortBy: 'name',
+        sortOrder: 'asc',
+      });
+
+      console.log('[DEBUG] Users API response:', response);
+
+      if (response.ok && response.data?.users) {
+        console.log('[DEBUG] Users loaded successfully:', response.data.users.length);
+        console.log(
+          '[DEBUG] First user structure:',
+          JSON.stringify(response.data.users[0], null, 2)
+        );
+        return response.data.users;
+      }
+      throw new Error('Failed to load users');
     },
-    // ✅ CRITICAL FIX: Mobile-optimized validation mode
-    mode: isMobile ? 'onBlur' : 'onChange',
-    reValidateMode: 'onBlur',
-    criteriaMode: 'firstError',
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   });
 
-  // ✅ PERFORMANCE OPTIMIZATION: Manual form data collection instead of watch()
-  const collectFormData = useCallback((): ProposalWizardStep2Data => {
-    const currentValues = getValues();
-    return {
-      teamLead: currentValues.teamLead || '',
-      salesRepresentative: currentValues.salesRepresentative || '',
-      subjectMatterExperts: currentValues.subjectMatterExperts as unknown as Record<
-        ExpertiseArea,
-        string
-      >,
-      executiveReviewers: currentValues.executiveReviewers,
-    };
-  }, [getValues]);
+  // Filter users by role
+  const teamLeads = useMemo(() => {
+    if (!usersData) return [];
+    const leads = usersData.filter(user =>
+      user.roles?.some(userRole => userRole.role?.name === 'Proposal Manager')
+    );
+    console.log(
+      '[DEBUG] Team leads found:',
+      leads.length,
+      leads.map(u => u.name)
+    );
+    return leads;
+  }, [usersData]);
 
-  // ✅ PERFORMANCE OPTIMIZATION: Debounced update function
-  const debouncedHandleUpdate = useCallback(
-    (formattedData: ProposalWizardStep2Data) => {
-      // Clear existing timeout
-      if (debouncedUpdateRef.current) {
-        clearTimeout(debouncedUpdateRef.current);
-      }
+  const salesReps = useMemo(() => {
+    if (!usersData) return [];
+    const reps = usersData.filter(user =>
+      user.roles?.some(userRole => userRole.role?.name === 'SME')
+    );
+    console.log(
+      '[DEBUG] Sales reps found:',
+      reps.length,
+      reps.map(u => u.name)
+    );
+    return reps;
+  }, [usersData]);
 
-      // Set new timeout with mobile-optimized delay
-      const delay = isMobile ? 500 : 300; // Longer delay on mobile for better performance
-      debouncedUpdateRef.current = setTimeout(() => {
-        const dataHash = JSON.stringify(formattedData);
+  const executives = useMemo(() => {
+    if (!usersData) return [];
+    const execs = usersData.filter(user =>
+      user.roles?.some(userRole => userRole.role?.name === 'Executive')
+    );
+    console.log(
+      '[DEBUG] Executives found:',
+      execs.length,
+      execs.map(u => u.name)
+    );
+    return execs;
+  }, [usersData]);
 
-        // Only update if data has actually changed
-        if (dataHash !== lastSentDataRef.current) {
-          lastSentDataRef.current = dataHash;
-          onUpdateRef.current(formattedData);
-        }
-      }, delay);
-    },
-    [isMobile]
+  // Form data with defaults
+  const formData = useMemo(
+    () => ({
+      teamLead: data?.teamLead || '',
+      salesRepresentative: data?.salesRepresentative || '',
+      subjectMatterExperts: data?.subjectMatterExperts || {},
+      executiveReviewers: data?.executiveReviewers || [],
+    }),
+    [data]
   );
 
-  // ✅ HYDRATION: When `data` changes (edit mode), reflect it into the form
-  useEffect(() => {
-    /* dev logs removed */
-
-    if (data.teamLead) setValue('teamLead', normalizeUserId(data.teamLead));
-    if (data.salesRepresentative)
-      setValue('salesRepresentative', normalizeUserId(data.salesRepresentative));
-    if (data.subjectMatterExperts) {
-      // Normalize without JSON.parse to avoid unsafe any
-      const smeEntries = Object.entries(
-        (data.subjectMatterExperts as Record<string, unknown>) ?? {}
-      );
-      const smeData: Record<string, string> = Object.fromEntries(
-        smeEntries.map(([key, value]) => [key, String(value ?? '')])
-      );
-      const entries = Object.entries(smeData);
-      // Set the full object for completeness
-      const normalized = Object.fromEntries(entries.map(([k, v]) => [k, normalizeUserId(v)]));
-      /* dev log removed */
-      setValue('subjectMatterExperts', normalized, { shouldValidate: false });
-      // Ensure all expertise areas present
-      const areas = Object.keys(normalized) as ExpertiseArea[];
-      setExpertiseAreas(prev => Array.from(new Set([...prev, ...areas])) as ExpertiseArea[]);
-    }
-    if (data.executiveReviewers) setValue('executiveReviewers', data.executiveReviewers);
-  }, [data, setValue, normalizeUserId]);
-
-  // Track analytics for team assignments
-  const trackTeamAssignment = useCallback(
-    (memberType: string, memberId: string, suggested: boolean = false) => {
-      analytics?.trackWizardStep?.(2, 'Team Assignment', 'team_member_assigned', {
-        memberType,
-        memberId,
-        suggested,
-        aiSuggestionAccepted: suggested,
-      });
-    },
-    [analytics]
-  );
-
-  // ✅ SIMPLIFIED: Fetch team data on component mount (like customer selection)
-  useEffect(() => {
-    const fetchTeamData = async () => {
-      setIsLoadingTeamData(true);
-      setTeamDataError(null);
-      try {
-        /* dev log removed */
-
-        // Fetch both user types in parallel using apiClient like customer selection
-        type UsersPayload = { users?: User[] } | User[];
-        const [managersResponse, executivesResponse, allUsersResponse] = await Promise.all([
-          apiClient.get<ApiResponse<UsersPayload>>(`users?role=${UserType.PROPOSAL_MANAGER}`),
-          apiClient.get<ApiResponse<UsersPayload>>(`users?role=${UserType.EXECUTIVE}`),
-          apiClient.get<ApiResponse<UsersPayload>>(`users`),
-        ]);
-
-        /* dev logs removed */
-
-        // Handle response structure like customer selection
-        const managers = managersResponse.success
-          ? Array.isArray(managersResponse.data)
-            ? managersResponse.data
-            : managersResponse.data?.users || []
-          : [];
-
-        const executives = executivesResponse.success
-          ? Array.isArray(executivesResponse.data)
-            ? executivesResponse.data
-            : executivesResponse.data?.users || []
-          : [];
-
-        const all =
-          allUsersResponse && (allUsersResponse.success ?? true)
-            ? Array.isArray(allUsersResponse.data)
-              ? allUsersResponse.data
-              : allUsersResponse.data?.users || []
-            : [];
-
-        /* dev log removed */
-
-        setTeamLeads(managers);
-        setSalesReps(managers); // Same users for both roles
-        setExecutives(executives);
-        setAllUsers(all);
-
-        // Reconcile preloaded SMEs after options load
-        try {
-          const current = getValues();
-          const smes = (current.subjectMatterExperts as Record<string, string>) || {};
-          let changed = false;
-          const normalized: Record<string, string> = {};
-          for (const [area, val] of Object.entries(smes)) {
-            const id = normalizeUserId(val);
-            normalized[area] = id;
-            if (id !== val) changed = true;
-          }
-          if (changed) {
-            setValue('subjectMatterExperts', normalized, { shouldValidate: false });
-            debouncedHandleUpdate(collectFormData());
-          }
-        } catch {
-          /* no-op: reconcile SMEs may fail if form not ready */
-        }
-
-        analytics.trackWizardStep?.(2, 'Team Assignment', 'team_data_loaded', {
-          managersCount: managers.length,
-          executivesCount: executives.length,
-          allUsersCount: all.length,
-          source: 'api_client',
-        });
-      } catch (error) {
-        // ✅ ENHANCED: Use proper logger instead of console.error
-        const errorHandlingService = ErrorHandlingService.getInstance();
-        const standardError = errorHandlingService.processError(
-          error,
-          'Failed to fetch team data',
-          ErrorCodes.DATA.QUERY_FAILED,
-          {
-            component: 'TeamAssignmentStep',
-            operation: 'fetchTeamData',
-            proposalId: 'unknown', // Team assignment step doesn't have proposal ID yet
-          }
-        );
-
-        logError('Error fetching team data', error, {
-          component: 'TeamAssignmentStep',
-          operation: 'fetchTeamData',
-          proposalId: 'unknown',
-          standardError: standardError.message,
-          errorCode: standardError.code,
-        });
-
-        setTeamLeads([]);
-        setSalesReps([]);
-        setExecutives([]);
-
-        // Error handling like customer selection
-        if (error instanceof Error) {
-          if (error.message.includes('401')) {
-            setTeamDataError('Please log in to access team data.');
-          } else if (error.message.includes('404')) {
-            setTeamDataError('User service is temporarily unavailable.');
-          } else if (error.message.includes('500')) {
-            setTeamDataError('Server error. Please try again in a few moments.');
-          } else {
-            setTeamDataError(
-              'Unable to load team members. Please check your connection and try again.'
-            );
-          }
-        } else {
-          setTeamDataError('An unexpected error occurred. Please try again.');
-        }
-
-        analytics.trackWizardStep?.(2, 'Team Assignment', 'team_data_error', {
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      } finally {
-        setIsLoadingTeamData(false);
-      }
-    };
-
-    fetchTeamData();
-    // We intentionally avoid adding unstable deps to prevent infinite loops.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Mount-only fetch
-
-  // ✅ PERFORMANCE OPTIMIZATION: Cleanup on unmount with final flush
-  useEffect(() => {
-    return () => {
-      // If a debounced update is pending, flush the latest values before unmount
-      if (debouncedUpdateRef.current) {
-        clearTimeout(debouncedUpdateRef.current);
-        const latest = collectFormData();
-        const dataHash = JSON.stringify(latest);
-        if (dataHash !== lastSentDataRef.current) {
-          lastSentDataRef.current = dataHash;
-          onUpdateRef.current(latest);
-        }
-      }
-    };
-  }, [collectFormData]);
-
-  // ✅ PERFORMANCE OPTIMIZATION: Memoized team data options
+  // Options for dropdowns
   const teamLeadOptions = useMemo(() => {
-    return teamLeads.map(lead => ({
-      value: lead.id,
-      label: `${lead.name} (${(lead.roles || []).map(r => r.name).join(', ') || lead.department || 'No role'})`,
-    }));
+    if (!teamLeads.length) return [{ value: '', label: 'No team leads available' }];
+
+    return [
+      { value: '', label: 'Select team lead...' },
+      ...teamLeads.map(user => ({
+        value: user.id,
+        label: user.name,
+      })),
+    ];
   }, [teamLeads]);
 
   const salesRepOptions = useMemo(() => {
-    return salesReps.map(rep => ({
-      value: rep.id,
-      label: `${rep.name} (${(rep.roles || []).map(r => r.name).join(', ') || rep.department || 'No role'})`,
-    }));
+    if (!salesReps.length) return [{ value: '', label: 'No sales representatives available' }];
+
+    return [
+      { value: '', label: 'Select sales representative...' },
+      ...salesReps.map(user => ({
+        value: user.id,
+        label: user.name,
+      })),
+    ];
   }, [salesReps]);
 
-  // ✅ FIX: Deduplicate SME options to avoid duplicate React keys
   const smeOptions = useMemo(() => {
-    const combinedUsers: User[] = [...teamLeads, ...salesReps, ...executives, ...allUsers];
-    const idToUser = new Map<string, User>();
-    for (const u of combinedUsers) {
-      if (!idToUser.has(u.id)) idToUser.set(u.id, u);
-    }
+    if (!usersData) return [{ value: '', label: 'Loading users...' }];
 
-    const baseOptions = Array.from(idToUser.values()).map(user => ({
-      value: String(user.id),
-      label: `${user.name}${user.department ? ` - ${user.department}` : ''}`,
-    }));
+    // Deduplicate users
+    const seenIds = new Set<string>();
+    const uniqueUsers: User[] = [];
 
-    // Ensure currently assigned SME ids always appear as options (even if user not in fetched lists yet)
-    const ensureAssignedOptions = (): Array<{ value: string; label: string }> => {
-      try {
-        const current = getValues();
-        const currentSmes = (current.subjectMatterExperts as Record<string, string>) || {};
-        const fromData = (data?.subjectMatterExperts as Record<string, string>) || {};
-        const values = new Set<string>();
-        Object.values(currentSmes).forEach(v => {
-          const id = normalizeUserId(v);
-          if (id) values.add(id);
-        });
-        Object.values(fromData).forEach(v => {
-          const id = normalizeUserId(v);
-          if (id) values.add(id);
-        });
-
-        const extras: Array<{ value: string; label: string }> = [];
-        for (const id of values) {
-          // Skip if already present in base options
-          if (idToUser.has(id)) continue;
-          const fallbackUser = combinedUsers.find(u => u.id === id);
-          const label = fallbackUser
-            ? `${fallbackUser.name}${fallbackUser.department ? ` - ${fallbackUser.department}` : ''}`
-            : id;
-          extras.push({ value: id, label });
-        }
-        return extras;
-      } catch {
-        return [];
+    [...teamLeads, ...salesReps, ...usersData].forEach(user => {
+      if (!seenIds.has(user.id)) {
+        seenIds.add(user.id);
+        uniqueUsers.push(user);
       }
-    };
-
-    return [...baseOptions, ...ensureAssignedOptions()];
-  }, [teamLeads, salesReps, executives, allUsers, getValues, data, normalizeUserId]);
-
-  // After options are loaded, resolve SME values that might be names into actual userIds
-  useEffect(() => {
-    const combined: User[] = [...teamLeads, ...salesReps, ...executives, ...allUsers];
-    if (combined.length === 0) return;
-    try {
-      const current = getValues();
-      const currentSMEs = (current.subjectMatterExperts as Record<string, string>) || {};
-      let changed = false;
-      const resolved: Record<string, string> = {};
-      Object.entries(currentSMEs).forEach(([area, val]) => {
-        let v = normalizeUserId(val);
-        if (!combined.some(u => u.id === v) && v) {
-          const lower = v.toLowerCase();
-          const match = combined.find(u => u.name?.toLowerCase().includes(lower));
-          if (match) v = match.id;
-        }
-        resolved[area] = v;
-        if (v !== val) changed = true;
-      });
-      if (changed) {
-        setValue('subjectMatterExperts', resolved, { shouldValidate: false });
-        debouncedHandleUpdate(collectFormData());
-      }
-      // Ensure rows exist for all areas present in data
-      const areas = Object.keys(currentSMEs) as ExpertiseArea[];
-      if (areas.length) {
-        setExpertiseAreas(prev => Array.from(new Set([...prev, ...areas])) as ExpertiseArea[]);
-      }
-    } catch {
-      /* no-op: resolving SMEs */
-    }
-  }, [
-    teamLeads,
-    salesReps,
-    executives,
-    allUsers,
-    getValues,
-    setValue,
-    debouncedHandleUpdate,
-    collectFormData,
-    normalizeUserId,
-  ]);
-
-  // Generate AI suggestions based on proposal context
-  const generateAISuggestions = useCallback(async () => {
-    setIsLoadingSuggestions(true);
-    analytics?.trackWizardStep?.(2, 'Team Assignment', 'ai_suggestions_requested');
-
-    // Simulate AI suggestion generation
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    const suggestions: AiSuggestions = {
-      teamLead: teamLeads[0] || null,
-      salesRep: salesReps[0] || null,
-      smes: {
-        [ExpertiseArea.TECHNICAL]: teamLeads[1] || salesReps[1] || null,
-        [ExpertiseArea.SECURITY]: teamLeads[2] || salesReps[2] || null,
-      },
-      executives: executives.slice(0, 1),
-    };
-
-    setAiSuggestions(suggestions);
-    setIsLoadingSuggestions(false);
-
-    analytics?.trackWizardStep?.(2, 'Team Assignment', 'ai_suggestions_generated', {
-      suggestionsCount: Object.keys(suggestions).length,
     });
-  }, [teamLeads, salesReps, executives, analytics]);
 
-  // Apply AI suggestion
-  type SuggestionType = 'teamLead' | 'salesRep';
-  const applyAISuggestion = useCallback(
-    (type: SuggestionType, value: string) => {
-      if (type === 'teamLead') {
-        setValue('teamLead', value);
-        trackTeamAssignment('teamLead', value, true);
-      } else if (type === 'salesRep') {
-        setValue('salesRepresentative', value);
-        trackTeamAssignment('salesRepresentative', value, true);
-      }
+    return [
+      { value: '', label: 'Select SME...' },
+      ...uniqueUsers.map(user => ({
+        value: user.id,
+        label: user.name,
+      })),
+    ];
+  }, [usersData, teamLeads, salesReps]);
+
+  // Handle field changes
+  const handleFieldChange = useCallback(
+    (field: string, value: string) => {
+      const updatedData = {
+        ...formData,
+        [field]: value,
+      };
+
+      setStepData(2, updatedData);
+
+      analytics.trackOptimized('proposal_field_change', {
+        field,
+        step: 2,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
     },
-    [setValue, trackTeamAssignment]
+    [formData, setStepData, analytics]
   );
 
-  // Add expertise area
-  const addExpertiseArea = useCallback((area: ExpertiseArea) => {
-    setExpertiseAreas(prev => [...prev, area]);
-  }, []);
+  // Handle SME changes
+  const handleSMEChange = useCallback(
+    (area: string, value: string) => {
+      const updatedData = {
+        ...formData,
+        subjectMatterExperts: {
+          ...formData.subjectMatterExperts,
+          [area]: value,
+        },
+      };
 
-  // Remove expertise area
-  const removeExpertiseArea = useCallback(
-    (area: ExpertiseArea) => {
-      setExpertiseAreas(prev => prev.filter(a => a !== area));
-      // Clear the SME assignment for this area
-      setValue(`subjectMatterExperts.${area}`, '');
+      setStepData(2, updatedData);
+
+      analytics.trackOptimized('proposal_sme_assigned', {
+        area,
+        step: 2,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
     },
-    [setValue]
+    [formData, setStepData, analytics]
   );
+
+  // Handle executive toggle
+  const handleExecutiveToggle = useCallback(
+    (executiveId: string) => {
+      const updatedData = {
+        ...formData,
+        executiveReviewers: formData.executiveReviewers.includes(executiveId)
+          ? formData.executiveReviewers.filter(id => id !== executiveId)
+          : [...formData.executiveReviewers, executiveId],
+      };
+
+      setStepData(2, updatedData);
+
+      analytics.trackOptimized('proposal_executive_toggled', {
+        executiveId,
+        isSelected: !formData.executiveReviewers.includes(executiveId),
+        step: 2,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+    },
+    [formData, setStepData, analytics]
+  );
+
+  // Handle next step
+  const handleNext = useCallback(() => {
+    // Update store with current data
+    setStepData(2, formData);
+
+    // Debug logging for step payload
+    logDebug('Step 2 payload', {
+      component: 'TeamAssignmentStep',
+      operation: 'next_step',
+      stepData: formData,
+      teamLead: formData.teamLead,
+      salesRepresentative: formData.salesRepresentative,
+      subjectMatterExperts: formData.subjectMatterExperts,
+      executiveReviewers: formData.executiveReviewers,
+      userStory: 'US-3.1',
+      hypothesis: 'H4',
+    });
+
+    analytics.trackOptimized('proposal_step_completed', {
+      step: 2,
+      stepName: 'Team Assignment',
+      userStory: 'US-3.1',
+      hypothesis: 'H4',
+    });
+
+    onNext();
+  }, [analytics, onNext, formData, setStepData]);
+
+  // Validation
+  const validationErrors = useMemo(() => {
+    const errors: string[] = [];
+
+    if (!formData.teamLead) {
+      errors.push('Team lead is required');
+    }
+
+    if (!formData.salesRepresentative) {
+      errors.push('Sales representative is required');
+    }
+
+    const smeCount = Object.values(formData.subjectMatterExperts).filter(v => v?.trim()).length;
+    if (smeCount === 0) {
+      errors.push('At least one subject matter expert is required');
+    }
+
+    return errors;
+  }, [formData]);
+
+  const canProceed = validationErrors.length === 0;
 
   return (
-    <div className="space-y-8">
-      {/* AI Suggestions Panel */}
-      <Card>
-        <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
-              <SparklesIcon className="w-6 h-6 text-blue-600 mr-2" />
-              <h3 className="text-lg font-semibold text-blue-900">AI Team Suggestions</h3>
-            </div>
-            <Button
-              variant="secondary"
-              onClick={generateAISuggestions}
-              disabled={isLoadingSuggestions}
-              loading={isLoadingSuggestions}
-              className="flex items-center"
-            >
-              Get AI Suggestions
-            </Button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Team Assignment</h2>
+        <p className="mt-2 text-gray-600">Assign team members and roles for this proposal</p>
+      </div>
+
+      {/* Validation Errors */}
+      {validationErrors.length > 0 && (
+        <Card className="p-4 bg-red-50 border-red-200">
+          <div className="text-sm text-red-800">
+            <h4 className="font-medium mb-2">Please fix the following errors:</h4>
+            <ul className="list-disc list-inside space-y-1">
+              {validationErrors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
           </div>
+        </Card>
+      )}
 
-          {Object.keys(aiSuggestions).length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {aiSuggestions.teamLead && (
-                <div className="bg-white p-3 rounded-lg border">
-                  <p className="text-sm font-medium text-gray-700">Suggested Team Lead:</p>
-                  <p className="text-blue-600">{aiSuggestions.teamLead.name}</p>
-                  {aiSuggestions.teamLead?.email && (
-                    <p className="text-xs text-gray-500">{aiSuggestions.teamLead.email}</p>
-                  )}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() =>
-                      aiSuggestions.teamLead &&
-                      applyAISuggestion('teamLead', aiSuggestions.teamLead.id)
-                    }
-                    className="mt-2"
-                  >
-                    Apply
-                  </Button>
-                </div>
-              )}
+      {/* API Errors */}
+      {usersError && (
+        <Card className="p-4 bg-red-50 border-red-200">
+          <div className="text-sm text-red-800">
+            <h4 className="font-medium mb-2">Error loading users:</h4>
+            <p>{usersError.message}</p>
+          </div>
+        </Card>
+      )}
 
-              {aiSuggestions.salesRep && (
-                <div className="bg-white p-3 rounded-lg border">
-                  <p className="text-sm font-medium text-gray-700">Suggested Sales Rep:</p>
-                  <p className="text-blue-600">{aiSuggestions.salesRep.name}</p>
-                  {aiSuggestions.salesRep?.email && (
-                    <p className="text-xs text-gray-500">{aiSuggestions.salesRep.email}</p>
-                  )}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() =>
-                      aiSuggestions.salesRep &&
-                      applyAISuggestion('salesRep', aiSuggestions.salesRep.id)
-                    }
-                    className="mt-2"
-                  >
-                    Apply
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Core Team Assignment */}
-      <Card>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6 flex items-center">
-            <UserGroupIcon className="w-5 h-5 mr-2" />
-            Proposal Team
-          </h3>
-
-          {isLoadingTeamData ? (
-            <div className="flex justify-center items-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <p className="ml-3 text-gray-600">Loading team members...</p>
-            </div>
-          ) : teamDataError ? (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-800" role="alert">
-                {teamDataError}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="teamLead" required>
-                  Team Lead
-                </Label>
-                <Controller
-                  name="teamLead"
-                  control={control}
-                  render={({ field }) => (
-                    <Select
-                      id="teamLead"
-                      options={teamLeadOptions}
-                      error={errors.teamLead?.message}
-                      value={field.value || ''}
-                      onChange={(value: string | string[]) => {
-                        const stringValue = Array.isArray(value) ? value[0] || '' : value;
-                        field.onChange(stringValue);
-                        trackTeamAssignment('teamLead', stringValue);
-                        debouncedHandleUpdate(collectFormData());
-                      }}
-                      placeholder="Select team lead..."
-                    />
-                  )}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="salesRepresentative" required>
-                  Sales Representative
-                </Label>
-                <Controller
-                  name="salesRepresentative"
-                  control={control}
-                  render={({ field }) => (
-                    <Select
-                      id="salesRepresentative"
-                      options={salesRepOptions}
-                      error={errors.salesRepresentative?.message}
-                      value={field.value || ''}
-                      onChange={(value: string | string[]) => {
-                        const stringValue = Array.isArray(value) ? value[0] || '' : value;
-                        field.onChange(stringValue);
-                        trackTeamAssignment('salesRepresentative', stringValue);
-                        debouncedHandleUpdate(collectFormData());
-                      }}
-                      placeholder="Select sales representative..."
-                    />
-                  )}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Subject Matter Experts */}
-      <Card>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-neutral-900">Subject Matter Experts</h3>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                // Show modal to add expertise area (simplified for now)
-                const availableAreas = Object.values(ExpertiseArea).filter(
-                  area => !expertiseAreas.includes(area)
-                );
-                if (availableAreas.length > 0) {
-                  addExpertiseArea(availableAreas[0]);
-                }
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Team Lead */}
+          <div>
+            <Label htmlFor="teamLead" className="text-sm font-medium text-gray-700">
+              Team Lead *
+            </Label>
+            <Select
+              id="teamLead"
+              options={teamLeadOptions}
+              value={formData.teamLead}
+              onChange={(value: string | string[]) => {
+                const teamLead = Array.isArray(value) ? value[0] : value;
+                handleFieldChange('teamLead', teamLead);
               }}
-              className="flex items-center"
-            >
-              <PlusIcon className="w-4 h-4 mr-2" />
-              Add Expertise
-            </Button>
+              placeholder="Select team lead..."
+              disabled={usersLoading}
+            />
           </div>
 
-          {isLoadingTeamData ? (
-            <div className="flex justify-center items-center h-24">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-              <p className="ml-3 text-gray-600">Loading subject matter experts...</p>
-            </div>
-          ) : teamDataError ? (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-800" role="alert">
-                {teamDataError}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Expertise</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Assigned SME</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expertiseAreas.map(area => (
-                    <tr key={area} className="border-b border-gray-100">
-                      <td className="py-3 px-4 capitalize font-medium text-gray-700">
-                        {area.replace('_', ' ')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="space-y-6">
-                          <div className="flex justify-between items-center mb-2">
-                            <Label htmlFor={`sme-${area}`}>
-                              {area} <span className="text-gray-500">&nbsp;</span>
-                            </Label>
-                          </div>
-
-                          <Controller
-                            name={
-                              `subjectMatterExperts.${area}` as `subjectMatterExperts.${string}`
-                            }
-                            control={control}
-                            render={({ field }) => {
-                              const fieldValue = String(
-                                (field.value as string) ||
-                                  normalizeUserId(
-                                    (
-                                      data.subjectMatterExperts as
-                                        | Record<string, string>
-                                        | undefined
-                                    )?.[area]
-                                  ) ||
-                                  ''
-                              ).trim();
-                              // debug removed
-                              return (
-                                <Select
-                                  id={`sme-${area}`}
-                                  options={smeOptions}
-                                  value={fieldValue}
-                                  onChange={(value: string | string[]) => {
-                                    const stringValue = Array.isArray(value)
-                                      ? value[0] || ''
-                                      : value;
-                                    field.onChange(stringValue);
-                                    trackTeamAssignment('sme', stringValue);
-                                    debouncedHandleUpdate(collectFormData());
-                                  }}
-                                  placeholder={`Select ${area.replace('_', ' ')} expert...`}
-                                />
-                              );
-                            }}
-                          />
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeExpertiseArea(area)}
-                          className="text-red-600 hover:bg-red-50"
-                        >
-                          <XMarkIcon className="w-4 h-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* Sales Representative */}
+          <div>
+            <Label htmlFor="salesRepresentative" className="text-sm font-medium text-gray-700">
+              Sales Representative *
+            </Label>
+            <Select
+              id="salesRepresentative"
+              options={salesRepOptions}
+              value={formData.salesRepresentative}
+              onChange={(value: string | string[]) => {
+                const salesRep = Array.isArray(value) ? value[0] : value;
+                handleFieldChange('salesRepresentative', salesRep);
+              }}
+              placeholder="Select sales representative..."
+              disabled={usersLoading}
+            />
+          </div>
         </div>
-      </Card>
 
-      {/* Executive Reviewers */}
-      <Card>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-6">Executive Reviewers</h3>
-          <p className="text-gray-600 mb-4">
-            Select executives who will review this proposal (optional)
-          </p>
+        {/* Right Column - Subject Matter Experts */}
+        <div className="space-y-6">
+          <div>
+            <Label className="text-sm font-medium text-gray-700">Subject Matter Experts *</Label>
+            <p className="text-sm text-gray-500 mb-4">
+              Assign SMEs for different areas of expertise
+            </p>
 
-          {isLoadingTeamData ? (
-            <div className="flex justify-center items-center h-16">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {executives.map(executive => (
-                <div key={executive.id} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{executive.name}</h4>
-                      <p className="text-sm text-gray-500">
-                        {(executive.roles || []).map(r => r.name).join(', ') ||
-                          executive.department ||
-                          'Executive'}
-                      </p>
-                    </div>
-                    <Controller
-                      name="executiveReviewers"
-                      control={control}
-                      render={({ field }) => {
-                        const isSelected = Array.isArray(field.value)
-                          ? field.value.includes(executive.id)
-                          : false;
-                        return (
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={e => {
-                              const currentValue = field.value || [];
-                              if (e.target.checked) {
-                                field.onChange([...currentValue, executive.id]);
-                              } else {
-                                field.onChange(
-                                  currentValue.filter((id: string) => id !== executive.id)
-                                );
-                              }
-                              trackTeamAssignment('executive', executive.id, false);
-                              // Ensure wizard step data is updated
-                              debouncedHandleUpdate(collectFormData());
-                            }}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                        );
+            <div className="space-y-3">
+              {EXPERTISE_AREAS.map(area => (
+                <div key={area.value} className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <Select
+                      id={`sme-${area.value}`}
+                      options={smeOptions}
+                      value={formData.subjectMatterExperts[area.value] || ''}
+                      onChange={(value: string | string[]) => {
+                        const smeId = Array.isArray(value) ? value[0] : value;
+                        handleSMEChange(area.value, smeId);
                       }}
+                      placeholder={`Select ${area.label} SME...`}
+                      disabled={usersLoading}
                     />
                   </div>
+                  {formData.subjectMatterExperts[area.value] && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSMEChange(area.value, '')}
+                      className="text-red-600 hover:bg-red-50"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
-          )}
+          </div>
+        </div>
+      </div>
+
+      {/* Executive Reviewers */}
+      <div>
+        <Label className="text-sm font-medium text-gray-700">Executive Reviewers</Label>
+        <p className="text-sm text-gray-500 mb-4">
+          Select executives who will review this proposal (optional)
+        </p>
+
+        {usersLoading ? (
+          <div className="flex justify-center items-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span className="ml-3 text-gray-600">Loading executives...</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {executives.map(executive => (
+              <div
+                key={executive.id}
+                className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                  formData.executiveReviewers.includes(executive.id)
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => handleExecutiveToggle(executive.id)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">{executive.name}</h4>
+                    <p className="text-sm text-gray-500">
+                      {executive.roles?.map(r => r.role?.name).join(', ') || 'Executive'}
+                    </p>
+                    {executive.department && (
+                      <p className="text-xs text-gray-400">{executive.department}</p>
+                    )}
+                  </div>
+                  {formData.executiveReviewers.includes(executive.id) && (
+                    <CheckIcon className="w-5 h-5 text-blue-500" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Team Summary */}
+      <Card className="p-4 bg-gray-50">
+        <div className="flex items-center gap-2 mb-3">
+          <UserGroupIcon className="w-5 h-5 text-gray-600" />
+          <h3 className="font-medium text-gray-900">Team Summary</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <span className="text-gray-600">Team Lead:</span>
+            <div className="font-medium">
+              {teamLeads.find(u => u.id === formData.teamLead)?.name || 'Not selected'}
+            </div>
+          </div>
+          <div>
+            <span className="text-gray-600">Sales Rep:</span>
+            <div className="font-medium">
+              {salesReps.find(u => u.id === formData.salesRepresentative)?.name || 'Not selected'}
+            </div>
+          </div>
+          <div>
+            <span className="text-gray-600">SMEs:</span>
+            <div className="font-medium">
+              {Object.values(formData.subjectMatterExperts).filter(v => v?.trim()).length} assigned
+            </div>
+          </div>
+          <div>
+            <span className="text-gray-600">Executives:</span>
+            <div className="font-medium">{formData.executiveReviewers.length} selected</div>
+          </div>
         </div>
       </Card>
+
+      {/* Navigation */}
+      <div className="flex justify-between pt-6 border-t border-gray-200">
+        <Button variant="outline" onClick={onBack} className="flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          Previous
+        </Button>
+        <Button onClick={handleNext} disabled={!canProceed} className="flex items-center gap-2">
+          Next Step
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </Button>
+      </div>
     </div>
   );
 }

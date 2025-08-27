@@ -20,9 +20,9 @@ const ProposalWizard = dynamic(
 export default function ProposalCreatePage() {
   const router = useRouter();
 
-  const handleComplete = (proposalData: { proposalId: string }) => {
+  const handleComplete = (proposalId: string) => {
     // Navigate to the newly created proposal
-    router.push(`/proposals/${proposalData.proposalId}`);
+    router.push(`/proposals/${proposalId}`);
   };
 
   const handleCancel = () => {

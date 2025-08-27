@@ -6,6 +6,33 @@ alwaysApply: true
 
 You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all implementations.
 
+## 🚨 **CRITICAL: COMPLETE ANALYSIS BEFORE IMPLEMENTATION** {#complete-analysis-before-implementation}
+
+**🔍 MANDATORY: Analyze ALL Issues Before Any Implementation**
+
+- **Step 1**: Identify ALL data mismatches, errors, and inconsistencies
+- **Step 2**: Map the complete data flow from source to display
+- **Step 3**: Identify ALL components, files, and layers affected
+- **Step 4**: Plan comprehensive solution addressing ALL issues at once
+- **Step 5**: Implement complete fix, not piece-by-piece solutions
+- **NEVER**: Implement partial fixes or create test files to "verify" incomplete solutions
+
+**📋 Analysis Checklist (MANDATORY)**
+
+- [ ] Identify ALL data sources (API, database, cache, components)
+- [ ] Map ALL data transformations and field mappings
+- [ ] Identify ALL components reading/writing the data
+- [ ] Check ALL related files (services, hooks, components, schemas)
+- [ ] Verify ALL cache invalidation points
+- [ ] Plan solution addressing ALL issues simultaneously
+
+**❌ FORBIDDEN PRACTICES**
+
+- Piece-by-piece fixes that create new problems
+- Test files that don't actually fix real issues
+- "Expected results" without actual implementation
+- Partial solutions that require multiple iterations
+
 ## Must‑read references
 
 - Tier 1: `PROJECT_REFERENCE.md`, `WIREFRAME_INTEGRATION_GUIDE.md`, `DEVELOPMENT_STANDARDS.md` (see CORE_REQUIREMENTS.md → Duplicate Prevention & Critical Reference Documents)
@@ -51,6 +78,22 @@ You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all 
 - **Provider Requirements**: Ensure `GlobalStateProvider` wraps components using bridge hooks that call `useGlobalState()` or `useUIState()`
 - **Template Compliance**: All bridges must follow template patterns for consistency and maintainability
 
+## HTTP Client & Service Layer Standards (CRITICAL)
+
+- **HTTP Client Pattern**: Use `http.method(url, data)` not `http.method(url, { body: JSON.stringify(data) })`
+- **Response Handling**: Let HTTP client handle response envelopes automatically - don't manually unwrap `{ success: true, data: ... }` or `{ ok: true, data: ... }`
+- **Service Layer Consistency**: All services must use same HTTP client pattern
+- **API Response Compatibility**: HTTP client supports both `ok` and `success` properties for backward compatibility
+- **Direct Type Parameters**: Use `http.get<UserList>()` not `http.get<{ success: boolean; data: UserList }>()`
+
+## Store Data Access Patterns (CRITICAL)
+
+- **Individual Selectors**: Use `useProposalStepData(stepNumber)` for each step, not array access
+- **No Array Access**: Don't assume `stepData[1]` - understand selector return values
+- **Store Implementation**: Read store implementation to understand data structure before using selectors
+- **Stable Selectors**: Use individual selectors (primitives or tuple+shallow), not object literals
+- **Client-Only Stores**: Ensure all store consumers are client-only and store isn't created per render
+
 ## Logging & Observability (Mandatory)
 
 - **Use structured logger** from `@/lib/logger`: `logDebug`, `logInfo`, `logWarn`, `logError`. No `console.*` in product code. (CORE_REQUIREMENTS.md → Logging & Observability)
@@ -62,7 +105,42 @@ You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all 
 - **Pair with ErrorHandlingService**: log after `ErrorHandlingService.processError()` in catch blocks.
 - **Env guidance**: verbose `debug` in dev; keep `info/warn/error` meaningful in prod.
 
+## Error Prevention Framework
+
+### **Common Anti-Patterns to Avoid**
+
+1. ❌ **Creating new APIs when existing ones work**
+2. ❌ **Composite hooks that create new objects on every render**
+3. ❌ **Inconsistent field names across layers**
+4. ❌ **Single response format support in HTTP clients**
+5. ❌ **Long stale times for frequently updated data**
+6. ❌ **Missing structured logging and error handling**
+7. ❌ **Dynamic values in component IDs**
+8. ❌ **Testing individual components without end-to-end flows**
+9. ❌ **Manual response envelope handling in services**
+10. ❌ **Array access on individual selector return values**
+
+### **Always Follow These Patterns**
+
+1. **Check existing implementations first** - Don't reinvent working solutions
+2. **Use consistent naming across all layers** - Database schema is the source of truth
+3. **Design stable state management from the start** - Individual selectors, functional updates
+4. **Implement comprehensive logging from day one** - Structured, traceable, user-friendly
+5. **Support multiple response formats** - Be format-agnostic in HTTP clients
+6. **Use aggressive cache management** - Immediate updates, comprehensive invalidation
+7. **Test with real data early and often** - Don't wait until the end
+8. **Validate complete user flows** - Not just individual components
+9. **Let HTTP client handle envelopes** - Don't manually unwrap response data
+10. **Understand selector return values** - Check what selectors actually return
+
 ## Reference Implementation
+
+- Use `/products` page and `ProductList` as the gold standard for data fetching, error handling, performance, structure, and logging.
+- Use bridge templates from `templates/design-patterns/bridge/` as the gold standard for bridge pattern implementation.
+- Use `src/services/productService.ts` as the gold standard for HTTP client usage patterns.
+- Use `src/lib/store/proposalStore.ts` as the gold standard for store data access patterns.
+- Use `src/features/*/keys.ts` as the gold standard for centralized query key management.
+- Use `src/lib/api/response.ts` as the gold standard for API response formats including cursor pagination.
 
 - Use `/products` page and `ProductList` as the gold standard for data fetching, error handling, performance, structure, and logging.
 - Use bridge templates from `templates/design-patterns/bridge/` as the gold standard for bridge pattern implementation.
@@ -71,6 +149,33 @@ You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all 
 
 You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all implementations.
 
+## 🚨 **CRITICAL: COMPLETE ANALYSIS BEFORE IMPLEMENTATION** {#complete-analysis-before-implementation}
+
+**🔍 MANDATORY: Analyze ALL Issues Before Any Implementation**
+
+- **Step 1**: Identify ALL data mismatches, errors, and inconsistencies
+- **Step 2**: Map the complete data flow from source to display
+- **Step 3**: Identify ALL components, files, and layers affected
+- **Step 4**: Plan comprehensive solution addressing ALL issues at once
+- **Step 5**: Implement complete fix, not piece-by-piece solutions
+- **NEVER**: Implement partial fixes or create test files to "verify" incomplete solutions
+
+**📋 Analysis Checklist (MANDATORY)**
+
+- [ ] Identify ALL data sources (API, database, cache, components)
+- [ ] Map ALL data transformations and field mappings
+- [ ] Identify ALL components reading/writing the data
+- [ ] Check ALL related files (services, hooks, components, schemas)
+- [ ] Verify ALL cache invalidation points
+- [ ] Plan solution addressing ALL issues simultaneously
+
+**❌ FORBIDDEN PRACTICES**
+
+- Piece-by-piece fixes that create new problems
+- Test files that don't actually fix real issues
+- "Expected results" without actual implementation
+- Partial solutions that require multiple iterations
+
 ## Must‑read references
 
 - Tier 1: `PROJECT_REFERENCE.md`, `WIREFRAME_INTEGRATION_GUIDE.md`, `DEVELOPMENT_STANDARDS.md` (see CORE_REQUIREMENTS.md → Duplicate Prevention & Critical Reference Documents)
@@ -116,6 +221,22 @@ You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all 
 - **Provider Requirements**: Ensure `GlobalStateProvider` wraps components using bridge hooks that call `useGlobalState()` or `useUIState()`
 - **Template Compliance**: All bridges must follow template patterns for consistency and maintainability
 
+## HTTP Client & Service Layer Standards (CRITICAL)
+
+- **HTTP Client Pattern**: Use `http.method(url, data)` not `http.method(url, { body: JSON.stringify(data) })`
+- **Response Handling**: Let HTTP client handle response envelopes automatically - don't manually unwrap `{ success: true, data: ... }` or `{ ok: true, data: ... }`
+- **Service Layer Consistency**: All services must use same HTTP client pattern
+- **API Response Compatibility**: HTTP client supports both `ok` and `success` properties for backward compatibility
+- **Direct Type Parameters**: Use `http.get<UserList>()` not `http.get<{ success: boolean; data: UserList }>()`
+
+## Store Data Access Patterns (CRITICAL)
+
+- **Individual Selectors**: Use `useProposalStepData(stepNumber)` for each step, not array access
+- **No Array Access**: Don't assume `stepData[1]` - understand selector return values
+- **Store Implementation**: Read store implementation to understand data structure before using selectors
+- **Stable Selectors**: Use individual selectors (primitives or tuple+shallow), not object literals
+- **Client-Only Stores**: Ensure all store consumers are client-only and store isn't created per render
+
 ## Logging & Observability (Mandatory)
 
 - **Use structured logger** from `@/lib/logger`: `logDebug`, `logInfo`, `logWarn`, `logError`. No `console.*` in product code. (CORE_REQUIREMENTS.md → Logging & Observability)
@@ -127,7 +248,42 @@ You are working on PosalPro MVP2. Follow `@[docs/CORE_REQUIREMENTS.md]` for all 
 - **Pair with ErrorHandlingService**: log after `ErrorHandlingService.processError()` in catch blocks.
 - **Env guidance**: verbose `debug` in dev; keep `info/warn/error` meaningful in prod.
 
+## Error Prevention Framework
+
+### **Common Anti-Patterns to Avoid**
+
+1. ❌ **Creating new APIs when existing ones work**
+2. ❌ **Composite hooks that create new objects on every render**
+3. ❌ **Inconsistent field names across layers**
+4. ❌ **Single response format support in HTTP clients**
+5. ❌ **Long stale times for frequently updated data**
+6. ❌ **Missing structured logging and error handling**
+7. ❌ **Dynamic values in component IDs**
+8. ❌ **Testing individual components without end-to-end flows**
+9. ❌ **Manual response envelope handling in services**
+10. ❌ **Array access on individual selector return values**
+
+### **Always Follow These Patterns**
+
+1. **Check existing implementations first** - Don't reinvent working solutions
+2. **Use consistent naming across all layers** - Database schema is the source of truth
+3. **Design stable state management from the start** - Individual selectors, functional updates
+4. **Implement comprehensive logging from day one** - Structured, traceable, user-friendly
+5. **Support multiple response formats** - Be format-agnostic in HTTP clients
+6. **Use aggressive cache management** - Immediate updates, comprehensive invalidation
+7. **Test with real data early and often** - Don't wait until the end
+8. **Validate complete user flows** - Not just individual components
+9. **Let HTTP client handle envelopes** - Don't manually unwrap response data
+10. **Understand selector return values** - Check what selectors actually return
+
 ## Reference Implementation
+
+- Use `/products` page and `ProductList` as the gold standard for data fetching, error handling, performance, structure, and logging.
+- Use bridge templates from `templates/design-patterns/bridge/` as the gold standard for bridge pattern implementation.
+- Use `src/services/productService.ts` as the gold standard for HTTP client usage patterns.
+- Use `src/lib/store/proposalStore.ts` as the gold standard for store data access patterns.
+- Use `src/features/*/keys.ts` as the gold standard for centralized query key management.
+- Use `src/lib/api/response.ts` as the gold standard for API response formats including cursor pagination.
 
 - Use `/products` page and `ProductList` as the gold standard for data fetching, error handling, performance, structure, and logging.
 - Use bridge templates from `templates/design-patterns/bridge/` as the gold standard for bridge pattern implementation.

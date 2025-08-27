@@ -324,13 +324,17 @@ export function getProductFieldValidation(fieldName: keyof ProductEditData) {
 
 // ✅ SKU validation types
 export interface SKUValidationResult {
-  exists: boolean;
-  conflictingProduct?: {
-    id: string;
-    name: string;
-    sku: string;
-    isActive: boolean;
+  success: boolean;
+  data?: {
+    exists: boolean;
+    conflictingProduct?: {
+      id: string;
+      name: string;
+      sku: string;
+      isActive: boolean;
+    };
   };
+  error?: string;
 }
 
 // ✅ SKU validation function

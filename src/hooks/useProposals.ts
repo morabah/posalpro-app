@@ -1,441 +1,494 @@
 /**
- * PosalPro MVP2 - Proposals Data Hook
- * React Query hook for fetching and caching proposals data
- * Performance optimized with caching and pagination
- * Follows the same architecture as useProducts.ts
+ * Proposal React Query Hooks - Modern Architecture
+ * User Story: US-3.1 (Proposal Creation), US-3.2 (Proposal Management)
+ * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
-import { useQuery, UseQueryResult } from '@tanstack/react-query';
-import { useApiClient } from './useApiClient';
+import { useHttpClient } from '@/hooks/useHttpClient';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import {
+  Proposal,
+  ProposalCreate,
+  ProposalUpdate,
+  proposalService,
+} from '@/services/proposalService';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
-// Proposal interfaces matching the API response structure
-export interface Proposal {
-  id: string;
-  title: string;
-  client: string;
-  status: ProposalStatus;
-  priority: ProposalPriority;
-  dueDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  estimatedValue: number;
-  teamLead: string;
-  assignedTeam: string[];
-  progress: number;
-  stage: string;
-  riskLevel: 'low' | 'medium' | 'high';
-  tags: string[];
-  description?: string;
-  lastActivity?: string;
-  customer?: { id: string; name: string; email?: string };
-}
+// ====================
+// Query Keys - Using centralized keys
+// ====================
 
-export enum ProposalStatus {
-  DRAFT = 'draft',
-  IN_PROGRESS = 'in_progress',
-  IN_REVIEW = 'in_review',
-  APPROVED = 'approved',
-  SUBMITTED = 'submitted',
-  WON = 'won',
-  LOST = 'lost',
-  CANCELLED = 'cancelled',
-}
+import { qk } from '@/features/proposals/keys';
 
-export enum ProposalPriority {
-  HIGH = 'high',
-  MEDIUM = 'medium',
-  LOW = 'low',
-}
+// ====================
+// Infinite Query Hook
+// ====================
 
-export interface ProposalsResponse {
-  proposals: Proposal[];
-  pagination: {
-    page?: number;
-    limit: number;
-    total?: number;
-    totalPages?: number;
-    hasMore?: boolean;
-    nextCursor?: string | null;
-  };
-  filters: {
-    search?: string;
-    status?: string;
-    priority?: string;
-    teamMember?: string;
-    dateRange?: string;
-  };
-}
-
-export interface ProposalsQueryParams {
-  page?: number;
-  limit?: number;
+export function useInfiniteProposals({
+  search = '',
+  limit = 20,
+  sortBy = 'createdAt',
+  sortOrder = 'desc',
+  status,
+  priority,
+  customerId,
+  assignedTo,
+}: {
   search?: string;
-  status?: string;
-  priority?: string;
-  teamMember?: string;
-  dateRange?: string;
-  sortBy?: 'title' | 'dueDate' | 'priority' | 'estimatedValue' | 'updatedAt';
+  limit?: number;
+  sortBy?: 'createdAt' | 'updatedAt' | 'title' | 'status' | 'priority' | 'value';
   sortOrder?: 'asc' | 'desc';
-  cursor?: string;
-  includeCustomer?: boolean;
-  includeTeam?: boolean;
-  fields?: string;
-}
+  status?:
+    | 'DRAFT'
+    | 'IN_REVIEW'
+    | 'PENDING_APPROVAL'
+    | 'APPROVED'
+    | 'REJECTED'
+    | 'SUBMITTED'
+    | 'ACCEPTED'
+    | 'DECLINED';
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH';
+  customerId?: string;
+  assignedTo?: string;
+} = {}) {
+  const { get } = useHttpClient();
 
-export interface ProposalStats {
-  total: number;
-  inProgress: number;
-  overdue: number;
-  winRate: number;
-  totalValue: number;
-}
+  return useInfiniteQuery({
+    queryKey: qk.proposals.list(
+      search,
+      limit,
+      sortBy,
+      sortOrder,
+      status,
+      priority,
+      customerId,
+      assignedTo
+    ),
+    queryFn: async ({ pageParam }) => {
+      logDebug('Fetching proposals with cursor pagination', {
+        component: 'useInfiniteProposals',
+        operation: 'queryFn',
+        search,
+        limit,
+        sortBy,
+        sortOrder,
+        status,
+        priority,
+        customerId,
+        assignedTo,
+        cursor: pageParam,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
 
-// Query keys for React Query
-export const PROPOSALS_QUERY_KEYS = {
-  all: ['proposals'] as const,
-  lists: () => [...PROPOSALS_QUERY_KEYS.all, 'list'] as const,
-  list: (params: ProposalsQueryParams) => [...PROPOSALS_QUERY_KEYS.lists(), params] as const,
-  details: () => [...PROPOSALS_QUERY_KEYS.all, 'detail'] as const,
-  detail: (id: string) => [...PROPOSALS_QUERY_KEYS.details(), id] as const,
-  stats: () => [...PROPOSALS_QUERY_KEYS.all, 'stats'] as const,
-};
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (limit) params.append('limit', limit.toString());
+      if (sortBy) params.append('sortBy', sortBy);
+      if (sortOrder) params.append('sortOrder', sortOrder);
+      if (status) params.append('status', status);
+      if (priority) params.append('priority', priority);
+      if (customerId) params.append('customerId', customerId);
+      if (assignedTo) params.append('assignedTo', assignedTo);
+      if (pageParam) params.append('cursor', pageParam);
 
-/**
- * Hook for fetching proposals list with pagination and filtering
- * Follows the same optimized pattern as useProducts
- */
-export function useProposals(
-  params: ProposalsQueryParams = {}
-): UseQueryResult<ProposalsResponse, Error> {
-  const apiClient = useApiClient();
+      const response = await get<{ items: Proposal[]; nextCursor: string | null }>(
+        `/api/proposals?${params.toString()}`
+      );
 
-  return useQuery({
-    queryKey: PROPOSALS_QUERY_KEYS.list(params),
-    queryFn: async (): Promise<ProposalsResponse> => {
-      const searchParams = new URLSearchParams();
+      logInfo('Proposals fetched successfully', {
+        component: 'useInfiniteProposals',
+        operation: 'queryFn',
+        count: response.items?.length || 0,
+        hasNextPage: !!response.nextCursor,
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
 
-      // Add parameters to search params
-      if (params.page) searchParams.set('page', params.page.toString());
-      if (params.limit) searchParams.set('limit', params.limit.toString());
-      if (params.search) searchParams.set('search', params.search);
-      if (params.status) searchParams.set('status', params.status);
-      if (params.priority) searchParams.set('priority', params.priority);
-      if (params.teamMember) searchParams.set('teamMember', params.teamMember);
-      if (params.dateRange) searchParams.set('dateRange', params.dateRange);
-      if (params.sortBy) searchParams.set('sortBy', params.sortBy);
-      if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
-      if (params.cursor) searchParams.set('cursor', params.cursor);
-      if (params.includeCustomer !== undefined)
-        searchParams.set('includeCustomer', params.includeCustomer.toString());
-      if (params.includeTeam !== undefined)
-        searchParams.set('includeTeam', params.includeTeam.toString());
-      if (params.fields) searchParams.set('fields', params.fields);
-
-      try {
-        const response = await apiClient.get(`/proposals?${searchParams.toString()}`);
-
-        // Handle different response shapes from the API
-        const data = extractProposalsResponse(response);
-        const transformedProposals = data.proposals.map(transformApiProposal);
-
-        return {
-          proposals: transformedProposals,
-          pagination: data.pagination || {
-            limit: params.limit || 20,
-            hasMore: transformedProposals.length === (params.limit || 20),
-            nextCursor:
-              transformedProposals.length > 0
-                ? transformedProposals[transformedProposals.length - 1].id
-                : null,
-          },
-          filters: {
-            search: params.search,
-            status: params.status,
-            priority: params.priority,
-            teamMember: params.teamMember,
-            dateRange: params.dateRange,
-          },
-        };
-      } catch (error) {
-        throw error instanceof Error ? error : new Error('Failed to fetch proposals');
-      }
+      return response;
     },
-    // Performance optimizations matching useProducts
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: 1,
-    retryDelay: 250,
-  });
-}
-
-/**
- * Hook for fetching proposal statistics
- */
-export function useProposalStats(): UseQueryResult<ProposalStats, Error> {
-  const apiClient = useApiClient();
-
-  return useQuery({
-    queryKey: PROPOSALS_QUERY_KEYS.stats(),
-    queryFn: async (): Promise<ProposalStats> => {
-      try {
-        const response = await apiClient.get<unknown>('/proposals/stats?fresh=1');
-        const raw = response as unknown;
-        const data = ((): Record<string, unknown> => {
-          if (isObject(raw) && isObject((raw as Record<string, unknown>).data)) {
-            return (raw as Record<string, unknown>).data as Record<string, unknown>;
-          }
-          if (isObject(raw)) {
-            return raw as Record<string, unknown>;
-          }
-          return {} as Record<string, unknown>;
-        })();
-
-        return {
-          total: Number((data as any)?.total ?? 0),
-          inProgress: Number((data as any)?.inProgress ?? 0),
-          overdue: Number((data as any)?.overdue ?? 0),
-          winRate: Number((data as any)?.winRate ?? 0),
-          totalValue: Number((data as any)?.totalValue ?? 0),
-        };
-      } catch (error) {
-        throw error instanceof Error ? error : new Error('Failed to fetch proposal stats');
-      }
-    },
-    staleTime: 60 * 1000, // 1 minute for stats
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    initialPageParam: null as string | null,
+    getNextPageParam: lastPage => lastPage?.nextCursor || undefined,
+    staleTime: 30000, // 30 seconds
+    gcTime: 120000, // 2 minutes
     refetchOnWindowFocus: false,
     retry: 1,
   });
 }
 
-/**
- * Hook for fetching a single proposal by ID
- */
-export function useProposal(id: string): UseQueryResult<Proposal, Error> {
-  const apiClient = useApiClient();
+// ====================
+// Individual Proposal Hook
+// ====================
+
+export function useProposal(id: string) {
+  const { get } = useHttpClient();
 
   return useQuery({
-    queryKey: PROPOSALS_QUERY_KEYS.detail(id),
-    queryFn: async (): Promise<Proposal> => {
-      const response = await apiClient.get<unknown>(`/proposals/${id}`);
+    queryKey: qk.proposals.byId(id),
+    queryFn: async () => {
+      logDebug('Fetching proposal', {
+        component: 'useProposal',
+        operation: 'queryFn',
+        proposalId: id,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
 
-      const raw = response as unknown;
-      if (isObject(raw) && 'success' in raw && (raw as any).success === false) {
-        const message =
-          isObject(raw) && typeof (raw as any).message === 'string'
-            ? (raw as any).message
-            : 'Failed to fetch proposal';
-        throw new Error(message);
-      }
+      const response = await get<Proposal>(`/api/proposals/${id}`);
 
-      const proposalData = isObject(raw) && 'data' in raw ? (raw as any).data : raw;
-      return transformApiProposal(proposalData);
+      logInfo('Proposal fetched successfully', {
+        component: 'useProposal',
+        operation: 'queryFn',
+        proposalId: id,
+        loadTime: Date.now(),
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      return response;
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
     enabled: !!id,
-    retry: 2,
+    staleTime: 5000, // ✅ REDUCED: Short stale time for responsiveness
+    gcTime: 120000,
+    refetchOnWindowFocus: true, // ✅ ENABLED: Refetch on window focus
+    retry: 1,
   });
 }
 
-// Helper functions for data transformation
-function extractProposalsResponse(raw: unknown): {
-  proposals: unknown[];
-  pagination?: any;
-} {
-  let proposals: unknown[] = [];
-  let pagination: any = undefined;
+// ====================
+// Multiple Proposals Hook
+// ====================
 
-  if (isObject(raw)) {
-    // Shape A: { proposals: [...] }
-    const arrA = (raw as Record<string, unknown>).proposals;
-    if (Array.isArray(arrA)) {
-      proposals = arrA;
-      pagination = (raw as Record<string, unknown>).pagination;
-      return { proposals, pagination };
-    }
+export function useProposalsByIds(ids: string[]) {
+  const { get } = useHttpClient();
 
-    // Shape B: { data: { proposals: [...] } }
-    const data = (raw as Record<string, unknown>).data;
-    if (isObject(data)) {
-      const arrB = (data as Record<string, unknown>).proposals;
-      if (Array.isArray(arrB)) {
-        proposals = arrB;
-        pagination = (data as Record<string, unknown>).pagination;
-      }
-    }
-  }
+  const results = useQueries({
+    queries: ids.map(id => ({
+      queryKey: qk.proposals.byId(id),
+      queryFn: async () => {
+        logDebug('Fetching proposal by ID', {
+          component: 'useProposalsByIds',
+          operation: 'queryFn',
+          proposalId: id,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        });
 
-  return { proposals, pagination };
-}
+        const response = await get<Proposal>(`/api/proposals/${id}`);
 
-function transformApiProposal(apiProposal: unknown): Proposal {
-  const p = isObject(apiProposal) ? apiProposal : {};
-
-  // Extract team lead
-  const teamLead =
-    typeof p.creatorName === 'string'
-      ? p.creatorName
-      : typeof (p as Record<string, unknown>).createdBy === 'string'
-        ? ((p as Record<string, unknown>).createdBy as string)
-        : 'Unassigned';
-
-  // Extract team members
-  const assignedRaw = (p as Record<string, unknown>).assignedTo;
-  const assignedTeam = Array.isArray(assignedRaw) ? assignedRaw : [];
-  const teamMembers = assignedTeam.map((member: unknown) => {
-    if (isObject(member)) {
-      const name = (member as any).name;
-      const id = (member as any).id;
-      return (typeof name === 'string' && name) || (typeof id === 'string' ? id : 'Unknown');
-    }
-    return 'Unknown';
+        return response;
+      },
+      enabled: !!id,
+      staleTime: 30000,
+      gcTime: 120000,
+    })),
   });
-
-  // Extract estimated value
-  const totalValueRaw = (p as Record<string, unknown>).totalValue;
-  const valueRaw = (p as Record<string, unknown>).value;
-  const estimatedValue =
-    typeof valueRaw === 'number' ? valueRaw : typeof totalValueRaw === 'number' ? totalValueRaw : 0;
-
-  // Extract due date
-  const due = (p as Record<string, unknown>).dueDate;
-  const dueDate = typeof due === 'string' || due instanceof Date ? due : new Date();
 
   return {
-    id: String((p as Record<string, unknown>).id || ''),
-    title: String((p as Record<string, unknown>).title || ''),
-    client:
-      (typeof (p as Record<string, unknown>).customerName === 'string' &&
-        ((p as Record<string, unknown>).customerName as string)) ||
-      (isObject((p as Record<string, unknown>).customer) &&
-      typeof ((p as Record<string, unknown>).customer as Record<string, unknown>).name === 'string'
-        ? String(((p as Record<string, unknown>).customer as Record<string, unknown>).name)
-        : 'Unknown Client'),
-    status: mapApiStatusToUIStatus(String((p as Record<string, unknown>).status || 'draft')),
-    priority: mapApiPriorityToUIPriority(
-      String((p as Record<string, unknown>).priority || 'medium')
-    ),
-    dueDate: new Date(dueDate),
-    createdAt: new Date(
-      String((p as Record<string, unknown>).createdAt || new Date().toISOString())
-    ),
-    updatedAt: new Date(
-      String((p as Record<string, unknown>).updatedAt || new Date().toISOString())
-    ),
-    estimatedValue,
-    teamLead,
-    assignedTeam: teamMembers,
-    progress: calculateProgress(String((p as Record<string, unknown>).status || 'draft')),
-    stage: getStageFromStatus(String((p as Record<string, unknown>).status || 'draft')),
-    riskLevel: calculateRiskLevel({
-      dueDate: new Date(dueDate),
-      status: mapApiStatusToUIStatus(String((p as Record<string, unknown>).status || 'draft')),
-      priority: mapApiPriorityToUIPriority(
-        String((p as Record<string, unknown>).priority || 'medium')
-      ),
-    }),
-    tags: Array.isArray((p as Record<string, unknown>).tags)
-      ? ((p as Record<string, unknown>).tags as string[])
-      : [],
-    description:
-      typeof (p as Record<string, unknown>).description === 'string'
-        ? ((p as Record<string, unknown>).description as string)
-        : undefined,
-    lastActivity: `Created on ${new Date(String((p as Record<string, unknown>).createdAt || new Date().toISOString())).toLocaleDateString()}`,
-    customer: isObject((p as Record<string, unknown>).customer)
-      ? {
-          id: String(((p as Record<string, unknown>).customer as Record<string, unknown>).id || ''),
-          name: String(
-            ((p as Record<string, unknown>).customer as Record<string, unknown>).name || ''
-          ),
-        }
-      : undefined,
+    data: results.map(r => (r.data ? r.data : null)).filter(Boolean) as Proposal[],
+    isLoading: results.some(r => r.isLoading),
+    isError: results.some(r => r.isError),
+    errors: results.filter(r => r.error).map(r => r.error),
   };
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+// ====================
+// Stats Hook
+// ====================
+
+export function useProposalStats() {
+  const { get } = useHttpClient();
+
+  return useQuery({
+    queryKey: qk.proposals.stats(),
+    queryFn: async () => {
+      logDebug('Fetching proposal stats', {
+        component: 'useProposalStats',
+        operation: 'queryFn',
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      const response = await get<{
+        total: number;
+        inProgress: number;
+        overdue: number;
+        winRate: number;
+        totalValue: number;
+      }>('/api/proposals/stats');
+
+      logInfo('Proposal stats fetched successfully', {
+        component: 'useProposalStats',
+        operation: 'queryFn',
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      return response;
+    },
+    staleTime: 60000, // 1 minute
+    gcTime: 300000, // 5 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 }
 
-function mapApiStatusToUIStatus(apiStatus: string): ProposalStatus {
-  switch (apiStatus?.toLowerCase()) {
-    case 'draft':
-      return ProposalStatus.DRAFT;
-    case 'in_review':
-      return ProposalStatus.IN_REVIEW;
-    case 'pending_approval':
-      return ProposalStatus.IN_REVIEW;
-    case 'approved':
-      return ProposalStatus.APPROVED;
-    case 'submitted':
-      return ProposalStatus.SUBMITTED;
-    case 'rejected':
-      return ProposalStatus.LOST;
-    default:
-      return ProposalStatus.DRAFT;
-  }
+// ====================
+// Mutation Hooks
+// ====================
+
+export function useCreateProposal() {
+  const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
+
+  return useMutation({
+    mutationFn: async (proposal: ProposalCreate) => {
+      logDebug('Creating proposal', {
+        component: 'useCreateProposal',
+        operation: 'mutationFn',
+        proposal: { title: proposal.basicInfo.title, customerId: proposal.basicInfo.customerId },
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      const response = await proposalService.createProposal(proposal);
+
+      logInfo('Proposal created successfully', {
+        component: 'useCreateProposal',
+        operation: 'mutationFn',
+        proposalId: response.id,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      return response;
+    },
+    onSuccess: (response, proposal) => {
+      // ✅ IMMEDIATE CACHE UPDATES - Following MIGRATION_LESSONS.md
+      queryClient.setQueryData(qk.proposals.byId(response.id), response);
+      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      queryClient.invalidateQueries({ queryKey: qk.proposals.stats() });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'proposal_created',
+        {
+          proposalId: response.id,
+          title: proposal.basicInfo.title,
+          customerId: proposal.basicInfo.customerId,
+          status: 'DRAFT', // Default status for new proposals
+          priority: proposal.basicInfo.priority,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        },
+        'high'
+      );
+    },
+    onError: error => {
+      logError('Failed to create proposal', error, {
+        component: 'useCreateProposal',
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+    },
+  });
 }
 
-function mapApiPriorityToUIPriority(apiPriority: string): ProposalPriority {
-  switch (apiPriority?.toLowerCase()) {
-    case 'high':
-    case 'urgent':
-      return ProposalPriority.HIGH;
-    case 'medium':
-      return ProposalPriority.MEDIUM;
-    case 'low':
-      return ProposalPriority.LOW;
-    default:
-      return ProposalPriority.MEDIUM;
-  }
+export function useUpdateProposal() {
+  const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
+
+  return useMutation({
+    mutationFn: async ({ id, proposal }: { id: string; proposal: ProposalUpdate }) => {
+      logDebug('Updating proposal', {
+        component: 'useUpdateProposal',
+        operation: 'mutationFn',
+        proposalId: id,
+        updates: Object.keys(proposal),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      const response = await proposalService.updateProposal(id, proposal);
+
+      logInfo('Proposal updated successfully', {
+        component: 'useUpdateProposal',
+        operation: 'mutationFn',
+        proposalId: id,
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      return response;
+    },
+    onSuccess: (response, { id, proposal }) => {
+      // ✅ FIXED: Aggressive cache management strategy from MIGRATION_LESSONS.md
+
+      // 1. Immediate cache updates
+      queryClient.setQueryData(qk.proposals.byId(id), response);
+
+      // 2. Comprehensive invalidation
+      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      queryClient.invalidateQueries({ queryKey: qk.proposals.byId(id) });
+      queryClient.refetchQueries({ queryKey: qk.proposals.byId(id) });
+
+      // 3. Invalidate related queries
+      queryClient.invalidateQueries({ queryKey: qk.proposals.stats() });
+      queryClient.invalidateQueries({ queryKey: qk.proposals.list('', 20, 'createdAt', 'desc') });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'proposal_updated',
+        {
+          proposalId: id,
+          updates: Object.keys(proposal),
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        },
+        'high'
+      );
+    },
+    onError: (error, { id }) => {
+      logError('Failed to update proposal', error, {
+        component: 'useUpdateProposal',
+        proposalId: id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+    },
+  });
 }
 
-function calculateProgress(status: string): number {
-  switch (status?.toLowerCase()) {
-    case 'draft':
-      return 10;
-    case 'in_review':
-      return 50;
-    case 'pending_approval':
-      return 75;
-    case 'approved':
-      return 90;
-    case 'submitted':
-      return 100;
-    default:
-      return 10;
-  }
+export function useDeleteProposal() {
+  const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      logDebug('Deleting proposal', {
+        component: 'useDeleteProposal',
+        operation: 'mutationFn',
+        proposalId: id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      const response = await proposalService.deleteProposal(id);
+
+      logInfo('Proposal deleted successfully', {
+        component: 'useDeleteProposal',
+        operation: 'mutationFn',
+        proposalId: id,
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      return response;
+    },
+    onSuccess: (response, id) => {
+      // Invalidate all proposal queries
+      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'proposal_deleted',
+        {
+          proposalId: id,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        },
+        'high'
+      );
+    },
+    onError: (error, id) => {
+      logError('Failed to delete proposal', error, {
+        component: 'useDeleteProposal',
+        proposalId: id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+    },
+  });
 }
 
-function getStageFromStatus(status: string): string {
-  switch (status?.toLowerCase()) {
-    case 'draft':
-      return 'Initial Draft';
-    case 'in_review':
-      return 'Under Review';
-    case 'pending_approval':
-      return 'Pending Approval';
-    case 'approved':
-      return 'Approved';
-    case 'submitted':
-      return 'Submitted';
-    case 'rejected':
-      return 'Rejected';
-    default:
-      return 'Unknown';
-  }
-}
+// ====================
+// Bulk Operations
+// ====================
 
-function calculateRiskLevel(
-  proposal: Pick<Proposal, 'dueDate' | 'status' | 'priority'>
-): 'low' | 'medium' | 'high' {
-  const daysUntilDeadline = Math.ceil(
-    (new Date(proposal.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
-  if (daysUntilDeadline < 7) return 'high';
-  if (daysUntilDeadline < 30) return 'medium';
-  return 'low';
+export function useDeleteProposalsBulk() {
+  const queryClient = useQueryClient();
+  const analytics = useOptimizedAnalytics();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      logDebug('Bulk deleting proposals', {
+        component: 'useDeleteProposalsBulk',
+        operation: 'mutationFn',
+        proposalIds: ids,
+        count: ids.length,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      const response = await fetch('/api/proposals/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      logInfo('Proposals bulk deleted successfully', {
+        component: 'useDeleteProposalsBulk',
+        operation: 'mutationFn',
+        deletedCount: data.data?.deleted || 0,
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      return data;
+    },
+    onSuccess: (response, ids) => {
+      // Invalidate all proposal queries
+      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+
+      // Track analytics
+      analytics.trackOptimized(
+        'proposals_bulk_deleted',
+        {
+          deletedCount: response.data?.deleted || 0,
+          proposalIds: ids,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        },
+        'high'
+      );
+    },
+    onError: (error, ids) => {
+      logError('Failed to bulk delete proposals', error, {
+        component: 'useDeleteProposalsBulk',
+        proposalIds: ids,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+    },
+  });
 }

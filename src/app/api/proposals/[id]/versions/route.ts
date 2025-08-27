@@ -33,6 +33,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       const rows = (await prisma.$queryRaw(
         PrismaLocal.sql`
           SELECT version, snapshot, "createdBy", "createdAt", "changeType", COALESCE("changesSummary", '') as "changesSummary"
+
           FROM proposal_versions
           WHERE "proposalId" = ${id} AND version IN (${vNum}, ${vNum - 1})
           ORDER BY version DESC
@@ -358,7 +359,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
     const createdArr = (await prisma.$queryRaw(
       PrismaLocal2.sql`INSERT INTO proposal_versions ("proposalId", version, "createdBy", "changeType", "changesSummary", snapshot, "productIds")
+
                  VALUES (${id}, ${nextVersion}, ${session.user.id}, ${changeType}, ${changesSummary ?? null}, ${snapshot as any}, ${productIds})
+
                  RETURNING id, "proposalId", version, "createdAt", "changeType", "changesSummary"`
     )) as Array<{
       id: string;

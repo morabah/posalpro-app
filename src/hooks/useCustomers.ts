@@ -15,19 +15,8 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-// Stable query keys
-export const qk = {
-  customers: {
-    all: ['customers'] as const,
-    lists: () => [...qk.customers.all, 'list'] as const,
-    list: (search: string, limit: number, sortBy: string, sortOrder: string) =>
-      [...qk.customers.lists(), search, limit, sortBy, sortOrder] as const,
-    details: () => [...qk.customers.all, 'detail'] as const,
-    detail: (id: string) => [...qk.customers.details(), id] as const,
-    search: (query: string, limit: number) =>
-      [...qk.customers.all, 'search', query, limit] as const,
-  },
-};
+// Using centralized query keys
+import { qk } from '@/features/customers/keys';
 
 // Infinite query for customer list with cursor pagination
 export function useInfiniteCustomers({

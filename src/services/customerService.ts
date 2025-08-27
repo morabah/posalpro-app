@@ -14,7 +14,7 @@ export const CustomerSchema = z.object({
   address: z.string().optional(),
   industry: z.string().optional(),
   companySize: z.string().optional(),
-  revenue: z.number().optional(),
+  revenue: z.number().optional().or(z.null()),
   status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']).optional(),
   tags: z.array(z.string()).optional(),
@@ -75,17 +75,15 @@ export class CustomerService {
     });
 
     try {
-      const response = await http<ApiResponse<CustomerList>>(
-        `${this.baseUrl}?${searchParams.toString()}`
-      );
+      const response = await http.get<CustomerList>(`${this.baseUrl}?${searchParams.toString()}`);
 
       logInfo('Customers fetched successfully', {
         component: 'CustomerService',
         operation: 'getCustomers',
-        count: response.ok ? response.data?.items?.length || 0 : 0,
+        count: response.items?.length || 0,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to fetch customers', {
         component: 'CustomerService',
@@ -104,7 +102,7 @@ export class CustomerService {
     });
 
     try {
-      const response = await http<ApiResponse<Customer>>(`${this.baseUrl}/${id}`);
+      const response = await http.get<Customer>(`${this.baseUrl}/${id}`);
 
       logInfo('Customer fetched successfully', {
         component: 'CustomerService',
@@ -112,7 +110,7 @@ export class CustomerService {
         customerId: id,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to fetch customer', {
         component: 'CustomerService',
@@ -134,19 +132,16 @@ export class CustomerService {
     });
 
     try {
-      const response = await http<ApiResponse<Customer>>(this.baseUrl, {
-        method: 'POST',
-        body: JSON.stringify(validatedData),
-      });
+      const response = await http.post<Customer>(this.baseUrl, validatedData);
 
       logInfo('Customer created successfully', {
         component: 'CustomerService',
         operation: 'createCustomer',
-        customerId: response.ok ? response.data?.id : undefined,
+        customerId: response.id,
         customerName: validatedData.name,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to create customer', {
         component: 'CustomerService',
@@ -168,10 +163,7 @@ export class CustomerService {
     });
 
     try {
-      const response = await http<ApiResponse<Customer>>(`${this.baseUrl}/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(validatedData),
-      });
+      const response = await http.put<Customer>(`${this.baseUrl}/${id}`, validatedData);
 
       logInfo('Customer updated successfully', {
         component: 'CustomerService',
@@ -179,7 +171,7 @@ export class CustomerService {
         customerId: id,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to update customer', {
         component: 'CustomerService',
@@ -199,9 +191,7 @@ export class CustomerService {
     });
 
     try {
-      const response = await http<ApiResponse<null>>(`${this.baseUrl}/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await http.delete(`${this.baseUrl}/${id}`);
 
       logInfo('Customer deleted successfully', {
         component: 'CustomerService',
@@ -209,7 +199,7 @@ export class CustomerService {
         customerId: id,
       });
 
-      return response;
+      return { ok: true, data: null };
     } catch (error) {
       logError('Failed to delete customer', {
         component: 'CustomerService',
@@ -229,18 +219,15 @@ export class CustomerService {
     });
 
     try {
-      const response = await http<ApiResponse<{ deleted: number }>>(`${this.baseUrl}/bulk-delete`, {
-        method: 'POST',
-        body: JSON.stringify({ ids }),
-      });
+      const response = await http.post<{ deleted: number }>(`${this.baseUrl}/bulk-delete`, { ids });
 
       logInfo('Customers deleted in bulk successfully', {
         component: 'CustomerService',
         operation: 'deleteCustomersBulk',
-        deletedCount: response.ok ? response.data?.deleted || 0 : 0,
+        deletedCount: response.deleted || 0,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to delete customers in bulk', {
         component: 'CustomerService',
@@ -261,7 +248,7 @@ export class CustomerService {
     });
 
     try {
-      const response = await http<ApiResponse<Customer[]>>(
+      const response = await http.get<Customer[]>(
         `${this.baseUrl}/search?q=${encodeURIComponent(query)}&limit=${limit}`
       );
 
@@ -269,10 +256,10 @@ export class CustomerService {
         component: 'CustomerService',
         operation: 'searchCustomers',
         query,
-        resultCount: response.ok ? response.data?.length || 0 : 0,
+        resultCount: response.length || 0,
       });
 
-      return response;
+      return { ok: true, data: response };
     } catch (error) {
       logError('Failed to search customers', {
         component: 'CustomerService',

@@ -170,3 +170,35 @@ export const logErrorWithContext = (
     errorName: error.name,
   });
 };
+
+// Validation logging
+export const logValidation = (
+  phase: string,
+  status: 'success' | 'error' | 'warning',
+  message: string,
+  description: string,
+  pattern: string,
+  metadata: LogMetadata = {}
+): void => {
+  logInfo('Validation completed', {
+    ...metadata,
+    phase,
+    status,
+    message,
+    description,
+    pattern,
+  });
+};
+
+// Performance logging
+export const logPerformance = (
+  operation: string,
+  duration: number,
+  metadata: LogMetadata = {}
+): void => {
+  logInfo('Performance metric', {
+    ...metadata,
+    operation,
+    duration,
+  });
+};

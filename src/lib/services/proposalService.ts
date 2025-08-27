@@ -943,7 +943,7 @@ export class ProposalService {
 
       const total = data.quantity * data.unitPrice * (1 - (data.discount || 0) / 100);
 
-      return await prisma.proposalProduct.create({
+      const created = await prisma.proposalProduct.create({
         data: {
           proposalId,
           productId: data.productId,
@@ -954,6 +954,11 @@ export class ProposalService {
           configuration: data.configuration ? toPrismaJson(data.configuration) : undefined,
         },
       });
+
+      // Recalculate proposal value after adding product
+      await this.calculateProposalValue(proposalId);
+
+      return created;
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);

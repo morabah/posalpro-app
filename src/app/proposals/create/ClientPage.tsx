@@ -115,7 +115,7 @@ export default function ClientPage() {
               </div>
             }
           >
-            <ProposalWizard editProposalId={editProposalId || undefined} />
+            <ProposalWizard />
           </Suspense>
 
           {process.env.NODE_ENV === 'development' && (

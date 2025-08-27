@@ -503,14 +503,14 @@ model Customer {
   address      String?
   industry     String?
   companySize  String?
-  revenue      Float?
+  revenue      Decimal?
   status       CustomerStatus    @default(ACTIVE)
   tier         CustomerTier      @default(STANDARD)
   tags         String[]
   metadata     Json?
   segmentation Json?
-  riskScore    Float?
-  ltv          Float?
+  riskScore    Decimal?
+  ltv          Decimal?
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   lastContact  DateTime?
@@ -557,7 +557,7 @@ model Proposal {
   status            ProposalStatus      @default(DRAFT)
   version           Int                 @default(1)
   priority          Priority            @default(MEDIUM)
-  value             Float?
+  value             Decimal?
   currency          String              @default("USD")
   validUntil        DateTime?
   createdAt         DateTime            @default(now())
@@ -567,7 +567,7 @@ model Proposal {
   approvedAt        DateTime?
   performanceData   Json?
   userStoryTracking Json?
-  riskScore         Float?
+  riskScore         Decimal?
   tags              String[]
   metadata          Json?
   cloudId           String?
@@ -575,7 +575,7 @@ model Proposal {
   syncStatus        String?             @default("PENDING")
   projectType       String?
   approvalCount     Int                 @default(0)
-  completionRate    Float               @default(0)
+  completionRate    Decimal             @default(0)
   creatorEmail      String?
   creatorName       String?
   customerName      String?
@@ -584,7 +584,7 @@ model Proposal {
   productCount      Int                 @default(0)
   sectionCount      Int                 @default(0)
   statsUpdatedAt    DateTime?
-  totalValue        Float?
+  totalValue        Decimal?
   approvals         ApprovalExecution[]
   products          ProposalProduct[]
   sections          ProposalSection[]
@@ -646,9 +646,9 @@ model ProposalProduct {
   proposalId         String
   productId          String
   quantity           Int               @default(1)
-  unitPrice          Float
-  discount           Float             @default(0)
-  total              Float
+  unitPrice          Decimal
+  discount           Decimal           @default(0)
+  total              Decimal
   configuration      Json?
   selectionAnalytics Json?
   createdAt          DateTime          @default(now())
@@ -669,7 +669,7 @@ model Product {
   name              String
   description       String?
   sku               String                    @unique
-  price             Float
+  price             Decimal
   currency          String                    @default("USD")
   category          String[]
   tags              String[]

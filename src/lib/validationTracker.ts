@@ -4,7 +4,7 @@
  * to logging and performance monitoring systems
  */
 
-import { logValidation, logInfo, logWarn } from './logger';
+import { logInfo, logValidation, logWarn } from './logger';
 import { trackPerformanceSync } from './performance';
 
 // Validation status enum
@@ -233,8 +233,10 @@ class ValidationTracker {
         }
       }
 
-      // Log validation
-      logValidation(phase, status, details, lessons, patterns);
+      // Log validation - map status to expected values
+      const mappedStatus =
+        status === 'failed' ? 'error' : status === 'in_progress' ? 'warning' : status;
+      logValidation(phase, mappedStatus, details, lessons || '', patterns || '');
 
       return result;
     };

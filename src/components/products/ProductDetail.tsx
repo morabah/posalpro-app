@@ -36,7 +36,7 @@ export function ProductDetail({ productId }: ProductDetailProps) {
     );
   }
 
-  if (isError || !product || !product.success || !product.data) {
+  if (isError || !product) {
     logError('Failed to load product details', {
       component: 'ProductDetail',
       operation: 'load',
@@ -58,7 +58,7 @@ export function ProductDetail({ productId }: ProductDetailProps) {
     );
   }
 
-  const productData = product.data;
+  const productData = product;
 
   logInfo('Product details loaded', {
     component: 'ProductDetail',
@@ -118,7 +118,7 @@ export function ProductDetail({ productId }: ProductDetailProps) {
                 {new Intl.NumberFormat('en-US', {
                   style: 'currency',
                   currency: productData.currency || 'USD',
-                }).format(productData.price)}
+                }).format(productData.price || 0)}
               </p>
             </div>
             <div>

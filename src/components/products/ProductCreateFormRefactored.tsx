@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { useProductForm } from '@/hooks/useProductForm';
 import { useCreateProduct } from '@/hooks/useProducts';
 import { logInfo } from '@/lib/logger';
+import { ProductCreate } from '@/services/productService';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -39,15 +40,14 @@ export function ProductCreateFormRefactored() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Use the common validation logic from the hook
-    const validationResult = await useProductForm({
-      mode: 'create',
-    }).handleSubmit(e);
-
-    if (!validationResult) return;
+    // Validate form
+    const errors = validation.validateAll();
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
 
     try {
-      const result = await createProduct.mutateAsync(validation.formData);
+      const result = await createProduct.mutateAsync(validation.formData as ProductCreate);
 
       if (result && result.ok && result.data) {
         toast.success('Product created successfully!');
@@ -90,7 +90,7 @@ export function ProductCreateFormRefactored() {
           />
 
           {/* Error Summary */}
-          {validation.hasErrors && <FormErrorSummary errors={validation.errors} />}
+          {validation.hasErrors && <FormErrorSummary errors={validation.validationErrors} />}
 
           {/* Form Actions */}
           <FormActions>

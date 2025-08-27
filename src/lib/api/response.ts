@@ -1,12 +1,39 @@
-// Typed API response envelopes for consistent API responses
+/**
+ * PosalPro MVP2 - API Response Types
+ * Standardized response formats for consistent API communication
+ */
+
+// Standard API response envelope
 export type ApiResponse<T> =
   | { ok: true; data: T }
   | { ok: false; code: string; message: string; details?: unknown };
 
-// Helper function to create successful responses
-export const ok = <T>(data: T): ApiResponse<T> => ({
+// Cursor pagination response format (recommended for all lists)
+export type CursorPaginatedResponse<T> = {
+  items: T[];
+  nextCursor: string | null;
+  meta?: {
+    total?: number;
+    hasNextPage?: boolean;
+    hasPrevPage?: boolean;
+  };
+};
+
+// Helper function for successful responses
+export const ok = <T>(data: T): ApiResponse<T> => ({ ok: true, data });
+
+// Helper function for cursor paginated responses
+export const okPaginated = <T>(
+  items: T[],
+  nextCursor: string | null,
+  meta?: any
+): ApiResponse<CursorPaginatedResponse<T>> => ({
   ok: true,
-  data,
+  data: {
+    items,
+    nextCursor,
+    meta,
+  },
 });
 
 // Helper function to create error responses

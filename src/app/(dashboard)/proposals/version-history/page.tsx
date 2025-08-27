@@ -385,8 +385,8 @@ export default function ProposalVersionHistoryPage() {
           <div>
             <span className="font-medium text-green-700">Added:</span>
             <ul className="list-disc list-inside text-gray-800">
-              {diff.added.map(id => (
-                <li key={`add-${id}`}>{productNames[id] || id}</li>
+              {diff.added.map((id, index) => (
+                <li key={`add-${id}-${index}`}>{productNames[id] || id}</li>
               ))}
             </ul>
           </div>
@@ -395,8 +395,8 @@ export default function ProposalVersionHistoryPage() {
           <div>
             <span className="font-medium text-red-700">Removed:</span>
             <ul className="list-disc list-inside text-gray-800">
-              {diff.removed.map(id => (
-                <li key={`rem-${id}`}>{productNames[id] || id}</li>
+              {diff.removed.map((id, index) => (
+                <li key={`rem-${id}-${index}`}>{productNames[id] || id}</li>
               ))}
             </ul>
           </div>
@@ -405,8 +405,8 @@ export default function ProposalVersionHistoryPage() {
           <div>
             <span className="font-medium text-blue-700">Updated:</span>
             <ul className="list-disc list-inside text-gray-800">
-              {diff.updated.map(u => (
-                <li key={`upd-${u.productId}`}>
+              {diff.updated.map((u, index) => (
+                <li key={`upd-${u.productId}-${index}`}>
                   {productNames[u.productId] || u.productId}: qty {String(u.from.quantity || 'N/A')}{' '}
                   → {String(u.to.quantity || 'N/A')}, price {String(u.from.unitPrice || 'N/A')} →{' '}
                   {String(u.to.unitPrice || 'N/A')}, discount {String(u.from.discount || 'N/A')}% →{' '}

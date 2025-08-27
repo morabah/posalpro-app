@@ -91,7 +91,11 @@
     "audit:patterns": "node scripts/audit-design-patterns.js",
     "migrate:new-arch": "node scripts/migrate-to-new-architecture.js",
     "migrate:list": "node scripts/migrate-to-new-architecture.js --list",
-    "migrate:all": "node scripts/migrate-to-new-architecture.js --all"
+    "migrate:all": "node scripts/migrate-to-new-architecture.js --all",
+    "test:proposal-edit:direct": "node scripts/direct-proposal-edit-test.js",
+    "test:proposal-edit:basic": "node scripts/basic-proposal-edit-test.js",
+    "test:https-cli": "node scripts/test-https-cli.js",
+    "test:edit-fixed": "node scripts/test-edit-fixed.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,json,css,scss}": [

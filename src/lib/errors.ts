@@ -80,6 +80,9 @@ export const timeoutError = (message = 'Request timeout', details?: unknown) =>
     metadata: { userSafeDetails: details as Record<string, unknown> },
   });
 
+// Import Prisma error handling
+import { isPrismaError, handlePrismaError } from './errors/PrismaErrorHandler';
+
 // Convert any error to a consistent JSON format
 export function errorToJson(error: unknown): {
   code: string;
@@ -91,6 +94,16 @@ export function errorToJson(error: unknown): {
       code: error.code,
       message: error.message,
       details: error.metadata?.userSafeDetails,
+    };
+  }
+
+  // Handle Prisma errors
+  if (isPrismaError(error)) {
+    const standardError = handlePrismaError(error);
+    return {
+      code: standardError.code,
+      message: standardError.message,
+      details: standardError.metadata?.userSafeDetails,
     };
   }
 

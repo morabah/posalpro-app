@@ -7,7 +7,7 @@
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
-import { logError, logInfo } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 import { z } from 'zod';
 
 // ====================
@@ -17,7 +17,7 @@ import { z } from 'zod';
 const ProductUpdateSchema = z.object({
   name: z.string().min(1, 'Product name is required').max(200).optional(),
   description: z.string().max(1000).optional(),
-  price: z.number().positive('Price must be positive').optional(),
+  price: z.number().positive('Price must be positive').optional().or(z.null()),
   currency: z.string().default('USD').optional(),
   sku: z.string().optional(),
   category: z.array(z.string()).optional(),
@@ -131,6 +131,7 @@ export const PUT = createRoute(
         userId: user.id,
         productId: id,
         updateFields: Object.keys(body!),
+        updateData: body,
       });
 
       // Check if product exists
@@ -170,6 +171,13 @@ export const PUT = createRoute(
         updateData.userStoryMappings = body!.userStoryMappings;
 
       // Update product
+      logDebug('Saving product update to database', {
+        component: 'ProductAPI',
+        operation: 'PUT',
+        productId: id,
+        updateData,
+      });
+
       const updatedProduct = await prisma.product.update({
         where: { id },
         data: updateData,

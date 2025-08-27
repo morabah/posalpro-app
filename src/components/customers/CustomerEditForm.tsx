@@ -29,7 +29,6 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
     status: 'ACTIVE',
     tier: 'STANDARD',
     tags: [],
-    notes: '',
   });
 
   // Update form data when customer data loads
@@ -47,7 +46,6 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
         status: customerData.data.status || 'ACTIVE',
         tier: customerData.data.tier || 'STANDARD',
         tags: customerData.data.tags || [],
-        notes: customerData.data.notes || '',
       });
     }
   }, [customerData]);
@@ -227,21 +225,6 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                   />
                 </div>
               </div>
-            </div>
-
-            {/* Additional Information */}
-            <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-                Notes
-              </label>
-              <textarea
-                id="notes"
-                value={formData.notes || ''}
-                onChange={e => handleInputChange('notes', e.target.value)}
-                rows={4}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Additional notes about the customer..."
-              />
             </div>
 
             {/* Form Actions */}

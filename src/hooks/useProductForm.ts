@@ -23,7 +23,7 @@ interface UseProductFormOptions {
 
 interface UseProductFormReturn {
   // Form state
-  validation: ReturnType<typeof useFormValidation>;
+  validation: ReturnType<typeof useFormValidation<any>>;
   skuValidation: ReturnType<typeof useSkuValidation>;
 
   // Data fetching

@@ -416,7 +416,7 @@ function ProductTable() {
                     {categoryDisplay}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${product.price.toFixed(2)} {product.currency}
+                    ${(product.price || 0).toFixed(2)} {product.currency}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge variant={product.isActive ? 'success' : 'secondary'}>

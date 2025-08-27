@@ -1,173 +1,434 @@
-// HTTP client helper with error propagation and request ID support
-export type ApiError = {
-  code?: string;
-  message: string;
-  details?: unknown;
-};
+/**
+ * PosalPro MVP2 - Centralized HTTP Client Helper
+ * Provides consistent error handling, request ID tracking, and TypeScript support
+ * Follows best practices for API communication with proper error envelopes
+ */
 
-export interface HttpOptions extends RequestInit {
+import { logDebug, logError, logInfo } from '@/lib/logger';
+
+// API response types
+export type ApiResponse<T = unknown> =
+  | { ok: true; data: T }
+  | { ok: false; code: string; message: string; details?: unknown };
+
+export type ApiError = { ok: false; code: string; message: string; details?: unknown };
+
+// HTTP client configuration
+export interface HttpClientConfig {
+  baseURL?: string;
+  defaultHeaders?: Record<string, string>;
   timeout?: number;
   retries?: number;
   retryDelay?: number;
 }
 
-export interface HttpResponse<T> {
-  data: T;
-  status: number;
-  headers: Headers;
-  requestId?: string;
+// HTTP client options
+export interface HttpClientOptions extends RequestInit {
+  timeout?: number;
+  retries?: number;
+  retryDelay?: number;
+  skipErrorHandling?: boolean;
 }
 
-// Default HTTP options
-const DEFAULT_OPTIONS: HttpOptions = {
-  timeout: 10000, // 10 seconds
+// HTTP client error
+export class HttpClientError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code: string,
+    public requestId?: string,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'HttpClientError';
+  }
+}
+
+// Default configuration
+const DEFAULT_CONFIG: HttpClientConfig = {
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '',
+  defaultHeaders: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 30000, // 30 seconds
   retries: 1,
   retryDelay: 1000, // 1 second
 };
 
-// Create headers with common defaults
-function createHeaders(init?: HeadersInit): Headers {
-  const headers = new Headers(init);
+/**
+ * Centralized HTTP client with error handling and request ID tracking
+ */
+export class HttpClient {
+  private config: HttpClientConfig;
 
-  // Set default content type if not provided
-  if (!headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
+  constructor(config: HttpClientConfig = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  return headers;
-}
+  /**
+   * Make an HTTP request with proper error handling
+   */
+  async request<T = unknown>(input: RequestInfo, options: HttpClientOptions = {}): Promise<T> {
+    const url = this.buildUrl(input);
+    const requestId = this.generateRequestId();
+    const startTime = Date.now();
 
-// Parse error response
-async function parseErrorResponse(response: Response): Promise<ApiError> {
-  try {
-    const payload = await response.json();
-    return {
-      code: payload.code || `HTTP_${response.status}`,
-      message: payload.message || `HTTP ${response.status}: ${response.statusText}`,
-      details: payload.details,
+    // Prepare request options
+    const requestOptions: RequestInit = {
+      ...options,
+      headers: {
+        ...this.config.defaultHeaders,
+        ...options.headers,
+        'x-request-id': requestId,
+      },
     };
-  } catch {
-    return {
-      code: `HTTP_${response.status}`,
-      message: `HTTP ${response.status}: ${response.statusText}`,
-    };
-  }
-}
 
-// Create timeout promise
-function createTimeoutPromise(timeout: number): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(`Request timeout after ${timeout}ms`));
-    }, timeout);
-  });
-}
+    // Add timeout support
+    const timeoutPromise = this.createTimeoutPromise(options.timeout || this.config.timeout!);
+    const fetchPromise = this.makeRequest(url, requestOptions, requestId, startTime);
 
-// Retry logic
-async function retryRequest<T>(
-  requestFn: () => Promise<T>,
-  retries: number,
-  delay: number
-): Promise<T> {
-  try {
-    return await requestFn();
-  } catch (error) {
-    if (retries > 0) {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return retryRequest(requestFn, retries - 1, delay);
+    try {
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+      return this.handleResponse<T>(response, requestId, startTime);
+    } catch (error) {
+      return this.handleError(error, url, requestId, startTime, options);
     }
-    throw error;
-  }
-}
-
-// Main HTTP function
-export async function http<T>(input: RequestInfo, init?: HttpOptions): Promise<T> {
-  const options = { ...DEFAULT_OPTIONS, ...init };
-  const { timeout, retries, retryDelay, ...fetchOptions } = options;
-
-  const requestFn = async (): Promise<T> => {
-    const headers = createHeaders(fetchOptions.headers);
-
-    const fetchPromise = fetch(input, {
-      ...fetchOptions,
-      headers,
-      cache: 'no-store', // Always fetch fresh data
-    });
-
-    // Race between fetch and timeout
-    const response = (await Promise.race([
-      fetchPromise,
-      createTimeoutPromise(timeout!),
-    ])) as Response;
-
-    // Extract request ID from response headers
-    const requestId = response.headers.get('x-request-id');
-
-    if (!response.ok) {
-      const error = await parseErrorResponse(response);
-      const httpError = new Error(error.message) as Error & {
-        status: number;
-        code: string;
-        details?: unknown;
-        requestId?: string;
-      };
-
-      httpError.status = response.status;
-      httpError.code = error.code || `HTTP_${response.status}`;
-      httpError.details = error.details;
-      httpError.requestId = requestId || undefined;
-
-      throw httpError;
-    }
-
-    // Parse JSON response
-    const data = await response.json();
-
-    // Add request ID to the response if available
-    if (requestId && typeof data === 'object' && data !== null) {
-      (data as any).requestId = requestId;
-    }
-
-    return data;
-  };
-
-  // Apply retry logic if retries > 0
-  if (retries! > 0) {
-    return retryRequest(requestFn, retries!, retryDelay!);
   }
 
-  return requestFn();
-}
+  /**
+   * GET request
+   */
+  async get<T = unknown>(input: RequestInfo, options: HttpClientOptions = {}): Promise<T> {
+    return this.request<T>(input, { ...options, method: 'GET' });
+  }
 
-// Convenience methods for different HTTP verbs
-export const httpClient = {
-  get: <T>(url: string, options?: HttpOptions): Promise<T> =>
-    http<T>(url, { ...options, method: 'GET' }),
-
-  post: <T>(url: string, data?: unknown, options?: HttpOptions): Promise<T> =>
-    http<T>(url, {
+  /**
+   * POST request
+   */
+  async post<T = unknown>(
+    input: RequestInfo,
+    data?: unknown,
+    options: HttpClientOptions = {}
+  ): Promise<T> {
+    return this.request<T>(input, {
       ...options,
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
-    }),
+    });
+  }
 
-  put: <T>(url: string, data?: unknown, options?: HttpOptions): Promise<T> =>
-    http<T>(url, {
+  /**
+   * PUT request
+   */
+  async put<T = unknown>(
+    input: RequestInfo,
+    data?: unknown,
+    options: HttpClientOptions = {}
+  ): Promise<T> {
+    return this.request<T>(input, {
       ...options,
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
-    }),
+    });
+  }
 
-  patch: <T>(url: string, data?: unknown, options?: HttpOptions): Promise<T> =>
-    http<T>(url, {
+  /**
+   * PATCH request
+   */
+  async patch<T = unknown>(
+    input: RequestInfo,
+    data?: unknown,
+    options: HttpClientOptions = {}
+  ): Promise<T> {
+    return this.request<T>(input, {
       ...options,
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
-    }),
+    });
+  }
 
-  delete: <T>(url: string, options?: HttpOptions): Promise<T> =>
-    http<T>(url, { ...options, method: 'DELETE' }),
+  /**
+   * DELETE request
+   */
+  async delete<T = unknown>(input: RequestInfo, options: HttpClientOptions = {}): Promise<T> {
+    return this.request<T>(input, { ...options, method: 'DELETE' });
+  }
+
+  /**
+   * Build full URL with base URL
+   */
+  private buildUrl(input: RequestInfo): string {
+    if (typeof input === 'string') {
+      return input.startsWith('http') ? input : `${this.config.baseURL}${input}`;
+    }
+    return input.url;
+  }
+
+  /**
+   * Generate unique request ID
+   */
+  private generateRequestId(): string {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Create timeout promise
+   */
+  private createTimeoutPromise(timeout: number): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new HttpClientError('Request timeout', 408, 'TIMEOUT'));
+      }, timeout);
+    });
+  }
+
+  /**
+   * Make the actual HTTP request with retry logic
+   */
+  private async makeRequest(
+    url: string,
+    options: RequestInit,
+    requestId: string,
+    startTime: number,
+    attempt: number = 1
+  ): Promise<Response> {
+    try {
+      logDebug('HTTP request start', {
+        component: 'HttpClient',
+        operation: 'makeRequest',
+        url,
+        method: options.method || 'GET',
+        requestId,
+        attempt,
+      });
+
+      const response = await fetch(url, options);
+
+      const duration = Date.now() - startTime;
+
+      logInfo('HTTP request completed', {
+        component: 'HttpClient',
+        operation: 'makeRequest',
+        url,
+        method: options.method || 'GET',
+        status: response.status,
+        duration,
+        requestId,
+        attempt,
+      });
+
+      return response;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+
+      logError('HTTP request failed', {
+        component: 'HttpClient',
+        operation: 'makeRequest',
+        url,
+        method: options.method || 'GET',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        duration,
+        requestId,
+        attempt,
+      });
+
+      // Retry logic for network errors
+      if (attempt < (this.config.retries || 1) && this.isRetryableError(error)) {
+        const delay = (this.config.retryDelay || 1000) * attempt;
+        await this.delay(delay);
+        return this.makeRequest(url, options, requestId, startTime, attempt + 1);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Handle successful response
+   */
+  private async handleResponse<T>(
+    response: Response,
+    requestId: string,
+    startTime: number
+  ): Promise<T> {
+    const duration = Date.now() - startTime;
+    const contentType = response.headers.get('content-type');
+
+    // Parse response body
+    let data: unknown;
+    try {
+      if (contentType?.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+    } catch (error) {
+      throw new HttpClientError(
+        'Failed to parse response',
+        response.status,
+        'PARSE_ERROR',
+        requestId
+      );
+    }
+
+    // Handle non-2xx responses
+    if (!response.ok) {
+      const errorData = data as ApiError | undefined;
+      throw new HttpClientError(
+        errorData?.message || `HTTP ${response.status}`,
+        response.status,
+        errorData?.code || 'HTTP_ERROR',
+        requestId,
+        errorData?.details
+      );
+    }
+
+    // Handle API response envelope
+    if (data && typeof data === 'object' && ('ok' in data || 'success' in data)) {
+      const apiResponse = data as any;
+      const isSuccess = apiResponse.ok !== undefined ? apiResponse.ok : apiResponse.success;
+      const message = apiResponse.message || 'API request failed';
+      const code = apiResponse.code || 'API_ERROR';
+
+      if (!isSuccess) {
+        throw new HttpClientError(message, response.status, code, requestId, apiResponse.details);
+      }
+      return apiResponse.data;
+    }
+
+    // Return raw data if no envelope
+    return data as T;
+  }
+
+  /**
+   * Handle request errors
+   */
+  private handleError(
+    error: unknown,
+    url: string,
+    requestId: string,
+    startTime: number,
+    options: HttpClientOptions
+  ): never {
+    const duration = Date.now() - startTime;
+
+    // If error handling is skipped, re-throw
+    if (options.skipErrorHandling) {
+      throw error;
+    }
+
+    // Handle HttpClientError (already processed)
+    if (error instanceof HttpClientError) {
+      throw error;
+    }
+
+    // Handle network errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new HttpClientError(
+        'Network error - please check your connection',
+        0,
+        'NETWORK_ERROR',
+        requestId
+      );
+    }
+
+    // Handle timeout errors
+    if (error instanceof HttpClientError && error.code === 'TIMEOUT') {
+      throw new HttpClientError('Request timeout - please try again', 408, 'TIMEOUT', requestId);
+    }
+
+    // Handle unknown errors
+    logError('HTTP client unknown error', {
+      component: 'HttpClient',
+      operation: 'handleError',
+      url,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration,
+      requestId,
+    });
+
+    throw new HttpClientError(
+      error instanceof Error ? error.message : 'Unknown error',
+      500,
+      'UNKNOWN_ERROR',
+      requestId
+    );
+  }
+
+  /**
+   * Check if error is retryable
+   */
+  private isRetryableError(error: unknown): boolean {
+    if (error instanceof HttpClientError) {
+      // Retry on 5xx errors and network errors
+      return error.status >= 500 || error.status === 0;
+    }
+
+    // Retry on network errors
+    if (error instanceof TypeError) {
+      return error.message.includes('fetch') || error.message.includes('network');
+    }
+
+    return false;
+  }
+
+  /**
+   * Delay utility for retries
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Global HTTP client instance
+export const httpClient = new HttpClient();
+
+// HTTP client interface with both function and method signatures
+interface HttpClientInterface {
+  <T = unknown>(input: RequestInfo, options?: HttpClientOptions): Promise<T>;
+  get: <T = unknown>(input: RequestInfo, options?: HttpClientOptions) => Promise<T>;
+  post: <T = unknown>(
+    input: RequestInfo,
+    data?: unknown,
+    options?: HttpClientOptions
+  ) => Promise<T>;
+  put: <T = unknown>(input: RequestInfo, data?: unknown, options?: HttpClientOptions) => Promise<T>;
+  patch: <T = unknown>(
+    input: RequestInfo,
+    data?: unknown,
+    options?: HttpClientOptions
+  ) => Promise<T>;
+  delete: <T = unknown>(input: RequestInfo, options?: HttpClientOptions) => Promise<T>;
+  request: <T = unknown>(input: RequestInfo, options?: HttpClientOptions) => Promise<T>;
+}
+
+// Create the HTTP client function with methods
+const httpFunction = <T = unknown>(input: RequestInfo, options?: HttpClientOptions): Promise<T> => {
+  return httpClient.request<T>(input, options);
 };
 
-// Export the main http function as default
-export default http;
+// Add convenience methods to the function
+Object.assign(httpFunction, {
+  get: <T = unknown>(input: RequestInfo, options?: HttpClientOptions) =>
+    httpClient.get<T>(input, options),
+
+  post: <T = unknown>(input: RequestInfo, data?: unknown, options?: HttpClientOptions) =>
+    httpClient.post<T>(input, data, options),
+
+  put: <T = unknown>(input: RequestInfo, data?: unknown, options?: HttpClientOptions) =>
+    httpClient.put<T>(input, data, options),
+
+  patch: <T = unknown>(input: RequestInfo, data?: unknown, options?: HttpClientOptions) =>
+    httpClient.patch<T>(input, data, options),
+
+  delete: <T = unknown>(input: RequestInfo, options?: HttpClientOptions) =>
+    httpClient.delete<T>(input, options),
+
+  request: <T = unknown>(input: RequestInfo, options?: HttpClientOptions) =>
+    httpClient.request<T>(input, options),
+});
+
+// Export the function with methods attached
+export const http = httpFunction as HttpClientInterface;
+
+// Types are already exported above

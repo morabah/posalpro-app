@@ -27,14 +27,14 @@ const CustomerUpdateSchema = z.object({
   address: z.string().max(500).optional(),
   industry: z.string().max(100).optional(),
   companySize: z.string().max(50).optional(),
-  revenue: z.number().min(0).optional().or(z.undefined()),
+  revenue: z.number().min(0).optional().or(z.null()),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']).optional(),
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.any()).optional(),
   segmentation: z.record(z.any()).optional(),
-  riskScore: z.number().min(0).max(100).optional().or(z.undefined()),
-  ltv: z.number().min(0).optional().or(z.undefined()),
+  riskScore: z.number().min(0).max(100).optional().or(z.null()),
+  ltv: z.number().min(0).optional().or(z.null()),
 });
 
 // ====================

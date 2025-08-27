@@ -35,7 +35,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
   const { data: tagsData, isLoading: tagsLoading } = useProductTags();
 
   // ✅ Get product data safely
-  const productData = product?.success && product?.data ? product.data : null;
+  const productData = product || null;
 
   // ✅ REUSABLE VALIDATION HOOK - Initialize with product data if available
   const validation = useFormValidation(
@@ -186,7 +186,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
     );
   }
 
-  if (isError || !product || !product.success || !product.data) {
+  if (isError || !product) {
     logError('Failed to load product for editing', {
       component: 'ProductEditForm',
       operation: 'load',

@@ -1,3 +1,5 @@
+'use client';
+
 // Customer UI State Store - New Architecture
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';

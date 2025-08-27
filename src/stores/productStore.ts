@@ -4,11 +4,10 @@
  * Hypothesis: H5 (Modern data fetching improves performance and user experience)
  */
 
+import type { Product } from '@/services/productService';
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { shallow } from 'zustand/shallow';
-import type { Product } from '@/services/productService';
 
 // ====================
 // Store Types
@@ -28,17 +27,17 @@ interface ProductState {
   productIds: string[];
   selectedProducts: string[];
   filters: ProductFilters;
-  
+
   // UI State
   isLoading: boolean;
   error: string | null;
   hasMore: boolean;
   nextCursor: string | null;
-  
+
   // Bulk Operations
   bulkOperationInProgress: boolean;
   bulkOperationType: 'delete' | 'update' | null;
-  
+
   // Statistics
   stats: {
     total: number;
@@ -56,26 +55,26 @@ interface ProductActions {
   updateProduct: (id: string, updates: Partial<Product>) => void;
   removeProduct: (id: string) => void;
   clearProducts: () => void;
-  
+
   // Selection Management
   selectProduct: (id: string) => void;
   deselectProduct: (id: string) => void;
   toggleProductSelection: (id: string) => void;
   selectAllProducts: () => void;
   clearSelection: () => void;
-  
+
   // Filter Management
   setFilters: (filters: Partial<ProductFilters>) => void;
   resetFilters: () => void;
-  
+
   // UI State Management
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setPagination: (hasMore: boolean, nextCursor: string | null) => void;
-  
+
   // Bulk Operations
   setBulkOperation: (type: 'delete' | 'update' | null, inProgress: boolean) => void;
-  
+
   // Statistics
   setStats: (stats: ProductState['stats']) => void;
 }
@@ -98,17 +97,17 @@ const initialState: ProductState = {
   productIds: [],
   selectedProducts: [],
   filters: initialFilters,
-  
+
   // UI State
   isLoading: false,
   error: null,
   hasMore: true,
   nextCursor: null,
-  
+
   // Bulk Operations
   bulkOperationInProgress: false,
   bulkOperationType: null,
-  
+
   // Statistics
   stats: null,
 };
@@ -122,73 +121,73 @@ export const useProductStore = create<ProductStore>()(
     subscribeWithSelector(
       immer((set, get) => ({
         ...initialState,
-        
+
         // Product Management
         setProducts: (products: Product[]) => {
-          set((state) => {
+          set(state => {
             const productMap: Record<string, Product> = {};
             const ids: string[] = [];
-            
-            products.forEach((product) => {
+
+            products.forEach(product => {
               productMap[product.id] = product;
               ids.push(product.id);
             });
-            
+
             state.products = productMap;
             state.productIds = ids;
           });
         },
-        
+
         addProduct: (product: Product) => {
-          set((state) => {
+          set(state => {
             state.products[product.id] = product;
             if (!state.productIds.includes(product.id)) {
               state.productIds.unshift(product.id);
             }
           });
         },
-        
+
         updateProduct: (id: string, updates: Partial<Product>) => {
-          set((state) => {
+          set(state => {
             if (state.products[id]) {
               state.products[id] = { ...state.products[id], ...updates };
             }
           });
         },
-        
+
         removeProduct: (id: string) => {
-          set((state) => {
+          set(state => {
             delete state.products[id];
-            state.productIds = state.productIds.filter((pid) => pid !== id);
-            state.selectedProducts = state.selectedProducts.filter((pid) => pid !== id);
+            state.productIds = state.productIds.filter(pid => pid !== id);
+            state.selectedProducts = state.selectedProducts.filter(pid => pid !== id);
           });
         },
-        
+
         clearProducts: () => {
-          set((state) => {
+          set(state => {
             state.products = {};
             state.productIds = [];
             state.selectedProducts = [];
           });
         },
-        
+
         // Selection Management
         selectProduct: (id: string) => {
-          set((state) => {
+          set(state => {
             if (!state.selectedProducts.includes(id)) {
               state.selectedProducts.push(id);
             }
           });
         },
-        
+
         deselectProduct: (id: string) => {
-          set((state) => {
-            state.selectedProducts = state.selectedProducts.filter((pid) => pid !== id);
+          set(state => {
+            state.selectedProducts = state.selectedProducts.filter(pid => pid !== id);
           });
         },
-        
+
         toggleProductSelection: (id: string) => {
-          set((state) => {
+          set(state => {
             const index = state.selectedProducts.indexOf(id);
             if (index === -1) {
               state.selectedProducts.push(id);
@@ -197,63 +196,63 @@ export const useProductStore = create<ProductStore>()(
             }
           });
         },
-        
+
         selectAllProducts: () => {
-          set((state) => {
+          set(state => {
             state.selectedProducts = [...state.productIds];
           });
         },
-        
+
         clearSelection: () => {
-          set((state) => {
+          set(state => {
             state.selectedProducts = [];
           });
         },
-        
+
         // Filter Management
         setFilters: (filters: Partial<ProductFilters>) => {
-          set((state) => {
+          set(state => {
             state.filters = { ...state.filters, ...filters };
           });
         },
-        
+
         resetFilters: () => {
-          set((state) => {
+          set(state => {
             state.filters = initialFilters;
           });
         },
-        
+
         // UI State Management
         setLoading: (loading: boolean) => {
-          set((state) => {
+          set(state => {
             state.isLoading = loading;
           });
         },
-        
+
         setError: (error: string | null) => {
-          set((state) => {
+          set(state => {
             state.error = error;
           });
         },
-        
+
         setPagination: (hasMore: boolean, nextCursor: string | null) => {
-          set((state) => {
+          set(state => {
             state.hasMore = hasMore;
             state.nextCursor = nextCursor;
           });
         },
-        
+
         // Bulk Operations
         setBulkOperation: (type: 'delete' | 'update' | null, inProgress: boolean) => {
-          set((state) => {
+          set(state => {
             state.bulkOperationType = type;
             state.bulkOperationInProgress = inProgress;
           });
         },
-        
+
         // Statistics
         setStats: (stats: ProductState['stats']) => {
-          set((state) => {
+          set(state => {
             state.stats = stats;
           });
         },
@@ -279,34 +278,35 @@ export const useProductStore = create<ProductStore>()(
 // Store Actions (Bound)
 // ====================
 
-export const useProductActions = () => useProductStore((state) => ({
-  // Product Management
-  setProducts: state.setProducts,
-  addProduct: state.addProduct,
-  updateProduct: state.updateProduct,
-  removeProduct: state.removeProduct,
-  clearProducts: state.clearProducts,
-  
-  // Selection Management
-  selectProduct: state.selectProduct,
-  deselectProduct: state.deselectProduct,
-  toggleProductSelection: state.toggleProductSelection,
-  selectAllProducts: state.selectAllProducts,
-  clearSelection: state.clearSelection,
-  
-  // Filter Management
-  setFilters: state.setFilters,
-  
-  // UI State Management
-  setLoading: state.setLoading,
-  setError: state.setError,
-  
-  // Bulk Operations
-  setBulkOperation: state.setBulkOperation,
-  
-  // Statistics
-  setStats: state.setStats,
-}));
+export const useProductActions = () =>
+  useProductStore(state => ({
+    // Product Management
+    setProducts: state.setProducts,
+    addProduct: state.addProduct,
+    updateProduct: state.updateProduct,
+    removeProduct: state.removeProduct,
+    clearProducts: state.clearProducts,
+
+    // Selection Management
+    selectProduct: state.selectProduct,
+    deselectProduct: state.deselectProduct,
+    toggleProductSelection: state.toggleProductSelection,
+    selectAllProducts: state.selectAllProducts,
+    clearSelection: state.clearSelection,
+
+    // Filter Management
+    setFilters: state.setFilters,
+
+    // UI State Management
+    setLoading: state.setLoading,
+    setError: state.setError,
+
+    // Bulk Operations
+    setBulkOperation: state.setBulkOperation,
+
+    // Statistics
+    setStats: state.setStats,
+  }));
 
 // ====================
 // Utility Functions
@@ -318,42 +318,41 @@ export const useProductActions = () => useProductStore((state) => ({
 export const getFilteredProducts = (state: ProductStore): Product[] => {
   const { products, productIds, filters } = state;
   let filteredProducts = productIds.map(id => products[id]).filter(Boolean);
-  
+
   // Apply search filter
   if (filters.search) {
     const searchLower = filters.search.toLowerCase();
-    filteredProducts = filteredProducts.filter(product => 
-      product.name.toLowerCase().includes(searchLower) ||
-      product.description?.toLowerCase().includes(searchLower) ||
-      product.sku.toLowerCase().includes(searchLower)
+    filteredProducts = filteredProducts.filter(
+      product =>
+        product.name.toLowerCase().includes(searchLower) ||
+        product.description?.toLowerCase().includes(searchLower) ||
+        product.sku.toLowerCase().includes(searchLower)
     );
   }
-  
+
   // Apply category filter
   if (filters.category) {
-    filteredProducts = filteredProducts.filter(product => 
+    filteredProducts = filteredProducts.filter(product =>
       product.category.includes(filters.category!)
     );
   }
-  
+
   // Apply active status filter
   if (filters.isActive !== undefined) {
-    filteredProducts = filteredProducts.filter(product => 
-      product.isActive === filters.isActive
-    );
+    filteredProducts = filteredProducts.filter(product => product.isActive === filters.isActive);
   }
-  
+
   // Apply sorting
   filteredProducts.sort((a, b) => {
     const { sortBy, sortOrder } = filters;
     let comparison = 0;
-    
+
     switch (sortBy) {
       case 'name':
         comparison = a.name.localeCompare(b.name);
         break;
       case 'price':
-        comparison = a.price - b.price;
+        comparison = (a.price || 0) - (b.price || 0);
         break;
       case 'isActive':
         comparison = Number(a.isActive) - Number(b.isActive);
@@ -363,10 +362,10 @@ export const getFilteredProducts = (state: ProductStore): Product[] => {
         comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         break;
     }
-    
+
     return sortOrder === 'desc' ? -comparison : comparison;
   });
-  
+
   return filteredProducts;
 };
 
@@ -375,15 +374,15 @@ export const getFilteredProducts = (state: ProductStore): Product[] => {
  */
 if (process.env.NODE_ENV === 'development') {
   useProductStore.subscribe(
-    (state) => state.selectedProducts,
-    (selectedProducts) => {
+    state => state.selectedProducts,
+    selectedProducts => {
       console.debug('[ProductStore] Selection changed:', selectedProducts.length, 'items');
     }
   );
-  
+
   useProductStore.subscribe(
-    (state) => state.filters,
-    (filters) => {
+    state => state.filters,
+    filters => {
       console.debug('[ProductStore] Filters changed:', filters);
     }
   );
