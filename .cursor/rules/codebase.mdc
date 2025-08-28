@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+Always search existing codebase first before creating new files
+Use existing patterns rather than reinventing functionality
+Verify requirements - the audit may have missed existing implementations

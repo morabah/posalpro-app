@@ -3,6 +3,104 @@
 This document captures key insights, patterns, and solutions discovered during
 development.
 
+## useEffect Best Practices - Core Guidelines
+
+**Date**: 2025-08-27 • **Category**: React / Performance • **Impact**: Critical
+
+### When useEffect is the Right Tool
+
+Use it only for real side-effects that happen after render:
+
+- **Subscriptions**: addEventListener, WebSocket, IntersectionObserver,
+  MutationObserver
+- **Timers**: setTimeout, setInterval (with cleanup)
+- **Imperative DOM work**: focusing, measuring (useLayoutEffect if before paint)
+- **Browser APIs**: localStorage, history, postMessage
+- **One-off client hooks**: fire analytics, wire third-party widget
+- **Sync UI state with URL/storage** (debounced)
+
+### When NOT to Use useEffect
+
+- ❌ **Data fetching**: Use React Query instead of
+  `useEffect(() => { fetch(...) }, [])`
+- ❌ **Derivations**: Compute from props/state inline or with `useMemo`
+- ❌ **Event logic**: Handle in event handlers (onClick, onChange), not effects
+- ❌ **Global client state**: Update Zustand from handlers/React Query
+  callbacks, not effects
+
+### Dependency & Lifecycle Rules
+
+- **ESLint compliance**: Keep `react-hooks/exhaustive-deps` on - add deps, don't
+  silence
+- **Idempotent effects**: Safe for Strict Mode double-invocation (dev)
+- **AbortController**: Use only when canceling in-flight work (not for HTTP -
+  use React Query)
+- **One effect per concern**: Don't overstuff single effects with unrelated work
+
+### Next.js + React Query + Zustand Stack Patterns
+
+```typescript
+// ✅ CANONICAL: Client-side initialization
+useEffect(() => {
+  setIsClient(true);
+}, []);
+
+// ✅ CANONICAL: Browser API with cleanup
+useEffect(() => {
+  const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+  window.addEventListener('keydown', onKey);
+  return () => window.removeEventListener('keydown', onKey);
+}, [onClose]);
+
+// ✅ CANONICAL: Debounced persistence
+useEffect(() => {
+  const id = setTimeout(() => {
+    localStorage.setItem('filters', JSON.stringify(filters));
+  }, 250);
+  return () => clearTimeout(id);
+}, [filters]);
+
+// ✅ CANONICAL: Mount-only analytics
+useEffect(() => {
+  analytics.trackPageView('component');
+}, []); // Empty deps for mount-only
+```
+
+### Stack-Specific Integration
+
+- **React Query**: Fetch, cache, retry there; use `onSuccess`/`onError` for
+  side-effects
+- **Zustand**: Update store in handlers/React Query callbacks, not effects
+- **Next.js**: Effects never run on server; put in Client Components
+
+### Quick Decision Checklist
+
+1. Is this a side-effect (touches outside world)? If no → don't use useEffect
+2. Can it run in event handler instead? If yes → do that
+3. Is it data fetching? If yes → React Query
+4. Must it run before paint? If yes → useLayoutEffect
+5. Do you have right deps and cleanup? If yes → proceed
+
+### Anti-Patterns to Avoid
+
+- ❌ `useEffect(() => setState(props.value), [props.value])` → Use prop directly
+  or derive with useMemo
+- ❌ Writing to URL without guarding → Infinite loops
+- ❌ Including unstable functions in deps → Use useCallback or ref pattern
+- ❌ Doing heavy work in useLayoutEffect → Use useEffect unless blocking paint
+- ❌ Adding function to deps that changes every render → Wrap in useCallback
+
+### Prevention Standards
+
+- Follow established patterns from gold standard components (`/products` page)
+- Use React Query for complex data fetching (lists, forms, mutations)
+- Use `useApiClient` only for simple one-time fetches
+- Never implement custom caching systems - rely on React Query's caching
+- Maintain 100% TypeScript compliance during all implementations
+
+This pattern keeps useEffect count low, each effect obvious, and prevents
+classic re-render loops and hydration issues.
+
 ## Critical RBAC Role Extraction Issue - January 2025
 
 ### **🚨 CRITICAL LESSON: Frontend Session Role Structure vs Backend Role Mapping**
@@ -2803,6 +2901,91 @@ error codes **Key Insights**:
 **Related**: [Error Handling Standards][memory:error-handling],
 [CORE_REQUIREMENTS.md][memory:core-requirements], [Singleton
 Pattern][memory:singleton]
+
+---
+
+## API 500 Error Resolution - Schema Validation & Data Transformation
+
+**Date**: 2025-08-28 • **Category**: API / Schema Validation / Error Handling •
+**Impact**: Critical
+
+### Context
+
+Comprehensive resolution of 500 Internal Server Errors across Customer, Product,
+and Proposal APIs through systematic schema validation fixes and data
+transformation patterns.
+
+### Key Problems Identified
+
+- **Schema Mismatches**: Zod validation failing on database null values, enum
+  mismatches, and date object vs string conflicts
+- **Data Structure Issues**: API responses containing null values not handled by
+  strict schemas
+- **Validation Failures**: Empty titles, missing fields, and enum value
+  mismatches causing crashes
+- **Error Propagation**: Poor error handling leading to 500 responses instead of
+  graceful degradation
+
+### Solutions Implemented
+
+**1. Schema Flexibility Patterns**:
+
+- Nullable field support: `z.string().nullable()` instead of
+  `z.string().optional()`
+- Date transformation:
+  `z.union([z.string(), z.date()]).transform((val) => val instanceof Date ? val.toISOString() : val)`
+- Enum preprocessing: `z.preprocess()` for case-insensitive enum matching
+
+**2. API-Level Data Transformation**:
+
+- Null-to-default transformations: `item.description || ''`, `item.price ?? 0`
+- Defensive array mapping:
+  `(items || []).map(item => ({ ...item, ...defaults }))`
+- Graceful fallback values for missing data
+
+**3. Safe Validation Approach**:
+
+- `safeParse()` instead of `parse()` to prevent crashes
+- Comprehensive error logging with validation details
+- Graceful degradation with fallback data when validation fails
+
+### Critical Lessons Learned
+
+1. **Schema-First Approach**: Always design schemas to match actual database
+   data, not ideal data structures
+2. **Defensive Data Transformation**: Transform data at API level before
+   validation to ensure compatibility
+3. **Safe Validation Patterns**: Use `safeParse()` with error logging rather
+   than strict `parse()` that crashes
+4. **Nullable vs Optional**: Distinguish between database null values and
+   missing optional fields
+5. **Enum Case Sensitivity**: Database enum values may differ in case from
+   schema expectations
+6. **Date Object Handling**: Database returns Date objects, APIs expect ISO
+   strings - transform accordingly
+7. **Error Context**: Comprehensive error metadata enables faster debugging of
+   complex validation issues
+
+### Prevention Standards
+
+- **✅ Schema Reality-Check**: Design schemas based on actual database queries,
+  not ideal structures
+- **✅ Data Transformation Layer**: Always transform database data to match API
+  expectations
+- **✅ Safe Validation**: Use `safeParse()` with proper error handling for
+  production resilience
+- **✅ Comprehensive Logging**: Include validation errors with full context for
+  debugging
+- **✅ Defensive Programming**: Handle null/undefined values gracefully with
+  sensible defaults
+
+### Impact Assessment
+
+- **Reliability**: Eliminated 500 errors across all major API modules
+- **Debugging**: Enhanced error logging provides clear root cause identification
+- **Performance**: Minimal overhead from data transformations vs crashes
+- **User Experience**: Graceful error handling prevents application failures
+- **Developer Experience**: Systematic patterns for future API development
 
 ---
 

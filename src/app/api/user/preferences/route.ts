@@ -4,6 +4,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { ErrorCodes } from '@/lib/errors';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
@@ -28,17 +29,21 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // First check if user exists
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { code: ErrorCodes.DATA.NOT_FOUND, message: 'User not found' },
+        { status: 404 }
+      );
+    }
+
     // Get user preferences using Prisma transaction (UserPreferences relation)
     const result = await prisma.$transaction(async tx => {
-      const user = await tx.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true },
-      });
-
-      if (!user) {
-        throw new Error('User not found');
-      }
-
       const prefs = await tx.userPreferences.findUnique({
         where: { userId: user.id },
         select: {
@@ -105,16 +110,21 @@ export async function PUT(request: NextRequest) {
 
     const newPreferences = validation.data;
 
+    // First check if user exists
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { code: ErrorCodes.DATA.NOT_FOUND, message: 'User not found' },
+        { status: 404 }
+      );
+    }
+
     // Update user preferences using Prisma transaction (UserPreferences relation)
     const result = await prisma.$transaction(async tx => {
-      const user = await tx.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true },
-      });
-
-      if (!user) {
-        throw new Error('User not found');
-      }
 
       const existing = await tx.userPreferences.findUnique({
         where: { userId: user.id },

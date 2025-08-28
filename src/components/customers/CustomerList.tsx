@@ -11,6 +11,7 @@ import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/hooks/useCustome
 import { analytics } from '@/lib/analytics';
 import {
   customerSelectors,
+  CustomerSortBy,
   CustomerStatus,
   CustomerTier,
   useCustomerQueryParams,
@@ -190,9 +191,9 @@ function CustomerTable() {
   }, [selectedIds.length, allCustomerIds.length, selectAll, allCustomerIds]);
 
   const handleSort = useCallback(
-    (sortBy: string) => {
+    (sortBy: CustomerSortBy) => {
       setSorting({
-        sortBy: sortBy as any,
+        sortBy,
         sortOrder: sorting.sortBy === sortBy && sorting.sortOrder === 'asc' ? 'desc' : 'asc',
       });
     },

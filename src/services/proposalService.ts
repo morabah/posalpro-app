@@ -9,6 +9,7 @@
  * ✅ IMPLEMENTS: Modern architecture with proper separation of concerns
  */
 
+import { ApiResponse } from '@/lib/api/response';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
@@ -102,7 +103,7 @@ export class ProposalService {
 
   private constructor() {}
 
-  async getProposals(params: Partial<ProposalQueryData> = {}) {
+  async getProposals(params: Partial<ProposalQueryData> = {}): Promise<ApiResponse<{ items: Proposal[]; nextCursor: string | null }>> {
     const start = performance.now();
     logDebug('Fetching proposals', {
       component: 'ProposalService',
@@ -140,7 +141,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -149,11 +150,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposals' }
       );
       logError('Failed to fetch proposals', processed, { component: 'ProposalService' });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 
-  async getProposal(id: string) {
+  async getProposal(id: string): Promise<ApiResponse<Proposal>> {
     const start = performance.now();
     logDebug('Fetching proposal', {
       component: 'ProposalService',
@@ -175,7 +176,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -184,11 +185,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposal', proposalId: id }
       );
       logError('Failed to fetch proposal', processed, { component: 'ProposalService' });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 
-  async createProposal(proposal: ProposalCreate) {
+  async createProposal(proposal: ProposalCreate): Promise<ApiResponse<Proposal>> {
     const start = performance.now();
     logDebug('Creating proposal', {
       component: 'ProposalService',
@@ -213,7 +214,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -222,11 +223,11 @@ export class ProposalService {
         { context: 'ProposalService.createProposal' }
       );
       logError('Failed to create proposal', processed, { component: 'ProposalService' });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 
-  async updateProposal(id: string, proposal: ProposalUpdate) {
+  async updateProposal(id: string, proposal: ProposalUpdate): Promise<ApiResponse<Proposal>> {
     const start = performance.now();
     logDebug('Updating proposal', {
       component: 'ProposalService',
@@ -252,7 +253,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -261,7 +262,7 @@ export class ProposalService {
         { context: 'ProposalService.updateProposal', proposalId: id }
       );
       logError('Failed to update proposal', processed, { component: 'ProposalService' });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 
@@ -292,7 +293,7 @@ export class ProposalService {
     return proposal;
   }
 
-  async deleteProposal(id: string) {
+  async deleteProposal(id: string): Promise<ApiResponse<{ message: string }>> {
     const start = performance.now();
     logDebug('Deleting proposal', {
       component: 'ProposalService',
@@ -303,7 +304,7 @@ export class ProposalService {
     });
 
     try {
-      const data = await http.delete(`/api/proposals/${id}`);
+      const data = await http.delete<{ message: string }>(`/api/proposals/${id}`);
 
       logInfo('Proposal deleted successfully', {
         component: 'ProposalService',
@@ -314,7 +315,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -323,11 +324,19 @@ export class ProposalService {
         { context: 'ProposalService.deleteProposal', proposalId: id }
       );
       logError('Failed to delete proposal', processed, { component: 'ProposalService' });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 
-  async getProposalStats() {
+  async getProposalStats(): Promise<ApiResponse<{
+    total: number;
+    draft: number;
+    submitted: number;
+    approved: number;
+    rejected: number;
+    averageValue: number;
+    totalValue: number;
+  }>> {
     const start = performance.now();
     logDebug('Fetching proposal stats', {
       component: 'ProposalService',
@@ -355,7 +364,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -364,11 +373,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposalStats' }
       );
       logError('Failed to fetch proposal stats', processed, { component: 'ProposalService' });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 
-  async bulkDeleteProposals(ids: string[]) {
+  async bulkDeleteProposals(ids: string[]): Promise<ApiResponse<{ deleted: number }>> {
     const start = performance.now();
     logDebug('Bulk deleting proposals', {
       component: 'ProposalService',
@@ -391,7 +400,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -400,11 +409,11 @@ export class ProposalService {
         { context: 'ProposalService.bulkDeleteProposals', proposalIds: ids }
       );
       logError('Failed to bulk delete proposals', processed, { component: 'ProposalService' });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 
-  async updateWorkflowStatus(id: string, status: string, metadata?: Record<string, unknown>) {
+  async updateWorkflowStatus(id: string, status: string, metadata?: Record<string, unknown>): Promise<ApiResponse<Proposal>> {
     const start = performance.now();
     logDebug('Updating proposal workflow status', {
       component: 'ProposalService',
@@ -416,7 +425,7 @@ export class ProposalService {
     });
 
     try {
-      const data = await http.put(`/api/proposals/workflow`, { id, status, metadata });
+      const data = await http.put<Proposal>(`/api/proposals/workflow`, { id, status, metadata });
 
       logInfo('Proposal workflow status updated successfully', {
         component: 'ProposalService',
@@ -428,7 +437,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return data;
+      return { ok: true as const, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -439,7 +448,7 @@ export class ProposalService {
       logError('Failed to update proposal workflow status', processed, {
         component: 'ProposalService',
       });
-      throw processed;
+      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
     }
   }
 }

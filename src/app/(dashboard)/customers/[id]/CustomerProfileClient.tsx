@@ -69,11 +69,11 @@ interface CustomerStatistics {
 interface CustomerApiResponse {
   id?: string | number;
   name?: string;
-  industry?: string;
-  address?: string;
-  phone?: string;
-  website?: string;
-  email?: string;
+  industry?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  email?: string | null;
   revenue?: number | null;
   employeeCount?: number;
   statistics?: CustomerStatistics;
@@ -146,11 +146,11 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     (raw: CustomerApiResponse, previous?: Customer | null): Customer => ({
       id: String(raw.id ?? previous?.id ?? ''),
       name: String(raw.name ?? previous?.name ?? ''),
-      industry: String(raw.industry ?? previous?.industry ?? ''),
-      address: String(raw.address ?? previous?.address ?? ''),
-      phone: String(raw.phone ?? previous?.phone ?? ''),
-      website: String(raw.website ?? previous?.website ?? ''),
-      email: String(raw.email ?? previous?.email ?? ''),
+      industry: raw.industry ? String(raw.industry) : (previous?.industry ?? ''),
+      address: raw.address ? String(raw.address) : (previous?.address ?? ''),
+      phone: raw.phone ? String(raw.phone) : (previous?.phone ?? ''),
+      website: raw.website ? String(raw.website) : (previous?.website ?? ''),
+      email: raw.email ? String(raw.email) : (previous?.email ?? ''),
       tier: (previous?.tier as CustomerTier) || CustomerTier.BRONZE,
       annualRevenue: typeof raw.revenue === 'number' ? raw.revenue : previous?.annualRevenue || 0,
       employeeCount:

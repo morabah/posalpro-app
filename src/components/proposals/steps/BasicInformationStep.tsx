@@ -19,7 +19,7 @@ import { logDebug } from '@/lib/logger';
 import { ProposalBasicInfo, useProposalActions } from '@/lib/store/proposalStore';
 import { CalendarIcon, CurrencyDollarIcon, UserIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 
 // Customer interface
 interface Customer {
@@ -63,7 +63,7 @@ interface BasicInformationStepProps {
   onUpdate?: (data: ProposalBasicInfo) => void;
 }
 
-export function BasicInformationStep({
+export const BasicInformationStep = React.memo(function BasicInformationStep({
   data,
   onNext,
   onBack,
@@ -73,68 +73,103 @@ export function BasicInformationStep({
   const apiClient = useApiClient();
   const { setStepData } = useProposalActions();
 
-  // Fetch customers using React Query
+  // 🔧 SAFEGUARD: Stabilize data prop to prevent infinite loops from parent
+  const stableData = useMemo(() => data, [
+    data?.title,
+    data?.description,
+    data?.customerId,
+    data?.dueDate,
+    data?.priority,
+    data?.value,
+    data?.currency,
+    data?.projectType,
+    data?.tags,
+    data?.customer
+  ]);
+
+  // 🔧 CRITICAL: Stable query function for customers
+  // This MUST be memoized with useCallback to prevent infinite loops.
+  // React Query's getSnapshot caching fails when queryFn is recreated on every render,
+  // causing "The result of getSnapshot should be cached to avoid an infinite loop" errors.
+  const fetchCustomers = useCallback(async () => {
+    // Use apiClient for better error handling and caching
+    const response = await apiClient.get<{
+      ok: boolean;
+      data?: {
+        items: Customer[];
+        nextCursor: string | null;
+      };
+      code?: string;
+      message?: string;
+    }>('/api/customers?limit=100&status=ACTIVE&sortBy=name&sortOrder=asc');
+
+    if (response.ok && response.data?.items) {
+      return response.data.items;
+    }
+    throw new Error(response.message || 'Failed to load customers');
+  }, [apiClient]);
+
+  // Fetch customers using React Query with stable queryFn
   const {
     data: customersData,
     isLoading: customersLoading,
     error: customersError,
   } = useQuery({
     queryKey: ['customers', 'proposal-wizard'],
-    queryFn: async () => {
-      const response = await apiClient.get<{
-        ok: boolean;
-        data?: {
-          items: Customer[];
-          nextCursor: string | null;
-        };
-        code?: string;
-        message?: string;
-      }>('/api/customers?limit=100&status=ACTIVE&sortBy=name&sortOrder=asc');
-
-      if (response.ok && response.data?.items) {
-        return response.data.items;
-      }
-      throw new Error(response.message || 'Failed to load customers');
-    },
+    queryFn: fetchCustomers,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
+    retry: 1, // Reduce retries to prevent excessive calls
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    refetchOnReconnect: false, // Prevent refetch on reconnect
   });
 
-  // Customer options for dropdown
+  // Customer options for dropdown - stabilized to prevent infinite loops
   const customerOptions = useMemo(() => {
     if (!customersData) return [{ value: '', label: 'Loading customers...' }];
 
     return [
       { value: '', label: 'Select a customer...' },
-      ...customersData.map(customer => ({
+      ...customersData.map((customer: Customer) => ({
         value: customer.id,
         label: customer.name,
       })),
     ];
   }, [customersData]);
 
-  // Selected customer data
+  // Selected customer data - memoized to prevent unnecessary recalculations
   const selectedCustomer = useMemo(() => {
-    if (!data?.customerId || !customersData) return null;
-    const customer = customersData.find(c => c.id === data.customerId);
+    if (!stableData?.customerId || !customersData) return null;
+    const customer = customersData.find((c: Customer) => c.id === stableData.customerId);
     return customer || null;
-  }, [data?.customerId, customersData]);
+  }, [stableData?.customerId, customersData]);
 
-  // Form data with defaults
+  // Form data with defaults - use individual properties to prevent unnecessary re-renders
   const formData = useMemo(
     () => ({
-      title: data?.title || '',
-      description: data?.description || '',
-      customerId: data?.customerId || '',
-      dueDate: data?.dueDate || '',
-      priority: data?.priority || 'MEDIUM',
-      value: data?.value || 0, // Changed from estimatedValue to match database, default to 0
-      currency: data?.currency || 'USD',
-      projectType: data?.projectType || '',
-      tags: data?.tags || [], // Added to match database
-      customer: data?.customer || undefined, // Include customer object
+      title: stableData?.title || '',
+      description: stableData?.description || '',
+      customerId: stableData?.customerId || '',
+      dueDate: stableData?.dueDate || '',
+      priority: stableData?.priority || 'MEDIUM',
+      value: stableData?.value || 0,
+      currency: stableData?.currency || 'USD',
+      projectType: stableData?.projectType || '',
+      tags: stableData?.tags || [],
+      customer: stableData?.customer || undefined,
     }),
-    [data]
+    [
+      stableData?.title,
+      stableData?.description,
+      stableData?.customerId,
+      stableData?.dueDate,
+      stableData?.priority,
+      stableData?.value,
+      stableData?.currency,
+      stableData?.projectType,
+      stableData?.tags,
+      stableData?.customer
+    ]
   );
 
   // Handle field changes
@@ -154,18 +189,24 @@ export function BasicInformationStep({
           customer: undefined,
         };
 
+        const updates: Partial<ProposalBasicInfo> = {
+          [field]: value,
+        };
+
+        // Update customer data when customer changes
+        if (field === 'customerId') {
+          const customer = customersData?.find((c: Customer) => c.id === value as string);
+          updates.customer = customer ? {
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            industry: customer.industry,
+          } : undefined;
+        }
+
         return {
           ...currentData,
-          [field]: value,
-          // Update customer data when customer changes
-          ...(field === 'customerId' && {
-            customer: customersData?.find(c => c.id === value) ? {
-              id: value as string,
-              name: customersData.find(c => c.id === value)?.name || '',
-              email: customersData.find(c => c.id === value)?.email,
-              industry: customersData.find(c => c.id === value)?.industry,
-            } : undefined,
-          }),
+          ...updates,
         };
       });
 
@@ -176,12 +217,16 @@ export function BasicInformationStep({
         hypothesis: 'H4',
       });
     },
-    [setStepData, analytics, customersData]
+    [customersData, setStepData, analytics]
   );
 
   // Handle customer selection
   const handleCustomerChange = useCallback(
     (customerId: string) => {
+      // Find customer outside the callback to prevent stale closure issues
+      const customer = customersData?.find((c: Customer) => c.id === customerId);
+      const customerName = customer?.name;
+
       setStepData(1, (prevData: ProposalBasicInfo | undefined) => {
         const currentData: ProposalBasicInfo = prevData || {
           title: '',
@@ -196,25 +241,21 @@ export function BasicInformationStep({
           customer: undefined,
         };
 
-        const customer = customersData?.find(c => c.id === customerId);
-
         return {
           ...currentData,
           customerId,
-          customer: customer
-            ? {
-                id: customer.id,
-                name: customer.name,
-                email: customer.email,
-                industry: customer.industry,
-              }
-            : undefined,
+          customer: customer ? {
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            industry: customer.industry,
+          } : undefined,
         };
       });
 
       analytics.trackOptimized('proposal_customer_selected', {
         customerId,
-        customerName: customersData?.find(c => c.id === customerId)?.name,
+        customerName,
         step: 1,
         userStory: 'US-3.1',
         hypothesis: 'H4',
@@ -223,7 +264,7 @@ export function BasicInformationStep({
     [customersData, setStepData, analytics]
   );
 
-  // Validation
+  // Validation - optimized to prevent unnecessary recalculations
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
 
@@ -239,8 +280,17 @@ export function BasicInformationStep({
       errors.push('Due date is required');
     }
 
-    if (formData.dueDate && new Date(formData.dueDate) < new Date()) {
-      errors.push('Due date must be in the future');
+    // Memoize date comparison to prevent creating new Date objects on every render
+    if (formData.dueDate) {
+      const dueDate = new Date(formData.dueDate);
+      const now = new Date();
+      // Reset time to start of day for fair comparison
+      now.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+
+      if (dueDate < now) {
+        errors.push('Due date must be in the future');
+      }
     }
 
     if (formData.value !== undefined && formData.value < 0) {
@@ -248,7 +298,7 @@ export function BasicInformationStep({
     }
 
     return errors;
-  }, [formData]);
+  }, [formData.title, formData.customerId, formData.dueDate, formData.value]);
 
   // Handle next step
   const handleNext = useCallback(() => {
@@ -279,6 +329,24 @@ export function BasicInformationStep({
   }, [analytics, onNext, validationErrors, formData]);
 
   const canProceed = validationErrors.length === 0;
+
+  // 🔧 FIX: Ensure hook order is consistent across renders
+  // Avoid calling hooks inside JSX or conditionally reachable branches.
+  // This value was previously computed via an inline useMemo inside the Input props,
+  // which caused a hook-order mismatch when the early return branch was taken.
+  const todayISODate = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  // 🔧 SAFEGUARD: Prevent render if component is in an unstable state
+  if (!customersData && customersLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading customers...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -409,7 +477,7 @@ export function BasicInformationStep({
                 type="date"
                 value={formData.dueDate}
                 onChange={e => handleFieldChange('dueDate', e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
+                min={todayISODate}
                 className="pl-10"
               />
               <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -481,4 +549,4 @@ export function BasicInformationStep({
       </div>
     </div>
   );
-}
+});

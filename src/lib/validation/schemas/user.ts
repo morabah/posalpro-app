@@ -39,12 +39,21 @@ export const userProfileSchema = baseEntitySchema.extend({
 
   phone: phoneSchema,
 
+  // Computed fields for display (not stored in DB)
+  name: z.string().optional(), // Computed from firstName + lastName
+
   // Professional Information
   jobTitle: validationUtils.stringWithLength(1, 100, 'Job title'),
 
   department: validationUtils.stringWithLength(1, 100, 'Department'),
 
-  role: z.nativeEnum(UserType),
+  role: z.nativeEnum(UserType), // Primary role for backward compatibility
+
+  roles: z.array(z.object({
+    role: z.nativeEnum(UserType),
+    assignedAt: z.date().optional(),
+    assignedBy: optionalUserIdSchema.optional(),
+  })).optional(), // Multiple roles support
 
   // Profile Details
   avatar: z.string().url().optional(),
@@ -315,12 +324,16 @@ export type UpdateUserData = z.infer<typeof updateUserSchema>;
  */
 export const userSearchSchema = z.object({
   query: z.string().optional(),
+  search: z.string().optional(), // Alias for query for backward compatibility
   role: z.array(z.nativeEnum(UserType)).optional(),
   department: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
   expertise: z.array(z.string()).optional(),
   createdAfter: z.date().optional(),
   createdBefore: z.date().optional(),
-});
+}).transform((data) => ({
+  ...data,
+  query: data.query || data.search || undefined, // Use search as fallback for query
+}));
 
 export type UserSearchCriteria = z.infer<typeof userSearchSchema>;

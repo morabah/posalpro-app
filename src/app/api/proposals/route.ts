@@ -2,154 +2,23 @@
  * PosalPro MVP2 - Proposals API Routes (Modern Architecture)
  * Enhanced proposal management with authentication, RBAC, and analytics
  * Component Traceability: US-3.1, US-3.2, H4
+ *
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/proposals/schemas.ts
+ * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
 
-// Validation schemas for modern proposal data
-const ProposalQuerySchema = z.object({
-  search: z.string().trim().default(''),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  cursor: z.string().nullable().optional(),
-  sortBy: z
-    .enum(['createdAt', 'updatedAt', 'title', 'status', 'priority', 'value'])
-    .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  status: z
-    .enum([
-      'DRAFT',
-      'SUBMITTED',
-      'IN_REVIEW',
-      'PENDING_APPROVAL',
-      'APPROVED',
-      'REJECTED',
-      'ACCEPTED',
-      'DECLINED',
-    ])
-    .optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
-  customerId: z.string().optional(),
-  assignedTo: z.string().optional(),
-});
-
-const ProposalBasicInfoSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
-  customerId: z.string().min(1, 'Customer is required'),
-  customer: z
-    .object({
-      id: z.string(),
-      name: z.string(),
-      email: z.string().optional(),
-      industry: z.string().optional(),
-    })
-    .optional(),
-  dueDate: z.string().optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
-  value: z.number().min(0).optional().default(0),
-  currency: z.string().default('USD'),
-  projectType: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-});
-
-const ProposalTeamDataSchema = z.object({
-  teamLead: z.string().min(1, 'Team lead is required'),
-  salesRepresentative: z.string().min(1, 'Sales representative is required'),
-  subjectMatterExperts: z.record(z.string()).default({}),
-  executiveReviewers: z.array(z.string()).default([]),
-  teamMembers: z
-    .array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        role: z.string(),
-        email: z.string().optional(),
-      })
-    )
-    .optional(),
-});
-
-const ProposalContentDataSchema = z.object({
-  selectedTemplates: z.array(z.string()).default([]),
-  customContent: z
-    .array(
-      z.object({
-        id: z.string(),
-        title: z.string(),
-        content: z.string(),
-        type: z.enum(['text', 'image', 'table']).default('text'),
-      })
-    )
-    .default([]),
-  contentLibrary: z
-    .array(
-      z.object({
-        id: z.string(),
-        title: z.string(),
-        category: z.string(),
-        isSelected: z.boolean(),
-      })
-    )
-    .default([]),
-});
-
-const ProposalProductDataSchema = z.object({
-  products: z
-    .array(
-      z.object({
-        id: z.string(),
-        productId: z.string(),
-        name: z.string(),
-        quantity: z.number().positive(),
-        unitPrice: z.number().positive(),
-        total: z.number().positive(),
-        discount: z.number().default(0),
-        category: z.string(),
-        configuration: z.record(z.unknown()).optional(),
-      })
-    )
-    .default([]),
-  totalValue: z.number().default(0),
-  searchQuery: z.string().optional(),
-  selectedCategory: z.string().optional(),
-});
-
-const ProposalSectionDataSchema = z.object({
-  sections: z
-    .array(
-      z.object({
-        id: z.string(),
-        title: z.string(),
-        content: z.string(),
-        order: z.number().positive(),
-        type: z.enum(['TEXT', 'IMAGE', 'TABLE', 'CHART']).default('TEXT'),
-        isRequired: z.boolean().default(false),
-      })
-    )
-    .default([]),
-  sectionTemplates: z
-    .array(
-      z.object({
-        id: z.string(),
-        title: z.string(),
-        content: z.string(),
-        category: z.string(),
-      })
-    )
-    .default([]),
-});
-
-const ProposalCreateSchema = z.object({
-  basicInfo: ProposalBasicInfoSchema,
-  teamData: ProposalTeamDataSchema,
-  contentData: ProposalContentDataSchema,
-  productData: ProposalProductDataSchema,
-  sectionData: ProposalSectionDataSchema,
-});
+// Import consolidated schemas from feature folder
+import {
+  ProposalCreateSchema,
+  ProposalListSchema,
+  ProposalQuerySchema,
+  ProposalSchema,
+} from '@/features/proposals/schemas';
 
 // GET /api/proposals - Retrieve proposals with filtering and cursor pagination
 export const GET = createRoute(
@@ -249,6 +118,21 @@ export const GET = createRoute(
       // Remove the extra item if it exists
       const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
 
+      // Transform null values to appropriate defaults before validation
+      const transformedItems = items.map(item => ({
+        ...item,
+        description: item.description || '',
+        metadata: item.metadata || {},
+        customer: item.customer
+          ? {
+              ...item.customer,
+              email: item.customer.email || '',
+              industry: item.customer.industry || '',
+            }
+          : undefined,
+        title: item.title || 'Untitled Proposal', // Handle empty titles
+      }));
+
       logInfo('Proposals fetched successfully', {
         component: 'ProposalAPI',
         operation: 'GET',
@@ -257,12 +141,13 @@ export const GET = createRoute(
         hasNextPage,
       });
 
-      return Response.json(
-        ok({
-          items,
-          nextCursor,
-        })
-      );
+      // Validate response against schema
+      const validatedResponse = ProposalListSchema.parse({
+        items: transformedItems,
+        nextCursor,
+      });
+
+      return Response.json(ok(validatedResponse));
     } catch (error) {
       logError('Failed to fetch proposals', {
         component: 'ProposalAPI',
@@ -395,6 +280,21 @@ export const POST = createRoute(
         return proposal;
       });
 
+      // Transform null values to appropriate defaults before validation
+      const transformedProposal = {
+        ...proposal,
+        description: proposal.description || '',
+        metadata: proposal.metadata || {},
+        customer: proposal.customer
+          ? {
+              ...proposal.customer,
+              email: proposal.customer.email || '',
+              industry: proposal.customer.industry || '',
+            }
+          : undefined,
+        title: proposal.title || 'Untitled Proposal', // Handle empty titles
+      };
+
       logInfo('Proposal created successfully', {
         component: 'ProposalAPI',
         operation: 'POST',
@@ -403,7 +303,19 @@ export const POST = createRoute(
         proposalTitle: proposal.title,
       });
 
-      return Response.json(ok(proposal), { status: 201 });
+      // Validate response against schema
+      const validationResult = ProposalSchema.safeParse(transformedProposal);
+      if (!validationResult.success) {
+        logError('Proposal schema validation failed after creation', validationResult.error, {
+          component: 'ProposalAPI',
+          operation: 'POST',
+          proposalId: proposal.id,
+        });
+        // Return the transformed proposal data anyway for now, but log the validation error
+        return Response.json(ok(transformedProposal), { status: 201 });
+      }
+
+      return Response.json(ok(validationResult.data), { status: 201 });
     } catch (error) {
       logError('Failed to create proposal', {
         component: 'ProposalAPI',

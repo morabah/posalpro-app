@@ -5,6 +5,7 @@ import { CustomerIndustrySchema } from '@/features/customers/schemas';
 import { z } from 'zod';
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 
 // UI State Types
 export type CustomerViewMode = 'table' | 'list' | 'grid';
@@ -209,31 +210,37 @@ export function useCustomerQueryParams() {
 }
 
 // Hook for selection state
-export function useCustomerSelection() {
-  const selectedIds = useCustomerStore(customerSelectors.selectedIds);
-  const selectedCount = useCustomerStore(customerSelectors.selectedCount);
-  const hasSelection = useCustomerStore(customerSelectors.hasSelection);
-
-  return {
-    selectedIds,
-    selectedCount,
-    hasSelection,
-  };
+export function useCustomerSelection(): {
+  selectedIds: string[];
+  selectedCount: number;
+  hasSelection: boolean;
+} {
+  // Subscribe to the minimal selection slice and compare with shallow to avoid re-renders
+  return useCustomerStore(
+    useShallow(state => ({
+      selectedIds: state.selection.selectedIds,
+      selectedCount: state.selection.selectedIds.length,
+      hasSelection: state.selection.selectedIds.length > 0,
+    }))
+  );
 }
 
 // Hook for checking if specific customer is selected
 export function useCustomerSelectionState(customerId: string) {
-  const selectedIds = useCustomerStore(customerSelectors.selectedIds);
-  return selectedIds.includes(customerId);
+  // Subscribe to a derived boolean; component re-renders only when its value changes
+  return useCustomerStore(state => state.selection.selectedIds.includes(customerId));
 }
 
 // Hook for checking if all customers in a list are selected
-export function useCustomerBulkSelectionState(customerIds: string[]) {
-  const isAllSelected = useCustomerStore(customerSelectors.isAllSelected);
-  const isPartiallySelected = useCustomerStore(customerSelectors.isPartiallySelected);
-
-  return {
-    isAllSelected: isAllSelected(customerIds),
-    isPartiallySelected: isPartiallySelected(customerIds),
-  };
+export function useCustomerBulkSelectionState(customerIds: string[]): {
+  isAllSelected: boolean;
+  isPartiallySelected: boolean;
+} {
+  // Shallow compare the pair of booleans to prevent unnecessary re-renders
+  return useCustomerStore(
+    useShallow(state => ({
+      isAllSelected: customerSelectors.isAllSelected(state)(customerIds),
+      isPartiallySelected: customerSelectors.isPartiallySelected(state)(customerIds),
+    }))
+  );
 }

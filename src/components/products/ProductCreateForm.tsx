@@ -112,7 +112,7 @@ export function ProductCreateForm() {
 
       const productData: ProductCreate = {
         name: validation.formData.name as string,
-        description: (validation.formData.description as string) || undefined,
+        description: (validation.formData.description as string) || '',
         sku: validation.formData.sku as string,
         price: validation.formData.price as number,
         currency: validation.formData.currency as string,

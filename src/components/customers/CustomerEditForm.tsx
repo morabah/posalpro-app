@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { useCustomer, useUpdateCustomer } from '@/hooks/useCustomers';
 import { Customer } from '@/services/customerService';
+import { CustomerUpdate } from '@/features/customers/schemas';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -18,7 +19,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
   const { data: customerData, isLoading, isError } = useCustomer(customerId);
   const updateCustomer = useUpdateCustomer();
 
-  const [formData, setFormData] = useState<Partial<Customer>>({
+  const [formData, setFormData] = useState<CustomerUpdate & { id?: string }>({
     name: '',
     email: '',
     phone: '',

@@ -5,7 +5,6 @@ import { ToastProvider } from '@/components/feedback/Toast/ToastProvider';
 import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
 import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
 import { AuthProvider } from '@/components/providers/AuthProvider';
-import { QueryProvider } from '@/components/providers/QueryProvider';
 import { SharedAnalyticsProvider } from '@/components/providers/SharedAnalyticsProvider';
 import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizationProvider';
 import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
@@ -20,17 +19,15 @@ export default function ProposalCreatePage() {
         <WebVitalsProvider>
           <SharedAnalyticsProvider>
             <ClientLayoutWrapper>
-              <QueryProvider>
-                <ToastProvider position="top-right" maxToasts={5}>
-                  <AuthProvider>
-                    <GlobalStateProvider>
-                      <ProtectedLayout>
-                        <ClientPage />
-                      </ProtectedLayout>
-                    </GlobalStateProvider>
-                  </AuthProvider>
-                </ToastProvider>
-              </QueryProvider>
+              <ToastProvider position="top-right" maxToasts={5}>
+                <AuthProvider>
+                  <GlobalStateProvider>
+                    <ProtectedLayout>
+                      <ClientPage />
+                    </ProtectedLayout>
+                  </GlobalStateProvider>
+                </AuthProvider>
+              </ToastProvider>
             </ClientLayoutWrapper>
           </SharedAnalyticsProvider>
         </WebVitalsProvider>

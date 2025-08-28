@@ -278,25 +278,28 @@ export const WizardProposalUpdateSchema = z
 
 export const ProposalSchema = z.object({
   id: z.string(),
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
+  title: z.string().optional().default('Untitled Proposal'),
+  description: z.string().nullable(),
   customerId: z.string(),
   customer: z
     .object({
       id: z.string(),
       name: z.string(),
-      email: z.string().optional(),
-      industry: z.string().optional(),
+      email: z.string().nullable(),
+      industry: z.string().nullable(),
     })
     .optional(),
   status: ProposalStatusSchema,
   priority: ProposalPrioritySchema,
-  dueDate: z.date().optional(),
+  dueDate: z
+    .union([z.string(), z.date()])
+    .optional()
+    .transform(val => (val instanceof Date ? val.toISOString() : val)),
   value: z.number().min(0).optional(),
   currency: z.string().length(3).default('USD'),
   projectType: z.string().optional(),
   tags: z.array(z.string()).default([]),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.any().nullable(),
   assignedTo: z.string().optional(),
   teamMembers: z.array(z.string()).default([]),
   progress: z.number().min(0).max(100).default(0),

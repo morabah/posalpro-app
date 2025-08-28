@@ -18,7 +18,8 @@ export default function ProposalWizardPage() {
   const router = useRouter();
 
   const handleComplete = useCallback(
-    (proposalId: string) => {
+    (data: string | object) => {
+      const proposalId = typeof data === 'string' ? data : (data as any).proposalId || 'unknown';
       logDebug('Proposal wizard completed', {
         component: 'ProposalWizardPage',
         operation: 'handleComplete',

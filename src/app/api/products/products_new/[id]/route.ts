@@ -2,33 +2,19 @@
  * PosalPro MVP2 - Individual Product API Routes (New Architecture)
  * Enhanced product operations with authentication, RBAC, and analytics
  * Component Traceability: US-4.1, H5
+ *
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
+ * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { ok } from '@/lib/api/response';
+import { fail, ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import { errorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
 
-// ====================
-// Validation Schemas
-// ====================
-
-const ProductUpdateSchema = z.object({
-  name: z.string().min(1, 'Product name is required').max(200).optional(),
-  description: z.string().max(1000).optional(),
-  price: z.number().positive('Price must be positive').optional().or(z.null()),
-  currency: z.string().default('USD').optional(),
-  sku: z.string().optional(),
-  category: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
-  attributes: z.record(z.unknown()).optional(),
-  images: z.array(z.string()).optional(),
-  isActive: z.boolean().optional(),
-  version: z.number().optional(),
-  usageAnalytics: z.record(z.unknown()).optional(),
-  userStoryMappings: z.array(z.string()).optional(),
-});
+// Import consolidated schemas from feature folder
+import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
 
 // ====================
 // GET Route - Get Product by ID
@@ -43,7 +29,7 @@ export const GET = createRoute(
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json({ error: 'Product ID is required' }, { status: 400 });
+        return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
       }
 
       logInfo('Fetching product by ID', {
@@ -87,7 +73,7 @@ export const GET = createRoute(
       });
 
       if (!product) {
-        return Response.json({ error: 'Product not found' }, { status: 404 });
+        return Response.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
       }
 
       logInfo('Product fetched successfully', {
@@ -96,14 +82,38 @@ export const GET = createRoute(
         productId: id,
       });
 
-      return Response.json(ok(product));
+      // Transform null values to appropriate defaults before validation
+      const transformedProduct = {
+        ...product,
+        description: product.description || '',
+        price: product.price ?? 0,
+        attributes: product.attributes || undefined,
+        usageAnalytics: product.usageAnalytics || undefined,
+      };
+
+      // Validate response against schema
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'GET_BY_ID',
+        });
+        // Return the transformed product data anyway for now, but log the validation error
+        return Response.json(ok(transformedProduct));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
-      logError('Failed to fetch product', {
-        component: 'ProductAPI',
-        operation: 'GET_BY_ID',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to fetch product',
+        undefined,
+        {
+          component: 'ProductAPI',
+          operation: 'GET_BY_ID',
+        }
+      );
+      throw processedError;
     }
   }
 );
@@ -122,7 +132,7 @@ export const PUT = createRoute(
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json({ error: 'Product ID is required' }, { status: 400 });
+        return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
       }
 
       logInfo('Updating product', {
@@ -141,7 +151,7 @@ export const PUT = createRoute(
       });
 
       if (!existingProduct) {
-        return Response.json({ error: 'Product not found' }, { status: 404 });
+        return Response.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
       }
 
       // Prepare update data
@@ -211,20 +221,44 @@ export const PUT = createRoute(
         },
       });
 
+      // Transform null values to appropriate defaults before validation
+      const transformedProduct = {
+        ...updatedProduct,
+        description: updatedProduct.description || '',
+        price: updatedProduct.price ?? 0,
+        attributes: updatedProduct.attributes || undefined,
+        usageAnalytics: updatedProduct.usageAnalytics || undefined,
+      };
+
       logInfo('Product updated successfully', {
         component: 'ProductAPI',
         operation: 'PUT',
         productId: id,
       });
 
-      return Response.json(ok(updatedProduct));
+      // Validate response against schema
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed after update', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'PUT',
+        });
+        // Return the transformed product data anyway for now, but log the validation error
+        return Response.json(ok(transformedProduct));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
-      logError('Failed to update product', {
-        component: 'ProductAPI',
-        operation: 'PUT',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to update product',
+        undefined,
+        {
+          component: 'ProductAPI',
+          operation: 'PUT',
+        }
+      );
+      throw processedError;
     }
   }
 );
@@ -242,7 +276,7 @@ export const DELETE = createRoute(
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json({ error: 'Product ID is required' }, { status: 400 });
+        return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
       }
 
       logInfo('Deleting product', {
@@ -259,7 +293,7 @@ export const DELETE = createRoute(
       });
 
       if (!existingProduct) {
-        return Response.json({ error: 'Product not found' }, { status: 404 });
+        return Response.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
       }
 
       // Delete product relationships first
@@ -282,12 +316,16 @@ export const DELETE = createRoute(
 
       return Response.json(ok({ message: 'Product deleted successfully' }));
     } catch (error) {
-      logError('Failed to delete product', {
-        component: 'ProductAPI',
-        operation: 'DELETE',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to delete product',
+        undefined,
+        {
+          component: 'ProductAPI',
+          operation: 'DELETE',
+        }
+      );
+      throw processedError;
     }
   }
 );

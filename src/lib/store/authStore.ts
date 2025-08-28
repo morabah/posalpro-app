@@ -1,83 +1,70 @@
 'use client';
 
-import { logger } from '@/lib/logger'; /**
- * PosalPro MVP2 - Authentication Store
- * Zustand store for managing authentication state and user sessions
- * Integrates with NextAuth.js and provides centralized auth management
+import { logger } from '@/lib/logger';
+
+/**
+ * PosalPro MVP2 - Authentication UI Store
+ * Zustand store for managing authentication UI state only
+ * Server state (user, session) handled by NextAuth.js integration
+ * This store manages UI concerns: loading states, session warnings, login attempts
+ *
+ * ✅ ARCHITECTURAL PATTERN: UI State Only (Server state → NextAuth)
+ * ✅ PERFORMANCE: Shallow comparison optimization for object selectors
+ * ✅ TYPE SAFETY: Explicit return types with proper TypeScript support
  */
 
-import type { Session, User } from 'next-auth';
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { shallow } from 'zustand/shallow';
 
-// Authentication state interface
-export interface AuthState {
-  // User and session data
-  user: User | null;
-  session: Session | null;
+// Authentication UI state interface (SERVER STATE MOVED TO NEXTAUTH)
+export interface AuthUIState {
+  // UI State Only - Server state moved to NextAuth integration
 
-  // Authentication status
-  isAuthenticated: boolean;
+  // Authentication status (derived from NextAuth)
   isLoading: boolean;
   isInitializing: boolean;
 
-  // Session management
-  sessionExpiry: Date | null;
-  lastActivity: Date | null;
+  // Session management UI state
   sessionWarningShown: boolean;
 
-  // Error handling
+  // Error handling UI state
   authError: string | null;
 
-  // Login attempts tracking
+  // Login attempts tracking UI state
   loginAttempts: number;
   isBlocked: boolean;
   blockExpiry: Date | null;
 }
 
-// Authentication actions interface
-export interface AuthActions {
-  // User authentication
-  setUser: (user: User | null) => void;
-  setSession: (session: Session | null) => void;
-  clearAuth: () => void;
+// Authentication UI actions interface (SERVER ACTIONS MOVED TO NEXTAUTH)
+export interface AuthUIActions {
+  // UI State Actions Only - Server actions moved to NextAuth integration
 
-  // Session management
-  updateLastActivity: () => void;
+  // Session management UI actions
   setSessionWarning: (shown: boolean) => void;
-  refreshSession: () => Promise<void>;
 
-  // Login attempts
+  // Login attempts UI actions
   incrementLoginAttempts: () => void;
   resetLoginAttempts: () => void;
   blockUser: (duration: number) => void;
 
-  // Loading states
+  // Loading states UI actions
   setLoading: (loading: boolean) => void;
   setInitializing: (initializing: boolean) => void;
 
-  // Error handling
+  // Error handling UI actions
   setAuthError: (error: string | null) => void;
-
-  // Utility actions
-  isSessionValid: () => boolean;
-  shouldShowSessionWarning: () => boolean;
-  getRemainingSessionTime: () => number;
 }
 
 // Combined store type
-export type AuthStore = AuthState & AuthActions;
+export type AuthUIStore = AuthUIState & AuthUIActions;
 
-// Initial state
-const initialState: AuthState = {
-  user: null,
-  session: null,
-  isAuthenticated: false,
+// Initial UI state (server state handled by NextAuth)
+const initialUIState: AuthUIState = {
   isLoading: false,
   isInitializing: true,
-  sessionExpiry: null,
-  lastActivity: null,
   sessionWarningShown: false,
   authError: null,
   loginAttempts: 0,
@@ -85,88 +72,20 @@ const initialState: AuthState = {
   blockExpiry: null,
 };
 
-// Create the auth store
-export const useAuthStore = create<AuthStore>()(
+// Create the auth UI store (server state handled by NextAuth)
+export const useAuthStore = create<AuthUIStore>()(
   subscribeWithSelector(
     immer((set, get) => ({
-      ...initialState,
+      ...initialUIState,
 
-      // User authentication actions
-      setUser: user => {
-        set(state => {
-          state.user = user;
-          state.isAuthenticated = !!user;
-          if (user) {
-            state.authError = null;
-            state.isInitializing = false;
-          }
-        });
-      },
-
-      setSession: session => {
-        set(state => {
-          state.session = session;
-          state.isAuthenticated = !!session;
-
-          if (session) {
-            state.sessionExpiry = session.expires ? new Date(session.expires) : null;
-            state.lastActivity = new Date();
-            state.authError = null;
-            state.isInitializing = false;
-          } else {
-            state.sessionExpiry = null;
-            state.sessionWarningShown = false;
-          }
-        });
-      },
-
-      clearAuth: () => {
-        set(state => {
-          state.user = null;
-          state.session = null;
-          state.isAuthenticated = false;
-          state.sessionExpiry = null;
-          state.lastActivity = null;
-          state.sessionWarningShown = false;
-          state.authError = null;
-          state.isInitializing = false;
-        });
-      },
-
-      // Session management
-      updateLastActivity: () => {
-        set(state => {
-          state.lastActivity = new Date();
-        });
-      },
-
+      // Session management UI actions
       setSessionWarning: shown => {
         set(state => {
           state.sessionWarningShown = shown;
         });
       },
 
-      refreshSession: async () => {
-        // TODO: Implement session refresh logic
-        set(state => {
-          state.isLoading = true;
-        });
-
-        try {
-          // This will be implemented when we integrate with NextAuth.js
-          // const newSession = await getSession();
-          // get().setSession(newSession);
-        } catch (error) {
-          logger.error('Failed to refresh session:', error);
-          get().setAuthError('Failed to refresh session');
-        } finally {
-          set(state => {
-            state.isLoading = false;
-          });
-        }
-      },
-
-      // Login attempts management
+      // Login attempts UI actions
       incrementLoginAttempts: () => {
         set(state => {
           state.loginAttempts += 1;
@@ -194,7 +113,7 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      // Loading states
+      // Loading states UI actions
       setLoading: loading => {
         set(state => {
           state.isLoading = loading;
@@ -207,77 +126,57 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      // Error handling
+      // Error handling UI actions
       setAuthError: error => {
         set(state => {
           state.authError = error;
         });
       },
-
-      // Utility functions
-      isSessionValid: () => {
-        const state = get();
-
-        if (!state.session || !state.sessionExpiry) {
-          return false;
-        }
-
-        return new Date() < state.sessionExpiry;
-      },
-
-      shouldShowSessionWarning: () => {
-        const state = get();
-
-        if (!state.sessionExpiry || state.sessionWarningShown) {
-          return false;
-        }
-
-        const now = new Date();
-        const timeRemaining = state.sessionExpiry.getTime() - now.getTime();
-
-        // Show warning 5 minutes before expiry
-        return timeRemaining <= 5 * 60 * 1000 && timeRemaining > 0;
-      },
-
-      getRemainingSessionTime: () => {
-        const state = get();
-
-        if (!state.sessionExpiry) {
-          return 0;
-        }
-
-        const now = new Date();
-        return Math.max(0, state.sessionExpiry.getTime() - now.getTime());
-      },
     }))
   )
 );
 
-// Selector hooks for common use cases
-export const useAuth = () =>
+// Selector hooks for UI state (server state from NextAuth)
+export const useAuthUI = (): {
+  isLoading: boolean;
+  isInitializing: boolean;
+  sessionWarningShown: boolean;
+  authError: string | null;
+  loginAttempts: number;
+  isBlocked: boolean;
+  blockExpiry: Date | null;
+} =>
   useAuthStore(state => ({
-    user: state.user,
-    session: state.session,
-    isAuthenticated: state.isAuthenticated,
     isLoading: state.isLoading,
     isInitializing: state.isInitializing,
+    sessionWarningShown: state.sessionWarningShown,
+    authError: state.authError,
+    loginAttempts: state.loginAttempts,
+    isBlocked: state.isBlocked,
+    blockExpiry: state.blockExpiry,
   }));
 
-export const useAuthUser = () => useAuthStore(state => state.user);
-export const useAuthSession = () => useAuthStore(state => state.session);
-export const useIsAuthenticated = () => useAuthStore(state => state.isAuthenticated);
+// Individual UI state selectors
 export const useAuthLoading = () => useAuthStore(state => state.isLoading);
+export const useAuthInitializing = () => useAuthStore(state => state.isInitializing);
+export const useSessionWarningShown = () => useAuthStore(state => state.sessionWarningShown);
 export const useAuthError = () => useAuthStore(state => state.authError);
+export const useLoginAttempts = () => useAuthStore(state => state.loginAttempts);
+export const useIsBlocked = () => useAuthStore(state => state.isBlocked);
+export const useBlockExpiry = () => useAuthStore(state => state.blockExpiry);
 
-// Actions hooks
-export const useAuthActions = () =>
+// UI Actions hooks
+export const useAuthUIActions = (): {
+  setSessionWarning: (shown: boolean) => void;
+  incrementLoginAttempts: () => void;
+  resetLoginAttempts: () => void;
+  blockUser: (duration: number) => void;
+  setLoading: (loading: boolean) => void;
+  setInitializing: (initializing: boolean) => void;
+  setAuthError: (error: string | null) => void;
+} =>
   useAuthStore(state => ({
-    setUser: state.setUser,
-    setSession: state.setSession,
-    clearAuth: state.clearAuth,
-    updateLastActivity: state.updateLastActivity,
     setSessionWarning: state.setSessionWarning,
-    refreshSession: state.refreshSession,
     incrementLoginAttempts: state.incrementLoginAttempts,
     resetLoginAttempts: state.resetLoginAttempts,
     blockUser: state.blockUser,
@@ -286,37 +185,7 @@ export const useAuthActions = () =>
     setAuthError: state.setAuthError,
   }));
 
-// Utility hooks
-export const useSessionUtilities = () =>
-  useAuthStore(state => ({
-    isSessionValid: state.isSessionValid,
-    shouldShowSessionWarning: state.shouldShowSessionWarning,
-    getRemainingSessionTime: state.getRemainingSessionTime,
-    sessionExpiry: state.sessionExpiry,
-    lastActivity: state.lastActivity,
-  }));
-
-// Subscribe to session changes for automatic cleanup
-useAuthStore.subscribe(
-  state => state.sessionExpiry,
-  sessionExpiry => {
-    if (!sessionExpiry) return;
-
-    const timeUntilExpiry = sessionExpiry.getTime() - Date.now();
-
-    if (timeUntilExpiry > 0) {
-      // Set timeout to clear auth when session expires
-      setTimeout(() => {
-        const currentState = useAuthStore.getState();
-        if (!currentState.isSessionValid()) {
-          currentState.clearAuth();
-        }
-      }, timeUntilExpiry);
-    }
-  }
-);
-
-// Analytics integration for auth events
+// Analytics integration for auth UI events
 type AnalyticsPriority = 'low' | 'medium' | 'high';
 type OptimizedTrackFn = (
   event: string,
@@ -324,7 +193,7 @@ type OptimizedTrackFn = (
   priority?: AnalyticsPriority
 ) => void;
 
-export const trackAuthEvent = (
+export const trackAuthUIEvent = (
   event: string,
   data?: Record<string, unknown>,
   options?: { priority?: AnalyticsPriority; analytics?: OptimizedTrackFn }
@@ -338,5 +207,5 @@ export const trackAuthEvent = (
   }
 
   // Fallback to logging if analytics not provided (SSR-safe and non-breaking)
-  logger.info('Auth Event: ' + event, { ...data, priority });
+  logger.info('Auth UI Event: ' + event, { ...data, priority });
 };

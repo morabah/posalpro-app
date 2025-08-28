@@ -13,6 +13,107 @@ migrations with comprehensive error prevention.
 
 ---
 
+## 🔧 **Unified Proposal Store - Zustand v5 Selector Refactor (Latest)
+
+### Migration Goal
+
+Refactor unified proposal store selectors and actions to:
+
+- Follow React hook naming conventions (prefix with `use`)
+- Use `useShallow` for composite selector objects to prevent re-renders
+- Avoid inline fallback patterns in selectors (e.g., `|| []`, `|| {}`)
+
+### Symptoms
+
+- ESLint React Hooks violations due to selectors not starting with `use`
+- Potential infinite re-renders when composite selectors returned new objects
+- Hidden performance costs from inline fallbacks in selectors
+
+### Root Causes
+
+1. Selectors exported as plain functions (e.g., `step4Data()`) calling hooks internally → not recognized as hooks by lint rules.
+2. Composite selectors returning new object references each render without shallow equality.
+3. Inline fallbacks in selectors caused new array/object creation on every store change.
+4-fix the hook order bug by moving the inline useMemo out of JSX and into a top-level constant so it's called on every render before any early returns. Then I'll update the component to use that constant.
+
+### Final Working Pattern (`src/lib/store/unifiedProposalStore.ts`)
+
+```ts
+// Individual hooks (stable, no inline fallbacks inside selectors)
+export const useUnifiedProposalStep4Data = () =>
+  useUnifiedProposalStore(state => state.wizardData.step4);
+
+// Navigation and validation
+export const useUnifiedProposalCanNavigateForward = () =>
+  useUnifiedProposalStore(state => state.canNavigateForward);
+export const useUnifiedProposalStepValidation = (step: number) =>
+  useUnifiedProposalStore(state => state.stepValidation[step]);
+
+// Composite actions with shallow equality to keep reference-stable
+import { useShallow } from 'zustand/react/shallow';
+export const useUnifiedProposalActions = () =>
+  useUnifiedProposalStore(
+    useShallow(state => ({
+      setCurrentStep: state.setCurrentStep,
+      goToNextStep: state.goToNextStep,
+      setStepData: state.setStepData,
+      validateStep: state.validateStep,
+      resetWizard: state.resetWizard,
+      // ...other actions
+    }))
+  );
+
+// Convenience namespace for migration ergonomics (optional)
+export const useUnifiedProposalStoreSelectors = {
+  useStep4Data: useUnifiedProposalStep4Data,
+  useActions: useUnifiedProposalActions,
+} as const;
+```
+
+### Anti-Pattern vs Correct Pattern
+
+```ts
+// ❌ Anti-pattern: inline fallbacks in selectors (creates new refs)
+export const useStep4Products = () =>
+  useUnifiedProposalStore(state => state.wizardData.step4?.products || []);
+
+// ✅ Correct: return raw state in selector, handle fallbacks in component
+export const useStep4 = () => useUnifiedProposalStore(state => state.wizardData.step4);
+
+// In component
+const step4 = useStep4();
+const products = useMemo(() => step4?.products ?? [], [step4]);
+```
+
+### Component Migration Example (`src/components/proposals/EnhancedProductSelectionStep.tsx`)
+
+```diff
+- import { useUnifiedProposalStoreSelectors } from '@/lib/store/unifiedProposalStore';
++ import { useUnifiedProposalActions, useUnifiedProposalStep4Data } from '@/lib/store/unifiedProposalStore';
+
+- const step4Data = useUnifiedProposalStoreSelectors.step4Data();
+- const actions = useUnifiedProposalStoreSelectors.actions();
++ const step4Data = useUnifiedProposalStep4Data();
++ const actions = useUnifiedProposalActions();
+```
+
+### Prevention Framework (Unified Proposal Store)
+
+1. Use top-level hooks with `use*` prefix for all selectors.
+2. Apply `useShallow` to any composite selector returning an object.
+3. Do not place `|| []`, `|| {}`, `?? []` inside selectors; perform fallbacks in components or `useMemo`.
+4. Keep selectors simple: direct state access only; derive values in components when possible.
+5. Prefer individual selectors over wide composite selectors for stability and performance.
+
+### Success Metrics
+
+- ✅ ESLint React Hooks compliance (no naming violations)
+- ✅ No infinite re-renders from composite selectors
+- ✅ Improved render stability in proposal wizard steps
+- ✅ 100% TypeScript compliance
+
+---
+
 ## 🎯 **Unified Problem-Solution Framework**
 
 ### **Core Challenge: Multi-Dimensional System Integration**
@@ -217,6 +318,135 @@ toast.error(processedError.userFriendlyMessage);
 
 **Prevention**: Implement structured logging, centralized error handling,
 user-friendly messages.
+
+---
+
+## 🔧 **Customers Page - React Query Refetch Loop & Zustand Re-render Loop Fix (Latest)**
+
+### **Migration Goal**: Eliminate infinite refetch/re-render on Customers page
+
+**Final Status**: ✅ **SUCCESSFUL** - Stable query keys, strictly typed sort handler, and correct Zustand v5 shallow selectors removed loop conditions.
+
+### **Symptoms**
+
+- **Infinite refetch/rerender** when toggling sort or changing filters
+- **Analytics events firing repeatedly** during list interactions
+- CPU spikes and janky scroll while using infinite list
+
+### **Root Causes**
+
+1. **Unstable selection slice equality (Zustand v5)**
+   - `useCustomerStore(selector, shallow)` comparator arg no longer supported in v5 → selector returned new object every store change → extra component renders → query inputs churned unnecessarily.
+2. **Unsafe sort typing in UI**
+   - `handleSort` accepted `string` with `as any` casts, allowing invalid values and causing unnecessary state flips.
+3. **Query key sensitivity**
+   - Keys must be constructed from stable primitives/objects with deterministic shape to avoid unintended refetches.
+
+### **Solutions Implemented**
+
+1. **Centralized, stable query keys** (`src/features/customers/keys.ts`)
+
+```ts
+export const qk = {
+  customers: {
+    all: ['customers'] as const,
+    lists: () => [...qk.customers.all, 'list'] as const,
+    list: (search, limit, sortBy, sortOrder, status, tier, industry) => [
+      ...qk.customers.lists(),
+      { search, limit, sortBy, sortOrder, status, tier, industry },
+    ] as const,
+  },
+} as const;
+```
+
+2. **Strictly typed sorting handler** (`src/components/customers/CustomerList.tsx`)
+
+```ts
+// Accepts only valid sort keys
+const handleSort = useCallback(
+  (sortBy: CustomerSortBy) => {
+    setSorting({
+      sortBy,
+      sortOrder:
+        sorting.sortBy === sortBy && sorting.sortOrder === 'asc' ? 'desc' : 'asc',
+    });
+  },
+  [sorting, setSorting]
+);
+// Note: This can be further stabilized via functional updates:
+// setSorting(prev => ({ sortBy, sortOrder: prev.sortBy === sortBy && prev.sortOrder === 'asc' ? 'desc' : 'asc' }))
+```
+
+3. **Zustand v5 shallow equality (correct pattern)** (`src/lib/store/customerStore.ts`)
+
+```ts
+import { useShallow } from 'zustand/react/shallow';
+
+export function useCustomerSelection() {
+  return useCustomerStore(
+    useShallow(state => ({
+      selectedIds: state.selection.selectedIds,
+      selectedCount: state.selection.selectedIds.length,
+      hasSelection: state.selection.selectedIds.length > 0,
+    }))
+  );
+}
+
+export function useCustomerBulkSelectionState(customerIds: string[]) {
+  return useCustomerStore(
+    useShallow(state => ({
+      isAllSelected: customerSelectors.isAllSelected(state)(customerIds),
+      isPartiallySelected: customerSelectors.isPartiallySelected(state)(customerIds),
+    }))
+  );
+}
+```
+
+4. **Infinite query with typed pagination** (`src/hooks/useCustomers.ts`)
+
+```ts
+return useInfiniteQuery({
+  queryKey: qk.customers.list(search, limit, sortBy, sortOrder, status, tier, industry),
+  queryFn: ({ pageParam }) =>
+    customerService.getCustomers({
+      search,
+      limit,
+      sortBy,
+      sortOrder,
+      status,
+      tier,
+      industry,
+      cursor: (pageParam ?? null) as string | null,
+    }),
+  initialPageParam: null as string | null,
+  getNextPageParam: (lastPage: ApiResponse<CustomerList>) =>
+    lastPage.ok ? lastPage.data.nextCursor ?? undefined : undefined,
+  staleTime: 60_000,
+  gcTime: 120_000,
+  refetchOnWindowFocus: false,
+  retry: 1,
+});
+```
+
+5. **Analytics hygiene**
+
+- Side-effects are triggered only in `onSuccess/onError` of mutations, not during render, avoiding extra loops.
+
+### **Prevention Framework (Customers + React Query)**
+
+1. **Use union types for UI controls** (e.g., `CustomerSortBy`) — never `any`.
+2. **Adopt `useShallow` for derived selector objects** in Zustand v5.
+3. **Build query keys from normalized primitives/objects** and `as const`.
+4. **Prefer functional state updates** in handlers that toggle state.
+5. **Keep side-effects in React Query callbacks**, not in render paths.
+6. **Tune refetch behavior** (`refetchOnWindowFocus: false`) for heavy lists.
+
+### **Success Metrics**
+
+- ✅ No infinite refetch on sort/filter changes
+- ✅ Stable scroll and pagination with `useInfiniteQuery`
+- ✅ Analytics events fire once per operation (no bursts)
+- ✅ Type-check passes (`npm run type-check`)
 
 ---
 
@@ -852,3 +1082,19 @@ npm run ui:test:wizard
 
 **Result**: **SUCCESSFUL WIZARD PAYLOAD FIX** - Wizard submissions now work
 correctly with proper data structure transformation.
+
+## 🔧 *React has detected a change in the order of Hooks called by BasicInformationStep. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: **
+Cause of bug
+Conditional hook order: BasicInformationStep called a hook inside JSX: min={useMemo(() => new Date().toISOString().split('T')[0], [])} in
+src/components/proposals/steps/BasicInformationStep.tsx
+.
+Because there’s an early return above (if (!customersData && customersLoading) return ...), the inline useMemo wasn’t called on some renders, changing the hooks order and triggering:
+“React has detected a change in the order of Hooks…”
+“Rendered more hooks than during the previous render.”
+Fix implemented
+Moved inline hook out of JSX and defined it before any conditional returns:
+Added const todayISODate = useMemo(() => new Date().toISOString().split('T')[0], []);
+Replaced prop with min={todayISODate}
+File:
+src/components/proposals/steps/BasicInformationStep.tsx
+Verified TypeScript OK: npm run type-check passed.

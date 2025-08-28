@@ -1,7 +1,8 @@
 // Product Service - New Architecture
 import { ApiResponse } from '@/lib/api/response';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
-import { logDebug, logError, logInfo } from '@/lib/logger';
+import { logDebug, logInfo } from '@/lib/logger';
 import { z } from 'zod';
 
 // ====================
@@ -48,6 +49,7 @@ export type BulkDelete = z.infer<typeof BulkDeleteSchema>;
 
 export class ProductService {
   private baseUrl = '/api/products';
+  private errorHandlingService = ErrorHandlingService.getInstance();
 
   /**
    * Get list of products with cursor pagination
@@ -78,13 +80,17 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to fetch products', {
-        component: 'ProductService',
-        operation: 'getProducts',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch products',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'getProducts',
+        }
+      );
+      throw processed;
     }
   }
 
@@ -108,14 +114,18 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to fetch product', {
-        component: 'ProductService',
-        operation: 'getProduct',
-        productId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch product',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'getProduct',
+          productId: id,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -141,14 +151,18 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to fetch product with relationships', {
-        component: 'ProductService',
-        operation: 'getProductWithRelationships',
-        productId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch product with relationships',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'getProductWithRelationships',
+          productId: id,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -174,13 +188,17 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to create product', {
-        component: 'ProductService',
-        operation: 'createProduct',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to create product',
+        ErrorCodes.DATA.CREATE_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'createProduct',
+        }
+      );
+      throw processed;
     }
   }
 
@@ -208,14 +226,18 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to update product', {
-        component: 'ProductService',
-        operation: 'updateProduct',
-        productId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to update product',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'updateProduct',
+          productId: id,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -239,14 +261,18 @@ export class ProductService {
       });
 
       return { ok: true, data: undefined };
-    } catch (error) {
-      logError('Failed to delete product', {
-        component: 'ProductService',
-        operation: 'deleteProduct',
-        productId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to delete product',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'deleteProduct',
+          productId: id,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -275,13 +301,17 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to bulk delete products', {
-        component: 'ProductService',
-        operation: 'deleteProductsBulk',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to bulk delete products',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'deleteProductsBulk',
+        }
+      );
+      throw processed;
     }
   }
 
@@ -309,14 +339,18 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to search products', {
-        component: 'ProductService',
-        operation: 'searchProducts',
-        query,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to search products',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'searchProducts',
+          query,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -350,14 +384,18 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to create product relationship', {
-        component: 'ProductService',
-        operation: 'createRelationship',
-        sourceProductId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to create product relationship',
+        ErrorCodes.DATA.CREATE_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'createRelationship',
+          sourceProductId,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -388,15 +426,19 @@ export class ProductService {
       });
 
       return { ok: true, data: undefined };
-    } catch (error) {
-      logError('Failed to delete product relationship', {
-        component: 'ProductService',
-        operation: 'deleteRelationship',
-        sourceProductId,
-        relationshipId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to delete product relationship',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'deleteRelationship',
+          sourceProductId,
+          relationshipId,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -432,13 +474,17 @@ export class ProductService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to fetch product statistics', {
-        component: 'ProductService',
-        operation: 'getProductStats',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch product statistics',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'getProductStats',
+        }
+      );
+      throw processed;
     }
   }
 

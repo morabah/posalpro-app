@@ -4,6 +4,12 @@
  * Follows assessment recommendations for consistency and maintainability
  */
 
+// Local type aliases to keep query key signatures expressive without adding cross-feature imports
+type CustomerSortBy = 'createdAt' | 'name' | 'status' | 'revenue';
+type CustomerSortOrder = 'asc' | 'desc';
+type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
+type CustomerTier = 'STANDARD' | 'PREMIUM' | 'ENTERPRISE';
+
 export const qk = {
   customers: {
     all: ['customers'] as const,
@@ -11,9 +17,24 @@ export const qk = {
     list: (
       search: string,
       limit: number,
-      sortBy: 'createdAt' | 'name' | 'status' | 'revenue',
-      sortOrder: 'asc' | 'desc'
-    ) => [...qk.customers.lists(), search, limit, sortBy, sortOrder] as const,
+      sortBy: CustomerSortBy,
+      sortOrder: CustomerSortOrder,
+      status?: CustomerStatus,
+      tier?: CustomerTier,
+      industry?: string
+    ) =>
+      [
+        ...qk.customers.lists(),
+        {
+          search,
+          limit,
+          sortBy,
+          sortOrder,
+          status,
+          tier,
+          industry,
+        },
+      ] as const,
     details: () => [...qk.customers.all, 'detail'] as const,
     detail: (id: string) => [...qk.customers.details(), id] as const,
     search: (query: string, limit: number) =>

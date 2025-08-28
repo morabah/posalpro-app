@@ -80,15 +80,15 @@ export function QueryProvider({ children }: QueryProviderProps) {
     <QueryClientProvider client={queryClient}>
       {children}
       {/* Show React Query DevTools in development */}
-      {process.env.NODE_ENV === 'development' &&
-        isClient &&
-        (() => {
-          const Devtools = dynamic(
-            () => import('@tanstack/react-query-devtools').then(m => m.ReactQueryDevtools),
-            { ssr: false }
-          );
-          return <Devtools initialIsOpen={false} position="bottom" />;
-        })()}
+      {process.env.NODE_ENV === 'development' && isClient && (
+        <DevtoolsMemo initialIsOpen={false} position="bottom" />
+      )}
     </QueryClientProvider>
   );
 }
+
+// Hoisted dynamic import to avoid redeclaration on each render
+const DevtoolsMemo = dynamic(
+  () => import('@tanstack/react-query-devtools').then(m => m.ReactQueryDevtools),
+  { ssr: false }
+);

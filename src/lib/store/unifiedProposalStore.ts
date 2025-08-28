@@ -11,6 +11,7 @@ import { logDebug, logError } from '@/lib/logger';
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { useShallow } from 'zustand/react/shallow';
 
 // Define UnifiedProposalData as an extension of Proposal
 export interface UnifiedProposalData extends Proposal {
@@ -108,26 +109,18 @@ export interface WizardStepData {
   };
 }
 
-// Store state interface
+// Store state interface - UI STATE ONLY
 interface UnifiedProposalStoreState {
-  // Current proposal data - single source of truth
-  currentProposal: UnifiedProposalData | null;
-
-  // Wizard state with persistence
+  // Wizard state - UI STATE ONLY
   wizardData: WizardStepData;
   currentStep: number;
   isWizardActive: boolean;
 
-  // Data persistence flags
-  isPersisting: boolean;
-  lastPersistedAt: number | null;
-  persistenceErrors: string[];
-
-  // Navigation state
+  // Navigation state - UI DERIVED STATE
   canNavigateBack: boolean;
   canNavigateForward: boolean;
 
-  // Validation state
+  // Validation state - CLIENT-SIDE VALIDATION STATE
   stepValidation: Record<
     number,
     {
@@ -138,13 +131,9 @@ interface UnifiedProposalStoreState {
   >;
 }
 
-// Store actions interface
+// Store actions interface - UI STATE ONLY
 interface UnifiedProposalStoreActions {
-  // Proposal management
-  setCurrentProposal: (proposal: UnifiedProposalData | null) => void;
-  updateProposalValue: (value: number) => void;
-
-  // Wizard navigation
+  // Wizard navigation - UI ACTIONS
   setCurrentStep: (step: number) => void;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
@@ -152,13 +141,12 @@ interface UnifiedProposalStoreActions {
   completeWizard: () => void;
   cancelWizard: () => void;
 
-  // Step data management with persistence
+  // Step data management - UI DATA MANAGEMENT
   setStepData: <T extends keyof WizardStepData>(step: T, data: WizardStepData[T]) => void;
   getStepData: <T extends keyof WizardStepData>(step: T) => WizardStepData[T];
-  persistStepData: (step: number, data: any) => Promise<void>;
 
-  // Data synchronization
-  syncWithUnifiedData: (unifiedData: UnifiedProposalData) => void;
+  // Data synchronization - UI SYNCHRONIZATION
+  syncWithWizardData: (wizardData: Partial<WizardStepData>) => void;
   calculateTotalValue: () => number;
 
   // Validation
@@ -166,9 +154,7 @@ interface UnifiedProposalStoreActions {
   validateAllSteps: () => boolean;
 
   // Persistence management
-  setPersisting: (isPersisting: boolean) => void;
-  addPersistenceError: (error: string) => void;
-  clearPersistenceErrors: () => void;
+  // Server state actions moved to React Query mutations
 
   // Reset and cleanup
   resetWizard: () => void;
@@ -177,15 +163,11 @@ interface UnifiedProposalStoreActions {
 
 type UnifiedProposalStore = UnifiedProposalStoreState & UnifiedProposalStoreActions;
 
-// Initial state
+// Initial state - UI STATE ONLY
 const initialState: UnifiedProposalStoreState = {
-  currentProposal: null,
   wizardData: {},
   currentStep: 1,
   isWizardActive: false,
-  isPersisting: false,
-  lastPersistedAt: null,
-  persistenceErrors: [],
   canNavigateBack: false,
   canNavigateForward: false,
   stepValidation: {},
@@ -197,39 +179,7 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
     immer((set, get) => ({
       ...initialState,
 
-      // Proposal management
-      setCurrentProposal: proposal => {
-        set(state => {
-          state.currentProposal = proposal;
-
-          // Sync wizard data with proposal if exists
-          if (proposal?.wizardData) {
-            state.wizardData = { ...proposal.wizardData };
-          }
-
-          logDebug('Current proposal set', {
-            component: 'UnifiedProposalStore',
-            operation: 'setCurrentProposal',
-            proposalId: proposal?.id,
-            hasWizardData: !!proposal?.wizardData,
-          });
-        });
-      },
-
-      updateProposalValue: value => {
-        set(state => {
-          if (state.currentProposal) {
-            state.currentProposal.value = value;
-            state.currentProposal.totalValue = value;
-          }
-
-          logDebug('Proposal value updated', {
-            component: 'UnifiedProposalStore',
-            operation: 'updateProposalValue',
-            value,
-          });
-        });
-      },
+      // UI State Management - Server state moved to React Query
 
       // Wizard navigation
       setCurrentStep: step => {
@@ -276,7 +226,6 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
           state.isWizardActive = true;
           state.currentStep = 1;
           state.wizardData = initialData || {};
-          state.persistenceErrors = [];
           state.stepValidation = {};
 
           logDebug('Wizard started', {
@@ -305,7 +254,7 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
           state.isWizardActive = false;
           state.currentStep = 1;
           state.wizardData = {};
-          state.persistenceErrors = [];
+          // Server state cleanup moved to React Query
 
           logDebug('Wizard cancelled', {
             component: 'UnifiedProposalStore',
@@ -323,18 +272,8 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
           const validation = get().validateStep(parseInt(step.replace('step', '')));
           state.stepValidation[parseInt(step.replace('step', ''))] = validation;
 
-          // Update proposal value if step 4 (products)
-          if (step === 'step4' && data && 'totalValue' in data) {
-            if (state.currentProposal) {
-              state.currentProposal.value = data.totalValue;
-              state.currentProposal.totalValue = data.totalValue;
-              state.currentProposal.products = data.products || [];
-              state.currentProposal.productCount = data.products?.length || 0;
-            }
-          }
-
-          // Update persistence timestamp
-          state.lastPersistedAt = Date.now();
+          // Server state updates moved to React Query mutations
+          // Proposal value updates handled by useUpdateProposal hook
 
           logDebug('Step data set with persistence', {
             component: 'UnifiedProposalStore',
@@ -361,74 +300,20 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
         return data;
       },
 
-      persistStepData: async (step, data) => {
-        const { setPersisting, addPersistenceError, clearPersistenceErrors } = get();
+      // Server persistence moved to React Query mutations
 
-        try {
-          setPersisting(true);
-          clearPersistenceErrors();
-
-          logDebug('Persisting step data', {
-            component: 'UnifiedProposalStore',
-            operation: 'persistStepData',
-            step,
-            dataKeys: data ? Object.keys(data) : [],
-          });
-
-          // Set the step data in store
-          get().setStepData(`step${step}` as keyof WizardStepData, data);
-
-          // Here you would typically call an API to persist the data
-          // For now, we'll simulate persistence with localStorage backup
-          if (typeof window !== 'undefined') {
-            const backupKey = `wizard-backup-step-${step}`;
-            localStorage.setItem(
-              backupKey,
-              JSON.stringify({
-                step,
-                data,
-                timestamp: Date.now(),
-              })
-            );
-          }
-
-          logDebug('Step data persisted successfully', {
-            component: 'UnifiedProposalStore',
-            operation: 'persistStepData',
-            step,
-          });
-        } catch (error) {
-          const errorMessage = `Failed to persist step ${step} data: ${error instanceof Error ? error.message : 'Unknown error'}`;
-          addPersistenceError(errorMessage);
-
-          logError('Step data persistence failed', error, {
-            component: 'UnifiedProposalStore',
-            operation: 'persistStepData',
-            step,
-          });
-
-          throw error;
-        } finally {
-          setPersisting(false);
-        }
-      },
-
-      // Data synchronization
-      syncWithUnifiedData: unifiedData => {
+      // UI Data synchronization - Server state moved to React Query
+      syncWithWizardData: wizardData => {
         set(state => {
-          state.currentProposal = unifiedData;
-
-          // Sync wizard data if it exists
-          if (unifiedData.wizardData) {
-            state.wizardData = { ...unifiedData.wizardData };
+          // Sync only wizard data - server state handled by React Query
+          if (wizardData) {
+            state.wizardData = { ...wizardData };
           }
 
-          logDebug('Store synced with unified data', {
+          logDebug('Store synced with wizard data', {
             component: 'UnifiedProposalStore',
-            operation: 'syncWithUnifiedData',
-            proposalId: unifiedData.id,
-            totalValue: unifiedData.totalValue,
-            productCount: unifiedData.productCount,
+            operation: 'syncWithWizardData',
+            dataKeys: wizardData ? Object.keys(wizardData) : [],
           });
         });
       },
@@ -528,23 +413,7 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
       },
 
       // Persistence management
-      setPersisting: isPersisting => {
-        set(state => {
-          state.isPersisting = isPersisting;
-        });
-      },
-
-      addPersistenceError: error => {
-        set(state => {
-          state.persistenceErrors.push(error);
-        });
-      },
-
-      clearPersistenceErrors: () => {
-        set(state => {
-          state.persistenceErrors = [];
-        });
-      },
+      // Server state actions moved to React Query mutations
 
       // Reset and cleanup
       resetWizard: () => {
@@ -552,9 +421,7 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
           state.wizardData = {};
           state.currentStep = 1;
           state.isWizardActive = false;
-          state.persistenceErrors = [];
           state.stepValidation = {};
-          state.lastPersistedAt = null;
 
           logDebug('Wizard reset', {
             component: 'UnifiedProposalStore',
@@ -577,41 +444,56 @@ export const useUnifiedProposalStore = create<UnifiedProposalStore>()(
   )
 );
 
-// Selectors for optimized component subscriptions
-export const useUnifiedProposalStoreSelectors = {
-  // Current proposal selectors
-  currentProposal: () => useUnifiedProposalStore(state => state.currentProposal),
-  proposalValue: () => useUnifiedProposalStore(state => state.currentProposal?.totalValue || 0),
+// Top-level hooks for optimized component subscriptions (Zustand v5 compliant)
+// Wizard selectors - UI STATE ONLY
+export const useUnifiedProposalCurrentStep = () =>
+  useUnifiedProposalStore(state => state.currentStep);
+export const useUnifiedProposalIsWizardActive = () =>
+  useUnifiedProposalStore(state => state.isWizardActive);
+export const useUnifiedProposalWizardData = () =>
+  useUnifiedProposalStore(state => state.wizardData);
 
-  // Wizard selectors
-  currentStep: () => useUnifiedProposalStore(state => state.currentStep),
-  isWizardActive: () => useUnifiedProposalStore(state => state.isWizardActive),
-  wizardData: () => useUnifiedProposalStore(state => state.wizardData),
+// Step data selectors - UI STATE ONLY
+export const useUnifiedProposalStep1Data = () =>
+  useUnifiedProposalStore(state => state.wizardData.step1);
+export const useUnifiedProposalStep2Data = () =>
+  useUnifiedProposalStore(state => state.wizardData.step2);
+export const useUnifiedProposalStep3Data = () =>
+  useUnifiedProposalStore(state => state.wizardData.step3);
+export const useUnifiedProposalStep4Data = () =>
+  useUnifiedProposalStore(state => state.wizardData.step4);
+export const useUnifiedProposalStep5Data = () =>
+  useUnifiedProposalStore(state => state.wizardData.step5);
 
-  // Step data selectors
-  step1Data: () => useUnifiedProposalStore(state => state.wizardData.step1),
-  step2Data: () => useUnifiedProposalStore(state => state.wizardData.step2),
-  step3Data: () => useUnifiedProposalStore(state => state.wizardData.step3),
-  step4Data: () => useUnifiedProposalStore(state => state.wizardData.step4),
-  step5Data: () => useUnifiedProposalStore(state => state.wizardData.step5),
+// Navigation selectors - UI DERIVED STATE
+export const useUnifiedProposalCanNavigateBack = () =>
+  useUnifiedProposalStore(state => state.canNavigateBack);
+export const useUnifiedProposalCanNavigateForward = () =>
+  useUnifiedProposalStore(state => state.canNavigateForward);
 
-  // Navigation selectors
-  canNavigateBack: () => useUnifiedProposalStore(state => state.canNavigateBack),
-  canNavigateForward: () => useUnifiedProposalStore(state => state.canNavigateForward),
+// Validation selectors - CLIENT-SIDE VALIDATION STATE
+export const useUnifiedProposalStepValidation = (step: number) =>
+  useUnifiedProposalStore(state => state.stepValidation[step]);
 
-  // Persistence selectors
-  isPersisting: () => useUnifiedProposalStore(state => state.isPersisting),
-  persistenceErrors: () => useUnifiedProposalStore(state => state.persistenceErrors),
-  lastPersistedAt: () => useUnifiedProposalStore(state => state.lastPersistedAt),
-
-  // Validation selectors
-  stepValidation: (step: number) => useUnifiedProposalStore(state => state.stepValidation[step]),
-
-  // Actions selectors
-  actions: () =>
-    useUnifiedProposalStore(state => ({
-      setCurrentProposal: state.setCurrentProposal,
-      updateProposalValue: state.updateProposalValue,
+// Actions - composite hook with shallow equality to avoid re-renders
+export const useUnifiedProposalActions = (): {
+  setCurrentStep: (step: number) => void;
+  goToNextStep: () => void;
+  goToPreviousStep: () => void;
+  startWizard: (initialData?: Partial<WizardStepData>) => void;
+  completeWizard: () => void;
+  cancelWizard: () => void;
+  setStepData: <T extends keyof WizardStepData>(step: T, data: WizardStepData[T]) => void;
+  getStepData: <T extends keyof WizardStepData>(step: T) => WizardStepData[T];
+  syncWithWizardData: (wizardData: Partial<WizardStepData>) => void;
+  calculateTotalValue: () => number;
+  validateStep: (step: number) => { isValid: boolean; errors: string[]; warnings: string[] };
+  validateAllSteps: () => boolean;
+  resetWizard: () => void;
+  resetStore: () => void;
+} =>
+  useUnifiedProposalStore(
+    useShallow(state => ({
       setCurrentStep: state.setCurrentStep,
       goToNextStep: state.goToNextStep,
       goToPreviousStep: state.goToPreviousStep,
@@ -620,12 +502,37 @@ export const useUnifiedProposalStoreSelectors = {
       cancelWizard: state.cancelWizard,
       setStepData: state.setStepData,
       getStepData: state.getStepData,
-      persistStepData: state.persistStepData,
-      syncWithUnifiedData: state.syncWithUnifiedData,
+      syncWithWizardData: state.syncWithWizardData,
       calculateTotalValue: state.calculateTotalValue,
       validateStep: state.validateStep,
       validateAllSteps: state.validateAllSteps,
       resetWizard: state.resetWizard,
       resetStore: state.resetStore,
-    })),
-};
+    }))
+  );
+
+/**
+ * @deprecated Use the named hooks directly instead of this namespace.
+ * Examples:
+ * - `useUnifiedProposalStep4Data`
+ * - `useUnifiedProposalActions`
+ * - `useUnifiedProposalCurrentStep`
+ * - `useUnifiedProposalCanNavigateForward`
+ * This alias is retained temporarily for migration ergonomics and will be removed
+ * in a future release after the deprecation window.
+ */
+// Convenience namespace (optional) retaining prior import name with proper hook naming
+export const useUnifiedProposalStoreSelectors = {
+  useCurrentStep: useUnifiedProposalCurrentStep,
+  useIsWizardActive: useUnifiedProposalIsWizardActive,
+  useWizardData: useUnifiedProposalWizardData,
+  useStep1Data: useUnifiedProposalStep1Data,
+  useStep2Data: useUnifiedProposalStep2Data,
+  useStep3Data: useUnifiedProposalStep3Data,
+  useStep4Data: useUnifiedProposalStep4Data,
+  useStep5Data: useUnifiedProposalStep5Data,
+  useCanNavigateBack: useUnifiedProposalCanNavigateBack,
+  useCanNavigateForward: useUnifiedProposalCanNavigateForward,
+  useStepValidation: useUnifiedProposalStepValidation,
+  useActions: useUnifiedProposalActions,
+} as const;

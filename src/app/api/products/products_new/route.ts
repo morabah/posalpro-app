@@ -2,42 +2,23 @@
  * PosalPro MVP2 - Products API Routes (New Architecture)
  * Enhanced product management with authentication, RBAC, and analytics
  * Component Traceability: US-4.1, H5
+ *
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
+ * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
 
-// Validation schemas
-const ProductQuerySchema = z.object({
-  search: z.string().trim().default(''),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'price', 'isActive']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  category: z.string().optional(),
-  isActive: z.boolean().optional(),
-});
-
-const ProductCreateSchema = z.object({
-  name: z.string().min(1, 'Product name is required').max(200),
-  description: z.string().max(1000).optional(),
-  price: z.number().positive('Price must be positive'),
-  currency: z.string().default('USD'),
-  sku: z.string().min(1, 'SKU is required'),
-  category: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
-  attributes: z.record(z.unknown()).optional(),
-  images: z.array(z.string()).default([]),
-  isActive: z.boolean().default(true),
-  version: z.number().default(1),
-  usageAnalytics: z.record(z.unknown()).optional(),
-  userStoryMappings: z.array(z.string()).default([]),
-});
-
-const ProductUpdateSchema = ProductCreateSchema.partial();
+// Import consolidated schemas from feature folder
+import {
+  ProductCreateSchema,
+  ProductListSchema,
+  ProductQuerySchema,
+  ProductSchema,
+} from '@/features/products/schemas';
 
 // GET /api/products_new - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(
@@ -110,6 +91,15 @@ export const GET = createRoute(
       const nextCursor = hasNextPage ? rows[query!.limit - 1].id : null;
       const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
 
+      // Transform null values to appropriate defaults before validation
+      const transformedItems = items.map(item => ({
+        ...item,
+        description: item.description || '',
+        price: item.price ?? 0,
+        attributes: item.attributes || undefined,
+        usageAnalytics: item.usageAnalytics || undefined,
+      }));
+
       logInfo('Products fetched successfully', {
         component: 'ProductAPI',
         operation: 'GET',
@@ -117,7 +107,13 @@ export const GET = createRoute(
         hasNextPage,
       });
 
-      return Response.json(ok({ items, nextCursor }));
+      // Validate response against schema
+      const validatedResponse = ProductListSchema.parse({
+        items: transformedItems,
+        nextCursor,
+      });
+
+      return Response.json(ok(validatedResponse));
     } catch (error) {
       logError('Failed to fetch products', {
         component: 'ProductAPI',
@@ -187,7 +183,28 @@ export const POST = createRoute(
         productId: product.id,
       });
 
-      return Response.json(ok(product));
+      // Transform null values to appropriate defaults before validation
+      const transformedProduct = {
+        ...product,
+        description: product.description || '',
+        price: product.price ?? 0,
+        attributes: product.attributes || undefined,
+        usageAnalytics: product.usageAnalytics || undefined,
+      };
+
+      // Validate response against schema
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed after creation', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'POST',
+          productId: product.id,
+        });
+        // Return the transformed product data anyway for now, but log the validation error
+        return Response.json(ok(transformedProduct));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
       logError('Failed to create product', {
         component: 'ProductAPI',

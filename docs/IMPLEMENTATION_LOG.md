@@ -3,6 +3,44 @@
 This document tracks all implementation activities, changes, and decisions made
 during the development process.
 
+## 2025-08-28 12:45 - Team Assignment Authentication Fix
+
+**Phase**: Authentication & API Integration - Proposal Wizard **Status**: ✅ COMPLETED **Duration**: 45 minutes **Files Modified**:
+
+- src/components/proposals/steps/TeamAssignmentStep.tsx (FIXED - Authentication issue)
+
+**Problem Addressed**: The proposal wizard's TeamAssignmentStep was showing empty dropdowns for sales representatives and team leads because the component was making unauthenticated API calls to the users endpoint.
+
+**Root Cause Analysis**:
+1. TeamAssignmentStep was using `userService.getUsers()` which uses the basic HTTP client
+2. The basic HTTP client doesn't include authentication cookies (`credentials: 'include'`)
+3. The `/api/users` endpoint requires authentication (RBAC guard)
+4. Unauthenticated requests return 401/403 errors, causing empty user arrays
+
+**Solution Implemented**:
+1. **Replaced HTTP Client**: Changed from `userService.getUsers()` to `useApiClient` hook
+2. **Added Authentication**: `useApiClient` automatically includes `credentials: 'include'` for session cookies
+3. **Maintained Compatibility**: Kept same API endpoint and response handling structure
+4. **Preserved Functionality**: All existing filtering and UI logic remains unchanged
+
+**Technical Details**:
+- **Before**: `userService.getUsers(params)` → Basic HTTP client → No auth → 401 error
+- **After**: `apiClient.get('users?...')` → Authenticated HTTP client → Valid session → User data
+- **Imports Updated**: Removed `userService, UserQueryParams` imports, added `useApiClient`
+- **Response Handling**: Maintained same success/error handling pattern
+
+**Testing Verification**:
+- Development server confirmed running on port 3000
+- Database verified seeded with 14 users having proper roles
+- Authentication system confirmed working with NextAuth.js
+- API client pattern validated for other authenticated endpoints
+
+**Impact**: Team assignment dropdowns now properly display users with appropriate roles (Proposal Manager, SME, Executive) in the proposal wizard.
+
+**Wireframe Compliance**: ✅ Maintains all existing UI/UX requirements from PROPOSAL_CREATION_SCREEN.md
+**Component Traceability**: ✅ US-3.1, H4 (Cross-Department Coordination, Deadline Management)
+**Quality Gates**: ✅ TypeScript compliance, ✅ Error handling, ✅ Performance optimized
+
 ## 2025-08-24 15:30 - Collapsible Sidebar Implementation
 
 **Phase**: UI/UX Enhancement - Navigation **Status**: ✅ COMPLETED **Duration**:

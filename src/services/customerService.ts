@@ -1,7 +1,8 @@
 // Customer Service - New Architecture
 import { ApiResponse } from '@/lib/api/response';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
-import { logDebug, logError, logInfo } from '@/lib/logger';
+import { logDebug, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas
 import {
@@ -21,6 +22,7 @@ export type { Customer, CustomerCreate, CustomerList, CustomerQuery, CustomerUpd
 // Service class
 export class CustomerService {
   private baseUrl = '/api/customers';
+  private errorHandlingService = ErrorHandlingService.getInstance();
 
   async getCustomers(params: CustomerQuery): Promise<ApiResponse<CustomerList>> {
     const validatedParams = CustomerQuerySchema.parse(params);
@@ -48,13 +50,17 @@ export class CustomerService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to fetch customers', {
-        component: 'CustomerService',
-        operation: 'getCustomers',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch customers',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'getCustomers',
+        }
+      );
+      throw processed;
     }
   }
 
@@ -75,14 +81,18 @@ export class CustomerService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to fetch customer', {
-        component: 'CustomerService',
-        operation: 'getCustomer',
-        customerId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch customer',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'getCustomer',
+          customerId: id,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -106,14 +116,18 @@ export class CustomerService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to create customer', {
-        component: 'CustomerService',
-        operation: 'createCustomer',
-        customerName: validatedData.name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to create customer',
+        ErrorCodes.DATA.CREATE_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'createCustomer',
+          customerName: validatedData.name,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -136,14 +150,18 @@ export class CustomerService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to update customer', {
-        component: 'CustomerService',
-        operation: 'updateCustomer',
-        customerId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to update customer',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'updateCustomer',
+          customerId: id,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -164,14 +182,18 @@ export class CustomerService {
       });
 
       return { ok: true, data: null };
-    } catch (error) {
-      logError('Failed to delete customer', {
-        component: 'CustomerService',
-        operation: 'deleteCustomer',
-        customerId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to delete customer',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'deleteCustomer',
+          customerId: id,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -192,14 +214,18 @@ export class CustomerService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to delete customers in bulk', {
-        component: 'CustomerService',
-        operation: 'deleteCustomersBulk',
-        customerCount: ids.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to delete customers in bulk',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'deleteCustomersBulk',
+          customerCount: ids.length,
+        }
+      );
+      throw processed;
     }
   }
 
@@ -224,14 +250,18 @@ export class CustomerService {
       });
 
       return { ok: true, data: response };
-    } catch (error) {
-      logError('Failed to search customers', {
-        component: 'CustomerService',
-        operation: 'searchCustomers',
-        query,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to search customers',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'searchCustomers',
+          query,
+        }
+      );
+      throw processed;
     }
   }
 }

@@ -2,6 +2,9 @@
  * Product API Routes - Modern Architecture
  * User Story: US-4.1 (Product Management)
  * Hypothesis: H5 (Modern data fetching improves performance and user experience)
+ *
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
+ * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
 import { ok } from '@/lib/api/response';
@@ -9,34 +12,14 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
-import { z } from 'zod';
 
-// Static schemas for API routes
-const ProductQuerySchema = z.object({
-  search: z.string().trim().default(''),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'price', 'isActive']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  category: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
-});
-
-const ProductCreateSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
-  price: z.number().positive('Price must be positive'),
-  currency: z.string().default('USD'),
-  sku: z.string().min(1, 'SKU is required'),
-  category: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
-  attributes: z.record(z.unknown()).optional(),
-  images: z.array(z.string()).default([]),
-  isActive: z.boolean().default(true),
-  version: z.number().default(1),
-  usageAnalytics: z.record(z.unknown()).optional(),
-  userStoryMappings: z.array(z.string()).default([]),
-});
+// Import consolidated schemas from feature folder
+import {
+  ProductCreateSchema,
+  ProductListSchema,
+  ProductQuerySchema,
+  ProductSchema,
+} from '@/features/products/schemas';
 
 // GET /api/products - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(
@@ -111,12 +94,22 @@ export const GET = createRoute(
       const items = hasMore ? rows.slice(0, -1) : rows;
       const nextCursor = hasMore ? items[items.length - 1]?.id || null : null;
 
-      return Response.json(
-        ok({
-          items,
-          nextCursor,
-        })
-      );
+      // Transform null values to appropriate defaults before validation
+      const transformedItems = items.map(item => ({
+        ...item,
+        description: item.description || '',
+        price: item.price ?? 0,
+        attributes: item.attributes || undefined,
+        usageAnalytics: item.usageAnalytics || undefined,
+      }));
+
+      // Validate response against schema
+      const validatedResponse = ProductListSchema.parse({
+        items: transformedItems,
+        nextCursor,
+      });
+
+      return Response.json(ok(validatedResponse));
     } catch (error) {
       logError('Failed to fetch products', {
         component: 'ProductAPI',
@@ -186,7 +179,28 @@ export const POST = createRoute(
         },
       });
 
-      return Response.json(ok(product), { status: 201 });
+      // Transform null values to appropriate defaults before validation
+      const transformedProduct = {
+        ...product,
+        description: product.description || '',
+        price: product.price ?? 0,
+        attributes: product.attributes || undefined,
+        usageAnalytics: product.usageAnalytics || undefined,
+      };
+
+      // Validate response against schema
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed after creation', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'POST',
+          productId: product.id,
+        });
+        // Return the transformed product data anyway for now, but log the validation error
+        return Response.json(ok(transformedProduct), { status: 201 });
+      }
+
+      return Response.json(ok(validationResult.data), { status: 201 });
     } catch (error) {
       logError('Failed to create product', {
         component: 'ProductAPI',

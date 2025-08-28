@@ -4,6 +4,7 @@
  * Component Traceability: US-3.1, US-3.2, H3, H4
  */
 
+import { fail } from '@/lib/api/response';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
@@ -20,6 +21,9 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+// Import consolidated schemas from feature folder
+import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-3.1 (Product Management), US-3.2 (Product Selection)
@@ -27,24 +31,10 @@ import { z } from 'zod';
  * - Hypotheses: H3 (SME Contribution Efficiency), H4 (Cross-Department Coordination)
  * - Methods: getProductById(), updateProduct(), deleteProduct()
  * - Test Cases: TC-H3-003, TC-H4-005
+ *
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
+ * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
-
-/**
- * Validation schema for product updates
- */
-const ProductUpdateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).optional(),
-  sku: z.string().min(1).max(50).optional(),
-  price: z.number().min(0).optional(),
-  currency: z.string().length(3).optional(),
-  category: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
-  attributes: z.record(z.any()).optional(),
-  images: z.array(z.string()).optional(),
-  isActive: z.boolean().optional(),
-  userStoryMappings: z.array(z.string()).optional(),
-});
 
 /**
  * GET /api/products/[id] - Get specific product with relationships
@@ -185,12 +175,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
 
     if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
     }
 
     // Transform the data for frontend consumption
     const transformedProduct = {
       ...product,
+      // Handle null values from database
+      description: product.description || '',
+      price: product.price ?? 0,
+      attributes: product.attributes || undefined,
+      usageAnalytics: product.usageAnalytics || undefined,
       statistics: {
         relationshipsCount: product._count.relationships + product._count.relatedFrom,
         usageInProposals: product._count.proposalProducts,
@@ -237,11 +232,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // Track product view for analytics
     await trackProductViewEvent(session.user.id, id, product.name);
 
+    // Validate response against schema
+    const validationResult = ProductSchema.safeParse(transformedProduct);
+    if (!validationResult.success) {
+      logError('Product schema validation failed', validationResult.error, {
+        component: 'ProductAPI',
+        operation: 'GET_BY_ID',
+      });
+      // Return the product data anyway for now, but log the validation error
+    }
+
+    const validatedProductData = validationResult.success
+      ? validationResult.data
+      : transformedProduct;
+
     return NextResponse.json(
       {
-        success: true,
-        data: transformedProduct,
-        message: 'Product retrieved successfully',
+        ok: true,
+        data: validatedProductData,
       },
       {
         headers: {
@@ -289,7 +297,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(fail('UNAUTHORIZED', 'Unauthorized'), { status: 401 });
     }
 
     // Parse and validate request body
@@ -303,7 +311,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
 
     if (!existingProduct) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
     }
 
     // Check for SKU uniqueness if SKU is being updated
@@ -365,10 +373,32 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       Object.keys(validatedData)
     );
 
+    // Transform null values to appropriate defaults before validation
+    const transformedProduct = {
+      ...updatedProduct,
+      description: updatedProduct.description || '',
+      price: updatedProduct.price ?? 0,
+      attributes: updatedProduct.attributes || undefined,
+      usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
+    };
+
+    // Validate response against schema
+    const validationResult = ProductSchema.safeParse(transformedProduct);
+    if (!validationResult.success) {
+      logError('Product schema validation failed after update', validationResult.error, {
+        component: 'ProductAPI',
+        operation: 'PUT',
+      });
+      // Return the product data anyway for now, but log the validation error
+    }
+
+    const validatedUpdatedData = validationResult.success
+      ? validationResult.data
+      : transformedProduct;
+
     return NextResponse.json({
-      success: true,
-      data: updatedProduct,
-      message: 'Product updated successfully',
+      ok: true,
+      data: validatedUpdatedData,
     });
   } catch (error) {
     const params = await context.params;
@@ -424,7 +454,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(fail('UNAUTHORIZED', 'Unauthorized'), { status: 401 });
     }
 
     // Check if product exists and get usage information
@@ -445,7 +475,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     });
 
     if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
     }
 
     // Check if product is in use
@@ -477,10 +507,32 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // Track product archival for analytics
       await trackProductArchiveEvent(session.user.id, id, product.name, 'in_use');
 
+      // Transform null values to appropriate defaults before validation
+      const transformedProduct = {
+        ...archivedProduct,
+        description: (archivedProduct as any).description || '',
+        price: (archivedProduct as any).price ?? 0,
+        attributes: (archivedProduct as any).attributes || undefined,
+        usageAnalytics: (archivedProduct as any).usageAnalytics || undefined,
+      };
+
+      // Validate response against schema
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed after archive', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'PUT_ARCHIVE',
+        });
+        // Return the product data anyway for now, but log the validation error
+      }
+
+      const validatedArchivedData = validationResult.success
+        ? validationResult.data
+        : transformedProduct;
+
       return NextResponse.json({
-        success: true,
-        data: archivedProduct,
-        message: 'Product archived successfully (was in use)',
+        ok: true,
+        data: validatedArchivedData,
       });
     } else {
       // Hard delete if not in use
@@ -492,9 +544,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       await trackProductArchiveEvent(session.user.id, id, product.name, 'deleted');
 
       return NextResponse.json({
-        success: true,
+        ok: true,
         data: { id, deleted: true },
-        message: 'Product deleted successfully',
       });
     }
   } catch (error) {

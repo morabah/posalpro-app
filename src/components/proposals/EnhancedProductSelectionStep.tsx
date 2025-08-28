@@ -11,38 +11,42 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { Select } from '@/components/ui/forms/Select';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useProposal } from '@/hooks/useProposals';
 import { logDebug, logError } from '@/lib/logger';
-import { useUnifiedProposalStoreSelectors } from '@/lib/store/unifiedProposalStore';
+import { useUnifiedProposalActions, useUnifiedProposalStep4Data } from '@/lib/store/unifiedProposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
+// Import existing hooks for server state (avoiding duplicates)
+import { useProposal } from '@/hooks/useProposal';
+import { usePersistProposalWizard } from '@/features/proposals/hooks';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 interface EnhancedProductSelectionStepProps {
+  proposalId: string;
   onNext: () => void;
   onBack: () => void;
 }
 
 export function EnhancedProductSelectionStep({
+  proposalId,
   onNext,
   onBack,
 }: EnhancedProductSelectionStepProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
-  // Unified store selectors for data persistence
-  const step4Data = useUnifiedProposalStoreSelectors.step4Data();
-  const currentProposal = useUnifiedProposalStoreSelectors.currentProposal();
-  const isPersisting = useUnifiedProposalStoreSelectors.isPersisting();
-  const persistenceErrors = useUnifiedProposalStoreSelectors.persistenceErrors();
-  const actions = useUnifiedProposalStoreSelectors.actions();
+  // UI state from store (wizard data, navigation, etc.)
+  const step4Data = useUnifiedProposalStep4Data();
+  const actions = useUnifiedProposalActions();
 
-  // Use real proposal data
+  // Server state from React Query hooks
   const {
     data: proposal,
     isLoading: proposalLoading,
     error: proposalError,
-  } = useProposal(currentProposal?.id || '');
+  } = useProposal(proposalId);
+
+  // Persistence mutation for wizard data
+  const persistWizard = usePersistProposalWizard();
 
   // Local state for form interactions
   const [selectedProducts, setSelectedProducts] = useState(() => {
@@ -175,7 +179,7 @@ export function EnhancedProductSelectionStep({
         actions.setStepData('step4', stepData);
 
         // Persist to API if proposal exists
-        if (currentProposal?.id) {
+        if (proposalId) {
           // This part of the logic is removed as persistWizardData is removed
           // await persistWizardData(4, stepData);
         }
@@ -211,7 +215,7 @@ export function EnhancedProductSelectionStep({
         setSelectedProducts(selectedProducts);
       }
     },
-    [productsData, selectedProducts, actions, currentProposal?.id, analytics]
+    [productsData, selectedProducts, actions, proposalId, analytics]
   );
 
   // Remove product handler with persistence
@@ -231,7 +235,7 @@ export function EnhancedProductSelectionStep({
       try {
         actions.setStepData('step4', stepData);
 
-        if (currentProposal?.id) {
+        if (proposalId) {
           // This part of the logic is removed as persistWizardData is removed
           // await persistWizardData(4, stepData);
         }
@@ -266,7 +270,7 @@ export function EnhancedProductSelectionStep({
         setSelectedProducts(selectedProducts);
       }
     },
-    [selectedProducts, actions, currentProposal?.id, analytics]
+    [selectedProducts, actions, proposalId, analytics]
   );
 
   // Quantity change handler with persistence
@@ -295,7 +299,7 @@ export function EnhancedProductSelectionStep({
       try {
         actions.setStepData('step4', stepData);
 
-        if (currentProposal?.id) {
+        if (proposalId) {
           // This part of the logic is removed as persistWizardData is removed
           // await persistWizardData(4, stepData);
         }
@@ -318,7 +322,7 @@ export function EnhancedProductSelectionStep({
         toast.error('Failed to save quantity change. Please try again.');
       }
     },
-    [selectedProducts, actions, currentProposal?.id]
+    [selectedProducts, actions, proposalId]
   );
 
   // Next step handler with final persistence
@@ -332,13 +336,17 @@ export function EnhancedProductSelectionStep({
       // Final persistence before navigation
       actions.setStepData('step4', finalStepData);
 
-      if (currentProposal?.id) {
+      if (proposalId) {
         // This part of the logic is removed as persistWizardData is removed
         // await persistWizardData(4, finalStepData);
       }
 
-      // Update proposal value in unified store
-      actions.updateProposalValue(totalAmount);
+      // Persist wizard data with React Query
+      await persistWizard.mutateAsync({
+        proposalId,
+        wizardData: { step4: finalStepData },
+        step: 4,
+      });
 
       analytics(
         'proposal_step_completed',
@@ -370,16 +378,14 @@ export function EnhancedProductSelectionStep({
 
       toast.error('Failed to save product selection. Please try again.');
     }
-  }, [selectedProducts, totalAmount, actions, currentProposal?.id, analytics, onNext]);
+  }, [selectedProducts, totalAmount, actions, proposalId, analytics, onNext]);
 
   // Display persistence errors
   useEffect(() => {
-    if (persistenceErrors.length > 0) {
-      persistenceErrors.forEach(error => {
-        toast.error(`Data persistence error: ${error}`);
-      });
+    if (persistWizard.error) {
+      toast.error(`Data persistence error: ${persistWizard.error.message}`);
     }
-  }, [persistenceErrors]);
+  }, [persistWizard.error]);
 
   return (
     <div className="space-y-6">
@@ -388,7 +394,7 @@ export function EnhancedProductSelectionStep({
         <p className="mt-2 text-gray-600">
           Choose products and services for your proposal with automatic data persistence
         </p>
-        {isPersisting && (
+        {persistWizard.isPending && (
           <div className="mt-2 flex items-center text-sm text-blue-600">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
             Saving changes...
@@ -409,7 +415,7 @@ export function EnhancedProductSelectionStep({
                 handleAddProduct(product);
               }
             }}
-            disabled={productsLoading || isPersisting}
+            disabled={productsLoading || persistWizard.isPending}
           />
         </div>
 
@@ -453,14 +459,14 @@ export function EnhancedProductSelectionStep({
                         handleQuantityChange(product.productId, parseInt(e.target.value) || 1)
                       }
                       className="w-20"
-                      disabled={isPersisting}
+                      disabled={persistWizard.isPending}
                     />
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleRemoveProduct(product.productId)}
                       className="text-red-600 hover:text-red-700"
-                      disabled={isPersisting}
+                      disabled={persistWizard.isPending}
                     >
                       Remove
                     </Button>
@@ -501,11 +507,11 @@ export function EnhancedProductSelectionStep({
 
       {/* Navigation */}
       <div className="flex justify-between pt-6 border-t border-gray-200">
-        <Button variant="outline" onClick={onBack} disabled={isPersisting}>
+        <Button variant="outline" onClick={onBack} disabled={persistWizard.isPending}>
           Previous
         </Button>
-        <Button onClick={handleNext} disabled={isPersisting} className="min-w-[120px]">
-          {isPersisting ? (
+        <Button onClick={handleNext} disabled={persistWizard.isPending} className="min-w-[120px]">
+          {persistWizard.isPending ? (
             <div className="flex items-center">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
               Saving...
@@ -524,7 +530,7 @@ export function EnhancedProductSelectionStep({
             <p>• Products: {selectedProducts.length} selected</p>
             <p>• Total Value: ${totalAmount.toFixed(2)}</p>
             <p>• Store Sync: {step4Data ? '✅ Synced' : '⚠️ Pending'}</p>
-            <p>• API Persistence: {currentProposal?.id ? '✅ Active' : '⚠️ Draft Mode'}</p>
+            <p>• API Persistence: {proposalId ? '✅ Active' : '⚠️ Draft Mode'}</p>
           </div>
         </div>
       </Card>

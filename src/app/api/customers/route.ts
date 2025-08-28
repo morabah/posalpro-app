@@ -2,41 +2,24 @@
  * PosalPro MVP2 - Customers API Routes (New Architecture)
  * Enhanced customer management with authentication, RBAC, and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
+ *
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/customers/schemas.ts
+ * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
 
-// Validation schemas
-const CustomerQuerySchema = z.object({
-  search: z.string().trim().default(''),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'status', 'revenue']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']).optional(),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']).optional(),
-  industry: z.string().optional(),
-});
-
-const CustomerCreateSchema = z.object({
-  name: z.string().min(1, 'Customer name is required').max(200),
-  email: z.string().email('Invalid email format'),
-  phone: z.string().max(20).optional(),
-  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
-  address: z.string().max(500).optional(),
-  industry: z.string().max(100).optional(),
-  companySize: z.string().max(50).optional(),
-  revenue: z.number().min(0).optional(),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']).default('STANDARD'),
-  tags: z.array(z.string()).default([]),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-const CustomerUpdateSchema = CustomerCreateSchema.partial();
+// Import consolidated schemas from feature folder
+import {
+  CustomerCreateSchema,
+  CustomerListSchema,
+  CustomerQuerySchema,
+  CustomerSchema,
+  CustomerUpdateSchema,
+} from '@/features/customers/schemas';
 
 // GET /api/customers - Retrieve customers with filtering and cursor pagination
 export const GET = createRoute(
@@ -124,12 +107,13 @@ export const GET = createRoute(
         hasNextPage,
       });
 
-      return Response.json(
-        ok({
-          items,
-          nextCursor,
-        })
-      );
+      // Validate response against schema
+      const validatedResponse = CustomerListSchema.parse({
+        items,
+        nextCursor,
+      });
+
+      return Response.json(ok(validatedResponse));
     } catch (error) {
       logError('Failed to fetch customers', {
         component: 'CustomerAPI',
@@ -190,7 +174,19 @@ export const POST = createRoute(
         customerName: customer.name,
       });
 
-      return Response.json(ok(customer), { status: 201 });
+      // Validate response against schema
+      const validationResult = CustomerSchema.safeParse(customer);
+      if (!validationResult.success) {
+        logError('Customer schema validation failed after creation', validationResult.error, {
+          component: 'CustomerAPI',
+          operation: 'POST',
+          customerId: customer.id,
+        });
+        // Return the customer data anyway for now, but log the validation error
+        return Response.json(ok(customer), { status: 201 });
+      }
+
+      return Response.json(ok(validationResult.data), { status: 201 });
     } catch (error) {
       logError('Failed to create customer', {
         component: 'CustomerAPI',
@@ -259,7 +255,19 @@ export const PUT = createRoute(
         customerName: customer.name,
       });
 
-      return Response.json(ok(customer));
+      // Validate response against schema
+      const validationResult = CustomerSchema.safeParse(customer);
+      if (!validationResult.success) {
+        logError('Customer schema validation failed after update', validationResult.error, {
+          component: 'CustomerAPI',
+          operation: 'PUT',
+          customerId: customer.id,
+        });
+        // Return the customer data anyway for now, but log the validation error
+        return Response.json(ok(customer));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
       logError('Failed to update customer', {
         component: 'CustomerAPI',

@@ -9,6 +9,7 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { qk } from '@/features/proposals/keys';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useProposal } from '@/hooks/useProposal';
 import { logInfo } from '@/lib/logger';
@@ -33,6 +34,8 @@ import {
   Mail,
   MessageSquare,
   Package,
+  Printer,
+  RefreshCw,
   Share2,
   Target,
   Trash2,
@@ -168,33 +171,59 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
   }, [proposalId, router, analytics]);
 
   const handleRefresh = useCallback(async () => {
-    try {
-      analytics(
-        'proposal_edit_clicked',
-        {
-          proposalId,
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        },
-        'medium'
-      );
+    logInfo('Manual refresh triggered', {
+      component: 'ProposalDetailView',
+      operation: 'manual_refresh',
+      proposalId,
+      userStory: 'US-3.2',
+      hypothesis: 'H4',
+    });
 
-      // Force refresh the proposal data
-      await refetch();
-
-      toast.success('Proposal data refreshed');
-    } catch (error) {
-      logInfo('Proposal refresh failed', {
-        component: 'ProposalDetailView',
-        operation: 'handleRefresh',
+    analytics(
+      'proposal_action_taken',
+      {
         proposalId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        action: 'refresh',
         userStory: 'US-3.2',
         hypothesis: 'H4',
-      });
-      toast.error('Failed to refresh proposal data');
-    }
-  }, [proposalId, refetch, analytics]);
+      },
+      'medium'
+    );
+
+    // Force invalidate and refetch
+    queryClient.invalidateQueries({ queryKey: qk.proposals.byId(proposalId) });
+    await refetch();
+
+    toast.success('Proposal data refreshed');
+  }, [proposalId, refetch, analytics, queryClient]);
+
+  // Preview proposal handler
+  const handlePreview = useCallback(() => {
+    logInfo('Preview proposal triggered', {
+      component: 'ProposalDetailView',
+      operation: 'preview_proposal',
+      proposalId,
+      userStory: 'US-3.2',
+      hypothesis: 'H4',
+    });
+
+    analytics(
+      'proposal_action_taken',
+      {
+        proposalId,
+        action: 'preview',
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      },
+      'medium'
+    );
+
+    // Open preview in new tab
+    const previewUrl = `/proposals/${proposalId}/preview`;
+    window.open(previewUrl, '_blank', 'noopener,noreferrer');
+
+    toast.success('Opening proposal preview...');
+  }, [proposalId, analytics]);
 
   // ====================
   // Helper Functions
@@ -340,6 +369,14 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
+                <Button onClick={handleRefresh} variant="outline">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button onClick={handlePreview} variant="outline">
+                  <Printer className="h-4 w-4 mr-2" />
+                  Preview Proposal
+                </Button>
                 <Button onClick={handleEdit} variant="outline">
                   <Edit className="h-4 w-4 mr-2" />
                   Edit
@@ -432,9 +469,16 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(
                       (() => {
+                        // ✅ FIXED: Prioritize database products over metadata
+                        if (proposal?.products && proposal.products.length > 0) {
+                          return proposal.products.reduce(
+                            (sum: number, product: any) => sum + (product.total || 0),
+                            0
+                          );
+                        }
                         const productData = getProductData(proposal?.metadata);
-                        if (productData?.products?.length > 0) {
-                          return productData?.products?.reduce(
+                        if (productData?.products && productData.products.length > 0) {
+                          return productData.products.reduce(
                             (sum: number, product: any) => sum + (product.total || 0),
                             0
                           );
@@ -489,8 +533,8 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Products</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {getProductData(proposal?.metadata)?.products?.length ||
-                      proposal?.products?.length ||
+                    {proposal?.products?.length ||
+                      getProductData(proposal?.metadata)?.products?.length ||
                       3}
                   </p>
                 </div>
@@ -784,21 +828,22 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                 <h2 className="text-lg font-semibold mb-4 flex items-center">
                   <Package className="h-5 w-5 mr-2 text-purple-600" />
                   Products (
-                  {getProductData(proposal?.metadata)?.products?.length ||
-                    proposal?.products?.length ||
+                  {proposal?.products?.length ||
+                    getProductData(proposal?.metadata)?.products?.length ||
                     0}
                   )
                 </h2>
                 {(() => {
+                  // ✅ FIXED: Prioritize database products over metadata
                   const products =
-                    getProductData(proposal?.metadata)?.products || proposal?.products || [];
+                    proposal?.products || getProductData(proposal?.metadata)?.products || [];
                   return products.length > 0;
                 })() ? (
                   <div className="space-y-4">
-                    {(getProductData(proposal?.metadata)?.products || proposal?.products || []).map(
+                    {(proposal?.products || getProductData(proposal?.metadata)?.products || []).map(
                       (product: any, index: number) => (
                         <div
-                          key={index}
+                          key={product.id || index}
                           className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border"
                         >
                           <div className="flex items-center space-x-4">

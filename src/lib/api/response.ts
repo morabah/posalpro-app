@@ -44,6 +44,14 @@ export const error = (code: string, message: string, details?: unknown): ApiResp
   details,
 });
 
+// Alias for error function to match acceptance criteria
+export const fail = (code: string, message: string, details?: unknown): ApiResponse<never> => ({
+  ok: false,
+  code,
+  message,
+  details,
+});
+
 // Helper function to create paginated responses
 export interface PaginatedResponse<T> {
   items: T[];

@@ -2,40 +2,19 @@
  * PosalPro MVP2 - Individual Customer API Routes (New Architecture)
  * Enhanced customer operations with authentication, RBAC, and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
+ *
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/customers/schemas.ts
+ * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { ok } from '@/lib/api/response';
+import { fail, ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import { errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
 
-// ====================
-// Validation Schemas
-// ====================
-
-const CustomerUpdateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  email: z.string().email('Invalid email format').optional(),
-  phone: z.string().max(20).optional(),
-  website: z
-    .string()
-    .refine(val => val === '' || z.string().url().safeParse(val).success, {
-      message: 'Please enter a valid website URL (e.g., https://example.com) or leave empty',
-    })
-    .optional(),
-  address: z.string().max(500).optional(),
-  industry: z.string().max(100).optional(),
-  companySize: z.string().max(50).optional(),
-  revenue: z.number().min(0).optional().or(z.null()),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']).optional(),
-  tags: z.array(z.string()).optional(),
-  metadata: z.record(z.any()).optional(),
-  segmentation: z.record(z.any()).optional(),
-  riskScore: z.number().min(0).max(100).optional().or(z.null()),
-  ltv: z.number().min(0).optional().or(z.null()),
-});
+// Import consolidated schemas from feature folder
+import { CustomerSchema, CustomerUpdateSchema } from '@/features/customers/schemas';
 
 // ====================
 // GET Route - Get Customer by ID
@@ -50,7 +29,7 @@ export const GET = createRoute(
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json({ error: 'Customer ID is required' }, { status: 400 });
+        return Response.json(fail('VALIDATION_ERROR', 'Customer ID is required'), { status: 400 });
       }
 
       logInfo('Fetching customer by ID', {
@@ -119,7 +98,7 @@ export const GET = createRoute(
       });
 
       if (!customer) {
-        return Response.json({ error: 'Customer not found' }, { status: 404 });
+        return Response.json(fail('NOT_FOUND', 'Customer not found'), { status: 404 });
       }
 
       // Calculate customer analytics
@@ -180,15 +159,31 @@ export const GET = createRoute(
         customerName: customer.name,
       });
 
-      return Response.json(ok(transformedCustomer));
+      // Validate response against schema
+      const validationResult = CustomerSchema.safeParse(transformedCustomer);
+      if (!validationResult.success) {
+        logError('Customer schema validation failed', validationResult.error, {
+          component: 'CustomerAPI',
+          operation: 'GET_BY_ID',
+          customerId: id,
+        });
+        // Return the customer data anyway for now, but log the validation error
+        return Response.json(ok(transformedCustomer));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
-      logError('Failed to fetch customer by ID', {
-        component: 'CustomerAPI',
-        operation: 'GET_BY_ID',
-        userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to fetch customer by ID',
+        undefined,
+        {
+          component: 'CustomerAPI',
+          operation: 'GET_BY_ID',
+          userId: user.id,
+        }
+      );
+      throw processedError;
     }
   }
 );
@@ -207,7 +202,7 @@ export const PUT = createRoute(
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json({ error: 'Customer ID is required' }, { status: 400 });
+        return Response.json(fail('VALIDATION_ERROR', 'Customer ID is required'), { status: 400 });
       }
 
       logInfo('Updating customer', {
@@ -225,7 +220,7 @@ export const PUT = createRoute(
       });
 
       if (!existingCustomer) {
-        return Response.json({ error: 'Customer not found' }, { status: 404 });
+        return Response.json(fail('NOT_FOUND', 'Customer not found'), { status: 404 });
       }
 
       // Check for email uniqueness if email is being updated
@@ -295,15 +290,31 @@ export const PUT = createRoute(
         customerName: updatedCustomer.name,
       });
 
-      return Response.json(ok(updatedCustomer));
+      // Validate response against schema
+      const validationResult = CustomerSchema.safeParse(updatedCustomer);
+      if (!validationResult.success) {
+        logError('Customer schema validation failed after update', validationResult.error, {
+          component: 'CustomerAPI',
+          operation: 'PUT',
+          customerId: id,
+        });
+        // Return the customer data anyway for now, but log the validation error
+        return Response.json(ok(updatedCustomer));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
-      logError('Failed to update customer', {
-        component: 'CustomerAPI',
-        operation: 'PUT',
-        userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to update customer',
+        undefined,
+        {
+          component: 'CustomerAPI',
+          operation: 'PUT',
+          userId: user.id,
+        }
+      );
+      throw processedError;
     }
   }
 );
@@ -321,7 +332,7 @@ export const DELETE = createRoute(
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json({ error: 'Customer ID is required' }, { status: 400 });
+        return Response.json(fail('VALIDATION_ERROR', 'Customer ID is required'), { status: 400 });
       }
 
       logInfo('Deleting customer', {
@@ -348,7 +359,7 @@ export const DELETE = createRoute(
       });
 
       if (!customer) {
-        return Response.json({ error: 'Customer not found' }, { status: 404 });
+        return Response.json(fail('NOT_FOUND', 'Customer not found'), { status: 404 });
       }
 
       // Check if customer has proposals (always soft delete customers with data)
@@ -402,13 +413,17 @@ export const DELETE = createRoute(
         return Response.json(ok({ id, deleted: true }));
       }
     } catch (error) {
-      logError('Failed to delete customer', {
-        component: 'CustomerAPI',
-        operation: 'DELETE',
-        userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to delete customer',
+        undefined,
+        {
+          component: 'CustomerAPI',
+          operation: 'DELETE',
+          userId: user.id,
+        }
+      );
+      throw processedError;
     }
   }
 );

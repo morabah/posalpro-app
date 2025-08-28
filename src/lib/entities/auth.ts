@@ -7,7 +7,7 @@
 import { apiClient, type ApiResponse } from '@/lib/api/client';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { trackAuthEvent } from '@/lib/store/authStore';
+import { trackAuthUIEvent } from '@/lib/store/authStore';
 import { loginSchema, registrationSchema } from '@/lib/validation';
 import { UserType } from '@/types/enums';
 import { z } from 'zod';
@@ -130,9 +130,9 @@ export class AuthEntity {
 
       if (response.success) {
         // Session cached automatically by apiClient
-        
+
         // Track successful login
-        trackAuthEvent('login_success', {
+        trackAuthUIEvent('login_success', {
           userId: response.data.session.userId,
           role: response.data.session.role,
           hasRememberMe: validatedCredentials.rememberMe,
@@ -142,7 +142,7 @@ export class AuthEntity {
       return response;
     } catch (error) {
       // Track failed login attempt
-      trackAuthEvent('login_failure', {
+      trackAuthUIEvent('login_failure', {
         email: credentials.email,
         role: credentials.role,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -181,7 +181,7 @@ export class AuthEntity {
 
       if (response.success) {
         // Track registration
-        trackAuthEvent('registration_success', {
+        trackAuthUIEvent('registration_success', {
           email: validatedData.email,
           role: validatedData.role,
           department: validatedData.department,
@@ -191,7 +191,7 @@ export class AuthEntity {
       return response;
     } catch (error) {
       // Track registration failure
-      trackAuthEvent('registration_failure', {
+      trackAuthUIEvent('registration_failure', {
         email: userData.email,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -221,9 +221,9 @@ export class AuthEntity {
 
       if (response.success) {
         // Session cache cleared automatically by apiClient
-        
+
         // Track logout
-        trackAuthEvent('logout_success', {
+        trackAuthUIEvent('logout_success', {
           allDevices,
         });
       }
@@ -253,14 +253,14 @@ export class AuthEntity {
       const response = await apiClient.post<AuthTokens>('/auth/refresh', {});
 
       if (response.success) {
-        trackAuthEvent('token_refresh_success', {
+        trackAuthUIEvent('token_refresh_success', {
           expiresAt: response.data.expiresAt,
         });
       }
 
       return response;
     } catch (error) {
-      trackAuthEvent('token_refresh_failure', {
+      trackAuthUIEvent('token_refresh_failure', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
@@ -311,7 +311,7 @@ export class AuthEntity {
       });
 
       if (response.success) {
-        trackAuthEvent('password_reset_requested', { email });
+        trackAuthUIEvent('password_reset_requested', { email });
       }
 
       return response;
@@ -345,7 +345,7 @@ export class AuthEntity {
       });
 
       if (response.success) {
-        trackAuthEvent('password_reset_completed', { token: token.substring(0, 8) + '...' });
+        trackAuthUIEvent('password_reset_completed', { token: token.substring(0, 8) + '...' });
       }
 
       return response;
@@ -380,7 +380,7 @@ export class AuthEntity {
       });
 
       if (response.success) {
-        trackAuthEvent('password_changed', {});
+        trackAuthUIEvent('password_changed', {});
       }
 
       return response;
@@ -408,7 +408,7 @@ export class AuthEntity {
       const response = await apiClient.post<TwoFactorSetup>('/auth/2fa/setup', {});
 
       if (response.success) {
-        trackAuthEvent('2fa_setup_initiated', {});
+        trackAuthUIEvent('2fa_setup_initiated', {});
       }
 
       return response;
@@ -444,7 +444,7 @@ export class AuthEntity {
       );
 
       if (response.success) {
-        trackAuthEvent('2fa_enabled', {});
+        trackAuthUIEvent('2fa_enabled', {});
       }
 
       return response;
@@ -474,7 +474,7 @@ export class AuthEntity {
       });
 
       if (response.success) {
-        trackAuthEvent('2fa_disabled', {});
+        trackAuthUIEvent('2fa_disabled', {});
       }
 
       return response;
@@ -526,7 +526,7 @@ export class AuthEntity {
       const response = await apiClient.put<SecuritySettings>('/auth/security-settings', settings);
 
       if (response.success) {
-        trackAuthEvent('security_settings_updated', {
+        trackAuthUIEvent('security_settings_updated', {
           updatedFields: Object.keys(settings),
         });
       }
@@ -608,7 +608,7 @@ export class AuthEntity {
       const response = await apiClient.delete<{ message: string }>(`/auth/sessions/${sessionId}`);
 
       if (response.success) {
-        trackAuthEvent('device_session_revoked', { sessionId });
+        trackAuthUIEvent('device_session_revoked', { sessionId });
       }
 
       return response;
@@ -636,7 +636,7 @@ export class AuthEntity {
       const response = await apiClient.post<{ message: string }>('/auth/verify-email', { token });
 
       if (response.success) {
-        trackAuthEvent('email_verified', { token: token.substring(0, 8) + '...' });
+        trackAuthUIEvent('email_verified', { token: token.substring(0, 8) + '...' });
       }
 
       return response;
@@ -665,7 +665,7 @@ export class AuthEntity {
       const response = await apiClient.post<{ message: string }>('/auth/resend-verification', {});
 
       if (response.success) {
-        trackAuthEvent('email_verification_resent', {});
+        trackAuthUIEvent('email_verification_resent', {});
       }
 
       return response;

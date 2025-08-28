@@ -9,8 +9,10 @@
 
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { ProposalWizard } from '@/components/proposals/ProposalWizard';
+import { qk } from '@/features/proposals/keys';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { logDebug } from '@/lib/logger';
+import { logDebug, logError } from '@/lib/logger';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -21,22 +23,119 @@ interface EditProposalPageProps {
 function EditProposalContent({ proposalId }: { proposalId: string }) {
   const analytics = useOptimizedAnalytics();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const handleComplete = useCallback(
-    async (proposalId: string) => {
-      logDebug('Proposal edit completed', {
+    async (data: string | object) => {
+      logDebug('DEBUG: EditProposalPage handleComplete called', {
         component: 'EditProposalPage',
         operation: 'handleComplete',
+        dataType: typeof data,
+        isWizardPayload: typeof data === 'object',
+        dataKeys: typeof data === 'object' ? Object.keys(data as any) : null,
+        dataLength: typeof data === 'object' ? JSON.stringify(data).length : null,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      if (typeof data === 'object' && data !== null) {
+        const wizardPayload = data as any;
+        logDebug('DEBUG: Wizard payload received', {
+          component: 'EditProposalPage',
+          operation: 'handleComplete',
+          hasTeamData: !!wizardPayload.teamData?.teamLead,
+          hasContentData: !!wizardPayload.contentData?.selectedTemplates?.length,
+          hasProductData: !!wizardPayload.productData?.products?.length,
+          hasSectionData: !!wizardPayload.sectionData?.sections?.length,
+          productCount: wizardPayload.productData?.products?.length || 0,
+          totalValue: wizardPayload.productData?.totalValue || 0,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+      }
+
+      // If we received a wizard payload (edit mode), send it to the API
+      if (typeof data === 'object' && data !== null) {
+        const wizardPayload = data as any;
+
+        logDebug('Sending wizard payload to API', {
+          component: 'EditProposalPage',
+          operation: 'handleComplete',
+          proposalId,
+          hasTeamData: !!wizardPayload.teamData?.teamLead,
+          hasContentData: !!wizardPayload.contentData?.selectedTemplates?.length,
+          hasProductData: !!wizardPayload.productData?.products?.length,
+          hasSectionData: !!wizardPayload.sectionData?.sections?.length,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+
+        try {
+          const response = await fetch(`/api/proposals/${proposalId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(wizardPayload),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`API update failed: ${response.status} - ${JSON.stringify(errorData)}`);
+          }
+
+          const result = await response.json();
+
+          logDebug('Proposal updated successfully', {
+            component: 'EditProposalPage',
+            operation: 'handleComplete',
+            proposalId: result.data?.id,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
+
+          analytics.trackOptimized('proposal_updated', {
+            proposalId: result.data?.id,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
+        } catch (error) {
+          logError('Failed to update proposal', {
+            component: 'EditProposalPage',
+            operation: 'handleComplete',
+            proposalId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
+
+          // Still redirect even on error so user doesn't get stuck
+          router.push(`/proposals/${proposalId}`);
+          return;
+        }
+      } else {
+        // If we received just a proposalId (create mode), just redirect
+        const receivedProposalId = data as string;
+
+        analytics.trackOptimized('proposal_created', {
+          proposalId: receivedProposalId,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+      }
+
+      // ✅ FORCE CACHE INVALIDATION: Ensure detail page gets fresh data
+      logDebug('Invalidating proposal cache before redirect', {
+        component: 'EditProposalPage',
+        operation: 'invalidateCache',
         proposalId,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
 
-      analytics.trackOptimized('proposal_updated', {
-        proposalId,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      // Remove and invalidate the proposal cache
+      queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
+      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
 
       // Redirect to proposal detail page
       logDebug('Redirecting to proposal detail', {
@@ -44,13 +143,14 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
         operation: 'handleComplete',
         proposalId,
         redirectUrl: `/proposals/${proposalId}`,
+        cacheInvalidated: true,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
 
       router.push(`/proposals/${proposalId}`);
     },
-    [analytics, router]
+    [analytics, router, proposalId, queryClient]
   );
 
   const handleCancel = useCallback(() => {

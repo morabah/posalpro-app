@@ -1,8 +1,10 @@
+import { error as apiError, ok } from '@/lib/api/response';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { StandardError } from '@/lib/errors/StandardError';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -14,7 +16,18 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     await validateApiPermission(request, { resource: 'proposals', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      const standardError = new StandardError({
+        message: 'Authentication required to access proposal versions',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ProposalVersionsAPI',
+          operation: 'GET',
+        },
+      });
+      errorHandlingService.processError(standardError);
+      return NextResponse.json(apiError(ErrorCodes.AUTH.UNAUTHORIZED, 'Unauthorized access'), {
+        status: 401,
+      });
     }
     const { id } = await ctx.params;
     const url = new URL(request.url);
@@ -28,7 +41,20 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       const PrismaLocal = (require('@prisma/client') as any).Prisma;
       const vNum = Number(versionQuery);
       if (!Number.isFinite(vNum)) {
-        return NextResponse.json({ success: false, error: 'Invalid version' }, { status: 400 });
+        const standardError = new StandardError({
+          message: 'Invalid version number provided',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProposalVersionsAPI',
+            operation: 'GET_DETAIL',
+            versionQuery,
+          },
+        });
+        errorHandlingService.processError(standardError);
+        return NextResponse.json(
+          apiError(ErrorCodes.VALIDATION.INVALID_INPUT, 'Invalid version number'),
+          { status: 400 }
+        );
       }
       const rows = (await prisma.$queryRaw(
         PrismaLocal.sql`
@@ -48,7 +74,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       }>;
 
       if (!rows || rows.length === 0) {
-        return NextResponse.json({ success: true, data: null });
+        return NextResponse.json(ok(null), { status: 200 });
       }
       const current = rows.find(r => r.version === vNum)!;
       const previous = rows.find(r => r.version === vNum - 1) || null;
@@ -170,9 +196,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       }
       const totalValue = computeTotalValue(current.snapshot);
 
-      return NextResponse.json({
-        success: true,
-        data: {
+      return NextResponse.json(
+        ok({
           version: current.version,
           createdAt: current.createdAt,
           createdBy: current.createdBy,
@@ -183,8 +208,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
           productsMap,
           customerName,
           totalValue,
-        },
-      });
+        }),
+        { status: 200 }
+      );
     }
 
     const PrismaLocal = (require('@prisma/client') as any).Prisma;
@@ -247,10 +273,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
           : undefined,
     }));
 
-    const res = NextResponse.json({ success: true, data });
-    res.headers.set('Cache-Control', 'public, max-age=30, s-maxage=120');
-    res.headers.set('Content-Type', 'application/json; charset=utf-8');
-    return res;
+    const response = NextResponse.json(ok(data));
+    response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=120');
+    response.headers.set('Content-Type', 'application/json; charset=utf-8');
+    return response;
   } catch (error) {
     errorHandlingService.processError(
       error,
@@ -261,10 +287,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         operation: 'GET',
       }
     );
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch versions' },
-      { status: 500 }
-    );
+    return NextResponse.json(apiError(ErrorCodes.DATA.FETCH_FAILED, 'Failed to fetch versions'), {
+      status: 500,
+    });
   }
 }
 
@@ -299,7 +324,18 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     await validateApiPermission(request, { resource: 'proposals', action: 'update' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      const standardError = new StandardError({
+        message: 'Authentication required to create proposal version',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ProposalVersionsAPI',
+          operation: 'POST',
+        },
+      });
+      errorHandlingService.processError(standardError);
+      return NextResponse.json(apiError(ErrorCodes.AUTH.UNAUTHORIZED, 'Unauthorized access'), {
+        status: 401,
+      });
     }
     const { id } = await ctx.params;
     proposalId = id;
@@ -331,8 +367,21 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         sections: { select: { id: true, title: true, order: true, updatedAt: true } },
       },
     });
-    if (!proposal)
-      return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    if (!proposal) {
+      const standardError = new StandardError({
+        message: 'Proposal not found',
+        code: ErrorCodes.DATA.NOT_FOUND,
+        metadata: {
+          component: 'ProposalVersionsAPI',
+          operation: 'POST',
+          proposalId: id,
+        },
+      });
+      errorHandlingService.processError(standardError);
+      return NextResponse.json(apiError(ErrorCodes.DATA.NOT_FOUND, 'Proposal not found'), {
+        status: 404,
+      });
+    }
 
     // Get next version number
     const PrismaLocal2 = (require('@prisma/client') as any).Prisma;
@@ -373,7 +422,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     }>;
     const created = createdArr[0];
 
-    return NextResponse.json({ success: true, data: created }, { status: 201 });
+    return NextResponse.json(ok(created), { status: 201 });
   } catch (error) {
     errorHandlingService.processError(
       error,
@@ -385,9 +434,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         proposalId,
       }
     );
-    return NextResponse.json(
-      { success: false, error: 'Failed to create version' },
-      { status: 500 }
-    );
+    return NextResponse.json(apiError(ErrorCodes.DATA.CREATE_FAILED, 'Failed to create version'), {
+      status: 500,
+    });
   }
 }

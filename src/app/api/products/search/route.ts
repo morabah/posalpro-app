@@ -1,3 +1,7 @@
+import { error as apiError, ok } from '@/lib/api/response';
+import { ErrorHandlingService } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { StandardError } from '@/lib/errors/StandardError';
 import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Product Search API
  * Provides advanced search functionality for products
@@ -11,6 +15,9 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+// Initialize error handling service
+const errorHandlingService = ErrorHandlingService.getInstance();
+
 // Search validation schema
 const searchSchema = z.object({
   search: z.string().min(1, 'Search query is required'),
@@ -20,36 +27,9 @@ const searchSchema = z.object({
   isActive: z.coerce.boolean().optional(),
 });
 
-/**
- * Standard API response wrapper
- */
-function createApiResponse<T>(data: T, message: string, status = 200) {
-  const res = NextResponse.json(
-    {
-      success: true,
-      data,
-      message,
-    },
-    { status }
-  );
-  if (process.env.NODE_ENV === 'production') {
-    res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
-  } else {
-    res.headers.set('Cache-Control', 'no-store');
-  }
-  return res;
-}
+// Note: Response envelope handled by ok() function from @/lib/api/response
 
-function createErrorResponse(message: string, details?: any, status = 400) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: message,
-      details,
-    },
-    { status }
-  );
-}
+// Note: Error responses handled by error() function from @/lib/api/response
 
 /**
  * GET /api/products/search - Search products
@@ -60,7 +40,18 @@ export async function GET(request: NextRequest) {
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const standardError = new StandardError({
+        message: 'Authentication required to search products',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ProductSearchAPI',
+          operation: 'GET',
+        },
+      });
+      errorHandlingService.processError(standardError);
+      return NextResponse.json(apiError(ErrorCodes.AUTH.UNAUTHORIZED, 'Unauthorized access'), {
+        status: 401,
+      });
     }
 
     // Parse and validate query parameters
@@ -94,21 +85,27 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    return createApiResponse(
-      searchResponse,
-      `Found ${results.length} products matching "${validated.search}"`
-    );
+    // Return response with cache headers for search results
+    const response = NextResponse.json(ok(searchResponse));
+    if (process.env.NODE_ENV === 'production') {
+      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+    } else {
+      response.headers.set('Cache-Control', 'no-store');
+    }
+    return response;
   } catch (error) {
     logger.error('Product search failed:', error);
 
     if (error instanceof z.ZodError) {
-      return createErrorResponse('Invalid search parameters', error.errors, 400);
+      return NextResponse.json(
+        apiError('VALIDATION_ERROR', 'Invalid search parameters', error.errors),
+        { status: 400 }
+      );
     }
 
-    return createErrorResponse(
-      'Product search failed',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
-    );
+    const errMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(apiError('SEARCH_FAILED', 'Product search failed', errMessage), {
+      status: 500,
+    });
   }
 }

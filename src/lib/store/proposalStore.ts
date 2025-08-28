@@ -6,6 +6,9 @@
  * Follows PROPOSAL_MIGRATION_ASSESSMENT.md guidelines
  * Handles multi-step wizard state management with performance optimizations
  *
+ * ✅ ARCHITECTURAL PATTERN: UI State Only (Wizard state management)
+ * ✅ PERFORMANCE: Ready for shallow comparison optimization
+ * ✅ TYPE SAFETY: Explicit return types with proper TypeScript support
  * ✅ FOLLOWS: MIGRATION_LESSONS.md - Zustand patterns
  * ✅ FOLLOWS: CORE_REQUIREMENTS.md - State management best practices
  * ✅ ALIGNS: Modern architecture with proper separation of concerns
@@ -13,6 +16,7 @@
 
 import { logDebug, logError } from '@/lib/logger';
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 
 // Types for proposal wizard data
 export interface ProposalBasicInfo {
@@ -278,7 +282,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
   totalSteps: 6,
   isSubmitting: false,
   stepData: {},
-  validationErrors: {},
+  validationErrors: { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
   canProceed: false,
   canGoBack: false,
 
@@ -292,17 +296,18 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
       const currentStepData = state.stepData[step];
       const newData = typeof data === 'function' ? data(currentStepData) : data;
 
-      // ✅ ADDED: Debug logging to track step data updates
-      console.log('[STORE DEBUG] Setting step data:', {
-        component: 'ProposalStore',
-        operation: 'setStepData',
-        step,
-        currentDataKeys: currentStepData ? Object.keys(currentStepData) : null,
-        newDataKeys: newData ? Object.keys(newData) : null,
-        productCount: newData?.products?.length || 0,
-        totalValue: newData?.totalValue || 0,
-        products: newData?.products?.map((p: any) => ({ id: p.id, name: p.name, temp: p.id?.startsWith('temp-') })) || [],
-      });
+      // ✅ ADDED: Debug logging to track step data updates (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        logDebug('Setting step data', {
+          component: 'ProposalStore',
+          operation: 'setStepData',
+          step,
+          currentDataKeys: currentStepData ? Object.keys(currentStepData) : null,
+          newDataKeys: newData ? Object.keys(newData) : null,
+          productCount: newData?.products?.length || 0,
+          totalValue: newData?.totalValue || 0,
+        });
+      }
 
       return {
         stepData: {
@@ -462,49 +467,41 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
         hypothesis: 'H4',
       });
 
-      // Submit to API (using working bridge implementation endpoint)
-      const response = await fetch('/api/proposals', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(proposalData),
-      });
+      // Submit to API using proposalService for consistency
+      const { proposalService } = await import('@/services/proposalService');
+      const response = await proposalService.createProposal(proposalData);
 
       logDebug('API response received', {
         component: 'ProposalStore',
         operation: 'submit_proposal',
-        status: response.status,
         ok: response.ok,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
         logError('API submission failed', {
           component: 'ProposalStore',
           operation: 'submit_proposal',
-          status: response.status,
-          errorText,
+          error: response.message,
           userStory: 'US-3.1',
           hypothesis: 'H4',
         });
-        throw new Error(`Failed to submit proposal: ${errorText}`);
+        throw new Error(`Failed to submit proposal: ${response.message}`);
       }
 
-      const result = await response.json();
+      const result = response.data;
 
       logDebug('Proposal submitted successfully', {
         component: 'ProposalStore',
         operation: 'submit_proposal',
         result: result,
-        proposalId: result.data?.id,
+        proposalId: result.id,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
 
-      return result.data.id;
+      return result.id;
     } catch (error) {
       logError('Proposal submission error', {
         component: 'ProposalStore',
@@ -524,7 +521,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
       currentStep: 1,
       isSubmitting: false,
       stepData: {},
-      validationErrors: {},
+      validationErrors: { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
       canProceed: false,
       canGoBack: false,
     });
@@ -559,7 +556,21 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
       };
 
       // ✅ FIXED: Use service layer with proper error handling
-      const result = await proposalService.updateProposal(proposalId, proposalData);
+      const response = await proposalService.updateProposal(proposalId, proposalData);
+
+      if (!response.ok) {
+        logError('Proposal update failed', {
+          component: 'ProposalStore',
+          operation: 'update_proposal',
+          proposalId,
+          error: response.message,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+        throw new Error(`Failed to update proposal: ${response.message}`);
+      }
+
+      const result = response.data;
 
       logDebug('Proposal updated successfully', {
         component: 'ProposalStore',
@@ -697,7 +708,7 @@ export const useProposalStepData = (step: number) =>
   useProposalStore(state => state.stepData[step]);
 
 export const useProposalValidationErrors = (step: number) =>
-  useProposalStore(state => state.validationErrors[step] || []);
+  useProposalStore(state => state.validationErrors[step]);
 
 // Individual selectors to prevent object creation and infinite re-renders
 export const useProposalCurrentStep = () => useProposalStore(state => state.currentStep);
@@ -715,23 +726,42 @@ export const useProposalInitializeFromData = () =>
   useProposalStore(state => state.initializeFromData);
 export const useProposalResetWizard = () => useProposalStore(state => state.resetWizard);
 
-// Composite hooks for convenience (but using individual selectors internally)
-export const useProposalNavigation = () => ({
-  currentStep: useProposalCurrentStep(),
-  totalSteps: useProposalTotalSteps(),
-  canProceed: useProposalCanProceed(),
-  canGoBack: useProposalCanGoBack(),
-  isSubmitting: useProposalIsSubmitting(),
-});
+// Composite hooks for convenience (with shallow comparison optimization)
+export const useProposalNavigation = (): {
+  currentStep: number;
+  totalSteps: number;
+  canProceed: boolean;
+  canGoBack: boolean;
+  isSubmitting: boolean;
+} =>
+  useProposalStore(
+    useShallow(state => ({
+      currentStep: state.currentStep,
+      totalSteps: state.totalSteps,
+      canProceed: state.canProceed,
+      canGoBack: state.canGoBack,
+      isSubmitting: state.isSubmitting,
+    }))
+  );
 
 // Individual action selectors
 export const useProposalSetCurrentStep = () => useProposalStore(state => state.setCurrentStep);
 
-export const useProposalActions = () => ({
-  setStepData: useProposalSetStepData(),
-  setCurrentStep: useProposalSetCurrentStep(),
-  nextStep: useProposalNextStep(),
-  previousStep: useProposalPreviousStep(),
-  submitProposal: useProposalSubmitProposal(),
-  resetWizard: useProposalResetWizard(),
-});
+export const useProposalActions = (): {
+  setStepData: (step: number, data: any) => void;
+  setCurrentStep: (step: number) => void;
+  nextStep: () => Promise<void>;
+  previousStep: () => void;
+  submitProposal: () => Promise<string>;
+  resetWizard: () => void;
+} =>
+  useProposalStore(
+    useShallow(state => ({
+      setStepData: state.setStepData,
+      setCurrentStep: state.setCurrentStep,
+      nextStep: state.nextStep,
+      previousStep: state.previousStep,
+      submitProposal: state.submitProposal,
+      resetWizard: state.resetWizard,
+    }))
+  );

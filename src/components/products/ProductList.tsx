@@ -308,9 +308,9 @@ function ProductTable() {
     if (isAllSelected) {
       clearSelection();
     } else {
-      selectAllProducts();
+      selectAllProducts(allProductIds);
     }
-  }, [isAllSelected, clearSelection, selectAllProducts]);
+  }, [isAllSelected, clearSelection, selectAllProducts, allProductIds]);
 
   const handleProductClick = useCallback(
     (id: string) => {

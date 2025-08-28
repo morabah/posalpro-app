@@ -11,10 +11,12 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/forms/Select';
 import { Label } from '@/components/ui/Label';
+import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import { ProposalTeamData, useProposalActions } from '@/lib/store/proposalStore';
-import { User, userService } from '@/services/userService';
+import { User } from '@/services/userService';
+import { UserType } from '@/types';
 import { CheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
@@ -39,8 +41,9 @@ interface TeamAssignmentStepProps {
 export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssignmentStepProps) {
   const analytics = useOptimizedAnalytics();
   const { setStepData } = useProposalActions();
+  const apiClient = useApiClient();
 
-  // Fetch users using React Query with the new service
+  // Fetch users using React Query with authenticated API client
   const {
     data: usersData,
     isLoading: usersLoading,
@@ -49,25 +52,61 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     queryKey: ['users', 'proposal-wizard'],
     queryFn: async () => {
       console.log('[DEBUG] Fetching users from API...');
-      const response = await userService.getUsers({
-        search: '',
-        limit: 100,
-        status: 'ACTIVE',
-        sortBy: 'name',
-        sortOrder: 'asc',
-      });
 
-      console.log('[DEBUG] Users API response:', response);
-
-      if (response.ok && response.data?.users) {
-        console.log('[DEBUG] Users loaded successfully:', response.data.users.length);
-        console.log(
-          '[DEBUG] First user structure:',
-          JSON.stringify(response.data.users[0], null, 2)
+      try {
+        const response = await apiClient.get<{
+          success: boolean;
+          data: { users: User[]; pagination: unknown };
+          message: string;
+        }>(
+          'users?search=&isActive=true&sortBy=name&sortOrder=asc&fields=id,firstName,lastName,name,email,department,status,lastLogin,createdAt,updatedAt,role,roles'
         );
-        return response.data.users;
+
+        console.log('[DEBUG] Raw API response structure:', JSON.stringify(response, null, 2));
+
+        // Check different possible response structures
+        if (response.success && response.data?.users) {
+          console.log('[DEBUG] Users loaded successfully:', response.data.users.length);
+          console.log(
+            '[DEBUG] First user structure:',
+            JSON.stringify(response.data.users[0], null, 2)
+          );
+          console.log('[DEBUG] All users roles check:');
+          const allRoleNames = new Set<string>();
+          response.data.users.forEach((user, index) => {
+            console.log(
+              `[DEBUG] User ${index}: ${user.name || user.email}, roles:`,
+              user.roles,
+              'role:',
+              user.role
+            );
+            // Also log the role names for easier debugging
+            const roleNames =
+              user.roles?.map(r => r.role?.name || r.role || r).filter(Boolean) || [];
+            console.log(`[DEBUG] User ${index} role names:`, roleNames);
+            roleNames.forEach(name => allRoleNames.add(name));
+          });
+          console.log('[DEBUG] All unique role names in system:', Array.from(allRoleNames));
+          console.log('[DEBUG] Expected UserType values:', {
+            PROPOSAL_MANAGER: UserType.PROPOSAL_MANAGER,
+            SME: UserType.SME,
+            EXECUTIVE: UserType.EXECUTIVE,
+          });
+          return response.data.users;
+        } else if (response.users) {
+          // Direct users array response
+          console.log('[DEBUG] Direct users array found:', response.users.length);
+          console.log('[DEBUG] First user structure:', JSON.stringify(response.users[0], null, 2));
+          return response.users;
+        } else {
+          console.error('[DEBUG] Failed to load users - unexpected response structure');
+          console.error('[DEBUG] Response keys:', Object.keys(response));
+          throw new Error('Unexpected API response structure');
+        }
+      } catch (error) {
+        console.error('[DEBUG] API call failed:', error);
+        throw error;
       }
-      throw new Error('Failed to load users');
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -76,9 +115,37 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
   // Filter users by role
   const teamLeads = useMemo(() => {
     if (!usersData) return [];
-    const leads = usersData.filter(user =>
-      user.roles?.some(userRole => userRole.role?.name === 'Proposal Manager')
-    );
+    console.log('[DEBUG] UserType.PROPOSAL_MANAGER:', UserType.PROPOSAL_MANAGER);
+    console.log('[DEBUG] Filtering for team leads from', usersData.length, 'users');
+
+    const leads = usersData.filter(user => {
+      console.log(`[DEBUG] Checking user ${user.name || user.email}:`, {
+        roles: user.roles,
+        role: user.role,
+        hasRolesArray: Array.isArray(user.roles),
+        rolesLength: user.roles?.length,
+      });
+
+      // Try different role matching approaches
+      const hasProposalManagerRole = user.roles?.some(
+        userRole =>
+          userRole.role?.name === UserType.PROPOSAL_MANAGER ||
+          userRole.role === UserType.PROPOSAL_MANAGER ||
+          userRole === UserType.PROPOSAL_MANAGER ||
+          userRole.name === UserType.PROPOSAL_MANAGER
+      );
+
+      const hasDirectRole = user.role === UserType.PROPOSAL_MANAGER;
+
+      console.log(`[DEBUG] User ${user.name || user.email} role check:`, {
+        hasProposalManagerRole,
+        hasDirectRole,
+        finalResult: hasProposalManagerRole || hasDirectRole,
+      });
+
+      return hasProposalManagerRole || hasDirectRole;
+    });
+
     console.log(
       '[DEBUG] Team leads found:',
       leads.length,
@@ -89,9 +156,31 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
   const salesReps = useMemo(() => {
     if (!usersData) return [];
-    const reps = usersData.filter(user =>
-      user.roles?.some(userRole => userRole.role?.name === 'SME')
-    );
+    console.log('[DEBUG] UserType.SME:', UserType.SME);
+    console.log('[DEBUG] Filtering for sales reps from', usersData.length, 'users');
+
+    const reps = usersData.filter(user => {
+      console.log(`[DEBUG] Checking user ${user.name || user.email} for SME role:`, {
+        roles: user.roles,
+        role: user.role,
+      });
+
+      const hasSMERole = user.roles?.some(userRole => {
+        const roleName = userRole.role?.name || userRole.role || userRole.name || userRole;
+        return roleName === 'SME' || roleName === 'Senior SME' || roleName === UserType.SME;
+      });
+
+      const hasDirectRole = user.role === UserType.SME;
+
+      console.log(`[DEBUG] User ${user.name || user.email} SME check:`, {
+        hasSMERole,
+        hasDirectRole,
+        finalResult: hasSMERole || hasDirectRole,
+      });
+
+      return hasSMERole || hasDirectRole;
+    });
+
     console.log(
       '[DEBUG] Sales reps found:',
       reps.length,
@@ -102,9 +191,31 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
   const executives = useMemo(() => {
     if (!usersData) return [];
-    const execs = usersData.filter(user =>
-      user.roles?.some(userRole => userRole.role?.name === 'Executive')
-    );
+    console.log('[DEBUG] UserType.EXECUTIVE:', UserType.EXECUTIVE);
+    console.log('[DEBUG] Filtering for executives from', usersData.length, 'users');
+
+    const execs = usersData.filter(user => {
+      console.log(`[DEBUG] Checking user ${user.name || user.email} for Executive role:`, {
+        roles: user.roles,
+        role: user.role,
+      });
+
+      const hasExecRole = user.roles?.some(userRole => {
+        const roleName = userRole.role?.name || userRole.role || userRole.name || userRole;
+        return roleName === 'Executive' || roleName === UserType.EXECUTIVE;
+      });
+
+      const hasDirectRole = user.role === UserType.EXECUTIVE;
+
+      console.log(`[DEBUG] User ${user.name || user.email} Executive check:`, {
+        hasExecRole,
+        hasDirectRole,
+        finalResult: hasExecRole || hasDirectRole,
+      });
+
+      return hasExecRole || hasDirectRole;
+    });
+
     console.log(
       '[DEBUG] Executives found:',
       execs.length,
@@ -132,7 +243,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       { value: '', label: 'Select team lead...' },
       ...teamLeads.map(user => ({
         value: user.id,
-        label: user.name,
+        label: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
       })),
     ];
   }, [teamLeads]);
@@ -144,7 +255,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       { value: '', label: 'Select sales representative...' },
       ...salesReps.map(user => ({
         value: user.id,
-        label: user.name,
+        label: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
       })),
     ];
   }, [salesReps]);
@@ -167,7 +278,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       { value: '', label: 'Select SME...' },
       ...uniqueUsers.map(user => ({
         value: user.id,
-        label: user.name,
+        label: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
       })),
     ];
   }, [usersData, teamLeads, salesReps]);
@@ -429,7 +540,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
                   <div className="flex-1">
                     <h4 className="font-medium text-gray-900">{executive.name}</h4>
                     <p className="text-sm text-gray-500">
-                      {executive.roles?.map(r => r.role?.name).join(', ') || 'Executive'}
+                      {executive.roles?.map(r => r.role).join(', ') || 'Executive'}
                     </p>
                     {executive.department && (
                       <p className="text-xs text-gray-400">{executive.department}</p>

@@ -4,10 +4,11 @@
  * 🚀 LCP OPTIMIZATION: Critical CSS, resource hints, font optimization
  */
 
-// Providers moved to segment layouts (e.g., (dashboard)/layout) to reduce /auth/* bundle size
+// Global providers centralized here to ensure a single React Query client and avoid nested providers
 import '@/styles/globals.css';
 import { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { QueryProvider } from '@/components/providers/QueryProvider';
 
 // ✅ CRITICAL: Font optimization for LCP improvement
 // Following Lesson #30: Performance Optimization - Font Loading
@@ -188,7 +189,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
       </head>
       <body className={`${inter.className} h-full antialiased`}>
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

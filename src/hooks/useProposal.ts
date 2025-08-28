@@ -9,7 +9,13 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { proposalService } from '@/services/proposalService';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-export function useProposal(proposalId: string) {
+export function useProposal(
+  proposalId: string,
+  options?: {
+    staleTime?: number;
+    refetchOnMount?: boolean;
+  }
+) {
   return useQuery({
     queryKey: qk.proposals.byId(proposalId),
     queryFn: async () => {
@@ -23,19 +29,23 @@ export function useProposal(proposalId: string) {
 
       try {
         const startTime = Date.now();
-        const proposal = await proposalService.getProposal(proposalId);
+        const response = await proposalService.getProposal(proposalId);
         const loadTime = Date.now() - startTime;
 
-        logInfo('Proposal fetched successfully', {
-          component: 'useProposal',
-          operation: 'fetchProposal',
-          proposalId,
-          loadTime,
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        });
+        if (response.ok) {
+          logInfo('Proposal fetched successfully', {
+            component: 'useProposal',
+            operation: 'fetchProposal',
+            proposalId,
+            loadTime,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
 
-        return proposal;
+          return response.data;
+        } else {
+          throw new Error(response.message || 'Failed to fetch proposal');
+        }
       } catch (error) {
         logError('Failed to fetch proposal', {
           component: 'useProposal',
@@ -49,9 +59,10 @@ export function useProposal(proposalId: string) {
       }
     },
     enabled: !!proposalId,
-    staleTime: 30000, // 30 seconds
+    staleTime: options?.staleTime ?? 5000, // ✅ REDUCED: 5 seconds (was 30 seconds)
     gcTime: 120000, // 2 minutes
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true, // ✅ ENABLED: Always refetch when window gets focus
+    refetchOnMount: options?.refetchOnMount ?? true, // ✅ ENABLED: Always refetch on mount
     retry: 1,
   });
 }
@@ -70,19 +81,23 @@ export function useCreateProposal() {
 
       try {
         const startTime = Date.now();
-        const proposal = await proposalService.createProposal(data);
+        const response = await proposalService.createProposal(data);
         const loadTime = Date.now() - startTime;
 
-        logInfo('Proposal created successfully', {
-          component: 'useCreateProposal',
-          operation: 'createProposal',
-          proposalId: proposal.id,
-          loadTime,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
+        if (response.ok) {
+          logInfo('Proposal created successfully', {
+            component: 'useCreateProposal',
+            operation: 'createProposal',
+            proposalId: response.data.id,
+            loadTime,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
 
-        return proposal;
+          return response.data;
+        } else {
+          throw new Error(response.message || 'Failed to create proposal');
+        }
       } catch (error) {
         logError('Failed to create proposal', {
           component: 'useCreateProposal',
@@ -127,19 +142,23 @@ export function useUpdateProposal() {
 
       try {
         const startTime = Date.now();
-        const proposal = await proposalService.updateProposal(id, data);
+        const response = await proposalService.updateProposal(id, data);
         const loadTime = Date.now() - startTime;
 
-        logInfo('Proposal updated successfully', {
-          component: 'useUpdateProposal',
-          operation: 'updateProposal',
-          proposalId: id,
-          loadTime,
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        });
+        if (response.ok) {
+          logInfo('Proposal updated successfully', {
+            component: 'useUpdateProposal',
+            operation: 'updateProposal',
+            proposalId: id,
+            loadTime,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
 
-        return proposal;
+          return response.data;
+        } else {
+          throw new Error(response.message || 'Failed to update proposal');
+        }
       } catch (error) {
         logError('Failed to update proposal', {
           component: 'useUpdateProposal',
@@ -153,10 +172,30 @@ export function useUpdateProposal() {
       }
     },
     onSuccess: (data, variables) => {
-      // Update the specific proposal in cache
+      logDebug('Invalidating proposal cache after update', {
+        component: 'useUpdateProposal',
+        operation: 'invalidateCache',
+        proposalId: variables.id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      // ✅ FORCE INVALIDATION: Remove and refetch immediately
+      queryClient.removeQueries({ queryKey: qk.proposals.byId(variables.id) });
+
+      // Set the fresh data in cache
       queryClient.setQueryData(qk.proposals.byId(variables.id), data);
+
       // Invalidate proposals list to reflect changes
       queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+
+      logDebug('Proposal cache invalidated and updated', {
+        component: 'useUpdateProposal',
+        operation: 'cacheUpdated',
+        proposalId: variables.id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
     },
     onError: (error, variables) => {
       logError('Proposal update failed', {

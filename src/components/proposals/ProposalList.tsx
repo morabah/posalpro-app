@@ -120,7 +120,35 @@ function PriorityBadge({
 // ====================
 
 function DashboardMetrics() {
-  const { data: metrics, isLoading, error } = useProposalStats();
+  const { data: stats, isLoading, error } = useProposalStats();
+
+  // Calculate derived metrics from stats data
+  const metrics = useMemo(() => {
+    if (!stats) {
+      return {
+        total: 0,
+        inProgress: 0,
+        overdue: 0,
+        winRate: 0,
+        totalValue: 0,
+        submitted: 0,
+        approved: 0,
+        rejected: 0,
+        draft: 0,
+        averageValue: 0,
+      };
+    }
+
+    const inProgress = (stats.submitted || 0); // Approximate in-progress as submitted
+    const winRate = stats.total > 0 ? ((stats.approved || 0) / stats.total) * 100 : 0;
+
+    return {
+      ...stats,
+      inProgress,
+      overdue: 0, // Would need deadline data from API
+      winRate: Math.round(winRate * 100) / 100, // Round to 2 decimal places
+    };
+  }, [stats]);
 
   if (isLoading) {
     return (

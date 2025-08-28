@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';/**
  */
 
 import { apiClient, type ApiResponse, type PaginatedResponse } from '@/lib/api/client';
-import { trackAuthEvent } from '@/lib/store/authStore';
+import { trackAuthUIEvent } from '@/lib/store/authStore';
 import { createUserSchema, updateUserSchema, userProfileSchema } from '@/lib/validation';
 import { UserType } from '@/types/enums';
 import { z } from 'zod';
@@ -91,7 +91,7 @@ export class UserEntity {
       if (response.success) {
         // User created successfully - apiClient handles caching automatically
         // Track user creation event
-        trackAuthEvent('user_created', {
+        trackAuthUIEvent('user_created', {
           userId: response.data.id,
           role: response.data.role,
           department: response.data.department,
@@ -158,7 +158,7 @@ export class UserEntity {
         // User updated successfully - apiClient handles caching automatically
 
         // Track user update event
-        trackAuthEvent('user_updated', {
+        trackAuthUIEvent('user_updated', {
           userId: id,
           updatedFields: Object.keys(updateData),
         });
@@ -180,9 +180,9 @@ export class UserEntity {
 
       if (response.success) {
         // User deleted successfully - apiClient handles cache invalidation automatically
-        
+
         // Track user deletion event
-        trackAuthEvent('user_deleted', { userId: id });
+        trackAuthUIEvent('user_deleted', { userId: id });
       }
 
       return response;
@@ -287,7 +287,7 @@ export class UserEntity {
 
       if (response.success) {
         // Track permission change
-        trackAuthEvent('user_permissions_updated', {
+        trackAuthUIEvent('user_permissions_updated', {
           userId: id,
           newRoles: permissions.roles,
           newPermissions: permissions.permissions,
@@ -335,7 +335,7 @@ export class UserEntity {
 
       if (response.success) {
         // User activated successfully - apiClient handles caching automatically
-        trackAuthEvent('user_activated', { userId: id });
+        trackAuthUIEvent('user_activated', { userId: id });
       }
 
       return response;
@@ -354,7 +354,7 @@ export class UserEntity {
 
       if (response.success) {
         // User deactivated successfully - apiClient handles caching automatically
-        trackAuthEvent('user_deactivated', { userId: id });
+        trackAuthUIEvent('user_deactivated', { userId: id });
       }
 
       return response;

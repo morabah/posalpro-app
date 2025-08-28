@@ -1,11 +1,13 @@
 // React Query hooks for customers - New Architecture
 import { analytics } from '@/lib/analytics';
+import type { ApiResponse } from '@/lib/api/response';
 import {
   Customer,
   CustomerCreate,
   CustomerQuery,
   customerService,
   CustomerUpdate,
+  CustomerList,
 } from '@/services/customerService';
 import {
   useInfiniteQuery,
@@ -29,7 +31,7 @@ export function useInfiniteCustomers({
   industry,
 }: CustomerQuery) {
   return useInfiniteQuery({
-    queryKey: qk.customers.list(search, limit, sortBy, sortOrder),
+    queryKey: qk.customers.list(search, limit, sortBy, sortOrder, status, tier, industry),
     queryFn: ({ pageParam }) =>
       customerService.getCustomers({
         search,
@@ -39,10 +41,11 @@ export function useInfiniteCustomers({
         status,
         tier,
         industry,
-        cursor: pageParam as string | null,
+        cursor: (pageParam ?? null) as string | null,
       }),
     initialPageParam: null as string | null,
-    getNextPageParam: (lastPage: any) => lastPage.data?.nextCursor || undefined,
+    getNextPageParam: (lastPage: ApiResponse<CustomerList>) =>
+      lastPage.ok ? lastPage.data.nextCursor ?? undefined : undefined,
     staleTime: 60_000, // 1 minute
     gcTime: 120_000, // 2 minutes
     refetchOnWindowFocus: false,

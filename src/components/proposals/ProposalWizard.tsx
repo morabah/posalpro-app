@@ -100,7 +100,7 @@ const STEP_META = [
 ];
 
 interface ProposalWizardProps {
-  onComplete?: (proposalId: string) => void;
+  onComplete?: (data: string | object) => void | Promise<void>;
   onCancel?: () => void;
   editMode?: boolean;
   proposalId?: string;
@@ -223,33 +223,36 @@ export function ProposalWizard({
     previousStep();
   }, [currentStep, previousStep, editMode, proposalId]); // ✅ Removed unstable analytics dependency
 
-  const handleStepClick = useCallback((targetStep: number) => {
-    // Only allow navigation to completed steps or the next step
-    if (targetStep <= currentStep || targetStep === currentStep + 1) {
-      analytics.trackOptimized('wizard_step_navigation', {
-        action: 'direct_step_click',
-        fromStep: currentStep,
-        toStep: targetStep,
-        editMode,
-        proposalId,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+  const handleStepClick = useCallback(
+    (targetStep: number) => {
+      // Only allow navigation to completed steps or the next step
+      if (targetStep <= currentStep || targetStep === currentStep + 1) {
+        analytics.trackOptimized('wizard_step_navigation', {
+          action: 'direct_step_click',
+          fromStep: currentStep,
+          toStep: targetStep,
+          editMode,
+          proposalId,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
 
-      logDebug('Direct step navigation', {
-        component: 'ProposalWizard',
-        operation: 'handleStepClick',
-        fromStep: currentStep,
-        toStep: targetStep,
-        editMode,
-        proposalId,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+        logDebug('Direct step navigation', {
+          component: 'ProposalWizard',
+          operation: 'handleStepClick',
+          fromStep: currentStep,
+          toStep: targetStep,
+          editMode,
+          proposalId,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
 
-      setCurrentStep(targetStep);
-    }
-  }, [currentStep, setCurrentStep, editMode, proposalId, analytics]);
+        setCurrentStep(targetStep);
+      }
+    },
+    [currentStep, setCurrentStep, editMode, proposalId, analytics]
+  );
 
   const handleSubmit = useCallback(async () => {
     try {
@@ -277,7 +280,7 @@ export function ProposalWizard({
       if (editMode && proposalId) {
         // Update existing proposal using React Query mutation
         const stepData = useProposalStore.getState().stepData;
-        
+
         // ✅ ADDED: Debug logging to track raw step data from store
         console.log('[WIZARD DEBUG] Raw step data from store:', {
           component: 'ProposalWizard',
@@ -286,13 +289,14 @@ export function ProposalWizard({
           step4Data: stepData[4],
           step4ProductCount: stepData[4]?.products?.length || 0,
           step4TotalValue: stepData[4]?.totalValue || 0,
-          step4Products: stepData[4]?.products?.map((p: any) => ({ 
-            id: p.id, 
-            name: p.name, 
-            temp: p.id?.startsWith('temp-') 
-          })) || [],
+          step4Products:
+            stepData[4]?.products?.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              temp: p.id?.startsWith('temp-'),
+            })) || [],
         });
-        
+
         const proposalData = {
           ...stepData[1], // Basic information
           teamData: stepData[2], // Team assignment
@@ -310,14 +314,15 @@ export function ProposalWizard({
           stepDataKeys: Object.keys(stepData),
           productData: stepData[4],
           productCount: stepData[4]?.products?.length || 0,
-          products: stepData[4]?.products?.map((p: any) => ({
-            id: p.id,
-            productId: p.productId,
-            name: p.name,
-            quantity: p.quantity,
-            unitPrice: p.unitPrice,
-            total: p.total,
-          })) || [],
+          products:
+            stepData[4]?.products?.map((p: any) => ({
+              id: p.id,
+              productId: p.productId,
+              name: p.name,
+              quantity: p.quantity,
+              unitPrice: p.unitPrice,
+              total: p.total,
+            })) || [],
           proposalDataKeys: Object.keys(proposalData),
           userStory: 'US-3.1',
           hypothesis: 'H4',
@@ -360,7 +365,141 @@ export function ProposalWizard({
           userStory: 'US-3.1',
           hypothesis: 'H4',
         });
-        onComplete(resultProposalId);
+
+        // ✅ FIXED: In edit mode, collect all wizard data and pass to onComplete
+        if (editMode) {
+          logDebug('EDIT MODE DETECTED: Starting payload collection', {
+            component: 'ProposalWizard',
+            operation: 'handleSubmit',
+            editMode: true,
+            proposalId: resultProposalId,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
+
+          try {
+            // Collect all step data from the store
+            const { stepData } = useProposalStore.getState();
+            const basicInfo = stepData[1] || {};
+            const teamData = stepData[2] || {};
+            const contentData = stepData[3] || {};
+            const productData = stepData[4] || {};
+            const sectionData = stepData[5] || {};
+
+            logDebug('DEBUG: Raw step data before payload creation', {
+              component: 'ProposalWizard',
+              operation: 'handleSubmit',
+              stepDataKeys: Object.keys(stepData),
+              step4ProductCount: productData.products?.length || 0,
+              step4TotalValue: productData.totalValue || 0,
+              userStory: 'US-3.1',
+              hypothesis: 'H4',
+            });
+
+            const wizardPayload = {
+              title: basicInfo.title || '',
+              description: basicInfo.description || '',
+              customerId: basicInfo.customerId || '',
+              customer: basicInfo.customer
+                ? {
+                    id: basicInfo.customer.id,
+                    name: basicInfo.customer.name,
+                    email: basicInfo.customer.email || undefined,
+                  }
+                : undefined,
+              dueDate: basicInfo.dueDate || '',
+              priority: basicInfo.priority || 'MEDIUM',
+              value: basicInfo.value || 0,
+              currency: basicInfo.currency || 'USD',
+              projectType: basicInfo.projectType || '',
+              tags: basicInfo.tags || [],
+              teamData: {
+                teamLead: teamData.teamLead || '',
+                salesRepresentative: teamData.salesRepresentative || '',
+                subjectMatterExperts: teamData.subjectMatterExperts || {},
+                executiveReviewers: teamData.executiveReviewers || [],
+              },
+              contentData: {
+                selectedTemplates: contentData.selectedTemplates || [],
+                customContent: contentData.customContent || [],
+                contentLibrary: contentData.contentLibrary || [],
+              },
+              productData: {
+                products: productData.products || [],
+                totalValue: productData.totalValue || 0,
+              },
+              sectionData: {
+                sections: sectionData.sections || [],
+                sectionTemplates: sectionData.sectionTemplates || [],
+              },
+              reviewData: {
+                validationChecklist: [],
+                totalProducts: productData.products?.length || 0,
+                totalValue: productData.totalValue || 0,
+                totalSections: sectionData.sections?.length || 0,
+              },
+            };
+
+            logDebug('DEBUG: Wizard payload created', {
+              component: 'ProposalWizard',
+              operation: 'handleSubmit',
+              payloadKeys: Object.keys(wizardPayload),
+              productCount: wizardPayload.productData?.products?.length || 0,
+              totalValue: wizardPayload.productData?.totalValue || 0,
+              hasTeamData: !!wizardPayload.teamData?.teamLead,
+              hasContentData: !!wizardPayload.contentData?.selectedTemplates?.length,
+              hasProductData: !!wizardPayload.productData?.products?.length,
+              hasSectionData: !!wizardPayload.sectionData?.sections?.length,
+              userStory: 'US-3.1',
+              hypothesis: 'H4',
+            });
+
+            logDebug('Passing wizard payload to onComplete', {
+              component: 'ProposalWizard',
+              operation: 'handleSubmit',
+              editMode: true,
+              payloadType: typeof wizardPayload,
+              payloadSize: JSON.stringify(wizardPayload).length,
+              userStory: 'US-3.1',
+              hypothesis: 'H4',
+            });
+
+            // Pass the complete wizard payload instead of just proposalId
+            onComplete(wizardPayload);
+          } catch (payloadError) {
+            logError('ERROR: Failed to create wizard payload in edit mode', {
+              component: 'ProposalWizard',
+              operation: 'handleSubmit',
+              editMode: true,
+              error: payloadError instanceof Error ? payloadError.message : 'Unknown error',
+              stack: payloadError instanceof Error ? payloadError.stack : undefined,
+              userStory: 'US-3.1',
+              hypothesis: 'H4',
+            });
+
+            // Fallback to create mode behavior
+            logDebug('FALLBACK: Passing proposalId to onComplete due to payload error', {
+              component: 'ProposalWizard',
+              operation: 'handleSubmit',
+              editMode: true,
+              proposalId: resultProposalId,
+              userStory: 'US-3.1',
+              hypothesis: 'H4',
+            });
+            onComplete(resultProposalId);
+          }
+        } else {
+          logDebug('CREATE MODE: Passing proposalId to onComplete', {
+            component: 'ProposalWizard',
+            operation: 'handleSubmit',
+            editMode: false,
+            proposalId: resultProposalId,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
+          // For create mode, just pass the proposalId as before
+          onComplete(resultProposalId);
+        }
       }
     } catch (error) {
       logError('Wizard submit failed', {
@@ -443,7 +582,7 @@ export function ProposalWizard({
               const isClickable = step.id <= currentStep || step.id === currentStep + 1;
               const isCompleted = currentStep > step.id;
               const isCurrent = currentStep === step.id;
-              
+
               return (
                 <div key={step.id} className="flex items-center">
                   <button
@@ -458,7 +597,11 @@ export function ProposalWizard({
                             ? 'bg-gray-200 text-gray-600 hover:bg-gray-300 cursor-pointer'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     } ${isClickable ? 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2' : ''}`}
-                    title={isClickable ? `Go to ${step.title}` : `Complete previous steps to unlock ${step.title}`}
+                    title={
+                      isClickable
+                        ? `Go to ${step.title}`
+                        : `Complete previous steps to unlock ${step.title}`
+                    }
                   >
                     {isCompleted ? <CheckCircleIcon className="w-5 h-5" /> : step.id}
                   </button>
@@ -466,13 +609,17 @@ export function ProposalWizard({
                     onClick={() => handleStepClick(step.id)}
                     disabled={!isClickable}
                     className={`ml-2 text-sm font-medium transition-colors duration-200 ${
-                      isCurrent || isCompleted 
-                        ? 'text-gray-900' 
+                      isCurrent || isCompleted
+                        ? 'text-gray-900'
                         : isClickable
                           ? 'text-gray-700 hover:text-gray-900 cursor-pointer'
                           : 'text-gray-400 cursor-not-allowed'
                     } ${isClickable ? 'focus:outline-none focus:underline' : ''}`}
-                    title={isClickable ? `Go to ${step.title}` : `Complete previous steps to unlock ${step.title}`}
+                    title={
+                      isClickable
+                        ? `Go to ${step.title}`
+                        : `Complete previous steps to unlock ${step.title}`
+                    }
                   >
                     {step.title}
                   </button>

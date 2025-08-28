@@ -617,7 +617,10 @@ export const useUIStore = create<UIStore>()(
 // Selector hooks for common use cases
 export const useSidebar = () => useUIStore(state => state.sidebar);
 export const useBreadcrumbs = () => useUIStore(state => state.breadcrumbs);
-export const useModals = () =>
+export const useModals = (): {
+  modals: Record<string, ModalState>;
+  activeModal: string | null;
+} =>
   useUIStore(state => ({
     modals: state.modals,
     activeModal: state.activeModal,
@@ -625,7 +628,12 @@ export const useModals = () =>
 export const useNotifications = () => useUIStore(state => state.notifications);
 export const useGlobalLoading = () => useUIStore(state => state.globalLoading);
 export const usePageLoading = () => useUIStore(state => state.pageLoading);
-export const useGlobalSearch = () =>
+export const useGlobalSearch = (): {
+  isOpen: boolean;
+  query: string;
+  results: GlobalSearchResult[];
+  loading: boolean;
+} =>
   useUIStore(state => ({
     isOpen: state.globalSearchOpen,
     query: state.globalSearchQuery,
@@ -634,7 +642,35 @@ export const useGlobalSearch = () =>
   }));
 
 // Actions hooks
-export const useUIActions = () =>
+export const useUIActions = (): {
+  // Sidebar
+  setSidebarOpen: (isOpen: boolean) => void;
+  toggleSidebar: () => void;
+  setSidebarPinned: (isPinned: boolean) => void;
+
+  // Modals
+  openModal: (modal: Omit<ModalState, 'isOpen'>) => void;
+  closeModal: (id: string) => void;
+  closeAllModals: () => void;
+
+  // Notifications
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
+  removeNotification: (id: string) => void;
+  clearNotifications: () => void;
+
+  // Loading
+  setGlobalLoading: (loading: LoadingState | null) => void;
+  setPageLoading: (loading: boolean) => void;
+  setLoading: (id: string, loading: LoadingState | null) => void;
+
+  // Search
+  setGlobalSearchOpen: (isOpen: boolean) => void;
+  setGlobalSearchQuery: (query: string) => void;
+
+  // Navigation
+  setCurrentPage: (page: string) => void;
+  setBreadcrumbs: (breadcrumbs: BreadcrumbItem[]) => void;
+} =>
   useUIStore(state => ({
     // Sidebar
     setSidebarOpen: state.setSidebarOpen,
@@ -670,11 +706,14 @@ export const useDebugMode = () => useUIStore(state => state.debugMode);
 export const useMaintenanceMode = () => useUIStore(state => state.maintenanceMode);
 
 // Form state hooks
-export const useFormState = (formId: string) =>
+export const useFormState = (formId: string): {
+  hasUnsavedChanges: boolean;
+  errors: string[];
+} =>
   useUIStore(state => ({
     hasUnsavedChanges: state.unsavedChanges[formId] || false,
     errors: state.formErrors[formId] || [],
-  }));
+  }));4
 
 // Analytics integration
 export const trackUIEvent = (event: string, data?: UIEventData) => {

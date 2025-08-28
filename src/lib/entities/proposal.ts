@@ -5,7 +5,7 @@
  */
 
 import { apiClient, type ApiResponse, type PaginatedResponse } from '@/lib/api/client';
-import { trackAuthEvent } from '@/lib/store/authStore';
+import { trackAuthUIEvent } from '@/lib/store/authStore';
 import { createProposalSchema, proposalMetadataSchema } from '@/lib/validation';
 import { ApprovalDecision, Priority, ProposalStatus } from '@/types/enums';
 import { logger } from '@/lib/logger';
@@ -166,7 +166,7 @@ export class ProposalEntity {
 
         // Track proposal creation event
         logger.info('[ProposalEntity] Tracking proposal creation event');
-        trackAuthEvent('proposal_created', {
+        trackAuthUIEvent('proposal_created', {
           proposalId: data.id,
           title: data.title,
           priority: data.priority,
@@ -231,7 +231,7 @@ export class ProposalEntity {
         this.setCache(id, response.data);
 
         // Track proposal update event
-        trackAuthEvent('proposal_updated', {
+        trackAuthUIEvent('proposal_updated', {
           proposalId: id,
           updatedFields: Object.keys(updateData),
         });
@@ -257,7 +257,7 @@ export class ProposalEntity {
         this.cacheExpiry.delete(id);
 
         // Track proposal deletion event
-        trackAuthEvent('proposal_deleted', { proposalId: id });
+        trackAuthUIEvent('proposal_deleted', { proposalId: id });
       }
 
       return response;
@@ -338,7 +338,7 @@ export class ProposalEntity {
         (err.name === 'ApiError' && err.status === 401)
       ) {
         // Return a structured response for authentication errors
-        trackAuthEvent('session_expired');
+        trackAuthUIEvent('session_expired');
         return {
           success: false,
           message: 'Authentication required. Please sign in to view proposals.',
@@ -386,7 +386,7 @@ export class ProposalEntity {
         this.setCache(id, response.data);
 
         // Track status change
-        trackAuthEvent('proposal_status_changed', {
+        trackAuthUIEvent('proposal_status_changed', {
           proposalId: id,
           newStatus: status,
           notes,
@@ -418,7 +418,7 @@ export class ProposalEntity {
         this.cacheExpiry.delete(id);
 
         // Track team assignment
-        trackAuthEvent('proposal_team_assigned', {
+        trackAuthUIEvent('proposal_team_assigned', {
           proposalId: id,
           assigneeCount: assignments.length,
           roles: assignments.map(a => a.role),
@@ -456,7 +456,7 @@ export class ProposalEntity {
         this.setCache(id, response.data);
 
         // Track submission
-        trackAuthEvent('proposal_submitted', {
+        trackAuthUIEvent('proposal_submitted', {
           proposalId: id,
           submittedAt: new Date(),
         });
@@ -502,7 +502,7 @@ export class ProposalEntity {
         this.cacheExpiry.delete(id);
 
         // Track approval decision
-        trackAuthEvent('proposal_approval_decision', {
+        trackAuthUIEvent('proposal_approval_decision', {
           proposalId: id,
           decision,
           hasComments: !!comments,
@@ -549,7 +549,7 @@ export class ProposalEntity {
         this.cacheExpiry.delete(id);
 
         // Track version creation
-        trackAuthEvent('proposal_version_created', {
+        trackAuthUIEvent('proposal_version_created', {
           proposalId: id,
           changesSummary,
           changedFields: Object.keys(changes),
@@ -589,7 +589,7 @@ export class ProposalEntity {
         this.setCache(response.data.id, response.data);
 
         // Track cloning
-        trackAuthEvent('proposal_cloned', {
+        trackAuthUIEvent('proposal_cloned', {
           originalId: id,
           newId: response.data.id,
           newTitle,
@@ -634,7 +634,7 @@ export class ProposalEntity {
       if (response.success) {
         logger.info('[ProposalEntity] Draft saved successfully');
         const draftId = ProposalEntity.isProposalData(response.data) ? response.data.id : undefined;
-        trackAuthEvent('proposal_draft_saved', {
+        trackAuthUIEvent('proposal_draft_saved', {
           proposalId: draftId,
           title: proposalData.metadata.title,
         });

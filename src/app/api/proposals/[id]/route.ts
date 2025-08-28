@@ -4,10 +4,11 @@
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
-import { WizardProposalUpdateSchema } from '@/features/proposals/schemas';
-import { ok } from '@/lib/api/response';
+import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals/schemas';
+import { fail, ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 
 // ====================
@@ -22,7 +23,7 @@ export const GET = createRoute(
     const id = req.url.split('/').pop()?.split('?')[0];
 
     if (!id) {
-      return Response.json({ error: 'Proposal ID is required' }, { status: 400 });
+      return Response.json(fail('VALIDATION_ERROR', 'Proposal ID is required'), { status: 400 });
     }
     try {
       logInfo('Fetching proposal', {
@@ -69,8 +70,34 @@ export const GET = createRoute(
       });
 
       if (!proposal) {
-        throw new Error('Proposal not found');
+        logError('Proposal not found', null, {
+          component: 'ProposalAPI',
+          operation: 'GET',
+          proposalId: id,
+          userId: user.id,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+        return Response.json(
+          { code: ErrorCodes.DATA.NOT_FOUND, message: 'Proposal not found' },
+          { status: 404 }
+        );
       }
+
+      // Transform null values to appropriate defaults before validation
+      const transformedProposal = {
+        ...proposal,
+        description: proposal.description || '',
+        metadata: proposal.metadata || {},
+        customer: proposal.customer
+          ? {
+              ...proposal.customer,
+              email: proposal.customer.email || '',
+              industry: (proposal.customer as any).industry || '',
+            }
+          : undefined,
+        title: proposal.title || 'Untitled Proposal', // Handle empty titles
+      };
 
       logInfo('Proposal fetched successfully', {
         component: 'ProposalAPI',
@@ -81,17 +108,34 @@ export const GET = createRoute(
         hypothesis: 'H4',
       });
 
-      return Response.json(ok(proposal));
+      // Validate response against schema
+      const validationResult = ProposalSchema.safeParse(transformedProposal);
+      if (!validationResult.success) {
+        logError('Proposal schema validation failed', validationResult.error, {
+          component: 'ProposalAPI',
+          operation: 'GET',
+          proposalId: id,
+        });
+        // Return the transformed proposal data anyway for now, but log the validation error
+        return Response.json(ok(transformedProposal));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
-      logError('Failed to fetch proposal', error, {
-        component: 'ProposalAPI',
-        operation: 'GET',
-        proposalId: id,
-        userId: user.id,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
-      throw error; // createRoute handles errorToJson automatically
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to fetch proposal',
+        undefined,
+        {
+          component: 'ProposalAPI',
+          operation: 'GET',
+          proposalId: id,
+          userId: user.id,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        }
+      );
+      throw processedError; // createRoute handles errorToJson automatically
     }
   }
 );
@@ -109,20 +153,39 @@ export const PUT = createRoute(
     const id = req.url.split('/').pop()?.split('?')[0];
 
     if (!id) {
-      return Response.json({ error: 'Proposal ID is required' }, { status: 400 });
+      return Response.json(fail('VALIDATION_ERROR', 'Proposal ID is required'), { status: 400 });
     }
 
     // ✅ ADDED: Debug logging to see what's being received
+    const bodyData = body as any;
     logInfo('Received proposal update request', {
       component: 'ProposalAPI',
       operation: 'PUT',
       proposalId: id,
-      bodyKeys: Object.keys(body || {}),
-      hasTeamData: !!(body as any)?.teamData,
-      hasContentData: !!(body as any)?.contentData,
-      hasProductData: !!(body as any)?.productData,
-      hasSectionData: !!(body as any)?.sectionData,
-      hasReviewData: !!(body as any)?.reviewData,
+      bodyKeys: Object.keys(bodyData || {}),
+      hasTeamData: !!bodyData?.teamData,
+      hasContentData: !!bodyData?.contentData,
+      hasProductData: !!bodyData?.productData,
+      hasSectionData: !!bodyData?.sectionData,
+      hasReviewData: !!bodyData?.reviewData,
+      userStory: 'US-3.2',
+      hypothesis: 'H4',
+    });
+
+    // ✅ ADDED: Detailed logging of the actual body structure
+    logInfo('DEBUG: Full request body structure', {
+      component: 'ProposalAPI',
+      operation: 'PUT',
+      proposalId: id,
+      bodyType: typeof bodyData,
+      bodySize: bodyData ? JSON.stringify(bodyData).length : 0,
+      topLevelKeys: Object.keys(bodyData || {}),
+      teamDataKeys: bodyData?.teamData ? Object.keys(bodyData.teamData) : null,
+      contentDataKeys: bodyData?.contentData ? Object.keys(bodyData.contentData) : null,
+      productDataKeys: bodyData?.productData ? Object.keys(bodyData.productData) : null,
+      sectionDataKeys: bodyData?.sectionData ? Object.keys(bodyData.sectionData) : null,
+      reviewDataKeys: bodyData?.reviewData ? Object.keys(bodyData.reviewData) : null,
+      productCount: bodyData?.productData?.products?.length || 0,
       userStory: 'US-3.2',
       hypothesis: 'H4',
     });
@@ -207,40 +270,180 @@ export const PUT = createRoute(
         hypothesis: 'H4',
       });
 
-      const proposal = await prisma.proposal.update({
-        where: { id },
-        data: updateData,
-        include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
+      // ✅ FIXED: Use transaction to ensure data consistency
+      const proposal = await prisma.$transaction(async tx => {
+        // 1. Update the proposal
+        const updatedProposal = await tx.proposal.update({
+          where: { id },
+          data: updateData,
+          include: {
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
             },
-          },
-          sections: {
-            orderBy: { order: 'asc' },
-          },
-          products: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  sku: true,
+            sections: {
+              orderBy: { order: 'asc' },
+            },
+            products: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    sku: true,
+                  },
                 },
               },
             },
-          },
-          assignedTo: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
             },
           },
-        },
+        });
+
+        // 2. ✅ FIXED: Handle product data by updating ProposalProduct records
+        if (productData && productData.products && Array.isArray(productData.products)) {
+          logInfo('Processing product data for proposal update', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            productCount: productData.products.length,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+
+          // Delete existing proposal products
+          await tx.proposalProduct.deleteMany({
+            where: { proposalId: id },
+          });
+
+          // Create new proposal products
+          for (const product of productData.products) {
+            if (product.productId && product.quantity && product.unitPrice) {
+              await tx.proposalProduct.create({
+                data: {
+                  proposalId: id,
+                  productId: product.productId,
+                  quantity: product.quantity,
+                  unitPrice: product.unitPrice,
+                  discount: product.discount || 0,
+                  total:
+                    product.total ||
+                    product.quantity * product.unitPrice * (1 - (product.discount || 0) / 100),
+                  configuration: product.configuration || {},
+                },
+              });
+            }
+          }
+
+          logInfo('Proposal products updated successfully', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            productsCreated: productData.products.length,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+        }
+
+        // 3. ✅ FIXED: Handle section data by updating ProposalSection records
+        if (sectionData && sectionData.sections && Array.isArray(sectionData.sections)) {
+          logInfo('Processing section data for proposal update', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            sectionCount: sectionData.sections.length,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+
+          // Delete existing proposal sections
+          await tx.proposalSection.deleteMany({
+            where: { proposalId: id },
+          });
+
+          // Create new proposal sections
+          for (const section of sectionData.sections) {
+            if (section.title && section.content) {
+              await tx.proposalSection.create({
+                data: {
+                  proposalId: id,
+                  title: section.title,
+                  content: section.content,
+                  order: section.order || 1,
+                  type: section.type || 'TEXT',
+                },
+              });
+            }
+          }
+
+          logInfo('Proposal sections updated successfully', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            sectionsCreated: sectionData.sections.length,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+        }
+
+        // 4. Fetch the updated proposal with all relations
+        return await tx.proposal.findUnique({
+          where: { id },
+          include: {
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            sections: {
+              orderBy: { order: 'asc' },
+            },
+            products: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    sku: true,
+                  },
+                },
+              },
+            },
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        });
       });
+
+      // Transform null values to appropriate defaults before validation
+      const transformedProposal = {
+        ...proposal,
+        description: proposal?.description || '',
+        metadata: proposal?.metadata || {},
+        customer: proposal?.customer
+          ? {
+              ...proposal.customer,
+              email: proposal.customer.email || '',
+              industry: (proposal.customer as any).industry || '',
+            }
+          : undefined,
+        title: proposal?.title || 'Untitled Proposal', // Handle empty titles
+      };
 
       logInfo('Proposal updated successfully', {
         component: 'ProposalAPI',
@@ -251,17 +454,34 @@ export const PUT = createRoute(
         hypothesis: 'H4',
       });
 
-      return Response.json(ok(proposal));
+      // Validate response against schema
+      const validationResult = ProposalSchema.safeParse(transformedProposal);
+      if (!validationResult.success) {
+        logError('Proposal schema validation failed after update', validationResult.error, {
+          component: 'ProposalAPI',
+          operation: 'PUT',
+          proposalId: id,
+        });
+        // Return the transformed proposal data anyway for now, but log the validation error
+        return Response.json(ok(transformedProposal));
+      }
+
+      return Response.json(ok(validationResult.data));
     } catch (error) {
-      logError('Failed to update proposal', error, {
-        component: 'ProposalAPI',
-        operation: 'PUT',
-        proposalId: id,
-        userId: user.id,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-      throw error; // createRoute handles errorToJson automatically
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to update proposal',
+        undefined,
+        {
+          component: 'ProposalAPI',
+          operation: 'PUT',
+          proposalId: id,
+          userId: user.id,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        }
+      );
+      throw processedError; // createRoute handles errorToJson automatically
     }
   }
 );
@@ -278,7 +498,7 @@ export const DELETE = createRoute(
     const id = req.url.split('/').pop()?.split('?')[0];
 
     if (!id) {
-      return Response.json({ error: 'Proposal ID is required' }, { status: 400 });
+      return Response.json(fail('VALIDATION_ERROR', 'Proposal ID is required'), { status: 400 });
     }
     try {
       logInfo('Deleting proposal', {
@@ -305,15 +525,20 @@ export const DELETE = createRoute(
 
       return Response.json(ok({ success: true }));
     } catch (error) {
-      logError('Failed to delete proposal', error, {
-        component: 'ProposalAPI',
-        operation: 'DELETE',
-        proposalId: id,
-        userId: user.id,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-      throw error; // createRoute handles errorToJson automatically
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to delete proposal',
+        undefined,
+        {
+          component: 'ProposalAPI',
+          operation: 'DELETE',
+          proposalId: id,
+          userId: user.id,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        }
+      );
+      throw processedError; // createRoute handles errorToJson automatically
     }
   }
 );

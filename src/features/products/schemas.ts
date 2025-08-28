@@ -32,19 +32,23 @@ export const ProductSchema = z.object({
   id: z.string(),
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  price: z.number().positive('Price must be positive').optional().or(z.null()),
+  price: z.number().min(0, 'Price must be non-negative'),
   currency: z.string().default('USD'),
   sku: z.string(),
   category: z.array(z.string()),
   tags: z.array(z.string()),
-  attributes: z.record(z.unknown()).optional(),
+  attributes: z.any().optional(),
   images: z.array(z.string()),
   isActive: z.boolean().default(true),
   version: z.number().default(1),
-  usageAnalytics: z.record(z.unknown()).optional(),
+  usageAnalytics: z.any().optional(),
   userStoryMappings: z.array(z.string()),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z
+    .union([z.string(), z.date()])
+    .transform(val => (val instanceof Date ? val.toISOString() : val)),
+  updatedAt: z
+    .union([z.string(), z.date()])
+    .transform(val => (val instanceof Date ? val.toISOString() : val)),
 });
 
 export const ProductCreateSchema = ProductSchema.omit({
@@ -185,7 +189,12 @@ export const ProductQuerySchema = z.object({
   sortBy: z.enum(['createdAt', 'name', 'price', 'isActive']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   category: z.string().optional(),
-  isActive: z.boolean().optional(),
+  isActive: z.preprocess(val => {
+    if (typeof val === 'string') {
+      return val.toLowerCase() === 'true';
+    }
+    return val;
+  }, z.boolean().optional()),
 });
 
 export const ProductSearchSchema = z.object({

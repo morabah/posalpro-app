@@ -22,61 +22,22 @@ interface ProductFilters {
 }
 
 interface ProductState {
-  // Data
-  products: Record<string, Product>;
-  productIds: string[];
+  // UI State Only
   selectedProducts: string[];
   filters: ProductFilters;
-
-  // UI State
-  isLoading: boolean;
-  error: string | null;
-  hasMore: boolean;
-  nextCursor: string | null;
-
-  // Bulk Operations
-  bulkOperationInProgress: boolean;
-  bulkOperationType: 'delete' | 'update' | null;
-
-  // Statistics
-  stats: {
-    total: number;
-    active: number;
-    inactive: number;
-    draft: number;
-    categories: Record<string, number>;
-  } | null;
 }
 
 interface ProductActions {
-  // Product Management
-  setProducts: (products: Product[]) => void;
-  addProduct: (product: Product) => void;
-  updateProduct: (id: string, updates: Partial<Product>) => void;
-  removeProduct: (id: string) => void;
-  clearProducts: () => void;
-
-  // Selection Management
+  // UI Selection Management - UI STATE ONLY
   selectProduct: (id: string) => void;
   deselectProduct: (id: string) => void;
   toggleProductSelection: (id: string) => void;
-  selectAllProducts: () => void;
+  selectAllProducts: (productIds?: string[]) => void;
   clearSelection: () => void;
 
-  // Filter Management
+  // UI Filter Management - UI STATE ONLY
   setFilters: (filters: Partial<ProductFilters>) => void;
   resetFilters: () => void;
-
-  // UI State Management
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  setPagination: (hasMore: boolean, nextCursor: string | null) => void;
-
-  // Bulk Operations
-  setBulkOperation: (type: 'delete' | 'update' | null, inProgress: boolean) => void;
-
-  // Statistics
-  setStats: (stats: ProductState['stats']) => void;
 }
 
 type ProductStore = ProductState & ProductActions;
@@ -91,25 +52,10 @@ const initialFilters: ProductFilters = {
   sortOrder: 'desc',
 };
 
+// Initial state - UI STATE ONLY
 const initialState: ProductState = {
-  // Data
-  products: {},
-  productIds: [],
   selectedProducts: [],
   filters: initialFilters,
-
-  // UI State
-  isLoading: false,
-  error: null,
-  hasMore: true,
-  nextCursor: null,
-
-  // Bulk Operations
-  bulkOperationInProgress: false,
-  bulkOperationType: null,
-
-  // Statistics
-  stats: null,
 };
 
 // ====================
@@ -122,54 +68,7 @@ export const useProductStore = create<ProductStore>()(
       immer((set, get) => ({
         ...initialState,
 
-        // Product Management
-        setProducts: (products: Product[]) => {
-          set(state => {
-            const productMap: Record<string, Product> = {};
-            const ids: string[] = [];
-
-            products.forEach(product => {
-              productMap[product.id] = product;
-              ids.push(product.id);
-            });
-
-            state.products = productMap;
-            state.productIds = ids;
-          });
-        },
-
-        addProduct: (product: Product) => {
-          set(state => {
-            state.products[product.id] = product;
-            if (!state.productIds.includes(product.id)) {
-              state.productIds.unshift(product.id);
-            }
-          });
-        },
-
-        updateProduct: (id: string, updates: Partial<Product>) => {
-          set(state => {
-            if (state.products[id]) {
-              state.products[id] = { ...state.products[id], ...updates };
-            }
-          });
-        },
-
-        removeProduct: (id: string) => {
-          set(state => {
-            delete state.products[id];
-            state.productIds = state.productIds.filter(pid => pid !== id);
-            state.selectedProducts = state.selectedProducts.filter(pid => pid !== id);
-          });
-        },
-
-        clearProducts: () => {
-          set(state => {
-            state.products = {};
-            state.productIds = [];
-            state.selectedProducts = [];
-          });
-        },
+        // UI State Management - Server state moved to React Query
 
         // Selection Management
         selectProduct: (id: string) => {
@@ -197,9 +96,11 @@ export const useProductStore = create<ProductStore>()(
           });
         },
 
-        selectAllProducts: () => {
+        selectAllProducts: (productIds?: string[]) => {
           set(state => {
-            state.selectedProducts = [...state.productIds];
+            // If productIds are provided, use them; otherwise clear selection
+            // This allows components to pass the current product IDs from React Query
+            state.selectedProducts = productIds || [];
           });
         },
 
@@ -222,40 +123,7 @@ export const useProductStore = create<ProductStore>()(
           });
         },
 
-        // UI State Management
-        setLoading: (loading: boolean) => {
-          set(state => {
-            state.isLoading = loading;
-          });
-        },
-
-        setError: (error: string | null) => {
-          set(state => {
-            state.error = error;
-          });
-        },
-
-        setPagination: (hasMore: boolean, nextCursor: string | null) => {
-          set(state => {
-            state.hasMore = hasMore;
-            state.nextCursor = nextCursor;
-          });
-        },
-
-        // Bulk Operations
-        setBulkOperation: (type: 'delete' | 'update' | null, inProgress: boolean) => {
-          set(state => {
-            state.bulkOperationType = type;
-            state.bulkOperationInProgress = inProgress;
-          });
-        },
-
-        // Statistics
-        setStats: (stats: ProductState['stats']) => {
-          set(state => {
-            state.stats = stats;
-          });
-        },
+        // Server state management moved to React Query hooks
       }))
     ),
     {
@@ -278,96 +146,36 @@ export const useProductStore = create<ProductStore>()(
 // Store Actions (Bound)
 // ====================
 
-export const useProductActions = () =>
-  useProductStore(state => ({
-    // Product Management
-    setProducts: state.setProducts,
-    addProduct: state.addProduct,
-    updateProduct: state.updateProduct,
-    removeProduct: state.removeProduct,
-    clearProducts: state.clearProducts,
+export const useProductActions = (): {
+  // UI Selection Management - UI STATE ONLY
+  selectProduct: (id: string) => void;
+  deselectProduct: (id: string) => void;
+  toggleProductSelection: (id: string) => void;
+  selectAllProducts: (productIds?: string[]) => void;
+  clearSelection: () => void;
 
-    // Selection Management
+  // UI Filter Management - UI STATE ONLY
+  setFilters: (filters: Partial<ProductFilters>) => void;
+  resetFilters: () => void;
+} =>
+  useProductStore(state => ({
+    // UI Selection Management - UI STATE ONLY
     selectProduct: state.selectProduct,
     deselectProduct: state.deselectProduct,
     toggleProductSelection: state.toggleProductSelection,
     selectAllProducts: state.selectAllProducts,
     clearSelection: state.clearSelection,
 
-    // Filter Management
+    // UI Filter Management - UI STATE ONLY
     setFilters: state.setFilters,
-
-    // UI State Management
-    setLoading: state.setLoading,
-    setError: state.setError,
-
-    // Bulk Operations
-    setBulkOperation: state.setBulkOperation,
-
-    // Statistics
-    setStats: state.setStats,
+    resetFilters: state.resetFilters,
   }));
 
 // ====================
 // Utility Functions
 // ====================
-
-/**
- * Get filtered and sorted products based on current filters
- */
-export const getFilteredProducts = (state: ProductStore): Product[] => {
-  const { products, productIds, filters } = state;
-  let filteredProducts = productIds.map(id => products[id]).filter(Boolean);
-
-  // Apply search filter
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    filteredProducts = filteredProducts.filter(
-      product =>
-        product.name.toLowerCase().includes(searchLower) ||
-        product.description?.toLowerCase().includes(searchLower) ||
-        product.sku.toLowerCase().includes(searchLower)
-    );
-  }
-
-  // Apply category filter
-  if (filters.category) {
-    filteredProducts = filteredProducts.filter(product =>
-      product.category.includes(filters.category!)
-    );
-  }
-
-  // Apply active status filter
-  if (filters.isActive !== undefined) {
-    filteredProducts = filteredProducts.filter(product => product.isActive === filters.isActive);
-  }
-
-  // Apply sorting
-  filteredProducts.sort((a, b) => {
-    const { sortBy, sortOrder } = filters;
-    let comparison = 0;
-
-    switch (sortBy) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'price':
-        comparison = (a.price || 0) - (b.price || 0);
-        break;
-      case 'isActive':
-        comparison = Number(a.isActive) - Number(b.isActive);
-        break;
-      case 'createdAt':
-      default:
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        break;
-    }
-
-    return sortOrder === 'desc' ? -comparison : comparison;
-  });
-
-  return filteredProducts;
-};
+// Server state utility functions moved to React Query hooks
+// Filtering and sorting now handled by useInfiniteProductsMigrated hook
 
 /**
  * Subscribe to store changes for debugging
