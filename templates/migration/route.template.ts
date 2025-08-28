@@ -1,59 +1,129 @@
 // API Route Template for Migration from Bridge Pattern
 // Replace __ENTITY__ with actual entity name (e.g., Customer, Product, Proposal)
+// User Story: __USER_STORY__ (e.g., US-1.1)
+// Hypothesis: __HYPOTHESIS__ (e.g., H1)
+//
+// ✅ FOLLOWS: MIGRATION_LESSONS.md - Route patterns with proper validation
+// ✅ FOLLOWS: CORE_REQUIREMENTS.md - API route standards and logging
+// ✅ ALIGNS: Feature-based schemas for consistent data flow
+// ✅ IMPLEMENTS: Performance monitoring and structured logging
 
-import { ok } from '@/lib/api/response';
-import { createRoute } from '@/lib/api/route';
-import { db } from '@/lib/db';
-import { z } from 'zod';
-
-// ====================
-// Query Schema
-// ====================
-
-const Q = z.object({
-  search: z.string().trim().default(''),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
+// TODO: Replace with actual imports when implementing
+// import { ok } from '@/lib/api/response';
+// import { createRoute } from '@/lib/api/route';
+// import { db } from '@/lib/db';
+// import { logDebug, logInfo } from '@/lib/logger';
 
 // ====================
-// Body Schemas
+// Import consolidated schemas from features directory
 // ====================
 
-const Create__ENTITY__ = z.object({
-  // Add entity-specific fields here
-  // Example for Customer:
-  // name: z.string().min(1, 'Name is required'),
-  // email: z.string().email('Invalid email format'),
-  // phone: z.string().optional(),
-  // company: z.string().optional(),
-});
+// TODO: Replace __ENTITY__ and __RESOURCE__ with actual values
+// import {
+//   __ENTITY__CreateSchema,
+//   __ENTITY__QuerySchema,
+//   __ENTITY__UpdateSchema,
+//   type __ENTITY__Create,
+//   type __ENTITY__Query,
+//   type __ENTITY__Update,
+// } from '@/features/__RESOURCE__/schemas';
 
-const Update__ENTITY__ = Create__ENTITY__.partial();
+// ====================
+// TypeScript Types (using feature-based schemas)
+// ====================
+
+type CreateData = __ENTITY__Create;
+type UpdateData = __ENTITY__Update;
+type QueryParams = __ENTITY__Query;
 
 // ====================
 // GET Route - List with Cursor Pagination
 // ====================
 
 export const GET = createRoute(
-  { roles: ['admin', 'sales', 'viewer'], query: Q },
-  async ({ query }) => {
-    const where = query!.search
-      ? { name: { contains: query!.search, mode: 'insensitive' } }
-      : undefined;
+  {
+    roles: ['admin', 'sales', 'viewer'],
+    query: __ENTITY__QuerySchema,
+    userStory: '__USER_STORY__',
+    hypothesis: '__HYPOTHESIS__'
+  },
+  async ({ query, user }) => {
+    const start = performance.now();
 
-    const rows = await db.__RESOURCE__.findMany({
-      where,
-      select: { id: true, name: true, status: true, createdAt: true },
-      orderBy: { [query!.sortBy]: query!.sortOrder },
-      take: query!.limit + 1,
-      ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
+    logDebug('API: Fetching __RESOURCE__ list', {
+      component: '__ENTITY__ API Route',
+      operation: 'GET /api/__RESOURCE__',
+      query: query,
+      userId: user.id,
+      userStory: '__USER_STORY__',
+      hypothesis: '__HYPOTHESIS__',
     });
 
-    const nextCursor = rows.length > query!.limit ? rows.pop()!.id : null;
-    return Response.json(ok({ items: rows, nextCursor }));
+    try {
+      // Build dynamic where clause based on entity schema
+      const where: any = {};
+
+      if (query.search && query.search.trim()) {
+        // This would be customized based on the entity's searchable fields
+        where.OR = [
+          { name: { contains: query.search, mode: 'insensitive' } },
+          // Add other searchable fields here
+          // { email: { contains: query.search, mode: 'insensitive' } },
+        ];
+      }
+
+      // Add any filters (status, category, etc.)
+      if (query.status) where.status = query.status;
+      if (query.category) where.category = query.category;
+      // Add other filter fields as needed
+
+      const rows = await db.__RESOURCE__.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          // Add other commonly displayed fields
+        },
+        orderBy: { [query.sortBy]: query.sortOrder },
+        take: query.limit + 1,
+        ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+      });
+
+      const nextCursor = rows.length > query.limit ? rows.pop()!.id : null;
+      const result = { items: rows, nextCursor };
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: __RESOURCE__ list fetched successfully', {
+        component: '__ENTITY__ API Route',
+        operation: 'GET /api/__RESOURCE__',
+        count: rows.length,
+        hasNextPage: !!nextCursor,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      return Response.json(ok(result));
+    } catch (error) {
+      const loadTime = performance.now() - start;
+
+      logDebug('API: Error fetching __RESOURCE__ list', {
+        component: '__ENTITY__ API Route',
+        operation: 'GET /api/__RESOURCE__',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      throw error; // Let createRoute handle the error response
+    }
   }
 );
 
@@ -62,49 +132,236 @@ export const GET = createRoute(
 // ====================
 
 export const POST = createRoute(
-  { roles: ['admin', 'sales'], body: Create__ENTITY__ },
+  {
+    roles: ['admin', 'sales'],
+    body: __ENTITY__CreateSchema,
+    userStory: '__USER_STORY__',
+    hypothesis: '__HYPOTHESIS__'
+  },
   async ({ body, user }) => {
-    const created = await db.__RESOURCE__.create({
-      data: {
-        ...body!,
-        createdBy: user.id,
-      },
-      select: { id: true, name: true, status: true, createdAt: true },
+    const start = performance.now();
+
+    logDebug('API: Creating new __RESOURCE__', {
+      component: '__ENTITY__ API Route',
+      operation: 'POST /api/__RESOURCE__',
+      data: body,
+      userId: user.id,
+      userStory: '__USER_STORY__',
+      hypothesis: '__HYPOTHESIS__',
     });
 
-    return new Response(JSON.stringify(ok(created)), { status: 201 });
+    try {
+      // Validate data using schema (already done by createRoute, but good to be explicit)
+      const validatedData = __ENTITY__CreateSchema.parse(body);
+
+      // Create the entity with audit trail
+      const created = await db.__RESOURCE__.create({
+        data: {
+          ...validatedData,
+          createdBy: user.id,
+          updatedBy: user.id,
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          createdBy: true,
+          // Add other fields that should be returned
+        },
+      });
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: __RESOURCE__ created successfully', {
+        component: '__ENTITY__ API Route',
+        operation: 'POST /api/__RESOURCE__',
+        __RESOURCE__Id: created.id,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      return new Response(JSON.stringify(ok(created)), {
+        status: 201,
+        headers: {
+          'Location': `/api/__RESOURCE__/${created.id}`,
+        },
+      });
+    } catch (error) {
+      const loadTime = performance.now() - start;
+
+      logDebug('API: Error creating __RESOURCE__', {
+        component: '__ENTITY__ API Route',
+        operation: 'POST /api/__RESOURCE__',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      throw error;
+    }
   }
 );
 
 // ====================
-// PUT Route - Update
+// PUT Route - Update (Typically in [id]/route.ts)
 // ====================
 
 export const PUT = createRoute(
-  { roles: ['admin', 'sales'], body: Update__ENTITY__ },
-  async ({ body, user }) => {
-    // Note: This would typically be in a [id]/route.ts file
-    // This is a placeholder for the update pattern
-    const updated = await db.__RESOURCE__.update({
-      where: { id: 'placeholder-id' },
-      data: body!,
-      select: { id: true, name: true, status: true, createdAt: true },
+  {
+    roles: ['admin', 'sales'],
+    body: __ENTITY__UpdateSchema,
+    userStory: '__USER_STORY__',
+    hypothesis: '__HYPOTHESIS__'
+  },
+  async ({ body, user, params }) => {
+    const start = performance.now();
+    const __RESOURCE__Id = params?.id as string;
+
+    logDebug('API: Updating __RESOURCE__', {
+      component: '__ENTITY__ API Route',
+      operation: 'PUT /api/__RESOURCE__/[id]',
+      __RESOURCE__Id,
+      data: body,
+      userId: user.id,
+      userStory: '__USER_STORY__',
+      hypothesis: '__HYPOTHESIS__',
     });
 
-    return Response.json(ok(updated));
+    try {
+      const validatedData = __ENTITY__UpdateSchema.parse(body);
+
+      // Update with audit trail
+      const updated = await db.__RESOURCE__.update({
+        where: { id: __RESOURCE__Id },
+        data: {
+          ...validatedData,
+          updatedBy: user.id,
+          updatedAt: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          updatedBy: true,
+          // Add other fields that should be returned
+        },
+      });
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: __RESOURCE__ updated successfully', {
+        component: '__ENTITY__ API Route',
+        operation: 'PUT /api/__RESOURCE__/[id]',
+        __RESOURCE__Id,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      return Response.json(ok(updated));
+    } catch (error) {
+      const loadTime = performance.now() - start;
+
+      logDebug('API: Error updating __RESOURCE__', {
+        component: '__ENTITY__ API Route',
+        operation: 'PUT /api/__RESOURCE__/[id]',
+        __RESOURCE__Id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      throw error;
+    }
   }
 );
 
 // ====================
-// DELETE Route - Delete
+// DELETE Route - Delete (Typically in [id]/route.ts)
 // ====================
 
-export const DELETE = createRoute({ roles: ['admin'] }, async ({ user }) => {
-  // Note: This would typically be in a [id]/route.ts file
-  // This is a placeholder for the delete pattern
-  await db.__RESOURCE__.delete({
-    where: { id: 'placeholder-id' },
-  });
+export const DELETE = createRoute(
+  {
+    roles: ['admin'],
+    userStory: '__USER_STORY__',
+    hypothesis: '__HYPOTHESIS__'
+  },
+  async ({ user, params }) => {
+    const start = performance.now();
+    const __RESOURCE__Id = params?.id as string;
 
-  return new Response(null, { status: 204 });
-});
+    logDebug('API: Deleting __RESOURCE__', {
+      component: '__ENTITY__ API Route',
+      operation: 'DELETE /api/__RESOURCE__/[id]',
+      __RESOURCE__Id,
+      userId: user.id,
+      userStory: '__USER_STORY__',
+      hypothesis: '__HYPOTHESIS__',
+    });
+
+    try {
+      // Soft delete pattern - update status instead of hard delete
+      // This preserves data integrity and audit trails
+      const deleted = await db.__RESOURCE__.update({
+        where: { id: __RESOURCE__Id },
+        data: {
+          status: 'DELETED',
+          updatedBy: user.id,
+          updatedAt: new Date(),
+          deletedAt: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          deletedAt: true,
+        },
+      });
+
+      // For hard delete, uncomment the following:
+      // await db.__RESOURCE__.delete({
+      //   where: { id: __RESOURCE__Id },
+      // });
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: __RESOURCE__ deleted successfully', {
+        component: '__ENTITY__ API Route',
+        operation: 'DELETE /api/__RESOURCE__/[id]',
+        __RESOURCE__Id,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      return new Response(null, { status: 204 });
+    } catch (error) {
+      const loadTime = performance.now() - start;
+
+      logDebug('API: Error deleting __RESOURCE__', {
+        component: '__ENTITY__ API Route',
+        operation: 'DELETE /api/__RESOURCE__/[id]',
+        __RESOURCE__Id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        userStory: '__USER_STORY__',
+        hypothesis: '__HYPOTHESIS__',
+      });
+
+      throw error;
+    }
+  }
+);

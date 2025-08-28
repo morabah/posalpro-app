@@ -46,7 +46,7 @@ interface ProposalDetail {
   teamSize?: number;
   totalSections?: number;
   daysUntilDeadline?: number | null;
-  sections?: Array<{
+  sections?: {
     id: string;
     title: string;
     content: string;
@@ -125,7 +125,7 @@ export function useProposalDetailBridge(
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
-  // Local state for loading and error management
+  // Local state for loading and error management - must be called before any early returns
   const [isDataLoading, setIsDataLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -142,6 +142,7 @@ export function useProposalDetailBridge(
     }
   }, [user, isAuthenticated, isLoading, router]);
 
+  // Early returns for loading and unauthenticated states
   if (isLoading) {
     return {
       proposal: null,

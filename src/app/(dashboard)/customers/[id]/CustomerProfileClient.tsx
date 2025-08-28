@@ -42,14 +42,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-// ✅ COMPONENT TRACEABILITY MATRIX
-const COMPONENT_MAPPING = {
-  userStories: ['US-2.3', 'US-6.4'],
-  acceptanceCriteria: ['AC-2.3.1', 'AC-2.3.2', 'AC-2.3.3', 'AC-6.4.1'],
-  methods: ['getCustomer()', 'updateCustomerProfile()'],
-  hypotheses: ['H4', 'H12'],
-  testCases: ['TC-H4-002', 'TC-H12-001'],
-};
+
 
 // ✅ TYPES
 enum CustomerTier {
@@ -258,7 +251,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
           throw new Error('Failed to update customer');
         }
 
-        const responseData = await response.json();
+        const responseData: { ok: boolean; data: CustomerApiResponse } = await response.json();
         if (!responseData?.ok || !responseData.data) {
           throw new Error('Invalid response format');
         }
@@ -682,14 +675,16 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Health Score</span>
-                    <span className={`text-lg font-bold ${getHealthColor(50)}`}>50%</span>
+                    <span className={`text-lg font-bold ${getHealthColor(customer?.healthScore || 0)}`}>
+                      {customer?.healthScore || 0}%
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
-                        50 >= 80 ? 'bg-green-500' : 50 >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                        (customer?.healthScore || 0) >= 80 ? 'bg-green-500' : (customer?.healthScore || 0) >= 60 ? 'bg-yellow-500' : 'bg-red-500'
                       }`}
-                      style={{ width: `50%` }}
+                      style={{ width: `${customer?.healthScore || 0}%` }}
                     ></div>
                   </div>
                 </div>

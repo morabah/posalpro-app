@@ -14,6 +14,7 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import type { Proposal } from '@/features/proposals/schemas';
 
 const prisma = new PrismaClient();
 const errorHandlingService = ErrorHandlingService.getInstance();
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
 /**
  * Calculate proposal completion rate based on available data
  */
-function calculateCompletionRate(proposal: any): number {
+function calculateCompletionRate(proposal: Proposal): number {
   let completionScore = 0;
   let totalChecks = 0;
 

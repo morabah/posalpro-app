@@ -30,10 +30,10 @@ interface WizardData {
   step3?: WizardStep3;
   // Enhanced step4 with actual product details
   step4?: {
-    products?: Array<{ 
+    products?: Array<{
       id: string;
       name: string;
-      quantity?: number; 
+      quantity?: number;
       unitPrice?: number;
       totalPrice?: number;
       category?: string;
@@ -84,11 +84,7 @@ interface WizardSummaryProps {
   assignedTo?: Array<{ id: string; name: string; email: string }>;
 }
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-}
+
 
 export const WizardSummary: React.FC<WizardSummaryProps> = ({
   wizardData = null,
@@ -198,7 +194,7 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
           users.forEach(u => {
             if (u?.id) nameMap[u.id] = u.name || u.email || `User ${u.id.substring(0, 8)}...`;
           });
-        } catch (e) {
+        } catch {
           // Graceful fallback to truncated IDs
           unresolved.forEach((userId) => {
             nameMap[userId] = userId.length > 20 ? `User ${userId.substring(0, 8)}...` : `User ${userId}`;
@@ -439,16 +435,16 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
 
         {/* Proposal Value Display Logic */}
         {(() => {
-          const hasProducts = wizardData?.step4?.products?.some(p => p.included !== false) && 
+          const hasProducts = wizardData?.step4?.products?.some(p => p.included !== false) &&
                              wizardData.step4.products.length > 0;
           const step4Total = wizardData?.step4?.totalValue || 0;
           const step1EstimatedValue = wizardData?.step1?.value || 0;
-          
+
           // Logic: If no products and step4 total is 0, show estimated value from step1
           // Otherwise, show actual value from step4
           const shouldShowEstimated = !hasProducts && step4Total === 0 && step1EstimatedValue > 0;
           const displayValue = shouldShowEstimated ? step1EstimatedValue : step4Total;
-          
+
           if (displayValue > 0) {
             return (
               <div className="space-y-3">
@@ -566,7 +562,7 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
             Cross-Step Validation
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(crossStepValidation).map(([key, value]) => (
+            {Object.entries(crossStepValidation).map(([key, _value]) => (
               <div key={key} className="flex items-center space-x-2 text-sm">
                 <CheckCircleIcon className="h-4 w-4 text-green-500" />
                 <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>

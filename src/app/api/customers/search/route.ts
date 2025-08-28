@@ -167,11 +167,11 @@ export async function GET(request: NextRequest) {
       res.headers.set('Cache-Control', 'no-store');
     }
     return res;
-  } catch (error) {
+  } catch (error: unknown) {
     const searchDuration = Date.now() - startTime;
 
     // Log the error using ErrorHandlingService
-    errorHandlingService.processError(error);
+    errorHandlingService.processError(error as Error);
 
     if (error instanceof z.ZodError) {
       logger.warn('CustomerSearch GET validation error', {

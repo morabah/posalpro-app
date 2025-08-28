@@ -37,11 +37,11 @@ export const ProductSchema = z.object({
   sku: z.string(),
   category: z.array(z.string()),
   tags: z.array(z.string()),
-  attributes: z.any().optional(),
+  attributes: z.record(z.unknown()).optional(),
   images: z.array(z.string()),
   isActive: z.boolean().default(true),
   version: z.number().default(1),
-  usageAnalytics: z.any().optional(),
+  usageAnalytics: z.record(z.unknown()).optional(),
   userStoryMappings: z.array(z.string()),
   createdAt: z
     .union([z.string(), z.date()])

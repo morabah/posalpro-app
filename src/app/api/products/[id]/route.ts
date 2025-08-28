@@ -191,7 +191,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         usageInProposals: product._count.proposalProducts,
         validationRulesCount: product._count.validationRules,
       },
-      recentUsage: product.proposalProducts.map((pp: any) => ({
+      recentUsage: product.proposalProducts.map((pp) => ({
         proposalId: pp.proposal.id,
         proposalTitle: pp.proposal.title,
         proposalStatus: pp.proposal.status,
@@ -202,7 +202,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         usedAt: pp.createdAt,
       })),
       allRelationships: [
-        ...product.relationships.map((rel: any) => ({
+        ...product.relationships.map((rel) => ({
           id: rel.id,
           type: rel.type,
           direction: 'outgoing' as const,

@@ -27,6 +27,26 @@ interface ProposalPreviewPageProps {
   params: Promise<{ id: string }>;
 }
 
+interface ProposalProduct {
+  productId: string;
+  product?: {
+    name: string;
+  };
+}
+
+interface ProductResponse {
+  items?: Array<{
+    id: string;
+    name: string;
+    sku: string;
+  }>;
+  data?: Array<{
+    id: string;
+    name: string;
+    sku: string;
+  }>;
+}
+
 function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
   // ✅ CRITICAL: ALL HOOKS MUST BE AT TOP LEVEL - NO CONDITIONAL LOGIC BEFORE THIS
 
@@ -64,19 +84,19 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
       if (!proposal || !Array.isArray(proposal.products) || proposal.products.length === 0) return;
 
       const needsHydration = proposal.products.filter(
-        (p: any) => !p?.product?.name || p.product?.name?.toLowerCase() === 'unknown product'
+        (p: ProposalProduct) => !p?.product?.name || p.product?.name?.toLowerCase() === 'unknown product'
       );
 
       if (needsHydration.length === 0) return;
 
       try {
-        const ids = needsHydration.map((p: any) => p.productId).join(',');
-        const res = await apiClient.get<{ items?: any[]; data?: any[] }>(
+        const ids = needsHydration.map((p: ProposalProduct) => p.productId).join(',');
+        const res = await apiClient.get<ProductResponse>(
           `/api/products?ids=${encodeURIComponent(ids)}&fields=id,name,sku`
         );
 
-        const list = (res as any)?.data ?? (res as unknown as any[]);
-        const byId = new Map<string, any>();
+        const list = res?.data ?? res?.items ?? [];
+        const byId = new Map<string, { id: string; name: string; sku: string }>();
         for (const item of list || []) byId.set(item.id, item);
 
         const cacheKey = `proposal-preview-${proposalId}`;

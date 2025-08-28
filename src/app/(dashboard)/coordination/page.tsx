@@ -273,38 +273,7 @@ const UsersIcon = ({ className = 'h-5 w-5' }) => (
   </svg>
 );
 
-// Component Traceability Matrix
-const COMPONENT_MAPPING = {
-  userStories: ['US-2.2', 'US-2.3', 'US-4.1', 'US-4.3'],
-  acceptanceCriteria: [
-    'AC-2.2.1',
-    'AC-2.2.2',
-    'AC-2.2.3',
-    'AC-2.2.4',
-    'AC-2.3.1',
-    'AC-2.3.2',
-    'AC-2.3.3',
-    'AC-4.1.1',
-    'AC-4.1.2',
-    'AC-4.1.3',
-    'AC-4.3.1',
-    'AC-4.3.2',
-    'AC-4.3.3',
-  ],
-  methods: [
-    'statusUpdates()',
-    'roleBasedView()',
-    'suggestContributors()',
-    'trackCoordinationTime()',
-    'clientInsights()',
-    'complexityEstimation()',
-    'criticalPath()',
-    'calculatePriority()',
-    'mapDependencies()',
-  ],
-  hypotheses: ['H4', 'H7'],
-  testCases: ['TC-H4-001', 'TC-H4-002', 'TC-H7-001', 'TC-H7-002'],
-};
+
 
 // Types for coordination management
 
@@ -355,7 +324,7 @@ export default function CoordinationHub() {
   const [activeTab, setActiveTab] = useState<'proposals' | 'team' | 'timeline' | 'analytics'>(
     'proposals'
   );
-  const [selectedProposal, setSelectedProposal] = useState<string | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [priorityFilter, setPriorityFilter] = useState<string>('All');
@@ -667,9 +636,7 @@ export default function CoordinationHub() {
     showToast('Team assignment interface would open here');
   }, []);
 
-  const handleUpdateStatus = useCallback((proposalId: string, newStatus: string) => {
-    showToast(`Status updated to: ${newStatus}`);
-  }, []);
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -837,7 +804,7 @@ export default function CoordinationHub() {
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
-                onClick={() => setActiveTab(key as any)}
+                onClick={() => setActiveTab(key)}
                 className={`${
                   activeTab === key
                     ? 'border-blue-500 text-blue-600'

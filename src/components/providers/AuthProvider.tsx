@@ -107,7 +107,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
 
       return () => clearTimeout(timeout);
     }
-  }, [status, sessionRetryCount, update]);
+  }, [status, sessionRetryCount, update, errorHandlingService]);
 
   // Reset retry count when session loads successfully
   useEffect(() => {

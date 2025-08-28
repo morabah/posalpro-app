@@ -9,7 +9,7 @@ export type ApiResponse<T> =
   | { ok: false; code: string; message: string; details?: unknown };
 
 // Cursor pagination response format (recommended for all lists)
-export type CursorPaginatedResponse<T> = {
+export interface CursorPaginatedResponse<T> {
   items: T[];
   nextCursor: string | null;
   meta?: {
@@ -17,7 +17,7 @@ export type CursorPaginatedResponse<T> = {
     hasNextPage?: boolean;
     hasPrevPage?: boolean;
   };
-};
+}
 
 // Helper function for successful responses
 export const ok = <T>(data: T): ApiResponse<T> => ({ ok: true, data });
@@ -26,7 +26,7 @@ export const ok = <T>(data: T): ApiResponse<T> => ({ ok: true, data });
 export const okPaginated = <T>(
   items: T[],
   nextCursor: string | null,
-  meta?: any
+  meta?: Record<string, unknown>
 ): ApiResponse<CursorPaginatedResponse<T>> => ({
   ok: true,
   data: {
@@ -115,14 +115,14 @@ export interface BulkResponse {
   processed: number;
   successful: number;
   failed: number;
-  errors?: Array<{ id: string; error: string }>;
+  errors?: { id: string; error: string }[];
 }
 
 export const bulk = (
   processed: number,
   successful: number,
   failed: number,
-  errors?: Array<{ id: string; error: string }>
+  errors?: { id: string; error: string }[]
 ): ApiResponse<BulkResponse> => {
   return ok({
     processed,

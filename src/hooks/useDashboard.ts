@@ -12,9 +12,9 @@ interface ExecutiveResponse {
   success: boolean;
   data: {
     metrics: ExecMetrics | null;
-    revenueChart: Array<ExecRevenueChart>;
-    teamPerformance: Array<ExecTeamPerformance>;
-    pipelineStages: Array<ExecPipelineStage>;
+    revenueChart: ExecRevenueChart[];
+    teamPerformance: ExecTeamPerformance[];
+    pipelineStages: ExecPipelineStage[];
   };
 }
 
@@ -78,13 +78,13 @@ export interface ProductBundle {
 }
 
 export interface DashboardAnalyticsData {
-  nearDueByDay: Array<ChartDataPoint>;
-  byEmployee: Array<EmployeePerformance>;
-  products: Array<ProductPerformance>;
-  topWinning: Array<ProductPerformance>;
-  funnelStages: Array<FunnelStage>;
-  overdueByPriority: Array<PriorityOverdue>;
-  bundles: Array<ProductBundle>;
+  nearDueByDay: ChartDataPoint[];
+  byEmployee: EmployeePerformance[];
+  products: ProductPerformance[];
+  topWinning: ProductPerformance[];
+  funnelStages: FunnelStage[];
+  overdueByPriority: PriorityOverdue[];
+  bundles: ProductBundle[];
 }
 
 export function useDashboardAnalytics(): UseQueryResult<DashboardAnalyticsData, Error> {
@@ -92,7 +92,7 @@ export function useDashboardAnalytics(): UseQueryResult<DashboardAnalyticsData, 
   return useQuery({
     queryKey: ['dashboard', 'analytics'],
     queryFn: async () => {
-      const result = (await bridge.fetchDashboardAnalytics()) as any;
+      const result = await bridge.fetchDashboardAnalytics();
 
       if (result.success && result.data) {
         return result.data as DashboardAnalyticsData;

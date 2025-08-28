@@ -37,7 +37,16 @@ export const GET = createRoute(
       });
 
       // Build where clause
-      const where: any = {};
+      const where: {
+        OR?: Array<{
+          name?: { contains: string; mode: 'insensitive' };
+          email?: { contains: string; mode: 'insensitive' };
+          industry?: { contains: string; mode: 'insensitive' };
+        }>;
+        status?: string;
+        tier?: string;
+        isActive?: boolean;
+      } = {};
 
       if (query!.search) {
         where.OR = [

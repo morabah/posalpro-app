@@ -261,11 +261,11 @@ export default function UnifiedProposalList() {
       userStory: 'US-3.2',
       hypothesis: 'H4',
     });
-  }, [total, proposals.length, analytics]);
+  }, [total, analytics]);
 
   // Filter and sort proposals
   const filteredAndSortedProposals = useMemo(() => {
-    let filtered = proposals.filter((proposal: any) => {
+    let filtered = proposals.filter((proposal: Proposal) => {
       const matchesSearch =
         !searchQuery ||
         proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -279,8 +279,8 @@ export default function UnifiedProposalList() {
     });
 
     // Sort proposals
-    filtered.sort((a: any, b: any) => {
-      let aValue: any, bValue: any;
+    filtered.sort((a: Proposal, b: Proposal) => {
+      let aValue: string | number | Date, bValue: string | number | Date;
 
       switch (sortBy) {
         case 'title':
@@ -524,7 +524,7 @@ export default function UnifiedProposalList() {
         </div>
       ) : filteredAndSortedProposals.length > 0 ? (
         <div className="space-y-4">
-          {filteredAndSortedProposals.map((proposal: any) => (
+          {filteredAndSortedProposals.map((proposal: Proposal) => (
             <ProposalCard
               key={proposal.id}
               proposal={proposal}

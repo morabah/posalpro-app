@@ -12,6 +12,20 @@ import { logDebug } from '@/lib/logger';
 import { useSession } from 'next-auth/react';
 import { useCallback } from 'react';
 
+interface ApprovalItem {
+  id: string;
+  title?: string;
+  status?: string;
+  priority?: string;
+}
+
+interface QueueMetrics {
+  totalItems: number;
+  averageWaitTime: number;
+  bottleneckStages: string[];
+  optimizationSuggestions: string[];
+}
+
 export default function ProposalApprovePage() {
   const { data: session } = useSession();
 
@@ -22,7 +36,7 @@ export default function ProposalApprovePage() {
     hypothesis: 'H4',
   });
 
-  const handleItemSelect = useCallback((item: any) => {
+  const handleItemSelect = useCallback((item: ApprovalItem) => {
     logDebug('Item selected', {
       component: 'ProposalApprovePage',
       operation: 'itemSelect',
@@ -30,7 +44,7 @@ export default function ProposalApprovePage() {
     });
   }, []);
 
-  const handleBulkAction = useCallback((action: string, items: any[]) => {
+  const handleBulkAction = useCallback((action: string, items: ApprovalItem[]) => {
     logDebug('Bulk action', {
       component: 'ProposalApprovePage',
       operation: 'bulkAction',
@@ -39,7 +53,7 @@ export default function ProposalApprovePage() {
     });
   }, []);
 
-  const handleQueueOptimization = useCallback((metrics: any) => {
+  const handleQueueOptimization = useCallback((metrics: QueueMetrics) => {
     logDebug('Queue optimization', {
       component: 'ProposalApprovePage',
       operation: 'queueOptimization',

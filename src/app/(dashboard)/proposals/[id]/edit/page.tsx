@@ -20,6 +20,22 @@ interface EditProposalPageProps {
   params: Promise<{ id: string }>;
 }
 
+interface WizardPayload {
+  teamData?: {
+    teamLead?: string;
+  };
+  contentData?: {
+    selectedTemplates?: unknown[];
+  };
+  productData?: {
+    products?: unknown[];
+    totalValue?: number;
+  };
+  sectionData?: {
+    sections?: unknown[];
+  };
+}
+
 function EditProposalContent({ proposalId }: { proposalId: string }) {
   const analytics = useOptimizedAnalytics();
   const router = useRouter();
@@ -32,14 +48,14 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
         operation: 'handleComplete',
         dataType: typeof data,
         isWizardPayload: typeof data === 'object',
-        dataKeys: typeof data === 'object' ? Object.keys(data as any) : null,
+        dataKeys: typeof data === 'object' ? Object.keys(data as Record<string, unknown>) : null,
         dataLength: typeof data === 'object' ? JSON.stringify(data).length : null,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
 
       if (typeof data === 'object' && data !== null) {
-        const wizardPayload = data as any;
+        const wizardPayload = data as WizardPayload;
         logDebug('DEBUG: Wizard payload received', {
           component: 'EditProposalPage',
           operation: 'handleComplete',
@@ -56,7 +72,7 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
 
       // If we received a wizard payload (edit mode), send it to the API
       if (typeof data === 'object' && data !== null) {
-        const wizardPayload = data as any;
+        const wizardPayload = data as WizardPayload;
 
         logDebug('Sending wizard payload to API', {
           component: 'EditProposalPage',
@@ -80,11 +96,11 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
           });
 
           if (!response.ok) {
-            const errorData = await response.json();
+            const errorData: unknown = await response.json();
             throw new Error(`API update failed: ${response.status} - ${JSON.stringify(errorData)}`);
           }
 
-          const result = await response.json();
+          const result: { data?: { id?: string } } = await response.json();
 
           logDebug('Proposal updated successfully', {
             component: 'EditProposalPage',
