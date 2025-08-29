@@ -5,41 +5,164 @@ during the development process.
 
 ## 2025-08-28 12:45 - Team Assignment Authentication Fix
 
-**Phase**: Authentication & API Integration - Proposal Wizard **Status**: ✅ COMPLETED **Duration**: 45 minutes **Files Modified**:
+**Phase**: Authentication & API Integration - Proposal Wizard **Status**: ✅
+COMPLETED **Duration**: 45 minutes **Files Modified**:
 
-- src/components/proposals/steps/TeamAssignmentStep.tsx (FIXED - Authentication issue)
+- src/components/proposals/steps/TeamAssignmentStep.tsx (FIXED - Authentication
+  issue)
 
-**Problem Addressed**: The proposal wizard's TeamAssignmentStep was showing empty dropdowns for sales representatives and team leads because the component was making unauthenticated API calls to the users endpoint.
+**Problem Addressed**: The proposal wizard's TeamAssignmentStep was showing
+empty dropdowns for sales representatives and team leads because the component
+was making unauthenticated API calls to the users endpoint.
 
 **Root Cause Analysis**:
-1. TeamAssignmentStep was using `userService.getUsers()` which uses the basic HTTP client
-2. The basic HTTP client doesn't include authentication cookies (`credentials: 'include'`)
+
+1. TeamAssignmentStep was using `userService.getUsers()` which uses the basic
+   HTTP client
+2. The basic HTTP client doesn't include authentication cookies
+   (`credentials: 'include'`)
 3. The `/api/users` endpoint requires authentication (RBAC guard)
 4. Unauthenticated requests return 401/403 errors, causing empty user arrays
 
 **Solution Implemented**:
-1. **Replaced HTTP Client**: Changed from `userService.getUsers()` to `useApiClient` hook
-2. **Added Authentication**: `useApiClient` automatically includes `credentials: 'include'` for session cookies
-3. **Maintained Compatibility**: Kept same API endpoint and response handling structure
-4. **Preserved Functionality**: All existing filtering and UI logic remains unchanged
+
+1. **Replaced HTTP Client**: Changed from `userService.getUsers()` to
+   `useApiClient` hook
+2. **Added Authentication**: `useApiClient` automatically includes
+   `credentials: 'include'` for session cookies
+3. **Maintained Compatibility**: Kept same API endpoint and response handling
+   structure
+4. **Preserved Functionality**: All existing filtering and UI logic remains
+   unchanged
 
 **Technical Details**:
-- **Before**: `userService.getUsers(params)` → Basic HTTP client → No auth → 401 error
-- **After**: `apiClient.get('users?...')` → Authenticated HTTP client → Valid session → User data
-- **Imports Updated**: Removed `userService, UserQueryParams` imports, added `useApiClient`
+
+- **Before**: `userService.getUsers(params)` → Basic HTTP client → No auth → 401
+  error
+- **After**: `apiClient.get('users?...')` → Authenticated HTTP client → Valid
+  session → User data
+- **Imports Updated**: Removed `userService, UserQueryParams` imports, added
+  `useApiClient`
 - **Response Handling**: Maintained same success/error handling pattern
 
 **Testing Verification**:
+
 - Development server confirmed running on port 3000
 - Database verified seeded with 14 users having proper roles
 - Authentication system confirmed working with NextAuth.js
 - API client pattern validated for other authenticated endpoints
 
-**Impact**: Team assignment dropdowns now properly display users with appropriate roles (Proposal Manager, SME, Executive) in the proposal wizard.
+**Impact**: Team assignment dropdowns now properly display users with
+appropriate roles (Proposal Manager, SME, Executive) in the proposal wizard.
 
-**Wireframe Compliance**: ✅ Maintains all existing UI/UX requirements from PROPOSAL_CREATION_SCREEN.md
-**Component Traceability**: ✅ US-3.1, H4 (Cross-Department Coordination, Deadline Management)
-**Quality Gates**: ✅ TypeScript compliance, ✅ Error handling, ✅ Performance optimized
+**Wireframe Compliance**: ✅ Maintains all existing UI/UX requirements from
+PROPOSAL_CREATION_SCREEN.md **Component Traceability**: ✅ US-3.1, H4
+(Cross-Department Coordination, Deadline Management) **Quality Gates**: ✅
+  TypeScript compliance, ✅ Error handling, ✅ Performance optimized
+
+## 2025-08-29 12:00 - Products Page UX/UI Enhancements (CORE Compliant)
+
+Phase: UI/UX Enhancement - Products
+Status: ✅ COMPLETED
+Files Modified:
+
+- src/app/(dashboard)/products/page.tsx (Wrapped with `MobileResponsiveWrapper`)
+- src/components/products/ProductList.tsx (Dynamic categories, stats, empty state, a11y)
+
+What changed:
+
+- Added `ProductStats` (uses `useProductStatsMigrated`) showing Total/Active/Inactive/Avg Price.
+- Switched category filter to dynamic options via `useProductCategories` (counts in labels).
+- Added an accessible empty state in the table with CTA to create a product.
+- Improved loading UX with table skeleton rows (replacing spinner-only state).
+- Accessibility: aria-labels for search, selects, checkboxes, and load-more; live regions for updates.
+- Header selection actions now include a Clear button; delete is labelled.
+- Page content wrapped in `MobileResponsiveWrapper` for consistent mobile spacing/touch targets.
+
+CORE_REQUIREMENTS compliance:
+
+- Reused existing hooks/services (`useProductStatsMigrated`, `useProductCategories`, `useInfiniteProductsMigrated`).
+- No new APIs created; database-first alignment preserved.
+- Centralized query keys maintained; server state via React Query, UI state via Zustand.
+- Error handling unchanged for data layer (via shared HTTP client); no custom envelopes.
+
+Impact:
+
+- Faster perceived load (skeletons), clearer filtering, better accessibility, and quick at-a-glance stats for decision making.
+
+## 2025-08-29 12:20 - Product Detail Page Enhancements (CORE Compliant)
+
+Phase: UI/UX Enhancement - Product Detail
+Status: ✅ COMPLETED
+Files Modified:
+
+- src/app/(dashboard)/products/[id]/page.tsx (Wrapped with `MobileResponsiveWrapper`)
+- src/components/products/ProductDetail.tsx (Header hero, actions, skeletons, a11y)
+
+What changed:
+
+- Added hero header with product image/initials, status badge, price, and SKU with copy action.
+- Added quick actions: Back, Edit, and Activate/Deactivate (uses `useUpdateProduct`).
+- Introduced loading skeletons for header and sections to improve perceived performance.
+- Improved error and loading accessibility and labels throughout.
+- Kept existing data flow via `useProductMigrated`; no new APIs introduced.
+
+CORE_REQUIREMENTS compliance:
+
+- Reused existing hooks/services (`useProductMigrated`, `useUpdateProduct`).
+- No new endpoints created; server state remains in React Query.
+- Mobile responsiveness via `MobileResponsiveWrapper`; accessible controls with aria labels.
+
+Impact:
+
+- Cleaner, action-oriented product view with faster perceived load and clearer context.
+
+## 2025-08-29 12:35 - Demo Products Page Hydration Fix
+
+Phase: Stability - Hydration
+Status: ✅ COMPLETED
+Files Modified:
+
+- src/app/(dashboard)/products/demo/page.tsx (client-mount guard)
+
+What changed:
+
+- Added a client-mount guard (`mounted` state + `useEffect`) to render a stable shell on the server and mount the interactive demo only on the client. This prevents React hydration mismatches on the demo page caused by client-only behaviors and presentational blocks.
+
+Rationale:
+
+- The demo page aggregates multiple animated, client-only sections and demo components. Rendering the full interactive tree exclusively on the client removes SSR/CSR divergence while preserving UX.
+
+Scope:
+
+- Limited to the demo route only. No APIs added; no impact to real products list/detail routes.
+
+## 2025-08-29 12:55 - Reusable Suggestion Combobox + CORE Compliance
+
+Phase: UX/Search
+Status: ✅ COMPLETED
+Files Added:
+
+- src/components/ui/forms/SuggestionCombobox.tsx (reusable UI component)
+- src/features/search/keys.ts (centralized query keys)
+- src/features/search/hooks/useSuggestions.ts (feature hook)
+
+Files Updated:
+
+- src/components/products/ProductList.tsx (ProductFilters consumes SuggestionCombobox + useSuggestions)
+
+Highlights:
+
+- Extracted search suggestions into a generic, accessible combobox component (keyboard + ARIA).
+- Centralized server state in React Query with feature-based keys (features/search/keys.ts).
+- UI-only state remains in React/Store; server state kept out of Zustand.
+- ProductFilters remains thin: passes value, renders mode toggle, handles analytics, and updates filters.
+
+CORE_REQUIREMENTS:
+
+- Feature-based structure (features/search) with centralized keys and hooks.
+- Stateless, reusable UI component; no manual response envelopes; existing HTTP client used via `useSuggestions`.
+- No new API routes created; database-first alignment preserved.
 
 ## 2025-08-24 15:30 - Collapsible Sidebar Implementation
 

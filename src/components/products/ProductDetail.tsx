@@ -3,11 +3,14 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
+import { SkeletonLoader } from '@/components/ui/LoadingStates';
 import { Button } from '@/components/ui/forms/Button';
-import { useProductMigrated } from '@/hooks/useProducts';
+import { useProductMigrated, useUpdateProduct } from '@/hooks/useProducts';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';
 import { useRouter } from 'next/navigation';
+import React, { useMemo, useState } from 'react';
 
 interface ProductDetailProps {
   productId: string;
@@ -16,6 +19,13 @@ interface ProductDetailProps {
 export function ProductDetail({ productId }: ProductDetailProps) {
   const router = useRouter();
   const { data: product, isLoading, isError, error } = useProductMigrated(productId);
+  const updateProduct = useUpdateProduct();
+  const [copied, setCopied] = useState(false);
+
+  const firstImage = useMemo(() => {
+    const imgs = (product as any)?.images as string[] | undefined;
+    return imgs && imgs.length > 0 ? imgs[0] : undefined;
+  }, [product]);
 
   const handleEdit = () => {
     router.push(`/products/${productId}/edit`);
@@ -27,12 +37,35 @@ export function ProductDetail({ productId }: ProductDetailProps) {
 
   if (isLoading) {
     return (
-      <Card className="p-8">
-        <div className="flex items-center justify-center">
-          <LoadingSpinner size="lg" />
-          <span className="ml-2">Loading product details...</span>
+      <div className="space-y-6">
+        <Card className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-4">
+              <SkeletonLoader className="w-16" height="h-16" />
+              <div>
+                <SkeletonLoader className="w-48 mb-2" height="h-6" />
+                <SkeletonLoader className="w-28" height="h-4" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <SkeletonLoader className="w-24" height="h-11" />
+              <SkeletonLoader className="w-32" height="h-11" />
+            </div>
+          </div>
+        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <SkeletonLoader className="w-40 mb-4" height="h-5" />
+              <div className="space-y-3">
+                <SkeletonLoader className="w-2/3" height="h-4" />
+                <SkeletonLoader className="w-1/2" height="h-4" />
+                <SkeletonLoader className="w-3/4" height="h-4" />
+              </div>
+            </Card>
+          ))}
         </div>
-      </Card>
+      </div>
     );
   }
 
@@ -83,20 +116,68 @@ export function ProductDetail({ productId }: ProductDetailProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{productData.name}</h1>
-          <p className="text-gray-600">Product Details</p>
+      {/* Information Architecture: Breadcrumbs for context */}
+      <Breadcrumbs className="mb-2" />
+      {/* Header / Hero */}
+      <Card className="p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            {firstImage ? (
+              <img src={firstImage} alt={`${productData.name} image`} className="w-16 h-16 rounded-lg object-cover" />
+            ) : (
+              <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center text-xl font-semibold text-gray-600">
+                {productData.name?.charAt(0)?.toUpperCase()}
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold text-gray-900">{productData.name}</h1>
+                <Badge variant={productData.isActive ? 'success' : 'secondary'} aria-label={`Status ${productData.isActive ? 'active' : 'inactive'}`}>
+                  {productData.isActive ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+              <div className="mt-1 text-gray-600">
+                <span className="font-mono text-sm">SKU: {productData.sku}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-2"
+                  aria-label="Copy SKU"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(productData.sku);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    } catch {}
+                  }}
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+              <div className="mt-2 text-gray-800 font-medium">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: productData.currency || 'USD' }).format(productData.price || 0)}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={handleBack} aria-label="Back to products">
+              Back
+            </Button>
+            <Button variant="outline" onClick={handleEdit} aria-label="Edit product">
+              Edit
+            </Button>
+            <Button
+              variant={productData.isActive ? 'danger' : 'primary'}
+              onClick={() =>
+                updateProduct.mutate({ id: productId, data: { isActive: !productData.isActive } })
+              }
+              aria-label={productData.isActive ? 'Deactivate product' : 'Activate product'}
+            >
+              {productData.isActive ? 'Deactivate' : 'Activate'}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={handleBack}>
-            Back to Products
-          </Button>
-          <Button variant="primary" onClick={handleEdit}>
-            Edit Product
-          </Button>
-        </div>
-      </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-6">

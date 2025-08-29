@@ -73,8 +73,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     },
     ref
   ) => {
-    // Generate unique ID if not provided
-    const inputId = id || `checkbox-${Math.random().toString(36).substr(2, 9)}`;
+    // Use provided ID or generate stable one
+    const inputId = id || `checkbox-stable-${React.useId().replace(/:/g, '-')}`;
 
     // Size mapping
     const sizeStyles = {

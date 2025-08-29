@@ -5,6 +5,7 @@
  */
 
 import { ProductDetail } from '@/components/products/ProductDetail';
+import { MobileResponsiveWrapper } from '@/components/ui/MobileResponsiveWrapper';
 import { analytics } from '@/lib/analytics';
 import { logInfo } from '@/lib/logger';
 import { Suspense } from 'react';
@@ -45,10 +46,10 @@ export default async function ProductViewPage({ params }: { params: Promise<{ id
   );
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <MobileResponsiveWrapper variant="page" className="container mx-auto">
       <Suspense fallback={<ProductDetailLoading />}>
         <ProductDetail productId={id} />
       </Suspense>
-    </div>
+    </MobileResponsiveWrapper>
   );
 }

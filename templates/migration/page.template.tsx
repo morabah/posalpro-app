@@ -21,8 +21,18 @@ import { Suspense } from 'react';
 
 export const metadata: Metadata = {
   title: '__ENTITY__s Management | PosalPro',
-  description: 'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation. Streamline your __RESOURCE__ operations with powerful tools and insights.',
-  keywords: ['__RESOURCE__s', 'management', 'dashboard', 'analytics', 'workflow', 'posalpro', 'business', 'automation'],
+  description:
+    'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation. Streamline your __RESOURCE__ operations with powerful tools and insights.',
+  keywords: [
+    '__RESOURCE__s',
+    'management',
+    'dashboard',
+    'analytics',
+    'workflow',
+    'posalpro',
+    'business',
+    'automation',
+  ],
   authors: [{ name: 'PosalPro Team' }],
   creator: 'PosalPro',
   publisher: 'PosalPro',
@@ -42,13 +52,15 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: '/__RESOURCE__s',
     title: '__ENTITY__s Management | PosalPro',
-    description: 'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation.',
+    description:
+      'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation.',
     siteName: 'PosalPro',
   },
   twitter: {
     card: 'summary_large_image',
     title: '__ENTITY__s Management | PosalPro',
-    description: 'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation.',
+    description:
+      'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation.',
     creator: '@posalpro',
   },
   viewport: {
@@ -67,7 +79,8 @@ function generateStructuredData() {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
     name: '__ENTITY__s Management',
-    description: 'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation.',
+    description:
+      'Comprehensive __RESOURCE__ management dashboard with advanced filtering, analytics, and workflow automation.',
     url: '/__RESOURCE__s',
     isPartOf: {
       '@type': 'WebSite',
@@ -108,7 +121,9 @@ export default function __ENTITY__sNewPage() {
           <nav aria-label="Breadcrumb" className="mb-6">
             <ol className="flex items-center space-x-2 text-sm text-gray-500">
               <li>
-                <a href="/dashboard" className="hover:text-gray-700">Dashboard</a>
+                <a href="/dashboard" className="hover:text-gray-700">
+                  Dashboard
+                </a>
               </li>
               <li aria-hidden="true">/</li>
               <li className="text-gray-900 font-medium">__ENTITY__s</li>
@@ -173,10 +188,12 @@ class ErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
-      return <__ENTITY__Error
-        error={this.state.error}
-        onRetry={() => this.setState({ hasError: false, error: undefined })}
-      />;
+      return (
+        <__ENTITY__Error
+          error={this.state.error}
+          onRetry={() => this.setState({ hasError: false, error: undefined })}
+        />
+      );
     }
 
     return this.props.children;

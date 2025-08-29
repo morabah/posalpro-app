@@ -45,7 +45,7 @@ export const GET = createRoute(
     roles: ['admin', 'sales', 'viewer'],
     query: __ENTITY__QuerySchema,
     userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__'
+    hypothesis: '__HYPOTHESIS__',
   },
   async ({ query, user }) => {
     const start = performance.now();
@@ -136,7 +136,7 @@ export const POST = createRoute(
     roles: ['admin', 'sales'],
     body: __ENTITY__CreateSchema,
     userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__'
+    hypothesis: '__HYPOTHESIS__',
   },
   async ({ body, user }) => {
     const start = performance.now();
@@ -187,7 +187,7 @@ export const POST = createRoute(
       return new Response(JSON.stringify(ok(created)), {
         status: 201,
         headers: {
-          'Location': `/api/__RESOURCE__/${created.id}`,
+          Location: `/api/__RESOURCE__/${created.id}`,
         },
       });
     } catch (error) {
@@ -217,7 +217,7 @@ export const PUT = createRoute(
     roles: ['admin', 'sales'],
     body: __ENTITY__UpdateSchema,
     userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__'
+    hypothesis: '__HYPOTHESIS__',
   },
   async ({ body, user, params }) => {
     const start = performance.now();
@@ -295,7 +295,7 @@ export const DELETE = createRoute(
   {
     roles: ['admin'],
     userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__'
+    hypothesis: '__HYPOTHESIS__',
   },
   async ({ user, params }) => {
     const start = performance.now();

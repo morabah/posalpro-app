@@ -153,7 +153,7 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
         ui: { ...defaultUI },
 
         // Actions with logging and analytics
-        setFilters: (newFilters) => {
+        setFilters: newFilters => {
           logDebug('Store: Setting __RESOURCE__ filters', {
             component: '__ENTITY__Store',
             operation: 'setFilters',
@@ -162,14 +162,14 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
             hypothesis: '__HYPOTHESIS__',
           });
 
-          set((state) => ({
+          set(state => ({
             filters: { ...state.filters, ...newFilters },
             pagination: { ...state.pagination, page: 1 }, // Reset pagination on filter change
             ui: { ...state.ui, lastUpdated: new Date() },
           }));
         },
 
-        setSorting: (newSorting) => {
+        setSorting: newSorting => {
           logDebug('Store: Setting __RESOURCE__ sorting', {
             component: '__ENTITY__Store',
             operation: 'setSorting',
@@ -178,13 +178,13 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
             hypothesis: '__HYPOTHESIS__',
           });
 
-          set((state) => ({
+          set(state => ({
             sorting: { ...state.sorting, ...newSorting },
             ui: { ...state.ui, lastUpdated: new Date() },
           }));
         },
 
-        setView: (newView) => {
+        setView: newView => {
           logDebug('Store: Setting __RESOURCE__ view', {
             component: '__ENTITY__Store',
             operation: 'setView',
@@ -193,14 +193,14 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
             hypothesis: '__HYPOTHESIS__',
           });
 
-          set((state) => ({
+          set(state => ({
             view: { ...state.view, ...newView },
             ui: { ...state.ui, lastUpdated: new Date() },
           }));
         },
 
-        setPagination: (newPagination) => {
-          set((state) => ({
+        setPagination: newPagination => {
+          set(state => ({
             pagination: { ...state.pagination, ...newPagination },
             ui: { ...state.ui, lastUpdated: new Date() },
           }));
@@ -228,7 +228,7 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
           }));
         },
 
-        toggleSelection: (id) => {
+        toggleSelection: id => {
           const state = get();
           const { selectedIds } = state.selection;
           const isSelected = selectedIds.includes(id);
@@ -257,7 +257,7 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
           }));
         },
 
-        selectAll: (ids) => {
+        selectAll: ids => {
           logDebug('Store: Selecting all __RESOURCE__', {
             component: '__ENTITY__Store',
             operation: 'selectAll',
@@ -290,14 +290,14 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
           }));
         },
 
-        setLoading: (loading) => {
-          set((state) => ({
+        setLoading: loading => {
+          set(state => ({
             ui: { ...state.ui, isLoading: loading, lastUpdated: new Date() },
           }));
         },
 
-        setError: (error) => {
-          set((state) => ({
+        setError: error => {
+          set(state => ({
             ui: { ...state.ui, error, lastUpdated: new Date() },
           }));
         },
@@ -346,7 +346,7 @@ export const use__ENTITY__Store = create<__ENTITY__StoreState>()(
       {
         name: '__RESOURCE__-ui-state',
         version: 1,
-        partialize: (state) => ({
+        partialize: state => ({
           filters: state.filters,
           sorting: state.sorting,
           view: state.view,

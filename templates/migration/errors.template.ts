@@ -87,7 +87,8 @@ export const ErrorCodes = {
   },
 } as const;
 
-export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes][keyof typeof ErrorCodes[keyof typeof ErrorCodes]];
+export type ErrorCode =
+  (typeof ErrorCodes)[keyof typeof ErrorCodes][keyof (typeof ErrorCodes)[keyof typeof ErrorCodes]];
 
 // ====================
 // Enhanced Error Class
@@ -213,7 +214,7 @@ export class AppError extends Error {
       case ErrorCodes.AUTH.TOKEN_EXPIRED:
         return 'Your session has expired. Please log in again.';
       case ErrorCodes.PERMISSION.FORBIDDEN:
-        return 'You don\'t have permission to perform this action.';
+        return "You don't have permission to perform this action.";
       case ErrorCodes.VALIDATION.BAD_REQUEST:
         return 'Please check your input and try again.';
       case ErrorCodes.BUSINESS.RESOURCE_NOT_FOUND:
@@ -265,11 +266,17 @@ export const insufficientRole = (message = 'Insufficient role', context?: ErrorC
   new AppError(ErrorCodes.PERMISSION.INSUFFICIENT_ROLE, message, 403, undefined, context);
 
 // Validation errors
-export const badRequest = (message = 'Bad request', details?: ErrorDetails, context?: ErrorContext) =>
-  new AppError(ErrorCodes.VALIDATION.BAD_REQUEST, message, 400, details, context);
+export const badRequest = (
+  message = 'Bad request',
+  details?: ErrorDetails,
+  context?: ErrorContext
+) => new AppError(ErrorCodes.VALIDATION.BAD_REQUEST, message, 400, details, context);
 
-export const invalidFormat = (message = 'Invalid format', details?: ErrorDetails, context?: ErrorContext) =>
-  new AppError(ErrorCodes.VALIDATION.INVALID_FORMAT, message, 400, details, context);
+export const invalidFormat = (
+  message = 'Invalid format',
+  details?: ErrorDetails,
+  context?: ErrorContext
+) => new AppError(ErrorCodes.VALIDATION.INVALID_FORMAT, message, 400, details, context);
 
 export const missingRequiredField = (field: string, context?: ErrorContext) =>
   new AppError(
@@ -282,7 +289,13 @@ export const missingRequiredField = (field: string, context?: ErrorContext) =>
 
 // Business logic errors
 export const notFound = (resource = 'Resource', context?: ErrorContext) =>
-  new AppError(ErrorCodes.BUSINESS.RESOURCE_NOT_FOUND, `${resource} not found`, 404, undefined, context);
+  new AppError(
+    ErrorCodes.BUSINESS.RESOURCE_NOT_FOUND,
+    `${resource} not found`,
+    404,
+    undefined,
+    context
+  );
 
 export const conflict = (message = 'Conflict', details?: ErrorDetails, context?: ErrorContext) =>
   new AppError(ErrorCodes.BUSINESS.CONFLICT, message, 409, details, context);
@@ -356,7 +369,12 @@ export function errorToJson(error: unknown): SerializedError {
 // ====================
 
 export interface ErrorHandlingService {
-  processError(error: unknown, customMessage?: string, customCode?: ErrorCode, context?: ErrorContext): AppError;
+  processError(
+    error: unknown,
+    customMessage?: string,
+    customCode?: ErrorCode,
+    context?: ErrorContext
+  ): AppError;
   getUserFriendlyMessage(error: AppError): string;
   shouldRetry(error: AppError): boolean;
   getRecoveryAction(error: AppError): string | undefined;

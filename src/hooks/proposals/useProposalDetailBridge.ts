@@ -52,7 +52,7 @@ interface ProposalDetail {
     content: string;
     type: string;
     order: number;
-  }>;
+  };
   assignedTo?: Array<{
     id: string;
     name: string;

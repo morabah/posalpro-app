@@ -4,6 +4,7 @@
 
 import ProductList from '@/components/products/ProductList';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
+import { MobileResponsiveWrapper } from '@/components/ui/MobileResponsiveWrapper';
 import { analytics } from '@/lib/analytics';
 import { logInfo } from '@/lib/logger';
 import { Metadata } from 'next';
@@ -88,10 +89,10 @@ export default function ProductsPage() {
   );
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <MobileResponsiveWrapper variant="page" className="container mx-auto">
       <Suspense fallback={<ProductsLoading />}>
         <ProductList />
       </Suspense>
-    </div>
+    </MobileResponsiveWrapper>
   );
 }

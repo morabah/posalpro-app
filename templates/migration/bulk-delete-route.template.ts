@@ -34,7 +34,7 @@ export const POST = createRoute(
     roles: ['admin'],
     body: BulkDeleteSchema,
     userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__'
+    hypothesis: '__HYPOTHESIS__',
   },
   async ({ body, user }) => {
     const start = performance.now();
@@ -54,7 +54,7 @@ export const POST = createRoute(
       const validatedData = BulkDeleteSchema.parse(body);
 
       // Use transaction for data integrity
-      const result = await db.$transaction(async (tx) => {
+      const result = await db.$transaction(async tx => {
         // Soft delete pattern - preserve data integrity
         const updated = await tx.__RESOURCE__.updateMany({
           where: {
@@ -102,12 +102,13 @@ export const POST = createRoute(
         hypothesis: '__HYPOTHESIS__',
       });
 
-      return Response.json(ok({
-        deleted: result.count,
-        requested: validatedData.ids.length,
-        message: `${result.count} __RESOURCE__(s) deleted successfully`,
-      }));
-
+      return Response.json(
+        ok({
+          deleted: result.count,
+          requested: validatedData.ids.length,
+          message: `${result.count} __RESOURCE__(s) deleted successfully`,
+        })
+      );
     } catch (error) {
       const loadTime = performance.now() - start;
 

@@ -98,14 +98,24 @@ export class Logger {
 
   // Check if log level is enabled
   private isLevelEnabled(level: LogLevel): boolean {
-    const levels = [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR, LogLevel.CRITICAL];
+    const levels = [
+      LogLevel.DEBUG,
+      LogLevel.INFO,
+      LogLevel.WARN,
+      LogLevel.ERROR,
+      LogLevel.CRITICAL,
+    ];
     const currentIndex = levels.indexOf(this.config.level);
     const messageIndex = levels.indexOf(level);
     return messageIndex >= currentIndex;
   }
 
   // Create log entry
-  private createLogEntry(level: LogLevel, message: string, context?: LogContext): Record<string, unknown> {
+  private createLogEntry(
+    level: LogLevel,
+    message: string,
+    context?: LogContext
+  ): Record<string, unknown> {
     const timestamp = this.config.includeTimestamp ? new Date().toISOString() : undefined;
 
     const entry: Record<string, unknown> = {
@@ -125,7 +135,10 @@ export class Logger {
       Object.entries(context).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           // Skip sensitive fields in production
-          if (this.config.environment === 'production' && ['password', 'token', 'secret'].includes(key)) {
+          if (
+            this.config.environment === 'production' &&
+            ['password', 'token', 'secret'].includes(key)
+          ) {
             entry[key] = '[REDACTED]';
           } else {
             entry[key] = value;
@@ -159,9 +172,14 @@ export class Logger {
     const entry = this.createLogEntry(level, message, context);
 
     if (this.config.enableConsole) {
-      const consoleMethod = level === LogLevel.ERROR || level === LogLevel.CRITICAL ? 'error' :
-                           level === LogLevel.WARN ? 'warn' :
-                           level === LogLevel.DEBUG ? 'debug' : 'log';
+      const consoleMethod =
+        level === LogLevel.ERROR || level === LogLevel.CRITICAL
+          ? 'error'
+          : level === LogLevel.WARN
+            ? 'warn'
+            : level === LogLevel.DEBUG
+              ? 'debug'
+              : 'log';
 
       if (this.config.enableStructured) {
         console[consoleMethod](this.formatAsJson(entry));
@@ -206,9 +224,14 @@ export class Logger {
   }
 
   // Request logging
-  request(method: string, path: string, status: number, duration: number, context?: LogContext): void {
-    const level = status >= 500 ? LogLevel.ERROR :
-                  status >= 400 ? LogLevel.WARN : LogLevel.INFO;
+  request(
+    method: string,
+    path: string,
+    status: number,
+    duration: number,
+    context?: LogContext
+  ): void {
+    const level = status >= 500 ? LogLevel.ERROR : status >= 400 ? LogLevel.WARN : LogLevel.INFO;
 
     this.log(level, `HTTP ${method} ${path}`, {
       ...context,
@@ -278,7 +301,13 @@ export const logPerformance = (operation: string, duration: number, context?: Lo
   defaultLogger.performance(operation, duration, context);
 };
 
-export const logRequest = (method: string, path: string, status: number, duration: number, context?: LogContext): void => {
+export const logRequest = (
+  method: string,
+  path: string,
+  status: number,
+  duration: number,
+  context?: LogContext
+): void => {
   defaultLogger.request(method, path, status, duration, context);
 };
 

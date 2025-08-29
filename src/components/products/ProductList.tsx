@@ -3,16 +3,19 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Input } from '@/components/ui/Input';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
+import { SkeletonLoader } from '@/components/ui/LoadingStates';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useInfiniteProductsMigrated } from '@/hooks/useProducts';
+import SuggestionCombobox from '@/components/ui/forms/SuggestionCombobox';
+import { useSuggestions } from '@/features/search/hooks/useSuggestions';
+import { useProductStatsMigrated, useProductCategories } from '@/hooks/useProducts';
 import { logError, logInfo } from '@/lib/logger';
 import type { Product } from '@/services/productService';
 import useProductStore from '@/stores/productStore';
 import { useRouter } from 'next/navigation';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Product List Header Component
 function ProductListHeader() {
@@ -82,14 +85,67 @@ function ProductListHeader() {
       <div className="flex items-center gap-3">
         {hasSelection && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">{selectedCount} selected</span>
-            <Button onClick={handleBulkDelete} variant="danger" size="sm">
+            <span className="text-sm text-gray-600" aria-live="polite">
+              {selectedCount} selected
+            </span>
+            <Button onClick={handleBulkDelete} variant="danger" size="sm" aria-label="Delete selected products">
               Delete Selected
+            </Button>
+            <Button onClick={clearSelection} variant="outline" size="sm" aria-label="Clear selection">
+              Clear
             </Button>
           </div>
         )}
-        <Button onClick={handleCreateProduct}>Create Product</Button>
+        <Button onClick={handleCreateProduct} aria-label="Create product">Create Product</Button>
       </div>
+    </div>
+  );
+}
+
+// Product Quick Stats Component
+function ProductStats() {
+  type ProductStatsShape = {
+    total: number;
+    active: number;
+    inactive: number;
+    averagePrice: number;
+  };
+  const { data, isLoading, isError } = useProductStatsMigrated();
+  const stats = data as ProductStatsShape | undefined;
+
+  if (isError) return null;
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4" aria-label="Product quick stats">
+      {isLoading ? (
+        <>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="p-4">
+              <SkeletonLoader className="w-24 mb-2" height="h-4" />
+              <SkeletonLoader className="w-16" height="h-6" />
+            </Card>
+          ))}
+        </>
+      ) : (
+        <>
+          <Card className="p-4" data-testid="stat-total">
+            <div className="text-sm text-gray-600">Total</div>
+            <div className="text-2xl font-semibold">{stats?.total ?? 0}</div>
+          </Card>
+          <Card className="p-4" data-testid="stat-active">
+            <div className="text-sm text-gray-600">Active</div>
+            <div className="text-2xl font-semibold text-green-600">{stats?.active ?? 0}</div>
+          </Card>
+          <Card className="p-4" data-testid="stat-inactive">
+            <div className="text-sm text-gray-600">Inactive</div>
+            <div className="text-2xl font-semibold text-gray-700">{stats?.inactive ?? 0}</div>
+          </Card>
+          <Card className="p-4" data-testid="stat-avg-price">
+            <div className="text-sm text-gray-600">Avg. Price</div>
+            <div className="text-2xl font-semibold">${(stats?.averagePrice ?? 0).toFixed(2)}</div>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
@@ -98,7 +154,23 @@ function ProductListHeader() {
 function ProductFilters() {
   const filters = useProductStore(state => state.filters);
   const setFilters = useProductStore(state => state.setFilters);
+  const resetFilters = useProductStore(state => state.resetFilters);
   const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const { data: categoriesResp, isLoading: isCatsLoading } = useProductCategories();
+  type SearchMode = 'known' | 'exploratory';
+  const [searchMode, setSearchMode] = useState<SearchMode>('known');
+  const [debouncedQuery, setDebouncedQuery] = useState(filters.search || '');
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(filters.search || ''), 250);
+    return () => clearTimeout(t);
+  }, [filters.search]);
+
+  const suggestionsQuery = useSuggestions(
+    debouncedQuery,
+    { type: searchMode === 'known' ? 'products' : 'all', limit: 7, enabled: (debouncedQuery?.length || 0) >= 2 }
+  );
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,6 +185,8 @@ function ProductFilters() {
         },
         'medium'
       );
+      setIsOpen(Boolean(searchValue) && searchValue.length >= 2);
+      setActiveIndex(-1);
     },
     [setFilters, analytics]
   );
@@ -185,18 +259,60 @@ function ProductFilters() {
 
   return (
     <Card className="p-4 mb-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div>
-          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-            Search
-          </label>
-          <Input
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="relative">
+          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+          {/* Search mode segmented control */}
+          <div className="mb-2 inline-flex rounded-md border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <button
+              type="button"
+              className={`px-2.5 py-1 text-xs ${
+                searchMode === 'known' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              aria-pressed={searchMode === 'known'}
+              onClick={() => {
+                setSearchMode('known');
+                analytics('product_search_mode_changed', { mode: 'known' }, 'low');
+              }}
+            >
+              Known‑item
+            </button>
+            <button
+              type="button"
+              className={`px-2.5 py-1 text-xs border-l border-gray-200 ${
+                searchMode === 'exploratory'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              aria-pressed={searchMode === 'exploratory'}
+              onClick={() => {
+                setSearchMode('exploratory');
+                analytics('product_search_mode_changed', { mode: 'exploratory' }, 'low');
+              }}
+            >
+              Exploratory
+            </button>
+          </div>
+          <SuggestionCombobox
             id="search"
-            type="text"
-            placeholder="Search products..."
             value={filters.search || ''}
             onChange={handleSearchChange}
+            onSelect={item => {
+              setFilters({ search: item.text });
+              analytics(
+                'product_search_suggestion_selected',
+                { suggestion: item.text, type: item.type, mode: searchMode },
+                'medium'
+              );
+            }}
+            suggestions={suggestionsQuery.data || []}
+            loading={suggestionsQuery.isFetching}
+            placeholder="Search products..."
+            label="Search"
+            minChars={2}
+            groupByType
           />
+          <p id="search-help" className="sr-only">Type to filter products by name or description</p>
         </div>
 
         <div>
@@ -207,14 +323,17 @@ function ProductFilters() {
             id="category"
             value={filters.category || ''}
             onChange={handleCategoryChange}
+            aria-label="Filter by category"
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">All Categories</option>
-            <option value="electronics">Electronics</option>
-            <option value="clothing">Clothing</option>
-            <option value="books">Books</option>
-            <option value="home">Home & Garden</option>
+            {categoriesResp?.categories?.map((cat: { name: string; count: number }) => (
+              <option key={cat.name} value={cat.name}>
+                {cat.name} ({cat.count})
+              </option>
+            ))}
           </select>
+          {isCatsLoading && <div className="mt-1 text-xs text-gray-500">Loading categories…</div>}
         </div>
 
         <div>
@@ -225,6 +344,7 @@ function ProductFilters() {
             id="status"
             value={filters.isActive !== undefined ? (filters.isActive ? 'active' : 'inactive') : ''}
             onChange={handleStatusChange}
+            aria-label="Filter by status"
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">All Status</option>
@@ -241,6 +361,7 @@ function ProductFilters() {
             id="sortBy"
             value={filters.sortBy}
             onChange={handleSortByChange}
+            aria-label="Sort by field"
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="name">Name</option>
@@ -258,11 +379,18 @@ function ProductFilters() {
             id="sortOrder"
             value={filters.sortOrder}
             onChange={handleSortOrderChange}
+            aria-label="Sort order"
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="asc">Ascending</option>
             <option value="desc">Descending</option>
           </select>
+        </div>
+
+        <div className="flex items-end">
+          <Button variant="outline" onClick={resetFilters} aria-label="Reset filters" className="w-full">
+            Reset
+          </Button>
         </div>
       </div>
     </Card>
@@ -321,9 +449,31 @@ function ProductTable() {
 
   if (isFetching && !data) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner size="lg" />
-      </div>
+      <Card className="overflow-hidden">
+        <div className="p-4 border-b bg-gray-50">
+          <SkeletonLoader className="w-40" height="h-6" />
+        </div>
+        <div className="divide-y">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-12 gap-4 px-6 py-4 items-center">
+              <div className="col-span-1"><SkeletonLoader className="w-5" height="h-5" /></div>
+              <div className="col-span-4">
+                <div className="flex items-center gap-3">
+                  <SkeletonLoader className="w-10" height="h-10" />
+                  <div className="flex-1">
+                    <SkeletonLoader className="w-32 mb-2" height="h-4" />
+                    <SkeletonLoader className="w-48" height="h-3" />
+                  </div>
+                </div>
+              </div>
+              <div className="col-span-2"><SkeletonLoader className="w-24" height="h-4" /></div>
+              <div className="col-span-2"><SkeletonLoader className="w-24" height="h-4" /></div>
+              <div className="col-span-1"><SkeletonLoader className="w-16" height="h-4" /></div>
+              <div className="col-span-2"><SkeletonLoader className="w-28" height="h-4" /></div>
+            </div>
+          ))}
+        </div>
+      </Card>
     );
   }
 
@@ -338,13 +488,13 @@ function ProductTable() {
   }
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden" role="region" aria-label="Products list">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200" role="table" aria-label="Products table">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               <th className="w-12 px-6 py-3 text-left">
-                <Checkbox checked={isAllSelected} onChange={handleSelectAll} />
+                <Checkbox checked={isAllSelected} onChange={handleSelectAll} aria-label="Select all products" />
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Product
@@ -366,7 +516,23 @@ function ProductTable() {
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white divide-y divide-gray-200" aria-live="polite">
+            {products.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-6 py-12">
+                  <div className="text-center">
+                    <div className="text-4xl mb-2">📦</div>
+                    <h3 className="text-lg font-medium text-gray-900">No products found</h3>
+                    <p className="text-gray-600 mt-1">Try adjusting filters or create a new product.</p>
+                    <div className="mt-4">
+                      <Button onClick={() => router.push('/products/create')} aria-label="Create product from empty state">
+                        Create Product
+                      </Button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )}
             {products.map((product: Product) => {
               const firstImage =
                 product.images && product.images.length > 0 ? product.images[0] : null;
@@ -384,6 +550,7 @@ function ProductTable() {
                     <Checkbox
                       checked={selectedProducts.includes(product.id)}
                       onChange={() => toggleProductSelection(product.id)}
+                      aria-label={`Select product ${product.name}`}
                     />
                   </td>
                   <td className="px-6 py-4">
@@ -440,6 +607,7 @@ function ProductTable() {
             onClick={() => fetchNextPage()}
             disabled={isFetchingNextPage}
             className="w-full"
+            aria-label="Load more products"
           >
             {isFetchingNextPage ? 'Loading more...' : 'Load more products'}
           </Button>
@@ -454,6 +622,7 @@ export default function ProductList() {
   return (
     <div className="space-y-6">
       <ProductListHeader />
+      <ProductStats />
       <ProductFilters />
       <ProductTable />
     </div>

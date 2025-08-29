@@ -24,7 +24,7 @@
     "test:bridge": "node scripts/test-bridge-example.js",
     "test:ci": "jest --ci --coverage",
     "test:ci:unit": "jest --ci --coverage --testPathIgnorePatterns=src/test/integration/ --testPathIgnorePatterns=src/test/production/ --testPathIgnorePatterns=src/test/api/ --testPathIgnorePatterns=src/test/api-routes/ --testPathIgnorePatterns=test/proposal-wizard-puppeteer.test.ts --testPathIgnorePatterns=\\.integration\\.test\\.",
-    "test:e2e": "jest test/proposal-wizard-puppeteer.test.ts",
+    "test:e2e": "npm run dev:smart > /dev/null 2>&1 & sleep 5 && jest test/proposal-wizard-puppeteer.test.ts --detectOpenHandles",
     "test:accessibility": "jest --testPathPattern=accessibility",
     "test:performance": "node scripts/test-optimizations.js",
     "test:real-world": "node scripts/run-real-world-tests.js",
