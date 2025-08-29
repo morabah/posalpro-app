@@ -1,19 +1,38 @@
 /**
- * PosalPro MVP2 - Product Management Demo
- * Hybrid approach demonstration: Real database + Advanced mock features
+ * EcoChic - Sustainable Fashion Product Demo
+ * Premium eco-conscious collection with advanced e-commerce features
  * User Story: US-3.2 (License requirement validation)
  * Hypothesis: H8 (Technical Configuration Validation - 50% error reduction)
  */
 
+
 'use client';
 
-import AdvancedProductList from '@/components/products/AdvancedProductList';
-import AdvancedProductModal from '@/components/products/AdvancedProductModal';
+import dynamic from 'next/dynamic';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { ToastProvider } from '@/components/feedback/Toast/ToastProvider';
+import { ProductsListSkeleton } from '@/components/ui/LoadingStates';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { logInfo } from '@/lib/logger';
 import { useEffect, useState } from 'react';
+import { useToast } from '@/components/feedback/Toast/ToastProvider';
+
+// Split heavy components for better TTI; provide enterprise fallback skeletons
+const AdvancedProductList = dynamic(() => import('@/components/products/AdvancedProductList'), {
+  ssr: false,
+  loading: () => (
+    <div aria-busy="true" aria-live="polite" className="mt-6">
+      <ProductsListSkeleton />
+    </div>
+  ),
+});
+
+const AdvancedProductModal = dynamic(
+  () => import('@/components/products/AdvancedProductModal'),
+  { ssr: false }
+);
 
 export default function ProductDemoPage() {
   const [showModal, setShowModal] = useState(false);
@@ -21,6 +40,7 @@ export default function ProductDemoPage() {
   // Prevent hydration mismatches by rendering only on client
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const { success } = useToast();
 
   const handleProductCreated = (product: any) => {
     setCreatedProducts(prev => [...prev, { ...product, createdAt: new Date() }]);
@@ -30,6 +50,7 @@ export default function ProductDemoPage() {
       userStory: 'US-3.2',
       hypothesis: 'H8',
     });
+    success('Product created successfully');
   };
 
   if (!mounted) {
@@ -38,52 +59,75 @@ export default function ProductDemoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-6 py-8">
-        {/* User-Centered Design Header */}
+    <div className="min-h-screen bg-gray-50 motion-reduce:transition-none motion-reduce:animate-none">
+      {/* Skip link for keyboard users */}
+      <a
+        href="#demo-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-white border border-gray-300 rounded px-3 py-2 shadow"
+      >
+        Skip to content
+      </a>
+      <ToastProvider>
+        <div className="container mx-auto px-6 py-8">
+          {/* Consistent enterprise breadcrumbs */}
+          <Breadcrumbs className="mb-4" />
+          <main id="demo-content" role="main">
+        {/* Sustainable Fashion Header */}
         <div className="mb-8">
-          <div className="relative overflow-hidden bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-8 border border-blue-200/50 shadow-lg">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-200/30 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-purple-200/30 to-transparent rounded-full translate-y-12 -translate-x-12"></div>
+          <div className="relative overflow-hidden bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 rounded-2xl p-8 border border-emerald-200/50 shadow-lg">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-emerald-200/30 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-green-200/30 to-transparent rounded-full translate-y-12 -translate-x-12"></div>
 
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span className="text-white text-2xl">👥</span>
+                    <span className="text-white text-2xl">🌱</span>
                   </div>
                   <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">
-                      User-Centered Product Experience
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-emerald-900 bg-clip-text text-transparent">
+                      EcoChic Sustainable Fashion Experience
                     </h1>
                     <p className="text-lg text-gray-600 mt-2">
-                      Designed with empathy through iterative UX research & validation
+                      Premium eco-conscious collection with seamless e-commerce functionality
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => window.open('/products', '_blank')} className="border-blue-300 hover:bg-blue-50">
-                    View Real Products
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open('/products', '_blank')}
+                    aria-label="View product collection in a new tab"
+                    className="border-emerald-300 hover:bg-emerald-50"
+                  >
+                    🌿 View Collection
                   </Button>
-                  <Button variant="primary" onClick={() => setShowModal(true)} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                    Create Advanced Product
+                  <Button
+                    variant="primary"
+                    onClick={() => setShowModal(true)}
+                    aria-haspopup="dialog"
+                    aria-controls="advanced-product-modal"
+                    aria-expanded={showModal}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+                  >
+                    🌱 Create Eco Product
                   </Button>
                 </div>
               </div>
 
-              {/* UX Methodology Badges */}
+              {/* Sustainable Fashion Badges */}
               <div className="flex flex-wrap gap-3">
                 <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium border border-emerald-200">
-                  🎯 User Research Driven
+                  🌱 Eco-Conscious Design
                 </span>
-                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium border border-blue-200">
-                  🔄 Iterative Design Process
+                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium border border-green-200">
+                  ♻️ Sustainable Materials
                 </span>
                 <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium border border-purple-200">
-                  💡 Empathy-Based Solutions
+                  🤝 Ethical Production
                 </span>
-                <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium border border-orange-200">
-                  📊 Data-Informed Decisions
+                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium border border-blue-200">
+                  📦 Premium Quality
                 </span>
               </div>
 
@@ -701,12 +745,12 @@ export default function ProductDemoPage() {
                     <h5 className="font-semibold text-green-800 mb-2">Phase 1: Database & Types</h5>
                     <div className="bg-green-50 p-3 rounded-lg">
                       <pre className="text-xs text-green-800 font-mono overflow-x-auto"><code>// prisma/schema.prisma
-model Product {
+model Product &#123;
   // ... existing fields
 + tags             String[]  // Array of tag strings
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
-}</code></pre>
+&#125;</code></pre>
                     </div>
                     <ul className="text-sm text-gray-700 mt-2 space-y-1">
                       <li>• <code>npx prisma migrate dev --name add-product-tags</code></li>
@@ -720,14 +764,14 @@ model Product {
                     <h5 className="font-semibold text-blue-800 mb-2">Phase 2: Validation Schemas</h5>
                     <div className="bg-blue-50 p-3 rounded-lg">
                       <pre className="text-xs text-blue-800 font-mono overflow-x-auto"><code>// src/features/products/schemas.ts
-export const ProductSchema = z.object({
+export const ProductSchema = z.object(&#123;
   // ... existing fields
 + tags: z.array(z.string().min(1).max(50)).optional().default([]),
-});
+&#125;);
 
-export const ProductCreateSchema = ProductSchema.omit({
+export const ProductCreateSchema = ProductSchema.omit(&#123;
   id: true, createdAt: true, updatedAt: true
-});</code></pre>
+&#125;);</code></pre>
                     </div>
                     <ul className="text-sm text-gray-700 mt-2 space-y-1">
                       <li>• Update create/update schemas</li>
@@ -741,17 +785,17 @@ export const ProductCreateSchema = ProductSchema.omit({
                     <h5 className="font-semibold text-purple-800 mb-2">Phase 3: Backend Implementation</h5>
                     <div className="bg-purple-50 p-3 rounded-lg">
                       <pre className="text-xs text-purple-800 font-mono overflow-x-auto"><code>// src/app/api/products/route.ts
-export async function POST(request: Request) {
+export async function POST(request: Request) &#123;
   const body = await request.json();
   const validatedData = ProductCreateSchema.parse(body);
 
-  const product = await prisma.product.create({
-    data: {
+  const product = await prisma.product.create(&#123;
+    data: &#123;
       ...validatedData,
 +     tags: validatedData.tags || [],
-    }
-  });
-}</code></pre>
+    &#125;
+  &#125;);
+&#125;</code></pre>
                     </div>
                     <ul className="text-sm text-gray-700 mt-2 space-y-1">
                       <li>• Update API routes to handle tags field</li>
@@ -765,15 +809,15 @@ export async function POST(request: Request) {
                     <h5 className="font-semibold text-orange-800 mb-2">Phase 4: Frontend Components</h5>
                     <div className="bg-orange-50 p-3 rounded-lg">
                       <pre className="text-xs text-orange-800 font-mono overflow-x-auto"><code>// src/components/products/ProductForm.tsx
-const [tags, setTags] = useState<string[]>([]);
+const [tags, setTags] = useState&lt;string[]&gt;([]);
 const [newTag, setNewTag] = useState('');
 
-const addTag = () => {
-  if (newTag && !tags.includes(newTag)) {
+const addTag = () =&gt; &#123;
+  if (newTag && !tags.includes(newTag)) &#123;
     setTags([...tags, newTag]);
     setNewTag('');
-  }
-};</code></pre>
+  &#125;
+&#125;;</code></pre>
                     </div>
                     <ul className="text-sm text-gray-700 mt-2 space-y-1">
                       <li>• Add tags input component to forms</li>
@@ -883,10 +927,11 @@ const addTag = () => {
         </div>
 
         {/* Advanced Product List */}
-        <AdvancedProductList />
+        <AdvancedProductList hideBreadcrumbs onAddProduct={() => setShowModal(true)} />
 
         {/* Demo Modal */}
         <AdvancedProductModal
+          id="advanced-product-modal"
           isOpen={showModal}
           onClose={() => setShowModal(false)}
           onSuccess={handleProductCreated}
@@ -962,7 +1007,9 @@ const addTag = () => {
             </Button>
           </div>
         </div>
-      </div>
+          </main>
+        </div>
+      </ToastProvider>
     </div>
   );
 }

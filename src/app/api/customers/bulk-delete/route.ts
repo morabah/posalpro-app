@@ -8,15 +8,13 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
+import { CustomerBulkDeleteSchema } from '@/features/customers/schemas';
 
 // ====================
 // Body Schema
 // ====================
 
-const BulkDeleteSchema = z.object({
-  ids: z.array(z.string().min(1)).min(1, 'At least one customer ID is required'),
-});
+const BulkDeleteSchema = CustomerBulkDeleteSchema;
 
 // ====================
 // POST Route - Bulk Delete

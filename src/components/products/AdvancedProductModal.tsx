@@ -56,12 +56,14 @@ interface ProductFormData {
 }
 
 interface AdvancedProductModalProps {
+  id?: string;
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (product: any) => void;
 }
 
 export default function AdvancedProductModal({
+  id,
   isOpen,
   onClose,
   onSuccess,
@@ -229,15 +231,86 @@ export default function AdvancedProductModal({
     [formData, analytics, onSuccess, onClose]
   );
 
+  const dialogId = id || 'advanced-product-modal';
+
+  // Accessibility: focus trap and escape to close
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const previouslyFocusedRef = React.useRef<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    previouslyFocusedRef.current = (document.activeElement as HTMLElement) || null;
+    const container = containerRef.current;
+    if (container) {
+      // focus the first focusable element within the modal, else the container
+      const focusable = container.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      (focusable || container).focus();
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+      if (e.key === 'Tab' && containerRef.current) {
+        const focusables = Array.from(
+          containerRef.current.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => !el.hasAttribute('disabled'));
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement;
+        if (e.shiftKey) {
+          if (active === first || !containerRef.current.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (active === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      // restore focus
+      previouslyFocusedRef.current?.focus?.();
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+    <div
+      id={`${dialogId}-backdrop`}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      aria-hidden="false"
+    >
+      <div
+        id={dialogId}
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${dialogId}-title`}
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden focus:outline-none"
+        tabIndex={-1}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">Create Advanced Product</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
+          <h2 id={`${dialogId}-title`} className="text-xl font-semibold text-gray-900">
+            Create Advanced Product
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl"
+            aria-label="Close dialog"
+          >
             ✕
           </button>
         </div>

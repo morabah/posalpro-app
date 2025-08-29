@@ -8,18 +8,13 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
+import { ProductQuickSearchApiSchema } from '@/features/products/schemas';
 
 // ====================
 // Validation Schema
 // ====================
 
-const ProductSearchSchema = z.object({
-  q: z.string().min(1, 'Search query is required').max(100),
-  limit: z.coerce.number().min(1).max(50).default(10),
-  category: z.string().optional(),
-  isActive: z.boolean().optional(),
-});
+const ProductSearchSchema = ProductQuickSearchApiSchema;
 
 // ====================
 // GET Route - Search Products

@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { SkeletonLoader } from '@/components/ui/LoadingStates';
 import { Button } from '@/components/ui/forms/Button';
-import { useProductMigrated, useUpdateProduct } from '@/hooks/useProducts';
+import { useProductMigrated, useUpdateProduct } from '@/features/products/hooks/useProducts';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';

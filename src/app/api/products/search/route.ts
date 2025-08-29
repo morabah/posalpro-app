@@ -13,19 +13,14 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { productService } from '@/lib/services';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { ProductSearchApiSchema } from '@/features/products/schemas';
 import { z } from 'zod';
 
 // Initialize error handling service
 const errorHandlingService = ErrorHandlingService.getInstance();
 
-// Search validation schema
-const searchSchema = z.object({
-  search: z.string().min(1, 'Search query is required'),
-  limit: z.coerce.number().min(1).max(100).default(50),
-  category: z.string().optional(),
-  tags: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
-});
+// Search validation schema (centralized)
+const searchSchema = ProductSearchApiSchema;
 
 // Note: Response envelope handled by ok() function from @/lib/api/response
 

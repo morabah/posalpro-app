@@ -8,21 +8,13 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
-
-// Validation schema for bulk delete
-const BulkDeleteSchema = z.object({
-  ids: z
-    .array(z.string().min(1))
-    .min(1, 'At least one proposal ID is required')
-    .max(100, 'Maximum 100 proposals can be deleted at once'),
-});
+import { ProposalBulkDeleteSchema } from '@/features/proposals/schemas';
 
 // POST /api/proposals/bulk-delete - Delete multiple proposals
 export const POST = createRoute(
   {
     roles: ['admin', 'System Administrator', 'Administrator'],
-    body: BulkDeleteSchema,
+    body: ProposalBulkDeleteSchema,
   },
   async ({ body, user }) => {
     try {

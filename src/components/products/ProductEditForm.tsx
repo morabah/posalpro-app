@@ -12,7 +12,7 @@ import {
   useProductMigrated,
   useProductTags,
   useUpdateProduct,
-} from '@/hooks/useProducts';
+} from '@/features/products/hooks/useProducts';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { logError, logInfo } from '@/lib/logger';
 import { productCreateValidationSchema } from '@/lib/validation/productValidation';

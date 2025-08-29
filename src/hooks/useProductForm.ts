@@ -5,7 +5,7 @@
  */
 
 import { useFormValidation } from '@/hooks/useFormValidation';
-import { useProductCategories, useProductTags } from '@/hooks/useProducts';
+import { useProductCategories, useProductTags } from '@/features/products/hooks/useProducts';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { logError, logInfo } from '@/lib/logger';
 import { productCreateValidationSchema } from '@/lib/validation/productValidation';

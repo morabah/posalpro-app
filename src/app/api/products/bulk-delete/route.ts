@@ -8,12 +8,10 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logInfo } from '@/lib/logger';
-import { z } from 'zod';
+import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 
-// Schema for bulk delete request
-const BulkDeleteSchema = z.object({
-  ids: z.array(z.string()).min(1, 'At least one product ID is required'),
-});
+// Schema for bulk delete request (centralized)
+const BulkDeleteSchema = ProductBulkDeleteSchema;
 
 export const POST = createRoute(
   {

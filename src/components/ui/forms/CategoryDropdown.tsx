@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useProductCategoriesMigrated } from '@/hooks/useProducts';
+import { useProductCategoriesMigrated } from '@/features/products/hooks/useProducts';
 import { logDebug } from '@/lib/logger';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

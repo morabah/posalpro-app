@@ -7,6 +7,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '../keys';
+import { proposalService } from '@/services/proposalService';
 
 /**
  * UNIQUE HOOK: Persists proposal wizard data to server
@@ -20,28 +21,20 @@ export function usePersistProposalWizard() {
     mutationFn: async ({
       proposalId,
       wizardData,
-      step
+      step,
     }: {
       proposalId: string;
       wizardData: any;
       step?: number;
     }): Promise<{ success: boolean; timestamp: number }> => {
-      const response = await fetch(`/api/proposals/${proposalId}/persist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ wizardData, step }),
-      });
+      // Use the existing service which transforms wizard payload to API schema
+      const res = await proposalService.updateProposal(proposalId, wizardData);
 
-      if (!response.ok) {
-        throw new Error('Failed to persist proposal wizard data');
+      if (!res.ok) {
+        throw new Error(res.message || 'Failed to persist proposal wizard data');
       }
 
-      return {
-        success: true,
-        timestamp: Date.now(),
-      };
+      return { success: true, timestamp: Date.now() };
     },
     onSuccess: (data, variables) => {
       // Update the proposal query with the new persisted data

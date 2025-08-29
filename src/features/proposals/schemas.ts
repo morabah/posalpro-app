@@ -347,6 +347,36 @@ export const ProposalListSchema = z.object({
 });
 
 // ====================
+// Utility / Ancillary Schemas (API specific)
+// ====================
+
+// Bulk delete schema specifically for proposals API routes
+export const ProposalBulkDeleteSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1, 'At least one proposal ID is required').max(100),
+});
+
+// Cursor pagination schema for proposal versions listing
+export const ProposalVersionsQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(200).default(50),
+  cursorCreatedAt: z.string().datetime().optional(),
+  cursorId: z.string().optional(),
+});
+
+// Workflow update schemas
+export const ProposalWorkflowStatusUpdateSchema = z.object({
+  proposalId: z.string().min(1, 'Proposal ID is required'),
+  status: ProposalStatusSchema,
+  comment: z.string().optional(),
+  assignedTo: z.string().optional(),
+});
+
+export const ProposalWorkflowBulkUpdateSchema = z.object({
+  proposalIds: z.array(z.string().min(1)).min(1).max(50),
+  status: ProposalStatusSchema,
+  comment: z.string().optional(),
+});
+
+// ====================
 // Wizard Schema
 // ====================
 

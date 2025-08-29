@@ -272,3 +272,40 @@ export type ProductUsageAnalytics = z.infer<typeof ProductUsageAnalyticsSchema>;
 export type ProductBulkOperation = z.infer<typeof ProductBulkOperationSchema>;
 export type LicenseDependency = z.infer<typeof LicenseDependencySchema>;
 export type ProductRelationshipType = z.infer<typeof ProductRelationshipTypeSchema>;
+
+// ====================
+// API‑Specific Schemas
+// ====================
+
+// Search schema used by /api/products/search (keeps route param names/values)
+export const ProductSearchApiSchema = z.object({
+  search: z.string().min(1, 'Search query is required'),
+  limit: z.coerce.number().min(1).max(100).default(50),
+  category: z.string().optional(),
+  tags: z.string().optional(),
+  isActive: z.coerce.boolean().optional(),
+});
+
+// Search schema used by /api/products/products_new/search
+export const ProductQuickSearchApiSchema = z.object({
+  q: z.string().min(1, 'Search query is required').max(100),
+  limit: z.coerce.number().min(1).max(50).default(10),
+  category: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+// Bulk delete schema alias for products
+export const ProductBulkDeleteSchema = BulkDeleteSchema;
+
+// SKU validation query schema
+export const SKUValidationSchema = z.object({
+  sku: z.string().min(1, 'SKU is required').max(50, 'SKU must be 50 characters or less'),
+  excludeId: z.string().optional(),
+});
+
+// Product relationship simulation body schema
+export const ProductRelationshipsSimulateSchema = z.object({
+  skus: z.array(z.string()).min(1, 'At least one SKU is required'),
+  mode: z.enum(['validate', 'simulate']).default('validate'),
+  attributes: z.record(z.any()).optional(),
+});

@@ -12,7 +12,7 @@ import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { FormActions, FormErrorSummary } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useProductForm } from '@/hooks/useProductForm';
-import { useCreateProduct } from '@/hooks/useProducts';
+import { useCreateProduct } from '@/features/products/hooks/useProducts';
 import { analytics } from '@/lib/analytics';
 import { ProductCreate } from '@/services/productService';
 import { useRouter } from 'next/navigation';

@@ -99,6 +99,33 @@ try {
 - Database-first field alignment (check Prisma schema first)
 - Centralized query keys from `src/features/*/keys.ts`
 
+## ✅ **SCHEMA & VALIDATION STANDARDS**
+
+**Single Source of Truth (MANDATORY)**
+
+- All Zod schemas for proposals, customers, and products live in
+  `src/features/[domain]/schemas.ts`.
+- API routes must import schemas from feature modules; avoid route‑local inline
+  `z.object` definitions in these domains.
+- Exception: highly route‑specific shapes (e.g., raw SQL payloads or Prisma native enums)
+  may remain local but must include a comment explaining why.
+
+**Acceptance Checks**
+
+- [ ] No inline `z.object` in `src/app/api/{proposals,customers,products}` for shared shapes
+- [ ] Centralized request/response schemas exported from feature `schemas.ts`
+- [ ] Response objects validated where appropriate before returning
+
+**Consistency Rules**
+
+- Prefer Prisma `select` DTOs that match Zod output exactly.
+- Name schemas descriptively: `XxxQuerySchema`, `XxxCreateSchema`,
+  `XxxUpdateSchema`, `BulkDeleteSchema`, `VersionsQuerySchema`.
+- Coerce/transform at the edges (string→number, dates→ISO strings) inside schemas.
+
+> Rationale: Centralizing schemas eliminates drift, improves type safety, and
+> keeps UI and API contracts in lockstep.
+
 ## 🎯 **FEATURE ORGANIZATION** {#feature-organization}
 
 **Feature-Based Structure (MANDATORY)**
@@ -345,6 +372,44 @@ return useInfiniteQuery({
   getNextPageParam: (lastPage) => lastPage.nextCursor,
 });
 ```
+
+## 🧩 **CODE USABILITY (NEW COMPONENTS)**
+
+**Design for Reuse and Clarity (MANDATORY)**
+
+- Props API:
+  - Keep prop names explicit and consistent across the design system
+  - Use narrow, well‑typed props; avoid broad `any` or ambiguous objects
+  - Provide sensible defaults; mark truly required props
+- Composition:
+  - Prefer composition over inheritance
+  - Expose building blocks (subcomponents or render props) when useful
+- Interop & Styling:
+  - Support `className` pass‑through and merge safely
+  - Forward refs with `React.forwardRef` for focus/measure/accessibility
+  - Avoid leaking internal DOM structure through fragile selectors
+- Accessibility:
+  - Keyboard navigation and ARIA roles/labels where applicable
+  - Meet WCAG 2.1 AA for focus states and contrast
+- Performance:
+  - Avoid creating new object/array literals in render paths
+  - Memoize expensive computations; stabilize callbacks
+  - Defer heavy logic until needed (lazy mount where applicable)
+- Documentation & Tests:
+  - Add concise JSDoc on components and props
+  - Include usage examples (or Storybook stories if available)
+  - Add basic unit/integration tests for critical behavior
+
+**New Component Checklist**
+
+- [ ] Clear, minimal props API with defaults
+- [ ] `className` passthrough and `forwardRef` implemented
+- [ ] A11y coverage: roles, labels, keyboard, focus states
+- [ ] Stable renders (no unnecessary re‑renders)
+- [ ] Examples/tests added alongside the component
+
+> Rationale: Usability standards ensure new components are easy to adopt,
+> accessible, and performant, reducing future rework and onboarding cost.
 
 ## 🎯 **TIPS & TRICKS** {#tips-tricks}
 

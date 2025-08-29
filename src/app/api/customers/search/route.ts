@@ -17,6 +17,7 @@ import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { CustomerSearchApiSchema } from '@/features/customers/schemas';
 import { z } from 'zod';
 
 /**
@@ -28,13 +29,7 @@ import { z } from 'zod';
  * - Test Cases: TC-H4-006, TC-H6-002
  */
 
-const CustomerSearchSchema = z.object({
-  q: z.string().min(1, 'Search query is required'),
-  limit: z.coerce.number().min(1).max(50).default(20),
-  industry: z.string().optional(),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']).optional(),
-});
+const CustomerSearchSchema = CustomerSearchApiSchema;
 
 /**
  * GET /api/customers/search - Search customers

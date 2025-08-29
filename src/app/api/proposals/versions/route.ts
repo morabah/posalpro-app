@@ -7,7 +7,7 @@ import { getCache, setCache } from '@/lib/redis';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { ProposalVersionsQuerySchema } from '@/features/proposals/schemas';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -21,12 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     const url = new URL(request.url);
-    const QuerySchema = z.object({
-      limit: z.coerce.number().int().positive().max(200).default(50),
-      cursorCreatedAt: z.string().datetime().optional(),
-      cursorId: z.string().optional(),
-    });
-    const { limit, cursorCreatedAt, cursorId } = QuerySchema.parse({
+    const { limit, cursorCreatedAt, cursorId } = ProposalVersionsQuerySchema.parse({
       limit: url.searchParams.get('limit'),
       cursorCreatedAt: url.searchParams.get('cursorCreatedAt') || undefined,
       cursorId: url.searchParams.get('cursorId') || undefined,

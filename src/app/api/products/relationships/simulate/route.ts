@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ProductRelationshipsSimulateSchema } from '@/features/products/schemas';
 import { z } from 'zod';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
@@ -6,12 +7,8 @@ import { ProductRelationshipEngine } from '@/lib/services/productRelationshipEng
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
-// Request body schema coming from ProductSimulator
-const BodySchema = z.object({
-  skus: z.array(z.string()).min(1, 'At least one SKU is required'),
-  mode: z.enum(['validate', 'simulate']).default('validate'),
-  attributes: z.record(z.any()).optional(),
-});
+// Request body schema coming from ProductSimulator (centralized)
+const BodySchema = ProductRelationshipsSimulateSchema;
 
 // Map engine actions to frontend simulator shape
 function mapEngineToSimulatorShape(

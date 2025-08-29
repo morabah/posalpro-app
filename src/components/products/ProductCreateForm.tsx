@@ -7,7 +7,7 @@ import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormFi
 import { Button } from '@/components/ui/forms/Button';
 import { SearchableDropdown } from '@/components/ui/SearchableDropdown';
 import { useFormValidation } from '@/hooks/useFormValidation';
-import { useCreateProduct, useProductCategories, useProductTags } from '@/hooks/useProducts';
+import { useCreateProduct, useProductCategories, useProductTags } from '@/features/products/hooks/useProducts';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';

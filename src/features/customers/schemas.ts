@@ -339,6 +339,49 @@ export const CustomerCoordinationSchema = z.object({
 });
 
 // ====================
+// API‑Specific Schemas
+// ====================
+
+// Search schema used by /api/customers/search (keeps route param names/values)
+export const CustomerSearchApiSchema = z.object({
+  q: z.string().min(1, 'Search query is required'),
+  limit: z.coerce.number().min(1).max(50).default(20),
+  industry: z.string().optional(),
+  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']).optional(),
+});
+
+// Bulk delete body schema for customers
+export const CustomerBulkDeleteSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1, 'At least one customer ID is required'),
+});
+
+// Query schema for /api/customers/[id]/proposals
+export const CustomerProposalsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: z
+    .enum([
+      'DRAFT',
+      'IN_REVIEW',
+      'PENDING_APPROVAL',
+      'APPROVED',
+      'REJECTED',
+      'SUBMITTED',
+      'ACCEPTED',
+      'DECLINED',
+    ])
+    .optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  sortBy: z.enum(['title', 'createdAt', 'updatedAt', 'dueDate', 'value', 'status']).default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  includeProducts: z.coerce.boolean().default(false),
+  includeStatistics: z.coerce.boolean().default(true),
+});
+
+// ====================
 // Type Exports
 // ====================
 
@@ -367,3 +410,6 @@ export type CustomerStatus = z.infer<typeof CustomerStatusSchema>;
 export type CustomerTier = z.infer<typeof CustomerTierSchema>;
 export type CustomerIndustry = z.infer<typeof CustomerIndustrySchema>;
 export type CompanySize = z.infer<typeof CompanySizeSchema>;
+export type CustomerSearchApi = z.infer<typeof CustomerSearchApiSchema>;
+export type CustomerBulkDelete = z.infer<typeof CustomerBulkDeleteSchema>;
+export type CustomerProposalsQuery = z.infer<typeof CustomerProposalsQuerySchema>;

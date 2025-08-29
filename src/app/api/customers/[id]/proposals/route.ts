@@ -11,6 +11,7 @@ import prisma from '@/lib/db/prisma';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { CustomerProposalsQuerySchema } from '@/features/customers/schemas';
 import { z } from 'zod';
 
 /**
@@ -25,31 +26,7 @@ import { z } from 'zod';
 /**
  * Validation schema for customer proposals query
  */
-const CustomerProposalsQuerySchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  status: z
-    .enum([
-      'DRAFT',
-      'IN_REVIEW',
-      'PENDING_APPROVAL',
-      'APPROVED',
-      'REJECTED',
-      'SUBMITTED',
-      'ACCEPTED',
-      'DECLINED',
-    ])
-    .optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
-  sortBy: z
-    .enum(['title', 'createdAt', 'updatedAt', 'dueDate', 'value', 'status'])
-    .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  includeProducts: z.coerce.boolean().default(false),
-  includeStatistics: z.coerce.boolean().default(true),
-});
+// Centralized schema imported from feature module
 
 /**
  * GET /api/customers/[id]/proposals - Get customer proposal history

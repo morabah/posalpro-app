@@ -16,6 +16,7 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { SKUValidationSchema } from '@/features/products/schemas';
 import { z } from 'zod';
 
 /**
@@ -25,10 +26,7 @@ import { z } from 'zod';
  * - Hypotheses: H8 (Product Management Efficiency)
  */
 
-const SKUValidationSchema = z.object({
-  sku: z.string().min(1, 'SKU is required').max(50, 'SKU must be 50 characters or less'),
-  excludeId: z.string().optional(), // Exclude current product when updating
-});
+// Centralized SKU validation schema
 
 /**
  * GET /api/products/validate-sku - Validate SKU uniqueness

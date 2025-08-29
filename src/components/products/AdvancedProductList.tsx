@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
 /**
- * PosalPro MVP2 - Advanced Product List Component
- * Hybrid approach: Mixes database-connected products with advanced mock features
+ * EcoChic - Advanced Product List with PDP Features
+ * Sustainable fashion brand product catalog with e-commerce functionality
  * User Story: US-3.2 (License requirement validation)
  * Hypothesis: H8 (Technical Configuration Validation - 50% error reduction)
  */
@@ -19,6 +19,20 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logError } from '@/lib/logger';
 import { useCallback, useMemo, useState } from 'react';
 
+interface AdvancedProductListProps {
+  onAddProduct?: () => void;
+  hideBreadcrumbs?: boolean;
+}
+
+// Sustainable materials icons
+const SUSTAINABLE_BADGES = {
+  organic: { icon: '🌱', label: 'Organic Cotton', color: 'bg-green-100 text-green-800' },
+  recycled: { icon: '♻️', label: 'Recycled Materials', color: 'bg-blue-100 text-blue-800' },
+  fairTrade: { icon: '🤝', label: 'Fair Trade', color: 'bg-purple-100 text-purple-800' },
+  vegan: { icon: '🌿', label: 'Vegan Certified', color: 'bg-emerald-100 text-emerald-800' },
+  carbonNeutral: { icon: '🌍', label: 'Carbon Neutral', color: 'bg-teal-100 text-teal-800' },
+};
+
 // Enhanced filter types
 interface ProductFilters {
   category: string;
@@ -29,9 +43,20 @@ interface ProductFilters {
   searchQuery: string;
 }
 
-// Product card component with advanced features
+// Enhanced product card with PDP features
 function AdvancedProductCard({ product }: { product: HybridProduct }) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const [selectedSize, setSelectedSize] = useState('');
+  const [selectedColor, setSelectedColor] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [cartMessage, setCartMessage] = useState('');
+
+  // Mock product data for PDP features
+  const sizes = product.isMockData ? ['XS', 'S', 'M', 'L', 'XL'] : [];
+  const colors = product.isMockData ? ['Natural Beige', 'Forest Green', 'Earth Brown', 'Sage Gray'] : [];
+  const sustainableFeatures = product.isMockData ? ['organic', 'fairTrade', 'carbonNeutral'] : [];
+  const reviews = product.isMockData ? { count: 24, average: 4.8 } : { count: 0, average: 0 };
 
   const handleViewDetails = useCallback(() => {
     analytics('product_detail_viewed', {
@@ -41,6 +66,43 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
       hypothesis: 'H8',
     });
   }, [product.id, product.isMockData, analytics]);
+
+  const handleAddToCart = useCallback(async () => {
+    if (!selectedSize && sizes.length > 0) {
+      setCartMessage('Please select a size');
+      setTimeout(() => setCartMessage(''), 3000);
+      return;
+    }
+    if (!selectedColor && colors.length > 0) {
+      setCartMessage('Please select a color');
+      setTimeout(() => setCartMessage(''), 3000);
+      return;
+    }
+
+    setIsAddingToCart(true);
+    setCartMessage('Adding to cart...');
+
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    analytics('product_added_to_cart', {
+      productId: product.id,
+      quantity,
+      selectedSize,
+      selectedColor,
+      isMockData: product.isMockData,
+      userStory: 'US-3.2',
+      hypothesis: 'H8',
+    });
+
+    setIsAddingToCart(false);
+    setCartMessage('Added to cart! 🎉');
+    setTimeout(() => setCartMessage(''), 3000);
+  }, [product.id, quantity, selectedSize, selectedColor, sizes.length, colors.length, analytics]);
+
+  const handleQuantityChange = useCallback((delta: number) => {
+    setQuantity(prev => Math.max(1, Math.min(10, prev + delta)));
+  }, []);
 
   const handleEdit = useCallback(() => {
     analytics('product_edit_initiated', {
@@ -52,28 +114,28 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
   }, [product.id, product.isMockData, analytics]);
 
   return (
-    <Card className="group relative overflow-hidden bg-gradient-to-br from-white via-white to-blue-50/30 border-0 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-      {/* Subtle background pattern */}
+    <Card className="group relative overflow-hidden bg-gradient-to-br from-white via-green-50/20 to-emerald-50/30 border border-green-200/40 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+      {/* Sustainable background pattern */}
       <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-400 to-transparent rounded-full -translate-y-8 translate-x-8"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-purple-400 to-transparent rounded-full translate-y-6 -translate-x-6"></div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-green-400 to-transparent rounded-full -translate-y-8 translate-x-8"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-emerald-400 to-transparent rounded-full translate-y-6 -translate-x-6"></div>
       </div>
 
       <div className="relative p-6">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            {/* Product Header with enhanced styling */}
+            {/* Product Header with sustainable branding */}
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                  {product.name.charAt(0).toUpperCase()}
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg">
+                  🌱
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors duration-200">
+                  <h2 className="text-xl font-bold text-gray-900 group-hover:text-emerald-700 transition-colors duration-200">
                     {product.name}
-                  </h3>
+                  </h2>
                   {product.productId && (
-                    <p className="text-xs text-gray-500 font-medium">{product.productId}</p>
+                    <p className="text-sm text-gray-600 font-medium">{product.productId}</p>
                   )}
                 </div>
               </div>
@@ -86,11 +148,11 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                 )}
                 {product.visibilitySettings?.featured && (
                   <Badge className="bg-gradient-to-r from-emerald-400 to-emerald-500 text-white border-0 text-xs font-semibold px-2 py-1">
-                    ⭐ FEATURED
+                    🌟 FEATURED
                   </Badge>
                 )}
                 {product.priceModel && (
-                  <Badge className="bg-gradient-to-r from-indigo-400 to-indigo-500 text-white border-0 text-xs font-semibold px-2 py-1">
+                  <Badge className="bg-gradient-to-r from-teal-400 to-teal-500 text-white border-0 text-xs font-semibold px-2 py-1">
                     {product.priceModel}
                   </Badge>
                 )}
@@ -198,6 +260,114 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                 </div>
               </div>
             )}
+
+            {/* Sustainable Materials Badges */}
+            {sustainableFeatures.length > 0 && (
+              <div className="mb-3">
+                <span className="text-xs text-gray-500 mb-2 block">Sustainable Features:</span>
+                <div className="flex flex-wrap gap-2">
+                  {sustainableFeatures.map(feature => {
+                    const badge = SUSTAINABLE_BADGES[feature as keyof typeof SUSTAINABLE_BADGES];
+                    return (
+                      <Badge key={feature} className={`${badge.color} text-xs font-semibold px-2 py-1 border-0`}>
+                        <span className="mr-1">{badge.icon}</span>
+                        {badge.label}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Customer Reviews */}
+            {reviews.count > 0 && (
+              <div className="mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <span key={i} className={`text-xs ${i < Math.floor(reviews.average) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                        ⭐
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-600 font-medium">
+                    {reviews.average} ({reviews.count} reviews)
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* PDP Features - Size and Color Selection */}
+            {product.isMockData && (sizes.length > 0 || colors.length > 0) && (
+              <div className="mb-4 space-y-3">
+                <h4 className="text-sm font-semibold text-gray-900">Select Options</h4>
+
+                {/* Size Selection */}
+                {sizes.length > 0 && (
+                  <div>
+                    <label className="text-xs text-gray-600 mb-2 block">Size</label>
+                    <select
+                      value={selectedSize}
+                      onChange={(e) => setSelectedSize(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                    >
+                      <option value="">Select Size</option>
+                      {sizes.map(size => (
+                        <option key={size} value={size}>{size}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Color Selection */}
+                {colors.length > 0 && (
+                  <div>
+                    <label className="text-xs text-gray-600 mb-2 block">Color</label>
+                    <select
+                      value={selectedColor}
+                      onChange={(e) => setSelectedColor(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                    >
+                      <option value="">Select Color</option>
+                      {colors.map(color => (
+                        <option key={color} value={color}>{color}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quantity Selector */}
+            {product.isMockData && (
+              <div className="mb-4">
+                <label className="text-xs text-gray-600 mb-2 block">Quantity</label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleQuantityChange(-1)}
+                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-sm font-medium transition-colors"
+                    disabled={quantity <= 1}
+                  >
+                    -
+                  </button>
+                  <span className="text-sm font-medium min-w-[2rem] text-center">{quantity}</span>
+                  <button
+                    onClick={() => handleQuantityChange(1)}
+                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-sm font-medium transition-colors"
+                    disabled={quantity >= 10}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Cart Message */}
+            {cartMessage && (
+              <div className="mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <p className="text-xs text-emerald-700 font-medium">{cartMessage}</p>
+              </div>
+            )}
           </div>
 
           {/* Enhanced Price and Actions */}
@@ -224,23 +394,48 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleViewDetails}
-                className="text-xs px-3 py-1.5 border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
-              >
-                <span className="flex items-center gap-1">👁️ View</span>
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleEdit}
-                className="text-xs px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-sm"
-              >
-                <span className="flex items-center gap-1">✏️ Edit</span>
-              </Button>
+            <div className="flex flex-col gap-2 w-full">
+              {/* Add to Cart Button for Mock Products */}
+              {product.isMockData && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleAddToCart}
+                  disabled={isAddingToCart}
+                  className="text-sm px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isAddingToCart ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Adding...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      🛒 Add to Cart
+                    </span>
+                  )}
+                </Button>
+              )}
+
+              {/* View and Edit Buttons */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleViewDetails}
+                  className="text-xs px-3 py-1.5 border-gray-300 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 flex-1"
+                >
+                  <span className="flex items-center gap-1">👁️ View</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEdit}
+                  className="text-xs px-3 py-1.5 border-gray-300 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 flex-1"
+                >
+                  <span className="flex items-center gap-1">✏️ Edit</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -450,7 +645,7 @@ function AdvancedFilterPanel({
 }
 
 // Main component
-export default function AdvancedProductList() {
+export default function AdvancedProductList({ onAddProduct, hideBreadcrumbs }: AdvancedProductListProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Use hybrid products hook
@@ -535,38 +730,67 @@ export default function AdvancedProductList() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+    <div
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-emerald-50/20 motion-reduce:transition-none motion-reduce:animate-none"
+      aria-busy={isLoading}
+    >
       <div className="max-w-7xl mx-auto p-8 space-y-8">
+        {/* Breadcrumb Navigation (optional if page already renders breadcrumbs) */}
+        {!hideBreadcrumbs && (
+          <nav className="flex items-center space-x-2 text-sm text-gray-600 mb-4" aria-label="Breadcrumb">
+            <a
+              href="/"
+              className="hover:text-emerald-600 transition-colors duration-200 flex items-center gap-1"
+            >
+              <span className="text-emerald-500">🏠</span>
+              Home
+            </a>
+            <span className="text-gray-400">/</span>
+            <a
+              href="/products"
+              className="hover:text-emerald-600 transition-colors duration-200 flex items-center gap-1"
+            >
+              <span className="text-emerald-500">🛍️</span>
+              Products
+            </a>
+            <span className="text-gray-400">/</span>
+            <span className="text-gray-900 font-medium flex items-center gap-1">
+              <span className="text-emerald-500">🌱</span>
+              EcoChic Collection
+            </span>
+          </nav>
+        )}
+
         {/* Enhanced Header */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-white via-blue-50/50 to-indigo-50/50 rounded-2xl shadow-lg border border-blue-200/50">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-blue-200/20 to-transparent rounded-full -translate-y-32 translate-x-32"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-indigo-200/20 to-transparent rounded-full translate-y-24 -translate-x-24"></div>
+        <div className="relative overflow-hidden bg-gradient-to-r from-white via-emerald-50/50 to-green-50/50 rounded-2xl shadow-lg border border-emerald-200/50">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-emerald-200/20 to-transparent rounded-full -translate-y-32 translate-x-32"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-green-200/20 to-transparent rounded-full translate-y-24 -translate-x-24"></div>
 
           <div className="relative p-8">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span className="text-white text-2xl">🚀</span>
+                  <div className="w-14 h-14 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-white text-2xl">🌱</span>
                   </div>
                   <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">
-                      Advanced Product Management
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-emerald-900 bg-clip-text text-transparent">
+                      EcoChic Sustainable Collection
                     </h1>
                     <p className="text-gray-600 mt-2 text-lg">
-                      Hybrid Ecosystem: Real Database + Cutting-Edge Demo Features
+                      Conscious Fashion for a Better Tomorrow • Premium Quality, Ethical Sourcing
                     </p>
                   </div>
                 </div>
 
                 {/* Enhanced Stats */}
                 <div className="flex flex-wrap gap-6">
-                  <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-blue-200/50 shadow-sm">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                  <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-emerald-200/50 shadow-sm">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
                     <div>
-                      <div className="text-2xl font-bold text-blue-700">{totalCount}</div>
+                      <div className="text-2xl font-bold text-emerald-700">{totalCount}</div>
                       <div className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                        Total Products
+                        Sustainable Items
                       </div>
                     </div>
                   </div>
@@ -575,16 +799,16 @@ export default function AdvancedProductList() {
                     <div>
                       <div className="text-2xl font-bold text-green-700">{realDataCount}</div>
                       <div className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                        Real Products
+                        Ready to Ship
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-purple-200/50 shadow-sm">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
+                  <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-teal-200/50 shadow-sm">
+                    <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse"></div>
                     <div>
-                      <div className="text-2xl font-bold text-purple-700">{mockDataCount}</div>
+                      <div className="text-2xl font-bold text-teal-700">{mockDataCount}</div>
                       <div className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                        Demo Products
+                        Eco Preview
                       </div>
                     </div>
                   </div>
@@ -595,21 +819,21 @@ export default function AdvancedProductList() {
                 <Button
                   variant="outline"
                   onClick={handleBulkDelete}
-                  className="px-6 py-3 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 shadow-sm"
+                  className="px-6 py-3 border-2 border-emerald-300 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 shadow-sm"
                 >
                   <span className="flex items-center gap-2">
-                    <span>⚙️</span>
-                    <span className="font-medium">Bulk Actions</span>
+                    <span>🌱</span>
+                    <span className="font-medium">Sustainability Tools</span>
                   </span>
                 </Button>
                 <Button
                   variant="primary"
-                  onClick={handleCreateProduct}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  onClick={onAddProduct ? onAddProduct : handleCreateProduct}
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
                   <span className="flex items-center gap-2">
-                    <span>✨</span>
-                    <span className="font-semibold">Create Product</span>
+                    <span>🌿</span>
+                    <span className="font-semibold">Add Eco Product</span>
                   </span>
                 </Button>
               </div>

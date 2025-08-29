@@ -8,39 +8,14 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { z } from 'zod';
+import {
+  ProposalWorkflowBulkUpdateSchema,
+  ProposalWorkflowStatusUpdateSchema,
+} from '@/features/proposals/schemas';
 
-// Validation schemas for workflow operations
-const WorkflowStatusUpdateSchema = z.object({
-  proposalId: z.string().min(1, 'Proposal ID is required'),
-  status: z.enum([
-    'DRAFT',
-    'SUBMITTED',
-    'IN_REVIEW',
-    'PENDING_APPROVAL',
-    'APPROVED',
-    'REJECTED',
-    'ACCEPTED',
-    'DECLINED',
-  ]),
-  comment: z.string().optional(),
-  assignedTo: z.string().optional(),
-});
-
-const WorkflowBulkUpdateSchema = z.object({
-  proposalIds: z.array(z.string().min(1)).min(1).max(50),
-  status: z.enum([
-    'DRAFT',
-    'SUBMITTED',
-    'IN_REVIEW',
-    'PENDING_APPROVAL',
-    'APPROVED',
-    'REJECTED',
-    'ACCEPTED',
-    'DECLINED',
-  ]),
-  comment: z.string().optional(),
-});
+// Validation schemas for workflow operations (centralized)
+const WorkflowStatusUpdateSchema = ProposalWorkflowStatusUpdateSchema;
+const WorkflowBulkUpdateSchema = ProposalWorkflowBulkUpdateSchema;
 
 // POST /api/proposals/workflow - Update proposal workflow status
 export const POST = createRoute(
