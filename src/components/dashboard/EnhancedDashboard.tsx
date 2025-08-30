@@ -19,7 +19,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useDashboardData } from '@/hooks/dashboard/useDashboardData';
+import { useDashboardData } from '@/features/dashboard/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import { useDashboardFilters, useDashboardUIActions } from '@/lib/store/dashboardStore';

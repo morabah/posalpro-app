@@ -2,9 +2,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useDashboardAnalytics } from '@/hooks/useDashboard';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { useDashboardAnalytics } from '@/features/dashboard/hooks';
 import { useEffect, useMemo, useState } from 'react';
 
 // Comprehensive interfaces for DashboardChartsClient

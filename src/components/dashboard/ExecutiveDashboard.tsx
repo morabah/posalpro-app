@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useExecutiveDashboard } from '@/hooks/useDashboard';
+import { useExecutiveDashboard } from '@/features/dashboard/hooks';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';

@@ -104,8 +104,77 @@ export const ExecutiveDashboardQuerySchema = z.object({
     .optional(),
 });
 
+// Executive Dashboard Response Schema - Compatible with existing types
+export const ExecutiveDashboardResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    metrics: z.object({
+      // Revenue Performance
+      totalRevenue: z.number().nonnegative(),
+      monthlyRevenue: z.number().nonnegative(),
+      quarterlyGrowth: z.number(),
+      yearlyGrowth: z.number(),
+      revenueTarget: z.number().nonnegative(),
+      revenueTargetProgress: z.number().min(0).max(100),
+
+      // Sales Performance
+      totalProposals: z.number().int().nonnegative(),
+      wonDeals: z.number().int().nonnegative(),
+      lostDeals: z.number().int().nonnegative(),
+      winRate: z.number().min(0).max(100),
+      avgDealSize: z.number().nonnegative(),
+      avgSalesCycle: z.number().nonnegative(),
+
+      // Pipeline Health
+      pipelineValue: z.number().nonnegative(),
+      qualifiedLeads: z.number().int().nonnegative(),
+      hotProspects: z.number().int().nonnegative(),
+      closingThisMonth: z.number().int().nonnegative(),
+      atRiskDeals: z.number().int().nonnegative(),
+
+      // Team Performance
+      topPerformer: z.string(),
+      teamSize: z.number().int().nonnegative(),
+      avgPerformance: z.number().min(0).max(100),
+
+      // Forecasting
+      projectedRevenue: z.number().nonnegative(),
+      confidenceLevel: z.number().min(0).max(100),
+    }).nullable(),
+    revenueChart: z.array(
+      z.object({
+        period: z.string(),
+        actual: z.number().nonnegative(),
+        target: z.number().nonnegative(),
+        forecast: z.number().nonnegative().optional(),
+      })
+    ),
+    teamPerformance: z.array(
+      z.object({
+        name: z.string(),
+        revenue: z.number().nonnegative(),
+        deals: z.number().int().nonnegative(),
+        winRate: z.number().min(0).max(100),
+        target: z.number().nonnegative(),
+        performance: z.number().min(0).max(100),
+      })
+    ),
+    pipelineStages: z.array(
+      z.object({
+        stage: z.string(),
+        count: z.number().int().nonnegative(),
+        value: z.number().nonnegative(),
+        velocity: z.number().nonnegative(),
+        conversionRate: z.number().min(0).max(100),
+        avgTime: z.number().nonnegative(),
+      })
+    ),
+  }),
+});
+
 // Types
 export type DashboardStats = z.infer<typeof DashboardStatsSchema>;
 export type EnhancedDashboardStats = z.infer<typeof EnhancedDashboardStatsSchema>;
 export type DashboardStatsQuery = z.infer<typeof DashboardStatsQuerySchema>;
 export type ExecutiveDashboardQuery = z.infer<typeof ExecutiveDashboardQuerySchema>;
+export type ExecutiveDashboardResponse = z.infer<typeof ExecutiveDashboardResponseSchema>;

@@ -7,7 +7,7 @@
 'use client';
 
 import { Card } from '@/components/ui/Card';
-import { useExecutiveDashboard } from '@/hooks/useDashboard';
+import { useExecutiveDashboard } from '@/features/dashboard/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import {

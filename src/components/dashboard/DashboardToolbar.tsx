@@ -6,7 +6,7 @@ import {
   type DashboardUIState,
   type TimeRange,
 } from '@/lib/store/dashboardStore';
-import { useDashboardData } from '@/hooks/dashboard/useDashboardData';
+import { useDashboardData } from '@/features/dashboard/hooks';
 import { useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
