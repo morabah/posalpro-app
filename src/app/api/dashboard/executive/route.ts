@@ -1,69 +1,17 @@
+import { ExecutiveDashboardQuerySchema } from '@/features/dashboard/schemas';
 import { createRoute } from '@/lib/api/route';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { prisma } from '@/lib/prisma';
-import { ExecutiveDashboardQuerySchema } from '@/features/dashboard/schemas';
 import { NextResponse } from 'next/server';
 
-// TypeScript interfaces for executive dashboard data
-export interface ExecutiveMetrics {
-  // Revenue Performance
-  totalRevenue: number;
-  monthlyRevenue: number;
-  quarterlyGrowth: number;
-  yearlyGrowth: number;
-  revenueTarget: number;
-  revenueTargetProgress: number;
-
-  // Sales Performance
-  totalProposals: number;
-  wonDeals: number;
-  lostDeals: number;
-  winRate: number;
-  avgDealSize: number;
-  avgSalesCycle: number;
-
-  // Pipeline Health
-  pipelineValue: number;
-  qualifiedLeads: number;
-  hotProspects: number;
-  closingThisMonth: number;
-  atRiskDeals: number;
-
-  // Team Performance
-  topPerformer: string;
-  teamSize: number;
-  avgPerformance: number;
-
-  // Forecasting
-  projectedRevenue: number;
-  confidenceLevel: number;
-}
-
-export interface RevenueChart {
-  period: string;
-  actual: number;
-  target: number;
-  forecast?: number;
-}
-
-export interface TeamPerformance {
-  name: string;
-  revenue: number;
-  deals: number;
-  winRate: number;
-  target: number;
-  performance: number;
-}
-
-export interface PipelineStage {
-  stage: string;
-  count: number;
-  value: number;
-  velocity: number;
-  conversionRate: number;
-  avgTime: number;
-}
+// Import centralized types from dashboard schemas (CORE_REQUIREMENTS.md compliance)
+import type {
+  ExecutiveMetrics,
+  RevenueChart,
+  TeamPerformance,
+  PipelineStage,
+} from '@/features/dashboard/schemas';
 
 export const GET = createRoute(
   {
@@ -80,111 +28,111 @@ export const GET = createRoute(
         includeForecasts: (query?.includeForecasts as unknown as boolean) ?? true,
       };
 
-    // Calculate date ranges based on timeframe
-    const now = new Date();
-    const startDate = new Date();
-    switch (queryParams.timeframe) {
-      case '1M':
-        startDate.setMonth(now.getMonth() - 1);
-        break;
-      case '3M':
-        startDate.setMonth(now.getMonth() - 3);
-        break;
-      case '6M':
-        startDate.setMonth(now.getMonth() - 6);
-        break;
-      case '1Y':
-        startDate.setFullYear(now.getFullYear() - 1);
-        break;
-    }
+      // Calculate date ranges based on timeframe
+      const now = new Date();
+      const startDate = new Date();
+      switch (queryParams.timeframe) {
+        case '1M':
+          startDate.setMonth(now.getMonth() - 1);
+          break;
+        case '3M':
+          startDate.setMonth(now.getMonth() - 3);
+          break;
+        case '6M':
+          startDate.setMonth(now.getMonth() - 6);
+          break;
+        case '1Y':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+      }
 
-    // Single transaction for consistent data - following CORE_REQUIREMENTS
-    const [proposalStats, revenueData, teamMembers, pipelineData, revenueHistory] =
-      await prisma.$transaction([
-        // Proposal statistics with selective hydration
-        prisma.proposal.groupBy({
-          by: ['status'],
-          _count: {
-            id: true,
-          },
-          _avg: {
-            totalValue: true,
-          },
-          _sum: {
-            totalValue: true,
-          },
-          where: {
-            createdAt: {
-              gte: startDate,
-            },
-          },
-          orderBy: {
-            status: 'asc',
-          },
-        }),
-
-        // Monthly revenue aggregation
-        prisma.proposal.groupBy({
-          by: ['status'],
-          _sum: {
-            totalValue: true,
-          },
-          _count: {
-            id: true,
-          },
-          where: {
-            status: 'ACCEPTED',
-            updatedAt: {
-              gte: startDate,
-            },
-          },
-          orderBy: {
-            status: 'asc',
-          },
-        }),
-
-        // Team members with proposal counts
-        prisma.user.findMany({
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            department: true,
+      // Single transaction for consistent data - following CORE_REQUIREMENTS
+      const [proposalStats, revenueData, teamMembers, pipelineData, revenueHistory] =
+        await prisma.$transaction([
+          // Proposal statistics with selective hydration
+          prisma.proposal.groupBy({
+            by: ['status'],
             _count: {
-              select: {
-                createdProposals: true,
+              id: true,
+            },
+            _avg: {
+              totalValue: true,
+            },
+            _sum: {
+              totalValue: true,
+            },
+            where: {
+              createdAt: {
+                gte: startDate,
               },
             },
-          },
-          where: {
-            status: 'ACTIVE',
-          },
-        }),
-
-        // Pipeline stages data
-        prisma.proposal.groupBy({
-          by: ['status'],
-          _count: {
-            id: true,
-          },
-          _sum: {
-            totalValue: true,
-          },
-          where: {
-            status: {
-              in: ['DRAFT', 'IN_REVIEW', 'SUBMITTED', 'PENDING_APPROVAL', 'ACCEPTED', 'DECLINED'],
+            orderBy: {
+              status: 'asc',
             },
-            createdAt: {
-              gte: startDate,
-            },
-          },
-          orderBy: {
-            status: 'asc',
-          },
-        }),
+          }),
 
-        // Historical revenue data for charts (PostgreSQL-compatible)
-        prisma.$queryRaw<Array<{ month: string; revenue: number; count: number }>>`
+          // Monthly revenue aggregation
+          prisma.proposal.groupBy({
+            by: ['status'],
+            _sum: {
+              totalValue: true,
+            },
+            _count: {
+              id: true,
+            },
+            where: {
+              status: 'ACCEPTED',
+              updatedAt: {
+                gte: startDate,
+              },
+            },
+            orderBy: {
+              status: 'asc',
+            },
+          }),
+
+          // Team members with proposal counts
+          prisma.user.findMany({
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              department: true,
+              _count: {
+                select: {
+                  createdProposals: true,
+                },
+              },
+            },
+            where: {
+              status: 'ACTIVE',
+            },
+          }),
+
+          // Pipeline stages data
+          prisma.proposal.groupBy({
+            by: ['status'],
+            _count: {
+              id: true,
+            },
+            _sum: {
+              totalValue: true,
+            },
+            where: {
+              status: {
+                in: ['DRAFT', 'IN_REVIEW', 'SUBMITTED', 'PENDING_APPROVAL', 'ACCEPTED', 'DECLINED'],
+              },
+              createdAt: {
+                gte: startDate,
+              },
+            },
+            orderBy: {
+              status: 'asc',
+            },
+          }),
+
+          // Historical revenue data for charts (PostgreSQL-compatible)
+          prisma.$queryRaw<Array<{ month: string; revenue: number; count: number }>>`
         WITH RECURSIVE months AS (
           SELECT date_trunc('month', ${startDate}) AS month_date
           UNION ALL
@@ -210,95 +158,97 @@ export const GET = createRoute(
         LEFT JOIN revenue_data rd ON m.month_date = rd.month_date
         ORDER BY m.month_date ASC
       `,
-      ]);
+        ]);
 
-    // Transform data with defensive programming and fallbacks
-    const transformedMetrics: ExecutiveMetrics = {
-      totalRevenue: revenueData.reduce(
-        (sum: number, item: any) => sum + (item._sum.totalValue || 0),
-        0
-      ) || 2120000, // Sample total revenue if no data
-      monthlyRevenue: getCurrentMonthRevenue(revenueHistory) || 285000, // Sample monthly revenue
-      quarterlyGrowth: calculateGrowthRate(revenueHistory, 'quarterly') || 12.5, // Sample growth
-      yearlyGrowth: calculateGrowthRate(revenueHistory, 'yearly') || 18.7, // Sample yearly growth
-      revenueTarget: 300000, // This would come from company settings
-      revenueTargetProgress: 0,
+      // Transform data with defensive programming and fallbacks
+      const transformedMetrics: ExecutiveMetrics = {
+        totalRevenue:
+          revenueData.reduce((sum: number, item: any) => sum + (item._sum.totalValue || 0), 0) ||
+          2120000, // Sample total revenue if no data
+        monthlyRevenue: getCurrentMonthRevenue(revenueHistory) || 285000, // Sample monthly revenue
+        quarterlyGrowth: calculateGrowthRate(revenueHistory, 'quarterly') || 12.5, // Sample growth
+        yearlyGrowth: calculateGrowthRate(revenueHistory, 'yearly') || 18.7, // Sample yearly growth
+        revenueTarget: 300000, // This would come from company settings
+        revenueTargetProgress: 0,
 
-      totalProposals: proposalStats.reduce((sum: number, item: any) => sum + item._count.id, 0) || 63, // Sample total proposals
-      wonDeals:
-        (proposalStats.find((stat: any) => stat.status === 'ACCEPTED')?._count as any)?.id || 22, // Sample won deals
-      lostDeals:
-        (proposalStats.find((stat: any) => stat.status === 'DECLINED')?._count as any)?.id || 8, // Sample lost deals
-      winRate: calculateWinRate(proposalStats) || 73.3, // Sample win rate
-      avgDealSize:
-        (proposalStats.find((stat: any) => stat.status === 'ACCEPTED')?._avg as any)?.totalValue ||
-        40500, // Sample average deal size
-      avgSalesCycle: 28, // This would be calculated from proposal lifecycle data
+        totalProposals:
+          proposalStats.reduce((sum: number, item: any) => sum + item._count.id, 0) || 63, // Sample total proposals
+        wonDeals:
+          (proposalStats.find((stat: any) => stat.status === 'ACCEPTED')?._count as any)?.id || 22, // Sample won deals
+        lostDeals:
+          (proposalStats.find((stat: any) => stat.status === 'DECLINED')?._count as any)?.id || 8, // Sample lost deals
+        winRate: calculateWinRate(proposalStats) || 73.3, // Sample win rate
+        avgDealSize:
+          (proposalStats.find((stat: any) => stat.status === 'ACCEPTED')?._avg as any)
+            ?.totalValue || 40500, // Sample average deal size
+        avgSalesCycle: 28, // This would be calculated from proposal lifecycle data
 
-      pipelineValue: pipelineData
-        .filter((stage: any) => !['ACCEPTED', 'DECLINED'].includes(stage.status))
-        .reduce((sum: number, stage: any) => sum + ((stage._sum as any)?.totalValue || 0), 0) || 1230000, // Sample pipeline value
-      qualifiedLeads:
-        (pipelineData.find((stage: any) => stage.status === 'IN_REVIEW')?._count as any)?.id || 8, // Sample qualified leads
-      hotProspects:
-        (pipelineData.find((stage: any) => stage.status === 'PENDING_APPROVAL')?._count as any)
-          ?.id || 6, // Sample hot prospects
-      closingThisMonth: getClosingThisMonth(pipelineData) || 4, // Sample closing this month
-      atRiskDeals: 0, // Would be calculated based on overdue proposals
+        pipelineValue:
+          pipelineData
+            .filter((stage: any) => !['ACCEPTED', 'DECLINED'].includes(stage.status))
+            .reduce((sum: number, stage: any) => sum + ((stage._sum as any)?.totalValue || 0), 0) ||
+          1230000, // Sample pipeline value
+        qualifiedLeads:
+          (pipelineData.find((stage: any) => stage.status === 'IN_REVIEW')?._count as any)?.id || 8, // Sample qualified leads
+        hotProspects:
+          (pipelineData.find((stage: any) => stage.status === 'PENDING_APPROVAL')?._count as any)
+            ?.id || 6, // Sample hot prospects
+        closingThisMonth: getClosingThisMonth(pipelineData) || 4, // Sample closing this month
+        atRiskDeals: 0, // Would be calculated based on overdue proposals
 
-      topPerformer: getTopPerformer(teamMembers) || 'Michael Chen', // Sample top performer
-      teamSize: teamMembers.length || 5, // Sample team size
-      avgPerformance: calculateAvgTeamPerformance(teamMembers) || 92.3, // Sample average performance
+        topPerformer: getTopPerformer(teamMembers) || 'Michael Chen', // Sample top performer
+        teamSize: teamMembers.length || 5, // Sample team size
+        avgPerformance: calculateAvgTeamPerformance(teamMembers) || 92.3, // Sample average performance
 
-      projectedRevenue: queryParams.includeForecasts ? projectRevenue(revenueHistory) : 0,
-      confidenceLevel: queryParams.includeForecasts ? 78 : 0,
-    };
+        projectedRevenue: queryParams.includeForecasts ? projectRevenue(revenueHistory) : 0,
+        confidenceLevel: queryParams.includeForecasts ? 78 : 0,
+      };
 
-    // Calculate target progress
-    transformedMetrics.revenueTargetProgress =
-      transformedMetrics.revenueTarget > 0
-        ? (transformedMetrics.monthlyRevenue / transformedMetrics.revenueTarget) * 100
-        : 0;
+      // Calculate target progress
+      transformedMetrics.revenueTargetProgress =
+        transformedMetrics.revenueTarget > 0
+          ? (transformedMetrics.monthlyRevenue / transformedMetrics.revenueTarget) * 100
+          : 0;
 
-    // Transform revenue history for charts
-    const chartData: RevenueChart[] = transformRevenueHistory(
-      revenueHistory,
-      queryParams.includeForecasts
-    );
+      // Transform revenue history for charts
+      const chartData: RevenueChart[] = transformRevenueHistory(
+        revenueHistory,
+        queryParams.includeForecasts
+      );
 
-    // Transform team data
-    const teamData: TeamPerformance[] = transformTeamData(teamMembers, revenueHistory);
+      // Transform team data
+      const teamData: TeamPerformance[] = transformTeamData(teamMembers, revenueHistory);
 
-    // Transform pipeline data
-    const pipelineStages: PipelineStage[] = transformPipelineData(pipelineData);
+      // Transform pipeline data
+      const pipelineStages: PipelineStage[] = transformPipelineData(pipelineData);
 
-    const response = {
-      success: true,
-      data: {
-        metrics: transformedMetrics,
-        revenueChart: chartData,
-        teamPerformance: teamData,
-        pipelineStages: pipelineStages,
-        lastUpdated: new Date().toISOString(),
-        timeframe: queryParams.timeframe,
-      },
-      meta: {
-        requestId: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-      },
-    };
+      const response = {
+        success: true,
+        data: {
+          metrics: transformedMetrics,
+          revenueChart: chartData,
+          teamPerformance: teamData,
+          pipelineStages: pipelineStages,
+          lastUpdated: new Date().toISOString(),
+          timeframe: queryParams.timeframe,
+        },
+        meta: {
+          requestId: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+        },
+      };
 
-    const res = NextResponse.json(response, {
-      status: 200,
-      headers: {
-        'Cache-Control': 'public, max-age=60, s-maxage=180', // Short TTL caching per CORE_REQUIREMENTS
-      },
-    });
-    // Additional security headers
-    res.headers.set('Content-Type', 'application/json; charset=utf-8');
-    res.headers.set('X-Content-Type-Options', 'nosniff');
-    res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-    return res;
+      const res = NextResponse.json(response, {
+        status: 200,
+        headers: {
+          'Cache-Control': 'public, max-age=60, s-maxage=180', // Short TTL caching per CORE_REQUIREMENTS
+        },
+      });
+      // Additional security headers
+      res.headers.set('Content-Type', 'application/json; charset=utf-8');
+      res.headers.set('X-Content-Type-Options', 'nosniff');
+      res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      return res;
     } catch (error) {
       const standardError = errorHandlingService.processError(
         error,
@@ -485,11 +435,46 @@ function transformTeamData(
   // If no real team data is available, generate sample data
   if (teamMembers.length === 0) {
     const sampleTeamMembers = [
-      { name: 'Sarah Johnson', revenue: 285000, deals: 8, winRate: 87.5, target: 350000, performance: 81.4 },
-      { name: 'Michael Chen', revenue: 320000, deals: 12, winRate: 83.3, target: 320000, performance: 100.0 },
-      { name: 'Emily Rodriguez', revenue: 245000, deals: 6, winRate: 83.3, target: 290000, performance: 84.5 },
-      { name: 'David Thompson', revenue: 198000, deals: 5, winRate: 80.0, target: 260000, performance: 76.2 },
-      { name: 'Lisa Wang', revenue: 275000, deals: 9, winRate: 88.9, target: 230000, performance: 119.6 },
+      {
+        name: 'Sarah Johnson',
+        revenue: 285000,
+        deals: 8,
+        winRate: 87.5,
+        target: 350000,
+        performance: 81.4,
+      },
+      {
+        name: 'Michael Chen',
+        revenue: 320000,
+        deals: 12,
+        winRate: 83.3,
+        target: 320000,
+        performance: 100.0,
+      },
+      {
+        name: 'Emily Rodriguez',
+        revenue: 245000,
+        deals: 6,
+        winRate: 83.3,
+        target: 290000,
+        performance: 84.5,
+      },
+      {
+        name: 'David Thompson',
+        revenue: 198000,
+        deals: 5,
+        winRate: 80.0,
+        target: 260000,
+        performance: 76.2,
+      },
+      {
+        name: 'Lisa Wang',
+        revenue: 275000,
+        deals: 9,
+        winRate: 88.9,
+        target: 230000,
+        performance: 119.6,
+      },
     ];
 
     return sampleTeamMembers;
@@ -515,11 +500,46 @@ function transformPipelineData(pipelineData: any[]): PipelineStage[] {
   // If no real pipeline data is available, generate sample data
   if (pipelineData.length === 0) {
     const samplePipelineStages = [
-      { stage: 'Draft', count: 12, value: 180000, velocity: 5.2, conversionRate: 68.0, avgTime: 7.0 },
-      { stage: 'In Review', count: 8, value: 320000, velocity: -2.1, conversionRate: 52.0, avgTime: 14.0 },
-      { stage: 'Submitted', count: 15, value: 450000, velocity: 8.7, conversionRate: 75.0, avgTime: 21.0 },
-      { stage: 'Pending Approval', count: 6, value: 280000, velocity: 12.3, conversionRate: 85.0, avgTime: 18.0 },
-      { stage: 'Accepted', count: 22, value: 890000, velocity: 15.8, conversionRate: 100.0, avgTime: 12.0 },
+      {
+        stage: 'Draft',
+        count: 12,
+        value: 180000,
+        velocity: 5.2,
+        conversionRate: 68.0,
+        avgTime: 7.0,
+      },
+      {
+        stage: 'In Review',
+        count: 8,
+        value: 320000,
+        velocity: -2.1,
+        conversionRate: 52.0,
+        avgTime: 14.0,
+      },
+      {
+        stage: 'Submitted',
+        count: 15,
+        value: 450000,
+        velocity: 8.7,
+        conversionRate: 75.0,
+        avgTime: 21.0,
+      },
+      {
+        stage: 'Pending Approval',
+        count: 6,
+        value: 280000,
+        velocity: 12.3,
+        conversionRate: 85.0,
+        avgTime: 18.0,
+      },
+      {
+        stage: 'Accepted',
+        count: 22,
+        value: 890000,
+        velocity: 15.8,
+        conversionRate: 100.0,
+        avgTime: 12.0,
+      },
     ];
 
     return samplePipelineStages;
