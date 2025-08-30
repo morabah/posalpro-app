@@ -108,39 +108,41 @@ export const ExecutiveDashboardQuerySchema = z.object({
 export const ExecutiveDashboardResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    metrics: z.object({
-      // Revenue Performance
-      totalRevenue: z.number().nonnegative(),
-      monthlyRevenue: z.number().nonnegative(),
-      quarterlyGrowth: z.number(),
-      yearlyGrowth: z.number(),
-      revenueTarget: z.number().nonnegative(),
-      revenueTargetProgress: z.number().min(0).max(100),
+    metrics: z
+      .object({
+        // Revenue Performance
+        totalRevenue: z.number().nonnegative(),
+        monthlyRevenue: z.number().nonnegative(),
+        quarterlyGrowth: z.number(),
+        yearlyGrowth: z.number(),
+        revenueTarget: z.number().nonnegative(),
+        revenueTargetProgress: z.number().min(0).max(100),
 
-      // Sales Performance
-      totalProposals: z.number().int().nonnegative(),
-      wonDeals: z.number().int().nonnegative(),
-      lostDeals: z.number().int().nonnegative(),
-      winRate: z.number().min(0).max(100),
-      avgDealSize: z.number().nonnegative(),
-      avgSalesCycle: z.number().nonnegative(),
+        // Sales Performance
+        totalProposals: z.number().int().nonnegative(),
+        wonDeals: z.number().int().nonnegative(),
+        lostDeals: z.number().int().nonnegative(),
+        winRate: z.number().min(0).max(100),
+        avgDealSize: z.number().nonnegative(),
+        avgSalesCycle: z.number().nonnegative(),
 
-      // Pipeline Health
-      pipelineValue: z.number().nonnegative(),
-      qualifiedLeads: z.number().int().nonnegative(),
-      hotProspects: z.number().int().nonnegative(),
-      closingThisMonth: z.number().int().nonnegative(),
-      atRiskDeals: z.number().int().nonnegative(),
+        // Pipeline Health
+        pipelineValue: z.number().nonnegative(),
+        qualifiedLeads: z.number().int().nonnegative(),
+        hotProspects: z.number().int().nonnegative(),
+        closingThisMonth: z.number().int().nonnegative(),
+        atRiskDeals: z.number().int().nonnegative(),
 
-      // Team Performance
-      topPerformer: z.string(),
-      teamSize: z.number().int().nonnegative(),
-      avgPerformance: z.number().min(0).max(100),
+        // Team Performance
+        topPerformer: z.string(),
+        teamSize: z.number().int().nonnegative(),
+        avgPerformance: z.number().min(0).max(100),
 
-      // Forecasting
-      projectedRevenue: z.number().nonnegative(),
-      confidenceLevel: z.number().min(0).max(100),
-    }).nullable(),
+        // Forecasting
+        projectedRevenue: z.number().nonnegative(),
+        confidenceLevel: z.number().min(0).max(100),
+      })
+      .nullable(),
     revenueChart: z.array(
       z.object({
         period: z.string(),
@@ -169,6 +171,8 @@ export const ExecutiveDashboardResponseSchema = z.object({
         avgTime: z.number().nonnegative(),
       })
     ),
+    lastUpdated: z.string(),
+    timeframe: z.string(),
   }),
 });
 
@@ -178,6 +182,64 @@ export type EnhancedDashboardStats = z.infer<typeof EnhancedDashboardStatsSchema
 export type DashboardStatsQuery = z.infer<typeof DashboardStatsQuerySchema>;
 export type ExecutiveDashboardQuery = z.infer<typeof ExecutiveDashboardQuerySchema>;
 export type ExecutiveDashboardResponse = z.infer<typeof ExecutiveDashboardResponseSchema>;
+
+// Dashboard Data Interface (moved from hooks to feature)
+export interface DashboardData {
+  proposals: Array<{
+    id: string;
+    title: string;
+    status: string;
+    value: number;
+    customer: string;
+    dueDate: string;
+    priority: 'low' | 'medium' | 'high';
+  }>;
+  activities: Array<{
+    id: string;
+    type: 'proposal' | 'customer' | 'deadline' | 'notification';
+    title: string;
+    description: string;
+    timestamp: string;
+    priority?: 'low' | 'medium' | 'high';
+    userId?: string;
+  }>;
+  team: Array<{
+    id: string;
+    name: string;
+    role: string;
+    avatar?: string;
+    performance: number;
+    proposalsCount: number;
+    revenueGenerated: number;
+  }>;
+  deadlines: Array<{
+    id: string;
+    title: string;
+    description: string;
+    dueDate: string;
+    priority: 'low' | 'medium' | 'high';
+    status: 'pending' | 'overdue' | 'completed';
+    assignedTo?: string;
+  }>;
+  performance: {
+    totalRevenue: number;
+    monthlyGrowth: number;
+    winRate: number;
+    avgDealSize: number;
+    pipelineValue: number;
+    conversionRate: number;
+  };
+  notifications: Array<{
+    id: string;
+    type: 'info' | 'warning' | 'error' | 'success';
+    title: string;
+    message: string;
+    read: boolean;
+    createdAt: string;
+    userId?: string;
+  }>;
+  lastUpdated: string;
+}
 
 // Centralized interface definitions for executive dashboard data
 // CORE_REQUIREMENTS.md: Single source of truth for all types

@@ -13,7 +13,7 @@ migrations with comprehensive error prevention.
 
 ---
 
-## 🔧 **Unified Proposal Store - Zustand v5 Selector Refactor (Latest)
+## 🔧 \*\*Unified Proposal Store - Zustand v5 Selector Refactor (Latest)
 
 ### Migration Goal
 
@@ -31,10 +31,14 @@ Refactor unified proposal store selectors and actions to:
 
 ### Root Causes
 
-1. Selectors exported as plain functions (e.g., `step4Data()`) calling hooks internally → not recognized as hooks by lint rules.
-2. Composite selectors returning new object references each render without shallow equality.
-3. Inline fallbacks in selectors caused new array/object creation on every store change.
-4-fix the hook order bug by moving the inline useMemo out of JSX and into a top-level constant so it's called on every render before any early returns. Then I'll update the component to use that constant.
+1. Selectors exported as plain functions (e.g., `step4Data()`) calling hooks
+   internally → not recognized as hooks by lint rules.
+2. Composite selectors returning new object references each render without
+   shallow equality.
+3. Inline fallbacks in selectors caused new array/object creation on every store
+   change. 4-fix the hook order bug by moving the inline useMemo out of JSX and
+   into a top-level constant so it's called on every render before any early
+   returns. Then I'll update the component to use that constant.
 
 ### Final Working Pattern (`src/lib/store/unifiedProposalStore.ts`)
 
@@ -78,7 +82,8 @@ export const useStep4Products = () =>
   useUnifiedProposalStore(state => state.wizardData.step4?.products || []);
 
 // ✅ Correct: return raw state in selector, handle fallbacks in component
-export const useStep4 = () => useUnifiedProposalStore(state => state.wizardData.step4);
+export const useStep4 = () =>
+  useUnifiedProposalStore(state => state.wizardData.step4);
 
 // In component
 const step4 = useStep4();
@@ -101,9 +106,12 @@ const products = useMemo(() => step4?.products ?? [], [step4]);
 
 1. Use top-level hooks with `use*` prefix for all selectors.
 2. Apply `useShallow` to any composite selector returning an object.
-3. Do not place `|| []`, `|| {}`, `?? []` inside selectors; perform fallbacks in components or `useMemo`.
-4. Keep selectors simple: direct state access only; derive values in components when possible.
-5. Prefer individual selectors over wide composite selectors for stability and performance.
+3. Do not place `|| []`, `|| {}`, `?? []` inside selectors; perform fallbacks in
+   components or `useMemo`.
+4. Keep selectors simple: direct state access only; derive values in components
+   when possible.
+5. Prefer individual selectors over wide composite selectors for stability and
+   performance.
 
 ### Success Metrics
 
@@ -325,7 +333,8 @@ user-friendly messages.
 
 ### **Migration Goal**: Eliminate infinite refetch/re-render on Customers page
 
-**Final Status**: ✅ **SUCCESSFUL** - Stable query keys, strictly typed sort handler, and correct Zustand v5 shallow selectors removed loop conditions.
+**Final Status**: ✅ **SUCCESSFUL** - Stable query keys, strictly typed sort
+handler, and correct Zustand v5 shallow selectors removed loop conditions.
 
 ### **Symptoms**
 
@@ -336,11 +345,15 @@ user-friendly messages.
 ### **Root Causes**
 
 1. **Unstable selection slice equality (Zustand v5)**
-   - `useCustomerStore(selector, shallow)` comparator arg no longer supported in v5 → selector returned new object every store change → extra component renders → query inputs churned unnecessarily.
+   - `useCustomerStore(selector, shallow)` comparator arg no longer supported in
+     v5 → selector returned new object every store change → extra component
+     renders → query inputs churned unnecessarily.
 2. **Unsafe sort typing in UI**
-   - `handleSort` accepted `string` with `as any` casts, allowing invalid values and causing unnecessary state flips.
+   - `handleSort` accepted `string` with `as any` casts, allowing invalid values
+     and causing unnecessary state flips.
 3. **Query key sensitivity**
-   - Keys must be constructed from stable primitives/objects with deterministic shape to avoid unintended refetches.
+   - Keys must be constructed from stable primitives/objects with deterministic
+     shape to avoid unintended refetches.
 
 ### **Solutions Implemented**
 
@@ -351,15 +364,17 @@ export const qk = {
   customers: {
     all: ['customers'] as const,
     lists: () => [...qk.customers.all, 'list'] as const,
-    list: (search, limit, sortBy, sortOrder, status, tier, industry) => [
-      ...qk.customers.lists(),
-      { search, limit, sortBy, sortOrder, status, tier, industry },
-    ] as const,
+    list: (search, limit, sortBy, sortOrder, status, tier, industry) =>
+      [
+        ...qk.customers.lists(),
+        { search, limit, sortBy, sortOrder, status, tier, industry },
+      ] as const,
   },
 } as const;
 ```
 
-2. **Strictly typed sorting handler** (`src/components/customers/CustomerList.tsx`)
+2. **Strictly typed sorting handler**
+   (`src/components/customers/CustomerList.tsx`)
 
 ```ts
 // Accepts only valid sort keys
@@ -368,7 +383,9 @@ const handleSort = useCallback(
     setSorting({
       sortBy,
       sortOrder:
-        sorting.sortBy === sortBy && sorting.sortOrder === 'asc' ? 'desc' : 'asc',
+        sorting.sortBy === sortBy && sorting.sortOrder === 'asc'
+          ? 'desc'
+          : 'asc',
     });
   },
   [sorting, setSorting]
@@ -377,7 +394,8 @@ const handleSort = useCallback(
 // setSorting(prev => ({ sortBy, sortOrder: prev.sortBy === sortBy && prev.sortOrder === 'asc' ? 'desc' : 'asc' }))
 ```
 
-3. **Zustand v5 shallow equality (correct pattern)** (`src/lib/store/customerStore.ts`)
+3. **Zustand v5 shallow equality (correct pattern)**
+   (`src/lib/store/customerStore.ts`)
 
 ```ts
 import { useShallow } from 'zustand/react/shallow';
@@ -396,7 +414,8 @@ export function useCustomerBulkSelectionState(customerIds: string[]) {
   return useCustomerStore(
     useShallow(state => ({
       isAllSelected: customerSelectors.isAllSelected(state)(customerIds),
-      isPartiallySelected: customerSelectors.isPartiallySelected(state)(customerIds),
+      isPartiallySelected:
+        customerSelectors.isPartiallySelected(state)(customerIds),
     }))
   );
 }
@@ -406,7 +425,15 @@ export function useCustomerBulkSelectionState(customerIds: string[]) {
 
 ```ts
 return useInfiniteQuery({
-  queryKey: qk.customers.list(search, limit, sortBy, sortOrder, status, tier, industry),
+  queryKey: qk.customers.list(
+    search,
+    limit,
+    sortBy,
+    sortOrder,
+    status,
+    tier,
+    industry
+  ),
   queryFn: ({ pageParam }) =>
     customerService.getCustomers({
       search,
@@ -420,7 +447,7 @@ return useInfiniteQuery({
     }),
   initialPageParam: null as string | null,
   getNextPageParam: (lastPage: ApiResponse<CustomerList>) =>
-    lastPage.ok ? lastPage.data.nextCursor ?? undefined : undefined,
+    lastPage.ok ? (lastPage.data.nextCursor ?? undefined) : undefined,
   staleTime: 60_000,
   gcTime: 120_000,
   refetchOnWindowFocus: false,
@@ -430,7 +457,8 @@ return useInfiniteQuery({
 
 5. **Analytics hygiene**
 
-- Side-effects are triggered only in `onSuccess/onError` of mutations, not during render, avoiding extra loops.
+- Side-effects are triggered only in `onSuccess/onError` of mutations, not
+  during render, avoiding extra loops.
 
 ### **Prevention Framework (Customers + React Query)**
 
@@ -1083,18 +1111,103 @@ npm run ui:test:wizard
 **Result**: **SUCCESSFUL WIZARD PAYLOAD FIX** - Wizard submissions now work
 correctly with proper data structure transformation.
 
-## 🔧 *React has detected a change in the order of Hooks called by BasicInformationStep. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: **
-Cause of bug
-Conditional hook order: BasicInformationStep called a hook inside JSX: min={useMemo(() => new Date().toISOString().split('T')[0], [])} in
-src/components/proposals/steps/BasicInformationStep.tsx
-.
-Because there’s an early return above (if (!customersData && customersLoading) return ...), the inline useMemo wasn’t called on some renders, changing the hooks order and triggering:
-“React has detected a change in the order of Hooks…”
-“Rendered more hooks than during the previous render.”
-Fix implemented
-Moved inline hook out of JSX and defined it before any conditional returns:
-Added const todayISODate = useMemo(() => new Date().toISOString().split('T')[0], []);
-Replaced prop with min={todayISODate}
-File:
-src/components/proposals/steps/BasicInformationStep.tsx
+---
+
+## 🔧 **Multi-Layer Response Format Coordination Fix (Latest)**
+
+### **Migration Goal**: Fix response format mismatch across service, hook, and component layers
+
+**Final Status**: ✅ **SUCCESSFUL** - Proper data flow from API → Service → Hook
+→ Components.
+
+### **Symptoms**
+
+- Hook throwing "Failed to load data" error despite successful API responses
+- TypeScript compilation errors for data access patterns
+- Components unable to access nested data properties
+
+### **Root Causes**
+
+1. **Service Layer**: Returned unwrapped data but hook expected full response
+2. **Hook Layer**: Explicit return type annotations conflicted with inferred
+   types
+3. **Component Layer**: Incorrect data access patterns (`data.field` vs
+   `data.data.field`)
+
+### **Solutions Implemented**
+
+1. **Service Layer Pattern** (`src/services/[domain]Service.ts`)
+
+```typescript
+// ✅ CORRECT: Return unwrapped data
+return response.data; // API response unwrapped
+```
+
+2. **Hook Layer Pattern** (`src/features/[domain]/hooks/use[Domain].ts`)
+
+```typescript
+// ✅ CORRECT: Let TypeScript infer return type
+export function useDomainData(params) {
+  return useQuery({ ... }); // No explicit return type annotation
+}
+```
+
+3. **Component Layer Pattern** (`src/components/[domain]/[Component].tsx`)
+
+```typescript
+// ✅ CORRECT: Access data through proper nested structure
+const { data, isLoading } = useDomainData(params);
+useEffect(() => {
+  if (data?.data) {
+    // ✅ Handle API response structure
+    setState(data.data.field);
+  }
+}, [data]);
+```
+
+4. **Schema Validation** (`src/features/[domain]/schemas.ts`)
+
+```typescript
+// ✅ CORRECT: Include all API response fields in schema
+export const DomainResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    // Include ALL fields returned by API
+    field1: z.string(),
+    field2: z.number(),
+    // ... all actual API response fields
+  }),
+});
+```
+
+### **Prevention Framework (Multi-Layer Coordination)**
+
+1. **Service Layer**: Always return unwrapped data (`response.data`)
+2. **Hook Layer**: Remove explicit return type annotations, let TypeScript infer
+3. **Component Layer**: Always check nested structure (`data?.data?.field`)
+4. **Schema Layer**: Include all actual API response fields
+5. **Type Safety**: Verify with `npm run type-check` after changes
+
+### **Success Metrics**
+
+- ✅ No "Failed to load data" errors
+- ✅ Proper data flow across all layers
+- ✅ TypeScript compilation passes
+- ✅ Components access data correctly
+
+**Result**: **SUCCESSFUL MULTI-LAYER FIX** - Consistent response format handling
+across service, hook, and component layers.
+
+## 🔧 \*React has detected a change in the order of Hooks called by BasicInformationStep. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: \*\*
+
+Cause of bug Conditional hook order: BasicInformationStep called a hook inside
+JSX: min={useMemo(() => new Date().toISOString().split('T')[0], [])} in
+src/components/proposals/steps/BasicInformationStep.tsx . Because there’s an
+early return above (if (!customersData && customersLoading) return ...), the
+inline useMemo wasn’t called on some renders, changing the hooks order and
+triggering: “React has detected a change in the order of Hooks…” “Rendered more
+hooks than during the previous render.” Fix implemented Moved inline hook out of
+JSX and defined it before any conditional returns: Added const todayISODate =
+useMemo(() => new Date().toISOString().split('T')[0], []); Replaced prop with
+min={todayISODate} File: src/components/proposals/steps/BasicInformationStep.tsx
 Verified TypeScript OK: npm run type-check passed.

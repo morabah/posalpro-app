@@ -229,8 +229,6 @@ export const UnifiedDashboardStats = memo(() => {
           trend={trends?.proposals}
         />
 
-
-
         {/* Win Rate */}
         <StatCard
           title="Win Rate"

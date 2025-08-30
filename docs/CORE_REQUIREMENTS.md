@@ -107,12 +107,13 @@ try {
   `src/features/[domain]/schemas.ts`.
 - API routes must import schemas from feature modules; avoid route‑local inline
   `z.object` definitions in these domains.
-- Exception: highly route‑specific shapes (e.g., raw SQL payloads or Prisma native enums)
-  may remain local but must include a comment explaining why.
+- Exception: highly route‑specific shapes (e.g., raw SQL payloads or Prisma
+  native enums) may remain local but must include a comment explaining why.
 
 **Acceptance Checks**
 
-- [ ] No inline `z.object` in `src/app/api/{proposals,customers,products}` for shared shapes
+- [ ] No inline `z.object` in `src/app/api/{proposals,customers,products}` for
+      shared shapes
 - [ ] Centralized request/response schemas exported from feature `schemas.ts`
 - [ ] Response objects validated where appropriate before returning
 
@@ -121,7 +122,8 @@ try {
 - Prefer Prisma `select` DTOs that match Zod output exactly.
 - Name schemas descriptively: `XxxQuerySchema`, `XxxCreateSchema`,
   `XxxUpdateSchema`, `BulkDeleteSchema`, `VersionsQuerySchema`.
-- Coerce/transform at the edges (string→number, dates→ISO strings) inside schemas.
+- Coerce/transform at the edges (string→number, dates→ISO strings) inside
+  schemas.
 
 > Rationale: Centralizing schemas eliminates drift, improves type safety, and
 > keeps UI and API contracts in lockstep.
@@ -457,6 +459,61 @@ return useInfiniteQuery({
 - Missing dependency arrays in useEffect
 - Unstable callback dependencies causing infinite loops
 - Manual JSON serialization in HTTP client calls
+- **Multi-layer response format mismatch** (`data.field` vs `data.data.field`)
+
+### **Multi-Layer Response Format Coordination (MANDATORY)**
+
+**❌ FORBIDDEN**: Response format mismatch across service, hook, and component
+layers.
+
+#### **Service Layer (MANDATORY)**
+
+```typescript
+// ✅ CORRECT: Always return unwrapped data
+async getData(): Promise<DomainData> {
+  const response = await apiClient.get<DomainResponse>(endpoint);
+  return response.data; // ✅ Return unwrapped data
+}
+```
+
+#### **Hook Layer (MANDATORY)**
+
+```typescript
+// ✅ CORRECT: Let TypeScript infer return type
+export function useDomainData(params) {
+  return useQuery({ ... }); // ❌ NO explicit return type annotation
+}
+```
+
+#### **Component Layer (MANDATORY)**
+
+```typescript
+// ✅ CORRECT: Always check nested data structure
+const { data, isLoading } = useDomainData(params);
+useEffect(() => {
+  if (data?.data) {
+    // ✅ Handle API response structure
+    setState(data.data.field);
+  }
+}, [data]);
+```
+
+#### **Schema Layer (MANDATORY)**
+
+```typescript
+// ✅ CORRECT: Include ALL API response fields
+export const DomainResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    // Include ALL fields actually returned by API
+    field1: z.string(),
+    field2: z.number(),
+  }),
+});
+```
+
+**Prevention**: Coordinate response formats across all layers to prevent "Failed
+to load data" errors.
 
 ## 🛡️ **WHAT TO TAKE CARE OF** {#what-to-take-care}
 

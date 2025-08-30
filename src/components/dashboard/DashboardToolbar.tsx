@@ -1,14 +1,14 @@
 'use client';
 
+import { useDashboardData } from '@/features/dashboard/hooks';
 import {
   useDashboardFilters,
   useDashboardUIActions,
   type DashboardUIState,
   type TimeRange,
 } from '@/lib/store/dashboardStore';
-import { useDashboardData } from '@/features/dashboard/hooks';
-import { useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef } from 'react';
 
 const ranges = [
   { value: 'day', label: 'Day' },
@@ -54,15 +54,14 @@ export default function DashboardToolbar() {
     if (urlRangeRaw && isRange(urlRangeRaw)) next.timeRange = urlRangeRaw;
 
     // Only set if different from current store
-    const changed = (
+    const changed =
       (typeof next.search !== 'undefined' && next.search !== (search || '')) ||
       (typeof next.status !== 'undefined' && next.status !== (status || 'all')) ||
-      (typeof next.timeRange !== 'undefined' && next.timeRange !== timeRange)
-    );
+      (typeof next.timeRange !== 'undefined' && next.timeRange !== timeRange);
 
     if (changed) setFilters(next);
-  // Intentionally exclude setFilters from deps; run only once using ref
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally exclude setFilters from deps; run only once using ref
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paramsString, search, status, timeRange]);
 
   // Debounced URL sync when filters change (shareable URLs)
@@ -94,7 +93,7 @@ export default function DashboardToolbar() {
     return () => clearTimeout(t);
   }, [search, status, timeRange, pathname, router, searchParams]);
 
-  const metrics = dashboardData?.proposals?.metrics;
+  const metrics = dashboardData?.performance;
 
   return (
     <div className="flex items-center gap-3" aria-label="Dashboard toolbar">
@@ -154,10 +153,10 @@ export default function DashboardToolbar() {
       {/* Analytics chips */}
       <div className="hidden md:flex items-center gap-2 ml-2" aria-label="KPI chips">
         <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-          Total: {metrics?.total ?? 0}
+          Total: {dashboardData?.proposals?.length ?? 0}
         </span>
         <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-          Active: {metrics?.active ?? 0}
+          Active: {dashboardData?.proposals?.length ?? 0}
         </span>
         <span className="text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
           Win Rate: {metrics?.winRate ?? 0}%

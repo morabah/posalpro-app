@@ -1,17 +1,13 @@
-export { useDashboardData } from '@/hooks/dashboard/useDashboardData';
-export type {
-  UseDashboardDataReturn,
-  UseDashboardDataOptions,
-} from '@/hooks/dashboard/useDashboardData';
-
 // Dashboard hooks from feature location
-export { useExecutiveDashboard, useDashboardAnalytics } from './useDashboard';
+export { useDashboardAnalytics, useDashboardData, useExecutiveDashboard } from './useDashboard';
 export type {
   ChartDataPoint,
+  DashboardAnalyticsData,
   EmployeePerformance,
-  ProductPerformance,
   FunnelStage,
   PriorityOverdue,
   ProductBundle,
-  DashboardAnalyticsData,
+  ProductPerformance,
+  UseDashboardDataOptions,
+  UseDashboardDataReturn,
 } from './useDashboard';

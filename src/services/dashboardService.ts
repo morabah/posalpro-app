@@ -16,7 +16,6 @@
  */
 
 import type {
-  DashboardStatsQuery,
   EnhancedDashboardStats,
   ExecutiveDashboardQuery,
   ExecutiveDashboardResponse,
@@ -44,6 +43,7 @@ export interface DashboardServiceOptions {
   refresh?: boolean;
   page?: number;
   limit?: number;
+  section?: string;
 }
 
 // Executive Dashboard Response Type (moved to schemas.ts for consistency)
@@ -172,6 +172,7 @@ export class DashboardService {
         hypothesis: DASHBOARD_SERVICE_TRACEABILITY.hypotheses[1],
       });
 
+      // Return the unwrapped data from the API response
       return response.data;
     } catch (error) {
       const standardError = errorHandlingService.processError(
@@ -205,11 +206,59 @@ export class DashboardService {
    * Get basic dashboard statistics
    * CORE_REQUIREMENTS.md: Uses HTTP client with proper response handling
    */
-  async getDashboardStats(options: DashboardStatsQuery = {}): Promise<EnhancedDashboardStats> {
-    return this.getEnhancedStats({
-      ...options,
-      timeRange: 'month', // Default to month for basic stats
+  async getDashboardStats(options: DashboardServiceOptions = {}): Promise<any> {
+    const errorHandlingService = ErrorHandlingService.getInstance();
+
+    logDebug('[DashboardService] Fetch start', {
+      component: DASHBOARD_SERVICE_TRACEABILITY.component,
+      operation: 'getDashboardStats',
+      userId: options.userId,
+      userRole: options.userRole,
+      timeRange: options.timeRange,
+      section: options.section || 'all',
+      userStory: DASHBOARD_SERVICE_TRACEABILITY.userStories[0],
+      hypothesis: DASHBOARD_SERVICE_TRACEABILITY.hypotheses[0],
     });
+
+    try {
+      // For now, return enhanced stats - this can be expanded to handle different sections
+      if (options.section && options.section !== 'all') {
+        // Handle section-specific queries
+        return this.getEnhancedStats(options);
+      }
+
+      return this.getEnhancedStats(options);
+    } catch (error) {
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to fetch dashboard statistics',
+        ErrorCodes.DATA.FETCH_FAILED,
+        {
+          component: DASHBOARD_SERVICE_TRACEABILITY.component,
+          operation: 'getDashboardStats',
+          userId: options.userId,
+          userRole: options.userRole,
+          timeRange: options.timeRange,
+          section: options.section,
+          userStory: DASHBOARD_SERVICE_TRACEABILITY.userStories[0],
+          hypothesis: DASHBOARD_SERVICE_TRACEABILITY.hypotheses[0],
+        }
+      );
+
+      logError('[DashboardService] Fetch failed', {
+        component: DASHBOARD_SERVICE_TRACEABILITY.component,
+        operation: 'getDashboardStats',
+        error: standardError.message,
+        userId: options.userId,
+        userRole: options.userRole,
+        timeRange: options.timeRange,
+        section: options.section,
+        userStory: DASHBOARD_SERVICE_TRACEABILITY.userStories[0],
+        hypothesis: DASHBOARD_SERVICE_TRACEABILITY.hypotheses[0],
+      });
+
+      throw standardError;
+    }
   }
 }
 
