@@ -90,6 +90,7 @@ Templates included
 - component.template.tsx - UI components with accessibility & analytics
 - hook.template.ts - Simple hooks with mount-only patterns
 - react-query-hook.template.ts - Data fetching hooks with caching
+- keys.template.ts - Centralized React Query keys (stable primitives)
 - api-route.template.ts - API handlers with RBAC & performance
 - service.template.ts - Business logic services with singleton pattern
 
@@ -98,7 +99,7 @@ Templates included
 - middleware.template.ts - RBAC authentication middleware
 - provider.template.tsx - Context providers with SSR consistency
 - layout.template.tsx - Route-group layouts with provider stacks
-- error-handler-hook.template.ts - Centralized error handling hooks
+- (Deprecated) error-handler-hook.template.ts - Use `src/hooks/useErrorHandler.ts`
 - analytics-hook.template.ts - Component Traceability Matrix tracking
 
 **Bridge Pattern Templates:**
@@ -119,10 +120,10 @@ Templates included
 **Mobile & Testing:**
 
 - mobile-component.template.tsx - Touch-optimized components (44px targets)
-- test.template.ts - Unit tests
-- integration-test.template.tsx - React Testing Library tests
+- test.template.ts - Unit/React tests; import from `@/lib/testing/testUtils` for providers
+- integration-test.template.tsx - React tests with providers via `@/lib/testing/testUtils`
 
 **Data & Types:**
 
 - zod-schema.template.ts - CUID-friendly validation schemas
-- types.template.ts - TypeScript interfaces and types
+- (Deprecated) types.template.ts - Prefer deriving types from feature `schemas.ts`

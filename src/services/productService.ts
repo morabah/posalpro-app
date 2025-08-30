@@ -95,6 +95,49 @@ export class ProductService {
   }
 
   /**
+   * Get product categories (simplified list)
+   */
+  async getCategories(options: { includeStats?: boolean; activeOnly?: boolean } = {}): Promise<
+    ApiResponse<{ categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }> }>
+  > {
+    const includeStats = options.includeStats === true;
+    const activeOnly = options.activeOnly !== false; // default true
+
+    logDebug('Fetching product categories', {
+      component: 'ProductService',
+      operation: 'getCategories',
+      includeStats,
+      activeOnly,
+    });
+
+    try {
+      const params = new URLSearchParams();
+      if (includeStats) params.set('includeStats', 'true');
+      if (!activeOnly) params.set('activeOnly', 'false');
+      const response = await http.get<{ categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }> }>(
+        `${this.baseUrl}/categories?${params.toString()}`
+      );
+      logInfo('Product categories fetched successfully', {
+        component: 'ProductService',
+        operation: 'getCategories',
+        count: response?.categories?.length || 0,
+      });
+      return { ok: true, data: response };
+    } catch (error: unknown) {
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch product categories',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProductService',
+          operation: 'getCategories',
+        }
+      );
+      throw processed;
+    }
+  }
+
+  /**
    * Get single product by ID
    */
   async getProduct(id: string): Promise<ApiResponse<Product>> {

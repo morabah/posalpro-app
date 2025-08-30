@@ -186,6 +186,19 @@ export function SectionAssignmentStep({
     [sections.length, analytics, generateId]
   );
 
+  // Persist sections continuously when changed
+  useEffect(() => {
+    setStepData(5, {
+      sections,
+      sectionTemplates: SECTION_TEMPLATES.map(template => ({
+        id: template.id,
+        title: template.title,
+        content: template.content,
+        category: template.category,
+      })),
+    });
+  }, [sections, setStepData]);
+
   const handleNext = useCallback(() => {
     // Update store with section data
     setStepData(5, {

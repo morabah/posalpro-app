@@ -1,34 +1,29 @@
-// __FILE_DESCRIPTION__: React Query hook skeleton following CORE_REQUIREMENTS
+// __FILE_DESCRIPTION__: React Query hook skeleton aligned with feature keys + service layer
 // __USER_STORY__: <short reference>
 // __HYPOTHESIS__: <short reference>
 
-import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { useQuery } from '@tanstack/react-query';
+// IMPORTANT: replace placeholders below
+// import { qk } from '@/features/__ROUTE_RESOURCE__/keys';
+// import { __SERVICE_INSTANCE__ } from '@/services/__ROUTE_RESOURCE__Service';
 
 export type __QUERY_PARAMS__ = {
-  page?: number;
-  limit?: number;
   search?: string;
+  limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
-};
-
-export const __QUERY_KEY_ROOT___KEYS = {
-  all: ['__QUERY_KEY_ROOT__'] as const,
-  lists: () => ['__QUERY_KEY_ROOT__', 'list'] as const,
-  list: (params: __QUERY_PARAMS__) => ['__QUERY_KEY_ROOT__', 'list', params] as const,
-  details: () => ['__QUERY_KEY_ROOT__', 'detail'] as const,
-  detail: (id: string) => ['__QUERY_KEY_ROOT__', 'detail', id] as const,
+  cursor?: string | null;
 };
 
 export function use__QUERY_HOOK_NAME__(params: __QUERY_PARAMS__ = {}) {
-  const apiClient = useApiClient();
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   return useQuery({
-    queryKey: __QUERY_KEY_ROOT___KEYS.list(params),
+    // Replace with centralized keys from feature module
+    // queryKey: qk.__ROUTE_RESOURCE__.list(params),
+    queryKey: ['__ROUTE_RESOURCE__', 'list', params],
     queryFn: async () => {
       const start = performance.now();
       logDebug('Fetch start', {
@@ -37,40 +32,24 @@ export function use__QUERY_HOOK_NAME__(params: __QUERY_PARAMS__ = {}) {
         keys: params,
         userStory: '__USER_STORY__',
         hypothesis: '__HYPOTHESIS__',
-        acceptanceCriteria: [
-          'Data fetched successfully',
-          'Minimal fields requested',
-          'Error handling works',
-        ],
       });
       try {
-        const searchParams = new URLSearchParams();
-        if (params.page) searchParams.set('page', String(params.page));
-        if (params.limit) searchParams.set('limit', String(params.limit));
-        if (params.search) searchParams.set('search', params.search);
-        if (params.sortBy) searchParams.set('sortBy', params.sortBy);
-        if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
-
-        // Minimal field selection and relation hydration disabled by default
-        if (!searchParams.has('fields')) searchParams.set('fields', 'id,title,updatedAt');
-        searchParams.set('includeCustomer', 'false');
-        searchParams.set('includeTeam', 'false');
-
-        const response = await apiClient.get<{ data: unknown }>(
-          `/api/__ROUTE_RESOURCE__?${searchParams.toString()}`
-        );
-        logInfo('Fetch success', {
-          component: 'use__QUERY_HOOK_NAME__',
-          loadTime: performance.now() - start,
-          userStory: '__USER_STORY__',
-          hypothesis: '__HYPOTHESIS__',
-          resultCount: Array.isArray(response?.data) ? response.data.length : 'unknown',
-        });
-        return (
-          response && typeof response === 'object' && 'data' in response
-            ? (response as { data: unknown }).data
-            : response
-        ) as unknown;
+        // Delegate to the service (ApiResponse pattern)
+        // const response = await __SERVICE_INSTANCE__.getList(params);
+        const response = { ok: true as const, data: { items: [], nextCursor: null as string | null } };
+        if (response.ok) {
+          logInfo('Fetch success', {
+            component: 'use__QUERY_HOOK_NAME__',
+            loadTime: performance.now() - start,
+            count: Array.isArray((response.data as any).items)
+              ? (response.data as any).items.length
+              : 0,
+            userStory: '__USER_STORY__',
+            hypothesis: '__HYPOTHESIS__',
+          });
+          return response.data;
+        }
+        throw new Error((response as any).message || 'Request failed');
       } catch (error: unknown) {
         const processed = errorHandlingService.processError(
           error,

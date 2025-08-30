@@ -126,6 +126,22 @@ export class ProposalService {
       if (params.priority) searchParams.set('priority', params.priority);
       if (params.customerId) searchParams.set('customerId', params.customerId);
       if (params.assignedTo) searchParams.set('assignedTo', params.assignedTo);
+      if (params.dueBefore)
+        searchParams.set(
+          'dueBefore',
+          typeof params.dueBefore === 'string'
+            ? params.dueBefore
+            : new Date(params.dueBefore as unknown as string).toISOString()
+        );
+      if (params.dueAfter)
+        searchParams.set(
+          'dueAfter',
+          typeof params.dueAfter === 'string'
+            ? params.dueAfter
+            : new Date(params.dueAfter as unknown as string).toISOString()
+        );
+      if (typeof (params as any).openOnly !== 'undefined')
+        searchParams.set('openOnly', String((params as any).openOnly));
 
       // Use centralized HTTP client
       const data = await http.get<{ items: Proposal[]; nextCursor: string | null }>(
@@ -269,7 +285,7 @@ export class ProposalService {
   // ✅ ADDED: Database-First Field Alignment - Transform wizard payload to API schema
   private transformWizardPayloadForAPI(proposal: any): ProposalUpdate {
     // ✅ Handle wizard flat payload structure
-    const { teamData, contentData, productData, sectionData, reviewData, ...basicFields } =
+    const { teamData, contentData, productData, sectionData, reviewData, planType, ...basicFields } =
       proposal;
 
     // ✅ Defensive validation - Check if wizard-specific data is present
@@ -285,6 +301,7 @@ export class ProposalService {
           reviewData: reviewData || undefined,
           submittedAt: new Date().toISOString(),
           wizardVersion: 'modern',
+          planType: planType || undefined,
         },
       };
     }
@@ -330,12 +347,12 @@ export class ProposalService {
 
   async getProposalStats(): Promise<ApiResponse<{
     total: number;
-    draft: number;
-    submitted: number;
-    approved: number;
-    rejected: number;
-    averageValue: number;
+    byStatus: Record<string, number>;
+    overdue: number;
     totalValue: number;
+    winRate: number;
+    recentActivity: number;
+    averageValue: number;
   }>> {
     const start = performance.now();
     logDebug('Fetching proposal stats', {
@@ -348,12 +365,12 @@ export class ProposalService {
     try {
       const data = await http.get<{
         total: number;
-        draft: number;
-        submitted: number;
-        approved: number;
-        rejected: number;
-        averageValue: number;
+        byStatus: Record<string, number>;
+        overdue: number;
         totalValue: number;
+        winRate: number;
+        recentActivity: number;
+        averageValue: number;
       }>('/api/proposals/stats');
 
       logInfo('Proposal stats fetched successfully', {

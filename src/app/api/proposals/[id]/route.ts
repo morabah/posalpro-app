@@ -208,6 +208,7 @@ export const PUT = createRoute(
         productData,
         sectionData,
         reviewData,
+        planType,
         customer,
         customerId, // Remove customerId to prevent Prisma conflict
         ...basicFields
@@ -231,7 +232,7 @@ export const PUT = createRoute(
       }
 
       // ✅ FIXED: Save complex nested data to metadata field
-      if (teamData || contentData || productData || sectionData || reviewData) {
+      if (teamData || contentData || productData || sectionData || reviewData || planType) {
         updateData.metadata = {
           teamData,
           contentData,
@@ -240,6 +241,7 @@ export const PUT = createRoute(
           reviewData,
           submittedAt: new Date().toISOString(),
           wizardVersion: 'modern',
+          planType,
         };
 
         // ✅ ADDED: Debug logging to verify metadata is being set
@@ -253,6 +255,7 @@ export const PUT = createRoute(
           hasProductData: !!productData,
           hasSectionData: !!sectionData,
           hasReviewData: !!reviewData,
+          hasPlanType: !!planType,
           userStory: 'US-3.2',
           hypothesis: 'H4',
         });

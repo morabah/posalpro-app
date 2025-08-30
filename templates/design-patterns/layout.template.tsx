@@ -1,4 +1,4 @@
-// __FILE_DESCRIPTION__: Route-group layout template with provider stack
+// __FILE_DESCRIPTION__: Route-group layout template aligned with dashboard provider stack
 // __USER_STORY__: <short reference>
 // __HYPOTHESIS__: <short reference>
 
@@ -7,15 +7,16 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logDebug } from '@/lib/logger';
 
-// Import providers in dependency order
-// import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizationProvider';
-// import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
-// import { SharedAnalyticsProvider } from '@/components/providers/SharedAnalyticsProvider';
-// import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
-// import { QueryProvider } from '@/components/providers/QueryProvider';
-// import { ToastProvider } from '@/components/providers/ToastProvider';
-// import { AuthProvider } from '@/components/providers/AuthProvider';
-// import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
+// Provider stack (match src/app/(dashboard)/layout.tsx)
+import { TTFBOptimizationProvider } from '@/components/providers/TTFBOptimizationProvider';
+import { WebVitalsProvider } from '@/components/providers/WebVitalsProvider';
+import { SharedAnalyticsProvider } from '@/components/providers/SharedAnalyticsProvider';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { ToastProvider } from '@/components/feedback/Toast/ToastProvider';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
+import { ServiceWorkerWrapper } from '@/components/pwa/ServiceWorkerWrapper';
+import { GlobalStateProvider } from '@/lib/bridges/StateBridge';
 
 // Force dynamic rendering for session-dependent layouts
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,6 @@ export type __LAYOUT_NAME__LayoutProps = {
 };
 
 export default async function __LAYOUT_NAME__Layout({ children }: __LAYOUT_NAME__LayoutProps) {
-  // Get server session to prevent client-side loading stalls
   const session = await getServerSession(authOptions);
 
   logDebug('Layout render', {
@@ -37,34 +37,21 @@ export default async function __LAYOUT_NAME__Layout({ children }: __LAYOUT_NAME_
   });
 
   return (
-    <html lang="en">
-      <body>
-        {/* Provider stack in dependency order per CORE_REQUIREMENTS.md */}
-        {/*
-        <TTFBOptimizationProvider>
-          <WebVitalsProvider>
-            <SharedAnalyticsProvider>
-              <ClientLayoutWrapper>
-                <QueryProvider>
-                  <ToastProvider>
-                    <AuthProvider session={session}>
-                      <ProtectedLayout>
-                        {children}
-                      </ProtectedLayout>
-                    </AuthProvider>
-                  </ToastProvider>
-                </QueryProvider>
-              </ClientLayoutWrapper>
-            </SharedAnalyticsProvider>
-          </WebVitalsProvider>
-        </TTFBOptimizationProvider>
-        */}
-
-        {/* Simplified version - replace with actual provider stack */}
-        <div data-testid="__LAYOUT_NAME__-layout">
-          {children}
-        </div>
-      </body>
-    </html>
+    <TTFBOptimizationProvider>
+      <WebVitalsProvider>
+        <SharedAnalyticsProvider>
+          <ClientLayoutWrapper>
+            <ToastProvider position="top-right" maxToasts={5}>
+              <AuthProvider session={session}>
+                <GlobalStateProvider>
+                  <ProtectedLayout>{children}</ProtectedLayout>
+                </GlobalStateProvider>
+              </AuthProvider>
+            </ToastProvider>
+          </ClientLayoutWrapper>
+        </SharedAnalyticsProvider>
+      </WebVitalsProvider>
+      <ServiceWorkerWrapper />
+    </TTFBOptimizationProvider>
   );
 }

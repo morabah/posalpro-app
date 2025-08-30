@@ -9,14 +9,14 @@
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
-import { Select } from '@/components/ui/forms/Select';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useProposalSetStepData } from '@/lib/store/proposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
 import { logDebug, logError } from '@/lib/logger';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type ProposalProductData } from '@/lib/store/proposalStore';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 interface ProductSelectionStepProps {
   data?: ProposalProductData;
@@ -59,28 +59,77 @@ export function ProductSelectionStep({
     return initialProducts;
   });
 
+  // UI state: search and sorting (persisted in localStorage)
+  const STORAGE_KEY = 'wizard:step4:products';
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'price' | 'isActive'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [category, setCategory] = useState<string>('');
+  const [showSelectedOnly, setShowSelectedOnly] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as { search?: string; sortBy?: typeof sortBy; sortOrder?: typeof sortOrder; category?: string; showSelectedOnly?: boolean };
+        if (saved.search) setSearch(saved.search);
+        if (saved.sortBy) setSortBy(saved.sortBy);
+        if (saved.sortOrder) setSortOrder(saved.sortOrder);
+        if (typeof saved.category === 'string') setCategory(saved.category);
+        if (typeof saved.showSelectedOnly === 'boolean') setShowSelectedOnly(saved.showSelectedOnly);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ search, sortBy, sortOrder, category, showSelectedOnly })
+      );
+    } catch {}
+  }, [search, sortBy, sortOrder, category, showSelectedOnly]);
+
+  // Debounced search for API fetch
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [search]);
+
   // Fetch products using React Query with productService
   const {
     data: productsData,
     isLoading: productsLoading,
     error: productsError,
   } = useQuery<Product[]>({
-    queryKey: ['products', 'proposal-wizard'],
+    queryKey: ['products', 'proposal-wizard', { search: debouncedSearch, sortBy, sortOrder, category }],
     queryFn: async () => {
       logDebug('Fetching products for proposal wizard', {
         component: 'ProductSelectionStep',
         operation: 'fetchProducts',
+        search: debouncedSearch,
+        sortBy,
+        sortOrder,
+        category,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
       
       try {
         const response = await productService.getProducts({
-          search: '',
-          limit: 100,
+          search: debouncedSearch,
+          limit: 50,
           isActive: true,
-          sortBy: 'name',
-          sortOrder: 'asc',
+          sortBy,
+          sortOrder,
+          category: category || undefined,
         });
 
         if (response.ok && response.data?.items) {
@@ -111,14 +160,53 @@ export function ProductSelectionStep({
     refetchOnWindowFocus: false,
   });
 
-  // Product options for select dropdown
-  const productOptions = useMemo(() => {
-    if (!productsData || productsError) return [];
-    return productsData.map(product => ({
-      value: product.id,
-      label: `${product.name} - ${product.sku}`,
-    }));
-  }, [productsData, productsError]);
+  // Quick lookup sets
+  const selectedSet = useMemo(() => new Set(selectedProducts.map(p => p.productId)), [selectedProducts]);
+  const selectedCategories = useMemo(() => new Set((selectedProducts || []).map(p => p.category)), [selectedProducts]);
+
+  // Categories for filter
+  const { data: categoryData } = useQuery<{ categories: Array<{ name: string; count: number }>}>({
+    queryKey: ['product-categories', { activeOnly: true }],
+    queryFn: async () => {
+      const res = await productService.getCategories({ activeOnly: true, includeStats: false });
+      return res.data;
+    },
+    staleTime: 300000,
+    gcTime: 600000,
+  });
+
+  // Displayed list supports "selected only"
+  const productsMap = useMemo(() => new Map((productsData || []).map(p => [p.id, p] as const)), [productsData]);
+  const displayedItems: Product[] = useMemo(() => {
+    if (!showSelectedOnly) {
+      const items = productsData || [];
+      if (!items.length) return items;
+      const pinned = items.filter(p => selectedSet.has(p.id));
+      const rest = items.filter(p => !selectedSet.has(p.id));
+      return [...pinned, ...rest];
+    }
+    return (selectedProducts || []).map(sp =>
+      (productsMap.get(sp.productId) as Product) ||
+      ({
+        id: sp.productId,
+        name: sp.name,
+        description: '',
+        price: sp.unitPrice,
+        currency: 'USD',
+        sku: '',
+        category: [sp.category || 'General'],
+        tags: [],
+        attributes: {},
+        images: [],
+        isActive: true,
+        version: 1,
+        usageAnalytics: {},
+        userStoryMappings: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as Product)
+    );
+  }, [showSelectedOnly, selectedProducts, productsMap, productsData, selectedSet]);
 
   // Handle product addition
   const handleAddProduct = useCallback(
@@ -140,21 +228,25 @@ export function ProductSelectionStep({
         };
 
         setSelectedProducts(prev => {
-          const updated = [...prev, newProduct];
-          
-          // ✅ ADDED: Debug logging to track product addition
+          // Deduplicate by productId to avoid double-add in strict mode or double events
+          if (prev.some(p => p.productId === product.id)) {
+            return prev;
+          }
+          const next = [...prev, newProduct];
+
+          // ✅ ADDED: Debug logging to track product addition post-dedupe
           logDebug('ProductSelectionStep: Product added', {
             component: 'ProductSelectionStep',
             operation: 'handleAddProduct',
             productId: product.id,
             productName: product.name,
             newProduct,
-            updatedProductsCount: updated.length,
+            updatedProductsCount: next.length,
             userStory: 'US-3.1',
             hypothesis: 'H4',
           });
-          
-          return updated;
+
+          return next;
         });
 
         analytics('product_added_to_proposal', {
@@ -170,10 +262,11 @@ export function ProductSelectionStep({
 
   // Handle quantity change
   const handleQuantityChange = useCallback((productId: string, quantity: number) => {
+    const q = Math.max(1, Number.isFinite(quantity) ? quantity : 1);
     setSelectedProducts(prev =>
       prev.map(product =>
         product.productId === productId
-          ? { ...product, quantity, total: product.unitPrice * quantity }
+          ? { ...product, quantity: q, total: product.unitPrice * q }
           : product
       )
     );
@@ -198,6 +291,16 @@ export function ProductSelectionStep({
     if (!selectedProducts || selectedProducts.length === 0) return 0;
     return selectedProducts.reduce((sum, product) => sum + (product.total || 0), 0);
   }, [selectedProducts]);
+
+  // Persist current step data into the store whenever selection changes
+  useEffect(() => {
+    const freshTotal = selectedProducts.reduce((sum, p) => sum + (p.unitPrice * p.quantity), 0);
+    const stepData: ProposalProductData = {
+      products: selectedProducts,
+      totalValue: freshTotal,
+    };
+    setStepData(4, stepData);
+  }, [selectedProducts, setStepData]);
 
   const handleNext = useCallback(() => {
     // Calculate fresh total to ensure accuracy
@@ -258,17 +361,51 @@ export function ProductSelectionStep({
         <p className="mt-2 text-gray-600">Choose products and services for your proposal</p>
       </div>
 
-      {/* Product Selection */}
-      <Card className="p-6">
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Add Products</label>
-          <Select
-            placeholder="Select a product..."
-            options={productOptions}
-            onChange={value => handleAddProduct(value as string)}
-            disabled={productsLoading}
-          />
+      {/* Search & Sort */}
+      <Card className="p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Search Products</label>
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name, SKU, or description..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+            <select className="border rounded px-3 py-2 text-sm w-full" value={category} onChange={e => setCategory(e.target.value)}>
+              <option value="">All categories</option>
+              {(categoryData?.categories || []).map(c => (
+                <option key={c.name} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+            <select
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={`${sortBy}:${sortOrder}`}
+              onChange={e => {
+                const [sb, so] = e.target.value.split(':') as [typeof sortBy, typeof sortOrder];
+                setSortBy(sb);
+                setSortOrder(so);
+              }}
+            >
+              <option value="name:asc">Name (A→Z)</option>
+              <option value="name:desc">Name (Z→A)</option>
+              <option value="price:asc">Price (Low→High)</option>
+              <option value="price:desc">Price (High→Low)</option>
+              <option value="createdAt:desc">Newest</option>
+              <option value="createdAt:asc">Oldest</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <input id="show-selected-only" type="checkbox" className="accent-blue-600" checked={showSelectedOnly} onChange={e => setShowSelectedOnly(e.target.checked)} />
+            <label htmlFor="show-selected-only" className="text-sm text-gray-700">Show selected only</label>
+          </div>
         </div>
+      </Card>
 
         {/* Loading State */}
         {productsLoading && (
@@ -282,68 +419,76 @@ export function ProductSelectionStep({
           <Card className="p-4 bg-red-50 border-red-200">
             <div className="text-sm text-red-800">
               <h4 className="font-medium mb-2">Error loading products:</h4>
-              <p>{productsError.message}</p>
+              <p>{(productsError as Error).message}</p>
             </div>
           </Card>
         )}
-
-        {/* Selected Products List */}
-        {selectedProducts.length > 0 && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Selected Products</h3>
-            {!selectedProducts || selectedProducts.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No products selected</p>
-            ) : (
-              selectedProducts.map((product) => (
-                <Card key={product.id} className="p-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{product.name}</h4>
-                      <p className="text-sm text-gray-500 mt-1">{product.category}</p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        ${product.unitPrice.toFixed(2)} per unit
-                      </p>
+      {/* Catalog with quick add / steppers */}
+      <Card className="p-4">
+        <h3 className="text-lg font-medium text-gray-900 mb-3">Catalog</h3>
+        {!displayedItems || displayedItems.length === 0 ? (
+          <p className="text-gray-500 py-6 text-center">No products found. Try a different filter.</p>
+        ) : (
+          <div className="divide-y">
+            {displayedItems.map(p => {
+              const isSelected = selectedSet.has(p.id);
+              const compat = selectedCategories.size === 0 || p.category.some(c => selectedCategories.has(c))
+                ? 'compatible'
+                : 'check';
+              const sp = selectedProducts.find(sp => sp.productId === p.id);
+              return (
+                <div key={p.id} className="py-3 flex items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-medium text-gray-900 truncate">{p.name}</h4>
+                      {p.sku ? <span className="text-xs text-gray-500">{p.sku}</span> : null}
+                      {isSelected && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Selected</span>
+                      )}
+                      <Tooltip content={compat === 'compatible' ? 'Likely compatible with current selection' : 'Compatibility not verified (non-blocking)'}>
+                        <span className={`text-xs px-2 py-0.5 rounded ${compat === 'compatible' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{compat === 'compatible' ? 'Compatible' : 'Check'}</span>
+                      </Tooltip>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="text-sm text-gray-600 mt-0.5">{(p.category || []).join(', ')}</div>
+                    <div className="text-sm text-gray-900 mt-1">${(p.price ?? 0).toFixed(2)} per unit</div>
+                  </div>
+                  {!isSelected ? (
+                    <div className="shrink-0">
+                      <Button size="sm" onClick={() => handleAddProduct(p.id)}>Add</Button>
+                    </div>
+                  ) : (
+                    <div className="shrink-0 flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleQuantityChange(p.id, (sp?.quantity || 1) - 1)}>-</Button>
                       <Input
                         type="number"
                         min="1"
-                        value={product.quantity}
-                        onChange={e => handleQuantityChange(product.productId, parseInt(e.target.value) || 1)}
-                        className="w-20"
+                        value={sp?.quantity || 1}
+                        onChange={e => handleQuantityChange(p.id, parseInt(e.target.value) || 1)}
+                        className="w-16 text-center"
                       />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleRemoveProduct(product.productId)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        Remove
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleQuantityChange(p.id, (sp?.quantity || 1) + 1)}>+</Button>
+                      <div className="ml-3 text-sm font-medium text-gray-900">${((sp?.unitPrice || 0) * (sp?.quantity || 1)).toFixed(2)}</div>
+                      <Button variant="outline" size="sm" className="ml-2 text-red-600" onClick={() => handleRemoveProduct(p.id)}>Remove</Button>
                     </div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-gray-200">
-                    <p className="text-sm font-medium text-gray-900">
-                      Total: ${product.total.toFixed(2)}
-                    </p>
-                  </div>
-                </Card>
-              ))
-            )}
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
-
-        {/* Total */}
-        <div className="flex justify-end pt-4 border-t border-gray-200">
-          <div className="text-right">
-            <p className="text-lg font-semibold text-gray-900">
-              Total: ${(totalAmount || 0).toFixed(2)}
-            </p>
-          </div>
-        </div>
       </Card>
 
-      <div className="flex justify-between pt-6 border-t border-gray-200">
+      {/* Sticky totals bar */}
+      <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 z-10">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">{selectedProducts.length}</span> product{selectedProducts.length !== 1 ? 's' : ''} selected
+          </div>
+          <div className="text-lg font-semibold text-gray-900">Total: ${(totalAmount || 0).toFixed(2)}</div>
+        </div>
+      </div>
+
+      <div className="flex justify-between pt-6">
         <Button variant="outline" onClick={onBack}>
           Previous
         </Button>

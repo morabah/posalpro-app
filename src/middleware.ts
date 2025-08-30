@@ -147,6 +147,16 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
 }
 
 export async function middleware(req: NextRequest) {
+  // Bypass for PWA/static assets to avoid unnecessary rate limiting (icons, SW, manifest)
+  const p = req.nextUrl.pathname;
+  if (
+    p.startsWith('/icons/') ||
+    p === '/manifest.json' ||
+    p === '/sw.js' ||
+    p === '/favicon.ico'
+  ) {
+    return SecurityHeaders.applyToResponse(NextResponse.next());
+  }
   // Security headers, rate limiting, audit logging
   const securityResult = await securityMiddleware(req);
   if (securityResult.status === 429) {
@@ -186,7 +196,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api/health|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api/health|_next/static|_next/image|favicon.ico|icons/|manifest\.json|sw\.js).*)',
     '/admin/:path*',
     '/api/((?!auth|health).*)',
   ],

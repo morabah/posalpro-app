@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
-import { useProposalStepData } from '@/lib/store/proposalStore';
+import { useProposalPlanType, useProposalStepData } from '@/lib/store/proposalStore';
 import { useCallback, useMemo } from 'react';
 
 interface ReviewStepProps {
@@ -21,6 +21,7 @@ interface ReviewStepProps {
 
 export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
   const analytics = useOptimizedAnalytics();
+  const planType = useProposalPlanType();
 
   // Get data from all steps individually
   const basicInfo = useProposalStepData(1);
@@ -30,8 +31,13 @@ export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
   const sectionData = useProposalStepData(5);
 
   // Validation checklist
-  const validationChecklist = useMemo(
-    () => [
+  const validationChecklist = useMemo(() => {
+    // Determine which items are required based on plan
+    const requireTeam = planType !== 'BASIC';
+    const requireContent = planType === 'ENTERPRISE';
+    const requireSections = planType === 'ENTERPRISE';
+
+    return [
       {
         id: 'basic-info',
         title: 'Basic Information',
@@ -45,7 +51,7 @@ export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
           !!teamData?.teamLead &&
           !!teamData?.salesRepresentative &&
           Object.keys(teamData?.subjectMatterExperts || {}).length > 0,
-        isRequired: true,
+        isRequired: requireTeam,
       },
       {
         id: 'content-selection',
@@ -53,7 +59,7 @@ export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
         isChecked:
           (contentData?.selectedTemplates?.length || 0) > 0 ||
           (contentData?.customContent?.length || 0) > 0,
-        isRequired: true,
+        isRequired: requireContent,
       },
       {
         id: 'product-selection',
@@ -65,11 +71,10 @@ export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
         id: 'section-assignment',
         title: 'Section Assignment',
         isChecked: (sectionData?.sections?.length || 0) > 0,
-        isRequired: true,
+        isRequired: requireSections,
       },
-    ],
-    [basicInfo, teamData, contentData, productData, sectionData]
-  );
+    ];
+  }, [basicInfo, teamData, contentData, productData, sectionData, planType]);
 
   // Calculate totals
   const totalProducts = useMemo(() => {

@@ -30,12 +30,21 @@ interface AppHeaderProps {
     avatar?: string;
   };
   isMobile: boolean;
+  showNotifications?: boolean;
+  onNotificationsClick?: () => void;
+  notificationCount?: number;
 }
 
-export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
+export function AppHeader({
+  onMenuClick,
+  user,
+  isMobile,
+  showNotifications = true,
+  onNotificationsClick,
+  notificationCount = 0,
+}: AppHeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [notificationCount] = useState(3); // Mock notification count
 
   // Analytics tracking for header interactions
   const trackHeaderAction = useCallback(
@@ -64,9 +73,8 @@ export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
 
   const handleNotificationClick = useCallback(() => {
     trackHeaderAction('notifications_clicked');
-    // Open notifications panel (structured log only)
-    void logInfo('Notifications opened');
-  }, [trackHeaderAction]);
+    if (onNotificationsClick) onNotificationsClick();
+  }, [onNotificationsClick, trackHeaderAction]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10" role="banner">
@@ -133,25 +141,27 @@ export function AppHeader({ onMenuClick, user, isMobile }: AppHeaderProps) {
               </Button>
             )}
 
-            {/* Notifications */}
-            <div className="relative">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleNotificationClick}
-                className="p-2 relative"
-                aria-label={`Notifications ${
-                  notificationCount > 0 ? `(${notificationCount} unread)` : ''
-                }`}
-              >
-                <BellIcon className="w-5 h-5" />
-                {notificationCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {notificationCount}
-                  </span>
-                )}
-              </Button>
-            </div>
+            {/* Notifications (global) */}
+            {showNotifications && (
+              <div className="relative">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleNotificationClick}
+                  className="p-2 relative"
+                  aria-label={`Notifications ${
+                    notificationCount > 0 ? `(${notificationCount} unread)` : ''
+                  }`}
+                >
+                  <BellIcon className="w-5 h-5" />
+                  {notificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {notificationCount}
+                    </span>
+                  )}
+                </Button>
+              </div>
+            )}
 
             {/* User menu */}
             <div className="relative">

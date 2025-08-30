@@ -252,6 +252,49 @@ export function useProposalStats() {
 }
 
 // ====================
+// Due Date Focused Hooks
+// ====================
+
+export function useDueProposals({
+  dueBefore,
+  dueAfter,
+  openOnly = true,
+  limit = 10,
+  sortBy = 'dueDate',
+  sortOrder = 'asc',
+}: {
+  dueBefore?: string;
+  dueAfter?: string;
+  openOnly?: boolean;
+  limit?: number;
+  sortBy?: 'dueDate' | 'createdAt' | 'updatedAt';
+  sortOrder?: 'asc' | 'desc';
+}) {
+  return useQuery({
+    queryKey: qk.proposals.due(dueBefore, dueAfter, openOnly, limit, sortBy, sortOrder),
+    queryFn: async () => {
+      const response = await proposalService.getProposals({
+        limit,
+        sortBy: sortBy as any,
+        sortOrder,
+        ...(dueBefore ? { dueBefore } : {}),
+        ...(dueAfter ? { dueAfter } : {}),
+        ...(openOnly ? { openOnly } : {}),
+      });
+
+      if (response.ok) {
+        return response.data.items;
+      }
+      throw new Error(response.message || 'Failed to fetch due proposals');
+    },
+    staleTime: 60000,
+    gcTime: 300000,
+    refetchOnWindowFocus: false,
+    retry: 0,
+  });
+}
+
+// ====================
 // Mutation Hooks
 // ====================
 

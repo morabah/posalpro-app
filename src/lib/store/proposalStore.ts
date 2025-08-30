@@ -130,6 +130,8 @@ interface ProposalWizardState {
   currentStep: number;
   totalSteps: number;
   isSubmitting: boolean;
+  // Wizard plan (controls visible steps)
+  planType: 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE';
 
   // Step data storage
   stepData: Record<number, any>;
@@ -143,6 +145,7 @@ interface ProposalWizardState {
 
   // Actions
   setCurrentStep: (step: number) => void;
+  setPlanType: (plan: 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') => void;
   setStepData: (step: number, data: any) => void;
   setValidationErrors: (step: number, errors: string[]) => void;
   nextStep: () => Promise<void>;
@@ -281,6 +284,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
   currentStep: 1,
   totalSteps: 6,
   isSubmitting: false,
+  planType: 'ENTERPRISE',
   stepData: {},
   validationErrors: { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
   canProceed: false,
@@ -289,6 +293,32 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
   // Actions
   setCurrentStep: (step: number) => {
     set({ currentStep: step });
+  },
+
+  setPlanType: (plan: 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') => {
+    // Determine visible steps for the selected plan
+    const visibleSteps = plan === 'BASIC'
+      ? [1, 4, 6]
+      : plan === 'PROFESSIONAL'
+        ? [1, 2, 4, 6]
+        : [1, 2, 3, 4, 5, 6];
+
+    set(state => {
+      const current = state.currentStep;
+      // If current step is not visible anymore, move to the closest next visible step
+      let nextCurrent = current;
+      if (!visibleSteps.includes(current)) {
+        // Find the next greater visible or fallback to last visible
+        const greater = visibleSteps.find(s => s > current);
+        nextCurrent = greater ?? visibleSteps[visibleSteps.length - 1];
+      }
+
+      return {
+        planType: plan,
+        totalSteps: visibleSteps.length,
+        currentStep: nextCurrent,
+      };
+    });
   },
 
   setStepData: (step: number, data: any | ((prevData: any) => any)) => {
@@ -328,28 +358,45 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
   },
 
   nextStep: async () => {
-    const { currentStep, totalSteps, stepData, setCurrentStep, validateStep, setValidationErrors } =
-      get();
+    const {
+      currentStep,
+      setCurrentStep,
+      validateStep,
+      setValidationErrors,
+      planType,
+    } = get();
 
     // Validate current step
     const errors = validateStep(currentStep);
     setValidationErrors(currentStep, errors);
-
     if (errors.length > 0) {
       throw new Error(`Step ${currentStep} validation failed: ${errors.join(', ')}`);
     }
 
-    // Move to next step
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+    // Compute visible steps according to plan and move to the next visible one
+    const visibleSteps = planType === 'BASIC'
+      ? [1, 4, 6]
+      : planType === 'PROFESSIONAL'
+        ? [1, 2, 4, 6]
+        : [1, 2, 3, 4, 5, 6];
+
+    const index = visibleSteps.indexOf(currentStep);
+    if (index > -1 && index < visibleSteps.length - 1) {
+      setCurrentStep(visibleSteps[index + 1]);
     }
   },
 
   previousStep: () => {
-    const { currentStep, setCurrentStep } = get();
+    const { currentStep, setCurrentStep, planType } = get();
+    const visibleSteps = planType === 'BASIC'
+      ? [1, 4, 6]
+      : planType === 'PROFESSIONAL'
+        ? [1, 2, 4, 6]
+        : [1, 2, 3, 4, 5, 6];
 
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+    const index = visibleSteps.indexOf(currentStep);
+    if (index > 0) {
+      setCurrentStep(visibleSteps[index - 1]);
     }
   },
 
@@ -451,6 +498,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
           sections: sectionData.sections || [],
           sectionTemplates: sectionData.sectionTemplates || [],
         },
+        planType: get().planType,
       };
 
       logDebug('Submitting proposal to API', {
@@ -553,6 +601,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
         productData: stepData[4], // Product selection
         sectionData: stepData[5], // Section assignment
         reviewData: stepData[6], // Review data
+        planType: get().planType,
       };
 
       // ✅ FIXED: Use service layer with proper error handling
@@ -617,6 +666,11 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
       const productData = metadata.productData || {};
       const sectionData = metadata.sectionData || {};
       const reviewData = metadata.reviewData || {};
+      const planTypeFromMetadata = (metadata as any).planType as
+        | 'BASIC'
+        | 'PROFESSIONAL'
+        | 'ENTERPRISE'
+        | undefined;
 
       // ✅ ADDED: Debug logging to see what data is being extracted
       logDebug('Extracted metadata from proposal', {
@@ -675,7 +729,11 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
         },
       };
 
-      set({ stepData });
+      const updates: any = { stepData };
+      if (planTypeFromMetadata) {
+        updates.planType = planTypeFromMetadata;
+      }
+      set(updates);
 
       logDebug('Wizard initialized successfully', {
         component: 'ProposalStore',
@@ -685,6 +743,8 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
+      // Default edit flows to start at Product Selection (step 4)
+      set({ currentStep: 4 });
     } catch (error) {
       logError('Failed to initialize wizard from data', {
         component: 'ProposalStore',
@@ -725,6 +785,8 @@ export const useProposalUpdateProposal = () => useProposalStore(state => state.u
 export const useProposalInitializeFromData = () =>
   useProposalStore(state => state.initializeFromData);
 export const useProposalResetWizard = () => useProposalStore(state => state.resetWizard);
+export const useProposalPlanType = () => useProposalStore(state => state.planType);
+export const useProposalSetPlanType = () => useProposalStore(state => state.setPlanType);
 
 // Composite hooks for convenience (with shallow comparison optimization)
 export const useProposalNavigation = (): {

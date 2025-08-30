@@ -55,7 +55,7 @@ The Dashboard module is currently implemented using the **Bridge Architecture Pa
 
 ## 📊 **ARCHITECTURE WORKFLOW DIAGRAM**
 
-## ✅ Core Requirements Alignment
+## ✅ Core Requirements Alignment (Updated)
 
 This migration aligns the Dashboard module with the non‑negotiable standards in
 `docs/CORE_REQUIREMENTS.md`.
@@ -72,19 +72,27 @@ This migration aligns the Dashboard module with the non‑negotiable standards i
 - Schema & Validation Standards: Centralize dashboard request/response schemas in
   `src/features/dashboard/schemas.ts`. Avoid inline `z.object` in dashboard API routes unless
   the shape is truly route‑specific (document exceptions).
-- API Route Wrapper: Use `createRoute` (`src/lib/api/route.ts`) for auth, validation, logging,
-  and `x-request-id` correlation across all dashboard API routes.
+- API Route Wrapper: Use `createRoute` (`src/lib/api/route.ts`) for auth, validation, logging.
+  Ensure headers are present: `x-request-id`, `x-api-version`, and deprecation headers when applicable.
+- Idempotency: All mutating dashboard endpoints must support `Idempotency-Key`
+  (automatic via `createRoute`), and include a replay header `x-idempotent-replay` on cache hits.
+- OpenAPI: Expose dashboard schemas via `src/lib/openapi/generator.ts` and surface under
+  `/api/docs/openapi.json` (viewable at `/docs`). Keep dashboard schemas under
+  `src/features/dashboard/schemas.ts` and register in the generator.
 - Code Usability (New Components): Follow the component usability checklist (props clarity,
   composition, `className` passthrough, `forwardRef`, a11y, performance, docs/tests).
 
-Acceptance Checks (Dashboard)
+Acceptance Checks (Dashboard) — Precise
 
-- [ ] Dashboard API routes use `createRoute` and set `x-request-id`
+- [ ] Dashboard API routes use `createRoute` (auth/RBAC/logging/validation)
+- [ ] Headers present: `x-request-id`, `x-api-version`; deprecation headers where applicable
+- [ ] Mutations respect `Idempotency-Key` (with `x-idempotent-replay` on replays)
 - [ ] Dashboard schemas centralized in `src/features/dashboard/schemas.ts`
 - [ ] No inline `z.object` for shared shapes in dashboard API routes
 - [ ] Service layer uses shared HTTP client (no manual envelopes)
 - [ ] UI state in Zustand; data fetching via React Query hooks
 - [ ] New components pass usability checklist (props, a11y, perf, docs/tests)
+- [ ] Dashboard endpoints and schemas appear in `/api/docs/openapi.json` and render in `/docs`
 - [ ] `npm run type-check` and `npm run build` pass; quality gates satisfied
 
 
@@ -359,6 +367,10 @@ eventBridge.publish('DASHBOARD_DATA_UPDATED', payload);
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+Additions vs. original plan:
+- Central route wrapper features (versioning, idempotency, deprecation headers)
+- OpenAPI integration (auto-generated from Zod schemas)
+
 ## 🎯 **MIGRATION ASSESSMENT MATRIX**
 
 ### **📊 Migration Complexity Analysis**
@@ -391,6 +403,8 @@ touch src/features/dashboard/hooks/index.ts
 - [ ] Create React Query hooks to replace bridge API calls
 - [ ] Set up Zustand store for dashboard state management
 - [ ] Establish service layer with HTTP client integration
+- [ ] Register dashboard Zod schemas in `src/lib/openapi/generator.ts` (components)
+- [ ] Validate docs route: `/api/docs/openapi.json` includes dashboard schemas
 
 #### **Phase 2: API Layer Migration (Weeks 5-8)**
 
@@ -455,6 +469,11 @@ const { filters, setFilters } = useDashboardStore();
 - [ ] Maintain error context and user-friendly messages
 - [ ] Update error boundaries and recovery strategies
 
+**4.3 API Contract & Idempotency Tests**
+- [ ] Header tests for `x-api-version`, `x-request-id` (`src/test/api/api-headers.test.ts` as reference)
+- [ ] Mutation tests asserting idempotent replay on repeated `Idempotency-Key`
+- [ ] OpenAPI smoke test (JSON contains registered dashboard schemas)
+
 #### **Phase 5: Optimization & Deployment (Weeks 19-20)**
 
 **5.1 Performance Optimization**
@@ -515,6 +534,18 @@ export function useDashboardData(options: DashboardQueryOptions) {
     queryFn: () => dashboardService.fetchDashboardData(options),
     staleTime: 30000,
     gcTime: 120000,
+  });
+}
+
+// Add example mutation hook with idempotency header usage
+export function useUpdateDashboardPrefs() {
+  const http = useHttpClient();
+  return useMutation({
+    mutationFn: async (prefs: Prefs) => {
+      return http.put('/api/dashboard/prefs', prefs, {
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      });
+    },
   });
 }
 ```
@@ -807,6 +838,8 @@ Phase 4 (Weeks 17-20): Cleanup & Deployment
 - ✅ Improved code maintainability
 - ✅ Better test coverage
 - ✅ Enhanced developer experience
+- ✅ Versioned API headers and idempotent mutations
+- ✅ OpenAPI spec coverage for dashboard endpoints
 
 #### **Business Success**
 - ✅ Faster feature development post-migration
@@ -825,6 +858,7 @@ Phase 4 (Weeks 17-20): Cleanup & Deployment
 - `src/features/proposals/` - Complete modern implementation
 - `src/services/proposalService.ts` - Service layer patterns
 - `src/hooks/useProposals.ts` - React Query patterns
+- `src/app/api/proposals/route.ts` - Concrete `createRoute` usage with Zod schemas
 
 ### **Migration Tools**
 - `scripts/migration/` - Migration automation scripts
@@ -876,6 +910,7 @@ These implementations validate the target patterns for the dashboard migration (
 
 - `src/lib/bridges/DashboardApiBridge.ts`
   - Replace with: `src/features/dashboard/services/DashboardService.ts` using `src/lib/api/client.ts` and typed contracts from `src/lib/dashboard/types.ts`.
+  - Ensure OpenAPI schemas reference these contracts to prevent drift.
 
 - `src/lib/bridges/StateBridge.tsx`
   - Replace with: `src/features/dashboard/store.ts` and selector-driven hooks; keep user prefs and filters colocated with dashboard feature.
@@ -889,6 +924,7 @@ These implementations validate the target patterns for the dashboard migration (
 - Keys: Mirror pattern used in products/proposals with a new `src/features/dashboard/keys.ts` for consistent cache keys.
 - Schemas: If endpoint-level validation is needed, colocate Zod schemas at `src/features/dashboard/schemas.ts` (aligning with products/proposals) and validate in route handlers.
 - Avoid drift: When dashboard surfaces proposals/customers/products KPIs, keep field names aligned with `src/features/proposals/schemas.ts` and `src/features/customers/schemas.ts`.
+ - Versioning & Deprecation: If KPI field names change, publish deprecation windows via route config and headers.
 
 ## ⚙️ Next.js App Router Compliance Checklist
 
@@ -919,3 +955,25 @@ These implementations validate the target patterns for the dashboard migration (
 - Document direct type imports in examples (link to `src/lib/dashboard/types.ts`) to prevent duplicate type definitions in the new feature layer.
 
 With these small additions, this document fully aligns with the modern implementation used by product, customer, and proposal features and provides the precision needed for a clean, low‑risk migration.
+**2.3 API Route Modernization**
+- [ ] Convert existing routes to `createRoute` configs with `query`/`body` schemas
+- [ ] Validate headers in tests: `x-request-id`, `x-api-version`
+- [ ] Ensure `Idempotency-Key` works on mutations (add unit/integration tests)
+- [ ] Add deprecation headers on legacy endpoints if dual-running
+
+Example (analytics dashboard):
+
+```ts
+// src/app/api/analytics/dashboard/route.ts (modernized outline)
+import { createRoute } from '@/lib/api/route';
+import { DashboardQuerySchema } from '@/features/dashboard/schemas';
+
+export const GET = createRoute({
+  roles: ['admin','manager','System Administrator','Administrator'],
+  query: DashboardQuerySchema,
+  apiVersion: '1',
+}, async ({ query, user }) => {
+  // fetch, compute, return Response
+  return new Response(JSON.stringify({ ok: true, data: {/* … */} }), { status: 200 });
+});
+```

@@ -10,7 +10,13 @@
 import { AnalyticsStorageMonitor } from '@/components/common/AnalyticsStorageMonitor';
 import { useResponsive } from '@/components/ui/ResponsiveBreakpointManager';
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { Card } from '@/components/ui/Card';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { useProposalStats, useDueProposals } from '@/hooks/useProposals';
+import { Badge } from '@/components/ui/Badge';
 
 // ✅ CRITICAL: Lazy loading for LCP optimization
 // Following Lesson #30: Performance Optimization - Component Lazy Loading
@@ -69,9 +75,49 @@ interface AppLayoutProps {
 export function AppLayout({ children, user }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   // ✅ FIXED: Use centralized responsive hook
   const { state } = useResponsive();
   const { isMobile } = state;
+  const pathname = usePathname();
+  const { data: stats } = useProposalStats();
+  const notifCount = stats?.overdue || 0;
+
+  // Freeze time ranges while drawer is open to avoid refetch loops
+  const ranges = useMemo(() => {
+    if (!notifOpen) return null;
+    const now = new Date();
+    const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    return {
+      overdueBefore: now.toISOString(),
+      nearAfter: now.toISOString(),
+      nearBefore: in14.toISOString(),
+    } as const;
+  }, [notifOpen]);
+
+  const overdueQuery = useDueProposals(
+    ranges
+      ? {
+          dueBefore: ranges.overdueBefore,
+          openOnly: true,
+          limit: 20,
+          sortBy: 'dueDate',
+          sortOrder: 'asc',
+        }
+      : { limit: 0 }
+  );
+  const nearDueQuery = useDueProposals(
+    ranges
+      ? {
+          dueAfter: ranges.nearAfter,
+          dueBefore: ranges.nearBefore,
+          openOnly: true,
+          limit: 20,
+          sortBy: 'dueDate',
+          sortOrder: 'asc',
+        }
+      : { limit: 0 }
+  );
 
   // Handle responsive behavior - enhanced with centralized detection
   useEffect(() => {
@@ -157,6 +203,8 @@ export function AppLayout({ children, user }: AppLayoutProps) {
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             isMobile={isMobile}
             user={user}
+            onNotificationsClick={() => setNotifOpen(true)}
+            notificationCount={notifCount}
           />
 
           {/* Main content */}
@@ -172,6 +220,133 @@ export function AppLayout({ children, user }: AppLayoutProps) {
 
       {/* Analytics monitoring */}
       <AnalyticsStorageMonitor />
+
+      {/* Global Notifications Drawer */}
+      {notifOpen && (
+        <div
+          id="global-notifications-backdrop"
+          className="fixed inset-0 z-40 bg-black/30"
+          onClick={e => {
+            if ((e.target as HTMLElement).id === 'global-notifications-backdrop') setNotifOpen(false);
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-xl z-50">
+            <div className="h-full flex flex-col">
+              <div className="p-4 border-b flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Deadlines</h2>
+                  <p className="text-sm text-gray-600">Overdue and near‑due proposals</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNotifOpen(false)}
+                  className="w-9 h-9 inline-flex items-center justify-center rounded-md border border-gray-200 hover:bg-gray-50"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="p-4 overflow-y-auto flex-1">
+                {(overdueQuery.isLoading || nearDueQuery.isLoading) && (
+                  <div className="text-sm text-gray-500 mb-3">Loading…</div>
+                )}
+                {(overdueQuery.error || nearDueQuery.error) && (
+                  <div className="text-sm text-red-600 mb-3">Failed to load deadlines</div>
+                )}
+
+                <Section title="Overdue" items={(overdueQuery.data as any[]) || []} onClose={() => setNotifOpen(false)} />
+                <Section title="Due in next 14 days" items={(nearDueQuery.data as any[]) || []} onClose={() => setNotifOpen(false)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function Section({
+  title,
+  items,
+  onClose,
+}: {
+  title: string;
+  items: any[];
+  onClose: () => void;
+}) {
+  return (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+        <span className="text-xs text-gray-500">{items?.length || 0}</span>
+      </div>
+      <div className="space-y-2">
+        {items && items.length > 0 ? (
+          items.map(item => (
+            <Tooltip
+              key={item.id}
+              placement="left"
+              content={
+                <div className="max-w-xs">
+                  <div className="text-sm font-semibold text-white/95 mb-1">
+                    {item.title || 'Untitled Proposal'}
+                  </div>
+                  <div className="text-xs text-white/80">
+                    <div>Client: {item.customer?.name || 'Unknown'}</div>
+                    <div>Due: {formatDateSafe(item.dueDate)}</div>
+                    {item.status && <div>Status: {item.status}</div>}
+                    {item.value !== undefined && (
+                      <div>
+                        Value: {Intl.NumberFormat('en-US', { style: 'currency', currency: item.currency || 'USD' }).format(Number(item.value) || 0)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              }
+              showArrow
+              showDelay={150}
+            >
+              <div className="group">
+                <Link
+                  href={`/proposals/${item.id}`}
+                  className="block p-3 rounded-md border border-gray-200 hover:border-blue-300 hover:bg-blue-50/30"
+                  onClick={onClose}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="mr-3">
+                      <div className="text-sm font-medium text-gray-900 line-clamp-1">
+                        {item.title || 'Untitled Proposal'}
+                      </div>
+                      <div className="text-xs text-gray-600 line-clamp-1">
+                        {item.customer?.name || 'Unknown Client'}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-gray-500">Due {formatDateSafe(item.dueDate)}</div>
+                      <div className="mt-1">
+                        <Badge className="bg-blue-100 text-blue-800 text-[10px]">{item.priority}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </div>
+            </Tooltip>
+          ))
+        ) : (
+          <Card>
+            <div className="p-3 text-xs text-gray-500">No items</div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatDateSafe(d?: string | Date) {
+  if (!d) return '—';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }

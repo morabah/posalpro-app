@@ -1,4 +1,5 @@
-// __FILE_DESCRIPTION__: Types skeleton for API contracts and UI models
+// __FILE_DESCRIPTION__: Types skeleton for API contracts and UI models (Deprecated)
+// Note: Prefer deriving types from Zod in feature schemas (src/features/[domain]/schemas.ts)
 
 export type DatabaseId = string; // CUID-friendly per CORE_REQUIREMENTS
 
@@ -19,3 +20,4 @@ export type __LIST_RESPONSE__<TItem> = {
     limit?: number;
   };
 };
+

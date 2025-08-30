@@ -30,6 +30,8 @@ export const ProposalPrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']
 
 export const ProposalRiskLevelSchema = z.enum(['low', 'medium', 'high']);
 
+export const ProposalPlanTypeSchema = z.enum(['BASIC', 'PROFESSIONAL', 'ENTERPRISE']);
+
 // ====================
 // Wizard Step Schemas
 // ====================
@@ -203,6 +205,7 @@ export const ProposalMetadataSchema = z.object({
     .optional(),
   submittedAt: z.string().optional(),
   wizardVersion: z.string().optional(),
+  planType: ProposalPlanTypeSchema.optional(),
 });
 
 // ====================
@@ -214,13 +217,18 @@ export const ProposalQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   cursor: z.string().nullable().optional(),
   sortBy: z
-    .enum(['createdAt', 'updatedAt', 'title', 'status', 'priority', 'value'])
+    .enum(['createdAt', 'updatedAt', 'title', 'status', 'priority', 'value', 'dueDate'])
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   status: ProposalStatusSchema.optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   customerId: z.string().optional(),
   assignedTo: z.string().optional(),
+  // Deadline filters (ISO date strings)
+  dueBefore: z.string().datetime().optional(),
+  dueAfter: z.string().datetime().optional(),
+  // Open-only filter to exclude final states
+  openOnly: z.coerce.boolean().optional().default(false),
 });
 
 export const ProposalCreateSchema = z.object({
@@ -229,6 +237,7 @@ export const ProposalCreateSchema = z.object({
   contentData: ContentSelectionSchema,
   productData: ProductSelectionSchema,
   sectionData: SectionAssignmentSchema,
+  planType: ProposalPlanTypeSchema.optional(),
 });
 
 export const ProposalUpdateSchema = z
@@ -269,6 +278,8 @@ export const WizardProposalUpdateSchema = z
     reviewData: z.any().optional(),
     // Customer object
     customer: z.any().optional(),
+    // Wizard plan selection
+    planType: ProposalPlanTypeSchema.optional(),
   })
   .partial();
 

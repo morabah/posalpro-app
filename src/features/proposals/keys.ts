@@ -33,5 +33,13 @@ export const qk = {
     byId: (id: string) => ['proposals', 'byId', id] as const,
     search: (query: string, limit: number) => ['proposals', 'search', query, limit] as const,
     stats: () => ['proposals', 'stats'] as const,
+    due: (
+      dueBefore?: string,
+      dueAfter?: string,
+      openOnly?: boolean,
+      limit: number = 10,
+      sortBy: 'dueDate' | 'createdAt' | 'updatedAt' = 'dueDate',
+      sortOrder: 'asc' | 'desc' = 'asc'
+    ) => ['proposals', 'due', dueBefore || null, dueAfter || null, !!openOnly, limit, sortBy, sortOrder] as const,
   },
 } as const;

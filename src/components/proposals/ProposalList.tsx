@@ -131,22 +131,27 @@ function DashboardMetrics() {
         overdue: 0,
         winRate: 0,
         totalValue: 0,
-        submitted: 0,
-        approved: 0,
-        rejected: 0,
-        draft: 0,
         averageValue: 0,
       };
     }
 
-    const inProgress = (stats.submitted || 0); // Approximate in-progress as submitted
-    const winRate = stats.total > 0 ? ((stats.approved || 0) / stats.total) * 100 : 0;
+    // Compute inProgress from byStatus (backend returns byStatus counts)
+    const byStatus = stats.byStatus || {};
+    const inProgress = (
+      (byStatus.DRAFT || 0) +
+      (byStatus.IN_REVIEW || 0) +
+      (byStatus.PENDING_APPROVAL || 0) +
+      (byStatus.SUBMITTED || 0) +
+      (byStatus.IN_PROGRESS || 0)
+    );
 
     return {
-      ...stats,
+      total: stats.total || 0,
       inProgress,
-      overdue: 0, // Would need deadline data from API
-      winRate: Math.round(winRate * 100) / 100, // Round to 2 decimal places
+      overdue: stats.overdue || 0,
+      winRate: typeof stats.winRate === 'number' ? Math.round(stats.winRate * 100) / 100 : 0,
+      totalValue: stats.totalValue || 0,
+      averageValue: stats.averageValue || 0,
     };
   }, [stats]);
 
@@ -990,6 +995,8 @@ export default function ProposalList() {
           )}
         </div>
       </div>
+
+      {/* Global header provides notifications */}
     </div>
   );
 }

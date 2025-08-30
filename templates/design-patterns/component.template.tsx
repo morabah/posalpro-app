@@ -7,21 +7,39 @@
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { logDebug, logInfo } from '@/lib/logger';
-import React from 'react';
+import { cn } from '@/lib/utils';
+import React, { forwardRef, memo } from 'react';
+import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 
-export type __COMPONENT_NAME__Props = {
+export type __COMPONENT_NAME__Props = React.HTMLAttributes<HTMLDivElement> & {
   title: string;
+  description?: string;
   onAction?: () => void;
+  actionLabel?: string;
   disabled?: boolean;
+  isLoading?: boolean;
+  className?: string;
+  children?: React.ReactNode;
   'data-testid'?: string;
 };
 
-export function __COMPONENT_NAME__({
-  title,
-  onAction,
-  disabled = false,
-  'data-testid': dataTestId = '__COMPONENT_NAME__',
-}: __COMPONENT_NAME__Props) {
+export const __COMPONENT_NAME__ = memo(
+  forwardRef<HTMLDivElement, __COMPONENT_NAME__Props>(
+    (
+      {
+        title,
+        description,
+        onAction,
+        actionLabel = 'Do Action',
+        disabled = false,
+        isLoading = false,
+        className,
+        children,
+        'data-testid': dataTestId = '__COMPONENT_NAME__',
+        ...rest
+      },
+      ref
+    ) => {
   // Component Traceability Matrix logging
   logDebug('Component render', {
     component: '__COMPONENT_NAME__',
@@ -29,7 +47,7 @@ export function __COMPONENT_NAME__({
     userStory: '__USER_STORY__',
     hypothesis: '__HYPOTHESIS__',
     acceptanceCriteria: ['Renders title', 'Handles action clicks', 'Accessible to screen readers'],
-    context: { title, disabled },
+    context: { title, disabled, isLoading },
   });
 
   const handleAction = React.useCallback(() => {
@@ -46,28 +64,45 @@ export function __COMPONENT_NAME__({
 
   return (
     <Card
+      ref={ref as any}
       data-testid={dataTestId}
       role="region"
       aria-label={title}
-      className={disabled ? 'opacity-60' : ''}
+      aria-busy={isLoading || undefined}
+      className={cn(disabled && 'opacity-60', className)}
+      {...rest}
     >
       <div className="p-4 grid gap-3">
         <h2 className="text-lg font-semibold" data-testid={`${dataTestId}-title`}>
           {title}
         </h2>
-        <div>
-          <Button
-            type="button"
-            onClick={handleAction}
-            disabled={disabled}
-            size="md" // 44px minimum for touch targets
-            aria-label={`${title} action`}
-            data-testid={`${dataTestId}-action-button`}
-          >
-            Do Action
-          </Button>
+        {description && (
+          <p className="text-sm text-neutral-600" data-testid={`${dataTestId}-description`}>
+            {description}
+          </p>
+        )}
+
+        {children}
+
+        <div className="flex items-center gap-3">
+          {onAction && (
+            <Button
+              type="button"
+              onClick={handleAction}
+              disabled={disabled || isLoading}
+              size="md" // 44px minimum for touch targets
+              aria-label={`${title} action`}
+              data-testid={`${dataTestId}-action-button`}
+            >
+              {actionLabel}
+            </Button>
+          )}
+          {isLoading && <LoadingSpinner size="sm" aria-label="Loading" />}
         </div>
       </div>
     </Card>
   );
 }
+));
+
+__COMPONENT_NAME__.displayName = '__COMPONENT_NAME__';

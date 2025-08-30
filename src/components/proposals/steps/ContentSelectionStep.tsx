@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ProposalContentData, useProposalActions } from '@/lib/store/proposalStore';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface ContentSelectionStepProps {
   data?: ProposalContentData;
@@ -138,6 +138,20 @@ export function ContentSelectionStep({
     },
     [analytics]
   );
+
+  // Persist step data continuously when selection changes
+  useEffect(() => {
+    setStepData(3, {
+      selectedTemplates,
+      customContent,
+      contentLibrary: CONTENT_TEMPLATES.map(template => ({
+        id: template.id,
+        title: template.title,
+        category: template.category,
+        isSelected: selectedTemplates.includes(template.id),
+      })),
+    });
+  }, [selectedTemplates, customContent, setStepData]);
 
   // Group templates by category
   const templatesByCategory = useMemo(() => {

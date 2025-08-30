@@ -4815,3 +4815,25 @@ Admin) to the modern architecture.
 **Next Steps**: The updated assessment document now serves as a comprehensive
 guide for future module migrations, ensuring that the lessons learned from the
 Product migration are applied to prevent similar issues in other modules.
+## 2025-08-29 13:20 - Notifications Drawer Hover Preview (CORE Compliant)
+
+Phase: UX/Notifications
+Status: ✅ COMPLETED
+Files Updated:
+
+- src/components/layout/AppLayout.tsx (added hover tooltip around proposal items)
+
+What changed:
+
+- When opening the global notifications drawer (bell icon), hovering a proposal now shows a brief tooltip with title, client, due date, status, and value.
+- Uses the existing accessible `Tooltip` component with left placement (auto-top on mobile), preserves click-through behavior.
+
+CORE_REQUIREMENTS compliance:
+
+- Reused shared UI component (`Tooltip`); no new APIs or stores.
+- Kept server state untouched; UI-only enhancement with proper a11y and stable renders.
+- Minimal, localized change inside layout notifications `Section`.
+
+Impact:
+
+- Faster triage from the drawer with immediate context on hover without navigating away.

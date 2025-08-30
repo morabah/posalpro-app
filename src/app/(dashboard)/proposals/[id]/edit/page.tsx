@@ -13,6 +13,7 @@ import { qk } from '@/features/proposals/keys';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError } from '@/lib/logger';
 import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -40,6 +41,7 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
   const analytics = useOptimizedAnalytics();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const handleComplete = useCallback(
     async (data: string | object) => {
@@ -115,6 +117,8 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
             userStory: 'US-3.1',
             hypothesis: 'H4',
           });
+          // Show success toast after confirming API updated
+          toast.success('Proposal updated successfully');
         } catch (error) {
           logError('Failed to update proposal', {
             component: 'EditProposalPage',
@@ -166,7 +170,7 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
 
       router.push(`/proposals/${proposalId}`);
     },
-    [analytics, router, proposalId, queryClient]
+    [analytics, router, proposalId, queryClient, toast]
   );
 
   const handleCancel = useCallback(() => {

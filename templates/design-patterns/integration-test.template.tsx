@@ -1,7 +1,7 @@
-// __FILE_DESCRIPTION__: React Testing Library integration test skeleton
+// __FILE_DESCRIPTION__: React Testing Library integration test skeleton (with providers)
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '@/lib/testing/testUtils';
 
 function __DUMMY_COMPONENT__() {
   return <div data-testid="__DUMMY__">Hello</div>;

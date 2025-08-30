@@ -65,6 +65,20 @@ export const GET = createRoute(
         };
       }
 
+      // Deadline filters
+      if (query!.dueBefore || query!.dueAfter) {
+        where.dueDate = {} as any;
+        if (query!.dueBefore) (where.dueDate as any).lte = new Date(query!.dueBefore);
+        if (query!.dueAfter) (where.dueDate as any).gte = new Date(query!.dueAfter);
+      }
+
+      // Open-only filter (exclude final states)
+      if (query!.openOnly) {
+        where.status = {
+          notIn: ['APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED'],
+        } as any;
+      }
+
       // Build order by
       const orderBy: Array<Record<string, string>> = [{ [query!.sortBy]: query!.sortOrder }];
 
@@ -212,6 +226,7 @@ export const POST = createRoute(
               sectionData: body!.sectionData,
               wizardVersion: 'modern',
               submittedAt: new Date().toISOString(),
+              planType: body!.planType,
             },
           },
           select: {

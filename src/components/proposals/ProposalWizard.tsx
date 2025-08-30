@@ -14,19 +14,28 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useProposal, useUpdateProposal } from '@/hooks/useProposals';
 import { logDebug, logError } from '@/lib/logger';
+import { http } from '@/lib/http';
+import { useQueryClient } from '@tanstack/react-query';
+import { buildWizardPayloadFromStore, buildCreateBodyFromStore, saveDraftToLocalStorage } from './wizard/persistence';
+import { WizardHeader } from './wizard/WizardHeader';
+import { WizardSidebar } from './wizard/WizardSidebar';
+import { useRouter } from 'next/navigation';
 import {
   useProposalCanGoBack,
   useProposalCanProceed,
   useProposalCurrentStep,
+  useProposalPlanType,
   useProposalInitializeFromData,
   useProposalIsSubmitting,
   useProposalNextStep,
   useProposalPreviousStep,
   useProposalResetWizard,
   useProposalSetCurrentStep,
+  useProposalSetPlanType,
   useProposalStepData,
   useProposalStore,
   useProposalSubmitProposal,
@@ -36,13 +45,7 @@ import {
   type ProposalSectionData,
   type ProposalTeamData,
 } from '@/lib/store/proposalStore';
-import {
-  CheckCircleIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  EyeIcon,
-  PaperAirplaneIcon,
-} from '@heroicons/react/24/outline';
+// Icons now handled inside extracted components
 import { useCallback, useEffect, useMemo } from 'react';
 
 // Step components
@@ -113,10 +116,14 @@ export function ProposalWizard({
   proposalId,
 }: ProposalWizardProps) {
   const analytics = useOptimizedAnalytics();
+  const toast = useToast();
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Use individual selectors to prevent object creation and infinite re-renders
   const currentStep = useProposalCurrentStep();
   const totalSteps = useProposalTotalSteps();
+  const planType = useProposalPlanType();
   const canProceed = useProposalCanProceed();
   const canGoBack = useProposalCanGoBack();
   const isSubmitting = useProposalIsSubmitting();
@@ -124,6 +131,7 @@ export function ProposalWizard({
   const nextStep = useProposalNextStep();
   const previousStep = useProposalPreviousStep();
   const setCurrentStep = useProposalSetCurrentStep();
+  const setPlanType = useProposalSetPlanType();
   const submitProposal = useProposalSubmitProposal();
   const updateProposalMutation = useUpdateProposal();
   const resetWizard = useProposalResetWizard();
@@ -156,6 +164,8 @@ export function ProposalWizard({
       try {
         // ✅ FIXED: Pass raw proposal data to store (store handles transformation internally)
         initializeFromData(proposalData);
+        // Ensure edit opens on step 4 directly
+        setCurrentStep(4);
 
         analytics.trackOptimized('wizard_edit_mode_initialized', {
           proposalId,
@@ -176,11 +186,161 @@ export function ProposalWizard({
     }
   }, [editMode, proposalData, isLoadingProposal, proposalId]); // ✅ FIXED: Removed unstable dependencies
 
+  // Visible steps based on plan type
+  const visibleStepIds = useMemo(() => {
+    if (planType === 'BASIC') return [1, 4, 6];
+    if (planType === 'PROFESSIONAL') return [1, 2, 4, 6];
+    return [1, 2, 3, 4, 5, 6];
+  }, [planType]);
+
+  const visibleSteps = useMemo(() => STEP_META.filter(s => visibleStepIds.includes(s.id)), [visibleStepIds]);
+
   // Current step component
   const CurrentStepComponent = useMemo(() => {
     const step = STEP_META.find(s => s.id === currentStep);
     return step?.component || BasicInformationStep;
   }, [currentStep]);
+
+  // Build payload to save (used for per-step update)
+  const buildWizardPayload = useCallback(() => buildWizardPayloadFromStore(planType), [planType]);
+
+  const handleUpdateCurrent = useCallback(async () => {
+    if (!editMode || !proposalId) return;
+    try {
+      const payload = buildWizardPayload();
+      await http.put(`/api/proposals/${proposalId}`, payload);
+      const { planOk, countOk, totalOk } = await (await import('./wizard/persistence')).verifyPersistedProposal(
+        proposalId,
+        payload
+      );
+
+      // Invalidate caches
+      try {
+        const { qk } = await import('@/features/proposals/keys');
+        queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
+        queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      } catch {}
+
+      if (planOk && countOk && totalOk) {
+        toast.success('Update saved successfully');
+      } else {
+        const parts = [
+          planOk ? null : 'plan',
+          countOk ? null : 'products',
+          totalOk ? null : 'total',
+        ].filter(Boolean);
+        toast.warning(`Saved, but verification mismatch (${parts.join(', ')})`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      toast.error(`Failed to update: ${msg}`);
+    }
+  }, [editMode, proposalId, buildWizardPayload, toast]);
+
+  const handleFinish = useCallback(async () => {
+    // Finish = save then navigate (edit mode)
+    if (editMode && proposalId) {
+      try {
+        const payload = buildWizardPayload();
+        await http.put(`/api/proposals/${proposalId}`, payload);
+
+        const { planOk, countOk, totalOk } = await (await import('./wizard/persistence')).verifyPersistedProposal(
+          proposalId,
+          payload
+        );
+
+        // Invalidate proposal caches to ensure detail page shows fresh data
+        try {
+          const { qk } = await import('@/features/proposals/keys');
+          queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
+          queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+        } catch {}
+
+        if (planOk && countOk && totalOk) {
+          toast.success('All changes saved');
+        } else {
+          const parts = [
+            planOk ? null : 'plan',
+            countOk ? null : 'products',
+            totalOk ? null : 'total',
+          ].filter(Boolean);
+          toast.warning(`Saved, but verification mismatch (${parts.join(', ')})`);
+        }
+        router.push(`/proposals/${proposalId}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Unknown error';
+        toast.error(`Failed to save before finishing: ${msg}`);
+      }
+      return;
+    }
+    // Create mode: attempt to save a server draft if minimally complete, else save locally
+    try {
+      const { stepData } = useProposalStore.getState();
+      const s1: any = stepData[1] || {};
+      const s2: any = stepData[2] || {};
+
+      const hasBasic = Boolean(s1?.title && s1?.customerId);
+      const hasTeam = Boolean(s2?.teamLead && s2?.salesRepresentative);
+
+      if (hasBasic && hasTeam) {
+        const proposalBody = buildCreateBodyFromStore();
+        const { proposalService } = await import('@/services/proposalService');
+        const response = await proposalService.createProposal(proposalBody as any);
+        if (response.ok) {
+          toast.success('Draft saved');
+          router.push('/proposals');
+          return;
+        }
+        toast.warning('Server save failed, saving draft locally.');
+        saveDraftToLocalStorage();
+        router.push('/proposals');
+        return;
+      }
+
+      const ok = saveDraftToLocalStorage();
+      toast[ok ? 'success' : 'warning'](ok ? 'Draft saved locally' : 'Could not save draft locally');
+      router.push('/proposals');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      toast.error(`Failed to finish: ${msg}`);
+    }
+  }, [editMode, proposalId, router, toast, buildWizardPayload]);
+
+  const handlePreview = useCallback(() => {
+    try {
+      // Build preview from persisted wizard store for BOTH create and edit modes
+      const { stepData } = useProposalStore.getState();
+      const s1: any = stepData[1] || {};
+      const s4: any = stepData[4] || {};
+      const preview = {
+        company: {
+          name: s1?.customer?.name || 'Company',
+          industry: s1?.customer?.industry || undefined,
+        },
+        proposal: {
+          title: s1?.title || 'Untitled Proposal',
+          description: s1?.description || '',
+          dueDate: s1?.dueDate || null,
+          priority: s1?.priority || 'MEDIUM',
+        },
+        products: (s4?.products || []).map((p: any) => ({
+          id: p.productId || p.id,
+          name: p.name || 'Unknown Product',
+          quantity: p.quantity || 1,
+          unitPrice: p.unitPrice || 0,
+          totalPrice: p.total || 0,
+          category: p.category || 'General',
+        })),
+        totals: { currency: s1?.currency || 'USD', amount: s4?.totalValue || 0 },
+        terms: [],
+      };
+      localStorage.setItem('proposal-preview-data', JSON.stringify(preview));
+      window.open('/proposals/preview', '_blank', 'noopener,noreferrer');
+      toast.success('Opening proposal preview...');
+    } catch (e) {
+      toast.error('Failed to open preview');
+    }
+  }, [toast]);
 
   // Navigation handlers
   const handleNext = useCallback(async () => {
@@ -225,33 +385,34 @@ export function ProposalWizard({
 
   const handleStepClick = useCallback(
     (targetStep: number) => {
-      // Only allow navigation to completed steps or the next step
-      if (targetStep <= currentStep || targetStep === currentStep + 1) {
-        analytics.trackOptimized('wizard_step_navigation', {
-          action: 'direct_step_click',
-          fromStep: currentStep,
-          toStep: targetStep,
-          editMode,
-          proposalId,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
+      // Allow jumping to any visible step
+      const allowedSteps = planType === 'BASIC' ? [1, 4, 6] : planType === 'PROFESSIONAL' ? [1, 2, 4, 6] : [1, 2, 3, 4, 5, 6];
+      if (!allowedSteps.includes(targetStep)) return;
 
-        logDebug('Direct step navigation', {
-          component: 'ProposalWizard',
-          operation: 'handleStepClick',
-          fromStep: currentStep,
-          toStep: targetStep,
-          editMode,
-          proposalId,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
+      analytics.trackOptimized('wizard_step_navigation', {
+        action: 'direct_step_click',
+        fromStep: currentStep,
+        toStep: targetStep,
+        editMode,
+        proposalId,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
 
-        setCurrentStep(targetStep);
-      }
+      logDebug('Direct step navigation', {
+        component: 'ProposalWizard',
+        operation: 'handleStepClick',
+        fromStep: currentStep,
+        toStep: targetStep,
+        editMode,
+        proposalId,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      setCurrentStep(targetStep);
     },
-    [currentStep, setCurrentStep, editMode, proposalId, analytics]
+    [currentStep, setCurrentStep, editMode, proposalId, analytics, planType]
   );
 
   const handleSubmit = useCallback(async () => {
@@ -438,6 +599,7 @@ export function ProposalWizard({
                 totalValue: productData.totalValue || 0,
                 totalSections: sectionData.sections?.length || 0,
               },
+              planType,
             };
 
             logDebug('DEBUG: Wizard payload created', {
@@ -550,92 +712,20 @@ export function ProposalWizard({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {editMode ? 'Edit Proposal' : 'Create New Proposal'}
-              </h1>
-              <p className="text-gray-600 mt-1">
-                {editMode
-                  ? 'Update your proposal details and settings'
-                  : 'Follow the guided workflow to create a comprehensive proposal for your client.'}
-              </p>
-            </div>
-
-            {onCancel && (
-              <Button variant="outline" onClick={onCancel} className="flex items-center gap-2">
-                Cancel
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {STEP_META.map((step, index) => {
-              const isClickable = step.id <= currentStep || step.id === currentStep + 1;
-              const isCompleted = currentStep > step.id;
-              const isCurrent = currentStep === step.id;
-
-              return (
-                <div key={step.id} className="flex items-center">
-                  <button
-                    onClick={() => handleStepClick(step.id)}
-                    disabled={!isClickable}
-                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-all duration-200 ${
-                      isCompleted
-                        ? 'bg-green-500 text-white hover:bg-green-600'
-                        : isCurrent
-                          ? 'bg-blue-500 text-white'
-                          : isClickable
-                            ? 'bg-gray-200 text-gray-600 hover:bg-gray-300 cursor-pointer'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    } ${isClickable ? 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2' : ''}`}
-                    title={
-                      isClickable
-                        ? `Go to ${step.title}`
-                        : `Complete previous steps to unlock ${step.title}`
-                    }
-                  >
-                    {isCompleted ? <CheckCircleIcon className="w-5 h-5" /> : step.id}
-                  </button>
-                  <button
-                    onClick={() => handleStepClick(step.id)}
-                    disabled={!isClickable}
-                    className={`ml-2 text-sm font-medium transition-colors duration-200 ${
-                      isCurrent || isCompleted
-                        ? 'text-gray-900'
-                        : isClickable
-                          ? 'text-gray-700 hover:text-gray-900 cursor-pointer'
-                          : 'text-gray-400 cursor-not-allowed'
-                    } ${isClickable ? 'focus:outline-none focus:underline' : ''}`}
-                    title={
-                      isClickable
-                        ? `Go to ${step.title}`
-                        : `Complete previous steps to unlock ${step.title}`
-                    }
-                  >
-                    {step.title}
-                  </button>
-                  {index < STEP_META.length - 1 && (
-                    <div
-                      className={`ml-4 w-8 h-0.5 ${
-                        currentStep > step.id ? 'bg-green-500' : 'bg-gray-200'
-                      }`}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <WizardHeader
+        title={editMode ? 'Edit Proposal' : 'Create New Proposal'}
+        subtitle={
+          editMode
+            ? 'Update your proposal details and settings'
+            : 'Follow the guided workflow to create a comprehensive proposal for your client.'
+        }
+        planType={planType}
+        onPlanChange={setPlanType}
+        steps={STEP_META.map(s => ({ id: s.id, title: s.title }))}
+        visibleStepIds={visibleStepIds}
+        currentStep={currentStep}
+        onStepClick={handleStepClick}
+      />
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
@@ -654,107 +744,63 @@ export function ProposalWizard({
                   }}
                   // editMode prop removed - not needed by step components
                 />
+                <div className="mt-4 flex justify-between items-center">
+                  {/* Left area: step-specific action (Preview on step 4) */}
+                  <div>
+                    {currentStep === 4 && (
+                      <Button variant="outline" onClick={handlePreview}>
+                        Preview Proposal
+                      </Button>
+                    )}
+                  </div>
+                  {/* Right area: Update + Finish in edit mode */}
+                  <div className="flex gap-2">
+                    {onCancel && (
+                      <Button variant="outline" onClick={onCancel}>
+                        Cancel
+                      </Button>
+                    )}
+                    {editMode && proposalId && (
+                      <Button variant="primary" onClick={handleUpdateCurrent}>
+                        Update
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={handleFinish}>
+                      Finish
+                    </Button>
+                  </div>
+                </div>
               </Card>
             </div>
 
             {/* Sidebar */}
             <div className="lg:col-span-1">
-              <Card className="p-6 sticky top-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Proposal Summary</h3>
-
-                {/* Quick Stats */}
-                <div className="space-y-3 mb-6">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Customer:</span>
-                    <span className="font-medium">
-                      {step1Data?.customer?.name || 'Not selected'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Team Members:</span>
-                    <span className="font-medium">{step2Data?.teamMembers?.length || 0}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Products:</span>
-                    <span className="font-medium">{step4Data?.products?.length || 0}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Sections:</span>
-                    <span className="font-medium">{step5Data?.sections?.length || 0}</span>
-                  </div>
-                </div>
-
-                {/* Navigation */}
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Current Step:</span>
-                    <span className="font-medium">
-                      {currentStep} of {totalSteps}
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleBack}
-                      disabled={!canGoBack}
-                      className="flex-1"
-                    >
-                      <ChevronLeftIcon className="w-4 h-4 mr-1" />
-                      Back
-                    </Button>
-
-                    {currentStep < totalSteps ? (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handleNext}
-                        disabled={!canProceed}
-                        className="flex-1"
-                      >
-                        Next
-                        <ChevronRightIcon className="w-4 h-4 ml-1" />
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handleSubmit}
-                        disabled={isSubmitting}
-                        className="flex-1"
-                      >
-                        {isSubmitting ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                        ) : (
-                          <PaperAirplaneIcon className="w-4 h-4 mr-1" />
-                        )}
-                        {editMode ? 'Update' : 'Submit'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Preview Button */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      analytics.trackOptimized('wizard_preview', {
-                        step: currentStep,
-                        editMode,
-                        proposalId,
-                        userStory: 'US-3.1',
-                        hypothesis: 'H4',
-                      });
-                    }}
-                  >
-                    <EyeIcon className="w-4 h-4 mr-2" />
-                    Preview Proposal
-                  </Button>
-                </div>
+              <Card>
+                <WizardSidebar
+                  customerName={step1Data?.customer?.name}
+                  teamCount={step2Data?.teamMembers?.length || 0}
+                  productCount={step4Data?.products?.length || 0}
+                  sectionCount={step5Data?.sections?.length || 0}
+                  currentStep={currentStep}
+                  visibleStepIds={visibleStepIds}
+                  canGoBack={canGoBack}
+                  canProceed={canProceed}
+                  isSubmitting={isSubmitting}
+                  editMode={editMode}
+                  onBack={handleBack}
+                  onNext={handleNext}
+                  onSubmit={handleSubmit}
+                  onPreview={() => {
+                    analytics.trackOptimized('wizard_preview', {
+                      step: currentStep,
+                      editMode,
+                      proposalId,
+                      userStory: 'US-3.1',
+                      hypothesis: 'H4',
+                    });
+                    handlePreview();
+                  }}
+                />
               </Card>
             </div>
           </div>

@@ -4,7 +4,7 @@
 
 import { useEffect, useRef } from 'react';
 import { logDebug, logInfo, logError } from '@/lib/logger';
-import { ErrorHandlingService } from '@/lib/errors';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 
 export function __HOOK_NAME__(): void {
   const errorHandlingService = ErrorHandlingService.getInstance();
@@ -22,8 +22,13 @@ export function __HOOK_NAME__(): void {
         // Initialize resources here
         logInfo('Hook init success', { component: '__HOOK_NAME__', loadTime: performance.now() - start });
       } catch (error: unknown) {
-        const processed = errorHandlingService.processError(error, { context: '__HOOK_NAME__ init' });
-        logError('Hook init failed', { component: '__HOOK_NAME__', error: processed });
+        const processed = errorHandlingService.processError(
+          error,
+          'Hook init failed',
+          ErrorCodes.SYSTEM.UNKNOWN,
+          { context: '__HOOK_NAME__ init' }
+        );
+        logError('Hook init failed', processed, { component: '__HOOK_NAME__' });
       }
     })();
   }, []);
