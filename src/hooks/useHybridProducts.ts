@@ -104,8 +104,7 @@ export function useHybridProducts(options: UseHybridProductsOptions = {}) {
 
   // HYBRID DATA PROCESSING
   const hybridProducts = useMemo((): HybridProduct[] => {
-    const realProducts =
-      realProductsData?.pages.flatMap(page => page.items || page.products || []) || [];
+    const realProducts = realProductsData?.pages.flatMap(page => page.items || []) || [];
 
     if (!enableMockData) {
       return realProducts.map(product => ({
@@ -241,10 +240,10 @@ export function useHybridProducts(options: UseHybridProductsOptions = {}) {
       }
 
       if (filters.priceRange) {
-        filtered = filtered.filter(
-          product =>
-            product.price >= filters.priceRange!.min && product.price <= filters.priceRange!.max
-        );
+        filtered = filtered.filter(product => {
+          const price = product.price ?? 0;
+          return price >= filters.priceRange!.min && price <= filters.priceRange!.max;
+        });
       }
 
       if (filters.hasCustomizations !== undefined) {
@@ -316,7 +315,7 @@ export function useHybridProducts(options: UseHybridProductsOptions = {}) {
 
       if (!product) return null;
 
-      const basePrice = product.price;
+      const basePrice = product.price ?? 0;
       const customizationTotal = customizations.reduce(
         (sum, cust) => sum + (cust.modifier || 0),
         0
@@ -372,8 +371,7 @@ export function useHybridProducts(options: UseHybridProductsOptions = {}) {
   logInfo('Hybrid products hook initialized', {
     component: 'useHybridProducts',
     totalProducts: hybridProducts.length,
-    realProductsCount:
-      realProductsData?.pages.flatMap(page => page.items || page.products || []).length || 0,
+    realProductsCount: realProductsData?.pages.flatMap(page => page.items || []).length || 0,
     mockProductsCount: mockProducts.length,
     enableMockData,
     includeAdvancedFeatures,
@@ -382,7 +380,7 @@ export function useHybridProducts(options: UseHybridProductsOptions = {}) {
   return {
     // DATA
     products: hybridProducts,
-    realProducts: realProductsData?.pages.flatMap(page => page.items || page.products || []) || [],
+    realProducts: realProductsData?.pages.flatMap(page => page.items || []) || [],
     mockProducts,
 
     // STATE
@@ -403,8 +401,7 @@ export function useHybridProducts(options: UseHybridProductsOptions = {}) {
     // METADATA
     hasMockData: enableMockData && mockProducts.length > 0,
     mockDataCount: mockProducts.length,
-    realDataCount:
-      realProductsData?.pages.flatMap(page => page.items || page.products || []).length || 0,
+    realDataCount: realProductsData?.pages.flatMap(page => page.items || []).length || 0,
     totalCount: hybridProducts.length,
   };
 }

@@ -312,7 +312,7 @@ export const NotificationCenter = memo(
                       <div className="text-sm font-medium text-gray-900">{notification.title}</div>
                       <div className="text-sm text-gray-600 mt-1">{notification.message}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {new Date(notification.timestamp).toLocaleString()}
+                        {new Date(notification.timestamp).toLocaleString('en-US', { timeZone: 'UTC' })}
                       </div>
                     </div>
                   </div>

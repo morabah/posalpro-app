@@ -129,13 +129,22 @@ export const NLQInterface = memo(
 NLQInterface.displayName = 'NLQInterface';
 
 // Query Results Display
+interface ChartData { data: Array<{ label: string; value: number }> }
+
+interface QueryResults {
+  summary?: string;
+  data?: Array<Record<string, unknown>>;
+  chart?: ChartData;
+  insights?: string[];
+}
+
 export const QueryResultsDisplay = memo(
   ({
     results,
     query,
     isLoading
   }: {
-    results: any;
+    results: QueryResults;
     query: string;
     isLoading: boolean;
   }) => {
@@ -156,9 +165,9 @@ export const QueryResultsDisplay = memo(
       return null;
     }
 
-    const renderValue = (value: any) => {
+    const renderValue = (value: unknown) => {
       if (typeof value === 'number') {
-        return value.toLocaleString();
+      return new Intl.NumberFormat('en-US').format(value);
       }
       if (typeof value === 'string') {
         return value;
@@ -169,18 +178,18 @@ export const QueryResultsDisplay = memo(
       return JSON.stringify(value);
     };
 
-    const renderChart = (chartData: any) => {
+    const renderChart = (chartData: ChartData) => {
       // Simple chart rendering - in a real implementation, you'd use Chart.js or similar
       return (
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="text-sm text-gray-600 mb-2">Chart visualization</div>
           <div className="h-32 bg-white border rounded flex items-end justify-around p-2">
-            {chartData.data?.map((point: any, index: number) => (
+            {chartData.data?.map((point: { label: string; value: number }, index: number) => (
               <div
                 key={index}
                 className="bg-blue-500 rounded-t"
                 style={{
-                  height: `${(point.value / Math.max(...chartData.data.map((p: any) => p.value))) * 100}%`,
+                  height: `${(point.value / Math.max(...chartData.data.map((p) => p.value))) * 100}%`,
                   width: '20px'
                 }}
                 title={`${point.label}: ${point.value}`}
@@ -227,9 +236,9 @@ export const QueryResultsDisplay = memo(
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {results.data.map((row: any, index: number) => (
+                  {results.data.map((row: Record<string, unknown>, index: number) => (
                     <tr key={index}>
-                      {Object.values(row).map((value: any, cellIndex: number) => (
+                      {Object.values(row).map((value: unknown, cellIndex: number) => (
                         <td
                           key={cellIndex}
                           className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
@@ -301,7 +310,7 @@ export const QueryHistory = memo(
                     <span className="text-sm font-medium text-gray-900">{query.query}</span>
                   </div>
                   <div className="text-xs text-gray-500">
-                    {new Date(query.timestamp).toLocaleString()}
+                    {new Date(query.timestamp).toLocaleString('en-US', { timeZone: 'UTC' })}
                   </div>
                   {query.resultCount && (
                     <div className="text-xs text-gray-500 mt-1">
@@ -448,9 +457,6 @@ export const QueryBuilder = memo(
 );
 
 QueryBuilder.displayName = 'QueryBuilder';
-
-
-
 
 
 

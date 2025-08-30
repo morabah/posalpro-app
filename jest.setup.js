@@ -3,6 +3,9 @@
  * Global test environment setup
  */
 
+// Import React for JSX transformations (prefixed with mock to satisfy Jest)
+const mockReact = require('react');
+
 // MSW Global polyfills - MUST be at the top before any imports
 global.TextEncoder = require('util').TextEncoder;
 global.TextDecoder = require('util').TextDecoder;
@@ -41,7 +44,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   require('@testing-library/jest-dom');
 }
-import React from 'react';
+
 // MSW Server Setup - Temporarily disabled for integration testing
 // import { server } from './src/test/mocks/server';
 
@@ -119,7 +122,7 @@ jest.mock('next/image', () => ({
   __esModule: true,
   default: ({ src, alt, ...props }) => {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt} {...props} />;
+    return mockReact.createElement('img', { src, alt, ...props });
   },
 }));
 
@@ -622,7 +625,7 @@ global.testUtils = {
 };
 
 // Error boundary for testing
-global.TestErrorBoundary = class extends React.Component {
+global.TestErrorBoundary = class extends mockReact.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false };
@@ -638,7 +641,7 @@ global.TestErrorBoundary = class extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      return <div data-testid="error-boundary">Something went wrong.</div>;
+      return mockReact.createElement('div', { 'data-testid': 'error-boundary' }, 'Something went wrong.');
     }
 
     return this.props.children;

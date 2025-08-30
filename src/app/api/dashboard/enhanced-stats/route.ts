@@ -1,12 +1,10 @@
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError } from '@/lib/logger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { DashboardStatsQuerySchema } from '@/features/dashboard/schemas';
 
 // Enhanced cache for comprehensive dashboard data
 const enhancedStatsCache = new Map<string, { data: any; ts: number }>();
@@ -14,38 +12,37 @@ const ENHANCED_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 300 * 1000
 
 // Performance optimization: Increase cache TTL to reduce database load
 
-export async function GET(request: NextRequest) {
-  let session;
-  const start = performance.now();
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'sales', 'viewer', 'Administrator', 'System Administrator'],
+    query: DashboardStatsQuerySchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, query }) => {
+    const start = performance.now();
+    try {
+      // Check cache first
+      const forceFresh = !!query?.fresh;
+      const cacheKey = `enhanced-stats:${user.id}`;
+      const cached = enhancedStatsCache.get(cacheKey);
 
-  try {
-    await validateApiPermission(request, { resource: 'analytics', action: 'read' });
-    session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check cache first
-    const url = new URL(request.url);
-    const forceFresh = url.searchParams.get('fresh') === '1';
-    const cacheKey = `enhanced-stats:${session.user.id}`;
-    const cached = enhancedStatsCache.get(cacheKey);
-
-    if (!forceFresh && cached && Date.now() - cached.ts < ENHANCED_STATS_TTL_MS) {
-      const response = NextResponse.json({
-        success: true,
-        data: cached.data,
-        message: 'Enhanced dashboard statistics retrieved successfully (cache)',
-      });
-
-      if (process.env.NODE_ENV === 'production') {
-        response.headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
-      } else {
-        response.headers.set('Cache-Control', 'no-store');
+      if (!forceFresh && cached && Date.now() - cached.ts < ENHANCED_STATS_TTL_MS) {
+        const headers = new Headers();
+        if (process.env.NODE_ENV === 'production') {
+          headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
+        } else {
+          headers.set('Cache-Control', 'no-store');
+        }
+        headers.set('Content-Type', 'application/json; charset=utf-8');
+        const body = JSON.stringify({
+          success: true,
+          data: cached.data,
+          message: 'Enhanced dashboard statistics retrieved successfully (cache)',
+        });
+        const duration = Math.round(performance.now() - start);
+        recordLatency(duration);
+        return new Response(body, { status: 200, headers });
       }
-      return response;
-    }
 
     // Enhanced data aggregation with comprehensive business metrics
     // Add timeout to prevent long-running queries
@@ -212,7 +209,7 @@ export async function GET(request: NextRequest) {
       avgProposalValue: Math.round(avgProposalValue),
 
       // Operational Metrics
-      avgCycleTime: Math.round(Number(timeData.avg_cycle_time_days) || 21),
+      avgCycleTime: Math.round(Number(timeData.avg_cycle_time_days) || 0),
       overdueCount: Number(proposalData.overdue_count) || 0,
       atRiskCount: Number(proposalData.at_risk_count) || 0,
       stalledCount: Number(timeData.stalled_count) || 0,
@@ -232,7 +229,7 @@ export async function GET(request: NextRequest) {
         revenue: Number(month.monthly_revenue) || 0,
         proposals: Number(month.proposal_count) || 0,
         wins: Number(month.won_count) || 0,
-        target: Math.round((totalRevenue / 6) * 1.2), // 20% above average as target
+        target: Math.round(Number(month.monthly_revenue) * 1.1), // 10% above actual as target
       })),
 
       // Risk Breakdown
@@ -241,33 +238,21 @@ export async function GET(request: NextRequest) {
         count: Number(risk.count) || 0,
       })),
 
-      // Conversion Funnel (estimated)
-      conversionFunnel: [
+      // Conversion Funnel (simplified based on available data)
+      conversionFunnel: totalProposals > 0 ? [
         {
-          stage: 'Leads',
-          count: Math.round(totalProposals * 2.5),
-          conversionRate: 100,
-          value: Math.round(totalRevenue * 1.8),
-        },
-        {
-          stage: 'Qualified',
-          count: Math.round(totalProposals * 1.8),
-          conversionRate: 72,
-          value: Math.round(totalRevenue * 1.4),
-        },
-        {
-          stage: 'Proposals',
+          stage: 'Submitted',
           count: totalProposals,
-          conversionRate: 56,
+          conversionRate: 100,
           value: totalRevenue,
         },
         {
           stage: 'Won',
           count: wonProposals,
           conversionRate: winRate,
-          value: Math.round(totalRevenue * 0.7),
+          value: Math.round(totalRevenue * (wonProposals / totalProposals)),
         },
-      ],
+      ] : [],
 
       // Metadata
       generatedAt: new Date().toISOString(),
@@ -277,29 +262,25 @@ export async function GET(request: NextRequest) {
     // Update cache
     enhancedStatsCache.set(cacheKey, { data: enhancedStats, ts: Date.now() });
 
-    const response = NextResponse.json({
+    const headers = new Headers();
+    if (process.env.NODE_ENV === 'production') {
+      headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
+    } else {
+      headers.set('Cache-Control', 'no-store');
+    }
+    headers.set('Content-Type', 'application/json; charset=utf-8');
+    headers.set('X-Content-Type-Options', 'nosniff');
+
+    const duration = Math.round(performance.now() - start);
+    recordLatency(duration);
+
+    const body = JSON.stringify({
       success: true,
       data: enhancedStats,
       message: 'Enhanced dashboard statistics retrieved successfully',
     });
-
-    // Performance optimization headers
-    if (process.env.NODE_ENV === 'production') {
-      response.headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
-    } else {
-      response.headers.set('Cache-Control', 'no-store');
-    }
-    response.headers.set('Content-Type', 'application/json; charset=utf-8');
-    response.headers.set('X-Content-Type-Options', 'nosniff');
-
-    const duration = Math.round(performance.now() - start);
-    recordLatency(duration);
-    return response;
+    return new Response(body, { status: 200, headers });
   } catch (error) {
-    if (error instanceof Response) {
-      return error as unknown as NextResponse;
-    }
-
     const errorHandlingService = ErrorHandlingService.getInstance();
     const standardError = errorHandlingService.processError(
       error,
@@ -308,14 +289,15 @@ export async function GET(request: NextRequest) {
       {
         component: 'EnhancedDashboardStatsAPI',
         operation: 'GET',
-        userId: session?.user?.id || 'unknown',
+        userId: user?.id || 'unknown',
+        url: new URL(req.url).pathname,
       }
     );
 
     logError('EnhancedDashboardStatsAPI error', error, {
       component: 'EnhancedDashboardStatsAPI',
       operation: 'GET',
-      userId: session?.user?.id || 'unknown',
+      userId: user?.id || 'unknown',
       standardError: standardError.message,
       errorCode: standardError.code,
     });
@@ -324,13 +306,9 @@ export async function GET(request: NextRequest) {
     const duration = Math.round(performance.now() - start);
     recordLatency(duration);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: standardError.message,
-        code: standardError.code,
-      },
-      { status: 500 }
-    );
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    const body = JSON.stringify({ success: false, error: standardError.message, code: standardError.code });
+    return new Response(body, { status: 500, headers });
   }
 }
+);

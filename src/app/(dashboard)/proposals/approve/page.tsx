@@ -9,6 +9,7 @@
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { ApprovalQueue } from '@/components/proposals/ApprovalQueue';
 import { logDebug } from '@/lib/logger';
+import type { QueueMetrics } from '@/components/proposals/ApprovalQueue';
 import { useSession } from 'next-auth/react';
 import { useCallback } from 'react';
 
@@ -19,12 +20,7 @@ interface ApprovalItem {
   priority?: string;
 }
 
-interface QueueMetrics {
-  totalItems: number;
-  averageWaitTime: number;
-  bottleneckStages: string[];
-  optimizationSuggestions: string[];
-}
+// Use QueueMetrics from ApprovalQueue to keep types consistent
 
 export default function ProposalApprovePage() {
   const { data: session } = useSession();

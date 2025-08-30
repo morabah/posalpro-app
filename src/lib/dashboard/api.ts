@@ -214,6 +214,8 @@ export class DashboardAPI {
             overdue: enhancedStats.overdueCount || 0,
             winRate: enhancedStats.winRate || 0,
             avgCompletionTime: enhancedStats.avgCycleTime || 0,
+            atRiskCount: enhancedStats.atRiskCount || 0,
+            funnel: enhancedStats.conversionFunnel || [],
           },
         },
         activities: [], // Enhanced stats doesn't provide individual activities
@@ -221,12 +223,12 @@ export class DashboardAPI {
         deadlines: [], // Enhanced stats doesn't provide specific deadlines
         performance: {
           userId: userId,
-          period: 'weekly',
+          period: timeRange === 'day' ? 'daily' : timeRange === 'week' ? 'weekly' : timeRange === 'month' ? 'monthly' : timeRange === 'quarter' ? 'quarterly' : 'weekly',
           proposalsCompleted: enhancedStats.wonProposals || 0,
           avgCompletionTime: enhancedStats.avgCycleTime || 0,
           qualityScore: Math.min(100, enhancedStats.winRate || 0),
-          collaborationScore: 85, // Placeholder
-          efficiency: Math.min(100, Math.max(0, 100 - enhancedStats.overdueCount * 10)),
+          collaborationScore: Math.min(100, Math.max(0, 100 - (enhancedStats.overdueCount || 0) * 2)), // Based on overdue count
+          efficiency: Math.min(100, Math.max(0, 100 - (enhancedStats.overdueCount || 0) * 10)),
           trends: enhancedStats.revenueHistory || [],
         },
         notifications: [], // Enhanced stats doesn't provide notifications

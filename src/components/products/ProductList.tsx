@@ -173,8 +173,7 @@ function ProductFilters() {
   );
 
   const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const searchValue = e.target.value;
+    (searchValue: string) => {
       setFilters({ search: searchValue });
 
       analytics(
@@ -185,8 +184,6 @@ function ProductFilters() {
         },
         'medium'
       );
-      setIsOpen(Boolean(searchValue) && searchValue.length >= 2);
-      setActiveIndex(-1);
     },
     [setFilters, analytics]
   );

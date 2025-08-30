@@ -456,7 +456,7 @@ export const ReportExecutionHistory = memo(
                   <div>
                     <div className="font-medium capitalize">{execution.status}</div>
                     <div className="text-sm text-gray-600">
-                      {new Date(execution.timestamp).toLocaleString()}
+                      {new Date(execution.timestamp).toLocaleString('en-US', { timeZone: 'UTC' })}
                     </div>
                   </div>
                 </div>
@@ -485,7 +485,6 @@ export const ReportExecutionHistory = memo(
 );
 
 ReportExecutionHistory.displayName = 'ReportExecutionHistory';
-
 
 
 

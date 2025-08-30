@@ -90,7 +90,7 @@ interface QueueFilters {
   showMyTasksOnly: boolean;
 }
 
-interface QueueMetrics {
+export interface QueueMetrics {
   totalItems: number;
   overdueItems: number;
   criticalItems: number;

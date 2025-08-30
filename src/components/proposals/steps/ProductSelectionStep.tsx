@@ -169,7 +169,7 @@ export function ProductSelectionStep({
     queryKey: ['product-categories', { activeOnly: true }],
     queryFn: async () => {
       const res = await productService.getCategories({ activeOnly: true, includeStats: false });
-      return res.data;
+      return res.ok ? res.data : { categories: [] };
     },
     staleTime: 300000,
     gcTime: 600000,

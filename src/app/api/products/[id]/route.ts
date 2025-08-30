@@ -20,6 +20,7 @@ import { apiRateLimiter } from '@/lib/security/hardening';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 
 // Import consolidated schemas from feature folder
 import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
@@ -333,10 +334,13 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Update product with version increment
-    const updatedProduct = await prisma.product.update({
+    const updatedProduct = await prisma.product.update(({
       where: { id },
-      data: {
+      data: ({
         ...validatedData,
+        ...(validatedData.attributes
+          ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
+          : {}),
         version: existingProduct.version + 1,
         usageAnalytics: {
           lastUpdatedBy: session.user.id,
@@ -344,8 +348,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
           updateCount: (existingProduct as any).usageAnalytics?.updateCount + 1 || 1,
           hypothesis: ['H3', 'H4'],
           userStories: ['US-3.1', 'US-3.2'],
-        },
-      },
+        } as unknown as Prisma.InputJsonValue,
+      }) as any,
       select: {
         id: true,
         name: true,
@@ -363,7 +367,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         createdAt: true,
         updatedAt: true,
       },
-    });
+    }) as any);
 
     // Track product update for analytics
     await trackProductUpdateEvent(
@@ -772,12 +776,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const validatedData = ProductUpdateSchema.parse(body);
 
     // Update product
-    const updatedProduct = await prisma.product.update({
+    const updatedProduct = await prisma.product.update(({
       where: { id },
-      data: {
+      data: ({
         ...validatedData,
+        ...(validatedData.attributes
+          ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...(validatedData.usageAnalytics
+          ? { usageAnalytics: validatedData.usageAnalytics as unknown as Prisma.InputJsonValue }
+          : {}),
         updatedAt: new Date(),
-      },
+      }) as any,
       include: {
         relationships: {
           include: {
@@ -808,7 +818,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           },
         },
       },
-    });
+    }) as any);
 
     // Track analytics event
     await trackProductUpdateEvent(

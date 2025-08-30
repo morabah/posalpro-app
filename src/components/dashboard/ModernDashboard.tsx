@@ -117,7 +117,7 @@ const DashboardSkeleton = () => (
       <div className="space-y-4 sm:space-y-6">
         <div className="h-5 sm:h-6 bg-gray-200 rounded w-1/2 sm:w-1/4"></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-          {[...Array(4)].map((_, i) => (
+          {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
               className="h-24 sm:h-28 lg:h-32 bg-gray-200 rounded-xl sm:rounded-2xl"
@@ -130,7 +130,7 @@ const DashboardSkeleton = () => (
       <div className="space-y-4 sm:space-y-6">
         <div className="h-5 sm:h-6 bg-gray-200 rounded w-1/2 sm:w-1/4"></div>
         <div className="space-y-3 sm:space-y-4">
-          {[...Array(3)].map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-16 sm:h-20 bg-gray-200 rounded-lg sm:rounded-xl"></div>
           ))}
         </div>

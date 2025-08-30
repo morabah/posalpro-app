@@ -330,6 +330,7 @@ export default function CoordinationHub() {
   const [priorityFilter, setPriorityFilter] = useState<string>('All');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [selectedProposal, setSelectedProposal] = useState<string | null>(null);
 
   // Load live proposals and insights
   useEffect(() => {
@@ -795,13 +796,16 @@ export default function CoordinationHub() {
 
         {/* Navigation Tabs */}
         <div className="bg-white border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
-            {[
-              { key: 'proposals', label: 'Active Proposals', icon: DocumentTextIcon },
-              { key: 'team', label: 'Team View', icon: UserGroupIcon },
-              { key: 'timeline', label: 'Timeline', icon: CalendarIcon },
-              { key: 'analytics', label: 'Analytics', icon: ChartBarIcon },
-            ].map(({ key, label, icon: Icon }) => (
+        <nav className="-mb-px flex space-x-8">
+            {(() => {
+              type TabKey = 'proposals' | 'team' | 'timeline' | 'analytics';
+              const tabs: ReadonlyArray<{ key: TabKey; label: string; icon: any }> = [
+                { key: 'proposals', label: 'Active Proposals', icon: DocumentTextIcon },
+                { key: 'team', label: 'Team View', icon: UserGroupIcon },
+                { key: 'timeline', label: 'Timeline', icon: CalendarIcon },
+                { key: 'analytics', label: 'Analytics', icon: ChartBarIcon },
+              ] as const;
+              return tabs.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
@@ -814,7 +818,8 @@ export default function CoordinationHub() {
                 <Icon className="h-5 w-5" />
                 <span>{label}</span>
               </button>
-            ))}
+              ));
+            })()}
           </nav>
         </div>
 

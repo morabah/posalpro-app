@@ -17,6 +17,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { MarketingAutomation } from '@/types/dashboard';
 
+const numberFormatter = new Intl.NumberFormat('en-US');
+
 // Marketing Automation Dashboard
 export const MarketingAutomationDashboard = memo(
   ({
@@ -121,7 +123,7 @@ export const MarketingAutomationDashboard = memo(
                     <h4 className="font-medium text-gray-900">{campaign.name}</h4>
                     <p className="text-sm text-gray-600">{campaign.type}</p>
                     <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
-                      <span>Recipients: {campaign.recipientCount.toLocaleString()}</span>
+                      <span>Recipients: {numberFormatter.format(campaign.recipientCount)}</span>
                       <span>Open Rate: {campaign.openRate}%</span>
                       <span>Click Rate: {campaign.clickRate}%</span>
                     </div>
@@ -147,15 +149,15 @@ export const MarketingAutomationDashboard = memo(
               <div className="mt-3 grid grid-cols-3 gap-4 text-xs">
                 <div>
                   <span className="text-gray-500">Sent:</span>
-                  <span className="ml-1 font-medium">{campaign.sentCount.toLocaleString()}</span>
+                  <span className="ml-1 font-medium">{numberFormatter.format(campaign.sentCount)}</span>
                 </div>
                 <div>
                   <span className="text-gray-500">Opened:</span>
-                  <span className="ml-1 font-medium">{campaign.openedCount.toLocaleString()}</span>
+                  <span className="ml-1 font-medium">{numberFormatter.format(campaign.openedCount)}</span>
                 </div>
                 <div>
                   <span className="text-gray-500">Clicked:</span>
-                  <span className="ml-1 font-medium">{campaign.clickedCount.toLocaleString()}</span>
+                  <span className="ml-1 font-medium">{numberFormatter.format(campaign.clickedCount)}</span>
                 </div>
               </div>
             </div>
@@ -204,7 +206,7 @@ export const CampaignPerformanceMetrics = memo(
       },
       {
         label: 'Revenue Generated',
-        value: `$${campaign.revenueGenerated?.toLocaleString() || '0'}`,
+        value: `$${numberFormatter.format(campaign.revenueGenerated || 0)}`,
         icon: <EnvelopeIcon className="h-4 w-4" />,
         color: 'text-orange-600',
       },
@@ -356,7 +358,6 @@ export const AutomationWorkflowBuilder = memo(
 );
 
 AutomationWorkflowBuilder.displayName = 'AutomationWorkflowBuilder';
-
 
 
 

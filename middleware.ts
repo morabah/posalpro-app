@@ -14,10 +14,13 @@ export async function middleware(request: NextRequest) {
   try {
     // Handle CORS preflight requests for API routes
     if (request.method === 'OPTIONS' && pathname.startsWith('/api/')) {
+      const origin = request.headers.get('origin') || '*';
       return new NextResponse(null, {
         status: 200,
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin': origin,
+          'Vary': 'Origin',
+          'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
           'Access-Control-Max-Age': '86400',
@@ -37,7 +40,10 @@ export async function middleware(request: NextRequest) {
       
       // Add CORS headers to API responses
       if (pathname.startsWith('/api/')) {
-        response.headers.set('Access-Control-Allow-Origin', '*');
+        const origin = request.headers.get('origin') || '*';
+        response.headers.set('Access-Control-Allow-Origin', origin);
+        response.headers.set('Vary', 'Origin');
+        response.headers.set('Access-Control-Allow-Credentials', 'true');
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
         response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
       }

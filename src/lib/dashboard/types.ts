@@ -64,6 +64,13 @@ export interface ProposalMetrics {
   overdue: number;
   winRate: number;
   avgCompletionTime: number;
+  atRiskCount?: number;
+  funnel?: Array<{
+    stage: string;
+    count: number;
+    conversionRate: number;
+    value: number;
+  }>;
 }
 
 export interface ActivityFeedItem {

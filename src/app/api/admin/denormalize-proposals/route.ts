@@ -14,7 +14,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import type { Proposal } from '@/features/proposals/schemas';
+// Intentionally use a minimal input type for completion calculation to avoid
+// requiring full Proposal shape when denormalizing from Prisma
 
 const prisma = new PrismaClient();
 const errorHandlingService = ErrorHandlingService.getInstance();
@@ -173,18 +174,28 @@ export async function POST(request: NextRequest) {
 /**
  * Calculate proposal completion rate based on available data
  */
-function calculateCompletionRate(proposal: Proposal): number {
+type ProposalCompletionInput = {
+  title?: string | null;
+  description?: string | null;
+  products?: Array<unknown> | null;
+  sections?: Array<unknown> | null;
+  dueDate?: Date | string | null;
+  value?: number | null;
+  status?: string | null;
+};
+
+function calculateCompletionRate(proposal: ProposalCompletionInput): number {
   let completionScore = 0;
   let totalChecks = 0;
 
   // Basic completion checks
   const checks = [
-    proposal.title?.length > 0, // Has title
-    proposal.description?.length > 0, // Has description
-    proposal.products?.length > 0, // Has products
-    proposal.sections?.length > 0, // Has sections
-    proposal.dueDate !== null, // Has due date
-    proposal.value !== null, // Has value
+    !!proposal.title && proposal.title.length > 0, // Has title
+    !!proposal.description && proposal.description.length > 0, // Has description
+    Array.isArray(proposal.products) && proposal.products.length > 0, // Has products
+    Array.isArray(proposal.sections) && proposal.sections.length > 0, // Has sections
+    proposal.dueDate != null, // Has due date
+    proposal.value != null, // Has value
     proposal.status !== 'DRAFT', // Beyond draft status
   ];
 

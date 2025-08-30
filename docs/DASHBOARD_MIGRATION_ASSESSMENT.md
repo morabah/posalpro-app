@@ -1,6 +1,21 @@
 # Dashboard Module Migration Assessment
 
-## 🎯 **CURRENT STATE: BRIDGE ARCHITECTURE IMPLEMENTATION**
+## 🎯 **CURRENT STATE: MODERN FEATURE ARCHITECTURE (Updated 2025‑08‑30)**
+
+Status Update:
+
+- The dashboard route (`/dashboard`) has been migrated to the modern
+  feature-based architecture. Bridge wrappers are no longer used on this page.
+- UI state persists via `src/lib/store/dashboardStore.ts` and collapsible
+  sections are wired to this store.
+- Server state is retrieved via React Query hooks (e.g., `useDashboardData`).
+- Archived bridge-era components are listed under
+  `docs/archive/dashboard-bridge-20250830/ARCHIVE_INDEX.md`.
+
+Legacy context from the previous bridge implementation remains below for
+historical reference and comparison.
+
+## 🔁 Historical: Bridge Architecture Implementation
 
 The Dashboard module is currently implemented using the **Bridge Architecture Pattern** and serves as a comprehensive analytics and management interface. This assessment analyzes the migration from bridge architecture to the modern feature-based architecture.
 

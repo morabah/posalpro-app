@@ -141,7 +141,7 @@ export const InteractiveRevenueChart = memo(
           cornerRadius: 8,
           displayColors: true,
           callbacks: {
-            title: (tooltipItems: TooltipItem<'line'>[]) => {
+            title: (tooltipItems: Array<TooltipItem<'line'>>) => {
               return `Period: ${tooltipItems[0]?.label ?? ''}`;
             },
             label: (tooltipItem: TooltipItem<'line'>) => {

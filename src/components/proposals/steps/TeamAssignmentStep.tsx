@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { Select } from '@/components/ui/forms/Select';
 import { Label } from '@/components/ui/Label';
 import { useApiClient } from '@/hooks/useApiClient';
+// useApiClient returns raw JSON; no ApiResponse wrapper here
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import { ProposalTeamData, useProposalActions } from '@/lib/store/proposalStore';
@@ -48,32 +49,28 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     data: usersData,
     isLoading: usersLoading,
     error: usersError,
-  } = useQuery({
+  } = useQuery<User[]>({
     queryKey: ['users', 'proposal-wizard'],
     queryFn: async () => {
       console.log('[DEBUG] Fetching users from API...');
 
       try {
-        const response = await apiClient.get<{
-          success: boolean;
-          data: { users: User[]; pagination: unknown };
-          message: string;
-        }>(
+        const response = await apiClient.get<{ users: User[]; pagination: unknown }>(
           'users?search=&isActive=true&sortBy=name&sortOrder=asc&fields=id,firstName,lastName,name,email,department,status,lastLogin,createdAt,updatedAt,role,roles'
         );
 
         console.log('[DEBUG] Raw API response structure:', JSON.stringify(response, null, 2));
 
         // Check different possible response structures
-        if (response.success && response.data?.users) {
-          console.log('[DEBUG] Users loaded successfully:', response.data.users.length);
+        if (response?.users) {
+          console.log('[DEBUG] Users loaded successfully:', response.users.length);
           console.log(
             '[DEBUG] First user structure:',
-            JSON.stringify(response.data.users[0], null, 2)
+            JSON.stringify(response.users[0], null, 2)
           );
           console.log('[DEBUG] All users roles check:');
           const allRoleNames = new Set<string>();
-          response.data.users.forEach((user, index) => {
+          response.users.forEach((user: User, index: number) => {
             console.log(
               `[DEBUG] User ${index}: ${user.name || user.email}, roles:`,
               user.roles,
@@ -81,8 +78,9 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
               user.role
             );
             // Also log the role names for easier debugging
-            const roleNames =
-              user.roles?.map(r => r.role?.name || r.role || r).filter(Boolean) || [];
+            const roleNames = (user.roles || [])
+              .map(r => (typeof r === 'string' ? r : (typeof (r as any).role === 'string' ? (r as any).role : (r as any)?.role?.name)))
+              .filter((v): v is string => typeof v === 'string');
             console.log(`[DEBUG] User ${index} role names:`, roleNames);
             roleNames.forEach(name => allRoleNames.add(name));
           });
@@ -92,15 +90,10 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
             SME: UserType.SME,
             EXECUTIVE: UserType.EXECUTIVE,
           });
-          return response.data.users;
-        } else if (response.users) {
-          // Direct users array response
-          console.log('[DEBUG] Direct users array found:', response.users.length);
-          console.log('[DEBUG] First user structure:', JSON.stringify(response.users[0], null, 2));
           return response.users;
         } else {
           console.error('[DEBUG] Failed to load users - unexpected response structure');
-          console.error('[DEBUG] Response keys:', Object.keys(response));
+          console.error('[DEBUG] Response keys:', Object.keys(response as object));
           throw new Error('Unexpected API response structure');
         }
       } catch (error) {
@@ -113,12 +106,12 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
   });
 
   // Filter users by role
-  const teamLeads = useMemo(() => {
+  const teamLeads = useMemo<User[]>(() => {
     if (!usersData) return [];
     console.log('[DEBUG] UserType.PROPOSAL_MANAGER:', UserType.PROPOSAL_MANAGER);
     console.log('[DEBUG] Filtering for team leads from', usersData.length, 'users');
 
-    const leads = usersData.filter(user => {
+    const leads = usersData.filter((user: User) => {
       console.log(`[DEBUG] Checking user ${user.name || user.email}:`, {
         roles: user.roles,
         role: user.role,
@@ -127,13 +120,17 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       });
 
       // Try different role matching approaches
-      const hasProposalManagerRole = user.roles?.some(
-        userRole =>
-          userRole.role?.name === UserType.PROPOSAL_MANAGER ||
-          userRole.role === UserType.PROPOSAL_MANAGER ||
-          userRole === UserType.PROPOSAL_MANAGER ||
-          userRole.name === UserType.PROPOSAL_MANAGER
-      );
+      const hasProposalManagerRole = (user.roles || []).some((userRole: any) => {
+        const roleName =
+          typeof userRole === 'string'
+            ? userRole
+            : typeof userRole?.role === 'string'
+              ? (userRole.role as string)
+              : typeof userRole?.role?.name === 'string'
+                ? (userRole.role.name as string)
+                : undefined;
+        return roleName === UserType.PROPOSAL_MANAGER;
+      });
 
       const hasDirectRole = user.role === UserType.PROPOSAL_MANAGER;
 
@@ -154,19 +151,26 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     return leads;
   }, [usersData]);
 
-  const salesReps = useMemo(() => {
+  const salesReps = useMemo<User[]>(() => {
     if (!usersData) return [];
     console.log('[DEBUG] UserType.SME:', UserType.SME);
     console.log('[DEBUG] Filtering for sales reps from', usersData.length, 'users');
 
-    const reps = usersData.filter(user => {
+    const reps = usersData.filter((user: User) => {
       console.log(`[DEBUG] Checking user ${user.name || user.email} for SME role:`, {
         roles: user.roles,
         role: user.role,
       });
 
-      const hasSMERole = user.roles?.some(userRole => {
-        const roleName = userRole.role?.name || userRole.role || userRole.name || userRole;
+      const hasSMERole = (user.roles || []).some((userRole: any) => {
+        const roleName =
+          typeof userRole === 'string'
+            ? userRole
+            : typeof userRole?.role === 'string'
+              ? (userRole.role as string)
+              : typeof userRole?.role?.name === 'string'
+                ? (userRole.role.name as string)
+                : (userRole?.name as string | undefined);
         return roleName === 'SME' || roleName === 'Senior SME' || roleName === UserType.SME;
       });
 
@@ -189,19 +193,26 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     return reps;
   }, [usersData]);
 
-  const executives = useMemo(() => {
+  const executives = useMemo<User[]>(() => {
     if (!usersData) return [];
     console.log('[DEBUG] UserType.EXECUTIVE:', UserType.EXECUTIVE);
     console.log('[DEBUG] Filtering for executives from', usersData.length, 'users');
 
-    const execs = usersData.filter(user => {
+    const execs = usersData.filter((user: User) => {
       console.log(`[DEBUG] Checking user ${user.name || user.email} for Executive role:`, {
         roles: user.roles,
         role: user.role,
       });
 
-      const hasExecRole = user.roles?.some(userRole => {
-        const roleName = userRole.role?.name || userRole.role || userRole.name || userRole;
+      const hasExecRole = (user.roles || []).some((userRole: any) => {
+        const roleName =
+          typeof userRole === 'string'
+            ? userRole
+            : typeof userRole?.role === 'string'
+              ? (userRole.role as string)
+              : typeof userRole?.role?.name === 'string'
+                ? (userRole.role.name as string)
+                : (userRole?.name as string | undefined);
         return roleName === 'Executive' || roleName === UserType.EXECUTIVE;
       });
 

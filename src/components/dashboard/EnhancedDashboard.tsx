@@ -1,31 +1,29 @@
 /**
- * Enhanced PosalPro Dashboard with Business-Priority Layout
- * Optimized chart types and data consistency
- * Based on business requirements analysis
+ * Modern PosalPro Dashboard - Market-Standard UX/UI Design
+ * Elegant, clean, and informative with reduced clutter
  *
- * COMPONENT TRACEABILITY MATRIX:
- * - User Stories: US-1.1 (Dashboard Overview), US-1.3 (Analytics)
- * - Acceptance Criteria: AC-1.1.1, AC-1.1.2, AC-1.3.1
- * - Hypotheses: H1 (Dashboard Efficiency), H4 (Data Insights)
+ * DESIGN PRINCIPLES:
+ * - Progressive disclosure with smart information hierarchy
+ * - Market-standard visual patterns (Linear, Stripe, Notion inspired)
+ * - Mobile-first responsive design with touch-friendly interactions
+ * - Contextual actions and data-driven insights
  *
  * COMPLIANCE STATUS:
- * ✅ Bridge Architecture Integration
- * ✅ Error Handling with ErrorHandlingService
- * ✅ Analytics with userStory and hypothesis tracking
- * ✅ Structured Logging with metadata
- * ✅ Performance Optimization with useCallback/useMemo
- * ✅ Accessibility with ARIA labels
+ * ✅ Post-Bridge Migration Architecture
+ * ✅ CORE_REQUIREMENTS.md compliance
+ * ✅ DASHBOARD_MIGRATION_ASSESSMENT.md alignment
+ * ✅ Modern UX/UI patterns with accessibility
  */
 
 'use client';
 
-import { useDashboardBridge } from '@/components/bridges/DashboardManagementBridge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { useDashboardData } from '@/hooks/dashboard/useDashboardData';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logDebug, logError, logInfo } from '@/lib/logger';
+import { logDebug } from '@/lib/logger';
+import { useDashboardFilters, useDashboardUIActions } from '@/lib/store/dashboardStore';
+import { z } from 'zod';
 import {
   ArrowTrendingDownIcon,
   ArrowTrendingUpIcon,
@@ -35,8 +33,10 @@ import {
   ExclamationTriangleIcon,
   TrophyIcon,
   UsersIcon,
+  ChartBarIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 // Enhanced KPI interfaces
 interface EnhancedKPIs {
@@ -85,205 +85,472 @@ interface RiskIndicator {
   trend: number;
 }
 
-// Enhanced KPI Card with better business context
-const EnhancedKPICard = memo(
+// Dashboard constants for consistent baselines and targets
+const DASHBOARD_CONSTANTS = {
+  WIN_RATE_TARGET: 75,
+  WIN_RATE_BASELINE: 65,
+  CYCLE_TIME_TARGET_DAYS: 14,
+  REVENUE_GROWTH_TARGET: 20, // percentage
+} as const;
+
+// Market-standard formatters for consistent data presentation
+const numberFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
+
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+
+// Zod validation schemas for API responses
+const TrendSchema = z.object({
+  month: z.string(),
+  revenue: z.number().nonnegative(),
+  target: z.number().nonnegative().optional().default(0),
+  proposals: z.number().int().nonnegative().optional().default(0),
+});
+
+const MetricsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  active: z.number().int().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  winRate: z.number().min(0).max(100).optional().default(0),
+  avgCompletionTime: z.number().nonnegative().optional().default(21),
+  overdue: z.number().int().nonnegative().optional().default(0),
+});
+
+const DashboardSchema = z.object({
+  proposals: z.object({ metrics: MetricsSchema }).optional(),
+  performance: z.object({ trends: z.array(TrendSchema) }).optional(),
+});
+
+// Modern KPI Card - Market-standard design with elegant interactions
+const ModernKPICard = memo(
   ({
     title,
     value,
     subtitle,
     change,
+    trend,
     icon,
     color,
-    target,
+    context,
     loading,
+    prefix,
+    suffix,
+    onClick,
   }: {
     title: string;
     value: string | number;
     subtitle?: string;
     change?: number;
+    trend?: 'up' | 'down' | 'neutral';
     icon: React.ReactNode;
-    color: 'blue' | 'green' | 'yellow' | 'purple' | 'red' | 'indigo';
-    target?: number;
+    color: 'blue' | 'green' | 'yellow' | 'purple' | 'red' | 'indigo' | 'slate';
+    context?: string;
     loading?: boolean;
+    prefix?: string;
+    suffix?: string;
+    onClick?: () => void;
   }) => {
-    const colorClasses = {
-      blue: 'bg-blue-50 text-blue-600 border-blue-200',
-      green: 'bg-green-50 text-green-600 border-green-200',
-      yellow: 'bg-yellow-50 text-yellow-600 border-yellow-200',
-      purple: 'bg-purple-50 text-purple-600 border-purple-200',
-      red: 'bg-red-50 text-red-600 border-red-200',
-      indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+
+    // Market-standard color schemes with improved contrast and accessibility
+    const colorSchemes = {
+      blue: {
+        bg: 'bg-blue-50/50',
+        text: 'text-blue-700',
+        icon: 'text-blue-600',
+        border: 'border-blue-200/60',
+        accent: 'bg-gradient-to-r from-blue-500 to-blue-600',
+        hover: 'hover:bg-blue-50/80',
+      },
+      green: {
+        bg: 'bg-emerald-50/50',
+        text: 'text-emerald-700',
+        icon: 'text-emerald-600',
+        border: 'border-emerald-200/60',
+        accent: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
+        hover: 'hover:bg-emerald-50/80',
+      },
+      yellow: {
+        bg: 'bg-amber-50/50',
+        text: 'text-amber-700',
+        icon: 'text-amber-600',
+        border: 'border-amber-200/60',
+        accent: 'bg-gradient-to-r from-amber-500 to-amber-600',
+        hover: 'hover:bg-amber-50/80',
+      },
+      purple: {
+        bg: 'bg-violet-50/50',
+        text: 'text-violet-700',
+        icon: 'text-violet-600',
+        border: 'border-violet-200/60',
+        accent: 'bg-gradient-to-r from-violet-500 to-violet-600',
+        hover: 'hover:bg-violet-50/80',
+      },
+      red: {
+        bg: 'bg-rose-50/50',
+        text: 'text-rose-700',
+        icon: 'text-rose-600',
+        border: 'border-rose-200/60',
+        accent: 'bg-gradient-to-r from-rose-500 to-rose-600',
+        hover: 'hover:bg-rose-50/80',
+      },
+      indigo: {
+        bg: 'bg-indigo-50/50',
+        text: 'text-indigo-700',
+        icon: 'text-indigo-600',
+        border: 'border-indigo-200/60',
+        accent: 'bg-gradient-to-r from-indigo-500 to-indigo-600',
+        hover: 'hover:bg-indigo-50/80',
+      },
+      slate: {
+        bg: 'bg-slate-50/50',
+        text: 'text-slate-700',
+        icon: 'text-slate-600',
+        border: 'border-slate-200/60',
+        accent: 'bg-gradient-to-r from-slate-500 to-slate-600',
+        hover: 'hover:bg-slate-50/80',
+      },
     };
 
-    const changeColor =
-      change && change > 0
-        ? 'text-green-600'
-        : change && change < 0
-          ? 'text-red-600'
-          : 'text-gray-500';
-    const changeIcon =
-      change && change > 0 ? (
-        <ArrowTrendingUpIcon className="w-4 h-4" />
-      ) : change && change < 0 ? (
-        <ArrowTrendingDownIcon className="w-4 h-4" />
-      ) : null;
+    const scheme = colorSchemes[color];
+    const trendColor = trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-rose-600' : 'text-slate-500';
+    const trendIcon = trend === 'up'
+      ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
+      : trend === 'down'
+        ? <ArrowTrendingDownIcon className="w-3.5 h-3.5" />
+        : null;
+
+    // Format percentage values properly
+    const formatValue = (val: string | number) => {
+      if (typeof val === 'number') {
+        if (suffix === '%') {
+          return `${prefix ?? ''}${val.toFixed(1)}${suffix}`;
+        }
+        return `${prefix ?? ''}${numberFormatter.format(val)}${suffix ?? ''}`;
+      }
+      return `${prefix ?? ''}${val}${suffix ?? ''}`;
+    };
 
     return (
-      <Card className="p-6 hover:shadow-md transition-shadow duration-200">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <div className={`p-2 rounded-lg border ${colorClasses[color]}`}>{icon}</div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-gray-600 truncate">{title}</h3>
-                {subtitle && <p className="text-xs text-gray-500 truncate">{subtitle}</p>}
-              </div>
+      <div
+        className={`group relative bg-white/80 backdrop-blur-sm rounded-2xl border ${scheme.border} p-6
+          ${onClick ? `cursor-pointer ${scheme.hover} hover:shadow-xl hover:shadow-black/5 hover:border-gray-300/80 hover:-translate-y-0.5` : 'hover:shadow-lg hover:shadow-black/5'}
+          transition-all duration-300 ease-out`}
+        onClick={onClick}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+        aria-label={onClick ? `View details for ${title}` : undefined}
+      >
+        {/* Subtle gradient overlay */}
+        <div className={`absolute inset-0 ${scheme.bg} rounded-2xl opacity-40`} />
+
+        {/* Interactive indicator */}
+        {onClick && (
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="w-2 h-2 bg-gray-400 rounded-full" />
+          </div>
+        )}
+
+        <div className="relative">
+          {/* Header with enhanced icon and trend */}
+          <div className="flex items-start justify-between mb-4">
+            <div className={`p-3 rounded-xl ${scheme.bg} ${scheme.icon} shadow-sm`}>
+              {icon}
             </div>
-
-            <div className="space-y-1">
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-gray-900">
-                  {loading ? '...' : typeof value === 'number' ? value.toLocaleString() : value}
-                </span>
-                {change !== undefined && (
-                  <div className={`flex items-center gap-1 text-sm ${changeColor}`}>
-                    {changeIcon}
-                    <span>{Math.abs(change)}%</span>
-                  </div>
-                )}
+            {change !== undefined && change !== null && Number.isFinite(change) && (
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-sm text-xs font-semibold ${trendColor}`}>
+                {trendIcon}
+                <span>{change > 0 ? '+' : ''}{change.toFixed(1)}%</span>
               </div>
+            )}
+          </div>
 
-              {target && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <span>Target: {target.toLocaleString()}</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-1">
-                    <div
-                      className="bg-blue-500 h-1 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min((Number(value) / target) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
+          {/* Value with improved typography */}
+          <div className="space-y-2">
+            <div className="text-3xl font-bold text-gray-900 leading-none tracking-tight">
+              {!mounted || loading ? (
+                <div className="animate-pulse bg-gray-200 h-8 w-24 rounded-lg" />
+              ) : (
+                formatValue(value)
               )}
             </div>
+
+            <div className="text-sm font-semibold text-gray-700 leading-tight">
+              {title}
+            </div>
+
+            {subtitle && (
+              <div className="text-xs text-gray-500 leading-relaxed">
+                {subtitle}
+              </div>
+            )}
+
+            {context && (
+              <div className={`text-xs ${scheme.text} font-medium mt-3 px-2 py-1 rounded-md ${scheme.bg} leading-tight`}>
+                {context}
+              </div>
+            )}
           </div>
         </div>
-      </Card>
+      </div>
     );
   }
 );
 
-EnhancedKPICard.displayName = 'EnhancedKPICard';
+ModernKPICard.displayName = 'ModernKPICard';
 
-// Revenue Chart Component
-const RevenueChart = memo(({ data }: { data: RevenueData[] }) => {
-  const maxRevenue = Math.max(...data.map(d => d.revenue), ...data.map(d => d.target));
+// Compact Revenue Trend Component
+const RevenueTrend = memo(({ data, loading }: { data: RevenueData[]; loading?: boolean }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trend</h3>
-      <div className="space-y-3">
-        {data.map((item, index) => (
-          <div key={index} className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">{item.month}</span>
-              <span className="font-medium">${item.revenue.toLocaleString()}</span>
+  const latest = data[data.length - 1];
+  const previous = data[data.length - 2];
+  const growth = previous && latest && previous.revenue > 0
+    ? ((latest.revenue - previous.revenue) / previous.revenue) * 100
+    : 0;
+
+  if (!mounted || loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-100 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-green-50 text-green-600 rounded-lg">
+            <ChartBarIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Revenue Trend</h3>
+            <p className="text-xs text-gray-500">Last 6 months</p>
+          </div>
             </div>
-            <div className="flex gap-2">
-              <div className="flex-1 bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(item.revenue / maxRevenue) * 100}%` }}
-                />
-              </div>
-              <div className="flex-1 bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(item.target / maxRevenue) * 100}%` }}
-                />
-              </div>
-            </div>
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>Target: ${item.target.toLocaleString()}</span>
-              <span>{item.proposals} proposals</span>
+        <div className="space-y-3">
+          <div className="animate-pulse bg-gray-200 h-4 w-32 rounded" />
+          <div className="animate-pulse bg-gray-200 h-4 w-28 rounded" />
+          <div className="animate-pulse bg-gray-200 h-2 w-full rounded-full" />
             </div>
           </div>
-        ))}
+    );
+  }
+
+            return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-emerald-200/60 p-6 hover:shadow-xl hover:shadow-black/5 transition-all duration-300 ease-out">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-emerald-50/50 text-emerald-600 rounded-xl shadow-sm">
+            <ChartBarIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Revenue Trend</h3>
+            <p className="text-xs text-gray-500">Last 6 months performance</p>
+          </div>
+        </div>
+        {Number.isFinite(growth) && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-sm text-xs font-semibold ${
+            growth >= 0 ? 'text-emerald-600' : 'text-rose-600'
+          }`}>
+            {growth >= 0 ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" /> : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
+            <span>{growth > 0 ? '+' : ''}{growth.toFixed(1)}%</span>
+          </div>
+        )}
       </div>
-    </Card>
-  );
-});
 
-RevenueChart.displayName = 'RevenueChart';
-
-// Conversion Funnel Component
-const ConversionFunnel = memo(({ data }: { data: ConversionFunnel[] }) => {
-  const maxCount = Math.max(...data.map(d => d.count));
-
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Conversion Funnel</h3>
       <div className="space-y-4">
-        {data.map((stage, index) => (
-          <div key={index} className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">{stage.stage}</span>
-              <span className="font-medium">{stage.count}</span>
-            </div>
-            <div className="bg-gray-200 rounded-full h-3">
-              <div
-                className="bg-purple-500 h-3 rounded-full transition-all duration-300"
-                style={{ width: `${(stage.count / maxCount) * 100}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>{stage.conversionRate}% conversion</span>
-              <span>${stage.value.toLocaleString()}</span>
-            </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current</span>
+            <div className="text-xl font-bold text-gray-900">${numberFormatter.format(latest?.revenue || 0)}</div>
           </div>
-        ))}
-      </div>
-    </Card>
-  );
-});
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Target</span>
+            <div className="text-xl font-bold text-gray-900">${numberFormatter.format(latest?.target || 0)}</div>
+          </div>
+        </div>
 
-ConversionFunnel.displayName = 'ConversionFunnel';
-
-// Risk Indicators Component
-const RiskIndicators = memo(({ data }: { data: RiskIndicator[] }) => {
-  const severityColors = {
-    high: 'text-red-600 bg-red-50 border-red-200',
-    medium: 'text-yellow-600 bg-yellow-50 border-yellow-200',
-    low: 'text-green-600 bg-green-50 border-green-200',
-  };
-
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Indicators</h3>
-      <div className="space-y-3">
-        {data.map((risk, index) => (
-          <div key={index} className="flex items-center justify-between p-3 rounded-lg border">
-            <div className="flex items-center gap-3">
-              <ExclamationTriangleIcon className="w-5 h-5 text-gray-400" />
-              <div>
-                <p className="text-sm font-medium text-gray-900 capitalize">
-                  {risk.type.replace('_', ' ')}
-                </p>
-                <p className="text-xs text-gray-500">{risk.count} items</p>
-              </div>
-            </div>
+        <div className="space-y-2">
+          <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
             <div
-              className={`px-2 py-1 rounded-full text-xs font-medium border ${severityColors[risk.severity]}`}
-            >
-              {risk.severity}
-            </div>
+              className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-3 rounded-full transition-all duration-700 ease-out"
+              style={{
+                width: `${Math.min(((latest?.revenue || 0) / (latest?.target || 1)) * 100, 100)}%`
+              }}
+            />
           </div>
-        ))}
+          <div className="flex justify-between text-xs text-gray-500">
+            <span>Progress to target</span>
+            <span className="font-medium">{latest?.proposals || 0} proposals</span>
+          </div>
+        </div>
       </div>
-    </Card>
+    </div>
   );
 });
 
-RiskIndicators.displayName = 'RiskIndicators';
+RevenueTrend.displayName = 'RevenueTrend';
+
+// Performance Insights Component
+const PerformanceInsights = memo(({ data }: { data: ConversionFunnel[] }) => {
+  // Handle empty data state
+  if (!data?.length) {
+  return (
+      <div className="bg-white rounded-xl border border-gray-100 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+            <TrophyIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Performance</h3>
+            <p className="text-xs text-gray-500">Conversion metrics</p>
+          </div>
+            </div>
+        <div className="text-center py-4">
+          <div className="text-purple-600 mb-2">
+            <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center mx-auto">
+              <ChartBarIcon className="w-4 h-4" />
+          </div>
+        </div>
+          <p className="text-sm text-gray-600">No funnel data for this range.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const totalProposals = data.find(d => d.stage === 'Submitted')?.count || 0;
+  const wonProposals = data.find(d => d.stage === 'Won')?.count || 0;
+  const winRate = totalProposals > 0 ? (wonProposals / totalProposals) * 100 : 0;
+
+            return (
+    <div className="bg-white rounded-xl border border-gray-100 p-6 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+            <TrophyIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+            <h3 className="text-sm font-semibold text-gray-900">Performance</h3>
+            <p className="text-xs text-gray-500">Conversion metrics</p>
+                        </div>
+                  </div>
+                </div>
+
+      <div className="space-y-3">
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">Win Rate</span>
+          <span className="text-lg font-bold text-gray-900">{winRate.toFixed(1)}%</span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-2">
+          <div
+            className="bg-purple-500 h-2 rounded-full transition-all duration-500"
+            style={{ width: `${Math.min(winRate, 100)}%` }}
+          />
+                    </div>
+        <div className="flex justify-between text-xs text-gray-500">
+          <span>{wonProposals} won</span>
+          <span>{totalProposals} total</span>
+                      </div>
+                </div>
+              </div>
+  );
+});
+
+PerformanceInsights.displayName = 'PerformanceInsights';
+
+// Alerts & Issues Component
+const AlertsPanel = memo(({ data, loading }: { data: RiskIndicator[]; loading?: boolean }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const totalIssues = data.reduce((sum, risk) => sum + risk.count, 0);
+  const highPriority = data.filter(r => r.severity === 'high').reduce((sum, r) => sum + r.count, 0);
+
+  if (!mounted || loading) {
+  return (
+      <div className="bg-white rounded-xl border border-gray-100 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-red-50 text-red-600 rounded-lg">
+            <ExclamationTriangleIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Alerts</h3>
+            <p className="text-xs text-gray-500">Items needing attention</p>
+          </div>
+          </div>
+        <div className="space-y-3">
+          <div className="animate-pulse bg-gray-200 h-4 w-24 rounded" />
+          <div className="animate-pulse bg-gray-200 h-4 w-32 rounded" />
+        </div>
+      </div>
+    );
+  }
+
+            return (
+    <div className="bg-white rounded-xl border border-gray-100 p-6 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+          <div className="p-2 bg-red-50 text-red-600 rounded-lg">
+            <ExclamationTriangleIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+            <h3 className="text-sm font-semibold text-gray-900">Alerts</h3>
+            <p className="text-xs text-gray-500">Items needing attention</p>
+                      </div>
+                    </div>
+        {totalIssues > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-red-600">{totalIssues}</span>
+            {highPriority > 0 && (
+              <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                {highPriority} high
+              </span>
+            )}
+                    </div>
+        )}
+                  </div>
+
+      {totalIssues === 0 ? (
+        <div className="text-center py-4">
+          <div className="text-green-600 mb-2">
+            <div className="w-8 h-8 bg-green-50 rounded-full flex items-center justify-center mx-auto">
+              ✓
+                    </div>
+                    </div>
+          <p className="text-sm text-gray-600">All clear</p>
+                  </div>
+      ) : (
+        <div className="space-y-2">
+          {data.slice(0, 2).map((risk, index) => (
+            <div key={index} className="flex justify-between items-center text-sm">
+              <span className="text-gray-600 capitalize">
+                {risk.type.replace('_', ' ')}
+              </span>
+              <span className={`font-medium ${
+                risk.severity === 'high' ? 'text-red-600' :
+                risk.severity === 'medium' ? 'text-yellow-600' : 'text-gray-600'
+              }`}>
+                {risk.count}
+                        </span>
+                      </div>
+          ))}
+          {data.length > 2 && (
+            <div className="text-xs text-gray-500 text-center pt-2">
+              +{data.length - 2} more items
+                    </div>
+                  )}
+          </div>
+        )}
+      </div>
+  );
+});
+
+AlertsPanel.displayName = 'AlertsPanel';
 
 export default function EnhancedDashboard() {
   const [kpis, setKpis] = useState<EnhancedKPIs>({
@@ -306,254 +573,242 @@ export default function EnhancedDashboard() {
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [funnelData, setFunnelData] = useState<ConversionFunnel[]>([]);
   const [riskData, setRiskData] = useState<RiskIndicator[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const bridge = useDashboardBridge();
+  const { timeRange, status: statusFilter /*, search: searchFilter*/ } = useDashboardFilters();
+  const { dashboardData, isLoading: loading, error, refetch } = useDashboardData({ timeRange });
   const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const { setFilters } = useDashboardUIActions();
 
-  // Load enhanced dashboard data using bridge
-  const loadEnhancedData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Ensure SSR/CSR consistency for UI that depends on transient client-only states
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-      logDebug('Enhanced Dashboard: Fetch start', {
-        component: 'EnhancedDashboard',
-        operation: 'loadEnhancedData',
-        userStory: 'US-1.1',
-        hypothesis: 'H1',
-      });
+  // (Bridge-based loader removed; using unified React Query hook instead)
 
-      analytics(
-        'enhanced_dashboard_load_started',
-        {
-          component: 'EnhancedDashboard',
-          userStory: 'US-1.1',
-          hypothesis: 'H1',
-        },
-        'low'
-      );
-
-      // Fetch enhanced dashboard data using bridge
-      const result = (await bridge.fetchDashboardData()) as any;
-
-      if (result.success && result.data) {
-        const data = result.data as {
-          totalRevenue?: number;
-          monthlyRevenue?: number;
-          revenueGrowth?: number;
-          totalProposals?: number;
-          activeProposals?: number;
-          wonProposals?: number;
-          winRate?: number;
-          avgProposalValue?: number;
-          avgCycleTime?: number;
-          overdueCount?: number;
-          atRiskCount?: number;
-          totalCustomers?: number;
-          activeCustomers?: number;
-          customerGrowth?: number;
-          avgCustomerValue?: number;
-          proposalGrowth?: number;
-          stalledCount?: number;
-          revenueHistory?: Array<{
-            month?: string;
-            revenue?: number;
-            target?: number;
-            proposals?: number;
-          }>;
-          conversionFunnel?: Array<{
-            stage?: string;
-            count?: number;
-            conversionRate?: number;
-            value?: number;
-          }>;
-        };
-
-        // Use real enhanced KPIs from API
-        const enhancedKpis: EnhancedKPIs = {
-          totalRevenue: data.totalRevenue || 0,
-          monthlyRevenue: data.monthlyRevenue || 0,
-          revenueGrowth: data.revenueGrowth || 0,
-
-          totalProposals: data.totalProposals || 0,
-          activeProposals: data.activeProposals || 0,
-          wonProposals: data.wonProposals || 0,
-          winRate: data.winRate || 0,
-          avgProposalValue: data.avgProposalValue || 0,
-
-          avgCycleTime: data.avgCycleTime || 21,
-          overdueCount: data.overdueCount || 0,
-          atRiskCount: data.atRiskCount || 0,
-
-          totalCustomers: data.totalCustomers || 0,
-          activeCustomers: data.activeCustomers || 0,
-          customerGrowth: data.customerGrowth || 0,
-          avgCustomerValue: data.avgCustomerValue || 0,
-        };
-
-        setKpis(enhancedKpis);
-
-        // Use real revenue history data from API
-        const revenueHistory = data.revenueHistory || [];
-        const revenueDataFromAPI: RevenueData[] = revenueHistory.map(item => ({
-          month: item.month || '',
-          revenue: item.revenue || 0,
-          target: item.target || 0,
-          proposals: item.proposals || 0,
-        }));
-        setRevenueData(revenueDataFromAPI);
-
-        // Use real funnel data from API
-        const conversionFunnel = data.conversionFunnel || [];
-        const funnelDataFromAPI: ConversionFunnel[] = conversionFunnel.map(item => ({
-          stage: item.stage || '',
-          count: item.count || 0,
-          conversionRate: item.conversionRate || 0,
-          value: item.value || 0,
-        }));
-        setFunnelData(funnelDataFromAPI);
-
-        // Use real risk data from API
-        const riskDataFromAPI: RiskIndicator[] = [
-          {
-            type: 'overdue',
-            count: enhancedKpis.overdueCount,
-            severity: 'high',
-            trend: data.proposalGrowth || 0,
-          },
-          { type: 'at_risk', count: enhancedKpis.atRiskCount, severity: 'medium', trend: -2 },
-          { type: 'stalled', count: data.stalledCount || 0, severity: 'low', trend: 1 },
-        ];
-        setRiskData(riskDataFromAPI);
-
-        logInfo('Enhanced Dashboard: Fetch success', {
-          component: 'EnhancedDashboard',
-          operation: 'loadEnhancedData',
-          loadTime: Date.now(),
-          userStory: 'US-1.1',
-          hypothesis: 'H1',
-        });
-
-        analytics(
-          'enhanced_dashboard_loaded',
-          {
-            component: 'EnhancedDashboard',
-            kpiCount: Object.keys(enhancedKpis).length,
-            userStory: 'US-1.1',
-            hypothesis: 'H1',
-          },
-          'medium'
-        );
-
-        bridge.trackPageView('enhanced_dashboard');
-      } else {
-        throw new Error('Failed to load enhanced dashboard data');
-      }
-    } catch (error) {
-      const ehs = ErrorHandlingService.getInstance();
-      const standardError = ehs.processError(
-        error,
-        'Failed to load enhanced dashboard data',
-        ErrorCodes.DATA.QUERY_FAILED,
-        {
-          component: 'EnhancedDashboard',
-          operation: 'loadEnhancedData',
-          userStory: 'US-1.1',
-          hypothesis: 'H1',
-        }
-      );
-
-      setError(standardError.message);
-
-      logError('Enhanced Dashboard: Fetch failed', {
-        component: 'EnhancedDashboard',
-        operation: 'loadEnhancedData',
-        error: standardError.message,
-        userStory: 'US-1.1',
-        hypothesis: 'H1',
-      });
-
-      analytics(
-        'enhanced_dashboard_load_error',
-        {
-          component: 'EnhancedDashboard',
-          error: standardError.message,
-          userStory: 'US-1.1',
-          hypothesis: 'H1',
-        },
-        'high'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [bridge, analytics]);
-
-  // Load data on mount
+  // Derive view data from unified dashboardData with Zod validation
   useEffect(() => {
-    loadEnhancedData();
-  }, []); // ✅ CRITICAL: Empty dependency array to prevent infinite loops
+    if (!dashboardData) return;
+
+    logDebug('Enhanced Dashboard: derive from unified hook', {
+      component: 'EnhancedDashboard',
+      operation: 'derive',
+    });
+
+    // Validate API response with Zod
+    const parsed = DashboardSchema.safeParse(dashboardData);
+    if (!parsed.success) {
+      logDebug('dashboard_parse_error', {
+        error: parsed.error.flatten(),
+        component: 'EnhancedDashboard',
+        operation: 'data_validation',
+      });
+      return;
+    }
+
+    const { proposals, performance } = parsed.data;
+    const metrics = proposals?.metrics as any; // Temporary type assertion
+    const trends = performance?.trends ?? [];
+
+    const totalRevenue = trends.reduce((sum, m) => sum + (Number(m?.revenue) || 0), 0);
+    const monthlyRevenue = trends.length > 0 ? Number(trends[trends.length - 1]?.revenue || 0) : 0;
+    const prevMonthlyRevenue =
+      trends.length > 1 ? Number(trends[trends.length - 2]?.revenue || 0) : 0;
+    const revenueGrowth =
+      prevMonthlyRevenue > 0
+      ? Math.round(((monthlyRevenue - prevMonthlyRevenue) / prevMonthlyRevenue) * 100)
+      : 0;
+
+    setKpis(prev => ({
+      ...prev,
+      totalRevenue,
+      monthlyRevenue,
+      revenueGrowth,
+      totalProposals: Number(metrics?.total || 0),
+      activeProposals: Number(metrics?.active || 0),
+      wonProposals: Number(metrics?.completed || 0),
+      winRate: Math.round(Number(metrics?.winRate || 0)),
+      avgProposalValue:
+        totalRevenue > 0 && Number(metrics?.total || 0) > 0
+        ? Math.round(totalRevenue / Number(metrics?.total || 1))
+        : 0,
+      avgCycleTime: Number(metrics?.avgCompletionTime || 0),
+      overdueCount: Number(metrics?.overdue || 0),
+      atRiskCount: Number(metrics?.atRiskCount || 0),
+    }));
+
+    setRevenueData(
+      trends.map(m => ({
+        month: String(m?.month || ''),
+        revenue: Number(m?.revenue || 0),
+        target: Number(m?.target || 0),
+        proposals: Number(m?.proposals || 0),
+      }))
+    );
+
+    // Use funnel data from API if available, otherwise leave empty
+    setFunnelData(metrics?.funnel || []);
+
+    // Calculate risk indicators using database data
+    const overdue = Number(metrics?.overdue || 0);
+    const atRiskCount = Number(metrics?.atRiskCount || 0);
+
+    const riskItems: RiskIndicator[] = [];
+    if (overdue > 0) {
+      riskItems.push({
+              type: 'overdue',
+              count: overdue,
+              severity: overdue > 10 ? 'high' : overdue > 3 ? 'medium' : 'low',
+              trend: -5,
+      });
+    }
+    if (atRiskCount > 0) {
+      riskItems.push({
+        type: 'at_risk',
+        count: atRiskCount,
+        severity: atRiskCount > 5 ? 'medium' : 'low',
+        trend: 3,
+      });
+    }
+
+    setRiskData(riskItems);
+
+    analytics(
+      'enhanced_dashboard_derived_success',
+      {
+        component: 'EnhancedDashboard',
+        userStory: 'US-1.1',
+        hypothesis: 'H1',
+        totalProposals: metrics?.total || 0,
+        totalRevenue,
+        winRate: metrics?.winRate || 0,
+      }
+    );
+  }, [dashboardData, analytics]);
 
   // Memoized KPI cards for performance
+  // Apply lightweight status-based quick view filtering to derived KPIs
+  const displayKpis = useMemo(() => {
+    if (!statusFilter || statusFilter === 'all') return kpis;
+
+    switch (statusFilter) {
+      case 'active':
+        return {
+          ...kpis,
+          totalProposals: kpis.activeProposals,
+        };
+      case 'overdue':
+        return {
+          ...kpis,
+          totalProposals: kpis.overdueCount,
+          activeProposals: kpis.overdueCount,
+        };
+      case 'won':
+        return {
+          ...kpis,
+          totalProposals: kpis.wonProposals,
+          activeProposals: 0,
+        };
+      default:
+        return kpis;
+    }
+  }, [kpis, statusFilter]);
+
   const kpiCards = useMemo(
     () => [
       {
         title: 'Total Revenue',
-        value: `$${kpis.totalRevenue.toLocaleString()}`,
-        change: kpis.revenueGrowth,
+        value: displayKpis.totalRevenue,
+        change: displayKpis.revenueGrowth,
         icon: <CurrencyDollarIcon className="w-5 h-5" />,
         color: 'green' as const,
-        target: kpis.totalRevenue * 1.2, // 20% growth target
+        prefix: '$',
+        onClick: () => {
+          // Drill-down to proposals with revenue focus
+          setFilters({ search: 'high-value' });
+          analytics('kpi_drilldown', { kpi: 'revenue', userStory: 'US-1.1' });
+        },
       },
       {
         title: 'Active Proposals',
-        value: kpis.activeProposals,
-        subtitle: `${kpis.totalProposals} total`,
-        change:
-          ((kpis.activeProposals - (kpis.totalProposals - kpis.activeProposals)) /
-            kpis.totalProposals) *
-          100,
+        value: displayKpis.activeProposals,
+        subtitle: `${displayKpis.totalProposals} total`,
+        change: displayKpis.activeProposals > 0 ? (displayKpis.activeProposals / displayKpis.totalProposals) * 100 : 0,
         icon: <DocumentTextIcon className="w-5 h-5" />,
         color: 'blue' as const,
+        onClick: () => {
+          // Drill-down to active proposals
+          setFilters({ status: 'active' });
+          analytics('kpi_drilldown', { kpi: 'active_proposals', userStory: 'US-1.1' });
+        },
       },
       {
         title: 'Win Rate',
-        value: `${kpis.winRate}%`,
-        subtitle: `${kpis.wonProposals} won`,
-        change: kpis.winRate - 65, // Baseline 65%
+        value: displayKpis.winRate,
+        subtitle: `${displayKpis.wonProposals} won`,
+        change: displayKpis.winRate - DASHBOARD_CONSTANTS.WIN_RATE_BASELINE,
         icon: <TrophyIcon className="w-5 h-5" />,
         color: 'purple' as const,
-        target: 75, // 75% target
+        suffix: '%',
+        onClick: () => {
+          // Drill-down to won proposals
+          setFilters({ status: 'won' });
+          analytics('kpi_drilldown', { kpi: 'win_rate', userStory: 'US-1.1' });
+        },
       },
       {
         title: 'Avg Cycle Time',
-        value: `${kpis.avgCycleTime} days`,
+        value: displayKpis.avgCycleTime,
         subtitle: 'Proposal to close',
-        change: 21 - kpis.avgCycleTime, // Lower is better
+        change: DASHBOARD_CONSTANTS.CYCLE_TIME_TARGET_DAYS - displayKpis.avgCycleTime,
         icon: <ClockIcon className="w-5 h-5" />,
         color: 'yellow' as const,
-        target: 14, // 14 days target
+        suffix: ' days',
+        onClick: () => {
+          // Drill-down to overdue proposals
+          setFilters({ status: 'overdue' });
+          analytics('kpi_drilldown', { kpi: 'cycle_time', userStory: 'US-1.1' });
+        },
       },
       {
         title: 'Active Customers',
-        value: kpis.activeCustomers,
-        subtitle: `${kpis.totalCustomers} total`,
-        change: kpis.customerGrowth,
+        value: displayKpis.activeCustomers,
+        subtitle: `${displayKpis.totalCustomers} total`,
+        change: displayKpis.customerGrowth,
         icon: <UsersIcon className="w-5 h-5" />,
         color: 'indigo' as const,
+        onClick: () => {
+          // Drill-down to customer proposals
+          setFilters({ search: 'customer' });
+          analytics('kpi_drilldown', { kpi: 'customers', userStory: 'US-1.1' });
+        },
       },
       {
         title: 'Risk Items',
-        value: kpis.overdueCount + kpis.atRiskCount,
+        value: displayKpis.overdueCount + displayKpis.atRiskCount,
         subtitle: 'Need attention',
-        change: -((kpis.overdueCount + kpis.atRiskCount) / kpis.totalProposals) * 100,
+        change: -(
+          ((displayKpis.overdueCount + displayKpis.atRiskCount) /
+            (displayKpis.totalProposals || 1)) *
+          100
+        ),
         icon: <ExclamationTriangleIcon className="w-5 h-5" />,
         color: 'red' as const,
+        onClick: () => {
+          // Drill-down to risk items
+          setFilters({ status: 'overdue' });
+          analytics('kpi_drilldown', { kpi: 'risk_items', userStory: 'US-1.1' });
+        },
       },
     ],
-    [kpis]
+    [displayKpis, analytics, setFilters]
   );
+
+  // Status summary for quick overview
+  const statusSummary = useMemo(() => {
+    const issues = [];
+    if (displayKpis.overdueCount > 0) issues.push(`${displayKpis.overdueCount} overdue`);
+    if (displayKpis.atRiskCount > 0) issues.push(`${displayKpis.atRiskCount} at risk`);
+    return issues.length > 0 ? issues.join(', ') : 'All on track';
+  }, [displayKpis]);
 
   if (error) {
     return (
@@ -561,8 +816,8 @@ export default function EnhancedDashboard() {
         <div className="text-center">
           <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <Button onClick={loadEnhancedData} variant="outline">
+          <p className="text-gray-600 mb-4">{error.message}</p>
+          <Button onClick={() => refetch()} variant="outline">
             Retry
           </Button>
         </div>
@@ -571,32 +826,109 @@ export default function EnhancedDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Enhanced KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {kpiCards.map((card, index) => (
-          <EnhancedKPICard key={index} {...card} loading={loading} />
-        ))}
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Modern Header - Market-standard design */}
+        <div className="relative overflow-hidden bg-white/60 backdrop-blur-xl rounded-3xl border border-white/20 shadow-xl shadow-black/5">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-indigo-600/5 to-violet-600/5" />
+          <div className="relative p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="space-y-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+                  Dashboard Overview
+                </h1>
+                <div className="text-sm text-gray-600 flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    statusSummary === 'All on track'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      statusSummary === 'All on track' ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`} />
+                    {statusSummary}
+                  </span>
+                  <span className="text-gray-400">•</span>
+                  <span>Real-time insights</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => {
+                    analytics('dashboard_refresh_clicked', { timeRange }, 'medium');
+                    refetch();
+                  }}
+                  variant="outline"
+                  size="sm"
+                  disabled={mounted ? loading : false}
+                  aria-busy={mounted ? loading : false}
+                  className="flex items-center gap-2 bg-white/80 backdrop-blur-sm hover:bg-white/90 border-gray-200/60"
+                >
+                  <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  {mounted && loading ? 'Refreshing...' : 'Refresh'}
+                </Button>
+                <span className="sr-only" aria-live="polite" role="status">
+                  {mounted && loading ? 'Refreshing dashboard data' : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <RevenueChart data={revenueData} />
-        <ConversionFunnel data={funnelData} />
-        <RiskIndicators data={riskData} />
-      </div>
+        {/* Primary KPI Grid - Market-standard 4-column layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+          {kpiCards.slice(0, 4).map((card, index) => (
+            <ModernKPICard
+              key={`primary-${index}`}
+              title={card.title}
+              value={card.value}
+              subtitle={card.subtitle}
+              change={card.change}
+              trend={card.change && card.change > 0 ? 'up' : card.change && card.change < 0 ? 'down' : 'neutral'}
+              icon={card.icon}
+              color={card.color}
+              prefix={card.prefix}
+              suffix={card.suffix}
+              onClick={card.onClick}
+              loading={loading}
+            />
+          ))}
+        </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-center gap-4">
-        <Button onClick={loadEnhancedData} variant="outline" disabled={loading}>
-          {loading ? 'Refreshing...' : 'Refresh Data'}
-        </Button>
-        <Button
-          onClick={() => bridge.trackAction('export_dashboard', { format: 'pdf' })}
-          variant="outline"
-        >
-          Export Report
-        </Button>
+        {/* Insights Row - Enhanced visual hierarchy */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <RevenueTrend data={revenueData} loading={loading} />
+          <PerformanceInsights data={funnelData} />
+          <AlertsPanel data={riskData} loading={loading} />
+        </div>
+
+        {/* Secondary Metrics - Conditional display */}
+        {kpiCards.length > 4 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900">Additional Metrics</h2>
+              <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+              {kpiCards.slice(4).map((card, index) => (
+                <ModernKPICard
+                  key={`secondary-${index}`}
+                  title={card.title}
+                  value={card.value}
+                  subtitle={card.subtitle}
+                  change={card.change}
+                  trend={card.change && card.change > 0 ? 'up' : card.change && card.change < 0 ? 'down' : 'neutral'}
+                  icon={card.icon}
+                  color={card.color}
+                  prefix={card.prefix}
+                  suffix={card.suffix}
+                  onClick={card.onClick}
+                  loading={loading}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -39,11 +39,13 @@ interface ProductResponse {
     id: string;
     name: string;
     sku: string;
+    category?: string;
   }>;
   data?: Array<{
     id: string;
     name: string;
     sku: string;
+    category?: string;
   }>;
 }
 
@@ -96,7 +98,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
         );
 
         const list = res?.data ?? res?.items ?? [];
-        const byId = new Map<string, { id: string; name: string; sku: string }>();
+        const byId = new Map<string, { id: string; name: string; sku: string; category?: string }>();
         for (const item of list || []) byId.set(item.id, item);
 
         const cacheKey = `proposal-preview-${proposalId}`;

@@ -56,18 +56,15 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-interface NearDueResponse extends ApiResponse<{ nearDueByDay: ChartDataPoint[] }> {}
-
-interface EmployeeResponse extends ApiResponse<{ byEmployee: EmployeePerformance[] }> {}
-
-interface ProductResponse
-  extends ApiResponse<{ products: ProductPerformance[]; topWinning: ProductPerformance[] }> {}
-
-interface FunnelResponse extends ApiResponse<{ stages: FunnelStage[] }> {}
-
-interface OverduePriorityResponse extends ApiResponse<PriorityOverdue[]> {}
-
-interface BundleResponse extends ApiResponse<{ pairs: ProductBundle[] }> {}
+type NearDueResponse = ApiResponse<{ nearDueByDay: ChartDataPoint[] }>;
+type EmployeeResponse = ApiResponse<{ byEmployee: EmployeePerformance[] }>;
+type ProductResponse = ApiResponse<{
+  products: ProductPerformance[];
+  topWinning: ProductPerformance[];
+}>;
+type FunnelResponse = ApiResponse<{ stages: FunnelStage[] }>;
+type OverduePriorityResponse = ApiResponse<PriorityOverdue[]>;
+type BundleResponse = ApiResponse<{ pairs: ProductBundle[] }>;
 
 export default function DashboardChartsClient() {
   const { data, isLoading, error } = useDashboardAnalytics();
@@ -109,7 +106,7 @@ export default function DashboardChartsClient() {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {[...Array(4)].map((_, i) => (
+        {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i} className="animate-pulse">
             <div className="p-6 h-48 bg-gray-100 rounded" />
           </Card>
@@ -291,7 +288,7 @@ export default function DashboardChartsClient() {
             <div className="space-y-2">
               {bundles.map((pair, index) => (
                 <div
-                  key={`${pair.aId}-${pair.bId}` || `bundle-${index}`}
+                  key={`${pair.aId || 'a'}-${pair.bId || 'b'}-${index}`}
                   className="flex items-center gap-2"
                 >
                   <div className="w-56 truncate" title={`${pair.aName} + ${pair.bName}`}>

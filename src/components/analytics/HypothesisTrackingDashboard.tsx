@@ -623,7 +623,7 @@ export const HypothesisTrackingDashboard: React.FC<HypothesisTrackingDashboardPr
 
       {/* Metadata */}
       <div className="text-xs text-gray-500 text-center">
-        Last updated: {new Date(overview.lastUpdated).toLocaleString()} • Time range:{' '}
+        Last updated: {new Date(overview.lastUpdated).toLocaleString('en-US', { timeZone: 'UTC' })} • Time range:{' '}
         {overview.timeRange} •
         {autoRefreshEnabled ? `Auto-refresh: ${refreshInterval / 1000}s` : 'Auto-refresh: Off'} •
         Component Traceability: {COMPONENT_MAPPING.userStories.join(', ')}

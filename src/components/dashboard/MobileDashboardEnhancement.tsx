@@ -85,6 +85,41 @@ interface MobileDashboardEnhancementProps {
   className?: string;
 }
 
+// Local shapes compatible with ModernDashboard props to avoid any-casts
+interface MDashboardMetrics {
+  totalProposals: number;
+  activeProposals: number;
+  completedProposals: number;
+  overdueProposals: number;
+  totalValue: number;
+  averageValue: number;
+  conversionRate: number;
+  teamPerformance: number;
+}
+
+interface MDashboardProposal {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueDate: string;
+  value: number;
+  customerName: string;
+  assignedTo: string;
+  progress: number;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+}
+
+interface MDashboardPriorityItem {
+  id: string;
+  title: string;
+  type: 'proposal' | 'approval' | 'deadline' | 'alert';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  dueDate: string;
+  description: string;
+  actionRequired: boolean;
+}
+
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
   userStories: ['US-8.1', 'US-8.4', 'US-2.2'],
@@ -184,6 +219,48 @@ export function MobileDashboardEnhancement({
     prefersReducedMotion,
     getOptimalTouchTargetSize,
   ]);
+
+  // Map incoming data to ModernDashboard-compatible shapes
+  const mdMetrics = useMemo<MDashboardMetrics | null>(() => {
+    if (!data) return null;
+    return {
+      totalProposals: data.proposals.length,
+      activeProposals: data.metrics.activeProposals ?? 0,
+      completedProposals: 0,
+      overdueProposals: 0,
+      totalValue: 0,
+      averageValue: 0,
+      conversionRate: Math.round((data.metrics.completionRate ?? 0) * 100) / 100,
+      teamPerformance: 0,
+    };
+  }, [data]);
+
+  const mdProposals = useMemo<MDashboardProposal[]>(() => {
+    return (proposals || []).map(p => ({
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      priority: p.priority,
+      dueDate: (p.dueDate instanceof Date ? p.dueDate : new Date(p.dueDate)).toISOString(),
+      value: 0,
+      customerName: '',
+      assignedTo: '',
+      progress: 0,
+      riskLevel: 'low',
+    }));
+  }, [proposals]);
+
+  const mdPriorityItems = useMemo<MDashboardPriorityItem[]>(() => {
+    return (priorityItems || []).map(i => ({
+      id: i.id,
+      title: i.title,
+      type: (i.type === 'approval' || i.type === 'deadline') ? i.type : 'alert',
+      priority: i.urgency,
+      dueDate: new Date().toISOString(),
+      description: i.description,
+      actionRequired: true,
+    }));
+  }, [priorityItems]);
 
   /**
    * Performance Mode Selection
@@ -478,9 +555,9 @@ export function MobileDashboardEnhancement({
           }
           loading={Boolean(loading)}
           error={error ?? null}
-          data={data as unknown as any}
-          proposals={proposals as unknown as any}
-          priorityItems={priorityItems as unknown as any}
+          data={mdMetrics}
+          proposals={mdProposals}
+          priorityItems={mdPriorityItems}
           onQuickAction={handleMobileQuickAction}
           onRetry={onRetry}
         />

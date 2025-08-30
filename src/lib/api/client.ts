@@ -11,7 +11,8 @@ import { errorInterceptor, type ErrorHandlerOptions } from './interceptors/error
 function getApiBaseUrl(): string {
   // Client-side: use current window location
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/api`;
+    // Use relative path on client to avoid cross-origin policies and mixed-hostname issues
+    return '/api';
   }
 
   // Server-side: check environment

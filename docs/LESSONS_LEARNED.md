@@ -1,5 +1,13 @@
 # PosalPro MVP2 - Lessons Learned
 
+Note (2025-08-30): References to the dashboard Bridge pattern (e.g.,
+DashboardManagementBridge and StateBridge) in this document reflect historical
+context. The dashboard has been migrated to the modern feature-based
+architecture with UI state in Zustand and server state in React Query. See
+docs/DASHBOARD_MIGRATION_ASSESSMENT.md for the current approach and
+docs/archive/dashboard-bridge-20250830/ARCHIVE_INDEX.md for archived
+bridge-era components.
+
 This document captures key insights, patterns, and solutions discovered during
 development.
 

@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/app/(dashboard)/**/*.ts",
+    "src/app/(dashboard)/**/*.tsx",
+    "src/components/dashboard/**/*.ts",
+    "src/components/dashboard/**/*.tsx",
+    "src/hooks/dashboard/**/*.ts",
+    "src/hooks/dashboard/**/*.tsx",
+    "src/lib/dashboard/**/*.ts",
+    "src/lib/dashboard/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "archive/**",
+    "src/archived/**",
+    "docs/**",
+    "scripts/**",
+    "src/test/**"
+  ]
+}

@@ -15,6 +15,10 @@ import {
 } from '@heroicons/react/24/outline';
 import { CRMIntegration } from '@/types/dashboard';
 
+const numberFormatter = new Intl.NumberFormat('en-US');
+const formatDateTime = (d: string | number | Date) =>
+  new Date(d).toLocaleString('en-US', { timeZone: 'UTC' });
+
 // CRM Integration Panel
 export const CRMIntegrationPanel = memo(
   ({
@@ -93,8 +97,8 @@ export const CRMIntegrationPanel = memo(
                     <h4 className="font-medium text-gray-900">{integration.name}</h4>
                     <p className="text-sm text-gray-600">{integration.type}</p>
                     <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
-                      <span>Last sync: {integration.lastSync}</span>
-                      <span>Records: {integration.recordCount.toLocaleString()}</span>
+                      <span>Last sync: {formatDateTime(integration.lastSync)}</span>
+                      <span>Records: {numberFormatter.format(integration.recordCount)}</span>
                     </div>
                   </div>
                 </div>
@@ -194,7 +198,7 @@ export const CRMDataSyncStatus = memo(
             <span className="text-sm font-medium capitalize">{syncStatus}</span>
           </div>
           <div className="text-xs text-gray-500">
-            {recordCount.toLocaleString()} records
+            {numberFormatter.format(recordCount)} records
           </div>
         </div>
         <div className="mt-2 text-xs text-gray-600">
@@ -359,7 +363,6 @@ export const CRMConfigurationModal = memo(
 );
 
 CRMConfigurationModal.displayName = 'CRMConfigurationModal';
-
 
 
 

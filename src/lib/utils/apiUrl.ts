@@ -12,8 +12,8 @@ import { logger } from '@/lib/logger'; /**
 export function getApiBaseUrl(): string {
   // Check if we're in the browser
   if (typeof window !== 'undefined') {
-    // Client-side: use current window location
-    return `${window.location.origin}/api`;
+    // Client-side: prefer relative URL to avoid cross-origin/CORS issues
+    return '/api';
   }
 
   // Server-side: check environment directly without triggering config loading

@@ -13,12 +13,34 @@ const customJestConfig = {
   },
   // This is the key: it tells Jest to NOT ignore these modules for transformation.
   transformIgnorePatterns: ['/node_modules/(?!(jose|@panva/hkdf|openid-client|dexie|uuid|msw))'],
-  testTimeout: 30000,
+  transform: {
+    '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
+  },
   verbose: true,
   maxWorkers: '50%',
   testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+  testMatch: [
+    '**/__tests__/**/*.(ts|tsx|js)',
+    '**/*.(test|spec).(ts|tsx|js)',
+    'src/test/**/*.(test|spec).(ts|tsx|js)',
+  ],
+
   // Configure Puppeteer tests to use Node environment
   projects: [
+    {
+      displayName: 'unit',
+      testMatch: [
+        '**/__tests__/**/*.(ts|tsx|js)',
+        '**/*.(test|spec).(ts|tsx|js)',
+        'src/test/**/*.(test|spec).(ts|tsx|js)',
+      ],
+      testEnvironment: 'jsdom',
+      setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+      },
+      transformIgnorePatterns: ['/node_modules/(?!(jose|@panva/hkdf|openid-client|dexie|uuid|msw))'],
+    },
     {
       displayName: 'e2e',
       testMatch: ['**/test/proposal-wizard-puppeteer.test.ts'],
@@ -32,7 +54,7 @@ const customJestConfig = {
         '/node_modules/(?!(jose|@panva/hkdf|openid-client|dexie|uuid|msw))',
       ],
       transform: {
-        '^.+\\.(ts|tsx)$': 'ts-jest',
+        '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
       },
       testTimeout: 60000,
     },

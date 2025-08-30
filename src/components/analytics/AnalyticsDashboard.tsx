@@ -17,6 +17,8 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import { useState } from 'react';
 
+const numberFormatter = new Intl.NumberFormat('en-US');
+
 // Inline SVG components to replace Heroicons and prevent webpack chunk loading issues
 const ArrowPathIcon = ({ className = 'h-5 w-5' }) => (
   <svg
@@ -269,7 +271,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 <div className="ml-4">
                   <div className="text-sm font-medium text-gray-500">Total Events</div>
                   <div className="text-2xl font-bold text-gray-900">
-                    {dashboardData.hypothesis.totalEvents.toLocaleString()}
+                    {numberFormatter.format(dashboardData.hypothesis.totalEvents)}
                   </div>
                 </div>
               </div>

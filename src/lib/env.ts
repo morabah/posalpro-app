@@ -351,16 +351,22 @@ class EnvironmentManager {
           type: 'string',
         }) as string;
 
-        // Server-side validation for production
-        if (isProduction) {
+        // Server-side validation for production - only validate when not in build process
+        // Skip validation during build time when environment variables may not be available
+        const isBuildProcess =
+          process.env.NEXT_PHASE === 'phase-production-build' ||
+          process.env.npm_lifecycle_event === 'build' ||
+          !process.env.NODE_ENV;
+
+        if (isProduction && !isBuildProcess) {
           if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('default')) {
             errors.push('JWT_SECRET must be set to a secure value in production');
           }
           if (!process.env.API_KEY || process.env.API_KEY.includes('default')) {
             errors.push('API_KEY must be set to a secure value in production');
           }
-        } else if (isDevelopment) {
-          // Development warnings (throttled)
+        } else if (isDevelopment && !isBuildProcess) {
+          // Development warnings (throttled) - only show when running the app
           if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('default')) {
             this.logBrowserWarning(
               'Using default JWT_SECRET in development - update for production',

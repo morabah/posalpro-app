@@ -261,6 +261,12 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     icon: DocumentTextIcon,
   },
   {
+    id: 'api-docs',
+    name: 'API Docs',
+    href: '/docs',
+    icon: DocumentTextIcon,
+  },
+  {
     id: 'bridge-demo',
     name: 'Bridge Demo',
     href: '/bridge-example',

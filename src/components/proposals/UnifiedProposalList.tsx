@@ -14,6 +14,7 @@ import { Select } from '@/components/ui/Select';
 import type { Proposal } from '@/features/proposals/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useInfiniteProposals } from '@/hooks/useProposals';
+import { useDashboardFilters } from '@/lib/store/dashboardStore';
 import { logDebug } from '@/lib/logger';
 import {
   AlertTriangleIcon,
@@ -227,8 +228,17 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
 export default function UnifiedProposalList() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
+  // Read global dashboard filters (search/status)
+  const { search: dashboardSearch, status: dashboardStatus } = useDashboardFilters();
+
+  // Map dashboard status to API status when possible
+  const apiStatus = dashboardStatus === 'won' ? ('ACCEPTED' as any) : undefined; // 'active'/'overdue' handled client-side
+
   // Single source of truth for proposal list data
-  const { data, isLoading, error, fetchNextPage, hasNextPage } = useInfiniteProposals();
+  const { data, isLoading, error, fetchNextPage, hasNextPage } = useInfiniteProposals({
+    search: dashboardSearch || '',
+    status: apiStatus,
+  });
 
   // Extract proposals from infinite query data
   const proposals = data?.pages?.flatMap(page => page.items) || [];
@@ -266,6 +276,33 @@ export default function UnifiedProposalList() {
   // Filter and sort proposals
   const filteredAndSortedProposals = useMemo(() => {
     let filtered = proposals.filter((proposal: Proposal) => {
+      // Apply global dashboard search (in addition to local search)
+      const matchesDashboardSearch =
+        !dashboardSearch ||
+        proposal.title.toLowerCase().includes(dashboardSearch.toLowerCase()) ||
+        proposal.description?.toLowerCase().includes(dashboardSearch.toLowerCase()) ||
+        proposal.customer?.name.toLowerCase().includes(dashboardSearch.toLowerCase());
+
+      // Apply global dashboard status quick views
+      const matchesDashboardStatus = (() => {
+        switch (dashboardStatus) {
+          case 'active':
+            return (
+              proposal.status === 'IN_REVIEW' || proposal.status === 'PENDING_APPROVAL'
+            );
+          case 'overdue': {
+            const due = proposal.dueDate ? new Date(proposal.dueDate) : null;
+            const isFinal = proposal.status === 'ACCEPTED' || proposal.status === 'DECLINED';
+            return !!(due && due.getTime() < Date.now() && !isFinal);
+          }
+          case 'won':
+            return proposal.status === 'ACCEPTED';
+          case 'all':
+          default:
+            return true;
+        }
+      })();
+
       const matchesSearch =
         !searchQuery ||
         proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -275,7 +312,13 @@ export default function UnifiedProposalList() {
       const matchesStatus = !statusFilter || proposal.status === statusFilter;
       const matchesPriority = !priorityFilter || proposal.priority === priorityFilter;
 
-      return matchesSearch && matchesStatus && matchesPriority;
+      return (
+        matchesDashboardSearch &&
+        matchesDashboardStatus &&
+        matchesSearch &&
+        matchesStatus &&
+        matchesPriority
+      );
     });
 
     // Sort proposals
@@ -288,8 +331,8 @@ export default function UnifiedProposalList() {
           bValue = b.title.toLowerCase();
           break;
         case 'value':
-          aValue = a.value;
-          bValue = b.value;
+          aValue = a.value ?? 0;
+          bValue = b.value ?? 0;
           break;
         case 'createdAt':
           aValue = new Date(a.createdAt);
@@ -310,7 +353,16 @@ export default function UnifiedProposalList() {
     });
 
     return filtered;
-  }, [proposals, searchQuery, statusFilter, priorityFilter, sortBy, sortOrder]);
+  }, [
+    proposals,
+    searchQuery,
+    statusFilter,
+    priorityFilter,
+    sortBy,
+    sortOrder,
+    dashboardSearch,
+    dashboardStatus,
+  ]);
 
   // Event handlers
   const handleView = useCallback((id: string) => {

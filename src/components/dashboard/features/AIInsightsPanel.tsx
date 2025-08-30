@@ -3,7 +3,7 @@
  * AI-powered insights and recommendations
  */
 
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 
 // AI Insights Component
@@ -23,6 +23,12 @@ interface AIInsightsPanelProps {
 }
 
 export const AIInsightsPanel = memo(({ data, loading }: AIInsightsPanelProps) => {
+  // Avoid hydration mismatch by populating time after mount
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+  useEffect(() => {
+    if (!loading) setLastUpdated(new Date().toLocaleTimeString());
+  }, [loading, data]);
+
   if (loading) {
     return (
       <Card className="p-6">
@@ -134,7 +140,7 @@ export const AIInsightsPanel = memo(({ data, loading }: AIInsightsPanelProps) =>
 
       <div className="mt-6 pt-4 border-t border-gray-200">
         <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>Last updated: {new Date().toLocaleTimeString()}</span>
+          <span>Last updated: {lastUpdated || '--'}</span>
           <button className="text-blue-600 hover:text-blue-700 font-medium">
             View All Insights →
           </button>

@@ -1,9 +1,9 @@
-import { authOptions } from '@/lib/auth';
-import { ErrorCodes, ErrorHandlingService, StandardError } from '@/lib/errors/ErrorHandlingService';
+import { createRoute } from '@/lib/api/route';
+import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { ExecutiveDashboardQuerySchema } from '@/features/dashboard/schemas';
+import { NextResponse } from 'next/server';
 
 // TypeScript interfaces for executive dashboard data
 export interface ExecutiveMetrics {
@@ -65,34 +65,20 @@ export interface PipelineStage {
   avgTime: number;
 }
 
-// Validation schema
-const ExecutiveDataRequestSchema = z.object({
-  timeframe: z.enum(['1M', '3M', '6M', '1Y']).optional().default('3M'),
-  includeForecasts: z.boolean().optional().default(true),
-});
-
-export async function GET(request: NextRequest) {
-  const errorHandlingService = ErrorHandlingService.getInstance();
-
-  try {
-    // Authentication with session validation
-    const sessionData = await getServerSession(authOptions);
-    if (!sessionData?.user?.id) {
-      throw new StandardError({
-        message: 'Authentication required',
-        code: ErrorCodes.AUTH.UNAUTHORIZED,
-        metadata: {
-          endpoint: '/api/dashboard/executive',
-        },
-      });
-    }
-
-    // Parse and validate query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = ExecutiveDataRequestSchema.parse({
-      timeframe: searchParams.get('timeframe') || '3M',
-      includeForecasts: searchParams.get('includeForecasts') === 'true',
-    });
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'Administrator', 'System Administrator'],
+    query: ExecutiveDashboardQuerySchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, query }) => {
+    const errorHandlingService = ErrorHandlingService.getInstance();
+    try {
+      // Query params already validated and coerced by createRoute
+      const queryParams = {
+        timeframe: query?.timeframe ?? '3M',
+        includeForecasts: (query?.includeForecasts as unknown as boolean) ?? true,
+      };
 
     // Calculate date ranges based on timeframe
     const now = new Date();
@@ -302,25 +288,37 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    return NextResponse.json(response, {
+    const res = NextResponse.json(response, {
       status: 200,
       headers: {
         'Cache-Control': 'public, max-age=60, s-maxage=180', // Short TTL caching per CORE_REQUIREMENTS
       },
     });
-  } catch (error) {
-    return errorHandlingService.createApiErrorResponse(
-      error,
-      'Failed to load executive dashboard data',
-      ErrorCodes.SYSTEM.UNKNOWN,
-      500,
-      {
-        endpoint: '/api/dashboard/executive',
-        context: 'ExecutiveDashboardAPI',
-      }
-    );
+    // Additional security headers
+    res.headers.set('Content-Type', 'application/json; charset=utf-8');
+    res.headers.set('X-Content-Type-Options', 'nosniff');
+    res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    return res;
+    } catch (error) {
+      const standardError = errorHandlingService.processError(
+        error,
+        'Failed to load executive dashboard data',
+        ErrorCodes.SYSTEM.UNKNOWN,
+        {
+          endpoint: '/api/dashboard/executive',
+          context: 'ExecutiveDashboardAPI',
+          userId: user?.id || 'unknown',
+          url: new URL(req.url).pathname,
+        }
+      );
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      return new Response(
+        JSON.stringify({ success: false, error: standardError.message, code: standardError.code }),
+        { status: 500, headers }
+      );
+    }
   }
-}
+);
 
 // Helper functions for data transformation
 function getCurrentMonthRevenue(

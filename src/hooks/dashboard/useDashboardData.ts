@@ -12,6 +12,7 @@
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { dashboardAPI, type DashboardQueryOptions } from '@/lib/dashboard/api';
+import { dashboardQK, type DashboardSection } from '@/features/dashboard/keys';
 import type {
   ActivityFeedItem,
   DashboardData,
@@ -26,14 +27,6 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { UserType } from '@/types/enums';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-// Dashboard section type for strong typing
-type DashboardSection =
-  | 'proposals'
-  | 'activities'
-  | 'team'
-  | 'deadlines'
-  | 'performance'
-  | 'notifications';
 
 // Hook configuration options
 interface UseDashboardDataOptions {
@@ -83,17 +76,7 @@ export interface UseDashboardDataReturn {
   lastUpdated: Date | null;
 }
 
-/**
- * Query key factory for dashboard data
- * Following CORE_REQUIREMENTS.md patterns for hierarchical query keys
- */
-const dashboardKeys = {
-  all: ['dashboard'] as const,
-  data: (options: DashboardQueryOptions) => [...dashboardKeys.all, 'data', options] as const,
-  section: (section: DashboardSection, options: DashboardQueryOptions) =>
-    [...dashboardKeys.all, 'section', section, options] as const,
-  notifications: (userId?: string) => [...dashboardKeys.all, 'notifications', userId] as const,
-};
+// Centralized query keys imported from feature module
 
 /**
  * React Query-based dashboard data management hook
@@ -119,7 +102,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
     error,
     refetch,
   } = useQuery({
-    queryKey: dashboardKeys.data(queryOptions),
+    queryKey: dashboardQK.data(queryOptions),
     queryFn: async () => {
       const start = Date.now();
       void logDebug('[Dashboard] Fetch start', {
@@ -169,7 +152,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
 
   // Individual section queries for granular loading states
   const proposalsQuery = useQuery({
-    queryKey: dashboardKeys.section('proposals', queryOptions),
+    queryKey: dashboardQK.section('proposals', queryOptions),
     queryFn: () => dashboardAPI.refreshSection('proposals', queryOptions),
     staleTime: 30000,
     gcTime: 120000,
@@ -179,7 +162,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
   });
 
   const activitiesQuery = useQuery({
-    queryKey: dashboardKeys.section('activities', queryOptions),
+    queryKey: dashboardQK.section('activities', queryOptions),
     queryFn: () => dashboardAPI.refreshSection('activities', queryOptions),
     staleTime: 30000,
     gcTime: 120000,
@@ -189,7 +172,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
   });
 
   const teamQuery = useQuery({
-    queryKey: dashboardKeys.section('team', queryOptions),
+    queryKey: dashboardQK.section('team', queryOptions),
     queryFn: () => dashboardAPI.refreshSection('team', queryOptions),
     staleTime: 30000,
     gcTime: 120000,
@@ -199,7 +182,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
   });
 
   const deadlinesQuery = useQuery({
-    queryKey: dashboardKeys.section('deadlines', queryOptions),
+    queryKey: dashboardQK.section('deadlines', queryOptions),
     queryFn: () => dashboardAPI.refreshSection('deadlines', queryOptions),
     staleTime: 30000,
     gcTime: 120000,
@@ -209,7 +192,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
   });
 
   const performanceQuery = useQuery({
-    queryKey: dashboardKeys.section('performance', queryOptions),
+    queryKey: dashboardQK.section('performance', queryOptions),
     queryFn: () => dashboardAPI.refreshSection('performance', queryOptions),
     staleTime: 30000,
     gcTime: 120000,
@@ -219,7 +202,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
   });
 
   const notificationsQuery = useQuery({
-    queryKey: dashboardKeys.section('notifications', queryOptions),
+    queryKey: dashboardQK.section('notifications', queryOptions),
     queryFn: () => dashboardAPI.refreshSection('notifications', queryOptions),
     staleTime: 30000,
     gcTime: 120000,
@@ -263,7 +246,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
       if (success) {
         // Optimistically update the cache
         queryClient.setQueryData(
-          dashboardKeys.data(queryOptions),
+          dashboardQK.data(queryOptions),
           (oldData: DashboardData | undefined) => {
             if (!oldData?.notifications) return oldData;
 

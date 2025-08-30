@@ -14,6 +14,7 @@ import {
   LightBulbIcon,
 } from '@heroicons/react/24/outline';
 import { memo, useState } from 'react';
+import { formatCurrency, formatDateUTC, formatNumber } from '@/lib/utils';
 
 // Predictive Analytics Dashboard
 export const PredictiveAnalyticsDashboard = memo(
@@ -54,11 +55,11 @@ export const PredictiveAnalyticsDashboard = memo(
     const formatValue = (value: number, type: string) => {
       switch (type) {
         case 'currency':
-          return `$${value.toLocaleString()}`;
+          return formatCurrency(value);
         case 'percentage':
           return `${value.toFixed(1)}%`;
         case 'number':
-          return value.toLocaleString();
+          return formatNumber(value);
         default:
           return value.toString();
       }
@@ -163,7 +164,12 @@ export const PredictiveAnalyticsDashboard = memo(
                   )}
 
                 <div className="mt-3 text-xs text-gray-500">
-                  Last updated: {new Date(prediction.lastUpdated).toLocaleString()}
+                  Last updated:{' '}
+                  {formatDateUTC(prediction.lastUpdated, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
                 </div>
               </div>
             ))}
@@ -243,7 +249,7 @@ export const TrendAnalysisChart = memo(
             return (
               <div key={index} className="flex items-center space-x-3">
                 <div className="w-20 text-sm text-gray-600">
-                  {new Date(point.date).toLocaleDateString()}
+                  {formatDateUTC(point.date, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
                 <div className="flex-1 bg-gray-200 rounded-full h-3">
                   <div
@@ -254,7 +260,7 @@ export const TrendAnalysisChart = memo(
                   />
                 </div>
                 <div className="w-16 text-sm font-medium text-right">
-                  {point.value.toLocaleString()}
+                  {numberFormatter.format(point.value)}
                 </div>
                 {point.predicted && (
                   <div className="text-xs text-blue-600 font-medium">Predicted</div>
@@ -334,7 +340,12 @@ export const AIModelPerformance = memo(
                   <div>
                     <h4 className="font-medium text-gray-900">{model.name}</h4>
                     <div className="text-sm text-gray-600">
-                      Last trained: {new Date(model.lastTrained).toLocaleDateString()}
+                      Last trained:{' '}
+                      {formatDateUTC(model.lastTrained, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
                     </div>
                   </div>
                 </div>
@@ -351,7 +362,7 @@ export const AIModelPerformance = memo(
                 </div>
                 <div>
                   <span className="text-gray-500">Predictions:</span>
-                  <span className="ml-2 font-medium">{model.predictions.toLocaleString()}</span>
+                  <span className="ml-2 font-medium">{numberFormatter.format(model.predictions)}</span>
                 </div>
               </div>
 

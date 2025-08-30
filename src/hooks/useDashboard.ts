@@ -94,7 +94,7 @@ export function useDashboardAnalytics(): UseQueryResult<DashboardAnalyticsData, 
     queryFn: async () => {
       const result = await bridge.fetchDashboardAnalytics();
 
-      if (result.success && result.data) {
+      if (result && typeof result === 'object' && 'success' in result && 'data' in result && result.success && result.data) {
         return result.data as DashboardAnalyticsData;
       }
 

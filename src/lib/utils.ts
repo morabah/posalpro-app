@@ -85,6 +85,39 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
 }
 
 /**
+ * Format plain numbers with grouping and optional precision
+ */
+export function formatNumber(value: number, options: Intl.NumberFormatOptions = {}): string {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 2,
+    ...options,
+  }).format(safeValue);
+}
+
+/**
+ * Format date in UTC with sensible defaults
+ */
+export function formatDateUTC(
+  date: Date | string | number,
+  options: Intl.DateTimeFormatOptions = {}
+): string {
+  const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return 'Invalid Date';
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      ...options,
+    }).format(d);
+  } catch {
+    return 'Invalid Date';
+  }
+}
+
+/**
  * Generate unique ID
  */
 export function generateId(): string {

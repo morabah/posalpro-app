@@ -81,7 +81,9 @@ export const AnomalyDetectionPanel = memo(
           <div className="flex items-center space-x-2">
             <select
               value={filter}
-              onChange={e => setFilter(e.target.value as any)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                setFilter(e.currentTarget.value as 'all' | 'high' | 'medium' | 'low')
+              }
               className="border border-gray-300 rounded-md px-3 py-1.5 text-sm"
             >
               <option value="all">All Severities</option>
@@ -185,7 +187,7 @@ export const AnomalyDetectionPanel = memo(
               </div>
 
               <div className="mt-3 text-xs text-gray-500">
-                Detected: {new Date(anomaly.detectedAt).toLocaleString()}
+                Detected: {new Date(anomaly.detectedAt).toLocaleString('en-US', { timeZone: 'UTC' })}
               </div>
             </div>
           ))}

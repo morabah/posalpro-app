@@ -18,7 +18,7 @@ import {
   DocumentTextIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 // Component following MIGRATION_LESSONS.md patterns
 const COMPONENT_MAPPING = {
@@ -134,6 +134,15 @@ export const UnifiedDashboardStats = memo(() => {
   // Single source of truth for dashboard data
   const { data: dashboardData, isLoading, error } = useExecutiveDashboard('3M', false);
   const stats = dashboardData?.metrics;
+
+  // SSR-safe last updated label to avoid hydration mismatch
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+  useEffect(() => {
+    // Update timestamp on mount and whenever stats finish loading
+    if (!isLoading) {
+      setLastUpdated(new Date().toLocaleTimeString());
+    }
+  }, [isLoading, stats]);
 
   // Track dashboard stats view
   useEffect(() => {
@@ -289,7 +298,7 @@ export const UnifiedDashboardStats = memo(() => {
             <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
             <span>Unified Data Source Active</span>
           </div>
-          <div>Last updated: {new Date().toLocaleTimeString()}</div>
+          <div>Last updated: {lastUpdated || '--'}</div>
         </div>
       </Card>
     </div>

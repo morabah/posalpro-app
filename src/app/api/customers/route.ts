@@ -10,6 +10,8 @@
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import type { Prisma } from '@prisma/client';
+import { CustomerStatus, CustomerTier } from '@prisma/client';
 import { logError, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas from feature folder
@@ -37,16 +39,7 @@ export const GET = createRoute(
       });
 
       // Build where clause
-      const where: {
-        OR?: Array<{
-          name?: { contains: string; mode: 'insensitive' };
-          email?: { contains: string; mode: 'insensitive' };
-          industry?: { contains: string; mode: 'insensitive' };
-        }>;
-        status?: string;
-        tier?: string;
-        isActive?: boolean;
-      } = {};
+      const where: Prisma.CustomerWhereInput = {};
 
       if (query!.search) {
         where.OR = [
@@ -57,19 +50,27 @@ export const GET = createRoute(
       }
 
       if (query!.status) {
-        where.status = query!.status;
+        const s = String(query!.status).toUpperCase();
+        if ((Object.values(CustomerStatus) as string[]).includes(s)) {
+          where.status = s as CustomerStatus;
+        }
       }
 
       if (query!.tier) {
-        where.tier = query!.tier;
+        const t = String(query!.tier).toUpperCase();
+        if ((Object.values(CustomerTier) as string[]).includes(t)) {
+          where.tier = t as CustomerTier;
+        }
       }
 
       if (query!.industry) {
-        where.industry = query!.industry;
+        where.industry = { contains: query!.industry, mode: 'insensitive' };
       }
 
       // Build order by
-      const orderBy: any = [{ [query!.sortBy]: query!.sortOrder }];
+      const orderBy: Prisma.CustomerOrderByWithRelationInput[] = [
+        { [query!.sortBy]: query!.sortOrder } as Prisma.CustomerOrderByWithRelationInput,
+      ];
 
       // Add secondary sort for cursor pagination
       if (query!.sortBy !== 'createdAt') {
