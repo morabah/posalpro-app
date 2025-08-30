@@ -55,7 +55,7 @@ export interface DashboardServiceOptions {
  */
 export class DashboardService {
   private static instance: DashboardService | null = null;
-  private readonly baseUrl = '/api/dashboard';
+  private readonly baseUrl = '/dashboard';
 
   public static getInstance(): DashboardService {
     return (this.instance ??= new DashboardService());
