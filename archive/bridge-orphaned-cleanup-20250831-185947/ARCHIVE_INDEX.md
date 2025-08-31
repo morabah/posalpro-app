@@ -1,17 +1,19 @@
 # Bridge Orphaned Files Archive Index
 
 **Archive Date**: August 31, 2025 **Archive Reason**: Orphaned bridge files -
-replaced by modern feature-based architecture **Total Files**: 9 files archived
-(4 management bridges + 5 API bridges)
+replaced by modern feature-based architecture **Total Files**: 10 files archived
+(5 management bridges + 5 API bridges)
 
 ## 📁 Archived Contents
 
-### 🧩 Management Bridge Components (4 files)
+### 🧩 Management Bridge Components (5 files)
 
 **Proposal Management:**
 
 - `components/bridges/ProposalManagementBridge.tsx` - Proposal management bridge
   component
+- `components/bridges/ProposalDetailManagementBridge.tsx` - Proposal detail
+  management bridge component
 - `lib/bridges/ProposalApiBridge.ts` - Proposal API bridge service
 - `lib/bridges/ProposalDetailApiBridge.ts` - Proposal detail API bridge service
 
