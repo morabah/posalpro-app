@@ -105,7 +105,7 @@ export function useInfiniteProposals({
         status,
         priority,
         customerId,
-        assignedTo
+        assignedTo,
       });
 
       if (response.ok) {
