@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import type { Proposal } from '@/features/proposals/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useInfiniteProposals } from '@/hooks/useProposals';
+import { useInfiniteProposals } from '@/features/proposals/hooks';
 import { useDashboardFilters } from '@/lib/store/dashboardStore';
 import { logDebug } from '@/lib/logger';
 import {

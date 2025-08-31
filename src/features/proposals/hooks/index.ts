@@ -1,29 +1,21 @@
 /**
  * PosalPro MVP2 - Proposals Hooks Index
  * Centralized exports for proposal-related React Query hooks
+ * All hooks are now implemented locally within the features module
  */
 
-// Export existing proposal hooks from main hooks directory to avoid duplication
+// Export local proposal hook implementations
 export {
   useProposal,
   useInfiniteProposals,
   useProposalsByIds,
   useProposalStats,
+  useDueProposals,
   useCreateProposal,
   useUpdateProposal,
   useDeleteProposal,
   useDeleteProposalsBulk
-} from '@/hooks/useProposals';
+} from './useProposals';
 
-// UNIQUE FUNCTIONALITY - Only export the non-duplicate hook
+// UNIQUE FUNCTIONALITY - Server state persistence hook
 export { usePersistProposalWizard } from './useProposalServerState';
-
-// ===========================================
-// 🚨 DEPRECATED EXPORTS - DO NOT USE 🚨
-// ===========================================
-// The following functions are DUPLICATES and should NOT be exported:
-// - useCreateProposal() → Use from src/hooks/useProposal.ts or src/hooks/useProposals.ts
-// - useUpdateProposal() → Use from src/hooks/useProposal.ts or src/hooks/useProposals.ts
-// - useDeleteProposal() → Use from src/hooks/useProposal.ts or src/hooks/useProposals.ts
-//
-// These functions were removed to prevent duplication with existing, well-established hooks

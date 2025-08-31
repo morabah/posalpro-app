@@ -4,10 +4,10 @@ import type { ApiResponse } from '@/lib/api/response';
 import {
   Customer,
   CustomerCreate,
+  CustomerList,
   CustomerQuery,
   customerService,
   CustomerUpdate,
-  CustomerList,
 } from '@/services/customerService';
 import {
   useInfiniteQuery,
@@ -45,7 +45,7 @@ export function useInfiniteCustomers({
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ApiResponse<CustomerList>) =>
-      lastPage.ok ? lastPage.data.nextCursor ?? undefined : undefined,
+      lastPage.ok ? (lastPage.data.nextCursor ?? undefined) : undefined,
     staleTime: 60_000, // 1 minute
     gcTime: 120_000, // 2 minutes
     refetchOnWindowFocus: false,

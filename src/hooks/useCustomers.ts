@@ -3,12 +3,12 @@
 // This file will be removed in a future version
 
 export {
-  useInfiniteCustomers,
-  useCustomer,
-  useCustomerSearch,
-  useCustomersByIds,
   useCreateCustomer,
-  useUpdateCustomer,
+  useCustomer,
+  useCustomersByIds,
+  useCustomerSearch,
   useDeleteCustomer,
   useDeleteCustomersBulk,
+  useInfiniteCustomers,
+  useUpdateCustomer,
 } from '@/features/customers/hooks';

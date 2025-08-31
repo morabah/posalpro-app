@@ -219,7 +219,10 @@ async function main() {
         const dueDate = new Date(Date.now() + randomInt(-60, 120) * 24 * 60 * 60 * 1000);
         const rfp = `RFP-${new Date().getFullYear()}-${String(currentProposals + i + 1).padStart(3, '0')}`;
         const selectedProducts = Array.from({ length: randomInt(1, 3) }, () => pick(products));
-        const value = selectedProducts.reduce((sum, p) => sum + Number(p.price) * randomInt(1, 3), 0);
+        const value = selectedProducts.reduce(
+          (sum, p) => sum + Number(p.price) * randomInt(1, 3),
+          0
+        );
 
         const teamLead = pickUserId(['pm1@posalpro.com', 'pm2@posalpro.com']);
         const salesRep = pickUserId(['pm2@posalpro.com', 'pm1@posalpro.com']);
@@ -773,7 +776,10 @@ async function main() {
             const customer = pick(customers);
             const creator = pick(users);
             const selectedProducts = Array.from({ length: 2 }, () => pick(products));
-            const value = selectedProducts.reduce((sum, p) => sum + Number(p.price) * randomInt(1, 2), 0);
+            const value = selectedProducts.reduce(
+              (sum, p) => sum + Number(p.price) * randomInt(1, 2),
+              0
+            );
             const dueDate = new Date(Date.now() + randomInt(-30, 60) * 24 * 60 * 60 * 1000);
             await prisma.proposal.create({
               data: {

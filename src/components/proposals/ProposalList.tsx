@@ -16,7 +16,7 @@ import {
   useDeleteProposalsBulk,
   useInfiniteProposals,
   useProposalStats,
-} from '@/hooks/useProposals';
+} from '@/features/proposals/hooks';
 import { ProposalPriority, ProposalStatus } from '@/services/proposalService';
 import {
   AlertTriangleIcon,

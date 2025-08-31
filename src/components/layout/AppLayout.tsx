@@ -15,7 +15,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { useProposalStats, useDueProposals } from '@/hooks/useProposals';
+import { useProposalStats, useDueProposals } from '@/features/proposals/hooks';
 import { Badge } from '@/components/ui/Badge';
 
 // ✅ CRITICAL: Lazy loading for LCP optimization

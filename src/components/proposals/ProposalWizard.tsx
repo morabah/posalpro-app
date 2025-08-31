@@ -16,7 +16,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useProposal, useUpdateProposal } from '@/hooks/useProposals';
+import { useProposal, useUpdateProposal } from '@/features/proposals/hooks';
 import { logDebug, logError } from '@/lib/logger';
 import { http } from '@/lib/http';
 import { useQueryClient } from '@tanstack/react-query';
