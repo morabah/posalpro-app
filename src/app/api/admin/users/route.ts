@@ -1,78 +1,80 @@
 /**
  * PosalPro MVP2 - Admin Users API Route
- * Database-driven user management API
- * Based on DATA_MODEL.md and COMPONENT_STRUCTURE.md specifications
+ * Database-driven user management API with modern createRoute wrapper
+ * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ok } from '@/lib/api/response';
+import { createRoute } from '@/lib/api/route';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const errorHandlingService = ErrorHandlingService.getInstance();
+// Import centralized schemas
+import { UserCreateSchema, UserUpdateSchema, UsersQuerySchema, type UserUpdate, type UserUpdate as UserUpdateData } from '@/features/admin/schemas';
 
 /**
  * Component Traceability Matrix
  */
 const COMPONENT_MAPPING = {
-  userStories: ['US-7.3', 'US-7.4', 'US-7.5'],
-  acceptanceCriteria: ['AC-7.3.1', 'AC-7.4.1', 'AC-7.5.1'],
+  userStories: ['US-8.1', 'US-8.2'],
+  acceptanceCriteria: ['AC-8.1.1', 'AC-8.1.2', 'AC-8.2.1', 'AC-8.2.2'],
   methods: ['getUsers()', 'createUser()', 'updateUser()', 'deleteUser()'],
   hypotheses: ['H8'],
-  testCases: ['TC-H8-003', 'TC-H8-004', 'TC-H8-005'],
+  testCases: ['TC-H8-001', 'TC-H8-002', 'TC-H8-003'],
 };
 
-// Validation schemas
-const GetUsersSchema = z.object({
-  page: z.string().optional().default('1'),
-  limit: z.string().optional().default('10'),
-  search: z.string().optional(),
-  role: z.string().optional(),
-  status: z.string().optional(),
-  department: z.string().optional(),
-});
+// Using centralized schemas from @/features/admin/schemas
 
-const CreateUserSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  password: z.string().min(8),
-  role: z.string().min(1),
-  department: z.string().min(1),
-});
-
-const UpdateUserSchema = z.object({
-  name: z.string().optional(),
-  department: z.string().optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING']).optional(),
-});
-
-// GET /api/admin/users - Fetch users from database
-export async function GET(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'users', action: 'read' });
-    const url = new URL(request.url);
-    const searchParams = Object.fromEntries(url.searchParams);
-    const { page, limit, search, role, status, department } = GetUsersSchema.parse(searchParams);
+// GET /api/admin/users - Fetch users from database with modern createRoute wrapper
+export const GET = createRoute(
+  {
+    roles: ['System Administrator', 'Administrator'],
+    query: UsersQuerySchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, query, requestId }) => {
+    const { page, limit, search, role, status, department } = query;
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
+    logDebug('Admin users API - handler started', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      userId: user.id,
+      userRoles: user.roles,
+      query,
+      requestId,
+    });
+
+    logDebug('Fetching admin users', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      userId: user.id,
+      requestId,
+      page: pageNum,
+      limit: limitNum,
+      search,
+      role,
+      status,
+      department,
+    });
+
     // Build where clause for filtering
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (search) {
-      where.OR = [
+      (where as any).OR = [
         { name: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
       ];
     }
 
     if (role) {
-      where.roles = {
+      (where as any).roles = {
         some: {
           role: {
             name: { equals: role, mode: 'insensitive' },
@@ -82,30 +84,93 @@ export async function GET(request: NextRequest) {
     }
 
     if (status) {
-      where.status = status.toUpperCase();
+      (where as any).status = status.toUpperCase();
     }
 
     if (department) {
-      where.department = { equals: department, mode: 'insensitive' };
+      (where as any).department = { equals: department, mode: 'insensitive' };
     }
 
-    // Fetch users with their roles and permissions
+    // ✅ OPTIMIZED: Simplified query with selective field loading for performance
+    // Following CORE_REQUIREMENTS.md database optimization patterns
+
+    logDebug('Admin users API - executing database queries', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      whereClause: where,
+      skip,
+      take: limitNum,
+      requestId,
+    });
+
+    // Test basic database connectivity first
+    try {
+      const testConnection = await prisma.user.count();
+      logDebug('Admin users API - database connection test', {
+        component: 'AdminUsersAPI',
+        operation: 'GET',
+        totalUsersInDb: testConnection,
+        requestId,
+      });
+    } catch (dbError) {
+      logError('Admin users API - database connection failed', {
+        component: 'AdminUsersAPI',
+        operation: 'GET',
+        error: dbError instanceof Error ? dbError.message : 'Unknown DB error',
+        requestId,
+      });
+      throw dbError;
+    }
+
+    // Execute the database query with detailed logging
+    logDebug('Admin users API - executing Prisma query', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      where: JSON.stringify(where),
+      skip,
+      take: limitNum,
+      requestId,
+    });
+
+    // Try a simpler query first to isolate the issue
+    const simpleUsers = await prisma.user.findMany({
+      take: 5, // Just get first 5 users to test
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        status: true,
+      },
+    });
+
+    logDebug('Admin users API - simple query test', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      simpleUsersCount: simpleUsers.length,
+      firstUser: simpleUsers.length > 0 ? simpleUsers[0] : null,
+      requestId,
+    });
+
     const [totalCount, users] = await prisma.$transaction([
       prisma.user.count({ where }),
       prisma.user.findMany({
         where,
         skip,
         take: limitNum,
-        include: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          department: true,
+          status: true,
+          lastLogin: true,
+          createdAt: true,
+          updatedAt: true,
           roles: {
-            include: {
+            select: {
               role: {
-                include: {
-                  permissions: {
-                    include: {
-                      permission: true,
-                    },
-                  },
+                select: {
+                  name: true,
                 },
               },
             },
@@ -117,7 +182,31 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // Transform data to match admin interface format
+    logDebug('Admin users API - Prisma query results', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      totalCount,
+      usersCount: users.length,
+      firstUserId: users.length > 0 ? users[0].id : null,
+      requestId,
+    });
+
+    logDebug('Admin users API - raw database results', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      totalCount,
+      usersCount: users.length,
+      firstUser: users.length > 0 ? {
+        id: users[0].id,
+        email: users[0].email,
+        status: users[0].status,
+        rolesCount: users[0].roles?.length || 0,
+        roles: users[0].roles?.map(r => r.role.name) || []
+      } : null,
+      requestId,
+    });
+
+    // ✅ OPTIMIZED: Simplified data transformation for better performance
     const transformedUsers = users.map(user => ({
       id: user.id,
       name: user.name || 'Unknown',
@@ -127,12 +216,43 @@ export async function GET(request: NextRequest) {
       status: user.status || 'PENDING',
       lastActive: user.lastLogin || user.updatedAt,
       createdAt: user.createdAt,
-      permissions: user.roles.flatMap(ur =>
-        ur.role.permissions.map(rp => `${rp.permission.resource}:${rp.permission.action}`)
-      ),
+      // Note: Permissions removed from list view for performance - available in detail view
     }));
 
-    return NextResponse.json({
+    logDebug('Admin users API - transformation result', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      rawUsersCount: users.length,
+      transformedUsersCount: transformedUsers.length,
+      firstTransformedUser: transformedUsers.length > 0 ? {
+        id: transformedUsers[0].id,
+        email: transformedUsers[0].email,
+        role: transformedUsers[0].role,
+        status: transformedUsers[0].status
+      } : null,
+      requestId,
+    });
+
+    logInfo('Admin users fetched successfully', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      userId: user.id,
+      requestId,
+      count: transformedUsers.length,
+      totalCount,
+    });
+
+    logDebug('Admin users API - returning response', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      itemsCount: transformedUsers.length,
+      totalCount,
+      page: pageNum,
+      limit: limitNum,
+      requestId,
+    });
+
+    const responseData = {
       users: transformedUsers,
       pagination: {
         page: pageNum,
@@ -140,42 +260,41 @@ export async function GET(request: NextRequest) {
         total: totalCount,
         totalPages: Math.ceil(totalCount / limitNum),
       },
-      timestamp: new Date().toISOString(),
+    };
+
+    logDebug('Admin users API - final response data', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      responseUsersCount: responseData.users.length,
+      responsePagination: responseData.pagination,
+      firstResponseUser: responseData.users.length > 0 ? {
+        id: responseData.users[0].id,
+        email: responseData.users[0].email
+      } : null,
+      requestId,
     });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to fetch users',
-      ErrorCodes.DATA.FETCH_FAILED,
-      {
-        context: 'admin_users_api',
-        operation: 'fetch_users',
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        requestUrl: request.url,
-        timestamp: new Date().toISOString(),
-      }
-    );
 
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch users',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return ok(responseData);
   }
-}
+);
 
-// POST /api/admin/users - Create new user
-export async function POST(request: NextRequest) {
-  let userEmail: string | undefined;
+// POST /api/admin/users - Create new user with modern createRoute wrapper
+export const POST = createRoute(
+  {
+    roles: ['System Administrator', 'Administrator'],
+    body: UserCreateSchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, body, requestId }) => {
+    const userData = body;
 
-  try {
-    await validateApiPermission(request, { resource: 'users', action: 'create' });
-    const body = await request.json();
-    const userData = CreateUserSchema.parse(body);
-    userEmail = userData.email;
+    logDebug('Creating admin user', {
+      component: 'AdminUsersAPI',
+      operation: 'POST',
+      userId: user.id,
+      requestId,
+      userEmail: userData.email,
+    });
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -183,7 +302,25 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 });
+      logError('User creation failed - email already exists', {
+        component: 'AdminUsersAPI',
+        operation: 'POST',
+        userId: user.id,
+        requestId,
+        userEmail: userData.email,
+      });
+
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: 'USER_EXISTS',
+          message: 'User with this email already exists',
+        }),
+        {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // Hash password
@@ -211,68 +348,59 @@ export async function POST(request: NextRequest) {
           data: {
             userId: newUser.id,
             roleId: role.id,
-            assignedBy: 'system', // In a real implementation, this would be the current user ID
+            assignedBy: user.id, // Use the actual user ID from the authenticated user
           },
         });
       }
     }
 
-    return NextResponse.json(
-      {
-        user: {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          role: userData.role,
-          department: newUser.department,
-          status: newUser.status,
-          createdAt: newUser.createdAt,
-        },
-        message: 'User created successfully',
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to create user',
-      ErrorCodes.DATA.CREATE_FAILED,
-      {
-        context: 'admin_users_api',
-        operation: 'create_user',
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        requestUrl: request.url,
-        userEmail: userEmail,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    logInfo('Admin user created successfully', {
+      component: 'AdminUsersAPI',
+      operation: 'POST',
+      userId: user.id,
+      requestId,
+      newUserId: newUser.id,
+      userEmail: userData.email,
+    });
 
-    return NextResponse.json(
+    return ok(
       {
-        error: 'Failed to create user',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: userData.role,
+        department: newUser.department,
+        status: newUser.status,
+        createdAt: newUser.createdAt,
       },
-      { status: 500 }
+      201
     );
   }
-}
+);
 
-// PUT /api/admin/users - Update user
-export async function PUT(request: NextRequest) {
-  let updateUserId: string | undefined;
+// PUT /api/admin/users - Update user with modern createRoute wrapper
+const UpdateUserWithIdSchema = UserUpdateSchema.extend({
+  id: z.string().min(1),
+});
 
-  try {
-    await validateApiPermission(request, { resource: 'users', action: 'update' });
-    const body = await request.json();
+export const PUT = createRoute(
+  {
+    roles: ['System Administrator', 'Administrator'],
+    body: UpdateUserWithIdSchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, body, requestId }) => {
     const { id, ...updateData } = body;
-    updateUserId = id;
 
-    if (!id) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
+    logDebug('Updating admin user', {
+      component: 'AdminUsersAPI',
+      operation: 'PUT',
+      userId: user.id,
+      requestId,
+      updateUserId: id,
+    });
 
-    const validatedData = UpdateUserSchema.parse(updateData);
+    const validatedData = UserUpdateSchema.parse(updateData);
 
     // Update user in database
     const updatedUser = await prisma.user.update({
@@ -290,64 +418,63 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      user: {
-        id: updatedUser.id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        role: updatedUser.roles.map(ur => ur.role.name).join(', '),
-        department: updatedUser.department,
-        status: updatedUser.status,
-        updatedAt: updatedUser.updatedAt,
-      },
-      message: 'User updated successfully',
+    logInfo('Admin user updated successfully', {
+      component: 'AdminUsersAPI',
+      operation: 'PUT',
+      userId: user.id,
+      requestId,
+      updateUserId: id,
     });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to update user',
-      ErrorCodes.DATA.UPDATE_FAILED,
-      {
-        context: 'admin_users_api',
-        operation: 'update_user',
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        requestUrl: request.url,
-        userId: updateUserId,
-        timestamp: new Date().toISOString(),
-      }
-    );
 
-    return NextResponse.json(
-      {
-        error: 'Failed to update user',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return ok({
+      id: updatedUser.id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      role: updatedUser.roles.map(ur => ur.role.name).join(', '),
+      department: updatedUser.department,
+      status: updatedUser.status,
+      updatedAt: updatedUser.updatedAt,
+    });
   }
-}
+);
 
-// DELETE /api/admin/users - Delete user
-export async function DELETE(request: NextRequest) {
-  let deleteUserId: string | undefined = undefined;
+// DELETE /api/admin/users - Delete user with modern createRoute wrapper
+const DeleteUserSchema = z.object({
+  id: z.string().min(1),
+});
 
-  try {
-    await validateApiPermission(request, { resource: 'users', action: 'delete' });
-    const url = new URL(request.url);
-    deleteUserId = url.searchParams.get('id') || undefined;
+export const DELETE = createRoute(
+  {
+    roles: ['System Administrator', 'Administrator'],
+    query: DeleteUserSchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, query, requestId }) => {
+    const { id: deleteUserId } = query;
 
-    if (!deleteUserId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
+    logDebug('Deleting admin user', {
+      component: 'AdminUsersAPI',
+      operation: 'DELETE',
+      userId: user.id,
+      requestId,
+      deleteUserId,
+    });
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
+    const existingUser = await prisma.user.findUnique({
       where: { id: deleteUserId },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (!existingUser) {
+      logError('User deletion failed - user not found', {
+        component: 'AdminUsersAPI',
+        operation: 'DELETE',
+        userId: user.id,
+        requestId,
+        deleteUserId,
+      });
+
+      return ok(null, 404);
     }
 
     // Delete user (cascade will handle related records)
@@ -355,31 +482,14 @@ export async function DELETE(request: NextRequest) {
       where: { id: deleteUserId },
     });
 
-    return NextResponse.json({
-      message: 'User deleted successfully',
+    logInfo('Admin user deleted successfully', {
+      component: 'AdminUsersAPI',
+      operation: 'DELETE',
+      userId: user.id,
+      requestId,
+      deleteUserId,
     });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to delete user',
-      ErrorCodes.DATA.DELETE_FAILED,
-      {
-        context: 'admin_users_api',
-        operation: 'delete_user',
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        requestUrl: request.url,
-        userId: deleteUserId,
-        timestamp: new Date().toISOString(),
-      }
-    );
 
-    return NextResponse.json(
-      {
-        error: 'Failed to delete user',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return ok({ message: 'User deleted successfully' });
   }
-}
+);

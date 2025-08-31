@@ -20,37 +20,58 @@ export interface CursorPaginatedResponse<T> {
 }
 
 // Helper function for successful responses
-export const ok = <T>(data: T): ApiResponse<T> => ({ ok: true, data });
+export const ok = <T>(data: T, status: number = 200): Response => {
+  return new Response(JSON.stringify({ ok: true, data }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
 
 // Helper function for cursor paginated responses
 export const okPaginated = <T>(
   items: T[],
   nextCursor: string | null,
-  meta?: Record<string, unknown>
-): ApiResponse<CursorPaginatedResponse<T>> => ({
-  ok: true,
-  data: {
-    items,
-    nextCursor,
-    meta,
-  },
-});
+  meta?: Record<string, unknown>,
+  status: number = 200
+): Response => {
+  return new Response(JSON.stringify({
+    ok: true,
+    data: {
+      items,
+      nextCursor,
+      meta,
+    },
+  }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
 
 // Helper function to create error responses
-export const error = (code: string, message: string, details?: unknown): ApiResponse<never> => ({
-  ok: false,
-  code,
-  message,
-  details,
-});
+export const error = (code: string, message: string, details?: unknown, status: number = 400): Response => {
+  return new Response(JSON.stringify({
+    ok: false,
+    code,
+    message,
+    details,
+  }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
 
 // Alias for error function to match acceptance criteria
-export const fail = (code: string, message: string, details?: unknown): ApiResponse<never> => ({
-  ok: false,
-  code,
-  message,
-  details,
-});
+export const fail = (code: string, message: string, details?: unknown, status: number = 400): Response => {
+  return new Response(JSON.stringify({
+    ok: false,
+    code,
+    message,
+    details,
+  }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
 
 // Helper function to create paginated responses
 export interface PaginatedResponse<T> {
@@ -67,14 +88,20 @@ export const paginated = <T>(
   limit: number,
   hasNextPage: boolean,
   nextCursor?: string | null
-): ApiResponse<PaginatedResponse<T>> => {
-  return ok({
-    items,
-    pagination: {
-      limit,
-      hasNextPage,
-      nextCursor,
+): Response => {
+  return new Response(JSON.stringify({
+    ok: true,
+    data: {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor,
+      },
     },
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
   });
 };
 
@@ -91,23 +118,41 @@ export const list = <T>(
   total: number,
   page: number,
   limit: number
-): ApiResponse<ListResponse<T>> => {
-  return ok({
-    items,
-    total,
-    page,
-    limit,
+): Response => {
+  return new Response(JSON.stringify({
+    ok: true,
+    data: {
+      items,
+      total,
+      page,
+      limit,
+    },
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
   });
 };
 
 // Helper function to create single item responses
-export const single = <T>(item: T): ApiResponse<T> => {
-  return ok(item);
+export const single = <T>(item: T): Response => {
+  return new Response(JSON.stringify({
+    ok: true,
+    data: item,
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 };
 
 // Helper function to create empty success responses
-export const success = (): ApiResponse<null> => {
-  return ok(null);
+export const success = (): Response => {
+  return new Response(JSON.stringify({
+    ok: true,
+    data: null,
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 };
 
 // Helper function to create bulk operation responses
@@ -123,12 +168,18 @@ export const bulk = (
   successful: number,
   failed: number,
   errors?: { id: string; error: string }[]
-): ApiResponse<BulkResponse> => {
-  return ok({
-    processed,
-    successful,
-    failed,
-    errors,
+): Response => {
+  return new Response(JSON.stringify({
+    ok: true,
+    data: {
+      processed,
+      successful,
+      failed,
+      errors,
+    },
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
   });
 };
 

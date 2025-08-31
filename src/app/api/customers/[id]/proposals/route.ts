@@ -183,10 +183,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
       statistics = {
         totalProposals: allProposals.length,
-        totalValue: allProposals.reduce((sum, p) => sum + (p.value || 0), 0),
+        totalValue: allProposals.reduce((sum, p) => sum + Number(p.value || 0), 0),
         averageValue:
           allProposals.length > 0
-            ? allProposals.reduce((sum, p) => sum + (p.value || 0), 0) / allProposals.length
+            ? allProposals.reduce((sum, p) => sum + Number(p.value || 0), 0) / allProposals.length
             : 0,
         statusBreakdown: allProposals.reduce(
           (acc, p) => {

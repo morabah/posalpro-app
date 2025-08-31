@@ -7,7 +7,6 @@
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
@@ -98,7 +97,7 @@ export const GET = createRoute(
       const transformedItems = items.map(item => ({
         ...item,
         description: item.description || '',
-        price: item.price ?? 0,
+        price: item.price ? Number(item.price) : 0,
         attributes: item.attributes || undefined,
         usageAnalytics: item.usageAnalytics || undefined,
       }));
@@ -109,7 +108,13 @@ export const GET = createRoute(
         nextCursor,
       });
 
-      return Response.json(ok(validatedResponse));
+      // Create the response data
+      const responsePayload = { ok: true, data: validatedResponse };
+
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to fetch products', {
         component: 'ProductAPI',
@@ -183,7 +188,7 @@ export const POST = createRoute(
       const transformedProduct = {
         ...product,
         description: product.description || '',
-        price: product.price ?? 0,
+        price: product.price ? Number(product.price) : 0,
         attributes: product.attributes || undefined,
         usageAnalytics: product.usageAnalytics || undefined,
       };
@@ -197,10 +202,18 @@ export const POST = createRoute(
           productId: product.id,
         });
         // Return the transformed product data anyway for now, but log the validation error
-        return Response.json(ok(transformedProduct), { status: 201 });
+        const responsePayload = { ok: true, data: transformedProduct };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data), { status: 201 });
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to create product', {
         component: 'ProductAPI',

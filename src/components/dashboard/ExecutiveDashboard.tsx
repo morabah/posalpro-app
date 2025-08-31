@@ -104,11 +104,64 @@ const ExecutiveDashboard = memo(() => {
 
   const { data, isLoading } = useExecutiveDashboard(timeframe, includeForecasts);
   useEffect(() => {
-    if (data) {
-      setMetrics(data.metrics);
-      setRevenueData(data.revenueChart);
-      setTeamData(data.teamPerformance);
-      setPipelineStages(data.pipelineStages);
+    if (data?.data) {
+      // Convert optional properties to required ones with defaults
+      const metrics = data.data.metrics
+        ? {
+            totalRevenue: Number(data.data.metrics.totalRevenue || 0),
+            monthlyRevenue: Number(data.data.metrics.monthlyRevenue || 0),
+            quarterlyGrowth: data.data.metrics.quarterlyGrowth ?? 0,
+            yearlyGrowth: data.data.metrics.yearlyGrowth ?? 0,
+            revenueTarget: Number(data.data.metrics.revenueTarget || 0),
+            revenueTargetProgress: Number(data.data.metrics.revenueTargetProgress || 0),
+            totalProposals: Number(data.data.metrics.totalProposals || 0),
+            wonDeals: Number(data.data.metrics.wonDeals || 0),
+            lostDeals: Number(data.data.metrics.lostDeals || 0),
+            winRate: Number(data.data.metrics.winRate || 0),
+            avgDealSize: Number(data.data.metrics.avgDealSize || 0),
+            avgSalesCycle: Number(data.data.metrics.avgSalesCycle || 0),
+            pipelineValue: Number(data.data.metrics.pipelineValue || 0),
+            qualifiedLeads: Number(data.data.metrics.qualifiedLeads || 0),
+            hotProspects: Number(data.data.metrics.hotProspects || 0),
+            closingThisMonth: Number(data.data.metrics.closingThisMonth || 0),
+            atRiskDeals: Number(data.data.metrics.atRiskDeals || 0),
+            topPerformer: data.data.metrics.topPerformer || '',
+            teamSize: Number(data.data.metrics.teamSize || 0),
+            avgPerformance: Number(data.data.metrics.avgPerformance || 0),
+            projectedRevenue: Number(data.data.metrics.projectedRevenue || 0),
+            confidenceLevel: Number(data.data.metrics.confidenceLevel || 0),
+          }
+        : null;
+
+      const revenueData = (data.data.revenueChart || []).map(item => ({
+        period: item.period || item.month || '',
+        actual: Number(item.actual || 0),
+        target: Number(item.target || 0),
+        forecast: item.forecast ? Number(item.forecast) : undefined,
+      }));
+
+      const teamData = (data.data.teamPerformance || []).map(item => ({
+        name: item.name || '',
+        revenue: Number(item.revenue || 0),
+        deals: Number(item.deals || 0),
+        winRate: Number(item.winRate || 0),
+        target: Number(item.target || 0),
+        performance: Number(item.performance || 0),
+      }));
+
+      const pipelineStages = (data.data.pipelineStages || []).map(item => ({
+        stage: item.stage || '',
+        count: Number(item.count || 0),
+        value: Number(item.value || 0),
+        velocity: Number(item.velocity || 0),
+        conversionRate: Number(item.conversionRate || 0),
+        avgTime: Number(item.avgTime || 0),
+      }));
+
+      setMetrics(metrics);
+      setRevenueData(revenueData);
+      setTeamData(teamData);
+      setPipelineStages(pipelineStages);
     }
   }, [data]);
 

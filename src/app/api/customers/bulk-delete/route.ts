@@ -4,11 +4,10 @@
  * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
-import { ok } from '@/lib/api/response';
+import { CustomerBulkDeleteSchema } from '@/features/customers/schemas';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { CustomerBulkDeleteSchema } from '@/features/customers/schemas';
 
 // ====================
 // Body Schema
@@ -48,7 +47,11 @@ export const POST = createRoute(
         requestedCount: body!.ids.length,
       });
 
-      return Response.json(ok({ deleted: result.count }));
+      const responsePayload = { ok: true, data: { deleted: result.count } };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to bulk delete customers', {
         component: 'CustomerAPI',

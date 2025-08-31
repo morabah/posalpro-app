@@ -96,14 +96,17 @@ export async function POST(request: NextRequest) {
           approvalCount: proposal.approvals.length,
 
           // Financial calculations
-          totalValue: proposal.products.reduce((sum, product) => sum + (product.total || 0), 0),
+          totalValue: proposal.products.reduce((sum, product) => sum + Number(product.total || 0), 0),
 
           // Activity tracking
           lastActivityAt: proposal.updatedAt || new Date(),
           statsUpdatedAt: new Date(),
 
           // Completion rate calculation
-          completionRate: calculateCompletionRate(proposal),
+          completionRate: calculateCompletionRate({
+            ...proposal,
+            value: Number(proposal.value || 0),
+          }),
         };
 
         // Update the proposal with denormalized data using raw SQL for now

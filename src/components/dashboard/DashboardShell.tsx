@@ -241,6 +241,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [widgetStates, setWidgetStates] = useState<Record<string, WidgetState>>({});
   const [showHiddenWidgets, setShowHiddenWidgets] = useState(false);
 
+  // Ensure SSR/CSR consistency for UI that depends on transient client-only states
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const analytics = useDashboardAnalytics(userId, userRole, `dashboard-${Date.now()}`);
 
   // Filter widgets by user role and permissions
@@ -432,7 +436,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-700">{widget.title}</h3>
             <div className="flex items-center space-x-1">
-              {isLoading && (
+              {mounted && isLoading && (
                 <>
                   <ArrowPathIcon className="w-4 h-4 text-blue-500 animate-spin" />
                   <span data-testid={`widget-skeleton-${widget.id}`} className="sr-only">

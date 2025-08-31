@@ -30,7 +30,7 @@ const COMPONENT_IMPORTERS: Record<string, () => Promise<{ default: ReactComponen
   'admin/AdminPanel': () =>
     import(
       /* webpackChunkName: "admin-panel" */
-      '@/components/admin/RoleManager'
+      '@/features/admin/components/RoleManager'
     ) as unknown as Promise<{ default: ReactComponentType<any> }>,
   'executive/ExecutiveReview': () =>
     import(

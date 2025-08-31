@@ -55,22 +55,32 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       console.log('[DEBUG] Fetching users from API...');
 
       try {
-        const response = await apiClient.get<{ users: User[]; pagination: unknown }>(
+        const response = await apiClient.get<{
+          users: User[];
+          pagination: unknown;
+        }>(
           'users?search=&isActive=true&sortBy=name&sortOrder=asc&fields=id,firstName,lastName,name,email,department,status,lastLogin,createdAt,updatedAt,role,roles'
         );
 
         console.log('[DEBUG] Raw API response structure:', JSON.stringify(response, null, 2));
 
-        // Check different possible response structures
+        // Handle both old and new response formats for backward compatibility
+        let usersArray: User[] = [];
         if (response?.users) {
-          console.log('[DEBUG] Users loaded successfully:', response.users.length);
-          console.log(
-            '[DEBUG] First user structure:',
-            JSON.stringify(response.users[0], null, 2)
-          );
+          // Direct response format (should be used after fix)
+          usersArray = response.users;
+        } else if (Array.isArray(response?.users)) {
+          // Direct response format (should be used after fix)
+          console.log('[DEBUG] Using direct response format');
+          usersArray = response.users;
+        }
+
+        if (usersArray.length > 0) {
+          console.log('[DEBUG] Users loaded successfully:', usersArray.length);
+          console.log('[DEBUG] First user structure:', JSON.stringify(usersArray[0], null, 2));
           console.log('[DEBUG] All users roles check:');
           const allRoleNames = new Set<string>();
-          response.users.forEach((user: User, index: number) => {
+          usersArray.forEach((user: User, index: number) => {
             console.log(
               `[DEBUG] User ${index}: ${user.name || user.email}, roles:`,
               user.roles,
@@ -79,7 +89,13 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
             );
             // Also log the role names for easier debugging
             const roleNames = (user.roles || [])
-              .map(r => (typeof r === 'string' ? r : (typeof (r as any).role === 'string' ? (r as any).role : (r as any)?.role?.name)))
+              .map(r =>
+                typeof r === 'string'
+                  ? r
+                  : typeof (r as any).role === 'string'
+                    ? (r as any).role
+                    : (r as any)?.role?.name
+              )
               .filter((v): v is string => typeof v === 'string');
             console.log(`[DEBUG] User ${index} role names:`, roleNames);
             roleNames.forEach(name => allRoleNames.add(name));
@@ -90,7 +106,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
             SME: UserType.SME,
             EXECUTIVE: UserType.EXECUTIVE,
           });
-          return response.users;
+          return usersArray;
         } else {
           console.error('[DEBUG] Failed to load users - unexpected response structure');
           console.error('[DEBUG] Response keys:', Object.keys(response as object));

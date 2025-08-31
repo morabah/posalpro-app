@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     // Calculate average prices
     tagMap.forEach((tagData, tagName) => {
       const tagProducts = products.filter(p => p.tags.includes(tagName));
-      const totalPrice = tagProducts.reduce((sum, p) => sum + p.price, 0);
+      const totalPrice = tagProducts.reduce((sum, p) => sum + Number(p.price), 0);
       tagData.avgPrice = tagProducts.length > 0 ? totalPrice / tagProducts.length : 0;
     });
 

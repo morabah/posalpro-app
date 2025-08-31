@@ -29,24 +29,25 @@ class ConsoleAnalyticsClient implements AnalyticsClient {
   private context: AnalyticsContext = {};
 
   track(event: string, properties: Record<string, unknown> = {}): void {
-    const analyticsEvent: AnalyticsEvent = {
-      event,
-      properties,
-      timestamp: new Date().toISOString(),
-      ...this.context,
-    };
-
-    console.log('[Analytics]', JSON.stringify(analyticsEvent, null, 2));
+    // ✅ PERFORMANCE FIX: Removed console.log to prevent Fast Refresh rebuilds
+    // Analytics events are now handled by useOptimizedAnalytics hook
+    // Event tracking is disabled in legacy analytics to prevent performance issues
+    void event;
+    void properties;
   }
 
   identify(userId: string, traits: Record<string, unknown> = {}): void {
     this.context.userId = userId;
-    console.log('[Analytics] Identify:', { userId, traits });
+    // ✅ PERFORMANCE FIX: Removed console.log to prevent Fast Refresh rebuilds
+    // console.log('[Analytics] Identify:', { userId, traits });
+    void traits;
   }
 
   page(page: string, properties: Record<string, unknown> = {}): void {
     this.context.page = page;
-    console.log('[Analytics] Page:', { page, properties });
+    // ✅ PERFORMANCE FIX: Removed console.log to prevent Fast Refresh rebuilds
+    // console.log('[Analytics] Page:', { page, properties });
+    void properties;
   }
 
   setContext(context: AnalyticsContext): void {

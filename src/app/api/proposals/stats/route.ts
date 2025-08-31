@@ -4,7 +4,6 @@
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
-import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
@@ -97,7 +96,7 @@ export const GET = createRoute(
         totalValue,
         winRate: Math.round(winRate * 100) / 100, // Round to 2 decimal places
         recentActivity,
-        averageValue: total > 0 ? Math.round((totalValue / total) * 100) / 100 : 0,
+        averageValue: total > 0 ? Math.round((Number(totalValue) / total) * 100) / 100 : 0,
       };
 
       logInfo('Proposal stats fetched successfully', {
@@ -114,7 +113,11 @@ export const GET = createRoute(
         hypothesis: 'H4',
       });
 
-      return Response.json(ok(stats));
+      const responsePayload = { ok: true, data: stats };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to fetch proposal stats', error, {
         component: 'ProposalStatsAPI',

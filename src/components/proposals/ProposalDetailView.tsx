@@ -471,10 +471,29 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                       (() => {
                         // ✅ FIXED: Prioritize database products over metadata
                         if (proposal?.products && proposal.products.length > 0) {
-                          return proposal.products.reduce(
-                            (sum: number, product: any) => sum + (product.total || 0),
-                            0
-                          );
+                          const total = proposal.products.reduce((sum: number, product: any) => {
+                            // Convert string totals to numbers (database stores as strings)
+                            const productTotal =
+                              typeof product.total === 'string'
+                                ? parseFloat(product.total) || 0
+                                : product.total || 0;
+                            return sum + productTotal;
+                          }, 0);
+
+                          // ✅ ADDED: Debug logging to verify total calculation
+                          console.log('Proposal Detail: Calculated total from database products:', {
+                            proposalId: proposal.id,
+                            productCount: proposal.products.length,
+                            total: total,
+                            products: proposal.products.map(p => ({
+                              id: p.id,
+                              name: p.name || 'Unknown Product',
+                              total: p.total,
+                              totalType: typeof p.total,
+                            })),
+                          });
+
+                          return total;
                         }
                         const productData = getProductData(proposal?.metadata);
                         if (productData?.products && productData.products.length > 0) {
@@ -669,11 +688,12 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                               const hasProducts = (proposal?.products?.length || 0) > 0;
                               const calculatedTotal =
                                 proposal?.products?.reduce((sum, product) => {
-                                  return (
-                                    sum +
-                                    (product.total ||
-                                      (product.quantity || 1) * (product.unitPrice || 0))
-                                  );
+                                  // Convert string totals to numbers (database stores as strings)
+                                  const total =
+                                    typeof product.total === 'string'
+                                      ? parseFloat(product.total) || 0
+                                      : product.total || 0;
+                                  return sum + total;
                                 }, 0) || 0;
                               const estimatedValue = proposal?.value || 0;
 
@@ -869,7 +889,12 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-gray-900">
-                              {formatCurrency(product.total, proposal?.currency || 'USD')}
+                              {formatCurrency(
+                                typeof product.total === 'string'
+                                  ? parseFloat(product.total) || 0
+                                  : product.total || 0,
+                                proposal?.currency || 'USD'
+                              )}
                             </p>
                             <p className="text-sm text-gray-500">Total</p>
                           </div>

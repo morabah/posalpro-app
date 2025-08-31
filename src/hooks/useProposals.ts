@@ -283,7 +283,8 @@ export function useDueProposals({
       });
 
       if (response.ok) {
-        return response.data.items;
+        // Ensure we always return an array, never undefined
+        return response.data?.items || [];
       }
       throw new Error(response.message || 'Failed to fetch due proposals');
     },

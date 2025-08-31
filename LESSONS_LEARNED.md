@@ -1,16 +1,19 @@
 # PosalPro MVP2 - Implementation Lessons Learned
 
+## [Critical] - Prisma Client Import Path Consistency
+
+**Date**: 2025-08-31 **Phase**: MVP2 - API Development **Context**: Admin roles API failing with `Cannot read properties of undefined (reading '$transaction')` error causing 500 responses and excessive retry loops.
+
+**Problem**: Multiple Prisma client files exist (`@/lib/prisma.ts` and `@/lib/db/prisma.ts`) with different import paths used across API endpoints, causing undefined Prisma client instances.
+
+**Solution**: Always import from `@/lib/db/prisma` for consistent database client with proper environment configuration, middleware, and observability. Verify import paths match working endpoints before deployment.
+
 ## [Deployment] - Neon Database Integration and Environment Configuration
 
 **Date**: 2025-06-30 **Phase**: MVP2 - Production Deployment **Context**: During
 the deployment of PosalPro MVP2, we encountered an issue where the production
 environment was unable to fetch proposals from the database, despite the API
 being accessible and the database being properly configured.
-
-**Problem**: The application was using the local database connection string in
-production because the environment-specific database configuration wasn't
-properly set up. This caused the production deployment to fail when trying to
-connect to a local database that didn't exist in the Netlify environment.
 
 **Root Cause Analysis**:
 

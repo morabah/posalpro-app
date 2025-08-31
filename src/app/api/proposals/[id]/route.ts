@@ -5,7 +5,7 @@
  */
 
 import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals/schemas';
-import { fail, ok } from '@/lib/api/response';
+import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';
@@ -117,10 +117,18 @@ export const GET = createRoute(
           proposalId: id,
         });
         // Return the transformed proposal data anyway for now, but log the validation error
-        return Response.json(ok(transformedProposal));
+        const responsePayload = { ok: true, data: transformedProposal };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data));
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -214,8 +222,15 @@ export const PUT = createRoute(
         ...basicFields
       } = body as any;
 
-      const updateData: any = {
+      // ✅ FIXED: Convert string values to appropriate types before database update
+      const processedBasicFields = {
         ...basicFields,
+        // Convert value to number if it's a string (common issue from form inputs)
+        value: basicFields.value !== undefined ? Number(basicFields.value) : undefined,
+      };
+
+      const updateData: any = {
+        ...processedBasicFields,
         updatedAt: new Date(),
       };
 
@@ -273,164 +288,203 @@ export const PUT = createRoute(
         hypothesis: 'H4',
       });
 
-      // ✅ FIXED: Use transaction to ensure data consistency
-      const proposal = await prisma.$transaction(async tx => {
-        // 1. Update the proposal
-        const updatedProposal = await tx.proposal.update({
-          where: { id },
-          data: updateData,
-          include: {
-            customer: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+      // ✅ FIXED: Use transaction with timeout to ensure data consistency and prevent network timeouts
+      const transactionStartTime = Date.now();
+      logInfo('Starting proposal update transaction', {
+        component: 'ProposalAPI',
+        operation: 'PUT',
+        proposalId: id,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      const proposal = await prisma.$transaction(
+        async tx => {
+          // 1. Update the proposal
+          const updatedProposal = await tx.proposal.update({
+            where: { id },
+            data: updateData,
+            include: {
+              customer: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
-            },
-            sections: {
-              orderBy: { order: 'asc' },
-            },
-            products: {
-              include: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    sku: true,
+              sections: {
+                select: {
+                  id: true,
+                  title: true,
+                  content: true,
+                  order: true,
+                  type: true,
+                },
+                orderBy: { order: 'asc' },
+              },
+              products: {
+                select: {
+                  id: true,
+                  productId: true,
+                  quantity: true,
+                  unitPrice: true,
+                  discount: true,
+                  total: true,
+                  configuration: true,
+                  product: {
+                    select: {
+                      id: true,
+                      name: true,
+                      sku: true,
+                    },
                   },
                 },
               },
-            },
-            assignedTo: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+              assignedTo: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
             },
-          },
-        });
-
-        // 2. ✅ FIXED: Handle product data by updating ProposalProduct records
-        if (productData && productData.products && Array.isArray(productData.products)) {
-          logInfo('Processing product data for proposal update', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            productCount: productData.products.length,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
           });
 
-          // Delete existing proposal products
-          await tx.proposalProduct.deleteMany({
-            where: { proposalId: id },
-          });
+          // 2. ✅ FIXED: Handle product data by updating ProposalProduct records
+          if (productData && productData.products && Array.isArray(productData.products)) {
+            logInfo('Processing product data for proposal update', {
+              component: 'ProposalAPI',
+              operation: 'PUT',
+              proposalId: id,
+              productCount: productData.products.length,
+              userStory: 'US-3.2',
+              hypothesis: 'H4',
+            });
 
-          // Create new proposal products
-          for (const product of productData.products) {
-            if (product.productId && product.quantity && product.unitPrice) {
-              await tx.proposalProduct.create({
-                data: {
-                  proposalId: id,
-                  productId: product.productId,
-                  quantity: product.quantity,
-                  unitPrice: product.unitPrice,
-                  discount: product.discount || 0,
-                  total:
-                    product.total ||
-                    product.quantity * product.unitPrice * (1 - (product.discount || 0) / 100),
-                  configuration: product.configuration || {},
-                },
-              });
+            // Delete existing proposal products
+            await tx.proposalProduct.deleteMany({
+              where: { proposalId: id },
+            });
+
+            // Create new proposal products
+            for (const product of productData.products) {
+              if (product.productId && product.quantity && product.unitPrice) {
+                await tx.proposalProduct.create({
+                  data: {
+                    proposalId: id,
+                    productId: product.productId,
+                    quantity: product.quantity,
+                    unitPrice: product.unitPrice,
+                    discount: product.discount || 0,
+                    total:
+                      product.total ||
+                      product.quantity * product.unitPrice * (1 - (product.discount || 0) / 100),
+                    configuration: product.configuration || {},
+                  },
+                });
+              }
             }
+
+            logInfo('Proposal products updated successfully', {
+              component: 'ProposalAPI',
+              operation: 'PUT',
+              proposalId: id,
+              productsCreated: productData.products.length,
+              userStory: 'US-3.2',
+              hypothesis: 'H4',
+            });
           }
 
-          logInfo('Proposal products updated successfully', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            productsCreated: productData.products.length,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
-        }
+          // 3. ✅ FIXED: Handle section data by updating ProposalSection records
+          if (sectionData && sectionData.sections && Array.isArray(sectionData.sections)) {
+            logInfo('Processing section data for proposal update', {
+              component: 'ProposalAPI',
+              operation: 'PUT',
+              proposalId: id,
+              sectionCount: sectionData.sections.length,
+              userStory: 'US-3.2',
+              hypothesis: 'H4',
+            });
 
-        // 3. ✅ FIXED: Handle section data by updating ProposalSection records
-        if (sectionData && sectionData.sections && Array.isArray(sectionData.sections)) {
-          logInfo('Processing section data for proposal update', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            sectionCount: sectionData.sections.length,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
+            // Delete existing proposal sections
+            await tx.proposalSection.deleteMany({
+              where: { proposalId: id },
+            });
 
-          // Delete existing proposal sections
-          await tx.proposalSection.deleteMany({
-            where: { proposalId: id },
-          });
-
-          // Create new proposal sections
-          for (const section of sectionData.sections) {
-            if (section.title && section.content) {
-              await tx.proposalSection.create({
-                data: {
-                  proposalId: id,
-                  title: section.title,
-                  content: section.content,
-                  order: section.order || 1,
-                  type: section.type || 'TEXT',
-                },
-              });
+            // Create new proposal sections
+            for (const section of sectionData.sections) {
+              if (section.title && section.content) {
+                await tx.proposalSection.create({
+                  data: {
+                    proposalId: id,
+                    title: section.title,
+                    content: section.content,
+                    order: section.order || 1,
+                    type: section.type || 'TEXT',
+                  },
+                });
+              }
             }
+
+            logInfo('Proposal sections updated successfully', {
+              component: 'ProposalAPI',
+              operation: 'PUT',
+              proposalId: id,
+              sectionsCreated: sectionData.sections.length,
+              userStory: 'US-3.2',
+              hypothesis: 'H4',
+            });
           }
 
-          logInfo('Proposal sections updated successfully', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            sectionsCreated: sectionData.sections.length,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
-        }
-
-        // 4. Fetch the updated proposal with all relations
-        return await tx.proposal.findUnique({
-          where: { id },
-          include: {
-            customer: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+          // 4. Fetch the updated proposal with all relations
+          return await tx.proposal.findUnique({
+            where: { id },
+            include: {
+              customer: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
-            },
-            sections: {
-              orderBy: { order: 'asc' },
-            },
-            products: {
-              include: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    sku: true,
+              sections: {
+                orderBy: { order: 'asc' },
+              },
+              products: {
+                include: {
+                  product: {
+                    select: {
+                      id: true,
+                      name: true,
+                      sku: true,
+                    },
                   },
                 },
               },
-            },
-            assignedTo: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+              assignedTo: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
             },
-          },
-        });
+          });
+        },
+        {
+          timeout: 15000, // 15 second timeout to prevent network connection loss
+          isolationLevel: 'ReadCommitted',
+        }
+      );
+
+      const transactionDuration = Date.now() - transactionStartTime;
+      logInfo('Proposal update transaction completed', {
+        component: 'ProposalAPI',
+        operation: 'PUT',
+        proposalId: id,
+        transactionDuration,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
       });
 
       // Transform null values to appropriate defaults before validation
@@ -466,11 +520,70 @@ export const PUT = createRoute(
           proposalId: id,
         });
         // Return the transformed proposal data anyway for now, but log the validation error
-        return Response.json(ok(transformedProposal));
+        const responsePayload = { ok: true, data: transformedProposal };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data));
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
+      // Handle specific network and timeout errors
+      if (error instanceof Error) {
+        if (error.message.includes('timeout') || error.message.includes('Load failed')) {
+          logError('Network timeout during proposal update', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            error: error.message,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              code: 'NETWORK_TIMEOUT',
+              message:
+                'Request timed out. Please try again with a smaller update or check your connection.',
+              details: { proposalId: id },
+            }),
+            {
+              status: 408, // Request Timeout
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+
+        if (error.message.includes('connection') || error.message.includes('network')) {
+          logError('Network connection error during proposal update', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            error: error.message,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              code: 'NETWORK_ERROR',
+              message:
+                'Network connection lost. Please check your internet connection and try again.',
+              details: { proposalId: id },
+            }),
+            {
+              status: 503, // Service Unavailable
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+      }
+
       const processedError = errorHandlingService.processError(
         error,
         'Failed to update proposal',
@@ -526,7 +639,11 @@ export const DELETE = createRoute(
         hypothesis: 'H4',
       });
 
-      return Response.json(ok({ success: true }));
+      const responsePayload = { ok: true, data: { success: true } };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,

@@ -1,16 +1,13 @@
 /**
  * PosalPro MVP2 - Admin System Metrics API Route
- * Database-driven system metrics and health monitoring
- * Based on DATA_MODEL.md specifications
+ * Database-driven system metrics and health monitoring with modern createRoute wrapper
+ * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { NextRequest, NextResponse } from 'next/server';
-
-const errorHandlingService = ErrorHandlingService.getInstance();
+import { createRoute } from '@/lib/api/route';
+import { ok } from '@/lib/api/response';
+import prisma from '@/lib/prisma';
+import { logDebug, logInfo, logError } from '@/lib/logger';
 
 /**
  * Component Traceability Matrix
@@ -23,11 +20,13 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H8-001', 'TC-H8-002'],
 };
 
-// GET /api/admin/metrics - Fetch system metrics from database
-export async function GET(request: NextRequest) {
-  try {
-    // RBAC guard
-    await validateApiPermission(request, { resource: 'metrics', action: 'read' });
+// GET /api/admin/metrics - Fetch system metrics from database with modern createRoute wrapper
+export const GET = createRoute(
+  {
+    roles: ['System Administrator', 'Administrator'],
+    apiVersion: '1',
+  },
+  async ({ req, user, requestId }) => {
     // Get database health and statistics
     const startTime = Date.now();
 
@@ -121,59 +120,26 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     };
 
-    return NextResponse.json({
-      success: true,
-      metrics,
+    logInfo('Admin system metrics fetched successfully', {
+      component: 'AdminMetricsAPI',
+      operation: 'GET',
+      userId: user.id,
+      requestId,
+    });
+
+    logInfo('Admin system metrics fetched successfully', {
+      component: 'AdminMetricsAPI',
+      operation: 'GET',
+      userId: user.id,
+      requestId,
+    });
+
+    return ok({
+      ...metrics,
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to fetch system metrics',
-      ErrorCodes.DATA.FETCH_FAILED,
-      {
-        context: 'admin_metrics_api',
-        operation: 'fetch_system_metrics',
-        userStories: COMPONENT_MAPPING.userStories,
-        hypotheses: COMPONENT_MAPPING.hypotheses,
-        requestUrl: request.url,
-        timestamp: new Date().toISOString(),
-      }
-    );
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch system metrics',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        metrics: {
-          // Fallback metrics when database is unavailable
-          apiStatus: 'Down',
-          databaseStatus: 'Down',
-          responseTime: -1,
-          uptime: process.uptime(),
-          storageUsed: 0,
-          storageTotal: 100,
-          storagePercentage: 0,
-          totalUsers: 0,
-          activeUsers: 0,
-          activeUserPercentage: 0,
-          totalProposals: 0,
-          totalProducts: 0,
-          totalContent: 0,
-          lastBackup: new Date(),
-          lastSync: null,
-          recentAuditLogs: [],
-          avgResponseTime: -1,
-          errorRate: 1.0,
-          throughput: 0,
-          timestamp: new Date().toISOString(),
-        },
-      },
-      { status: 500 }
-    );
   }
-}
+);
 
 // Helper function to determine system health
 function checkSystemHealth(responseTime: number) {

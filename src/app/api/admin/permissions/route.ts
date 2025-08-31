@@ -1,49 +1,123 @@
 /**
  * PosalPro MVP2 - Admin Permissions API Route
- * Database-driven permission management API
- * Based on ADMIN_SCREEN.md wireframe and RBAC schema specifications
+ * Database-driven permission management API with modern createRoute wrapper
+ * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
-import prisma from '@/lib/db/prisma';
-import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
+import { createRoute } from '@/lib/api/route';
+import { ok } from '@/lib/api/response';
+import prisma from '@/lib/prisma';
+import { logDebug, logInfo, logError } from '@/lib/logger';
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { z } from 'zod';
 
-// Validation schemas
-const GetPermissionsSchema = z.object({
-  page: z.string().optional().default('1'),
-  limit: z.string().optional().default('20'),
-  search: z.string().optional(),
-  resource: z.string().optional(),
-  action: z.string().optional(),
-  scope: z.enum(['ALL', 'TEAM', 'OWN']).optional(),
+// Import centralized schemas
+import {
+  PermissionsQuerySchema,
+  PermissionCreateSchema,
+  PermissionUpdateSchema,
+  type PermissionsQuery,
+  type PermissionCreate,
+  type PermissionUpdate,
+  type PermissionUpdate as PermissionUpdateData,
+} from '@/features/admin/schemas';
+
+/**
+ * Component Traceability Matrix
+ */
+const COMPONENT_MAPPING = {
+  userStories: ['US-8.1', 'US-8.2'],
+  acceptanceCriteria: ['AC-8.1.1', 'AC-8.1.2', 'AC-8.2.1', 'AC-8.2.2'],
+  methods: ['getPermissions()', 'createPermission()', 'updatePermission()', 'deletePermission()'],
+  hypotheses: ['H8'],
+};
+
+// Initialize error handling service
+const errorHandlingService = ErrorHandlingService.getInstance();
+
+// DELETE schema
+const DeletePermissionSchema = z.object({
+  id: z.string().min(1),
 });
 
-const CreatePermissionSchema = z.object({
-  resource: z.string().min(1),
-  action: z.string().min(1),
-  scope: z.enum(['ALL', 'TEAM', 'OWN']).default('ALL'),
-  constraints: z.record(z.any()).optional(),
-});
+// DELETE /api/admin/permissions - Delete permission with modern createRoute wrapper
+export const DELETE = createRoute(
+  {
+    roles: ['System Administrator'],
+    query: DeletePermissionSchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, query, requestId }) => {
+    const { id } = query;
 
-const UpdatePermissionSchema = z.object({
-  resource: z.string().min(1).optional(),
-  action: z.string().min(1).optional(),
-  scope: z.enum(['ALL', 'TEAM', 'OWN']).optional(),
-  constraints: z.record(z.any()).optional(),
-});
+    // Check if permission exists
+    const existingPermission = await prisma.permission.findUnique({
+      where: { id },
+      include: {
+        rolePermissions: true,
+        userPermissions: true,
+      },
+    });
 
-// GET /api/admin/permissions - Fetch permissions from database
-export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const searchParams = Object.fromEntries(url.searchParams);
-  const { page, limit, search, resource, action, scope } =
-    GetPermissionsSchema.parse(searchParams);
+    if (!existingPermission) {
+      return ok(null, 404);
+    }
 
-  const pageNum = parseInt(page);
-  const limitNum = parseInt(limit);
+    // Check if permission is assigned to roles or users
+    const assignmentCount =
+      existingPermission.rolePermissions.length + existingPermission.userPermissions.length;
 
-  try {
+    if (assignmentCount > 0) {
+      return ok(
+        {
+          error: `Cannot delete permission that is assigned to ${existingPermission.rolePermissions.length} role(s) and ${existingPermission.userPermissions.length} user(s). Please remove assignments first.`,
+          assignments: {
+            roles: existingPermission.rolePermissions.length,
+            users: existingPermission.userPermissions.length,
+          },
+        },
+        409
+      );
+    }
+
+    // Delete permission
+    await prisma.permission.delete({
+      where: { id },
+    });
+
+    logInfo('Admin permission deleted successfully', {
+      component: 'AdminPermissionsAPI',
+      operation: 'DELETE',
+      userId: user.id,
+      requestId,
+      permissionId: id,
+    });
+
+    return ok({
+      message: 'Permission deleted successfully',
+      deletedPermission: {
+        id: existingPermission.id,
+        displayName: `${existingPermission.resource}:${existingPermission.action}`,
+      },
+    });
+  }
+);
+
+// Using centralized schemas from @/features/admin/schemas
+
+// GET /api/admin/permissions - Fetch permissions from database with modern createRoute wrapper
+export const GET = createRoute(
+  {
+    roles: ['System Administrator', 'Administrator'],
+    query: PermissionsQuerySchema,
+    apiVersion: '1',
+  },
+  async ({ req, user, query, requestId }) => {
+    const { page, limit, search, resource, action, scope } = query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
@@ -77,7 +151,16 @@ export async function GET(request: NextRequest) {
       scopes: Array.from(new Set(allPermissions.map(p => p.scope))).sort(),
     };
 
-    return NextResponse.json({
+    logInfo('Admin permissions fetched successfully', {
+      component: 'AdminPermissionsAPI',
+      operation: 'GET',
+      userId: user.id,
+      requestId,
+      count: permissions.length,
+      totalCount,
+    });
+
+    return ok({
       permissions: permissions.map(p => ({
         id: p.id,
         resource: p.resource,
@@ -99,25 +182,8 @@ export async function GET(request: NextRequest) {
       },
       filters,
     });
-  } catch (error) {
-    // Use standardized error handling
-    errorHandlingService.processError(
-      error,
-      'Failed to fetch permissions',
-      ErrorCodes.DATA.QUERY_FAILED,
-      {
-        component: 'AdminPermissionsRoute',
-        operation: 'GET',
-        page: pageNum,
-        limit: limitNum,
-      }
-    );
-    return NextResponse.json(
-      { error: 'Failed to fetch permissions', code: 'PERMISSIONS_ERROR' },
-      { status: 500 }
-    );
   }
-}
+);
 
 // POST /api/admin/permissions - Create new permission
 export async function POST(request: NextRequest) {
@@ -177,7 +243,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Permission ID is required' }, { status: 400 });
     }
 
-    const validatedData = UpdatePermissionSchema.parse(updateData);
+    const validatedData = PermissionUpdateSchema.parse(updateData);
 
     // Check if permission exists
     const existingPermission = await prisma.permission.findUnique({
@@ -198,7 +264,7 @@ export async function PUT(request: NextRequest) {
         where: {
           resource: checkResource,
           action: checkAction,
-          scope: checkScope,
+          scope: checkScope as any,
           id: { not: id },
         },
       });
@@ -217,7 +283,7 @@ export async function PUT(request: NextRequest) {
       data: {
         ...validatedData,
         updatedAt: new Date(),
-      },
+      } as any,
     });
 
     return NextResponse.json({
@@ -247,81 +313,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to update permission',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE /api/admin/permissions - Delete permission
-export async function DELETE(request: NextRequest) {
-  const url = new URL(request.url);
-  const id = url.searchParams.get('id');
-
-  try {
-
-    if (!id) {
-      return NextResponse.json({ error: 'Permission ID is required' }, { status: 400 });
-    }
-
-    // Check if permission exists
-    const existingPermission = await prisma.permission.findUnique({
-      where: { id },
-      include: {
-        rolePermissions: true,
-        userPermissions: true,
-      },
-    });
-
-    if (!existingPermission) {
-      return NextResponse.json({ error: 'Permission not found' }, { status: 404 });
-    }
-
-    // Check if permission is assigned to roles or users
-    const assignmentCount =
-      existingPermission.rolePermissions.length + existingPermission.userPermissions.length;
-
-    if (assignmentCount > 0) {
-      return NextResponse.json(
-        {
-          error: `Cannot delete permission that is assigned to ${existingPermission.rolePermissions.length} role(s) and ${existingPermission.userPermissions.length} user(s). Please remove assignments first.`,
-          assignments: {
-            roles: existingPermission.rolePermissions.length,
-            users: existingPermission.userPermissions.length,
-          },
-        },
-        { status: 409 }
-      );
-    }
-
-    // Delete permission
-    await prisma.permission.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({
-      message: 'Permission deleted successfully',
-      deletedPermission: {
-        id: existingPermission.id,
-        displayName: `${existingPermission.resource}:${existingPermission.action}`,
-      },
-    });
-  } catch (error) {
-    // Use standardized error handling
-    errorHandlingService.processError(
-      error,
-      'Failed to delete permission',
-      ErrorCodes.DATA.DELETE_FAILED,
-      {
-        component: 'AdminPermissionsRoute',
-        operation: 'DELETE',
-        permissionId: id,
-      }
-    );
-    return NextResponse.json(
-      {
-        error: 'Failed to delete permission',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }

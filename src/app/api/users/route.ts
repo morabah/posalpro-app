@@ -5,6 +5,7 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -22,7 +23,6 @@ import {
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 
 /**
@@ -214,7 +214,7 @@ export async function GET(request: NextRequest) {
     const queryEndTime = Date.now();
 
     return NextResponse.json({
-      success: true,
+      ok: true,
       data: {
         users,
         pagination,
@@ -435,7 +435,7 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json({
-      success: true,
+      ok: true,
       data: result,
       message: 'Profile updated successfully',
     });

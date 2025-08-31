@@ -7,7 +7,6 @@
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
@@ -135,6 +134,7 @@ export const GET = createRoute(
       // Transform null values to appropriate defaults before validation
       const transformedItems = items.map(item => ({
         ...item,
+        value: item.value ? Number(item.value) : undefined,
         description: item.description || '',
         metadata: item.metadata || {},
         customer: item.customer
@@ -161,7 +161,13 @@ export const GET = createRoute(
         nextCursor,
       });
 
-      return Response.json(ok(validatedResponse));
+      // Create the response data
+      const responsePayload = { ok: true, data: validatedResponse };
+
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to fetch proposals', {
         component: 'ProposalAPI',
@@ -298,6 +304,7 @@ export const POST = createRoute(
       // Transform null values to appropriate defaults before validation
       const transformedProposal = {
         ...proposal,
+        value: proposal.value ? Number(proposal.value) : undefined,
         description: proposal.description || '',
         metadata: proposal.metadata || {},
         customer: proposal.customer
@@ -327,10 +334,18 @@ export const POST = createRoute(
           proposalId: proposal.id,
         });
         // Return the transformed proposal data anyway for now, but log the validation error
-        return Response.json(ok(transformedProposal), { status: 201 });
+        const responsePayload = { ok: true, data: transformedProposal };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data), { status: 201 });
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to create proposal', {
         component: 'ProposalAPI',

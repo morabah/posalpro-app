@@ -103,7 +103,9 @@ export class ProposalService {
 
   private constructor() {}
 
-  async getProposals(params: Partial<ProposalQueryData> = {}): Promise<ApiResponse<{ items: Proposal[]; nextCursor: string | null }>> {
+  async getProposals(
+    params: Partial<ProposalQueryData> = {}
+  ): Promise<ApiResponse<{ items: Proposal[]; nextCursor: string | null }>> {
     const start = performance.now();
     logDebug('Fetching proposals', {
       component: 'ProposalService',
@@ -166,7 +168,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposals' }
       );
       logError('Failed to fetch proposals', processed, { component: 'ProposalService' });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 
@@ -201,7 +207,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposal', proposalId: id }
       );
       logError('Failed to fetch proposal', processed, { component: 'ProposalService' });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 
@@ -239,7 +249,11 @@ export class ProposalService {
         { context: 'ProposalService.createProposal' }
       );
       logError('Failed to create proposal', processed, { component: 'ProposalService' });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 
@@ -278,21 +292,39 @@ export class ProposalService {
         { context: 'ProposalService.updateProposal', proposalId: id }
       );
       logError('Failed to update proposal', processed, { component: 'ProposalService' });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 
   // ✅ ADDED: Database-First Field Alignment - Transform wizard payload to API schema
   private transformWizardPayloadForAPI(proposal: any): ProposalUpdate {
     // ✅ Handle wizard flat payload structure
-    const { teamData, contentData, productData, sectionData, reviewData, planType, ...basicFields } =
-      proposal;
+    const {
+      teamData,
+      contentData,
+      productData,
+      sectionData,
+      reviewData,
+      planType,
+      ...basicFields
+    } = proposal;
+
+    // ✅ FIXED: Ensure numeric fields are always numbers, not strings (common issue from form inputs)
+    const processedBasicFields = {
+      ...basicFields,
+      // Convert numeric fields from string to number
+      value: basicFields.value !== undefined ? Number(basicFields.value) : undefined,
+    };
 
     // ✅ Defensive validation - Check if wizard-specific data is present
     if (teamData || contentData || productData || sectionData || reviewData) {
       // ✅ Transform flat structure to nested structure under metadata
       return {
-        ...basicFields,
+        ...processedBasicFields,
         metadata: {
           teamData: teamData || undefined,
           contentData: contentData || undefined,
@@ -306,8 +338,8 @@ export class ProposalService {
       };
     }
 
-    // ✅ If no wizard-specific data, return as-is
-    return proposal;
+    // ✅ If no wizard-specific data, return processed fields
+    return processedBasicFields;
   }
 
   async deleteProposal(id: string): Promise<ApiResponse<{ message: string }>> {
@@ -341,19 +373,25 @@ export class ProposalService {
         { context: 'ProposalService.deleteProposal', proposalId: id }
       );
       logError('Failed to delete proposal', processed, { component: 'ProposalService' });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 
-  async getProposalStats(): Promise<ApiResponse<{
-    total: number;
-    byStatus: Record<string, number>;
-    overdue: number;
-    totalValue: number;
-    winRate: number;
-    recentActivity: number;
-    averageValue: number;
-  }>> {
+  async getProposalStats(): Promise<
+    ApiResponse<{
+      total: number;
+      byStatus: Record<string, number>;
+      overdue: number;
+      totalValue: number;
+      winRate: number;
+      recentActivity: number;
+      averageValue: number;
+    }>
+  > {
     const start = performance.now();
     logDebug('Fetching proposal stats', {
       component: 'ProposalService',
@@ -390,7 +428,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposalStats' }
       );
       logError('Failed to fetch proposal stats', processed, { component: 'ProposalService' });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 
@@ -426,11 +468,19 @@ export class ProposalService {
         { context: 'ProposalService.bulkDeleteProposals', proposalIds: ids }
       );
       logError('Failed to bulk delete proposals', processed, { component: 'ProposalService' });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 
-  async updateWorkflowStatus(id: string, status: string, metadata?: Record<string, unknown>): Promise<ApiResponse<Proposal>> {
+  async updateWorkflowStatus(
+    id: string,
+    status: string,
+    metadata?: Record<string, unknown>
+  ): Promise<ApiResponse<Proposal>> {
     const start = performance.now();
     logDebug('Updating proposal workflow status', {
       component: 'ProposalService',
@@ -465,7 +515,11 @@ export class ProposalService {
       logError('Failed to update proposal workflow status', processed, {
         component: 'ProposalService',
       });
-      return { ok: false as const, code: processed.code || 'UNKNOWN_ERROR', message: processed.message };
+      return {
+        ok: false as const,
+        code: processed.code || 'UNKNOWN_ERROR',
+        message: processed.message,
+      };
     }
   }
 }

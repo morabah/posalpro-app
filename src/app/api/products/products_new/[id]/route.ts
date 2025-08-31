@@ -7,7 +7,7 @@
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { fail, ok } from '@/lib/api/response';
+import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { errorHandlingService } from '@/lib/errors';
@@ -99,10 +99,18 @@ export const GET = createRoute(
           operation: 'GET_BY_ID',
         });
         // Return the transformed product data anyway for now, but log the validation error
-        return Response.json(ok(transformedProduct));
+        const responsePayload = { ok: true, data: transformedProduct };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data));
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -244,10 +252,18 @@ export const PUT = createRoute(
           operation: 'PUT',
         });
         // Return the transformed product data anyway for now, but log the validation error
-        return Response.json(ok(transformedProduct));
+        const responsePayload = { ok: true, data: transformedProduct };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data));
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -314,7 +330,11 @@ export const DELETE = createRoute(
         productId: id,
       });
 
-      return Response.json(ok({ message: 'Product deleted successfully' }));
+      const responsePayload = { ok: true, data: { message: 'Product deleted successfully' } };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,

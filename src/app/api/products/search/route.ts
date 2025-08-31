@@ -1,4 +1,4 @@
-import { error as apiError, ok } from '@/lib/api/response';
+import { error as apiError } from '@/lib/api/response';
 import { ErrorHandlingService } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -8,12 +8,12 @@ import { logger } from '@/lib/logger'; /**
  * Supports H1 hypothesis (Content Discovery Efficiency)
  */
 
+import { ProductSearchApiSchema } from '@/features/products/schemas';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { productService } from '@/lib/services';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { ProductSearchApiSchema } from '@/features/products/schemas';
 import { z } from 'zod';
 
 // Initialize error handling service
@@ -81,7 +81,11 @@ export async function GET(request: NextRequest) {
     };
 
     // Return response with cache headers for search results
-    const response = NextResponse.json(ok(searchResponse));
+    const responsePayload = { ok: true, data: searchResponse };
+    const response = new Response(JSON.stringify(responsePayload), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
     if (process.env.NODE_ENV === 'production') {
       response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
     } else {

@@ -107,6 +107,11 @@ interface ProposalCardProps {
 const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps) => {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
+  // Safety check for proposal object
+  if (!proposal || typeof proposal !== 'object') {
+    return null;
+  }
+
   const handleView = useCallback(() => {
     analytics('proposal_viewed_from_list', {
       proposalId: proposal.id,
@@ -240,8 +245,8 @@ export default function UnifiedProposalList() {
     status: apiStatus,
   });
 
-  // Extract proposals from infinite query data
-  const proposals = data?.pages?.flatMap(page => page.items) || [];
+  // Extract proposals from infinite query data and filter out any undefined/null items
+  const proposals = data?.pages?.flatMap(page => page.items).filter((item): item is Proposal => item != null) || [];
   const total = proposals.length;
 
   // Local state for filtering and searching
@@ -276,6 +281,10 @@ export default function UnifiedProposalList() {
   // Filter and sort proposals
   const filteredAndSortedProposals = useMemo(() => {
     let filtered = proposals.filter((proposal: Proposal) => {
+      // Safety check for undefined/null proposal
+      if (!proposal || typeof proposal !== 'object') {
+        return false;
+      }
       // Apply global dashboard search (in addition to local search)
       const matchesDashboardSearch =
         !dashboardSearch ||
@@ -472,7 +481,7 @@ export default function UnifiedProposalList() {
                 <p className="text-2xl font-bold text-gray-900">
                   {
                     filteredAndSortedProposals.filter(
-                      p => p.status === 'IN_REVIEW' || p.status === 'PENDING_APPROVAL'
+                      p => p && p.status && (p.status === 'IN_REVIEW' || p.status === 'PENDING_APPROVAL')
                     ).length
                   }
                 </p>
@@ -486,7 +495,7 @@ export default function UnifiedProposalList() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Customers</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {new Set(filteredAndSortedProposals.map(p => p.customerId)).size}
+                  {new Set(filteredAndSortedProposals.filter(p => p && p.customerId).map(p => p.customerId)).size}
                 </p>
               </div>
             </div>
@@ -499,7 +508,7 @@ export default function UnifiedProposalList() {
                 <p className="text-sm font-medium text-gray-600">Total Value</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatCurrency(
-                    filteredAndSortedProposals.reduce((sum, p) => sum + (p.value || 0), 0)
+                    filteredAndSortedProposals.filter(p => p && typeof p.value === 'number').reduce((sum, p) => sum + (p.value || 0), 0)
                   )}
                 </p>
               </div>
@@ -576,7 +585,7 @@ export default function UnifiedProposalList() {
         </div>
       ) : filteredAndSortedProposals.length > 0 ? (
         <div className="space-y-4">
-          {filteredAndSortedProposals.map((proposal: Proposal) => (
+          {filteredAndSortedProposals.filter((proposal: Proposal) => proposal && proposal.id).map((proposal: Proposal) => (
             <ProposalCard
               key={proposal.id}
               proposal={proposal}

@@ -4,7 +4,6 @@
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 
-import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logInfo } from '@/lib/logger';
@@ -58,7 +57,7 @@ export const GET = createRoute(
       }).length;
 
       const totalValue = allProposals.reduce((sum, p) => {
-        const value = p.value || 0;
+        const value = Number(p.value || 0);
         // Convert to USD if currency is different (simplified conversion)
         if (p.currency === 'EUR') return sum + value * 1.1; // Approximate EUR to USD
         if (p.currency === 'GBP') return sum + value * 1.3; // Approximate GBP to USD
@@ -114,7 +113,11 @@ export const GET = createRoute(
         hypothesis: 'H4',
       });
 
-      return Response.json(ok(metrics));
+      const responsePayload = { ok: true, data: metrics };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logInfo('Failed to fetch dashboard metrics', {
         component: 'ProposalAPI',

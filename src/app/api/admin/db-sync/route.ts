@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Import auth options from the correct location
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 

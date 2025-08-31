@@ -4,11 +4,10 @@
  * Component Traceability: US-4.1, H5
  */
 
-import { ok } from '@/lib/api/response';
+import { ProductQuickSearchApiSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { ProductQuickSearchApiSchema } from '@/features/products/schemas';
 
 // ====================
 // Validation Schema
@@ -79,7 +78,11 @@ export const GET = createRoute(
         query: query!.q,
       });
 
-      return Response.json(ok({ items: products }));
+      const responsePayload = { ok: true, data: { items: products } };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to search products', {
         component: 'ProductAPI',

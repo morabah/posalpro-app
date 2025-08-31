@@ -19,24 +19,24 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useDashboardData } from '@/features/dashboard/hooks';
+import { useExecutiveDashboard } from '@/features/dashboard/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import { useDashboardFilters, useDashboardUIActions } from '@/lib/store/dashboardStore';
-import { z } from 'zod';
 import {
+  ArrowPathIcon,
   ArrowTrendingDownIcon,
   ArrowTrendingUpIcon,
+  ChartBarIcon,
   ClockIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
   TrophyIcon,
   UsersIcon,
-  ChartBarIcon,
-  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { memo, useEffect, useMemo, useState } from 'react';
+import { z } from 'zod';
 
 // Enhanced KPI interfaces
 interface EnhancedKPIs {
@@ -106,7 +106,6 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 });
 
-
 // Zod validation schemas for API responses
 const TrendSchema = z.object({
   month: z.string(),
@@ -122,11 +121,6 @@ const MetricsSchema = z.object({
   winRate: z.number().min(0).max(100).optional().default(0),
   avgCompletionTime: z.number().nonnegative().optional().default(21),
   overdue: z.number().int().nonnegative().optional().default(0),
-});
-
-const DashboardSchema = z.object({
-  proposals: z.object({ metrics: MetricsSchema }).optional(),
-  performance: z.object({ trends: z.array(TrendSchema) }).optional(),
 });
 
 // Modern KPI Card - Market-standard design with elegant interactions
@@ -222,12 +216,14 @@ const ModernKPICard = memo(
     };
 
     const scheme = colorSchemes[color];
-    const trendColor = trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-rose-600' : 'text-slate-500';
-    const trendIcon = trend === 'up'
-      ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
-      : trend === 'down'
-        ? <ArrowTrendingDownIcon className="w-3.5 h-3.5" />
-        : null;
+    const trendColor =
+      trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-rose-600' : 'text-slate-500';
+    const trendIcon =
+      trend === 'up' ? (
+        <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
+      ) : trend === 'down' ? (
+        <ArrowTrendingDownIcon className="w-3.5 h-3.5" />
+      ) : null;
 
     // Format percentage values properly
     const formatValue = (val: string | number) => {
@@ -248,7 +244,7 @@ const ModernKPICard = memo(
         onClick={onClick}
         role={onClick ? 'button' : undefined}
         tabIndex={onClick ? 0 : undefined}
-        onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+        onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
         aria-label={onClick ? `View details for ${title}` : undefined}
       >
         {/* Subtle gradient overlay */}
@@ -264,13 +260,16 @@ const ModernKPICard = memo(
         <div className="relative">
           {/* Header with enhanced icon and trend */}
           <div className="flex items-start justify-between mb-4">
-            <div className={`p-3 rounded-xl ${scheme.bg} ${scheme.icon} shadow-sm`}>
-              {icon}
-            </div>
+            <div className={`p-3 rounded-xl ${scheme.bg} ${scheme.icon} shadow-sm`}>{icon}</div>
             {change !== undefined && change !== null && Number.isFinite(change) && (
-              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-sm text-xs font-semibold ${trendColor}`}>
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-sm text-xs font-semibold ${trendColor}`}
+              >
                 {trendIcon}
-                <span>{change > 0 ? '+' : ''}{change.toFixed(1)}%</span>
+                <span>
+                  {change > 0 ? '+' : ''}
+                  {change.toFixed(1)}%
+                </span>
               </div>
             )}
           </div>
@@ -285,18 +284,14 @@ const ModernKPICard = memo(
               )}
             </div>
 
-            <div className="text-sm font-semibold text-gray-700 leading-tight">
-              {title}
-            </div>
+            <div className="text-sm font-semibold text-gray-700 leading-tight">{title}</div>
 
-            {subtitle && (
-              <div className="text-xs text-gray-500 leading-relaxed">
-                {subtitle}
-              </div>
-            )}
+            {subtitle && <div className="text-xs text-gray-500 leading-relaxed">{subtitle}</div>}
 
             {context && (
-              <div className={`text-xs ${scheme.text} font-medium mt-3 px-2 py-1 rounded-md ${scheme.bg} leading-tight`}>
+              <div
+                className={`text-xs ${scheme.text} font-medium mt-3 px-2 py-1 rounded-md ${scheme.bg} leading-tight`}
+              >
                 {context}
               </div>
             )}
@@ -316,9 +311,10 @@ const RevenueTrend = memo(({ data, loading }: { data: RevenueData[]; loading?: b
 
   const latest = data[data.length - 1];
   const previous = data[data.length - 2];
-  const growth = previous && latest && previous.revenue > 0
-    ? ((latest.revenue - previous.revenue) / previous.revenue) * 100
-    : 0;
+  const growth =
+    previous && latest && previous.revenue > 0
+      ? ((latest.revenue - previous.revenue) / previous.revenue) * 100
+      : 0;
 
   if (!mounted || loading) {
     return (
@@ -331,17 +327,17 @@ const RevenueTrend = memo(({ data, loading }: { data: RevenueData[]; loading?: b
             <h3 className="text-sm font-semibold text-gray-900">Revenue Trend</h3>
             <p className="text-xs text-gray-500">Last 6 months</p>
           </div>
-            </div>
+        </div>
         <div className="space-y-3">
           <div className="animate-pulse bg-gray-200 h-4 w-32 rounded" />
           <div className="animate-pulse bg-gray-200 h-4 w-28 rounded" />
           <div className="animate-pulse bg-gray-200 h-2 w-full rounded-full" />
-            </div>
-          </div>
+        </div>
+      </div>
     );
   }
 
-            return (
+  return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-emerald-200/60 p-6 hover:shadow-xl hover:shadow-black/5 transition-all duration-300 ease-out">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -354,11 +350,20 @@ const RevenueTrend = memo(({ data, loading }: { data: RevenueData[]; loading?: b
           </div>
         </div>
         {Number.isFinite(growth) && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-sm text-xs font-semibold ${
-            growth >= 0 ? 'text-emerald-600' : 'text-rose-600'
-          }`}>
-            {growth >= 0 ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" /> : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
-            <span>{growth > 0 ? '+' : ''}{growth.toFixed(1)}%</span>
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-sm text-xs font-semibold ${
+              growth >= 0 ? 'text-emerald-600' : 'text-rose-600'
+            }`}
+          >
+            {growth >= 0 ? (
+              <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
+            ) : (
+              <ArrowTrendingDownIcon className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {growth > 0 ? '+' : ''}
+              {growth.toFixed(1)}%
+            </span>
           </div>
         )}
       </div>
@@ -366,12 +371,20 @@ const RevenueTrend = memo(({ data, loading }: { data: RevenueData[]; loading?: b
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current</span>
-            <div className="text-xl font-bold text-gray-900">${numberFormatter.format(latest?.revenue || 0)}</div>
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Current
+            </span>
+            <div className="text-xl font-bold text-gray-900">
+              ${numberFormatter.format(latest?.revenue || 0)}
+            </div>
           </div>
           <div className="space-y-1">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Target</span>
-            <div className="text-xl font-bold text-gray-900">${numberFormatter.format(latest?.target || 0)}</div>
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Target
+            </span>
+            <div className="text-xl font-bold text-gray-900">
+              ${numberFormatter.format(latest?.target || 0)}
+            </div>
           </div>
         </div>
 
@@ -380,7 +393,7 @@ const RevenueTrend = memo(({ data, loading }: { data: RevenueData[]; loading?: b
             <div
               className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-3 rounded-full transition-all duration-700 ease-out"
               style={{
-                width: `${Math.min(((latest?.revenue || 0) / (latest?.target || 1)) * 100, 100)}%`
+                width: `${Math.min(((latest?.revenue || 0) / (latest?.target || 1)) * 100, 100)}%`,
               }}
             />
           </div>
@@ -400,7 +413,7 @@ RevenueTrend.displayName = 'RevenueTrend';
 const PerformanceInsights = memo(({ data }: { data: ConversionFunnel[] }) => {
   // Handle empty data state
   if (!data?.length) {
-  return (
+    return (
       <div className="bg-white rounded-xl border border-gray-100 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
@@ -410,13 +423,13 @@ const PerformanceInsights = memo(({ data }: { data: ConversionFunnel[] }) => {
             <h3 className="text-sm font-semibold text-gray-900">Performance</h3>
             <p className="text-xs text-gray-500">Conversion metrics</p>
           </div>
-            </div>
+        </div>
         <div className="text-center py-4">
           <div className="text-purple-600 mb-2">
             <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center mx-auto">
               <ChartBarIcon className="w-4 h-4" />
+            </div>
           </div>
-        </div>
           <p className="text-sm text-gray-600">No funnel data for this range.</p>
         </div>
       </div>
@@ -427,19 +440,19 @@ const PerformanceInsights = memo(({ data }: { data: ConversionFunnel[] }) => {
   const wonProposals = data.find(d => d.stage === 'Won')?.count || 0;
   const winRate = totalProposals > 0 ? (wonProposals / totalProposals) * 100 : 0;
 
-            return (
+  return (
     <div className="bg-white rounded-xl border border-gray-100 p-6 hover:shadow-lg transition-all duration-200">
       <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
             <TrophyIcon className="w-5 h-5" />
-                    </div>
-                    <div>
+          </div>
+          <div>
             <h3 className="text-sm font-semibold text-gray-900">Performance</h3>
             <p className="text-xs text-gray-500">Conversion metrics</p>
-                        </div>
-                  </div>
-                </div>
+          </div>
+        </div>
+      </div>
 
       <div className="space-y-3">
         <div className="flex justify-between items-center">
@@ -451,13 +464,13 @@ const PerformanceInsights = memo(({ data }: { data: ConversionFunnel[] }) => {
             className="bg-purple-500 h-2 rounded-full transition-all duration-500"
             style={{ width: `${Math.min(winRate, 100)}%` }}
           />
-                    </div>
+        </div>
         <div className="flex justify-between text-xs text-gray-500">
           <span>{wonProposals} won</span>
           <span>{totalProposals} total</span>
-                      </div>
-                </div>
-              </div>
+        </div>
+      </div>
+    </div>
   );
 });
 
@@ -472,7 +485,7 @@ const AlertsPanel = memo(({ data, loading }: { data: RiskIndicator[]; loading?: 
   const highPriority = data.filter(r => r.severity === 'high').reduce((sum, r) => sum + r.count, 0);
 
   if (!mounted || loading) {
-  return (
+    return (
       <div className="bg-white rounded-xl border border-gray-100 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-red-50 text-red-600 rounded-lg">
@@ -482,7 +495,7 @@ const AlertsPanel = memo(({ data, loading }: { data: RiskIndicator[]; loading?: 
             <h3 className="text-sm font-semibold text-gray-900">Alerts</h3>
             <p className="text-xs text-gray-500">Items needing attention</p>
           </div>
-          </div>
+        </div>
         <div className="space-y-3">
           <div className="animate-pulse bg-gray-200 h-4 w-24 rounded" />
           <div className="animate-pulse bg-gray-200 h-4 w-32 rounded" />
@@ -491,18 +504,18 @@ const AlertsPanel = memo(({ data, loading }: { data: RiskIndicator[]; loading?: 
     );
   }
 
-            return (
+  return (
     <div className="bg-white rounded-xl border border-gray-100 p-6 hover:shadow-lg transition-all duration-200">
       <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <div className="p-2 bg-red-50 text-red-600 rounded-lg">
             <ExclamationTriangleIcon className="w-5 h-5" />
-                      </div>
-                      <div>
+          </div>
+          <div>
             <h3 className="text-sm font-semibold text-gray-900">Alerts</h3>
             <p className="text-xs text-gray-500">Items needing attention</p>
-                      </div>
-                    </div>
+          </div>
+        </div>
         {totalIssues > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-red-600">{totalIssues}</span>
@@ -511,42 +524,45 @@ const AlertsPanel = memo(({ data, loading }: { data: RiskIndicator[]; loading?: 
                 {highPriority} high
               </span>
             )}
-                    </div>
+          </div>
         )}
-                  </div>
+      </div>
 
       {totalIssues === 0 ? (
         <div className="text-center py-4">
           <div className="text-green-600 mb-2">
             <div className="w-8 h-8 bg-green-50 rounded-full flex items-center justify-center mx-auto">
               ✓
-                    </div>
-                    </div>
+            </div>
+          </div>
           <p className="text-sm text-gray-600">All clear</p>
-                  </div>
+        </div>
       ) : (
         <div className="space-y-2">
           {data.slice(0, 2).map((risk, index) => (
             <div key={index} className="flex justify-between items-center text-sm">
-              <span className="text-gray-600 capitalize">
-                {risk.type.replace('_', ' ')}
-              </span>
-              <span className={`font-medium ${
-                risk.severity === 'high' ? 'text-red-600' :
-                risk.severity === 'medium' ? 'text-yellow-600' : 'text-gray-600'
-              }`}>
+              <span className="text-gray-600 capitalize">{risk.type.replace('_', ' ')}</span>
+              <span
+                className={`font-medium ${
+                  risk.severity === 'high'
+                    ? 'text-red-600'
+                    : risk.severity === 'medium'
+                      ? 'text-yellow-600'
+                      : 'text-gray-600'
+                }`}
+              >
                 {risk.count}
-                        </span>
-                      </div>
+              </span>
+            </div>
           ))}
           {data.length > 2 && (
             <div className="text-xs text-gray-500 text-center pt-2">
               +{data.length - 2} more items
-                    </div>
-                  )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 });
 
@@ -574,7 +590,12 @@ export default function EnhancedDashboard() {
   const [funnelData, setFunnelData] = useState<ConversionFunnel[]>([]);
   const [riskData, setRiskData] = useState<RiskIndicator[]>([]);
   const { timeRange, status: statusFilter /*, search: searchFilter*/ } = useDashboardFilters();
-  const { dashboardData, isLoading: loading, error, refetch } = useDashboardData({ timeRange });
+  const {
+    data: dashboardData,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useExecutiveDashboard('3M', false);
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { setFilters } = useDashboardUIActions();
 
@@ -584,7 +605,7 @@ export default function EnhancedDashboard() {
 
   // (Bridge-based loader removed; using unified React Query hook instead)
 
-  // Derive view data from unified dashboardData with Zod validation
+  // Derive view data from unified dashboardData with proper handling
   useEffect(() => {
     if (!dashboardData) return;
 
@@ -593,71 +614,72 @@ export default function EnhancedDashboard() {
       operation: 'derive',
     });
 
-    // Validate API response with Zod
-    const parsed = DashboardSchema.safeParse(dashboardData);
-    if (!parsed.success) {
+    // Extract data from the consistent API response structure
+    const responseData = dashboardData?.data;
+    const metrics = responseData?.metrics;
+
+    // Skip if metrics is null or undefined
+    if (!metrics) {
       logDebug('dashboard_parse_error', {
-        error: parsed.error.flatten(),
+        error: 'Metrics data is null or undefined',
         component: 'EnhancedDashboard',
         operation: 'data_validation',
       });
       return;
     }
 
-    const { proposals, performance } = parsed.data;
-    const metrics = proposals?.metrics as any; // Temporary type assertion
-    const trends = performance?.trends ?? [];
-
-    const totalRevenue = trends.reduce((sum, m) => sum + (Number(m?.revenue) || 0), 0);
-    const monthlyRevenue = trends.length > 0 ? Number(trends[trends.length - 1]?.revenue || 0) : 0;
-    const prevMonthlyRevenue =
-      trends.length > 1 ? Number(trends[trends.length - 2]?.revenue || 0) : 0;
-    const revenueGrowth =
-      prevMonthlyRevenue > 0
-      ? Math.round(((monthlyRevenue - prevMonthlyRevenue) / prevMonthlyRevenue) * 100)
-      : 0;
-
     setKpis(prev => ({
       ...prev,
-      totalRevenue,
-      monthlyRevenue,
-      revenueGrowth,
-      totalProposals: Number(metrics?.total || 0),
-      activeProposals: Number(metrics?.active || 0),
-      wonProposals: Number(metrics?.completed || 0),
-      winRate: Math.round(Number(metrics?.winRate || 0)),
-      avgProposalValue:
-        totalRevenue > 0 && Number(metrics?.total || 0) > 0
-        ? Math.round(totalRevenue / Number(metrics?.total || 1))
-        : 0,
-      avgCycleTime: Number(metrics?.avgCompletionTime || 0),
-      overdueCount: Number(metrics?.overdue || 0),
-      atRiskCount: Number(metrics?.atRiskCount || 0),
+      totalRevenue: Number(metrics.totalRevenue || 0),
+      monthlyRevenue: Number(metrics.monthlyRevenue || 0),
+      revenueGrowth: Number(metrics.quarterlyGrowth || 0), // Using quarterly as revenue growth
+      totalProposals: Number(metrics.totalProposals || 0),
+      activeProposals: Number(metrics.closingThisMonth || 0), // Using closingThisMonth as active proposals
+      wonProposals: Number(metrics.wonDeals || 0),
+      winRate: Math.round(Number(metrics.winRate || 0)),
+      avgProposalValue: Number(metrics.avgDealSize || 0),
+      avgCycleTime: Number(metrics.avgSalesCycle || 0),
+      overdueCount: Number(metrics.atRiskDeals || 0),
+      atRiskCount: Number(metrics.atRiskDeals || 0),
+      totalCustomers: Number(metrics.teamSize || 0), // Using teamSize as proxy for customers
+      activeCustomers: Number(metrics.teamSize || 0),
+      customerGrowth: Number(metrics.quarterlyGrowth || 0),
+      avgCustomerValue: Number(metrics.avgDealSize || 0), // Using avgDealSize as proxy
+      proposalGrowth: Number(metrics.quarterlyGrowth || 0),
     }));
 
+    // Use revenue chart from parsed data - map period to month
     setRevenueData(
-      trends.map(m => ({
-        month: String(m?.month || ''),
-        revenue: Number(m?.revenue || 0),
-        target: Number(m?.target || 0),
-        proposals: Number(m?.proposals || 0),
+      (responseData.revenueChart || []).map((item: any) => ({
+        month: String(item?.period || ''),
+        revenue: Number(item?.actual || 0),
+        target: Number(item?.target || 0),
+        proposals: Number(metrics.totalProposals || 0), // Use total proposals since per-period data not available
       }))
     );
 
-    // Use funnel data from API if available, otherwise leave empty
-    setFunnelData(metrics?.funnel || []);
+    // Convert pipeline stages to conversion funnel format
+    const funnelData: ConversionFunnel[] = (responseData.pipelineStages || []).map(
+      (stage: any) => ({
+        stage: String(stage.stage || ''),
+        count: Number(stage.count || 0),
+        conversionRate: Number(stage.conversionRate || 0),
+        value: Number(stage.value || 0),
+      })
+    );
+    setFunnelData(funnelData);
 
-    // Calculate risk indicators using database data
-    const overdue = Number(metrics?.overdue || 0);
-    const atRiskCount = Number(metrics?.atRiskCount || 0);
+    // Calculate risk indicators using available data
+    const overdue = Number(metrics.atRiskDeals || 0);
+    const atRiskCount = Number(metrics.atRiskDeals || 0);
 
     const riskItems: RiskIndicator[] = [];
     if (overdue > 0) {
       riskItems.push({
-              type: 'overdue',
-              count: overdue,
-              severity: overdue > 10 ? 'high' : overdue > 3 ? 'medium' : 'low',
-              trend: -5,
+        type: 'overdue',
+        count: overdue,
+        severity: overdue > 10 ? 'high' : overdue > 3 ? 'medium' : 'low',
+        trend: -5,
       });
     }
     if (atRiskCount > 0) {
@@ -671,17 +693,14 @@ export default function EnhancedDashboard() {
 
     setRiskData(riskItems);
 
-    analytics(
-      'enhanced_dashboard_derived_success',
-      {
-        component: 'EnhancedDashboard',
-        userStory: 'US-1.1',
-        hypothesis: 'H1',
-        totalProposals: metrics?.total || 0,
-        totalRevenue,
-        winRate: metrics?.winRate || 0,
-      }
-    );
+    analytics('enhanced_dashboard_derived_success', {
+      component: 'EnhancedDashboard',
+      userStory: 'US-1.1',
+      hypothesis: 'H1',
+      totalProposals: Number(metrics?.totalProposals || 0),
+      totalRevenue: Number(metrics?.totalRevenue || 0),
+      winRate: Number(metrics?.winRate || 0),
+    });
   }, [dashboardData, analytics]);
 
   // Memoized KPI cards for performance
@@ -731,7 +750,10 @@ export default function EnhancedDashboard() {
         title: 'Active Proposals',
         value: displayKpis.activeProposals,
         subtitle: `${displayKpis.totalProposals} total`,
-        change: displayKpis.activeProposals > 0 ? (displayKpis.activeProposals / displayKpis.totalProposals) * 100 : 0,
+        change:
+          displayKpis.activeProposals > 0
+            ? (displayKpis.activeProposals / displayKpis.totalProposals) * 100
+            : 0,
         icon: <DocumentTextIcon className="w-5 h-5" />,
         color: 'blue' as const,
         onClick: () => {
@@ -838,14 +860,18 @@ export default function EnhancedDashboard() {
                   Dashboard Overview
                 </h1>
                 <div className="text-sm text-gray-600 flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                    statusSummary === 'All on track'
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                      : 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                  }`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${
-                      statusSummary === 'All on track' ? 'bg-emerald-500' : 'bg-amber-500'
-                    }`} />
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                      statusSummary === 'All on track'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                    }`}
+                  >
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        statusSummary === 'All on track' ? 'bg-emerald-500' : 'bg-amber-500'
+                      }`}
+                    />
                     {statusSummary}
                   </span>
                   <span className="text-gray-400">•</span>
@@ -864,7 +890,9 @@ export default function EnhancedDashboard() {
                   aria-busy={mounted ? loading : false}
                   className="flex items-center gap-2 bg-white/80 backdrop-blur-sm hover:bg-white/90 border-gray-200/60"
                 >
-                  <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  <ArrowPathIcon
+                    className={`w-4 h-4 ${mounted && loading ? 'animate-spin' : ''}`}
+                  />
                   {mounted && loading ? 'Refreshing...' : 'Refresh'}
                 </Button>
                 <span className="sr-only" aria-live="polite" role="status">
@@ -884,7 +912,13 @@ export default function EnhancedDashboard() {
               value={card.value}
               subtitle={card.subtitle}
               change={card.change}
-              trend={card.change && card.change > 0 ? 'up' : card.change && card.change < 0 ? 'down' : 'neutral'}
+              trend={
+                card.change && card.change > 0
+                  ? 'up'
+                  : card.change && card.change < 0
+                    ? 'down'
+                    : 'neutral'
+              }
               icon={card.icon}
               color={card.color}
               prefix={card.prefix}
@@ -917,7 +951,13 @@ export default function EnhancedDashboard() {
                   value={card.value}
                   subtitle={card.subtitle}
                   change={card.change}
-                  trend={card.change && card.change > 0 ? 'up' : card.change && card.change < 0 ? 'down' : 'neutral'}
+                  trend={
+                    card.change && card.change > 0
+                      ? 'up'
+                      : card.change && card.change < 0
+                        ? 'down'
+                        : 'neutral'
+                  }
                   icon={card.icon}
                   color={card.color}
                   prefix={card.prefix}

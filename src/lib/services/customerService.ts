@@ -798,8 +798,8 @@ export class CustomerService {
         total,
         byStatus,
         byTier,
-        totalRevenue: revenueStats._sum.revenue || 0,
-        averageRevenue: revenueStats._avg.revenue || 0,
+        totalRevenue: Number(revenueStats._sum.revenue || 0),
+        averageRevenue: Number(revenueStats._avg.revenue || 0),
       };
     } catch (error) {
       // Log the error using ErrorHandlingService

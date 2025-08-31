@@ -7,7 +7,7 @@
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { fail, ok } from '@/lib/api/response';
+import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { errorHandlingService } from '@/lib/errors';
@@ -105,10 +105,10 @@ export const GET = createRoute(
       const now = new Date();
       const proposalStatistics = {
         totalProposals: customer._count.proposals,
-        totalValue: customer.proposals.reduce((sum, p) => sum + (p.value || 0), 0),
+        totalValue: customer.proposals.reduce((sum, p) => sum + Number(p.value || 0), 0),
         averageValue:
           customer.proposals.length > 0
-            ? customer.proposals.reduce((sum, p) => sum + (p.value || 0), 0) /
+            ? customer.proposals.reduce((sum, p) => sum + Number(p.value || 0), 0) /
               customer.proposals.length
             : 0,
         statusBreakdown: customer.proposals.reduce(
@@ -168,10 +168,18 @@ export const GET = createRoute(
           customerId: id,
         });
         // Return the customer data anyway for now, but log the validation error
-        return Response.json(ok(transformedCustomer));
+        const responsePayload = { ok: true, data: transformedCustomer };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data));
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -299,10 +307,18 @@ export const PUT = createRoute(
           customerId: id,
         });
         // Return the customer data anyway for now, but log the validation error
-        return Response.json(ok(updatedCustomer));
+        const responsePayload = { ok: true, data: updatedCustomer };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data));
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -394,7 +410,11 @@ export const DELETE = createRoute(
           action: 'archived',
         });
 
-        return Response.json(ok(archivedCustomer));
+        const responsePayload = { ok: true, data: archivedCustomer };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       } else {
         // Hard delete if no proposals or contacts
         await prisma.customer.delete({
@@ -410,7 +430,11 @@ export const DELETE = createRoute(
           action: 'deleted',
         });
 
-        return Response.json(ok({ id, deleted: true }));
+        const responsePayload = { ok: true, data: { id, deleted: true } };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
     } catch (error) {
       const processedError = errorHandlingService.processError(

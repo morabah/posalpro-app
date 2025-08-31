@@ -111,68 +111,75 @@ export const ExecutiveDashboardResponseSchema = z.object({
     metrics: z
       .object({
         // Revenue Performance
-        totalRevenue: z.number().nonnegative(),
-        monthlyRevenue: z.number().nonnegative(),
-        quarterlyGrowth: z.number(),
-        yearlyGrowth: z.number(),
-        revenueTarget: z.number().nonnegative(),
-        revenueTargetProgress: z.number().min(0).max(100),
+        totalRevenue: z.union([z.string(), z.number()]).optional(),
+        monthlyRevenue: z.number().optional(),
+        quarterlyGrowth: z.number().nullable().optional(),
+        yearlyGrowth: z.number().nullable().optional(),
+        revenueTarget: z.number().optional(),
+        revenueTargetProgress: z.number().optional(),
 
         // Sales Performance
-        totalProposals: z.number().int().nonnegative(),
-        wonDeals: z.number().int().nonnegative(),
-        lostDeals: z.number().int().nonnegative(),
-        winRate: z.number().min(0).max(100),
-        avgDealSize: z.number().nonnegative(),
-        avgSalesCycle: z.number().nonnegative(),
+        totalProposals: z.number().optional(),
+        wonDeals: z.number().optional(),
+        lostDeals: z.number().optional(),
+        winRate: z.number().optional(),
+        avgDealSize: z.union([z.string(), z.number()]).optional(),
+        avgSalesCycle: z.number().optional(),
 
         // Pipeline Health
-        pipelineValue: z.number().nonnegative(),
-        qualifiedLeads: z.number().int().nonnegative(),
-        hotProspects: z.number().int().nonnegative(),
-        closingThisMonth: z.number().int().nonnegative(),
-        atRiskDeals: z.number().int().nonnegative(),
+        pipelineValue: z.union([z.string(), z.number()]).optional(),
+        qualifiedLeads: z.number().optional(),
+        hotProspects: z.number().optional(),
+        closingThisMonth: z.number().optional(),
+        atRiskDeals: z.number().optional(),
 
         // Team Performance
-        topPerformer: z.string(),
-        teamSize: z.number().int().nonnegative(),
-        avgPerformance: z.number().min(0).max(100),
+        topPerformer: z.string().optional(),
+        teamSize: z.number().optional(),
+        avgPerformance: z.number().optional(),
 
         // Forecasting
-        projectedRevenue: z.number().nonnegative(),
-        confidenceLevel: z.number().min(0).max(100),
+        projectedRevenue: z.number().optional(),
+        confidenceLevel: z.number().optional(),
       })
       .nullable(),
-    revenueChart: z.array(
-      z.object({
-        period: z.string(),
-        actual: z.number().nonnegative(),
-        target: z.number().nonnegative(),
-        forecast: z.number().nonnegative().optional(),
-      })
-    ),
-    teamPerformance: z.array(
-      z.object({
-        name: z.string(),
-        revenue: z.number().nonnegative(),
-        deals: z.number().int().nonnegative(),
-        winRate: z.number().min(0).max(100),
-        target: z.number().nonnegative(),
-        performance: z.number().min(0).max(100),
-      })
-    ),
-    pipelineStages: z.array(
-      z.object({
-        stage: z.string(),
-        count: z.number().int().nonnegative(),
-        value: z.number().nonnegative(),
-        velocity: z.number().nonnegative(),
-        conversionRate: z.number().min(0).max(100),
-        avgTime: z.number().nonnegative(),
-      })
-    ),
-    lastUpdated: z.string(),
-    timeframe: z.string(),
+    revenueChart: z
+      .array(
+        z.object({
+          period: z.string().optional(),
+          month: z.string().optional(),
+          actual: z.number().optional(),
+          target: z.number().optional(),
+          forecast: z.number().optional(),
+        })
+      )
+      .optional(),
+    teamPerformance: z
+      .array(
+        z.object({
+          name: z.string().optional(),
+          revenue: z.number().optional(),
+          deals: z.number().optional(),
+          winRate: z.number().optional(),
+          target: z.number().optional(),
+          performance: z.number().optional(),
+        })
+      )
+      .optional(),
+    pipelineStages: z
+      .array(
+        z.object({
+          stage: z.string().optional(),
+          count: z.number().optional(),
+          value: z.union([z.string(), z.number()]).optional(),
+          velocity: z.number().optional(),
+          conversionRate: z.number().optional(),
+          avgTime: z.number().optional(),
+        })
+      )
+      .optional(),
+    lastUpdated: z.string().optional(),
+    timeframe: z.string().optional(),
   }),
 });
 

@@ -8,7 +8,7 @@
  * Component Traceability: CommunicationCenter, TeamChat
  */
 
-import { error as apiError, ok } from '@/lib/api/response';
+import { error as apiError } from '@/lib/api/response';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorHandlingService } from '@/lib/errors';
@@ -70,7 +70,11 @@ export async function GET(request: NextRequest) {
     // Get messages from in-memory store
     const messages = messageStore.get(proposalId) || [];
 
-    return NextResponse.json(ok(messages), { status: 200 });
+    const responsePayload = { ok: true, data: messages };
+    return new Response(JSON.stringify(responsePayload), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : 'Unknown error';
     const standardError = new StandardError({
@@ -154,7 +158,11 @@ export async function POST(request: NextRequest) {
     existingMessages.push(message);
     messageStore.set(proposalId, existingMessages);
 
-    return NextResponse.json(ok(message), { status: 201 });
+    const responsePayload = { ok: true, data: message };
+    return new Response(JSON.stringify(responsePayload), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : 'Unknown error';
     const standardError = new StandardError({

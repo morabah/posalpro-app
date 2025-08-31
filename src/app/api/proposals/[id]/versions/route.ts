@@ -74,7 +74,11 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       }>;
 
       if (!rows || rows.length === 0) {
-        return NextResponse.json(ok(null), { status: 200 });
+        const responsePayload = { ok: true, data: null };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
       const current = rows.find(r => r.version === vNum)!;
       const previous = rows.find(r => r.version === vNum - 1) || null;
@@ -273,7 +277,11 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
           : undefined,
     }));
 
-    const response = NextResponse.json(ok(data));
+    const responsePayload = { ok: true, data: data };
+    const response = new Response(JSON.stringify(responsePayload), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
     response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=120');
     response.headers.set('Content-Type', 'application/json; charset=utf-8');
     return response;
@@ -422,7 +430,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     }>;
     const created = createdArr[0];
 
-    return NextResponse.json(ok(created), { status: 201 });
+    const responsePayload = { ok: true, data: created };
+    return new Response(JSON.stringify(responsePayload), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     errorHandlingService.processError(
       error,

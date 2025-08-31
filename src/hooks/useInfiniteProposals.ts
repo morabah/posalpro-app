@@ -4,9 +4,9 @@
  * Follows best practices for React Query infinite queries
  */
 
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { qk } from '@/features/proposals/keys';
 import { http } from '@/lib/http';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 interface ProposalItem {
   id: string;
@@ -68,11 +68,9 @@ export function useInfiniteProposals(filters: ProposalFilters = {}) {
         ...(pageParam && { cursor: pageParam }),
       });
 
-      const response = await http.get<{ ok: true; data: ProposalListResponse }>(
-        `/api/proposals?${params.toString()}`
-      );
+      const response = await http.get<ProposalListResponse>(`/api/proposals?${params.toString()}`);
 
-      return response.data;
+      return response;
     },
     getNextPageParam: (lastPage: ProposalListResponse) => lastPage.nextCursor,
     initialPageParam: undefined as string | undefined,
@@ -85,10 +83,10 @@ export function useInfiniteProposals(filters: ProposalFilters = {}) {
 // Helper hook to get all items from infinite query
 export function useInfiniteProposalsData(filters: ProposalFilters = {}) {
   const query = useInfiniteProposals(filters);
-  
+
   const items: ProposalItem[] = query.data?.pages.flatMap(page => page.items) ?? [];
   const totalCount = query.data?.pages[0]?.meta?.total;
-  
+
   return {
     ...query,
     items,

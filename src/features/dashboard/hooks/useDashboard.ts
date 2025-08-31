@@ -25,67 +25,7 @@ import { useMutation, useQuery, useQueryClient, UseQueryResult } from '@tanstack
 import { dashboardQK, type DashboardSection } from '../keys';
 import type { DashboardData, DashboardStatsQuery, EnhancedDashboardStats } from '../schemas';
 
-// Define ExecutiveDashboardResponse type locally to match full schema
-interface ExecutiveDashboardResponse {
-  success: boolean;
-  data: {
-    metrics: {
-      // Revenue Performance
-      totalRevenue: number;
-      monthlyRevenue: number;
-      quarterlyGrowth: number;
-      yearlyGrowth: number;
-      revenueTarget: number;
-      revenueTargetProgress: number;
-
-      // Sales Performance
-      totalProposals: number;
-      wonDeals: number;
-      lostDeals: number;
-      winRate: number;
-      avgDealSize: number;
-      avgSalesCycle: number;
-
-      // Pipeline Health
-      pipelineValue: number;
-      qualifiedLeads: number;
-      hotProspects: number;
-      closingThisMonth: number;
-      atRiskDeals: number;
-
-      // Team Performance
-      topPerformer: string;
-      teamSize: number;
-      avgPerformance: number;
-
-      // Forecasting
-      projectedRevenue: number;
-      confidenceLevel: number;
-    } | null;
-    revenueChart: Array<{
-      period: string;
-      actual: number;
-      target: number;
-      forecast?: number;
-    }>;
-    teamPerformance: Array<{
-      name: string;
-      revenue: number;
-      deals: number;
-      winRate: number;
-      target: number;
-      performance: number;
-    }>;
-    pipelineStages: Array<{
-      stage: string;
-      count: number;
-      value: number;
-      velocity: number;
-      conversionRate: number;
-      avgTime: number;
-    }>;
-  };
-}
+// Import ExecutiveDashboardResponse from schemas for consistency
 
 // Component Traceability Matrix - Required by CORE_REQUIREMENTS.md
 const DASHBOARD_HOOKS_TRACEABILITY = {
@@ -186,7 +126,7 @@ export function useExecutiveDashboard(
           hypothesis: DASHBOARD_HOOKS_TRACEABILITY.hypotheses[1],
         });
 
-        // Return the dashboard data (service already validated success)
+        // Return the full API response including success wrapper
         return response;
       } catch (error) {
         const standardError = errorHandlingService.processError(

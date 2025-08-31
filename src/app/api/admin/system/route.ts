@@ -1,9 +1,11 @@
 import { authOptions } from '@/lib/auth';
-import { createApiErrorResponse, ErrorCodes } from '@/lib/errors';
-import { logger } from '@/lib/logger';
+import { createApiErrorResponse, ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { logInfo, logError } from '@/lib/logger';
+import { ok } from '@/lib/api/response';
 import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
 import { z } from 'zod';
 
 // System configuration schema
@@ -61,44 +63,18 @@ const getSystemStats = () => ({
   },
 });
 
-export async function GET(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'system', action: 'monitor' });
-    const session = await getServerSession(authOptions);
+// GET /api/admin/system - System monitoring with modern createRoute wrapper
+export const GET = createRoute(
+  {
+    roles: ['System Administrator'],
+    apiVersion: '1',
+  },
+  async ({ req, user, requestId }) => {
 
-    if (!session || !session.user) {
-      logger.warn('Unauthorized admin system access attempt', {
-        ip: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown',
-      });
-      return createApiErrorResponse(
-        'Unauthorized access',
-        'Unauthorized access',
-        ErrorCodes.AUTH.UNAUTHORIZED,
-        401
-      );
-    }
+    // User is already validated by createRoute roles check
+    // No additional permission validation needed
 
-    // Check if user has admin privileges
-    const userRoles = session.user.roles || [];
-    const isAdmin =
-      userRoles.includes('Administrator') || userRoles.includes('System Administrator');
-
-    if (!isAdmin) {
-      logger.warn('Insufficient permissions for admin system access', {
-        userId: session.user.id,
-        userRoles,
-        ip: request.headers.get('x-forwarded-for') || 'unknown',
-      });
-      return createApiErrorResponse(
-        'Insufficient permissions to access system administration',
-        'Insufficient permissions to access system administration',
-        ErrorCodes.AUTH.INSUFFICIENT_PERMISSIONS,
-        403
-      );
-    }
-
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const includeStats = searchParams.get('includeStats') === 'true';
     const includeConfig = searchParams.get('includeConfig') === 'true';
 
@@ -113,7 +89,7 @@ export async function GET(request: NextRequest) {
         },
       },
       metadata: {
-        requestedBy: session.user.id,
+        requestedBy: user.id,
         requestTime: new Date().toISOString(),
       },
     };
@@ -136,25 +112,25 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    logger.info('Admin system information accessed', {
-      userId: session.user.id,
-      userRoles,
+    logInfo('Admin system information accessed', {
+      userId: user.id,
+      userRoles: user.roles || [],
       includeStats,
       includeConfig,
     });
 
-    return NextResponse.json(response);
-  } catch (error) {
-    logger.error('Admin system access error:', error);
+    logInfo('Admin system access successful', {
+      component: 'AdminSystemAPI',
+      operation: 'GET',
+      userId: user.id,
+      requestId,
+      includeStats,
+      includeConfig,
+    });
 
-    return createApiErrorResponse(
-      error,
-      'Internal server error during admin system access',
-      ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500
-    );
+    return ok(response);
   }
-}
+);
 
 export async function PUT(request: NextRequest) {
   try {
@@ -213,7 +189,7 @@ export async function PUT(request: NextRequest) {
       lastUpdated: new Date().toISOString(),
     };
 
-    logger.info('System configuration updated', {
+    logInfo('System configuration updated', {
       userId: session.user.id,
       userRoles,
       previousConfig,
@@ -230,7 +206,7 @@ export async function PUT(request: NextRequest) {
       message: 'System configuration updated successfully',
     });
   } catch (error) {
-    logger.error('System configuration update error:', error);
+    logError('System configuration update error', { error });
 
     return createApiErrorResponse(
       error,
@@ -335,7 +311,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    logger.info('System action performed', {
+    logInfo('System action performed', {
       userId: session.user.id,
       userRoles,
       action,
@@ -349,7 +325,7 @@ export async function POST(request: NextRequest) {
       message: `System action '${action}' completed successfully`,
     });
   } catch (error) {
-    logger.error('System action error:', error);
+    logError('System action error', { error });
 
     return createApiErrorResponse(
       error,

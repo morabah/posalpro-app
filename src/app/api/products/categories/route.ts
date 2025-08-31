@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     // Calculate average prices
     categoryMap.forEach((categoryData, categoryName) => {
       const categoryProducts = products.filter(p => p.category.includes(categoryName));
-      const totalPrice = categoryProducts.reduce((sum, p) => sum + p.price, 0);
+      const totalPrice = categoryProducts.reduce((sum, p) => sum + Number(p.price), 0);
       categoryData.avgPrice =
         categoryProducts.length > 0 ? totalPrice / categoryProducts.length : 0;
     });

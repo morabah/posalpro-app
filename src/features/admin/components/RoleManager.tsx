@@ -12,7 +12,23 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { usePermissions, useRoles } from '@/hooks/admin';
+import {
+  useAdminRoles,
+  useAdminPermissions,
+  useCreateRole,
+  useUpdateRole,
+  useDeleteRole,
+  useCreatePermission,
+  useUpdatePermission,
+  useDeletePermission,
+} from '@/features/admin/hooks';
+import { useShallow } from 'zustand/react/shallow';
+
+// Zustand store selectors
+import {
+  useRoleFilters,
+  useRoleActions,
+} from '@/lib/store/adminStore';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -102,17 +118,16 @@ export default function RoleManager({
     permissions: string[];
   } | null>(null);
 
-  const {
-    roles,
-    loading: rolesLoading,
-    error: rolesError,
-    createRole,
-    updateRole,
-    deleteRole,
-  } = useRoles();
+  const { roles, loading: rolesLoading, error: rolesError } = useAdminRoles();
+  const { createRole, isCreating: isCreatingRole, error: createRoleError } = useCreateRole();
+  const { updateRole, isUpdating: isUpdatingRole, error: updateRoleError } = useUpdateRole();
+  const { deleteRole, isDeleting: isDeletingRole, error: deleteRoleError } = useDeleteRole();
 
   // ✅ FIXED: Remove unused variables
-  const { permissions, loading: permissionsLoading, error: permissionsError } = usePermissions();
+  const { data: permissions, isLoading: permissionsLoading, error: permissionsError } = useAdminPermissions();
+  const { createPermission, isCreating: isCreatingPermission } = useCreatePermission();
+  const { updatePermission, isUpdating: isUpdatingPermission } = useUpdatePermission();
+  const { deletePermission, isDeleting: isDeletingPermission } = useDeletePermission();
 
   // Build dynamic categories from server permissions to avoid saving non-existent permissions
   const availablePermissionCategories: Record<string, string[]> = (() => {
@@ -170,7 +185,7 @@ export default function RoleManager({
   const handleUpdateRole = useCallback(
     async (roleId: string) => {
       try {
-        await updateRole(roleId, formData);
+        await updateRole({ ...formData, id: roleId });
         setEditingRole(null);
         setFormData({
           name: '',
@@ -263,7 +278,7 @@ export default function RoleManager({
   if (rolesError) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600">Error loading roles: {rolesError}</p>
+        <p className="text-red-600">Error loading roles: {rolesError?.message || 'Unknown error'}</p>
         {/* The original code had a refetchRoles call here, but it's not defined in the new_code.
             Assuming it's removed or handled elsewhere if needed. */}
       </div>

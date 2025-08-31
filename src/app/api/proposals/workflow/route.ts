@@ -4,14 +4,14 @@
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 
-import { ok } from '@/lib/api/response';
-import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
-import { logError, logInfo } from '@/lib/logger';
 import {
   ProposalWorkflowBulkUpdateSchema,
   ProposalWorkflowStatusUpdateSchema,
 } from '@/features/proposals/schemas';
+import { ok } from '@/lib/api/response';
+import { createRoute } from '@/lib/api/route';
+import prisma from '@/lib/db/prisma';
+import { logError, logInfo } from '@/lib/logger';
 
 // Validation schemas for workflow operations (centralized)
 const WorkflowStatusUpdateSchema = ProposalWorkflowStatusUpdateSchema;
@@ -96,7 +96,11 @@ export const POST = createRoute(
         newStatus: body!.status,
       });
 
-      return Response.json(ok(result));
+      const responsePayload = { ok: true, data: result };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to update proposal workflow status', {
         component: 'ProposalWorkflowAPI',

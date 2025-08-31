@@ -159,7 +159,7 @@ export class DashboardService {
 
       const endpoint = `${this.baseUrl}/executive?${queryParams.toString()}`;
 
-      const response = await apiClient.get<ExecutiveDashboardResponse>(endpoint, {
+      const response = await apiClient.get(endpoint, {
         timeout: 25000, // 25 seconds for executive dashboard queries
       });
 
@@ -172,8 +172,8 @@ export class DashboardService {
         hypothesis: DASHBOARD_SERVICE_TRACEABILITY.hypotheses[1],
       });
 
-      // Return the unwrapped data from the API response
-      return response.data;
+      // Return the full API response including success wrapper
+      return response as ExecutiveDashboardResponse;
     } catch (error) {
       const standardError = errorHandlingService.processError(
         error,

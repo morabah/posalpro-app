@@ -759,7 +759,7 @@ export class ProductService {
       }
 
       const totalUsage = proposalProducts.length;
-      const revenueGenerated = proposalProducts.reduce((sum, pp) => sum + pp.total, 0);
+      const revenueGenerated = proposalProducts.reduce((sum, pp) => sum + Number(pp.total), 0);
       const averageQuantity =
         totalUsage > 0
           ? proposalProducts.reduce((sum, pp) => sum + pp.quantity, 0) / totalUsage
@@ -884,8 +884,8 @@ export class ProductService {
         active,
         inactive,
         byCategory,
-        totalRevenue: revenueResult._sum.total || 0,
-        averagePrice: priceStats._avg.price || 0,
+        totalRevenue: Number(revenueResult._sum.total || 0),
+        averagePrice: Number(priceStats._avg.price || 0),
         mostUsedProducts,
       };
     } catch (error) {

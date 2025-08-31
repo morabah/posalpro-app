@@ -75,7 +75,7 @@ export class HttpClient {
 
     // Prepare request options
     const requestOptions: RequestInit = {
-      ...options,
+      credentials: "include",      ...options,
       headers: {
         ...this.config.defaultHeaders,
         ...options.headers,
@@ -262,6 +262,17 @@ export class HttpClient {
       } else {
         data = await response.text();
       }
+
+      logDebug('Parsed response data', {
+        component: 'HttpClient',
+        operation: 'handleResponse',
+        url: response.url,
+        status: response.status,
+        dataType: typeof data,
+        dataKeys: data && typeof data === 'object' ? Object.keys(data) : null,
+        dataPreview: data && typeof data === 'object' ? JSON.stringify(data).substring(0, 200) : String(data).substring(0, 200),
+        requestId,
+      });
     } catch (error) {
       throw new HttpClientError(
         'Failed to parse response',

@@ -7,12 +7,11 @@
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import { logError, logInfo } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 import { CustomerStatus, CustomerTier } from '@prisma/client';
-import { logError, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas from feature folder
 import {
@@ -109,21 +108,34 @@ export const GET = createRoute(
       // Remove the extra item if it exists
       const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
 
+      // Transform null values to appropriate defaults before validation
+      const transformedItems = items.map(item => ({
+        ...item,
+        metadata: item.metadata || {},
+        revenue: item.revenue ? Number(item.revenue) : undefined,
+      }));
+
       logInfo('Customers fetched successfully', {
         component: 'CustomerAPI',
         operation: 'GET',
         userId: user.id,
-        count: items.length,
+        count: transformedItems.length,
         hasNextPage,
       });
 
       // Validate response against schema
       const validatedResponse = CustomerListSchema.parse({
-        items,
+        items: transformedItems,
         nextCursor,
       });
 
-      return Response.json(ok(validatedResponse));
+      // Create the response data
+      const responsePayload = { ok: true, data: validatedResponse };
+
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to fetch customers', {
         component: 'CustomerAPI',
@@ -193,10 +205,18 @@ export const POST = createRoute(
           customerId: customer.id,
         });
         // Return the customer data anyway for now, but log the validation error
-        return Response.json(ok(customer), { status: 201 });
+        const responsePayload = { ok: true, data: customer };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data), { status: 201 });
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to create customer', {
         component: 'CustomerAPI',
@@ -274,10 +294,18 @@ export const PUT = createRoute(
           customerId: customer.id,
         });
         // Return the customer data anyway for now, but log the validation error
-        return Response.json(ok(customer));
+        const responsePayload = { ok: true, data: customer };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
-      return Response.json(ok(validationResult.data));
+      const responsePayload = { ok: true, data: validationResult.data };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to update customer', {
         component: 'CustomerAPI',
@@ -322,7 +350,11 @@ export const DELETE = createRoute(
         customerId,
       });
 
-      return Response.json(ok(null));
+      const responsePayload = { ok: true, data: null };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } catch (error) {
       logError('Failed to delete customer', {
         component: 'CustomerAPI',

@@ -94,14 +94,17 @@ export class ProposalDenormalizationService {
         approvalCount: proposal.approvals.length,
 
         // Financial calculations
-        totalValue: proposal.products.reduce((sum, product) => sum + (product.total || 0), 0),
+        totalValue: proposal.products.reduce((sum, product) => sum + Number(product.total || 0), 0),
 
         // Activity tracking
         lastActivityAt: new Date(),
         statsUpdatedAt: new Date(),
 
         // Completion rate calculation (basic implementation)
-        completionRate: this.calculateCompletionRate(proposal),
+        completionRate: this.calculateCompletionRate({
+          ...proposal,
+          value: Number(proposal.value || 0),
+        }),
       };
 
       // Update the proposal with denormalized data
@@ -284,7 +287,7 @@ export class ProposalDenormalizationService {
           oldest: completionStats._min.statsUpdatedAt,
           newest: completionStats._max.statsUpdatedAt,
         },
-        averageCompletionRate: completionStats._avg.completionRate || 0,
+        averageCompletionRate: Number(completionStats._avg.completionRate || 0),
       };
     } catch (error) {
       logger.error('[ProposalDenormalization] Failed to get stats:', error);

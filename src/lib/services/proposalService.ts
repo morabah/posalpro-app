@@ -1037,9 +1037,9 @@ export class ProposalService {
         data.discount !== undefined
       ) {
         if (current) {
-          const quantity = data.quantity ?? current.quantity;
-          const unitPrice = data.unitPrice ?? current.unitPrice;
-          const discount = data.discount ?? current.discount;
+          const quantity = Number(data.quantity ?? current.quantity);
+          const unitPrice = Number(data.unitPrice ?? current.unitPrice);
+          const discount = Number(data.discount ?? current.discount);
           updateData.total = quantity * unitPrice * (1 - discount / 100);
         }
       }
@@ -1317,7 +1317,7 @@ export class ProposalService {
         _sum: { total: true },
       });
 
-      const totalValue = result._sum.total || 0;
+      const totalValue = Number(result._sum.total || 0);
 
       // Update the proposal with calculated value
       await prisma.proposal.update({
@@ -1420,11 +1420,11 @@ export class ProposalService {
         proposalId: id,
         totalSections: sections,
         totalProducts: products._count,
-        totalValue,
+        totalValue: Number(totalValue),
         validationIssues,
         completionPercentage: this.calculateCompletionPercentage(sections, products._count),
         averageSectionScore: 85, // This would come from actual section analytics
-        riskScore: proposal.riskScore || 0,
+        riskScore: Number(proposal.riskScore || 0),
         timeToCompletion,
       };
     } catch (error) {
@@ -1547,8 +1547,8 @@ export class ProposalService {
         total,
         byStatus,
         byPriority,
-        totalValue: valueStats._sum.value || 0,
-        averageValue: valueStats._avg.value || 0,
+        totalValue: Number(valueStats._sum.value || 0),
+        averageValue: Number(valueStats._avg.value || 0),
         conversionRate,
       };
     } catch (error) {

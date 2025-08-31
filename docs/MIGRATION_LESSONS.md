@@ -1,581 +1,380 @@
-# Migration Lessons Learned - Unified Framework
+# Migration Lessons Learned - Bug Fix Reference
 
-## Executive Summary
-
-**Goal**: Transform complex bridge-based systems to modern React architecture
-with proper data flow, validation, and database integration.
-
-**Status**: ✅ **SUCCESSFUL** - Complete migration framework with unified
-solutions for common issues.
-
-**Key Achievement**: Established reproducible patterns for system-wide
-migrations with comprehensive error prevention.
+**Status**: ✅ **SUCCESSFUL** - Unified framework for common migration issues.
 
 ---
 
-## 🔧 \*\*Unified Proposal Store - Zustand v5 Selector Refactor (Latest)
+## 🔧 **Store Selectors & Hooks (Zustand v5)**
 
-### Migration Goal
+**Symptoms**: ESLint violations, infinite re-renders, unstable selectors.
 
-Refactor unified proposal store selectors and actions to:
+**Root Causes**:
 
-- Follow React hook naming conventions (prefix with `use`)
-- Use `useShallow` for composite selector objects to prevent re-renders
-- Avoid inline fallback patterns in selectors (e.g., `|| []`, `|| {}`)
+- Selectors not prefixed with `use`
+- Composite selectors without `useShallow`
+- Inline fallbacks in selectors
 
-### Symptoms
-
-- ESLint React Hooks violations due to selectors not starting with `use`
-- Potential infinite re-renders when composite selectors returned new objects
-- Hidden performance costs from inline fallbacks in selectors
-
-### Root Causes
-
-1. Selectors exported as plain functions (e.g., `step4Data()`) calling hooks
-   internally → not recognized as hooks by lint rules.
-2. Composite selectors returning new object references each render without
-   shallow equality.
-3. Inline fallbacks in selectors caused new array/object creation on every store
-   change. 4-fix the hook order bug by moving the inline useMemo out of JSX and
-   into a top-level constant so it's called on every render before any early
-   returns. Then I'll update the component to use that constant.
-
-### Final Working Pattern (`src/lib/store/unifiedProposalStore.ts`)
+**Solution**:
 
 ```ts
-// Individual hooks (stable, no inline fallbacks inside selectors)
-export const useUnifiedProposalStep4Data = () =>
-  useUnifiedProposalStore(state => state.wizardData.step4);
-
-// Navigation and validation
-export const useUnifiedProposalCanNavigateForward = () =>
-  useUnifiedProposalStore(state => state.canNavigateForward);
-export const useUnifiedProposalStepValidation = (step: number) =>
-  useUnifiedProposalStore(state => state.stepValidation[step]);
-
-// Composite actions with shallow equality to keep reference-stable
-import { useShallow } from 'zustand/react/shallow';
+// ✅ Individual hooks with useShallow for objects
 export const useUnifiedProposalActions = () =>
   useUnifiedProposalStore(
     useShallow(state => ({
       setCurrentStep: state.setCurrentStep,
-      goToNextStep: state.goToNextStep,
       setStepData: state.setStepData,
-      validateStep: state.validateStep,
-      resetWizard: state.resetWizard,
       // ...other actions
     }))
   );
 
-// Convenience namespace for migration ergonomics (optional)
-export const useUnifiedProposalStoreSelectors = {
-  useStep4Data: useUnifiedProposalStep4Data,
-  useActions: useUnifiedProposalActions,
-} as const;
-```
-
-### Anti-Pattern vs Correct Pattern
-
-```ts
-// ❌ Anti-pattern: inline fallbacks in selectors (creates new refs)
-export const useStep4Products = () =>
-  useUnifiedProposalStore(state => state.wizardData.step4?.products || []);
-
-// ✅ Correct: return raw state in selector, handle fallbacks in component
-export const useStep4 = () =>
-  useUnifiedProposalStore(state => state.wizardData.step4);
-
-// In component
+// ✅ Handle fallbacks in components, not selectors
 const step4 = useStep4();
 const products = useMemo(() => step4?.products ?? [], [step4]);
 ```
 
-### Component Migration Example (`src/components/proposals/EnhancedProductSelectionStep.tsx`)
+**Prevention**:
 
-```diff
-- import { useUnifiedProposalStoreSelectors } from '@/lib/store/unifiedProposalStore';
-+ import { useUnifiedProposalActions, useUnifiedProposalStep4Data } from '@/lib/store/unifiedProposalStore';
-
-- const step4Data = useUnifiedProposalStoreSelectors.step4Data();
-- const actions = useUnifiedProposalStoreSelectors.actions();
-+ const step4Data = useUnifiedProposalStep4Data();
-+ const actions = useUnifiedProposalActions();
-```
-
-### Prevention Framework (Unified Proposal Store)
-
-1. Use top-level hooks with `use*` prefix for all selectors.
-2. Apply `useShallow` to any composite selector returning an object.
-3. Do not place `|| []`, `|| {}`, `?? []` inside selectors; perform fallbacks in
-   components or `useMemo`.
-4. Keep selectors simple: direct state access only; derive values in components
-   when possible.
-5. Prefer individual selectors over wide composite selectors for stability and
-   performance.
-
-### Success Metrics
-
-- ✅ ESLint React Hooks compliance (no naming violations)
-- ✅ No infinite re-renders from composite selectors
-- ✅ Improved render stability in proposal wizard steps
-- ✅ 100% TypeScript compliance
+- Use `use*` prefix for all selectors
+- Apply `useShallow` to composite selectors
+- Move fallbacks to components with `useMemo`
 
 ---
 
-## 🎯 **Unified Problem-Solution Framework**
+## 🔧 **Core Patterns & Solutions**
 
-### **Core Challenge: Multi-Dimensional System Integration**
+### **1. API Response Format Issues**
 
-All migrations involve coordinating **5 critical layers** that must work
-together:
+**Problem**: Inconsistent response formats (`ok` vs `success`)
 
-1. **UI Components** (React components)
-2. **State Management** (Zustand/React Query)
-3. **Data Validation** (Zod schemas)
-4. **API Integration** (Next.js routes)
-5. **Database Schema** (Prisma models)
-
-**Root Problem**: Each layer developed independently → field mismatches,
-validation failures, data flow breakdowns.
-
----
-
-## 🔧 **Unified Solutions for Common Issues**
-
-### **1. API Integration & Response Format Issues**
-
-#### **Problem**: Inconsistent API endpoints and response formats
-
-- Wrong HTTP methods (PUT vs PATCH)
-- Incompatible response envelopes (`ok` vs `success`)
-- New endpoints instead of existing working ones
-
-#### **Solution**: Use Existing Working APIs + Dual Format Support
+**Solution**:
 
 ```typescript
-// ✅ UNIFIED PATTERN - Existing APIs with dual format support
-
-// 1. Use existing working endpoints
-const response = await http.patch<Product>(`/api/products/${id}`, data);
-
-// 2. HTTP client supports both response formats
-if (data && typeof data === 'object' && ('ok' in data || 'success' in data)) {
-  const isSuccess =
-    apiResponse.ok !== undefined ? apiResponse.ok : apiResponse.success;
-  return apiResponse.data; // Always unwrap data
-}
-
-// 3. Service layer maintains consistent return types
-return { ok: true, data: response };
-```
-
-**Prevention**: Always check existing implementations first, support multiple
-response formats.
-
----
-
-### **2. Data Flow & Validation Issues**
-
-#### **Problem**: Field name inconsistencies and validation failures
-
-- Different field names across layers
-- Missing required fields
-- Validation schema mismatches
-
-#### **Solution**: Database-First Field Alignment
-
-```typescript
-// ✅ UNIFIED PATTERN - Consistent field names across all layers
-
-// Database Schema (prisma/schema.prisma)
-model Product {
-  value             Float?  // ✅ Single source of truth
-  total             Float   // ✅ Consistent naming
-}
-
-// TypeScript Interfaces
-export interface ProductData {
-  value?: number;           // ✅ Match database
-  total: number;            // ✅ Match database
-}
-
-// Zod Validation
-const ProductSchema = z.object({
-  value: z.number().optional().or(z.null()), // ✅ Defensive validation
-  total: z.number().positive(),
+// ✅ Standard format
+return NextResponse.json({
+  ok: true,
+  data: result,
 });
 
-// UI Components
-<Input
-  id="value"                    // ✅ Match data field
-  value={formData.value ?? ''}  // ✅ Proper null handling
-/>
+// ✅ Support both formats
+const isSuccess = response.ok ?? response.success;
+return response.data;
 ```
 
-**Prevention**: Start with database schema, use consistent naming, implement
-defensive validation.
+### **2. Data Type Conversion Issues**
 
----
+**Problem**: String values from forms failing number validation
 
-### **3. State Management & Performance Issues**
-
-#### **Problem**: Infinite loops, unstable selectors, performance degradation
-
-- Composite hooks creating new objects
-- Unstable callback dependencies
-- Excessive re-renders
-
-#### **Solution**: Stable State Management Patterns
+**Solution**:
 
 ```typescript
-// ✅ UNIFIED PATTERN - Stable state management
+// ✅ Schema-level transformation
+value: z.union([z.string(), z.number()])
+  .transform(val => (val !== undefined ? Number(val) : undefined))
+  .optional();
 
-// 1. Individual selectors (not composite hooks)
+// ✅ Service-level conversion
+const processedData = {
+  ...data,
+  value: data.value !== undefined ? Number(data.value) : undefined,
+};
+```
+
+### **3. State Management Issues**
+
+**Problem**: Infinite loops, unstable selectors
+
+**Solution**:
+
+```typescript
+// ✅ Individual selectors only
 export const useProductId = () => useProductStore(state => state.id);
-export const useProductName = () => useProductStore(state => state.name);
 
-// 2. Functional updates with stable dependencies
+// ✅ Functional updates with stable dependencies
 const handleUpdate = useCallback(
   (field: string, value: any) => {
     setProductData(prev => ({ ...prev, [field]: value }));
   },
-  [setProductData]
-); // ✅ Stable dependencies only
-
-// 3. Empty dependency arrays for initialization
-useEffect(() => {
-  fetchData();
-}, []); // ✅ Mount-only execution
+  [setProductData] // ✅ Stable dependencies
+);
 ```
 
-**Prevention**: Use individual selectors, functional updates, stable
-dependencies.
+### **4. Cache Management Issues**
 
----
+**Problem**: Stale data, insufficient invalidation
 
-### **4. Cache Management & Data Consistency**
-
-#### **Problem**: Stale data, inconsistent UI updates, cache invalidation issues
-
-- Long stale times preventing updates
-- Insufficient cache invalidation
-- Missing immediate cache updates
-
-#### **Solution**: Aggressive Cache Management Strategy
+**Solution**:
 
 ```typescript
-// ✅ UNIFIED PATTERN - Comprehensive cache management
-
-// 1. Immediate cache updates
+// ✅ Immediate cache updates
 onSuccess: (response, { id }) => {
   queryClient.setQueryData(qk.products.byId(id), response);
   queryClient.invalidateQueries({ queryKey: qk.products.all });
-  queryClient.invalidateQueries({ queryKey: qk.products.byId(id) });
-  queryClient.refetchQueries({ queryKey: qk.products.byId(id) });
-},
+};
 
-// 2. Reduced stale times for responsiveness
-return useQuery({
-  queryKey: qk.products.byId(id),
-  queryFn: fetchProduct,
-  staleTime: 5000, // ✅ Short stale time for updates
-  gcTime: 120000,
-});
+// ✅ Short stale times
+staleTime: 5000, gcTime: 120000
 ```
 
-**Prevention**: Use immediate cache updates, comprehensive invalidation, short
-stale times.
+### **5. Error Handling Issues**
 
----
+**Problem**: Inconsistent error handling
 
-### **5. Error Handling & Debugging**
-
-#### **Problem**: Inconsistent error handling, poor debugging visibility
-
-- Missing structured logging
-- Inconsistent error formats
-- Poor error traceability
-
-#### **Solution**: Centralized Error Handling + Debug Logging
+**Solution**:
 
 ```typescript
-// ✅ UNIFIED PATTERN - Comprehensive error handling
-
-// 1. Structured logging at critical points
-logDebug('Operation start', {
-  component: 'ComponentName',
-  operation: 'operationName',
-  dataKeys: Object.keys(data),
-  userStory: 'US-X.X',
-  hypothesis: 'HX',
-});
-
-// 2. Centralized error handling
+// ✅ Centralized error handling
 try {
   const result = await operation();
-  logInfo('Operation success', { result });
+  logInfo('Success', { result });
 } catch (error) {
   const processedError = errorHandlingService.processError(error);
-  logError('Operation failed', { error: processedError });
+  logError('Failed', { error: processedError });
   throw processedError;
 }
-
-// 3. User-friendly error messages
-toast.error(processedError.userFriendlyMessage);
 ```
-
-**Prevention**: Implement structured logging, centralized error handling,
-user-friendly messages.
 
 ---
 
-## 🔧 **Customers Page - React Query Refetch Loop & Zustand Re-render Loop Fix (Latest)**
+## 🔧 **Infinite Refetch Loop Fix**
 
-### **Migration Goal**: Eliminate infinite refetch/re-render on Customers page
+**Problem**: Infinite refetch/re-render loops on data tables.
 
-**Final Status**: ✅ **SUCCESSFUL** - Stable query keys, strictly typed sort
-handler, and correct Zustand v5 shallow selectors removed loop conditions.
+**Root Causes**:
 
-### **Symptoms**
+- Unstable query keys
+- Composite selectors without `useShallow`
+- Unstable sort handlers
 
-- **Infinite refetch/rerender** when toggling sort or changing filters
-- **Analytics events firing repeatedly** during list interactions
-- CPU spikes and janky scroll while using infinite list
-
-### **Root Causes**
-
-1. **Unstable selection slice equality (Zustand v5)**
-   - `useCustomerStore(selector, shallow)` comparator arg no longer supported in
-     v5 → selector returned new object every store change → extra component
-     renders → query inputs churned unnecessarily.
-2. **Unsafe sort typing in UI**
-   - `handleSort` accepted `string` with `as any` casts, allowing invalid values
-     and causing unnecessary state flips.
-3. **Query key sensitivity**
-   - Keys must be constructed from stable primitives/objects with deterministic
-     shape to avoid unintended refetches.
-
-### **Solutions Implemented**
-
-1. **Centralized, stable query keys** (`src/features/customers/keys.ts`)
+**Solution**:
 
 ```ts
+// ✅ Stable query keys
 export const qk = {
   customers: {
-    all: ['customers'] as const,
-    lists: () => [...qk.customers.all, 'list'] as const,
-    list: (search, limit, sortBy, sortOrder, status, tier, industry) =>
-      [
-        ...qk.customers.lists(),
-        { search, limit, sortBy, sortOrder, status, tier, industry },
-      ] as const,
+    list: (search, limit, sortBy, sortOrder) =>
+      ['customers', 'list', { search, limit, sortBy, sortOrder }] as const,
   },
 } as const;
-```
 
-2. **Strictly typed sorting handler**
-   (`src/components/customers/CustomerList.tsx`)
-
-```ts
-// Accepts only valid sort keys
+// ✅ Typed sort handler
 const handleSort = useCallback(
   (sortBy: CustomerSortBy) => {
-    setSorting({
+    setSorting(prev => ({
       sortBy,
       sortOrder:
-        sorting.sortBy === sortBy && sorting.sortOrder === 'asc'
-          ? 'desc'
-          : 'asc',
-    });
+        prev.sortBy === sortBy && prev.sortOrder === 'asc' ? 'desc' : 'asc',
+    }));
   },
-  [sorting, setSorting]
+  [setSorting] // ✅ Functional updates
 );
-// Note: This can be further stabilized via functional updates:
-// setSorting(prev => ({ sortBy, sortOrder: prev.sortBy === sortBy && prev.sortOrder === 'asc' ? 'desc' : 'asc' }))
-```
 
-3. **Zustand v5 shallow equality (correct pattern)**
-   (`src/lib/store/customerStore.ts`)
-
-```ts
-import { useShallow } from 'zustand/react/shallow';
-
+// ✅ useShallow for composite selectors
 export function useCustomerSelection() {
   return useCustomerStore(
     useShallow(state => ({
       selectedIds: state.selection.selectedIds,
       selectedCount: state.selection.selectedIds.length,
-      hasSelection: state.selection.selectedIds.length > 0,
-    }))
-  );
-}
-
-export function useCustomerBulkSelectionState(customerIds: string[]) {
-  return useCustomerStore(
-    useShallow(state => ({
-      isAllSelected: customerSelectors.isAllSelected(state)(customerIds),
-      isPartiallySelected:
-        customerSelectors.isPartiallySelected(state)(customerIds),
     }))
   );
 }
 ```
 
-4. **Infinite query with typed pagination** (`src/hooks/useCustomers.ts`)
-
-```ts
-return useInfiniteQuery({
-  queryKey: qk.customers.list(
-    search,
-    limit,
-    sortBy,
-    sortOrder,
-    status,
-    tier,
-    industry
-  ),
-  queryFn: ({ pageParam }) =>
-    customerService.getCustomers({
-      search,
-      limit,
-      sortBy,
-      sortOrder,
-      status,
-      tier,
-      industry,
-      cursor: (pageParam ?? null) as string | null,
-    }),
-  initialPageParam: null as string | null,
-  getNextPageParam: (lastPage: ApiResponse<CustomerList>) =>
-    lastPage.ok ? (lastPage.data.nextCursor ?? undefined) : undefined,
-  staleTime: 60_000,
-  gcTime: 120_000,
-  refetchOnWindowFocus: false,
-  retry: 1,
-});
-```
-
-5. **Analytics hygiene**
-
-- Side-effects are triggered only in `onSuccess/onError` of mutations, not
-  during render, avoiding extra loops.
-
-### **Prevention Framework (Customers + React Query)**
-
-1. **Use union types for UI controls** (e.g., `CustomerSortBy`) — never `any`.
-2. **Adopt `useShallow` for derived selector objects** in Zustand v5.
-3. **Build query keys from normalized primitives/objects** and `as const`.
-4. **Prefer functional state updates** in handlers that toggle state.
-5. **Keep side-effects in React Query callbacks**, not in render paths.
-6. **Tune refetch behavior** (`refetchOnWindowFocus: false`) for heavy lists.
-
-### **Success Metrics**
-
-- ✅ No infinite refetch on sort/filter changes
-- ✅ Stable scroll and pagination with `useInfiniteQuery`
-- ✅ Analytics events fire once per operation (no bursts)
-- ✅ Type-check passes (`npm run type-check`)
+**Prevention**: Use `useShallow`, functional updates, stable query keys.
 
 ---
 
-## 🚀 **Unified Migration Strategy**
+## 🚀 **Migration Strategy**
 
 ### **Pre-Migration Checklist**
 
-1. **Database Schema Review** - Map all field names and relationships
-2. **Existing Implementation Analysis** - Study working patterns
-3. **API Endpoint Inventory** - Identify existing working endpoints
-4. **Component Architecture Planning** - Design stable, reusable patterns
-5. **Validation Strategy** - Plan multi-layer validation approach
+1. Review database schema and field names
+2. Analyze existing working implementations
+3. Inventory existing API endpoints
+4. Plan component architecture patterns
+5. Design multi-layer validation
 
 ### **Implementation Strategy**
 
-1. **Database-First Design** - Start with schema, align all layers
-2. **Existing Endpoint Leverage** - Use proven APIs over new ones
-3. **Stable State Management** - Use individual selectors, avoid composite hooks
-4. **Functional State Updates** - Prevent circular dependencies
-5. **Structured Debug Logging** - Implement comprehensive tracking
-6. **Stable Component Generation** - Avoid dynamic values in IDs
-7. **Complete User Flow Testing** - Test end-to-end experience
+1. **Database-first design** - Schema as single source of truth
+2. **Leverage existing endpoints** - Use proven APIs
+3. **Stable state management** - Individual selectors, functional updates
+4. **Complete user flow testing** - End-to-end validation
 
 ### **Quality Gates**
 
-1. **TypeScript Compliance** - 0 compilation errors
-2. **State Management Stability** - No infinite loops or getServerSnapshot
-   errors
-3. **Performance Benchmarks** - Compilation times within acceptable ranges
-4. **Database Integration** - All data properly stored
-5. **API Validation** - All requests pass validation
-6. **UI Consistency** - No hydration mismatches
-7. **User Experience** - Complete flow from start to finish
+- ✅ TypeScript compliance (0 errors)
+- ✅ No infinite loops or hydration mismatches
+- ✅ Database integration working
+- ✅ API validation passing
+- ✅ Complete user flows functional
 
 ---
 
-## 📚 **Unified Prevention Framework**
+## 📚 **Prevention Framework**
 
 ### **Always Follow These Patterns**
 
-1. **Check existing implementations first** - Don't reinvent working solutions
-2. **Use consistent naming across all layers** - Database schema is the source
-   of truth
-3. **Design stable state management from the start** - Individual selectors,
-   functional updates
-4. **Implement comprehensive logging from day one** - Structured, traceable,
-   user-friendly
-5. **Support multiple response formats** - Be format-agnostic in HTTP clients
-6. **Use aggressive cache management** - Immediate updates, comprehensive
-   invalidation
-7. **Test with real data early and often** - Don't wait until the end
-8. **Validate complete user flows** - Not just individual components
+1. Check existing implementations first
+2. Use consistent naming across all layers
+3. Design stable state management from start
+4. Implement structured logging from day one
+5. Support multiple response formats
+6. Use aggressive cache management
+7. Test with real data early and often
+8. Validate complete user flows
 
 ### **Common Anti-Patterns to Avoid**
 
-1. ❌ **Creating new APIs when existing ones work**
-2. ❌ **Composite hooks that create new objects on every render**
-3. ❌ **Inconsistent field names across layers**
-4. ❌ **Single response format support in HTTP clients**
-5. ❌ **Long stale times for frequently updated data**
-6. ❌ **Missing structured logging and error handling**
-7. ❌ **Dynamic values in component IDs**
-8. ❌ **Testing individual components without end-to-end flows**
+1. ❌ Creating new APIs when existing ones work
+2. ❌ Composite hooks creating new objects
+3. ❌ Inconsistent field names across layers
+4. ❌ Single response format support
+5. ❌ Long stale times for frequently updated data
+6. ❌ Missing structured logging
+7. ❌ Dynamic values in component IDs
+8. ❌ Testing individual components only
 
 ---
 
 ## ✅ **Success Metrics**
 
-### **Before Migration**
-
-- Complex bridge patterns with tight coupling
-- Inconsistent error handling and debugging
-- Performance issues and infinite loops
-- Field name mismatches and validation failures
-- Stale data and cache invalidation issues
-
-### **After Migration**
-
 - ✅ Modern React architecture with proper data flow
 - ✅ Complete database integration with validation
 - ✅ Stable state management with no infinite loops
-- ✅ 65% performance improvement in compilation times
-- ✅ Comprehensive debug logging and error handling
-- ✅ Seamless user experience from creation to detail view
 - ✅ 100% TypeScript compliance
 - ✅ Zero hydration mismatches
-- ✅ Full API validation compliance
+- ✅ Comprehensive error handling
 
 ---
 
 ## 🎯 **Conclusion**
 
-This unified framework provides **reproducible methodology** for future
-migrations and implementations, ensuring consistent success across different
-features and modules.
+**Key Principle**: Systematic multi-dimensional thinking for migrations.
 
-**Key Principle**: **Systematic, multi-dimensional thinking** - treat migrations
-as coordinated system integration rather than individual component development.
+**Result**: Complete success with modern architecture and comprehensive error
+handling.
 
-**Result**: **COMPLETE SUCCESS** - Modern, maintainable, and user-friendly
-systems with comprehensive error handling, validation, and user experience.
+---
+
+## 🔧 **API Response Format Fix**
+
+**Problem**: Double-wrapping with `Response.json(ok())` causing malformed
+responses.
+
+**Solution**:
+
+```typescript
+// ❌ BEFORE: Double wrapping
+return Response.json(ok(validatedResponse));
+
+// ✅ AFTER: Direct return
+return ok(validatedResponse);
+```
+
+**Scope**: 38 API endpoints fixed across proposals, products, customers,
+communication APIs.
+
+**Result**: All API endpoints now return proper JSON responses, fixing "no data"
+issues.
+
+---
+
+## 🔧 **Network Timeout Fix**
+
+**Problem**: Complex transactions causing "Load failed" errors.
+
+**Solution**:
+
+```typescript
+const proposal = await prisma.$transaction(
+  async tx => {
+    /* Complex operations... */
+  },
+  { timeout: 15000, isolationLevel: 'ReadCommitted' }
+);
+
+if (
+  error.message.includes('timeout') ||
+  error.message.includes('Load failed')
+) {
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      code: 'NETWORK_TIMEOUT',
+      message: 'Request timed out. Please try again.',
+    }),
+    { status: 408, headers: { 'Content-Type': 'application/json' } }
+  );
+}
+```
+
+**Result**: PUT requests complete successfully without connection loss.
+
+---
+
+## 🔧 **Type Conversion Fix**
+
+**Problem**: Form inputs send strings, API schemas expect numbers.
+
+**Solution**:
+
+```typescript
+// ✅ Schema-level transformation
+value: z.union([z.string(), z.number()])
+  .transform(val => (val !== undefined ? Number(val) : undefined))
+  .optional();
+
+// ✅ Service-level transformation
+const processedData = {
+  ...proposalData,
+  value:
+    proposalData.value !== undefined ? Number(proposalData.value) : undefined,
+};
+```
+
+**Result**: Validation errors eliminated for numeric fields.
+
+---
+
+## 🔧 **Proposal Detail Total Fix**
+
+**Problem**: Database stores product totals as strings, frontend sums as
+numbers.
+
+**Solution**:
+
+```typescript
+const productTotal =
+  typeof product.total === 'string'
+    ? parseFloat(product.total) || 0
+    : product.total || 0;
+return sum + productTotal;
+```
+
+**Result**: Totals now display correctly on proposal detail page.
+
+---
+
+## 🔧 **API Response Format Fix**
+
+**Problem**: Users API using `{ success: true }` instead of standard
+`{ ok: true }`.
+
+**Solution**:
+
+```typescript
+// ✅ AFTER: Standard format
+return NextResponse.json({
+  ok: true, // Correct key
+  data: { users, pagination, meta },
+  message: 'Users retrieved successfully',
+});
+
+// Handle both formats in component
+let usersArray = response?.users || response?.data?.users || [];
+```
+
+**Result**: Team assignment users load successfully.
 
 ---
 
@@ -1198,16 +997,239 @@ export const DomainResponseSchema = z.object({
 **Result**: **SUCCESSFUL MULTI-LAYER FIX** - Consistent response format handling
 across service, hook, and component layers.
 
+## 🔧 **Admin Page Data Access & API Response Format Fixes (Latest)**
+
+### **Migration Goal**: Fix admin page "users.map is not a function" error and API response format issues
+
+**Final Status**: ✅ **SUCCESSFUL** - Admin page now loads correctly with proper
+data access patterns.
+
+### **Core Challenges Identified**
+
+#### **1. API Response Format Mismatch**
+
+- **Problem**: `/api/admin/metrics` returned `{ success: true, metrics: {...} }`
+  but HTTP client expected `{ ok: true, data: {...} }`
+- **Symptom**: `result.data` was `undefined`, causing React Query to reject data
+- **Fix**: Updated API route to return `ok/data` format and removed debug
+  logging
+
+#### **2. Users Data Structure Mismatch**
+
+- **Problem**: Component tried to map over `users` but API returned
+  `{ users: [...], pagination: {...} }`
+- **Symptom**: `TypeError: users.map is not a function`
+- **Fix**: Changed from `users?.map()` to `users?.users?.map()` and updated all
+  related data access
+
+#### **3. Excessive Re-rendering**
+
+- **Problem**: Unstable data references causing infinite re-renders
+- **Symptom**: Admin page constantly re-rendering, high CPU usage
+- **Fix**: Added `useMemo` for stable query parameters and cleaned up debug
+  logging
+
+### **Key Fixes Applied**
+
+#### **API Response Format Fix**
+
+```typescript
+// ❌ BEFORE: Wrong format
+return NextResponse.json({
+  success: true,
+  metrics,
+  timestamp: new Date().toISOString(),
+});
+
+// ✅ AFTER: Correct format
+return NextResponse.json({
+  ok: true,
+  data: metrics,
+  timestamp: new Date().toISOString(),
+});
+```
+
+#### **Data Access Pattern Fix**
+
+```typescript
+// ❌ BEFORE: Wrong data structure
+{users?.map((user: any) => (
+  // Error: users.map is not a function
+))}
+{users?.length || 0} users found
+
+// ✅ AFTER: Correct data structure
+{users?.users?.map((user: any) => (
+  // ✅ Works correctly
+))}
+{users?.users?.length || 0} users found
+```
+
+#### **Stable Query Parameters**
+
+```typescript
+// ✅ ADDED: Stable memoization to prevent re-renders
+const usersQueryParams = useMemo(
+  () => ({
+    search: usersFilters.search,
+    role: usersFilters.role || '',
+    status: usersFilters.status === 'all' ? '' : usersFilters.status,
+    page: String(usersFilters.page),
+    limit: '10',
+  }),
+  [
+    usersFilters.search,
+    usersFilters.role,
+    usersFilters.status,
+    usersFilters.page,
+  ]
+);
+```
+
+### **Migration Success Metrics**
+
+**Before Fix**:
+
+- Admin page crashed with JavaScript errors
+- "users.map is not a function" error
+- API response format mismatch causing undefined data
+- Excessive re-rendering loops
+
+**After Fix**:
+
+- ✅ Admin page loads without errors
+- ✅ Users table displays correctly
+- ✅ System metrics load properly
+- ✅ No more re-rendering loops
+- ✅ 100% TypeScript compliance
+- ✅ Clean console logs
+
+### **Prevention Framework (Admin Data Access)**
+
+1. **Verify API response structure** - Check actual data format returned by APIs
+2. **Use correct data access patterns** - Map over correct nested properties
+3. **Add stable memoization** - Use `useMemo` for query parameters to prevent
+   re-renders
+4. **Clean up debug logging** - Remove temporary console.log statements after
+   fixes
+
+**Result**: **SUCCESSFUL ADMIN PAGE FIXES** - Admin system now works correctly
+with proper data flow and no performance issues.
+
+---
+
 ## 🔧 \*React has detected a change in the order of Hooks called by BasicInformationStep. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: \*\*
 
 Cause of bug Conditional hook order: BasicInformationStep called a hook inside
 JSX: min={useMemo(() => new Date().toISOString().split('T')[0], [])} in
-src/components/proposals/steps/BasicInformationStep.tsx . Because there’s an
+src/components/proposals/steps/BasicInformationStep.tsx . Because there's an
 early return above (if (!customersData && customersLoading) return ...), the
-inline useMemo wasn’t called on some renders, changing the hooks order and
-triggering: “React has detected a change in the order of Hooks…” “Rendered more
-hooks than during the previous render.” Fix implemented Moved inline hook out of
+inline useMemo wasn't called on some renders, changing the hooks order and
+triggering: "React has detected a change in the order of Hooks…" "Rendered more
+hooks than during the previous render." Fix implemented Moved inline hook out of
 JSX and defined it before any conditional returns: Added const todayISODate =
 useMemo(() => new Date().toISOString().split('T')[0], []); Replaced prop with
 min={todayISODate} File: src/components/proposals/steps/BasicInformationStep.tsx
 Verified TypeScript OK: npm run type-check passed.
+
+---
+
+## 🔧 **Service Method Parameter Validation Fix (Latest)**
+
+### **Migration Goal**: Fix service method calls missing required parameters
+
+**Problem**: React hooks calling service methods without required parameters,
+causing Zod validation to fail before HTTP requests are made.
+
+**Symptoms**:
+
+- Hooks call `adminService.getRoles()` without parameters
+- Zod validation fails with "Required" error
+- HTTP requests never sent, causing silent failures
+
+**Solution**: Add required parameters to service method calls
+
+```typescript
+// ❌ BEFORE: Missing parameters
+const result = await adminService.getRoles(); // Fails Zod validation
+const result = await adminService.getPermissions(); // Fails Zod validation
+
+// ✅ AFTER: Proper parameters
+const result = await adminService.getRoles({}); // ✅ Zod validation passes
+const result = await adminService.getPermissions({}); // ✅ Zod validation passes
+```
+
+**Prevention**: Always provide required parameters to service methods, even if
+empty objects `{}`. Test service calls independently before integrating with
+hooks.
+
+**Result**: **SUCCESSFUL SERVICE PARAMETER FIX** - All service method calls now
+provide required parameters, enabling proper Zod validation and HTTP requests.
+
+---
+
+## 🔧 **Multi-Layer Data Structure Coordination Fix**
+
+### **General Problem**: Inconsistent data flow across service → hook → component layers
+
+**Symptoms**:
+
+- TypeScript compilation errors for data access
+- Components unable to access nested properties
+- Complex conditional logic for different response formats
+- Hook return type mismatches
+
+**Root Cause**: Layer misalignment in data structure handling.
+
+**Solution Framework**:
+
+1. **Service Layer Standard**:
+
+```typescript
+// ✅ Return unwrapped data consistently
+async getData(params): Promise<DataType> {
+  const response = await apiClient.get<DataType>(endpoint);
+  return response.data; // Unwrapped
+}
+```
+
+2. **Hook Layer Standard**:
+
+```typescript
+// ✅ Let TypeScript infer return type
+export function useData(params) {
+  return useQuery({ ... }); // No explicit return type
+}
+```
+
+3. **Component Layer Standard**:
+
+```typescript
+// ✅ Consistent data access pattern
+const { data } = useDataHook();
+useEffect(() => {
+  if (data?.data) {
+    setState(data.data.field); // Consistent nesting
+  }
+}, [data]);
+```
+
+4. **Schema Layer Standard**:
+
+```typescript
+// ✅ Match actual API response structure
+export const ResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    field1: z.string().optional(),
+    field2: z.number().optional(),
+    // Include ALL actual API fields
+  }),
+});
+```
+
+**Prevention**: Establish consistent data flow patterns before implementing new
+features. Use this framework for all API integrations.
+
+**Result**: **SUCCESSFUL COORDINATION FIX** - Standardized data flow eliminates
+type errors and access inconsistencies.

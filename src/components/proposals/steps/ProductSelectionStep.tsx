@@ -132,7 +132,7 @@ export function ProductSelectionStep({
           category: category || undefined,
         });
 
-        if (response.ok && response.data?.items) {
+        if (response.ok && 'data' in response && response.data?.items) {
           logDebug('Products loaded successfully for proposal wizard', {
             component: 'ProductSelectionStep',
             operation: 'fetchProducts',
@@ -142,6 +142,35 @@ export function ProductSelectionStep({
           });
           return response.data.items;
         }
+        
+        // Handle case where http client unwraps the envelope and returns data directly
+        if (response.ok && 'data' in response && response.data && typeof response.data === 'object' && 'items' in response.data) {
+          const productList = response.data as { items: Product[]; nextCursor: string | null };
+          logDebug('Products loaded successfully for proposal wizard (unwrapped)', {
+            component: 'ProductSelectionStep',
+            operation: 'fetchProducts',
+            count: productList.items.length,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
+          return productList.items;
+        }
+        
+        // Log the actual response structure for debugging
+        logError('Invalid response format from products API', {
+          component: 'ProductSelectionStep',
+          operation: 'fetchProducts',
+          responseStructure: {
+            ok: response.ok,
+            hasData: 'data' in response,
+            dataKeys: 'data' in response && response.data ? Object.keys(response.data as Record<string, unknown>) : [],
+            dataType: 'data' in response ? typeof response.data : 'no data property',
+            errorMessage: !response.ok && 'message' in response ? response.message : 'no error message',
+          },
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+        
         throw new Error('Failed to load products: Invalid response format');
       } catch (error) {
         logError('Failed to fetch products for proposal wizard', {

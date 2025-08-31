@@ -133,7 +133,9 @@ export const UnifiedDashboardStats = memo(() => {
 
   // Single source of truth for dashboard data
   const { data: dashboardData, isLoading, error } = useExecutiveDashboard('3M', false);
-  const stats = dashboardData?.metrics;
+
+  // Extract metrics from the consistent API response structure
+  const stats = dashboardData?.data?.metrics || null;
 
   // SSR-safe last updated label to avoid hydration mismatch
   const [lastUpdated, setLastUpdated] = useState<string>('');
@@ -146,13 +148,13 @@ export const UnifiedDashboardStats = memo(() => {
 
   // Track dashboard stats view
   useEffect(() => {
-    if (stats && !isLoading) {
+    if (stats && !isLoading && stats !== null) {
       analytics(
         'unified_dashboard_stats_viewed',
         {
-          totalProposals: stats.totalProposals,
-          totalRevenue: stats.totalRevenue,
-          winRate: stats.winRate,
+          totalProposals: Number(stats.totalProposals || 0),
+          totalRevenue: Number(stats.totalRevenue || 0),
+          winRate: Number(stats.winRate || 0),
           userStory: 'US-2.2',
           hypothesis: 'H9',
         },
@@ -163,9 +165,9 @@ export const UnifiedDashboardStats = memo(() => {
         component: 'UnifiedDashboardStats',
         operation: 'render',
         stats: {
-          totalProposals: stats.totalProposals,
-          totalRevenue: stats.totalRevenue,
-          winRate: stats.winRate,
+          totalProposals: Number(stats.totalProposals || 0),
+          totalRevenue: Number(stats.totalRevenue || 0),
+          winRate: Number(stats.winRate || 0),
         },
         userStory: 'US-2.2',
         hypothesis: 'H9',
@@ -193,23 +195,26 @@ export const UnifiedDashboardStats = memo(() => {
   }
 
   // Calculate trends based on available metrics
-  const trends = stats
-    ? {
-        proposals: {
-          value:
-            stats.totalProposals > 0 ? ((stats.wonDeals || 0) / stats.totalProposals) * 100 : 0,
-          isPositive: (stats.winRate || 0) > 50,
-        },
-        revenue: {
-          value: stats.quarterlyGrowth || 0,
-          isPositive: (stats.quarterlyGrowth || 0) > 0,
-        },
-        deals: {
-          value: stats.winRate || 0,
-          isPositive: (stats.winRate || 0) > 50,
-        },
-      }
-    : null;
+  const trends =
+    stats && stats !== null
+      ? {
+          proposals: {
+            value:
+              Number(stats.totalProposals || 0) > 0
+                ? (Number(stats.wonDeals || 0) / Number(stats.totalProposals || 0)) * 100
+                : 0,
+            isPositive: Number(stats.winRate || 0) > 50,
+          },
+          revenue: {
+            value: Number(stats.quarterlyGrowth || 0),
+            isPositive: Number(stats.quarterlyGrowth || 0) > 0,
+          },
+          deals: {
+            value: Number(stats.winRate || 0),
+            isPositive: Number(stats.winRate || 0) > 50,
+          },
+        }
+      : null;
 
   return (
     <div className="space-y-6">
@@ -222,7 +227,7 @@ export const UnifiedDashboardStats = memo(() => {
         {/* Total Proposals */}
         <StatCard
           title="Total Proposals"
-          value={stats?.totalProposals || 0}
+          value={Number(stats?.totalProposals || 0)}
           icon={<DocumentTextIcon className="h-6 w-6" />}
           color="blue"
           loading={isLoading}
@@ -232,7 +237,7 @@ export const UnifiedDashboardStats = memo(() => {
         {/* Win Rate */}
         <StatCard
           title="Win Rate"
-          value={`${stats?.winRate?.toFixed(1) || 0}%`}
+          value={`${Number(stats?.winRate || 0).toFixed(1)}%`}
           icon={<ChartBarIcon className="h-6 w-6" />}
           color="green"
           loading={isLoading}
@@ -242,7 +247,7 @@ export const UnifiedDashboardStats = memo(() => {
         {/* Team Size */}
         <StatCard
           title="Team Size"
-          value={stats?.teamSize || 0}
+          value={Number(stats?.teamSize || 0)}
           icon={<UsersIcon className="h-6 w-6" />}
           color="purple"
           loading={isLoading}
@@ -251,7 +256,7 @@ export const UnifiedDashboardStats = memo(() => {
         {/* Total Revenue */}
         <StatCard
           title="Total Revenue"
-          value={formatCurrency(stats?.totalRevenue || 0)}
+          value={formatCurrency(Number(stats?.totalRevenue || 0))}
           icon={<CurrencyDollarIcon className="h-6 w-6" />}
           color="orange"
           loading={isLoading}
@@ -260,12 +265,12 @@ export const UnifiedDashboardStats = memo(() => {
       </div>
 
       {/* Additional Metrics */}
-      {stats && !isLoading && (
+      {stats && stats !== null && !isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="p-6">
             <div className="text-center">
               <div className="text-3xl font-bold text-green-600">
-                {stats.winRate?.toFixed(1) || 0}%
+                {Number(stats.winRate || 0).toFixed(1)}%
               </div>
               <div className="text-sm text-gray-600 mt-1">Win Rate</div>
             </div>
@@ -274,7 +279,7 @@ export const UnifiedDashboardStats = memo(() => {
           <Card className="p-6">
             <div className="text-center">
               <div className="text-3xl font-bold text-blue-600">
-                {stats.quarterlyGrowth?.toFixed(1) || 0}%
+                {Number(stats.quarterlyGrowth || 0).toFixed(1)}%
               </div>
               <div className="text-sm text-gray-600 mt-1">Quarterly Growth</div>
             </div>
@@ -282,7 +287,9 @@ export const UnifiedDashboardStats = memo(() => {
 
           <Card className="p-6">
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600">{stats.teamSize || 0}</div>
+              <div className="text-3xl font-bold text-purple-600">
+                {Number(stats.teamSize || 0)}
+              </div>
               <div className="text-sm text-gray-600 mt-1">Team Size</div>
             </div>
           </Card>

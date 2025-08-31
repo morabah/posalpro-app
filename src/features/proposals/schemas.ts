@@ -266,7 +266,11 @@ export const WizardProposalUpdateSchema = z
     status: ProposalStatusSchema.optional(),
     priority: ProposalPrioritySchema.optional(),
     dueDate: z.union([z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).optional(),
-    value: z.number().positive().optional(),
+    // ✅ FIXED: Accept both string and number values, transform to number
+    value: z
+      .union([z.string(), z.number()])
+      .transform(val => (val !== undefined ? Number(val) : undefined))
+      .optional(),
     currency: z.string().length(3).default('USD').optional(),
     projectType: z.string().nullable().optional(),
     tags: z.array(z.string()).default([]).optional(),
