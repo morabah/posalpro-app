@@ -24,7 +24,7 @@ export class CustomerService {
   private baseUrl = '/api/customers';
   private errorHandlingService = ErrorHandlingService.getInstance();
 
-  async getCustomers(params: CustomerQuery): Promise<ApiResponse<CustomerList>> {
+  async getCustomers(params: CustomerQuery): Promise<CustomerList> {
     const validatedParams = CustomerQuerySchema.parse(params);
     const searchParams = new URLSearchParams();
 
@@ -49,7 +49,7 @@ export class CustomerService {
         count: response.items?.length || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -64,7 +64,7 @@ export class CustomerService {
     }
   }
 
-  async getCustomer(id: string): Promise<ApiResponse<Customer>> {
+  async getCustomer(id: string): Promise<Customer> {
     logDebug('Fetching customer', {
       component: 'CustomerService',
       operation: 'getCustomer',
@@ -80,7 +80,7 @@ export class CustomerService {
         customerId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -96,7 +96,7 @@ export class CustomerService {
     }
   }
 
-  async createCustomer(data: CustomerCreate): Promise<ApiResponse<Customer>> {
+  async createCustomer(data: CustomerCreate): Promise<Customer> {
     const validatedData = CustomerCreateSchema.parse(data);
 
     logDebug('Creating customer', {
@@ -115,7 +115,7 @@ export class CustomerService {
         customerName: validatedData.name,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -131,7 +131,7 @@ export class CustomerService {
     }
   }
 
-  async updateCustomer(id: string, data: CustomerUpdate): Promise<ApiResponse<Customer>> {
+  async updateCustomer(id: string, data: CustomerUpdate): Promise<Customer> {
     const validatedData = CustomerUpdateSchema.parse(data);
 
     logDebug('Updating customer', {
@@ -149,7 +149,7 @@ export class CustomerService {
         customerId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -165,7 +165,7 @@ export class CustomerService {
     }
   }
 
-  async deleteCustomer(id: string): Promise<ApiResponse<null>> {
+  async deleteCustomer(id: string): Promise<ApiResponse<void>> {
     logDebug('Deleting customer', {
       component: 'CustomerService',
       operation: 'deleteCustomer',
@@ -181,7 +181,7 @@ export class CustomerService {
         customerId: id,
       });
 
-      return { ok: true, data: null };
+      return { ok: true, data: undefined };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -193,11 +193,15 @@ export class CustomerService {
           customerId: id,
         }
       );
-      throw processed;
+      return {
+        ok: false,
+        message: processed.message,
+        code: processed.code,
+      };
     }
   }
 
-  async deleteCustomersBulk(ids: string[]): Promise<ApiResponse<{ deleted: number }>> {
+  async deleteCustomersBulk(ids: string[]): Promise<{ deleted: number }> {
     logDebug('Deleting customers in bulk', {
       component: 'CustomerService',
       operation: 'deleteCustomersBulk',
@@ -213,7 +217,7 @@ export class CustomerService {
         deletedCount: response.deleted || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -229,7 +233,7 @@ export class CustomerService {
     }
   }
 
-  async searchCustomers(query: string, limit: number = 10): Promise<ApiResponse<Customer[]>> {
+  async searchCustomers(query: string, limit: number = 10): Promise<Customer[]> {
     logDebug('Searching customers', {
       component: 'CustomerService',
       operation: 'searchCustomers',
@@ -249,7 +253,7 @@ export class CustomerService {
         resultCount: response.length || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,

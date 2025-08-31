@@ -485,7 +485,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                             proposalId: proposal.id,
                             productCount: proposal.products.length,
                             total: total,
-                            products: proposal.products.map(p => ({
+                            products: proposal.products.map((p: any) => ({
                               id: p.id,
                               name: p.name || 'Unknown Product',
                               total: p.total,
@@ -668,7 +668,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                             {(() => {
                               const hasProducts = (proposal?.products?.length || 0) > 0;
                               const calculatedTotal =
-                                proposal?.products?.reduce((sum, product) => {
+                                proposal?.products?.reduce((sum: number, product: any) => {
                                   return (
                                     sum +
                                     (product.total ||
@@ -687,7 +687,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                             {(() => {
                               const hasProducts = (proposal?.products?.length || 0) > 0;
                               const calculatedTotal =
-                                proposal?.products?.reduce((sum, product) => {
+                                proposal?.products?.reduce((sum: number, product: any) => {
                                   // Convert string totals to numbers (database stores as strings)
                                   const total =
                                     typeof product.total === 'string'

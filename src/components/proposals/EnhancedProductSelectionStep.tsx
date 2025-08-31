@@ -12,12 +12,15 @@ import { Input } from '@/components/ui/forms/Input';
 import { Select } from '@/components/ui/forms/Select';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError } from '@/lib/logger';
-import { useUnifiedProposalActions, useUnifiedProposalStep4Data } from '@/lib/store/unifiedProposalStore';
+import {
+  useUnifiedProposalActions,
+  useUnifiedProposalStep4Data,
+} from '@/lib/store/unifiedProposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
 // Import existing hooks for server state (avoiding duplicates)
-import { useProposal } from '@/hooks/useProposal';
 import { usePersistProposalWizard } from '@/features/proposals/hooks';
+import { useProposal } from '@/hooks/useProposal';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -103,8 +106,8 @@ export function EnhancedProductSelectionStep({
           sortOrder: 'asc',
         });
 
-        if (response.ok && response.data?.items) {
-          return response.data.items;
+        if (response?.items) {
+          return response.items;
         }
         throw new Error('Failed to load products: Invalid response format');
       } catch (error) {

@@ -10,12 +10,10 @@
  * - Test Cases: TC-H8-001
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { adminService } from '@/services/adminService';
-import { qk } from '../keys';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { adminService } from '@/services/adminService';
+import { useQuery } from '@tanstack/react-query';
+import { qk } from '../keys';
 import type { SystemMetrics } from '../schemas';
 
 /**
@@ -39,10 +37,6 @@ export function useAdminSystemMetrics() {
 
       const result = await adminService.getSystemMetrics();
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to fetch system metrics');
-      }
-
       analytics(
         'admin_metrics_fetch_success',
         {
@@ -50,15 +44,15 @@ export function useAdminSystemMetrics() {
           hypothesis: 'H8',
           userStory: 'US-8.1',
           metricsData: {
-            activeUsers: result.data?.activeUsers || 0,
-            totalUsers: result.data?.totalUsers || 0,
-            responseTime: result.data?.responseTime || 0,
+            activeUsers: result.activeUsers || 0,
+            totalUsers: result.totalUsers || 0,
+            responseTime: result.responseTime || 0,
           },
         },
         'low'
       );
 
-      return result.data;
+      return result;
     },
     staleTime: 30000, // 30 seconds - system metrics change frequently
     gcTime: 120000, // 2 minutes

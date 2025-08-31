@@ -42,8 +42,6 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-
-
 // ✅ TYPES
 enum CustomerTier {
   BRONZE = 'bronze',
@@ -172,10 +170,10 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
 
   // Transform the response to match the expected Customer interface
   const customer = useMemo(() => {
-    if (!customerResponse?.ok || !customerResponse.data) {
+    if (!customerResponse) {
       return null;
     }
-    return mapApiToCustomer(customerResponse.data);
+    return mapApiToCustomer(customerResponse);
   }, [customerResponse, mapApiToCustomer]);
 
   // ✅ Initialize edit data when entering edit mode
@@ -675,14 +673,20 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Health Score</span>
-                    <span className={`text-lg font-bold ${getHealthColor(customer?.healthScore || 0)}`}>
+                    <span
+                      className={`text-lg font-bold ${getHealthColor(customer?.healthScore || 0)}`}
+                    >
                       {customer?.healthScore || 0}%
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
-                        (customer?.healthScore || 0) >= 80 ? 'bg-green-500' : (customer?.healthScore || 0) >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                        (customer?.healthScore || 0) >= 80
+                          ? 'bg-green-500'
+                          : (customer?.healthScore || 0) >= 60
+                            ? 'bg-yellow-500'
+                            : 'bg-red-500'
                       }`}
                       style={{ width: `${customer?.healthScore || 0}%` }}
                     ></div>

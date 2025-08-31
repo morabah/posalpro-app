@@ -13,7 +13,7 @@
 import { ApiResponse } from '@/lib/api/response';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas and types
 import {
@@ -70,7 +70,7 @@ export type {
   UserCreate,
   UserUpdate,
   UsersListResponse,
-  UsersQuery
+  UsersQuery,
 };
 
 /**
@@ -88,7 +88,7 @@ export class AdminService {
   /**
    * Get users list with pagination and filtering
    */
-  async getUsers(params: UsersQuery): Promise<ApiResponse<UsersListResponse>> {
+  async getUsers(params: UsersQuery): Promise<UsersListResponse> {
     const validatedParams = UsersQuerySchema.parse(params);
     const searchParams = new URLSearchParams();
 
@@ -105,9 +105,10 @@ export class AdminService {
     });
 
     try {
-      const response = await http.get<{ users: Array<Record<string, unknown>>; pagination: { page: number; limit: number; total: number; totalPages: number } }>(
-        `${this.baseUrl}/users?${searchParams.toString()}`
-      );
+      const response = await http.get<{
+        users: Array<Record<string, unknown>>;
+        pagination: { page: number; limit: number; total: number; totalPages: number };
+      }>(`${this.baseUrl}/users?${searchParams.toString()}`);
 
       // Transform API response to match expected schema
       const transformedResponse: UsersListResponse = {
@@ -117,10 +118,12 @@ export class AdminService {
           email: String(item.email || ''),
           role: String(item.role || 'User'),
           department: String(item.department || ''),
-          status: (item.status as 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'SUSPENDED' | 'DELETED') || 'ACTIVE',
+          status:
+            (item.status as 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'SUSPENDED' | 'DELETED') ||
+            'ACTIVE',
           lastLogin: item.lastLogin ? new Date(item.lastLogin as string) : null,
           createdAt: new Date(item.createdAt as string),
-          permissions: Array.isArray(item.permissions) ? item.permissions as string[] : [],
+          permissions: Array.isArray(item.permissions) ? (item.permissions as string[]) : [],
         })),
         pagination: response.pagination,
         timestamp: new Date().toISOString(),
@@ -133,7 +136,7 @@ export class AdminService {
         total: transformedResponse.pagination.total,
       });
 
-      return { ok: true, data: transformedResponse };
+      return transformedResponse;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -151,7 +154,7 @@ export class AdminService {
   /**
    * Get single user by ID
    */
-  async getUser(id: string): Promise<ApiResponse<User>> {
+  async getUser(id: string): Promise<User> {
     logDebug('Fetching admin user', {
       component: 'AdminService',
       operation: 'getUser',
@@ -167,7 +170,7 @@ export class AdminService {
         userId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -186,7 +189,7 @@ export class AdminService {
   /**
    * Create new user
    */
-  async createUser(data: UserCreate): Promise<ApiResponse<User>> {
+  async createUser(data: UserCreate): Promise<User> {
     const validatedData = UserCreateSchema.parse(data);
 
     logDebug('Creating admin user', {
@@ -204,7 +207,7 @@ export class AdminService {
         userId: response?.id || 'unknown',
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -222,7 +225,7 @@ export class AdminService {
   /**
    * Update existing user
    */
-  async updateUser(id: string, data: UserUpdate): Promise<ApiResponse<User>> {
+  async updateUser(id: string, data: UserUpdate): Promise<User> {
     const validatedData = UserUpdateSchema.parse(data);
 
     logDebug('Updating admin user', {
@@ -242,7 +245,7 @@ export class AdminService {
         userId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -261,7 +264,7 @@ export class AdminService {
   /**
    * Delete user
    */
-  async deleteUser(id: string): Promise<ApiResponse<void>> {
+  async deleteUser(id: string): Promise<void> {
     logDebug('Deleting admin user', {
       component: 'AdminService',
       operation: 'deleteUser',
@@ -270,7 +273,7 @@ export class AdminService {
 
     try {
       await http.delete(`/api/admin/users/${id}`);
-      return { ok: true, data: undefined };
+      return;
     } catch (error) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -293,7 +296,7 @@ export class AdminService {
   /**
    * Get roles list with pagination and filtering
    */
-  async getRoles(params: RolesQuery): Promise<ApiResponse<RolesListResponse>> {
+  async getRoles(params: RolesQuery): Promise<RolesListResponse> {
     const validatedParams = RolesQuerySchema.parse(params);
     const searchParams = new URLSearchParams();
 
@@ -336,7 +339,7 @@ export class AdminService {
         count: response?.roles?.length || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       logError('Failed to fetch admin roles', {
         component: 'AdminService',
@@ -347,19 +350,15 @@ export class AdminService {
         status: error instanceof Error && 'status' in error ? (error as any).status : undefined,
       });
 
-      // Return error response instead of throwing to match hook expectations
-      return {
-        ok: false,
-        code: 'ADMIN_ROLES_FETCH_ERROR',
-        message: error instanceof Error ? error.message : 'Failed to fetch admin roles'
-      };
+      // Throw error to match service layer pattern
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch admin roles');
     }
   }
 
   /**
    * Get single role by ID
    */
-  async getRole(id: string): Promise<ApiResponse<Role>> {
+  async getRole(id: string): Promise<Role> {
     logDebug('Fetching admin role', {
       component: 'AdminService',
       operation: 'getRole',
@@ -368,7 +367,7 @@ export class AdminService {
 
     try {
       const response = await http.get(`/api/admin/roles/${id}`);
-      return { ok: true, data: response as Role };
+      return response as Role;
     } catch (error) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -387,7 +386,7 @@ export class AdminService {
   /**
    * Create new role
    */
-  async createRole(data: RoleCreate): Promise<ApiResponse<Role>> {
+  async createRole(data: RoleCreate): Promise<Role> {
     const validatedData = RoleCreateSchema.parse(data);
 
     logDebug('Creating admin role', {
@@ -405,7 +404,7 @@ export class AdminService {
         roleId: response?.id || 'unknown',
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -423,7 +422,7 @@ export class AdminService {
   /**
    * Update existing role
    */
-  async updateRole(id: string, data: RoleUpdate): Promise<ApiResponse<Role>> {
+  async updateRole(id: string, data: RoleUpdate): Promise<Role> {
     const validatedData = RoleUpdateSchema.parse(data);
 
     logDebug('Updating admin role', {
@@ -435,7 +434,10 @@ export class AdminService {
     });
 
     try {
-      const response = await http.put<{ role: Role; message: string }>(`${this.baseUrl}/roles/${id}`, validatedData);
+      const response = await http.put<{ role: Role; message: string }>(
+        `${this.baseUrl}/roles/${id}`,
+        validatedData
+      );
 
       logInfo('Admin role updated successfully', {
         component: 'AdminService',
@@ -443,7 +445,7 @@ export class AdminService {
         roleId: id,
       });
 
-      return { ok: true, data: response.role };
+      return response.role;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -462,7 +464,7 @@ export class AdminService {
   /**
    * Delete role
    */
-  async deleteRole(id: string): Promise<ApiResponse<void>> {
+  async deleteRole(id: string): Promise<void> {
     logDebug('Deleting admin role', {
       component: 'AdminService',
       operation: 'deleteRole',
@@ -478,7 +480,7 @@ export class AdminService {
         roleId: id,
       });
 
-      return { ok: true, data: undefined };
+      return;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -501,7 +503,7 @@ export class AdminService {
   /**
    * Get permissions list with pagination and filtering
    */
-  async getPermissions(params: PermissionsQuery): Promise<ApiResponse<PermissionsListResponse>> {
+  async getPermissions(params: PermissionsQuery): Promise<PermissionsListResponse> {
     const validatedParams = PermissionsQuerySchema.parse(params);
     const searchParams = new URLSearchParams();
 
@@ -528,7 +530,7 @@ export class AdminService {
         count: response?.permissions?.length || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -546,7 +548,7 @@ export class AdminService {
   /**
    * Create new permission
    */
-  async createPermission(data: PermissionCreate): Promise<ApiResponse<Permission>> {
+  async createPermission(data: PermissionCreate): Promise<Permission> {
     const validatedData = PermissionCreateSchema.parse(data);
 
     logDebug('Creating admin permission', {
@@ -564,7 +566,7 @@ export class AdminService {
         permissionId: response?.id || 'unknown',
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -582,7 +584,7 @@ export class AdminService {
   /**
    * Update existing permission
    */
-  async updatePermission(id: string, data: PermissionUpdate): Promise<ApiResponse<Permission>> {
+  async updatePermission(id: string, data: PermissionUpdate): Promise<Permission> {
     const validatedData = PermissionUpdateSchema.parse(data);
 
     logDebug('Updating admin permission', {
@@ -605,7 +607,7 @@ export class AdminService {
         permissionId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -624,7 +626,7 @@ export class AdminService {
   /**
    * Delete permission
    */
-  async deletePermission(id: string): Promise<ApiResponse<void>> {
+  async deletePermission(id: string): Promise<void> {
     logDebug('Deleting admin permission', {
       component: 'AdminService',
       operation: 'deletePermission',
@@ -640,7 +642,7 @@ export class AdminService {
         permissionId: id,
       });
 
-      return { ok: true, data: undefined };
+      return;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -663,7 +665,7 @@ export class AdminService {
   /**
    * Get system metrics
    */
-  async getSystemMetrics(): Promise<ApiResponse<SystemMetrics>> {
+  async getSystemMetrics(): Promise<SystemMetrics> {
     logDebug('Fetching system metrics', {
       component: 'AdminService',
       operation: 'getSystemMetrics',
@@ -677,7 +679,7 @@ export class AdminService {
         operation: 'getSystemMetrics',
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -699,7 +701,7 @@ export class AdminService {
   /**
    * Get audit logs with pagination and filtering
    */
-  async getAuditLogs(params: AuditLogsQuery): Promise<ApiResponse<AuditLogsResponse>> {
+  async getAuditLogs(params: AuditLogsQuery): Promise<AuditLogsResponse> {
     const validatedParams = AuditLogsQuerySchema.parse(params);
     const searchParams = new URLSearchParams();
 
@@ -726,7 +728,7 @@ export class AdminService {
         count: response?.logs?.length || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -781,7 +783,11 @@ export class AdminService {
           operation: 'getDatabaseStatus',
         }
       );
-      throw processed;
+      return {
+        ok: false,
+        message: processed.message,
+        code: processed.code,
+      };
     }
   }
 
@@ -825,7 +831,7 @@ export class AdminService {
   /**
    * Assign role to user
    */
-  async assignRoleToUser(userId: string, roleName: string): Promise<ApiResponse<void>> {
+  async assignRoleToUser(userId: string, roleName: string): Promise<void> {
     logDebug('Assigning role to user', {
       component: 'AdminService',
       operation: 'assignRoleToUser',
@@ -843,7 +849,7 @@ export class AdminService {
         roleName,
       });
 
-      return { ok: true, data: undefined };
+      return;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -863,7 +869,7 @@ export class AdminService {
   /**
    * Remove role from user
    */
-  async removeRoleFromUser(userId: string, roleName: string): Promise<ApiResponse<void>> {
+  async removeRoleFromUser(userId: string, roleName: string): Promise<void> {
     logDebug('Removing role from user', {
       component: 'AdminService',
       operation: 'removeRoleFromUser',
@@ -872,10 +878,8 @@ export class AdminService {
     });
 
     try {
-      await http.delete(
-        `/api/admin/users/${userId}/roles/${roleName}`
-      );
-      return { ok: true, data: undefined };
+      await http.delete(`/api/admin/users/${userId}/roles/${roleName}`);
+      return;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,

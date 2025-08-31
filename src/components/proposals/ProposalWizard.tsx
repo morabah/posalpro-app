@@ -12,26 +12,21 @@
  * ✅ ALIGNS: API route schemas for consistent data transformation
  */
 
+import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useToast } from '@/components/feedback/Toast/ToastProvider';
-import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useProposal, useUpdateProposal } from '@/features/proposals/hooks';
-import { logDebug, logError } from '@/lib/logger';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { http } from '@/lib/http';
-import { useQueryClient } from '@tanstack/react-query';
-import { buildWizardPayloadFromStore, buildCreateBodyFromStore, saveDraftToLocalStorage } from './wizard/persistence';
-import { WizardHeader } from './wizard/WizardHeader';
-import { WizardSidebar } from './wizard/WizardSidebar';
-import { useRouter } from 'next/navigation';
+import { logDebug, logError } from '@/lib/logger';
 import {
   useProposalCanGoBack,
   useProposalCanProceed,
   useProposalCurrentStep,
-  useProposalPlanType,
   useProposalInitializeFromData,
   useProposalIsSubmitting,
   useProposalNextStep,
+  useProposalPlanType,
   useProposalPreviousStep,
   useProposalResetWizard,
   useProposalSetCurrentStep,
@@ -45,6 +40,15 @@ import {
   type ProposalSectionData,
   type ProposalTeamData,
 } from '@/lib/store/proposalStore';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import {
+  buildCreateBodyFromStore,
+  buildWizardPayloadFromStore,
+  saveDraftToLocalStorage,
+} from './wizard/persistence';
+import { WizardHeader } from './wizard/WizardHeader';
+import { WizardSidebar } from './wizard/WizardSidebar';
 // Icons now handled inside extracted components
 import { useCallback, useEffect, useMemo } from 'react';
 
@@ -193,7 +197,10 @@ export function ProposalWizard({
     return [1, 2, 3, 4, 5, 6];
   }, [planType]);
 
-  const visibleSteps = useMemo(() => STEP_META.filter(s => visibleStepIds.includes(s.id)), [visibleStepIds]);
+  const visibleSteps = useMemo(
+    () => STEP_META.filter(s => visibleStepIds.includes(s.id)),
+    [visibleStepIds]
+  );
 
   // Current step component
   const CurrentStepComponent = useMemo(() => {
@@ -209,10 +216,9 @@ export function ProposalWizard({
     try {
       const payload = buildWizardPayload();
       await http.put(`/api/proposals/${proposalId}`, payload);
-      const { planOk, countOk, totalOk } = await (await import('./wizard/persistence')).verifyPersistedProposal(
-        proposalId,
-        payload
-      );
+      const { planOk, countOk, totalOk } = await (
+        await import('./wizard/persistence')
+      ).verifyPersistedProposal(proposalId, payload);
 
       // Invalidate caches
       try {
@@ -244,10 +250,9 @@ export function ProposalWizard({
         const payload = buildWizardPayload();
         await http.put(`/api/proposals/${proposalId}`, payload);
 
-        const { planOk, countOk, totalOk } = await (await import('./wizard/persistence')).verifyPersistedProposal(
-          proposalId,
-          payload
-        );
+        const { planOk, countOk, totalOk } = await (
+          await import('./wizard/persistence')
+        ).verifyPersistedProposal(proposalId, payload);
 
         // Invalidate proposal caches to ensure detail page shows fresh data
         try {
@@ -285,20 +290,24 @@ export function ProposalWizard({
       if (hasBasic && hasTeam) {
         const proposalBody = buildCreateBodyFromStore();
         const { proposalService } = await import('@/services/proposalService');
-        const response = await proposalService.createProposal(proposalBody as any);
-        if (response.ok) {
+
+        try {
+          const response = await proposalService.createProposal(proposalBody as any);
           toast.success('Draft saved');
           router.push('/proposals');
           return;
+        } catch (error) {
+          toast.warning('Server save failed, saving draft locally.');
+          saveDraftToLocalStorage();
+          router.push('/proposals');
+          return;
         }
-        toast.warning('Server save failed, saving draft locally.');
-        saveDraftToLocalStorage();
-        router.push('/proposals');
-        return;
       }
 
       const ok = saveDraftToLocalStorage();
-      toast[ok ? 'success' : 'warning'](ok ? 'Draft saved locally' : 'Could not save draft locally');
+      toast[ok ? 'success' : 'warning'](
+        ok ? 'Draft saved locally' : 'Could not save draft locally'
+      );
       router.push('/proposals');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -386,7 +395,12 @@ export function ProposalWizard({
   const handleStepClick = useCallback(
     (targetStep: number) => {
       // Allow jumping to any visible step
-      const allowedSteps = planType === 'BASIC' ? [1, 4, 6] : planType === 'PROFESSIONAL' ? [1, 2, 4, 6] : [1, 2, 3, 4, 5, 6];
+      const allowedSteps =
+        planType === 'BASIC'
+          ? [1, 4, 6]
+          : planType === 'PROFESSIONAL'
+            ? [1, 2, 4, 6]
+            : [1, 2, 3, 4, 5, 6];
       if (!allowedSteps.includes(targetStep)) return;
 
       analytics.trackOptimized('wizard_step_navigation', {

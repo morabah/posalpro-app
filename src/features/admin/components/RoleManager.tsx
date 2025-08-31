@@ -13,22 +13,17 @@
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import {
-  useAdminRoles,
   useAdminPermissions,
-  useCreateRole,
-  useUpdateRole,
-  useDeleteRole,
+  useAdminRoles,
   useCreatePermission,
-  useUpdatePermission,
+  useCreateRole,
   useDeletePermission,
+  useDeleteRole,
+  useUpdatePermission,
+  useUpdateRole,
 } from '@/features/admin/hooks';
-import { useShallow } from 'zustand/react/shallow';
 
 // Zustand store selectors
-import {
-  useRoleFilters,
-  useRoleActions,
-} from '@/lib/store/adminStore';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -124,7 +119,11 @@ export default function RoleManager({
   const { deleteRole, isDeleting: isDeletingRole, error: deleteRoleError } = useDeleteRole();
 
   // ✅ FIXED: Remove unused variables
-  const { data: permissions, isLoading: permissionsLoading, error: permissionsError } = useAdminPermissions();
+  const {
+    data: permissions,
+    isLoading: permissionsLoading,
+    error: permissionsError,
+  } = useAdminPermissions();
   const { createPermission, isCreating: isCreatingPermission } = useCreatePermission();
   const { updatePermission, isUpdating: isUpdatingPermission } = useUpdatePermission();
   const { deletePermission, isDeleting: isDeletingPermission } = useDeletePermission();
@@ -278,7 +277,9 @@ export default function RoleManager({
   if (rolesError) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600">Error loading roles: {rolesError?.message || 'Unknown error'}</p>
+        <p className="text-red-600">
+          Error loading roles: {rolesError?.message || 'Unknown error'}
+        </p>
         {/* The original code had a refetchRoles call here, but it's not defined in the new_code.
             Assuming it's removed or handled elsewhere if needed. */}
       </div>
@@ -503,7 +504,7 @@ export default function RoleManager({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {roles.map(role => (
+              {roles.map((role: any) => (
                 <tr key={role.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -558,7 +559,7 @@ export default function RoleManager({
                       {role.permissionsList.length} permissions
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1 max-w-xs">
-                      {role.permissionsList.slice(0, 3).map((permission, index) => (
+                      {role.permissionsList.slice(0, 3).map((permission: any, index: number) => (
                         <span
                           key={index}
                           className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"

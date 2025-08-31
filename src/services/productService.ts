@@ -1,5 +1,4 @@
 // Product Service - New Architecture
-import { ApiResponse } from '@/lib/api/response';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
 import { logDebug, logInfo } from '@/lib/logger';
@@ -54,7 +53,7 @@ export class ProductService {
   /**
    * Get list of products with cursor pagination
    */
-  async getProducts(params: ProductQuery): Promise<ApiResponse<ProductList>> {
+  async getProducts(params: ProductQuery): Promise<ProductList> {
     const validatedParams = ProductQuerySchema.parse(params);
     const searchParams = new URLSearchParams();
 
@@ -79,7 +78,7 @@ export class ProductService {
         count: response?.items?.length || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -97,9 +96,9 @@ export class ProductService {
   /**
    * Get product categories (simplified list)
    */
-  async getCategories(options: { includeStats?: boolean; activeOnly?: boolean } = {}): Promise<
-    ApiResponse<{ categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }> }>
-  > {
+  async getCategories(options: { includeStats?: boolean; activeOnly?: boolean } = {}): Promise<{
+    categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
+  }> {
     const includeStats = options.includeStats === true;
     const activeOnly = options.activeOnly !== false; // default true
 
@@ -114,15 +113,15 @@ export class ProductService {
       const params = new URLSearchParams();
       if (includeStats) params.set('includeStats', 'true');
       if (!activeOnly) params.set('activeOnly', 'false');
-      const response = await http.get<{ categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }> }>(
-        `${this.baseUrl}/categories?${params.toString()}`
-      );
+      const response = await http.get<{
+        categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
+      }>(`${this.baseUrl}/categories?${params.toString()}`);
       logInfo('Product categories fetched successfully', {
         component: 'ProductService',
         operation: 'getCategories',
         count: response?.categories?.length || 0,
       });
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -140,7 +139,7 @@ export class ProductService {
   /**
    * Get single product by ID
    */
-  async getProduct(id: string): Promise<ApiResponse<Product>> {
+  async getProduct(id: string): Promise<Product> {
     logDebug('Fetching product', {
       component: 'ProductService',
       operation: 'getProduct',
@@ -156,7 +155,7 @@ export class ProductService {
         productId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -175,7 +174,7 @@ export class ProductService {
   /**
    * Get product with relationships
    */
-  async getProductWithRelationships(id: string): Promise<ApiResponse<ProductWithRelationships>> {
+  async getProductWithRelationships(id: string): Promise<ProductWithRelationships> {
     logDebug('Fetching product with relationships', {
       component: 'ProductService',
       operation: 'getProductWithRelationships',
@@ -193,7 +192,7 @@ export class ProductService {
         productId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -212,7 +211,7 @@ export class ProductService {
   /**
    * Create new product
    */
-  async createProduct(data: ProductCreate): Promise<ApiResponse<Product>> {
+  async createProduct(data: ProductCreate): Promise<Product> {
     const validatedData = ProductCreateSchema.parse(data);
 
     logDebug('Creating product', {
@@ -230,7 +229,7 @@ export class ProductService {
         productId: response?.id || 'unknown',
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -248,7 +247,7 @@ export class ProductService {
   /**
    * Update existing product
    */
-  async updateProduct(id: string, data: ProductUpdate): Promise<ApiResponse<Product>> {
+  async updateProduct(id: string, data: ProductUpdate): Promise<Product> {
     const validatedData = ProductUpdateSchema.parse(data);
 
     logDebug('Updating product', {
@@ -268,7 +267,7 @@ export class ProductService {
         productId: id,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -287,7 +286,7 @@ export class ProductService {
   /**
    * Delete product
    */
-  async deleteProduct(id: string): Promise<ApiResponse<void>> {
+  async deleteProduct(id: string): Promise<void> {
     logDebug('Deleting product', {
       component: 'ProductService',
       operation: 'deleteProduct',
@@ -303,7 +302,7 @@ export class ProductService {
         productId: id,
       });
 
-      return { ok: true, data: undefined };
+      return;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -322,7 +321,7 @@ export class ProductService {
   /**
    * Bulk delete products
    */
-  async deleteProductsBulk(ids: string[]): Promise<ApiResponse<{ deleted: number }>> {
+  async deleteProductsBulk(ids: string[]): Promise<{ deleted: number }> {
     const validatedData = BulkDeleteSchema.parse({ ids });
 
     logDebug('Bulk deleting products', {
@@ -343,7 +342,7 @@ export class ProductService {
         deletedCount: response?.deleted || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -361,7 +360,7 @@ export class ProductService {
   /**
    * Search products
    */
-  async searchProducts(query: string, limit: number = 10): Promise<ApiResponse<Product[]>> {
+  async searchProducts(query: string, limit: number = 10): Promise<Product[]> {
     logDebug('Searching products', {
       component: 'ProductService',
       operation: 'searchProducts',
@@ -381,7 +380,7 @@ export class ProductService {
         resultCount: response?.length || 0,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -403,7 +402,7 @@ export class ProductService {
   async createRelationship(
     sourceProductId: string,
     data: ProductRelationshipCreate
-  ): Promise<ApiResponse<ProductRelationship>> {
+  ): Promise<ProductRelationship> {
     const validatedData = ProductRelationshipCreateSchema.parse(data);
 
     logDebug('Creating product relationship', {
@@ -426,7 +425,7 @@ export class ProductService {
         targetProductId: validatedData.targetProductId,
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -445,10 +444,7 @@ export class ProductService {
   /**
    * Delete product relationship
    */
-  async deleteRelationship(
-    sourceProductId: string,
-    relationshipId: string
-  ): Promise<ApiResponse<void>> {
+  async deleteRelationship(sourceProductId: string, relationshipId: string): Promise<void> {
     logDebug('Deleting product relationship', {
       component: 'ProductService',
       operation: 'deleteRelationship',
@@ -468,7 +464,7 @@ export class ProductService {
         relationshipId,
       });
 
-      return { ok: true, data: undefined };
+      return;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -488,15 +484,13 @@ export class ProductService {
   /**
    * Get product statistics
    */
-  async getProductStats(): Promise<
-    ApiResponse<{
-      total: number;
-      active: number;
-      inactive: number;
-      draft: number;
-      categories: Record<string, number>;
-    }>
-  > {
+  async getProductStats(): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+    draft: number;
+    categories: Record<string, number>;
+  }> {
     logDebug('Fetching product statistics', {
       component: 'ProductService',
       operation: 'getProductStats',
@@ -516,7 +510,7 @@ export class ProductService {
         operation: 'getProductStats',
       });
 
-      return { ok: true, data: response };
+      return response;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,

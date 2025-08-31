@@ -7,9 +7,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 // Feature-based imports
-import { adminService } from '@/services/adminService';
 import { qk } from '@/features/admin/keys';
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { logDebug, logInfo } from '@/lib/logger';
+import { adminService } from '@/services/adminService';
 
 // Types
 export interface Role {
@@ -56,37 +56,15 @@ export function useAdminRoles() {
 
       const result = await adminService.getRoles({ page: '1', limit: '50' });
 
-      logDebug('Received result from adminService', {
-        component: 'useAdminRoles',
-        operation: 'fetch',
-        ok: result.ok,
-      });
-
-      if (!result.ok) {
-        logError('Admin service returned error', {
-          component: 'useAdminRoles',
-          operation: 'fetch',
-          message: result.message,
-        });
-        throw new Error(result.message || 'Failed to fetch roles');
-      }
-
-      // Ensure we have a valid response structure
-      if (!result.data || typeof result.data !== 'object') {
-        logError('Invalid response format from server', {
-          component: 'useAdminRoles',
-          operation: 'fetch',
-        });
-        throw new Error('Invalid response format from server');
-      }
-
       logInfo('Admin roles fetched successfully', {
         component: 'useAdminRoles',
         operation: 'fetch',
-        count: result.data.roles?.length || 0,
+        count: result.roles?.length || 0,
+        total: result.pagination?.total || 0,
+        page: result.pagination?.page || 1,
       });
 
-      return result.data.roles || [];
+      return result.roles || [];
     },
     staleTime: 30000,
     gcTime: 120000,
@@ -116,16 +94,12 @@ export function useCreateRole() {
 
       const result = await adminService.createRole(data);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to create role');
-      }
-
       logInfo('Admin role created successfully', {
         component: 'useCreateRole',
         operation: 'create',
       });
 
-      return result.data;
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.admin.roles.all });
@@ -154,16 +128,12 @@ export function useUpdateRole() {
 
       const result = await adminService.updateRole(data.id, data);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to update role');
-      }
-
       logInfo('Admin role updated successfully', {
         component: 'useUpdateRole',
         operation: 'update',
       });
 
-      return result.data;
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.admin.roles.all });
@@ -192,16 +162,12 @@ export function useDeleteRole() {
 
       const result = await adminService.deleteRole(roleId);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to delete role');
-      }
-
       logInfo('Admin role deleted successfully', {
         component: 'useDeleteRole',
         operation: 'delete',
       });
 
-      return result.data;
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.admin.roles.all });

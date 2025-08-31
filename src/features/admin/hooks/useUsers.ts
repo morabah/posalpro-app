@@ -10,14 +10,13 @@
  * - Test Cases: TC-H8-001
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
-import { adminService } from '@/services/adminService';
-import { qk, adminQueryKeys } from '../keys';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import type { UsersQuery, UserCreate, UserUpdate, UsersListResponse, User } from '../schemas';
+import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { adminService } from '@/services/adminService';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { adminQueryKeys, qk } from '../keys';
+import type { User, UserCreate, UserUpdate, UsersListResponse, UsersQuery } from '../schemas';
 
 /**
  * Hook for fetching admin users with pagination and filtering
@@ -43,33 +42,19 @@ export function useAdminUsers(params: UsersQuery) {
 
       const result = await adminService.getUsers(params);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to fetch users');
-      }
-
-      // Debug logging to understand the response structure
-      console.log('🔍 useAdminUsers - API result:', {
-        ok: result.ok,
-        dataType: typeof result.data,
-        dataKeys: result.data ? Object.keys(result.data) : null,
-        hasUsers: result.data && 'users' in result.data,
-        usersCount: result.data?.users?.length || 0,
-        dataPreview: JSON.stringify(result.data).substring(0, 200)
-      });
-
       analytics(
         'admin_users_fetch_success',
         {
           component: 'useAdminUsers',
           hypothesis: 'H8',
           userStory: 'US-8.1',
-          count: result.data?.users?.length || 0,
-          page: result.data?.pagination?.page || 1,
+          count: result.users?.length || 0,
+          page: result.pagination?.page || 1,
         },
         'low'
       );
 
-      return result.data;
+      return result;
     },
     staleTime: 30000, // 30 seconds
     gcTime: 120000, // 2 minutes
@@ -100,10 +85,6 @@ export function useAdminUser(id: string) {
 
       const result = await adminService.getUser(id);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to fetch user');
-      }
-
       analytics(
         'admin_user_detail_fetch_success',
         {
@@ -115,7 +96,7 @@ export function useAdminUser(id: string) {
         'low'
       );
 
-      return result.data;
+      return result;
     },
     staleTime: 30000,
     gcTime: 120000,
@@ -146,13 +127,9 @@ export function useCreateAdminUser() {
 
       const result = await adminService.createUser(data);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to create user');
-      }
-
-      return result.data;
+      return result;
     },
-    onSuccess: (newUser) => {
+    onSuccess: newUser => {
       analytics(
         'admin_user_create_success',
         {
@@ -218,11 +195,7 @@ export function useUpdateAdminUser() {
 
       const result = await adminService.updateUser(id, data);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to update user');
-      }
-
-      return { id, data: result.data };
+      return { id, data: result };
     },
     onSuccess: ({ id, data }) => {
       analytics(
@@ -297,7 +270,7 @@ export function useDeleteAdminUser() {
       await adminService.deleteUser(id);
       return id;
     },
-    onSuccess: (id) => {
+    onSuccess: id => {
       analytics(
         'admin_user_delete_success',
         {

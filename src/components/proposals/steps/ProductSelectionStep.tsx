@@ -9,14 +9,13 @@
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useProposalSetStepData } from '@/lib/store/proposalStore';
+import { logDebug, logError } from '@/lib/logger';
+import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
-import { logDebug, logError } from '@/lib/logger';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type ProposalProductData } from '@/lib/store/proposalStore';
-import { Tooltip } from '@/components/ui/Tooltip';
 
 interface ProductSelectionStepProps {
   data?: ProposalProductData;
@@ -37,7 +36,7 @@ export function ProductSelectionStep({
   // Local state for form data
   const [selectedProducts, setSelectedProducts] = useState<ProposalProductData['products']>(() => {
     const initialProducts = data?.products || [];
-    
+
     // ✅ ADDED: Debug logging to track initial product data
     logDebug('ProductSelectionStep: Initializing with existing data', {
       component: 'ProductSelectionStep',
@@ -55,7 +54,7 @@ export function ProductSelectionStep({
       userStory: 'US-3.1',
       hypothesis: 'H4',
     });
-    
+
     return initialProducts;
   });
 
@@ -72,12 +71,19 @@ export function ProductSelectionStep({
       if (typeof window === 'undefined') return;
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const saved = JSON.parse(raw) as { search?: string; sortBy?: typeof sortBy; sortOrder?: typeof sortOrder; category?: string; showSelectedOnly?: boolean };
+        const saved = JSON.parse(raw) as {
+          search?: string;
+          sortBy?: typeof sortBy;
+          sortOrder?: typeof sortOrder;
+          category?: string;
+          showSelectedOnly?: boolean;
+        };
         if (saved.search) setSearch(saved.search);
         if (saved.sortBy) setSortBy(saved.sortBy);
         if (saved.sortOrder) setSortOrder(saved.sortOrder);
         if (typeof saved.category === 'string') setCategory(saved.category);
-        if (typeof saved.showSelectedOnly === 'boolean') setShowSelectedOnly(saved.showSelectedOnly);
+        if (typeof saved.showSelectedOnly === 'boolean')
+          setShowSelectedOnly(saved.showSelectedOnly);
       }
     } catch {}
   }, []);
@@ -109,7 +115,11 @@ export function ProductSelectionStep({
     isLoading: productsLoading,
     error: productsError,
   } = useQuery<Product[]>({
-    queryKey: ['products', 'proposal-wizard', { search: debouncedSearch, sortBy, sortOrder, category }],
+    queryKey: [
+      'products',
+      'proposal-wizard',
+      { search: debouncedSearch, sortBy, sortOrder, category },
+    ],
     queryFn: async () => {
       logDebug('Fetching products for proposal wizard', {
         component: 'ProductSelectionStep',
@@ -121,7 +131,7 @@ export function ProductSelectionStep({
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
-      
+
       try {
         const response = await productService.getProducts({
           search: debouncedSearch,
@@ -132,45 +142,41 @@ export function ProductSelectionStep({
           category: category || undefined,
         });
 
-        if (response.ok && 'data' in response && response.data?.items) {
+        if (response?.items) {
           logDebug('Products loaded successfully for proposal wizard', {
             component: 'ProductSelectionStep',
             operation: 'fetchProducts',
-            count: response.data.items.length,
+            count: response.items.length,
             userStory: 'US-3.1',
             hypothesis: 'H4',
           });
-          return response.data.items;
+          return response.items;
         }
-        
-        // Handle case where http client unwraps the envelope and returns data directly
-        if (response.ok && 'data' in response && response.data && typeof response.data === 'object' && 'items' in response.data) {
-          const productList = response.data as { items: Product[]; nextCursor: string | null };
-          logDebug('Products loaded successfully for proposal wizard (unwrapped)', {
-            component: 'ProductSelectionStep',
-            operation: 'fetchProducts',
-            count: productList.items.length,
-            userStory: 'US-3.1',
-            hypothesis: 'H4',
-          });
-          return productList.items;
-        }
-        
+
+        // This should not happen with the updated service, but keeping as fallback
+        logError('Unexpected response format from product service', {
+          component: 'ProductSelectionStep',
+          operation: 'fetchProducts',
+          response,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+        return [];
+
         // Log the actual response structure for debugging
         logError('Invalid response format from products API', {
           component: 'ProductSelectionStep',
           operation: 'fetchProducts',
           responseStructure: {
-            ok: response.ok,
-            hasData: 'data' in response,
-            dataKeys: 'data' in response && response.data ? Object.keys(response.data as Record<string, unknown>) : [],
-            dataType: 'data' in response ? typeof response.data : 'no data property',
-            errorMessage: !response.ok && 'message' in response ? response.message : 'no error message',
+            hasItems: 'items' in response,
+            itemCount: 'items' in response ? response.items?.length : 0,
+            responseType: typeof response,
+            responseKeys: Object.keys(response as Record<string, unknown>),
           },
           userStory: 'US-3.1',
           hypothesis: 'H4',
         });
-        
+
         throw new Error('Failed to load products: Invalid response format');
       } catch (error) {
         logError('Failed to fetch products for proposal wizard', {
@@ -190,22 +196,33 @@ export function ProductSelectionStep({
   });
 
   // Quick lookup sets
-  const selectedSet = useMemo(() => new Set(selectedProducts.map(p => p.productId)), [selectedProducts]);
-  const selectedCategories = useMemo(() => new Set((selectedProducts || []).map(p => p.category)), [selectedProducts]);
+  const selectedSet = useMemo(
+    () => new Set(selectedProducts.map(p => p.productId)),
+    [selectedProducts]
+  );
+  const selectedCategories = useMemo(
+    () => new Set((selectedProducts || []).map(p => p.category)),
+    [selectedProducts]
+  );
 
   // Categories for filter
-  const { data: categoryData } = useQuery<{ categories: Array<{ name: string; count: number }>}>({
+  const { data: categoryData } = useQuery<{
+    categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
+  }>({
     queryKey: ['product-categories', { activeOnly: true }],
     queryFn: async () => {
       const res = await productService.getCategories({ activeOnly: true, includeStats: false });
-      return res.ok ? res.data : { categories: [] };
+      return res || { categories: [] };
     },
     staleTime: 300000,
     gcTime: 600000,
   });
 
   // Displayed list supports "selected only"
-  const productsMap = useMemo(() => new Map((productsData || []).map(p => [p.id, p] as const)), [productsData]);
+  const productsMap = useMemo(
+    () => new Map((productsData || []).map(p => [p.id, p] as const)),
+    [productsData]
+  );
   const displayedItems: Product[] = useMemo(() => {
     if (!showSelectedOnly) {
       const items = productsData || [];
@@ -214,26 +231,27 @@ export function ProductSelectionStep({
       const rest = items.filter(p => !selectedSet.has(p.id));
       return [...pinned, ...rest];
     }
-    return (selectedProducts || []).map(sp =>
-      (productsMap.get(sp.productId) as Product) ||
-      ({
-        id: sp.productId,
-        name: sp.name,
-        description: '',
-        price: sp.unitPrice,
-        currency: 'USD',
-        sku: '',
-        category: [sp.category || 'General'],
-        tags: [],
-        attributes: {},
-        images: [],
-        isActive: true,
-        version: 1,
-        usageAnalytics: {},
-        userStoryMappings: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as unknown as Product)
+    return (selectedProducts || []).map(
+      sp =>
+        (productsMap.get(sp.productId) as Product) ||
+        ({
+          id: sp.productId,
+          name: sp.name,
+          description: '',
+          price: sp.unitPrice,
+          currency: 'USD',
+          sku: '',
+          category: [sp.category || 'General'],
+          tags: [],
+          attributes: {},
+          images: [],
+          isActive: true,
+          version: 1,
+          usageAnalytics: {},
+          userStoryMappings: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as unknown as Product)
     );
   }, [showSelectedOnly, selectedProducts, productsMap, productsData, selectedSet]);
 
@@ -241,7 +259,7 @@ export function ProductSelectionStep({
   const handleAddProduct = useCallback(
     (productId: string) => {
       if (!productsData || productsError) return;
-      
+
       const product = productsData.find(p => p.id === productId);
       if (product && !selectedProducts.find(p => p.productId === productId)) {
         const newProduct: ProposalProductData['products'][0] = {
@@ -278,12 +296,16 @@ export function ProductSelectionStep({
           return next;
         });
 
-        analytics('product_added_to_proposal', {
-          productId: product.id,
-          productName: product.name,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        }, 'medium');
+        analytics(
+          'product_added_to_proposal',
+          {
+            productId: product.id,
+            productName: product.name,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          },
+          'medium'
+        );
       }
     },
     [productsData, selectedProducts, analytics, productsError]
@@ -306,11 +328,15 @@ export function ProductSelectionStep({
     (productId: string) => {
       setSelectedProducts(prev => prev.filter(p => p.productId !== productId));
 
-      analytics('product_removed_from_proposal', {
-        productId,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      }, 'medium');
+      analytics(
+        'product_removed_from_proposal',
+        {
+          productId,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        },
+        'medium'
+      );
     },
     [analytics]
   );
@@ -323,7 +349,7 @@ export function ProductSelectionStep({
 
   // Persist current step data into the store whenever selection changes
   useEffect(() => {
-    const freshTotal = selectedProducts.reduce((sum, p) => sum + (p.unitPrice * p.quantity), 0);
+    const freshTotal = selectedProducts.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0);
     const stepData: ProposalProductData = {
       products: selectedProducts,
       totalValue: freshTotal,
@@ -334,7 +360,7 @@ export function ProductSelectionStep({
   const handleNext = useCallback(() => {
     // Calculate fresh total to ensure accuracy
     const freshTotal = selectedProducts.reduce((sum, product) => {
-      return sum + (product.unitPrice * product.quantity);
+      return sum + product.unitPrice * product.quantity;
     }, 0);
 
     const stepData: ProposalProductData = {
@@ -349,12 +375,12 @@ export function ProductSelectionStep({
       stepData,
       productsCount: selectedProducts.length,
       totalValue: freshTotal,
-      selectedProducts: selectedProducts.map(p => ({ 
-        id: p.id, 
-        name: p.name, 
-        unitPrice: p.unitPrice, 
-        quantity: p.quantity 
-      }))
+      selectedProducts: selectedProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        unitPrice: p.unitPrice,
+        quantity: p.quantity,
+      })),
     });
 
     // ✅ FIXED: Use proper store setStepData with step number (4 for ProductSelectionStep)
@@ -371,14 +397,18 @@ export function ProductSelectionStep({
       },
     });
 
-    analytics('proposal_step_completed', {
-      step: 4,
-      stepName: 'Product Selection',
-      productCount: selectedProducts.length,
-      totalAmount: freshTotal,
-      userStory: 'US-3.1',
-      hypothesis: 'H4',
-    }, 'medium');
+    analytics(
+      'proposal_step_completed',
+      {
+        step: 4,
+        stepName: 'Product Selection',
+        productCount: selectedProducts.length,
+        totalAmount: freshTotal,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      },
+      'medium'
+    );
 
     onNext();
   }, [analytics, onNext, selectedProducts, setStepData]);
@@ -403,10 +433,16 @@ export function ProductSelectionStep({
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select className="border rounded px-3 py-2 text-sm w-full" value={category} onChange={e => setCategory(e.target.value)}>
+            <select
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+            >
               <option value="">All categories</option>
               {(categoryData?.categories || []).map(c => (
-                <option key={c.name} value={c.name}>{c.name}</option>
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
@@ -430,40 +466,51 @@ export function ProductSelectionStep({
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <input id="show-selected-only" type="checkbox" className="accent-blue-600" checked={showSelectedOnly} onChange={e => setShowSelectedOnly(e.target.checked)} />
-            <label htmlFor="show-selected-only" className="text-sm text-gray-700">Show selected only</label>
+            <input
+              id="show-selected-only"
+              type="checkbox"
+              className="accent-blue-600"
+              checked={showSelectedOnly}
+              onChange={e => setShowSelectedOnly(e.target.checked)}
+            />
+            <label htmlFor="show-selected-only" className="text-sm text-gray-700">
+              Show selected only
+            </label>
           </div>
         </div>
       </Card>
 
-        {/* Loading State */}
-        {productsLoading && (
-          <div className="text-center py-4">
-            <p className="text-gray-500">Loading products...</p>
-          </div>
-        )}
+      {/* Loading State */}
+      {productsLoading && (
+        <div className="text-center py-4">
+          <p className="text-gray-500">Loading products...</p>
+        </div>
+      )}
 
-        {/* Error State */}
-        {productsError && (
-          <Card className="p-4 bg-red-50 border-red-200">
-            <div className="text-sm text-red-800">
-              <h4 className="font-medium mb-2">Error loading products:</h4>
-              <p>{(productsError as Error).message}</p>
-            </div>
-          </Card>
-        )}
+      {/* Error State */}
+      {productsError && (
+        <Card className="p-4 bg-red-50 border-red-200">
+          <div className="text-sm text-red-800">
+            <h4 className="font-medium mb-2">Error loading products:</h4>
+            <p>{(productsError as Error).message}</p>
+          </div>
+        </Card>
+      )}
       {/* Catalog with quick add / steppers */}
       <Card className="p-4">
         <h3 className="text-lg font-medium text-gray-900 mb-3">Catalog</h3>
         {!displayedItems || displayedItems.length === 0 ? (
-          <p className="text-gray-500 py-6 text-center">No products found. Try a different filter.</p>
+          <p className="text-gray-500 py-6 text-center">
+            No products found. Try a different filter.
+          </p>
         ) : (
           <div className="divide-y">
             {displayedItems.map(p => {
               const isSelected = selectedSet.has(p.id);
-              const compat = selectedCategories.size === 0 || p.category.some(c => selectedCategories.has(c))
-                ? 'compatible'
-                : 'check';
+              const compat =
+                selectedCategories.size === 0 || p.category.some(c => selectedCategories.has(c))
+                  ? 'compatible'
+                  : 'check';
               const sp = selectedProducts.find(sp => sp.productId === p.id);
               return (
                 <div key={p.id} className="py-3 flex items-start gap-4">
@@ -472,22 +519,46 @@ export function ProductSelectionStep({
                       <h4 className="font-medium text-gray-900 truncate">{p.name}</h4>
                       {p.sku ? <span className="text-xs text-gray-500">{p.sku}</span> : null}
                       {isSelected && (
-                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Selected</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                          Selected
+                        </span>
                       )}
-                      <Tooltip content={compat === 'compatible' ? 'Likely compatible with current selection' : 'Compatibility not verified (non-blocking)'}>
-                        <span className={`text-xs px-2 py-0.5 rounded ${compat === 'compatible' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{compat === 'compatible' ? 'Compatible' : 'Check'}</span>
+                      <Tooltip
+                        content={
+                          compat === 'compatible'
+                            ? 'Likely compatible with current selection'
+                            : 'Compatibility not verified (non-blocking)'
+                        }
+                      >
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded ${compat === 'compatible' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}
+                        >
+                          {compat === 'compatible' ? 'Compatible' : 'Check'}
+                        </span>
                       </Tooltip>
                     </div>
-                    <div className="text-sm text-gray-600 mt-0.5">{(p.category || []).join(', ')}</div>
-                    <div className="text-sm text-gray-900 mt-1">${(p.price ?? 0).toFixed(2)} per unit</div>
+                    <div className="text-sm text-gray-600 mt-0.5">
+                      {(p.category || []).join(', ')}
+                    </div>
+                    <div className="text-sm text-gray-900 mt-1">
+                      ${(p.price ?? 0).toFixed(2)} per unit
+                    </div>
                   </div>
                   {!isSelected ? (
                     <div className="shrink-0">
-                      <Button size="sm" onClick={() => handleAddProduct(p.id)}>Add</Button>
+                      <Button size="sm" onClick={() => handleAddProduct(p.id)}>
+                        Add
+                      </Button>
                     </div>
                   ) : (
                     <div className="shrink-0 flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleQuantityChange(p.id, (sp?.quantity || 1) - 1)}>-</Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleQuantityChange(p.id, (sp?.quantity || 1) - 1)}
+                      >
+                        -
+                      </Button>
                       <Input
                         type="number"
                         min="1"
@@ -495,9 +566,24 @@ export function ProductSelectionStep({
                         onChange={e => handleQuantityChange(p.id, parseInt(e.target.value) || 1)}
                         className="w-16 text-center"
                       />
-                      <Button variant="outline" size="sm" onClick={() => handleQuantityChange(p.id, (sp?.quantity || 1) + 1)}>+</Button>
-                      <div className="ml-3 text-sm font-medium text-gray-900">${((sp?.unitPrice || 0) * (sp?.quantity || 1)).toFixed(2)}</div>
-                      <Button variant="outline" size="sm" className="ml-2 text-red-600" onClick={() => handleRemoveProduct(p.id)}>Remove</Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleQuantityChange(p.id, (sp?.quantity || 1) + 1)}
+                      >
+                        +
+                      </Button>
+                      <div className="ml-3 text-sm font-medium text-gray-900">
+                        ${((sp?.unitPrice || 0) * (sp?.quantity || 1)).toFixed(2)}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-2 text-red-600"
+                        onClick={() => handleRemoveProduct(p.id)}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -511,9 +597,12 @@ export function ProductSelectionStep({
       <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 z-10">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="text-sm text-gray-700">
-            <span className="font-medium">{selectedProducts.length}</span> product{selectedProducts.length !== 1 ? 's' : ''} selected
+            <span className="font-medium">{selectedProducts.length}</span> product
+            {selectedProducts.length !== 1 ? 's' : ''} selected
           </div>
-          <div className="text-lg font-semibold text-gray-900">Total: ${(totalAmount || 0).toFixed(2)}</div>
+          <div className="text-lg font-semibold text-gray-900">
+            Total: ${(totalAmount || 0).toFixed(2)}
+          </div>
         </div>
       </div>
 

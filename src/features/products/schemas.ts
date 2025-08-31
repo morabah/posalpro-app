@@ -8,6 +8,7 @@
  * ✅ FOLLOWS: Feature-based organization pattern
  */
 
+import { RuleKind } from '@prisma/client';
 import { z } from 'zod';
 
 // ====================
@@ -308,4 +309,68 @@ export const ProductRelationshipsSimulateSchema = z.object({
   skus: z.array(z.string()).min(1, 'At least one SKU is required'),
   mode: z.enum(['validate', 'simulate']).default('validate'),
   attributes: z.record(z.any()).optional(),
+});
+
+// ====================
+// Product Relationship Rules Schema
+// ====================
+
+export const RuleSchema = z.object({
+  productId: z.string().min(1),
+  name: z.string().min(1),
+  ruleType: z.nativeEnum(RuleKind),
+  rule: z.any(),
+  precedence: z.number().int().min(0).optional(),
+  scope: z.any().optional(),
+  explain: z.string().optional(),
+  effectiveFrom: z.string().datetime().optional(),
+  effectiveTo: z.string().datetime().optional(),
+});
+
+// ====================
+// Product Validation Schema
+// ====================
+
+export const validateRequestSchema = z.object({
+  configuration: z.object({
+    id: z.string(),
+    proposalId: z.string().optional(),
+    products: z.array(
+      z.object({
+        productId: z.string(),
+        quantity: z.number().positive(),
+        settings: z.record(z.unknown()).optional().default({}),
+        customizations: z.record(z.unknown()).optional().default({}),
+        dependencies: z.array(z.string()).optional().default([]),
+        conflicts: z.array(z.string()).optional().default([]),
+      })
+    ),
+    globalSettings: z.record(z.unknown()).optional().default({}),
+    relationships: z
+      .array(
+        z.object({
+          id: z.string(),
+          productAId: z.string(),
+          productBId: z.string(),
+          type: z.enum(['requires', 'conflicts', 'enhances', 'replaces']),
+          strength: z.number().min(0).max(1).optional().default(1.0),
+          conditions: z.record(z.unknown()).optional(),
+        })
+      )
+      .optional()
+      .default([]),
+    metadata: z.object({
+      version: z.string(),
+      createdAt: z.string().transform(str => new Date(str)),
+      updatedAt: z.string().transform(str => new Date(str)),
+      createdBy: z.string(),
+      validatedAt: z
+        .string()
+        .transform(str => new Date(str))
+        .optional(),
+      validationVersion: z.string().optional(),
+    }),
+  }),
+  userId: z.string(),
+  environment: z.enum(['development', 'staging', 'production']).optional().default('development'),
 });

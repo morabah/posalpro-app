@@ -3,8 +3,8 @@
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { useCustomer, useUpdateCustomer } from '@/features/customers/hooks';
-import { Customer } from '@/services/customerService';
 import { CustomerUpdate } from '@/features/customers/schemas';
+import { Customer } from '@/services/customerService';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -35,19 +35,19 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
 
   // Update form data when customer data loads
   useEffect(() => {
-    if (customerData?.ok && customerData.data) {
+    if (customerData) {
       setFormData({
-        name: customerData.data.name || '',
-        email: customerData.data.email || '',
-        phone: customerData.data.phone || '',
-        website: customerData.data.website || '',
-        address: customerData.data.address || '',
-        industry: customerData.data.industry || undefined,
-        companySize: customerData.data.companySize || undefined,
-        revenue: customerData.data.revenue,
-        status: customerData.data.status || 'ACTIVE',
-        tier: customerData.data.tier || 'STANDARD',
-        tags: customerData.data.tags || [],
+        name: customerData.name || '',
+        email: customerData.email || '',
+        phone: customerData.phone || '',
+        website: customerData.website || '',
+        address: customerData.address || '',
+        industry: customerData.industry || undefined,
+        companySize: customerData.companySize || undefined,
+        revenue: customerData.revenue,
+        status: customerData.status || 'ACTIVE',
+        tier: customerData.tier || 'STANDARD',
+        tags: customerData.tags || [],
       });
     }
   }, [customerData]);
@@ -91,7 +91,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
     );
   }
 
-  if (isError || !customerData?.ok) {
+  if (isError || !customerData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

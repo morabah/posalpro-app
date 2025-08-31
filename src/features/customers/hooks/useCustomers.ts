@@ -1,6 +1,5 @@
 // React Query hooks for customers - New Architecture
 import { analytics } from '@/lib/analytics';
-import type { ApiResponse } from '@/lib/api/response';
 import {
   Customer,
   CustomerCreate,
@@ -44,8 +43,7 @@ export function useInfiniteCustomers({
         cursor: (pageParam ?? null) as string | null,
       }),
     initialPageParam: null as string | null,
-    getNextPageParam: (lastPage: ApiResponse<CustomerList>) =>
-      lastPage.ok ? (lastPage.data.nextCursor ?? undefined) : undefined,
+    getNextPageParam: (lastPage: CustomerList) => lastPage.nextCursor ?? undefined,
     staleTime: 60_000, // 1 minute
     gcTime: 120_000, // 2 minutes
     refetchOnWindowFocus: false,
@@ -94,7 +92,7 @@ export function useCustomersByIds(ids: string[]) {
   });
 
   return {
-    data: results.map(r => (r.data?.ok ? r.data.data : null)).filter(Boolean) as Customer[],
+    data: results.map(r => r.data || null).filter(Boolean) as Customer[],
     isLoading: results.some(r => r.isLoading),
     isError: results.some(r => r.isError),
     errors: results.filter(r => r.error).map(r => r.error),
@@ -117,15 +115,13 @@ export function useCreateCustomer() {
 
       const response = await customerService.createCustomer(data);
 
-      if (response.ok) {
-        analytics.trackOptimized('customer_create_success', {
-          customerId: response.data.id,
-          name: data.name,
-          userStories: ['US-2.1'],
-          hypotheses: ['H3'],
-          priority: 'medium',
-        });
-      }
+      analytics.trackOptimized('customer_create_success', {
+        customerId: response.id,
+        name: data.name,
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'medium',
+      });
 
       return response;
     },
@@ -133,8 +129,8 @@ export function useCreateCustomer() {
       // Invalidate and refetch customers list
       queryClient.invalidateQueries({ queryKey: qk.customers.all });
       // Set the new customer data in cache
-      if (response.ok && response.data) {
-        queryClient.setQueryData(qk.customers.detail(response.data.id), response);
+      if (response) {
+        queryClient.setQueryData(qk.customers.detail(response.id), response);
       }
     },
     onError: (error, variables) => {
@@ -165,21 +161,19 @@ export function useUpdateCustomer() {
 
       const response = await customerService.updateCustomer(id, data);
 
-      if (response.ok) {
-        analytics.trackOptimized('customer_update_success', {
-          customerId: response.data.id,
-          name: data.name,
-          userStories: ['US-2.1'],
-          hypotheses: ['H3'],
-          priority: 'medium',
-        });
-      }
+      analytics.trackOptimized('customer_update_success', {
+        customerId: response.id,
+        name: data.name,
+        userStories: ['US-2.1'],
+        hypotheses: ['H3'],
+        priority: 'medium',
+      });
 
       return response;
     },
     onSuccess: (response, variables) => {
       // Update the specific customer in cache
-      if (response.ok && response.data) {
+      if (response) {
         queryClient.setQueryData(qk.customers.detail(variables.id), response);
       }
       // Invalidate customers list to reflect changes
@@ -222,7 +216,7 @@ export function useDeleteCustomer() {
         });
       }
 
-      return response;
+      return undefined;
     },
     onSuccess: (response, id) => {
       // Remove the customer from cache

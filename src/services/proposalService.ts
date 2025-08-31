@@ -159,7 +159,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -169,7 +169,7 @@ export class ProposalService {
       );
       logError('Failed to fetch proposals', processed, { component: 'ProposalService' });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };
@@ -198,7 +198,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -208,7 +208,7 @@ export class ProposalService {
       );
       logError('Failed to fetch proposal', processed, { component: 'ProposalService' });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };
@@ -240,7 +240,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -250,7 +250,7 @@ export class ProposalService {
       );
       logError('Failed to create proposal', processed, { component: 'ProposalService' });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };
@@ -283,7 +283,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -293,7 +293,7 @@ export class ProposalService {
       );
       logError('Failed to update proposal', processed, { component: 'ProposalService' });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };
@@ -364,7 +364,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -374,7 +374,7 @@ export class ProposalService {
       );
       logError('Failed to delete proposal', processed, { component: 'ProposalService' });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };
@@ -419,7 +419,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -429,7 +429,7 @@ export class ProposalService {
       );
       logError('Failed to fetch proposal stats', processed, { component: 'ProposalService' });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };
@@ -459,7 +459,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -469,7 +469,7 @@ export class ProposalService {
       );
       logError('Failed to bulk delete proposals', processed, { component: 'ProposalService' });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };
@@ -504,7 +504,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true as const, data };
+      return { ok: true, data };
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -516,7 +516,7 @@ export class ProposalService {
         component: 'ProposalService',
       });
       return {
-        ok: false as const,
+        ok: false,
         code: processed.code || 'UNKNOWN_ERROR',
         message: processed.message,
       };

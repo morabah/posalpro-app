@@ -172,7 +172,7 @@ function CustomerTable() {
 
   // Flatten all pages data
   const customers = useMemo(() => {
-    return data?.pages.flatMap(page => (page.ok ? page.data?.items || [] : [])) || [];
+    return data?.pages.flatMap(page => page?.items || []) || [];
   }, [data]);
 
   // Get all customer IDs for select all functionality

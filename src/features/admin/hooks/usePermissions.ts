@@ -7,9 +7,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 // Feature-based imports
-import { adminService } from '@/services/adminService';
 import { qk } from '@/features/admin/keys';
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { logDebug, logInfo } from '@/lib/logger';
+import { adminService } from '@/services/adminService';
 
 // Types
 export interface Permission {
@@ -47,17 +47,13 @@ export function useAdminPermissions() {
 
       const result = await adminService.getPermissions({ page: '1', limit: '50' });
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to fetch permissions');
-      }
-
       logInfo('Admin permissions fetched successfully', {
         component: 'useAdminPermissions',
         operation: 'fetch',
-        count: result.data?.permissions?.length || 0,
+        count: result?.permissions?.length || 0,
       });
 
-      return result.data?.permissions || [];
+      return result?.permissions || [];
     },
     staleTime: 30000,
     gcTime: 120000,
@@ -87,16 +83,12 @@ export function useCreatePermission() {
 
       const result = await adminService.createPermission(data);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to create permission');
-      }
-
       logInfo('Admin permission created successfully', {
         component: 'useCreatePermission',
         operation: 'create',
       });
 
-      return result.data;
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.admin.permissions.all });
@@ -125,16 +117,14 @@ export function useUpdatePermission() {
 
       const result = await adminService.updatePermission(data.id, data);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to update permission');
-      }
+      // Service now throws errors directly instead of returning ApiResponse
 
       logInfo('Admin permission updated successfully', {
         component: 'useUpdatePermission',
         operation: 'update',
       });
 
-      return result.data;
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.admin.permissions.all });
@@ -163,16 +153,14 @@ export function useDeletePermission() {
 
       const result = await adminService.deletePermission(permissionId);
 
-      if (!result.ok) {
-        throw new Error(result.message || 'Failed to delete permission');
-      }
+      // Service now throws errors directly instead of returning ApiResponse
 
       logInfo('Admin permission deleted successfully', {
         component: 'useDeletePermission',
         operation: 'delete',
       });
 
-      return result.data;
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.admin.permissions.all });

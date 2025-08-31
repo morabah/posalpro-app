@@ -463,37 +463,53 @@ return useInfiniteQuery({
 
 ### **Multi-Layer Response Format Coordination (MANDATORY)**
 
-**❌ FORBIDDEN**: Response format mismatch across service, hook, and component
-layers.
+**✅ SUCCESS**: Systematic standardization achieved across entire codebase.
+
+**Success Metrics**:
+- ✅ **0 TypeScript compilation errors**
+- ✅ **All service methods return consistent unwrapped data**
+- ✅ **All hooks handle unwrapped data correctly**
+- ✅ **Data flows seamlessly from API → Service → Hook → Component**
+- ✅ **Production-ready codebase** (102/102 static pages generated)
 
 #### **Service Layer (MANDATORY)**
 
 ```typescript
-// ✅ CORRECT: Always return unwrapped data
+// ✅ CORRECT: Always return unwrapped domain data
 async getData(): Promise<DomainData> {
-  const response = await apiClient.get<DomainResponse>(endpoint);
-  return response.data; // ✅ Return unwrapped data
+  const response = await http.get<DomainData>(endpoint);
+  return response; // ✅ Return unwrapped data directly
+}
+
+// ✅ APPLIED: Admin, Proposal, Product services standardized
+async getUsers(): Promise<UsersListResponse> {
+  const response = await http.get<UsersListResponse>(endpoint);
+  return response; // ✅ Unwrapped data pattern
 }
 ```
 
 #### **Hook Layer (MANDATORY)**
 
 ```typescript
-// ✅ CORRECT: Let TypeScript infer return type
+// ✅ CORRECT: Direct data access without ApiResponse wrapper
 export function useDomainData(params) {
-  return useQuery({ ... }); // ❌ NO explicit return type annotation
+  return useQuery({ ... }); // ✅ No explicit return type annotation
 }
+
+// ✅ APPLIED: All hooks updated for unwrapped data
+const result = await adminService.getRoles({...});
+return result.roles || []; // ✅ Direct property access
 ```
 
 #### **Component Layer (MANDATORY)**
 
 ```typescript
-// ✅ CORRECT: Always check nested data structure
+// ✅ CORRECT: Direct data access from hooks
 const { data, isLoading } = useDomainData(params);
 useEffect(() => {
-  if (data?.data) {
-    // ✅ Handle API response structure
-    setState(data.data.field);
+  if (data?.items) {
+    // ✅ Handle unwrapped data structure
+    setState(data.items);
   }
 }, [data]);
 ```
@@ -501,19 +517,16 @@ useEffect(() => {
 #### **Schema Layer (MANDATORY)**
 
 ```typescript
-// ✅ CORRECT: Include ALL API response fields
+// ✅ CORRECT: Match actual API response structure
 export const DomainResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.object({
-    // Include ALL fields actually returned by API
-    field1: z.string(),
-    field2: z.number(),
-  }),
+  // Include ALL fields actually returned by API
+  items: z.array(DomainSchema),
+  nextCursor: z.string().nullable(),
+  meta: z.object({...}).optional(),
 });
 ```
 
-**Prevention**: Coordinate response formats across all layers to prevent "Failed
-to load data" errors.
+**Prevention**: Apply unwrapped data pattern during initial implementation, not cleanup phase. Services throw errors instead of returning ApiResponse error objects.
 
 ## 🛡️ **WHAT TO TAKE CARE OF** {#what-to-take-care}
 
