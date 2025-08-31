@@ -27,20 +27,23 @@ const customJestConfig = {
 
   // Configure Puppeteer tests to use Node environment
   projects: [
-    {
-      displayName: 'unit',
-      testMatch: [
-        '**/__tests__/**/*.(ts|tsx|js)',
-        '**/*.(test|spec).(ts|tsx|js)',
-        'src/test/**/*.(test|spec).(ts|tsx|js)',
-      ],
-      testEnvironment: 'jsdom',
-      setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-      moduleNameMapper: {
-        '^@/(.*)$': '<rootDir>/src/$1',
+      {
+        displayName: 'unit',
+        testMatch: [
+          '**/__tests__/**/*.(ts|tsx|js)',
+          '**/*.(test|spec).(ts|tsx|js)',
+          'src/test/**/*.(test|spec).(ts|tsx|js)',
+        ],
+        testEnvironment: 'jsdom',
+        setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+        moduleNameMapper: {
+          '^@/(.*)$': '<rootDir>/src/$1',
+        },
+        transformIgnorePatterns: ['/node_modules/(?!(jose|@panva/hkdf|openid-client|dexie|uuid|msw))'],
+        transform: {
+          '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
+        },
       },
-      transformIgnorePatterns: ['/node_modules/(?!(jose|@panva/hkdf|openid-client|dexie|uuid|msw))'],
-    },
     {
       displayName: 'e2e',
       testMatch: ['**/test/proposal-wizard-puppeteer.test.ts'],

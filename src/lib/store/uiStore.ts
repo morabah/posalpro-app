@@ -73,6 +73,7 @@ export interface Notification {
   }>;
   persistent?: boolean;
   timestamp: Date;
+  read: boolean;
 }
 
 // Loading state interface
@@ -178,7 +179,7 @@ export interface UIActions {
   updateModal: (id: string, updates: Partial<ModalState>) => void;
 
   // Notification system
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
   markNotificationRead: (id: string) => void;
@@ -384,6 +385,7 @@ export const useUIStore = create<UIStore>()(
           ...notification,
           id,
           timestamp: new Date(),
+          read: false,
         };
 
         set(state => {
@@ -417,8 +419,12 @@ export const useUIStore = create<UIStore>()(
       },
 
       markNotificationRead: id => {
-        // TODO: Implement notification read status if needed
-        logger.info('Marking notification as read:', id);
+        set(state => {
+          const target = state.notifications.find(n => n.id === id);
+          if (target) {
+            target.read = !target.read;
+          }
+        });
       },
 
       // Loading states
@@ -654,7 +660,7 @@ export const useUIActions = (): {
   closeAllModals: () => void;
 
   // Notifications
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
 
@@ -706,14 +712,16 @@ export const useDebugMode = () => useUIStore(state => state.debugMode);
 export const useMaintenanceMode = () => useUIStore(state => state.maintenanceMode);
 
 // Form state hooks
-export const useFormState = (formId: string): {
+export const useFormState = (
+  formId: string
+): {
   hasUnsavedChanges: boolean;
   errors: string[];
 } =>
   useUIStore(state => ({
     hasUnsavedChanges: state.unsavedChanges[formId] || false,
     errors: state.formErrors[formId] || [],
-  }));4
+  }));
 
 // Analytics integration
 export const trackUIEvent = (event: string, data?: UIEventData) => {
