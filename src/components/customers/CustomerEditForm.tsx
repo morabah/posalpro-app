@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
-import { useCustomer, useUpdateCustomer } from '@/hooks/useCustomers';
+import { useCustomer, useUpdateCustomer } from '@/features/customers/hooks';
 import { Customer } from '@/services/customerService';
 import { CustomerUpdate } from '@/features/customers/schemas';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';

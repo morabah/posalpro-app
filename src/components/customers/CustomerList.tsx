@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
-import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/hooks/useCustomers';
+import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/features/customers/hooks';
 import { analytics } from '@/lib/analytics';
 import {
   customerSelectors,

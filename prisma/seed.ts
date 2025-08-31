@@ -219,7 +219,7 @@ async function main() {
         const dueDate = new Date(Date.now() + randomInt(-60, 120) * 24 * 60 * 60 * 1000);
         const rfp = `RFP-${new Date().getFullYear()}-${String(currentProposals + i + 1).padStart(3, '0')}`;
         const selectedProducts = Array.from({ length: randomInt(1, 3) }, () => pick(products));
-        const value = selectedProducts.reduce((sum, p) => sum + p.price * randomInt(1, 3), 0);
+        const value = selectedProducts.reduce((sum, p) => sum + Number(p.price) * randomInt(1, 3), 0);
 
         const teamLead = pickUserId(['pm1@posalpro.com', 'pm2@posalpro.com']);
         const salesRep = pickUserId(['pm2@posalpro.com', 'pm1@posalpro.com']);
@@ -653,7 +653,7 @@ async function main() {
           const creator = pick(users);
           const dueDate = new Date(Date.now() - (i + 5) * day);
           const selectedProducts = [pick(products)];
-          const value = selectedProducts.reduce((sum, p) => sum + p.price, 0);
+          const value = selectedProducts.reduce((sum, p) => sum + Number(p.price), 0);
           await prisma.proposal.create({
             data: {
               title: `Won Proposal ${i + 1} for ${customer.name}`,
@@ -694,7 +694,7 @@ async function main() {
           const creator = pick(users);
           const dueDate = new Date(Date.now() - (i + 7) * day);
           const selectedProducts = [pick(products)];
-          const value = selectedProducts.reduce((sum, p) => sum + p.price, 0);
+          const value = selectedProducts.reduce((sum, p) => sum + Number(p.price), 0);
           await prisma.proposal.create({
             data: {
               title: `Overdue Proposal ${i + 1} for ${customer.name}`,
@@ -773,7 +773,7 @@ async function main() {
             const customer = pick(customers);
             const creator = pick(users);
             const selectedProducts = Array.from({ length: 2 }, () => pick(products));
-            const value = selectedProducts.reduce((sum, p) => sum + p.price * randomInt(1, 2), 0);
+            const value = selectedProducts.reduce((sum, p) => sum + Number(p.price) * randomInt(1, 2), 0);
             const dueDate = new Date(Date.now() + randomInt(-30, 60) * 24 * 60 * 60 * 1000);
             await prisma.proposal.create({
               data: {
@@ -886,7 +886,7 @@ async function main() {
           const selected = Array.from(
             new Set([pick(products), pick(products), pick(products)])
           ).slice(0, 3);
-          const value = selected.reduce((sum, p) => sum + p.price, 0);
+          const value = selected.reduce((sum, p) => sum + Number(p.price), 0);
           const proposal = await prisma.proposal.create({
             data: {
               title: `Bundle Combo ${i + 1} for ${customer.name}`,

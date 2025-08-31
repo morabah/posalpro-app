@@ -15,7 +15,7 @@ import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
-import { useCustomer } from '@/hooks/useCustomers';
+import { useCustomer } from '@/features/customers/hooks';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
