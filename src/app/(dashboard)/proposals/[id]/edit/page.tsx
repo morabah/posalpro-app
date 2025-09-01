@@ -157,6 +157,42 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
       queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
       queryClient.invalidateQueries({ queryKey: qk.proposals.all });
 
+      // ✅ FORCE REFETCH: Wait for fresh data before redirecting
+      logDebug('Refetching proposal data before redirect', {
+        component: 'EditProposalPage',
+        operation: 'refetchProposal',
+        proposalId,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      try {
+        await queryClient.refetchQueries({
+          queryKey: qk.proposals.byId(proposalId),
+          exact: true,
+        });
+
+        logDebug('Proposal data refetched successfully', {
+          component: 'EditProposalPage',
+          operation: 'refetchComplete',
+          proposalId,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+      } catch (refetchError) {
+        logError('Failed to refetch proposal data', {
+          component: 'EditProposalPage',
+          operation: 'refetchProposal',
+          proposalId,
+          error: refetchError instanceof Error ? refetchError.message : 'Unknown error',
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+
+        // Continue with redirect even if refetch fails
+        // The detail page will handle loading states and fallbacks
+      }
+
       // Redirect to proposal detail page
       logDebug('Redirecting to proposal detail', {
         component: 'EditProposalPage',
@@ -164,6 +200,7 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
         proposalId,
         redirectUrl: `/proposals/${proposalId}`,
         cacheInvalidated: true,
+        refetchAttempted: true,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
