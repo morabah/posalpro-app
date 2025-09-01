@@ -55,6 +55,7 @@ export const GET = createRoute(
                   id: true,
                   name: true,
                   sku: true,
+                  category: true,
                 },
               },
             },
@@ -97,6 +98,16 @@ export const GET = createRoute(
             }
           : undefined,
         title: proposal.title || 'Untitled Proposal', // Handle empty titles
+        // ✅ FIXED: Handle null product relations and missing product names
+        products: proposal.products
+          ? proposal.products
+              .filter(pp => pp.product) // Remove orphaned ProposalProduct records
+              .map(pp => ({
+                ...pp,
+                name: pp.product?.name || `Product ${pp.productId}`, // Handle null product names
+                category: pp.product?.category?.[0] || 'General', // Handle null category
+              }))
+          : [],
       };
 
       logInfo('Proposal fetched successfully', {
@@ -336,6 +347,7 @@ export const PUT = createRoute(
                       id: true,
                       name: true,
                       sku: true,
+                      category: true,
                     },
                   },
                 },
@@ -351,12 +363,44 @@ export const PUT = createRoute(
           });
 
           // 2. ✅ FIXED: Handle product data by updating ProposalProduct records
+          logInfo('Checking product data structure', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            hasProductData: !!productData,
+            productDataType: typeof productData,
+            productDataKeys: productData ? Object.keys(productData) : [],
+            hasProductsArray: productData && productData.products,
+            productsArrayType:
+              productData && productData.products ? typeof productData.products : null,
+            isProductsArray:
+              productData && productData.products && Array.isArray(productData.products),
+            productsLength:
+              productData && productData.products && Array.isArray(productData.products)
+                ? productData.products.length
+                : 0,
+            rawProductData: productData,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+
           if (productData && productData.products && Array.isArray(productData.products)) {
             logInfo('Processing product data for proposal update', {
               component: 'ProposalAPI',
               operation: 'PUT',
               proposalId: id,
               productCount: productData.products.length,
+              productDataStructure: productData.products.map((p: any) => ({
+                id: p.id,
+                productId: p.productId,
+                name: p.name,
+                quantity: p.quantity,
+                unitPrice: p.unitPrice,
+                total: p.total,
+                hasProductId: !!p.productId,
+                hasQuantity: !!p.quantity,
+                hasUnitPrice: !!p.unitPrice,
+              })),
               userStory: 'US-3.2',
               hypothesis: 'H4',
             });
@@ -366,21 +410,112 @@ export const PUT = createRoute(
               where: { proposalId: id },
             });
 
-            // Create new proposal products
+            // Create new proposal products with better validation
+            let createdCount = 0;
+            let skippedCount = 0;
+
+            logInfo('Starting product creation process', {
+              component: 'ProposalAPI',
+              operation: 'PUT',
+              proposalId: id,
+              totalProductsToProcess: productData.products.length,
+              userStory: 'US-3.2',
+              hypothesis: 'H4',
+            });
+
             for (const product of productData.products) {
-              if (product.productId && product.quantity && product.unitPrice) {
-                await tx.proposalProduct.create({
-                  data: {
+              // ✅ FIXED: Better validation and data transformation
+              const productId = product.productId;
+              const quantity = Number(product.quantity) || 1;
+              const unitPrice = Number(product.unitPrice) || 0;
+              const discount = Number(product.discount) || 0;
+
+              logInfo('Processing product for creation', {
+                component: 'ProposalAPI',
+                operation: 'PUT',
+                proposalId: id,
+                productData: {
+                  originalId: product.id,
+                  productId: productId,
+                  name: product.name,
+                  quantity: quantity,
+                  unitPrice: unitPrice,
+                  discount: discount,
+                  total: product.total,
+                },
+                validation: {
+                  hasProductId: !!productId,
+                  quantityValid: quantity > 0,
+                  unitPriceValid: unitPrice >= 0,
+                },
+                userStory: 'US-3.2',
+                hypothesis: 'H4',
+              });
+
+              if (productId && quantity > 0 && unitPrice >= 0) {
+                const calculatedTotal = quantity * unitPrice * (1 - discount / 100);
+                const total = Number(product.total) || calculatedTotal;
+
+                try {
+                  const createdProduct = await tx.proposalProduct.create({
+                    data: {
+                      proposalId: id,
+                      productId: productId,
+                      quantity: quantity,
+                      unitPrice: unitPrice,
+                      discount: discount,
+                      total: total,
+                      configuration: product.configuration || {},
+                    },
+                  });
+                  createdCount++;
+
+                  logInfo('Successfully created proposal product', {
+                    component: 'ProposalAPI',
+                    operation: 'PUT',
                     proposalId: id,
-                    productId: product.productId,
-                    quantity: product.quantity,
-                    unitPrice: product.unitPrice,
-                    discount: product.discount || 0,
-                    total:
-                      product.total ||
-                      product.quantity * product.unitPrice * (1 - (product.discount || 0) / 100),
-                    configuration: product.configuration || {},
+                    createdProductId: createdProduct.id,
+                    productId: productId,
+                    name: product.name,
+                    quantity: quantity,
+                    unitPrice: unitPrice,
+                    total: total,
+                    userStory: 'US-3.2',
+                    hypothesis: 'H4',
+                  });
+                } catch (createError) {
+                  skippedCount++;
+                  logError('Failed to create proposal product', createError, {
+                    component: 'ProposalAPI',
+                    operation: 'PUT',
+                    proposalId: id,
+                    productId: productId,
+                    name: product.name,
+                    userStory: 'US-3.2',
+                    hypothesis: 'H4',
+                  });
+                }
+              } else {
+                skippedCount++;
+                logError('Skipping invalid product data', {
+                  component: 'ProposalAPI',
+                  operation: 'PUT',
+                  proposalId: id,
+                  product: {
+                    id: product.id,
+                    name: product.name,
+                    productId: productId,
+                    quantity: quantity,
+                    unitPrice: unitPrice,
+                    isValid: false,
+                    validationFailures: {
+                      noProductId: !productId,
+                      invalidQuantity: quantity <= 0,
+                      invalidUnitPrice: unitPrice < 0,
+                    },
                   },
+                  userStory: 'US-3.2',
+                  hypothesis: 'H4',
                 });
               }
             }
@@ -389,7 +524,9 @@ export const PUT = createRoute(
               component: 'ProposalAPI',
               operation: 'PUT',
               proposalId: id,
-              productsCreated: productData.products.length,
+              totalProducts: productData.products.length,
+              productsCreated: createdCount,
+              skippedProducts: productData.products.length - createdCount,
               userStory: 'US-3.2',
               hypothesis: 'H4',
             });
@@ -436,8 +573,8 @@ export const PUT = createRoute(
             });
           }
 
-          // 4. Fetch the updated proposal with all relations
-          return await tx.proposal.findUnique({
+          // 4. Fetch the updated proposal with all relations and verify data integrity
+          const finalProposal = await tx.proposal.findUnique({
             where: { id },
             include: {
               customer: {
@@ -457,6 +594,7 @@ export const PUT = createRoute(
                       id: true,
                       name: true,
                       sku: true,
+                      category: true,
                     },
                   },
                 },
@@ -470,6 +608,65 @@ export const PUT = createRoute(
               },
             },
           });
+
+          // ✅ ADDED: Verification logic to ensure data integrity
+          if (finalProposal && productData?.products) {
+            const savedProductCount = finalProposal.products.length;
+            const expectedProductCount = productData.products.filter(
+              (p: any) => p.productId && p.quantity > 0
+            ).length;
+            const savedTotal = finalProposal.products.reduce(
+              (sum, p) => sum + Number(p.total || 0),
+              0
+            );
+            const expectedTotal = productData.totalValue || 0;
+
+            logInfo('Data verification after proposal update', {
+              component: 'ProposalAPI',
+              operation: 'PUT',
+              proposalId: id,
+              verification: {
+                products: {
+                  expected: expectedProductCount,
+                  saved: savedProductCount,
+                  match: savedProductCount === expectedProductCount,
+                },
+                total: {
+                  expected: expectedTotal,
+                  saved: savedTotal,
+                  match: Math.abs(savedTotal - expectedTotal) < 0.01,
+                },
+              },
+              userStory: 'US-3.2',
+              hypothesis: 'H4',
+            });
+
+            // Log verification mismatch if any
+            if (
+              savedProductCount !== expectedProductCount ||
+              Math.abs(savedTotal - expectedTotal) >= 0.01
+            ) {
+              logError('Verification mismatch detected', {
+                component: 'ProposalAPI',
+                operation: 'PUT',
+                proposalId: id,
+                mismatch: {
+                  productCount: savedProductCount !== expectedProductCount,
+                  total: Math.abs(savedTotal - expectedTotal) >= 0.01,
+                },
+                details: {
+                  expectedProducts: expectedProductCount,
+                  savedProducts: savedProductCount,
+                  expectedTotal: expectedTotal,
+                  savedTotal: savedTotal,
+                },
+                userStory: 'US-3.2',
+                hypothesis: 'H4',
+              });
+            }
+          }
+
+          return finalProposal;
         },
         {
           timeout: 15000, // 15 second timeout to prevent network connection loss
@@ -500,6 +697,16 @@ export const PUT = createRoute(
             }
           : undefined,
         title: proposal?.title || 'Untitled Proposal', // Handle empty titles
+        // ✅ FIXED: Handle null product relations and missing product names
+        products: proposal?.products
+          ? proposal.products
+              .filter(pp => pp.product) // Remove orphaned ProposalProduct records
+              .map(pp => ({
+                ...pp,
+                name: pp.product?.name || `Product ${pp.productId}`, // Handle null product names
+                category: pp.product?.category?.[0] || 'General', // Handle null category
+              }))
+          : [],
       };
 
       logInfo('Proposal updated successfully', {

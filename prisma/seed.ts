@@ -1016,8 +1016,8 @@ async function main() {
       }
 
       const renameCustomer: Record<string, string> = {
-        'TechCorp Solutions': 'Al Noor Technologies',
-        'Global Financial Services': 'Al Quds Financial',
+        'Al Noor Technologies': 'Al Noor Technologies',
+        'Al Quds Financial': 'Al Quds Financial',
         'Healthcare Innovations Inc': 'Shifa Health Innovations',
         'Manufacturing Excellence LLC': 'Al Hadid Manufacturing',
         'EduTech Systems': 'Al Ilm Education Systems',
@@ -2024,10 +2024,10 @@ async function main() {
     // Won Proposals (for revenue tracking)
     {
       title: 'TechCorp Cloud Migration Project',
-      description: 'Complete cloud infrastructure migration for TechCorp Solutions',
+      description: 'Complete cloud infrastructure migration for Al Noor Technologies',
       status: ProposalStatus.ACCEPTED,
       priority: Priority.HIGH,
-      customerName: 'TechCorp Solutions',
+      customerName: 'Al Noor Technologies',
       creatorEmail: 'pm1@posalpro.com',
       dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), // 15 days ago (completed)
       products: ['Sahab Cloud Platform', 'Amn Security Monitoring'],
@@ -2049,7 +2049,7 @@ async function main() {
       description: 'AI-powered analytics solution for financial services',
       status: ProposalStatus.ACCEPTED,
       priority: Priority.HIGH,
-      customerName: 'Global Financial Services',
+      customerName: 'Al Quds Financial',
       creatorEmail: 'pm2@posalpro.com',
       dueDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago (completed)
       products: ['Bayan Analytics Suite', 'Rabt Data Integration'],
@@ -2136,7 +2136,7 @@ async function main() {
       description: 'Comprehensive security assessment and compliance audit',
       status: ProposalStatus.IN_REVIEW,
       priority: Priority.HIGH,
-      customerName: 'TechCorp Solutions',
+      customerName: 'Al Noor Technologies',
       creatorEmail: 'pm1@posalpro.com',
       dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days overdue
       products: ['Amn Security Monitoring'],
@@ -2158,7 +2158,7 @@ async function main() {
       description: 'City-wide IoT infrastructure for smart city initiatives',
       status: ProposalStatus.DRAFT,
       priority: Priority.HIGH,
-      customerName: 'Global Financial Services',
+      customerName: 'Al Quds Financial',
       creatorEmail: 'pm2@posalpro.com',
       dueDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
       products: ['Raqib IoT Management', 'Sahab Cloud Platform'],
@@ -2180,7 +2180,7 @@ async function main() {
       description: 'Advanced risk modeling and analytics for financial institutions',
       status: ProposalStatus.DRAFT,
       priority: Priority.MEDIUM,
-      customerName: 'Global Financial Services',
+      customerName: 'Al Quds Financial',
       creatorEmail: 'pm1@posalpro.com',
       dueDate: new Date(Date.now() + 75 * 24 * 60 * 60 * 1000), // 75 days from now
       products: ['Bayan Analytics Suite'],
@@ -2236,6 +2236,42 @@ async function main() {
             salesRepresentative: salesRepId,
             subjectMatterExperts: smeIds,
           },
+
+          // Build wizard-compatible product snapshot for step 4
+          wizardProducts: proposalData.products
+            .map(productName => {
+              const product = createdProducts[productName];
+              if (!product) return null;
+              return {
+                id: product.id,
+                name: product.name,
+                included: true,
+                quantity: 1,
+                unitPrice: product.price,
+                totalPrice: product.price,
+                category: product.category?.[0] ?? 'General',
+                configuration: {},
+                customizations: [],
+                notes: '',
+              };
+            })
+            .filter(
+              (
+                p
+              ): p is {
+                id: string;
+                name: string;
+                included: boolean;
+                quantity: number;
+                unitPrice: number;
+                totalPrice: number;
+                category: string;
+                configuration: Record<string, unknown>;
+                customizations: string[];
+                notes: string;
+              } => p !== null
+            ),
+
           wizardData: {
             step1: {
               client: {
@@ -2268,7 +2304,7 @@ async function main() {
                 },
               ],
             },
-            step4: { products: proposalData.products },
+            step4: { products: wizardProducts },
             step5: {
               sections: [
                 { id: '1', title: 'Executive Summary', required: true, estimatedHours: 8 },

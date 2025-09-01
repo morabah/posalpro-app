@@ -340,12 +340,12 @@ export const ProposalSchema = z.object({
       z.object({
         id: z.string(),
         productId: z.string(),
-        name: z.string(),
+        name: z.string().min(1), // ✅ FIXED: Ensure name is not empty, but allow fallback handling
         quantity: z.number().int().positive(),
         unitPrice: z.number().positive(),
         discount: z.number().min(0).max(100),
         total: z.number().positive(),
-        category: z.string(),
+        category: z.string().min(1), // ✅ FIXED: Ensure category is not empty
         configuration: z.record(z.unknown()).optional(),
       })
     )

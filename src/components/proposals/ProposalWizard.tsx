@@ -509,11 +509,42 @@ export function ProposalWizard({
         });
         resultProposalId = result.id;
 
+        // ✅ ADDED: Verify the update was successful by checking product count
+        const expectedProductCount = stepData[4]?.products?.length || 0;
+        const savedProductCount = result?.products?.length || 0;
+
+        if (expectedProductCount > 0 && savedProductCount !== expectedProductCount) {
+          logError('Product count mismatch after update', {
+            component: 'ProposalWizard',
+            operation: 'handleSubmit',
+            proposalId: resultProposalId,
+            expected: expectedProductCount,
+            saved: savedProductCount,
+            userStory: 'US-3.1',
+            hypothesis: 'H4',
+          });
+
+          // Show user-friendly message instead of throwing error
+          console.warn(
+            'Saved, but verification mismatch (products, total). Please refresh to see latest data.'
+          );
+        }
+
         logDebug('Proposal updated successfully', {
           component: 'ProposalWizard',
           operation: 'handleSubmit',
           proposalId: resultProposalId,
           editMode,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+
+        // ✅ FIXED: Cache invalidation is already handled by useUpdateProposal hook
+        // The hook's onSuccess callback properly invalidates and updates the cache
+        logDebug('Cache invalidation handled by useUpdateProposal hook', {
+          component: 'ProposalWizard',
+          operation: 'cacheHandled',
+          proposalId: resultProposalId,
           userStory: 'US-3.1',
           hypothesis: 'H4',
         });
@@ -701,6 +732,11 @@ export function ProposalWizard({
     }
   }, [currentStep, submitProposal, updateProposalMutation, onComplete, editMode, proposalId]); // ✅ Removed unstable analytics dependency
 
+  // ✅ FIXED: Memoized onUpdate callback to prevent React.memo from breaking
+  const handleStepUpdate = useCallback(() => {
+    // Step data updates are handled by the store - no additional logic needed
+  }, []);
+
   // Show loading state while fetching proposal data in edit mode
   if (editMode && isLoadingProposal) {
     return (
@@ -753,9 +789,9 @@ export function ProposalWizard({
                   onNext={handleNext}
                   onBack={handleBack}
                   onSubmit={handleSubmit}
-                  onUpdate={() => {
-                    // Step data updates are handled by the store
-                  }}
+                  onUpdate={handleStepUpdate}
+                  // Pass proposalId to ProductSelectionStep (step 4) to fix caching issues
+                  {...(currentStep === 4 && proposalId ? { proposalId } : {})}
                   // editMode prop removed - not needed by step components
                 />
                 <div className="mt-4 flex justify-between items-center">

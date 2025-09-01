@@ -59,10 +59,10 @@ export function useProposal(
       }
     },
     enabled: !!proposalId,
-    staleTime: options?.staleTime ?? 5000, // ✅ REDUCED: 5 seconds (was 30 seconds)
+    staleTime: options?.staleTime ?? 30000, // ✅ INCREASED: 30 seconds for better performance
     gcTime: 120000, // 2 minutes
-    refetchOnWindowFocus: true, // ✅ ENABLED: Always refetch when window gets focus
-    refetchOnMount: options?.refetchOnMount ?? true, // ✅ ENABLED: Always refetch on mount
+    refetchOnWindowFocus: true, // ✅ ENABLED: Auto-refresh detail page when returning from wizard
+    refetchOnMount: options?.refetchOnMount ?? 'always', // ✅ OPTIMIZED: Use 'always' for consistent behavior
     retry: 1,
   });
 }
@@ -180,19 +180,29 @@ export function useUpdateProposal() {
         hypothesis: 'H4',
       });
 
-      // ✅ FORCE INVALIDATION: Remove and refetch immediately
+      // ✅ AGGRESSIVE CACHE INVALIDATION: Force complete refresh
+      // 1. Remove all cached data for this proposal
       queryClient.removeQueries({ queryKey: qk.proposals.byId(variables.id) });
 
-      // Set the fresh data in cache
+      // 2. Invalidate all proposal-related queries to force refetch
+      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      queryClient.invalidateQueries({ queryKey: qk.proposals.byId(variables.id) });
+
+      // 3. Set fresh data immediately to prevent loading states
       queryClient.setQueryData(qk.proposals.byId(variables.id), data);
 
-      // Invalidate proposals list to reflect changes
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      // 4. Force refetch to ensure data consistency
+      queryClient.refetchQueries({
+        queryKey: qk.proposals.byId(variables.id),
+        type: 'active',
+      });
 
-      logDebug('Proposal cache invalidated and updated', {
+      logDebug('Proposal cache aggressively invalidated and refreshed', {
         component: 'useUpdateProposal',
         operation: 'cacheUpdated',
         proposalId: variables.id,
+        productCount: data?.products?.length || 0,
+        totalValue: data?.value || 0,
         userStory: 'US-3.2',
         hypothesis: 'H4',
       });

@@ -68,16 +68,67 @@ print_check() {
     fi
 }
 
+# Function to fix PostgreSQL service synchronization
+fix_postgres_sync() {
+    echo -e "  ${INFO} ${BLUE}Attempting to fix PostgreSQL service synchronization...${NC}"
+
+    # Stop the service first
+    brew services stop postgresql@14 >/dev/null 2>&1
+
+    # Wait for it to stop
+    sleep 2
+
+    # Check if process is still running
+    if pg_ctl -D /opt/homebrew/var/postgresql@14 status >/dev/null 2>&1; then
+        # Stop the process manually
+        pg_ctl -D /opt/homebrew/var/postgresql@14 stop >/dev/null 2>&1
+        sleep 2
+    fi
+
+    # Start the service properly
+    if brew services start postgresql@14 >/dev/null 2>&1; then
+        sleep 3
+        # Verify it's now properly synced
+        local new_status=$(brew services list | grep postgresql | awk '{print $2}')
+        if [ "$new_status" = "started" ]; then
+            echo -e "  ${CHECK_MARK} ${GREEN}PostgreSQL service synchronization fixed${NC}"
+            return 0
+        fi
+    fi
+
+    echo -e "  ${CROSS_MARK} ${YELLOW}Could not fix service synchronization automatically${NC}"
+    return 1
+}
+
 # Function to test database connectivity
 check_database() {
     print_header "${DATABASE} Database Health Check"
 
-    # Check if PostgreSQL is running
-    if brew services list | grep -q "postgresql.*started"; then
+    # Check PostgreSQL status more robustly
+    local brew_status=$(brew services list | grep postgresql | awk '{print $2}')
+
+    if [ "$brew_status" = "started" ]; then
         print_check "pass" "PostgreSQL service is running"
     else
-        print_check "fail" "PostgreSQL service is not running" "Run: brew services start postgresql"
-        return
+        # Brew services shows error, but check if process is actually running
+        if pg_ctl -D /opt/homebrew/var/postgresql@14 status >/dev/null 2>&1; then
+            print_check "warn" "PostgreSQL running but service out of sync" "Process running, but brew services shows '$brew_status'"
+
+            # Offer to fix the sync issue
+            echo ""
+            echo -e "${YELLOW}Would you like to fix the PostgreSQL service synchronization now? (y/N)${NC}"
+            read -r fix_response
+            if [[ "$fix_response" =~ ^[Yy]$ ]]; then
+                if fix_postgres_sync; then
+                    # Re-run the check
+                    check_database
+                    return
+                fi
+            fi
+        else
+            print_check "fail" "PostgreSQL service is not running" "Run: brew services start postgresql@14"
+            return
+        fi
     fi
 
     # Check database connection with credentials

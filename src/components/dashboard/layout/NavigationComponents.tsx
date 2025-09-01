@@ -247,7 +247,7 @@ export const NotificationCenter = memo(
       message: string;
       type: 'info' | 'warning' | 'error' | 'success';
       timestamp: string;
-      isRead: boolean;
+      read: boolean;
     }>;
     onNotificationClick: (notificationId: string) => void;
     onMarkAllRead: () => void;
@@ -278,7 +278,7 @@ export const NotificationCenter = memo(
       }
     };
 
-    const unreadCount = notifications.filter(n => !n.isRead).length;
+    const unreadCount = notifications.filter(n => !n.read).length;
 
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -299,7 +299,7 @@ export const NotificationCenter = memo(
                   key={notification.id}
                   onClick={() => onNotificationClick(notification.id)}
                   className={`p-3 border-l-4 cursor-pointer transition-colors ${
-                    notification.isRead
+                    notification.read
                       ? 'border-gray-200 bg-gray-50'
                       : getNotificationColor(notification.type)
                   }`}
@@ -312,7 +312,9 @@ export const NotificationCenter = memo(
                       <div className="text-sm font-medium text-gray-900">{notification.title}</div>
                       <div className="text-sm text-gray-600 mt-1">{notification.message}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {new Date(notification.timestamp).toLocaleString('en-US', { timeZone: 'UTC' })}
+                        {new Date(notification.timestamp).toLocaleString('en-US', {
+                          timeZone: 'UTC',
+                        })}
                       </div>
                     </div>
                   </div>

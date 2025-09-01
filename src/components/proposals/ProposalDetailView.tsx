@@ -44,6 +44,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import * as React from 'react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -79,11 +80,16 @@ const getSectionData = (metadata: any) => {
   };
 };
 
-export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
+export const ProposalDetailView = React.memo(function ProposalDetailView({
+  proposalId,
+}: ProposalDetailViewProps) {
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const queryClient = useQueryClient();
   const { data: proposal, isLoading, error, refetch } = useProposal(proposalId);
+
+  // ✅ OPTIMIZED: Remove manual refetch since useProposal handles refetchOnMount
+  // The useProposal hook already handles data freshness with appropriate staleTime
 
   // Enhanced error handling with retry logic
   const handleRetry = useCallback(() => {
@@ -91,14 +97,14 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
       'proposal_action_taken',
       {
         proposalId,
-        action: 'edit',
-        userStory: 'US-2.1',
-        hypothesis: 'H2',
+        action: 'retry',
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
       },
       'medium'
     );
     refetch();
-  }, [analytics, proposalId, refetch]);
+  }, [analytics, proposalId]); // Remove refetch dependency to prevent callback recreation
 
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -190,12 +196,14 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
       'medium'
     );
 
-    // Force invalidate and refetch
-    queryClient.invalidateQueries({ queryKey: qk.proposals.byId(proposalId) });
-    await refetch();
+    // ✅ OPTIMIZED: Invalidate and refetch in one operation
+    await queryClient.refetchQueries({
+      queryKey: qk.proposals.byId(proposalId),
+      exact: true,
+    });
 
     toast.success('Proposal data refreshed');
-  }, [proposalId, refetch, analytics, queryClient]);
+  }, [proposalId, analytics, queryClient]);
 
   // Preview proposal handler
   const handlePreview = useCallback(() => {
@@ -480,18 +488,7 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
                             return sum + productTotal;
                           }, 0);
 
-                          // ✅ ADDED: Debug logging to verify total calculation
-                          console.log('Proposal Detail: Calculated total from database products:', {
-                            proposalId: proposal.id,
-                            productCount: proposal.products.length,
-                            total: total,
-                            products: proposal.products.map((p: any) => ({
-                              id: p.id,
-                              name: p.name || 'Unknown Product',
-                              total: p.total,
-                              totalType: typeof p.total,
-                            })),
-                          });
+                          // ✅ REMOVED: Debug logging to prevent excessive console output
 
                           return total;
                         }
@@ -1133,4 +1130,6 @@ export function ProposalDetailView({ proposalId }: ProposalDetailViewProps) {
       </div>
     </div>
   );
-}
+});
+
+ProposalDetailView.displayName = 'ProposalDetailView';

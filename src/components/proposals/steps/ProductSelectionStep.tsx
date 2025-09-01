@@ -15,6 +15,7 @@ import { logDebug, logError } from '@/lib/logger';
 import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
+import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface ProductSelectionStepProps {
@@ -22,13 +23,15 @@ interface ProductSelectionStepProps {
   onNext: () => void;
   onBack: () => void;
   onUpdate?: (data: ProposalProductData) => void;
+  proposalId?: string; // ✅ ADDED: For unique localStorage keys per proposal
 }
 
-export function ProductSelectionStep({
+export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   data,
   onNext,
   onBack,
   onUpdate,
+  proposalId,
 }: ProductSelectionStepProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const setStepData = useProposalSetStepData();
@@ -59,7 +62,11 @@ export function ProductSelectionStep({
   });
 
   // UI state: search and sorting (persisted in localStorage)
-  const STORAGE_KEY = 'wizard:step4:products';
+  // ✅ FIXED: Make storage key unique per proposal to prevent caching issues
+  const STORAGE_KEY = useMemo(
+    () => (proposalId ? `wizard:step4:products:${proposalId}` : 'wizard:step4:products'),
+    [proposalId]
+  );
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'price' | 'isActive'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -86,7 +93,27 @@ export function ProductSelectionStep({
           setShowSelectedOnly(saved.showSelectedOnly);
       }
     } catch {}
-  }, []);
+  }, [STORAGE_KEY]); // ✅ FIXED: Include STORAGE_KEY in dependency to re-load when proposal changes
+
+  // ✅ FIXED: Reset UI state when proposal changes to prevent stale data
+  useEffect(() => {
+    if (proposalId) {
+      logDebug('Resetting UI state for new proposal', {
+        component: 'ProductSelectionStep',
+        operation: 'reset_ui_state',
+        proposalId,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      // Clear previous state when switching proposals
+      setSearch('');
+      setSortBy('name');
+      setSortOrder('asc');
+      setCategory('');
+      setShowSelectedOnly(false);
+    }
+  }, [proposalId]);
 
   useEffect(() => {
     try {
@@ -616,4 +643,6 @@ export function ProductSelectionStep({
       </div>
     </div>
   );
-}
+});
+
+ProductSelectionStep.displayName = 'ProductSelectionStep';

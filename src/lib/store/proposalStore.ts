@@ -297,11 +297,8 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
 
   setPlanType: (plan: 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') => {
     // Determine visible steps for the selected plan
-    const visibleSteps = plan === 'BASIC'
-      ? [1, 4, 6]
-      : plan === 'PROFESSIONAL'
-        ? [1, 2, 4, 6]
-        : [1, 2, 3, 4, 5, 6];
+    const visibleSteps =
+      plan === 'BASIC' ? [1, 4, 6] : plan === 'PROFESSIONAL' ? [1, 2, 4, 6] : [1, 2, 3, 4, 5, 6];
 
     set(state => {
       const current = state.currentStep;
@@ -358,13 +355,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
   },
 
   nextStep: async () => {
-    const {
-      currentStep,
-      setCurrentStep,
-      validateStep,
-      setValidationErrors,
-      planType,
-    } = get();
+    const { currentStep, setCurrentStep, validateStep, setValidationErrors, planType } = get();
 
     // Validate current step
     const errors = validateStep(currentStep);
@@ -374,11 +365,12 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
     }
 
     // Compute visible steps according to plan and move to the next visible one
-    const visibleSteps = planType === 'BASIC'
-      ? [1, 4, 6]
-      : planType === 'PROFESSIONAL'
-        ? [1, 2, 4, 6]
-        : [1, 2, 3, 4, 5, 6];
+    const visibleSteps =
+      planType === 'BASIC'
+        ? [1, 4, 6]
+        : planType === 'PROFESSIONAL'
+          ? [1, 2, 4, 6]
+          : [1, 2, 3, 4, 5, 6];
 
     const index = visibleSteps.indexOf(currentStep);
     if (index > -1 && index < visibleSteps.length - 1) {
@@ -388,11 +380,12 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
 
   previousStep: () => {
     const { currentStep, setCurrentStep, planType } = get();
-    const visibleSteps = planType === 'BASIC'
-      ? [1, 4, 6]
-      : planType === 'PROFESSIONAL'
-        ? [1, 2, 4, 6]
-        : [1, 2, 3, 4, 5, 6];
+    const visibleSteps =
+      planType === 'BASIC'
+        ? [1, 4, 6]
+        : planType === 'PROFESSIONAL'
+          ? [1, 2, 4, 6]
+          : [1, 2, 3, 4, 5, 6];
 
     const index = visibleSteps.indexOf(currentStep);
     if (index > 0) {
@@ -765,10 +758,10 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
 
 // Selectors for optimized re-renders
 export const useProposalStepData = (step: number) =>
-  useProposalStore(state => state.stepData[step]);
+  useProposalStore(useShallow(state => state.stepData[step]));
 
 export const useProposalValidationErrors = (step: number) =>
-  useProposalStore(state => state.validationErrors[step]);
+  useProposalStore(useShallow(state => state.validationErrors[step]));
 
 // Individual selectors to prevent object creation and infinite re-renders
 export const useProposalCurrentStep = () => useProposalStore(state => state.currentStep);
