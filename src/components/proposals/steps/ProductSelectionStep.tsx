@@ -15,6 +15,8 @@ import { logDebug, logError } from '@/lib/logger';
 import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
+import { useUpdateProposal } from '@/features/proposals/hooks';
+import type { WizardProposalUpdateData } from '@/features/proposals/schemas';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -35,6 +37,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
 }: ProductSelectionStepProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const setStepData = useProposalSetStepData();
+  const updateProposalMutation = useUpdateProposal();
 
   // Local state for form data
   const [selectedProducts, setSelectedProducts] = useState<ProposalProductData['products']>(() => {
@@ -374,15 +377,79 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     return selectedProducts.reduce((sum, product) => sum + (product.total || 0), 0);
   }, [selectedProducts]);
 
-  // Persist current step data into the store whenever selection changes
+  // Persist current step data into the store and auto-save to database whenever selection changes
   useEffect(() => {
     const freshTotal = selectedProducts.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0);
     const stepData: ProposalProductData = {
       products: selectedProducts,
       totalValue: freshTotal,
     };
+
+    // Update store
     setStepData(4, stepData);
-  }, [selectedProducts, setStepData]);
+
+    // Auto-save to database if proposalId is available and we have changes
+    if (proposalId && selectedProducts.length > 0) {
+      const autoSaveData = {
+        value: freshTotal, // Update the proposal's estimated value
+        metadata: {
+          productData: {
+            products: selectedProducts.map(p => ({
+              productId: p.productId,
+              quantity: p.quantity,
+              unitPrice: p.unitPrice,
+              total: p.total,
+              discount: p.discount || 0,
+              category: p.category,
+              configuration: p.configuration || {},
+            })),
+            totalValue: freshTotal,
+          },
+        },
+      };
+
+      logDebug('ProductSelectionStep: Auto-saving to database', {
+        component: 'ProductSelectionStep',
+        operation: 'autoSave',
+        proposalId,
+        productsCount: selectedProducts.length,
+        totalValue: freshTotal,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
+      // Use setTimeout to debounce auto-save operations
+      const timeoutId = setTimeout(() => {
+        updateProposalMutation.mutate(
+          { id: proposalId, proposal: autoSaveData as WizardProposalUpdateData },
+          {
+            onSuccess: () => {
+              logDebug('ProductSelectionStep: Auto-save successful', {
+                component: 'ProductSelectionStep',
+                operation: 'autoSave_success',
+                proposalId,
+                totalValue: freshTotal,
+                userStory: 'US-3.1',
+                hypothesis: 'H4',
+              });
+            },
+            onError: (error) => {
+              logError('ProductSelectionStep: Auto-save failed', {
+                component: 'ProductSelectionStep',
+                operation: 'autoSave_error',
+                proposalId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                userStory: 'US-3.1',
+                hypothesis: 'H4',
+              });
+            },
+          }
+        );
+      }, 1000); // 1 second debounce
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selectedProducts, setStepData, proposalId, updateProposalMutation]);
 
   const handleNext = useCallback(() => {
     // Calculate fresh total to ensure accuracy

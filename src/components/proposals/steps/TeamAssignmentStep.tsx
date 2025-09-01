@@ -56,23 +56,29 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
       try {
         const response = await apiClient.get<{
-          users: User[];
-          pagination: unknown;
+          ok: boolean;
+          data: {
+            users: User[];
+            pagination: unknown;
+            meta: unknown;
+          };
+          message: string;
         }>(
           'users?search=&isActive=true&sortBy=name&sortOrder=asc&fields=id,firstName,lastName,name,email,department,status,lastLogin,createdAt,updatedAt,role,roles'
         );
 
         console.log('[DEBUG] Raw API response structure:', JSON.stringify(response, null, 2));
 
-        // Handle both old and new response formats for backward compatibility
+        // Handle API response structure with data.users
         let usersArray: User[] = [];
-        if (response?.users) {
-          // Direct response format (should be used after fix)
-          usersArray = response.users;
-        } else if (Array.isArray(response?.users)) {
-          // Direct response format (should be used after fix)
-          console.log('[DEBUG] Using direct response format');
-          usersArray = response.users;
+        if (response?.data?.users) {
+          // Standard API response format
+          usersArray = response.data.users;
+          console.log('[DEBUG] Using response.data.users format');
+        } else if (Array.isArray(response?.data?.users)) {
+          // Alternative format check
+          usersArray = response.data.users;
+          console.log('[DEBUG] Using response.data.users array format');
         }
 
         if (usersArray.length > 0) {
@@ -108,9 +114,15 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
           });
           return usersArray;
         } else {
-          console.error('[DEBUG] Failed to load users - unexpected response structure');
-          console.error('[DEBUG] Response keys:', Object.keys(response as object));
-          throw new Error('Unexpected API response structure');
+          console.error('[DEBUG] Failed to load users - no users found in response');
+          console.error('[DEBUG] Response structure:', {
+            hasResponse: !!response,
+            hasData: !!response?.data,
+            hasUsers: !!response?.data?.users,
+            dataKeys: response?.data ? Object.keys(response.data) : [],
+            responseKeys: response ? Object.keys(response) : [],
+          });
+          throw new Error('No users found in API response');
         }
       } catch (error) {
         console.error('[DEBUG] API call failed:', error);

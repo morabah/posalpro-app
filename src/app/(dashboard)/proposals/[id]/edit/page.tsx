@@ -167,10 +167,57 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
       });
 
       try {
+        console.log('🔍 DEBUG: About to refetch proposal data', {
+          proposalId: proposalId,
+          queryKey: qk.proposals.byId(proposalId),
+        });
+
         await queryClient.refetchQueries({
           queryKey: qk.proposals.byId(proposalId),
           exact: true,
         });
+
+        console.log('🔍 DEBUG: Proposal data refetch completed', {
+          proposalId: proposalId,
+        });
+
+        // ✅ CREATE VERSION SNAPSHOT after successful update
+        console.log('🔍 DEBUG: About to create version snapshot', {
+          proposalId: proposalId,
+        });
+
+        try {
+          const response = await fetch(`/api/proposals/${proposalId}/versions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              changeType: 'update',
+              changesSummary: 'Proposal content was modified',
+            }),
+          });
+
+          if (response.ok) {
+            console.log('🔍 DEBUG: Version snapshot created successfully', {
+              proposalId: proposalId,
+              status: response.status,
+            });
+          } else {
+            console.error('🔍 DEBUG: Version snapshot creation failed', {
+              proposalId: proposalId,
+              status: response.status,
+              statusText: response.statusText,
+            });
+          }
+        } catch (versionError) {
+          const isError = versionError instanceof Error;
+          console.error('🔍 DEBUG: Version snapshot creation failed', {
+            proposalId: proposalId,
+            error: isError ? versionError.message : String(versionError),
+          });
+          // Don't fail the entire operation if version creation fails
+        }
 
         logDebug('Proposal data refetched successfully', {
           component: 'EditProposalPage',

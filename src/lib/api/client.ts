@@ -95,6 +95,26 @@ interface RetryConfig {
   retryCondition?: (error: Error | ApiError) => boolean;
 }
 
+// Default retry condition that handles 429 rate limit errors intelligently
+const defaultRetryCondition = (error: Error | ApiError): boolean => {
+  // Check if it's an ApiError with status 429 (rate limit)
+  if ('status' in error && error.status === 429) {
+    return true; // Always retry 429 errors
+  }
+
+  // Check if it's a network error
+  if (error.message?.includes('fetch') || error.message?.includes('network')) {
+    return true;
+  }
+
+  // Check if it's a timeout error
+  if (error.message?.includes('timeout')) {
+    return true;
+  }
+
+  return false; // Don't retry other errors by default
+};
+
 interface CustomCacheConfig {
   ttl: number;
   key?: string;
@@ -171,12 +191,18 @@ class EnhancedApiClient {
         lastError = error instanceof Error ? error : new Error(String(error));
 
         // Check if we should retry
-        if (
-          attempt === retryConfig.attempts ||
-          (retryConfig.retryCondition && !retryConfig.retryCondition(lastError))
-        ) {
+        if (attempt === retryConfig.attempts) {
           break;
         }
+
+        // If a custom retry condition is provided, use it
+        if (retryConfig.retryCondition) {
+          const shouldRetry = retryConfig.retryCondition(lastError);
+          if (!shouldRetry) {
+            break;
+          }
+        }
+        // If no custom condition, use default logic (retry 429 and network errors)
 
         // Calculate delay with backoff
         const delay = retryConfig.delay * Math.pow(retryConfig.backoff, attempt);
@@ -307,7 +333,7 @@ class EnhancedApiClient {
         attempts: config.retry?.attempts || 3,
         delay: config.retry?.delay || 1000,
         backoff: config.retry?.backoff || 2,
-        retryCondition: config.retry?.retryCondition,
+        retryCondition: config.retry?.retryCondition || defaultRetryCondition,
       }
     );
 

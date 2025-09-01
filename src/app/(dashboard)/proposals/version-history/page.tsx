@@ -87,6 +87,18 @@ export default function ProposalVersionHistoryPage() {
             (c: Record<string, unknown>, idx: number) => {
               const tvRaw = c.totalValue as unknown;
               const tv = tvRaw === null || tvRaw === undefined ? undefined : Number(tvRaw);
+
+              console.log('🔍 DEBUG: Mapping version history item', {
+                index: idx,
+                itemId: c.id,
+                rawTotalValue: tvRaw,
+                rawTotalValueType: typeof tvRaw,
+                processedTotalValue: tv,
+                processedTotalValueType: typeof tv,
+                isValidNumber: !Number.isNaN(tv),
+                willIncludeTotalValue: tv !== undefined && !Number.isNaN(tv),
+              });
+
               return {
                 id: (c.id as string) || String(idx),
                 version: (c.version as number) ?? 0,
@@ -213,6 +225,12 @@ export default function ProposalVersionHistoryPage() {
         return 'Proposal was initially created';
       case 'update':
         if (entry.totalValue !== undefined) {
+          console.log('🔍 DEBUG: Version history entry totalValue:', {
+            entryId: entry.id,
+            totalValue: entry.totalValue,
+            totalValueType: typeof entry.totalValue,
+            formattedValue: formatCurrency(entry.totalValue),
+          });
           return `Proposal updated (Total: ${formatCurrency(entry.totalValue)})`;
         }
         return 'Proposal content was modified';
@@ -354,10 +372,19 @@ export default function ProposalVersionHistoryPage() {
       customerName?: string;
       createdByName?: string;
       changeType?: string;
+      isInitialVersion?: boolean;
     } | null>(null);
     const api = apiClient;
 
     useEffect(() => {
+      console.log('🔍 DEBUG: DiffViewer useEffect triggered', {
+        entryId: entry.id,
+        proposalId: entry.proposalId,
+        version: entry.version,
+        changeType: entry.changeType,
+        totalValue: entry.totalValue,
+      });
+
       let cancelled = false;
       async function load() {
         try {
@@ -367,45 +394,94 @@ export default function ProposalVersionHistoryPage() {
             `/proposals/${entry.proposalId}/versions?version=${entry.version}&detail=1`
           )) as {
             success?: boolean;
-            data?: {
-              diff?: {
-                added: string[];
-                removed: string[];
-                updated: Array<{
-                  productId: string;
-                  from: Record<string, unknown>;
-                  to: Record<string, unknown>;
-                }>;
-              };
-              productsMap?: Record<string, { name: string }>;
-            };
+            data?: any;
+            ok?: boolean;
           };
-          if (!cancelled && res?.success && res?.data) {
-            // Set diff information
-            if (res.data.diff) {
-              setDiff(res.data.diff);
+
+          // Debug: Log raw API response
+          console.log('🔍 DEBUG: DiffViewer raw API response', {
+            hasRes: !!res,
+            resKeys: res ? Object.keys(res) : [],
+            resSuccess: res?.success,
+            resOk: res?.ok,
+            hasData: !!res?.data,
+            dataKeys: res?.data ? Object.keys(res.data) : [],
+            rawRes: res,
+          });
+
+          // Handle both response formats (ok/data or success/data)
+          const responseData = res?.data || res;
+          if (!cancelled && (res?.success || res?.ok) && responseData) {
+            // Set diff information - check if diff exists directly on responseData
+            if (responseData.diff) {
+              console.log('🔍 DEBUG: Diff data found and set', {
+                addedCount: responseData.diff.added?.length || 0,
+                removedCount: responseData.diff.removed?.length || 0,
+                updatedCount: responseData.diff.updated?.length || 0,
+              });
+              setDiff(responseData.diff);
+            } else {
+              console.log('🔍 DEBUG: No diff data found in response', {
+                responseDataKeys: Object.keys(responseData),
+                responseDataPreview: JSON.stringify(responseData).substring(0, 200),
+              });
             }
 
-            // Set product names map
-            const pm: Record<string, string> | undefined = res?.data?.productsMap
-              ? Object.fromEntries(
-                  Object.entries(res.data.productsMap as Record<string, { name: string }>).map(
-                    ([id, obj]) => [id, obj.name]
-                  )
+            // Set product names map - check multiple possible locations
+            let pm: Record<string, string> | undefined;
+            if (responseData.productsMap) {
+              pm = Object.fromEntries(
+                Object.entries(responseData.productsMap as Record<string, { name: string }>).map(
+                  ([id, obj]) => [id, obj.name]
                 )
-              : undefined;
+              );
+            } else if (responseData.diff && responseData.diff.productsMap) {
+              // Fallback for nested productsMap
+              pm = Object.fromEntries(
+                Object.entries(
+                  responseData.diff.productsMap as Record<string, { name: string }>
+                ).map(([id, obj]) => [id, obj.name])
+              );
+            }
             if (pm) setProductNames(prev => ({ ...prev, ...pm }));
 
             // Set version details - handle the extended response
-            const extendedData = res.data as any;
+            const extendedData = responseData;
+
+            // Debug logging for DiffViewer data
+            console.log('🔍 DEBUG: DiffViewer response data', {
+              versionId: entry.id,
+              responseKeys: Object.keys(responseData),
+              hasDiff: !!responseData.diff,
+              diffKeys: responseData.diff ? Object.keys(responseData.diff) : [],
+              totalValue: responseData.totalValue,
+              totalValueType: typeof responseData.totalValue,
+              customerName: responseData.customerName,
+              createdByName: responseData.createdByName,
+              changeType: responseData.changeType,
+              addedCount: responseData.diff?.added?.length || 0,
+              removedCount: responseData.diff?.removed?.length || 0,
+              updatedCount: responseData.diff?.updated?.length || 0,
+              productsMapKeys: responseData.productsMap
+                ? Object.keys(responseData.productsMap)
+                : [],
+            });
+
             setVersionDetails({
               totalValue: extendedData.totalValue,
               customerName: extendedData.customerName,
               createdByName: extendedData.createdByName,
               changeType: extendedData.changeType,
+              isInitialVersion: extendedData.isInitialVersion || false,
             });
           }
-        } catch {
+        } catch (err) {
+          console.log('🔍 DEBUG: DiffViewer API error', {
+            error: err instanceof Error ? err.message : String(err),
+            entryId: entry.id,
+            proposalId: entry.proposalId,
+            version: entry.version,
+          });
           if (!cancelled) setError('Failed to load change details');
         } finally {
           if (!cancelled) setLoading(false);
@@ -431,13 +507,25 @@ export default function ProposalVersionHistoryPage() {
           {versionDetails && (
             <div className="mt-2 text-sm text-gray-600 space-y-1">
               {versionDetails.totalValue !== undefined && (
-                <p>Total Value: <span className="font-medium">{formatCurrency(versionDetails.totalValue)}</span></p>
+                <p>
+                  Total Value:{' '}
+                  <span className="font-medium">{formatCurrency(versionDetails.totalValue)}</span>
+                </p>
               )}
               {versionDetails.customerName && (
-                <p>Customer: <span className="font-medium">{versionDetails.customerName}</span></p>
+                <p>
+                  Customer: <span className="font-medium">{versionDetails.customerName}</span>
+                </p>
               )}
               {versionDetails.createdByName && (
-                <p>Modified by: <span className="font-medium">{versionDetails.createdByName}</span></p>
+                <p>
+                  Modified by: <span className="font-medium">{versionDetails.createdByName}</span>
+                </p>
+              )}
+              {versionDetails.isInitialVersion && (
+                <div className="mt-3 p-2 bg-blue-50 rounded text-blue-800 text-xs">
+                  📝 This is the initial version of the proposal
+                </div>
               )}
             </div>
           )}
@@ -453,13 +541,25 @@ export default function ProposalVersionHistoryPage() {
           {versionDetails && (
             <div className="text-sm text-gray-600 space-y-1">
               {versionDetails.totalValue !== undefined && (
-                <p>Total Value: <span className="font-medium">{formatCurrency(versionDetails.totalValue)}</span></p>
+                <p>
+                  Total Value:{' '}
+                  <span className="font-medium">{formatCurrency(versionDetails.totalValue)}</span>
+                </p>
               )}
               {versionDetails.customerName && (
-                <p>Customer: <span className="font-medium">{versionDetails.customerName}</span></p>
+                <p>
+                  Customer: <span className="font-medium">{versionDetails.customerName}</span>
+                </p>
               )}
               {versionDetails.createdByName && (
-                <p>Modified by: <span className="font-medium">{versionDetails.createdByName}</span></p>
+                <p>
+                  Modified by: <span className="font-medium">{versionDetails.createdByName}</span>
+                </p>
+              )}
+              {versionDetails.isInitialVersion && (
+                <div className="mt-2 p-2 bg-blue-50 rounded text-blue-800 text-xs">
+                  📝 This is the initial version - all products were added at creation
+                </div>
               )}
             </div>
           )}
@@ -468,7 +568,9 @@ export default function ProposalVersionHistoryPage() {
         {/* Changes Breakdown */}
         {diff.added.length > 0 && (
           <div className="border-l-4 border-green-500 pl-4">
-            <span className="font-medium text-green-700 text-sm uppercase tracking-wide">Added Products</span>
+            <span className="font-medium text-green-700 text-sm uppercase tracking-wide">
+              Added Products
+            </span>
             <ul className="mt-2 space-y-1">
               {diff.added.map((id, index) => (
                 <li key={`add-${id}-${index}`} className="text-sm text-gray-800 flex items-center">
@@ -482,7 +584,9 @@ export default function ProposalVersionHistoryPage() {
 
         {diff.removed.length > 0 && (
           <div className="border-l-4 border-red-500 pl-4">
-            <span className="font-medium text-red-700 text-sm uppercase tracking-wide">Removed Products</span>
+            <span className="font-medium text-red-700 text-sm uppercase tracking-wide">
+              Removed Products
+            </span>
             <ul className="mt-2 space-y-1">
               {diff.removed.map((id, index) => (
                 <li key={`rem-${id}-${index}`} className="text-sm text-gray-800 flex items-center">
@@ -496,7 +600,9 @@ export default function ProposalVersionHistoryPage() {
 
         {diff.updated.length > 0 && (
           <div className="border-l-4 border-blue-500 pl-4">
-            <span className="font-medium text-blue-700 text-sm uppercase tracking-wide">Updated Products</span>
+            <span className="font-medium text-blue-700 text-sm uppercase tracking-wide">
+              Updated Products
+            </span>
             <ul className="mt-2 space-y-2">
               {diff.updated.map((u, index) => {
                 const changes = [];
@@ -504,10 +610,12 @@ export default function ProposalVersionHistoryPage() {
                   changes.push(`Quantity: ${u.from.quantity || 0} → ${u.to.quantity || 0}`);
                 }
                 if (u.from.unitPrice !== u.to.unitPrice) {
-                  changes.push(`Price: ${formatCurrency(Number(u.from.unitPrice) || 0)} → ${formatCurrency(Number(u.to.unitPrice) || 0)}`);
+                  changes.push(
+                    `Price: ${formatCurrency(Number(u.from.unitPrice) || 0)} → ${formatCurrency(Number(u.to.unitPrice) || 0)}`
+                  );
                 }
                 if (u.from.discount !== u.to.discount) {
-                  changes.push(`Discount: ${(u.from.discount || 0)}% → ${(u.to.discount || 0)}%`);
+                  changes.push(`Discount: ${u.from.discount || 0}% → ${u.to.discount || 0}%`);
                 }
 
                 return (
@@ -515,10 +623,14 @@ export default function ProposalVersionHistoryPage() {
                     <div className="flex items-start">
                       <span className="w-2 h-2 bg-blue-500 rounded-full mr-2 mt-1.5 flex-shrink-0"></span>
                       <div>
-                        <span className="font-medium">{productNames[u.productId] || `Product ${u.productId}`}</span>
+                        <span className="font-medium">
+                          {productNames[u.productId] || `Product ${u.productId}`}
+                        </span>
                         <div className="ml-4 mt-1 space-y-0.5">
                           {changes.map((change, idx) => (
-                            <div key={idx} className="text-xs text-gray-600">{change}</div>
+                            <div key={idx} className="text-xs text-gray-600">
+                              {change}
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -536,9 +648,13 @@ export default function ProposalVersionHistoryPage() {
             <div className="text-sm text-blue-800">
               <span className="font-medium">Summary:</span>{' '}
               {diff.added.length > 0 && `${diff.added.length} added`}
-              {diff.added.length > 0 && (diff.removed.length > 0 || diff.updated.length > 0) && ', '}
+              {diff.added.length > 0 &&
+                (diff.removed.length > 0 || diff.updated.length > 0) &&
+                ', '}
               {diff.removed.length > 0 && `${diff.removed.length} removed`}
-              {(diff.added.length > 0 || diff.removed.length > 0) && diff.updated.length > 0 && ', '}
+              {(diff.added.length > 0 || diff.removed.length > 0) &&
+                diff.updated.length > 0 &&
+                ', '}
               {diff.updated.length > 0 && `${diff.updated.length} updated`}
             </div>
           </div>

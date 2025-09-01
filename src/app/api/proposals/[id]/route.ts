@@ -10,6 +10,8 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
+import { formatCurrency } from '@/lib/utils';
+import { Prisma } from '@prisma/client';
 
 // ====================
 // GET /api/proposals/[id] - Get individual proposal
@@ -177,6 +179,20 @@ export const PUT = createRoute(
 
     // ✅ ADDED: Debug logging to see what's being received
     const bodyData = body as any;
+
+    // 🔍 DEBUG: Log incoming body data
+    console.log('🔍 DEBUG: Incoming body data', {
+      proposalId: id,
+      bodyKeys: Object.keys(bodyData),
+      bodyValue: bodyData.value,
+      bodyValueType: typeof bodyData.value,
+      hasProductData: !!bodyData.productData,
+      productDataKeys: bodyData.productData ? Object.keys(bodyData.productData) : [],
+      hasChangesSummary: !!bodyData.changesSummary,
+      changesSummaryValue: bodyData.changesSummary,
+      bodyStringified: JSON.stringify(bodyData).substring(0, 500) + '...',
+    });
+
     logInfo('Received proposal update request', {
       component: 'ProposalAPI',
       operation: 'PUT',
@@ -230,6 +246,7 @@ export const PUT = createRoute(
         planType,
         customer,
         customerId, // Remove customerId to prevent Prisma conflict
+        changesSummary, // Extract changesSummary separately (not a Proposal field)
         ...basicFields
       } = body as any;
 
@@ -239,6 +256,18 @@ export const PUT = createRoute(
         // Convert value to number if it's a string (common issue from form inputs)
         value: basicFields.value !== undefined ? Number(basicFields.value) : undefined,
       };
+
+      console.log('🔍 DEBUG: Processed basic fields', {
+        proposalId: id,
+        basicFieldsValue: basicFields.value,
+        basicFieldsValueType: typeof basicFields.value,
+        processedBasicFieldsValue: processedBasicFields.value,
+        processedBasicFieldsValueType: typeof processedBasicFields.value,
+        basicFieldsKeys: Object.keys(basicFields),
+        processedBasicFieldsKeys: Object.keys(processedBasicFields),
+        changesSummary: changesSummary,
+        changesSummaryType: typeof changesSummary,
+      });
 
       const updateData: any = {
         ...processedBasicFields,
@@ -257,49 +286,47 @@ export const PUT = createRoute(
         updateData.dueDate = new Date(basicFields.dueDate);
       }
 
-              // ✅ FIXED: Save complex nested data to metadata field
-        if (teamData || contentData || productData || sectionData || reviewData || planType) {
-          updateData.metadata = {
-            teamData,
-            contentData,
-            productData,
-            sectionData,
-            reviewData,
-            submittedAt: new Date().toISOString(),
-            wizardVersion: 'modern',
-            planType,
-          };
+      // ✅ FIXED: Save complex nested data to metadata field
+      if (teamData || contentData || productData || sectionData || reviewData || planType) {
+        updateData.metadata = {
+          teamData,
+          contentData,
+          productData,
+          sectionData,
+          reviewData,
+          submittedAt: new Date().toISOString(),
+          wizardVersion: 'modern',
+          planType,
+          // Store changesSummary in metadata for version snapshots
+          _changesSummary: changesSummary,
+        };
 
-          // ✅ ENHANCED: Generate meaningful change summary
-          const changes = [];
-          if (teamData) changes.push('team assignments');
-          if (contentData) changes.push('content sections');
-          if (productData) changes.push('product catalog');
-          if (sectionData) changes.push('proposal sections');
-          if (reviewData) changes.push('review details');
-          if (planType) changes.push('proposal plan');
+        // ✅ ENHANCED: Generate meaningful change summary
+        const changes = [];
+        if (teamData) changes.push('team assignments');
+        if (contentData) changes.push('content sections');
+        if (productData) changes.push('product catalog');
+        if (sectionData) changes.push('proposal sections');
+        if (reviewData) changes.push('review details');
+        if (planType) changes.push('proposal plan');
 
-          updateData.changesSummary = changes.length > 0
-            ? `Updated ${changes.join(', ')}`
-            : 'Proposal content modified';
-
-          // ✅ ADDED: Debug logging to verify metadata is being set
-          logInfo('Setting metadata for proposal update', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            metadataKeys: Object.keys(updateData.metadata),
-            changesSummary: updateData.changesSummary,
-            hasTeamData: !!teamData,
-            hasContentData: !!contentData,
-            hasProductData: !!productData,
-            hasSectionData: !!sectionData,
-            hasReviewData: !!reviewData,
-            hasPlanType: !!planType,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
-        }
+        // ✅ ADDED: Debug logging to verify metadata is being set
+        logInfo('Setting metadata for proposal update', {
+          component: 'ProposalAPI',
+          operation: 'PUT',
+          proposalId: id,
+          metadataKeys: Object.keys(updateData.metadata),
+          changesSummaryInMetadata: updateData.metadata._changesSummary,
+          hasTeamData: !!teamData,
+          hasContentData: !!contentData,
+          hasProductData: !!productData,
+          hasSectionData: !!sectionData,
+          hasReviewData: !!reviewData,
+          hasPlanType: !!planType,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        });
+      }
 
       // ✅ ADDED: Debug logging to verify updateData structure
       logInfo('Updating proposal with data', {
@@ -319,13 +346,23 @@ export const PUT = createRoute(
         component: 'ProposalAPI',
         operation: 'PUT',
         proposalId: id,
+        userId: user.id,
         userStory: 'US-3.2',
         hypothesis: 'H4',
       });
 
       const proposal = await prisma.$transaction(
         async tx => {
+          const currentUserId = user.id;
           // 1. Update the proposal
+          console.log('🔍 DEBUG: About to update proposal', {
+            proposalId: id,
+            updateDataKeys: Object.keys(updateData),
+            updateDataValue: updateData.value,
+            updateDataValueType: typeof updateData.value,
+            updateDataStringified: JSON.stringify(updateData).substring(0, 300) + '...',
+          });
+
           const updatedProposal = await tx.proposal.update({
             where: { id },
             data: updateData,
@@ -377,7 +414,7 @@ export const PUT = createRoute(
           });
 
           // 2. ✅ FIXED: Handle product data by updating ProposalProduct records
-          logInfo('Checking product data structure', {
+          logInfo('🔍 DEBUG: Checking product data structure', {
             component: 'ProposalAPI',
             operation: 'PUT',
             proposalId: id,
@@ -397,6 +434,29 @@ export const PUT = createRoute(
             userStory: 'US-3.2',
             hypothesis: 'H4',
           });
+
+          // 🔍 DEBUG: Log detailed product data for first few products
+          if (productData && productData.products && Array.isArray(productData.products)) {
+            productData.products.slice(0, 3).forEach((product: any, index: number) => {
+              console.log('🔍 DEBUG: Product data analysis', {
+                index: index,
+                productId: product.productId,
+                productIdType: typeof product.productId,
+                name: product.name,
+                nameType: typeof product.name,
+                quantity: product.quantity,
+                quantityType: typeof product.quantity,
+                unitPrice: product.unitPrice,
+                unitPriceType: typeof product.unitPrice,
+                discount: product.discount,
+                discountType: typeof product.discount,
+                total: product.total,
+                totalType: typeof product.total,
+                configuration: product.configuration,
+                configurationType: typeof product.configuration,
+              });
+            });
+          }
 
           if (productData && productData.products && Array.isArray(productData.products)) {
             logInfo('Processing product data for proposal update', {
@@ -544,6 +604,174 @@ export const PUT = createRoute(
               userStory: 'US-3.2',
               hypothesis: 'H4',
             });
+
+            // ✅ FIXED: Recalculate proposal total value after product updates
+            if (createdCount > 0) {
+              logInfo('🔍 DEBUG: Starting proposal value recalculation', {
+                component: 'ProposalAPI',
+                operation: 'PUT',
+                proposalId: id,
+                createdCount: createdCount,
+                skippedProducts: productData.products.length - createdCount,
+                userStory: 'US-3.2',
+                hypothesis: 'H4',
+              });
+
+              const totalValueResult = (await prisma.$queryRaw(
+                Prisma.sql`
+                  SELECT COALESCE(SUM(total), 0) as totalValue
+                  FROM proposal_products
+                  WHERE "proposalId" = ${id}
+                `
+              )) as Array<{ totalvalue: number }>;
+
+              const newTotalValue = Number(totalValueResult[0]?.totalvalue || 0);
+
+              logInfo('🔍 DEBUG: Total value calculation result', {
+                component: 'ProposalAPI',
+                operation: 'PUT',
+                proposalId: id,
+                rawResult: totalValueResult,
+                totalValueResult: totalValueResult[0]?.totalvalue,
+                newTotalValue: newTotalValue,
+                newTotalValueType: typeof newTotalValue,
+                userStory: 'US-3.2',
+                hypothesis: 'H4',
+              });
+
+              // Update the proposal's value field
+              console.log('🔍 DEBUG: About to update proposal value field', {
+                proposalId: id,
+                newTotalValue: newTotalValue,
+                newTotalValueType: typeof newTotalValue,
+              });
+
+              await tx.proposal.update({
+                where: { id },
+                data: {
+                  value: newTotalValue,
+                  updatedAt: new Date(),
+                },
+              });
+
+              logInfo('✅ DEBUG: Proposal total value updated successfully', {
+                component: 'ProposalAPI',
+                operation: 'PUT',
+                proposalId: id,
+                oldValue: processedBasicFields.value || 0,
+                newValue: newTotalValue,
+                valueDifference: newTotalValue - (processedBasicFields.value || 0),
+                userStory: 'US-3.2',
+                hypothesis: 'H4',
+              });
+
+              // Update processedBasicFields to reflect the new value
+              processedBasicFields.value = newTotalValue;
+
+              logInfo('🔍 DEBUG: Final processed data', {
+                component: 'ProposalAPI',
+                operation: 'PUT',
+                proposalId: id,
+                processedBasicFieldsValue: processedBasicFields.value,
+                processedBasicFieldsValueType: typeof processedBasicFields.value,
+                userStory: 'US-3.2',
+                hypothesis: 'H4',
+              });
+
+              // ✅ NEW: Auto-create version snapshot when products are actually updated
+              if (createdCount > 0) {
+                logInfo('🔍 DEBUG: Auto-creating version snapshot for product changes', {
+                  component: 'ProposalAPI',
+                  operation: 'PUT',
+                  proposalId: id,
+                  createdCount: createdCount,
+                  hasProductData: !!productData,
+                  userStory: 'US-3.2',
+                  hypothesis: 'H4',
+                });
+
+                // Get current proposal data for version snapshot
+                const currentProposal = await tx.proposal.findUnique({
+                  where: { id },
+                  include: {
+                    products: {
+                      select: {
+                        productId: true,
+                        quantity: true,
+                        unitPrice: true,
+                        total: true,
+                        configuration: true,
+                      },
+                    },
+                    sections: {
+                      select: {
+                        id: true,
+                        title: true,
+                        content: true,
+                        order: true,
+                      },
+                    },
+                  },
+                });
+
+                if (currentProposal) {
+                  // Get next version number
+                  const lastVersion =
+                    (
+                      await tx.proposalVersion.findFirst({
+                        where: { proposalId: id },
+                        orderBy: { version: 'desc' },
+                        select: { version: true },
+                      })
+                    )?.version || 0;
+
+                  const nextVersion = lastVersion + 1;
+
+                  // Create comprehensive snapshot
+                  const snapshot = {
+                    id: currentProposal.id,
+                    title: currentProposal.title,
+                    status: currentProposal.status,
+                    priority: currentProposal.priority,
+                    value: newTotalValue, // Use the newly calculated total
+                    currency: currentProposal.currency,
+                    customerId: currentProposal.customerId,
+                    metadata: currentProposal.metadata,
+                    products: currentProposal.products,
+                    sections: currentProposal.sections,
+                    updatedAt: currentProposal.updatedAt,
+                    calculatedTotalValue: newTotalValue,
+                    originalStoredValue: currentProposal.value,
+                    changeSummary: `Product catalog updated: ${createdCount} products modified`,
+                    changeType: 'update' as const,
+                  };
+
+                  // Create version snapshot
+                  await tx.proposalVersion.create({
+                    data: {
+                      proposalId: id,
+                      version: nextVersion,
+                      createdBy: currentUserId || 'system',
+                      changeType: 'update',
+                      changesSummary: `Product catalog updated: ${createdCount} products modified, total value: ${formatCurrency(newTotalValue)}`,
+                      snapshot: snapshot as any,
+                      productIds: currentProposal.products.map(p => p.productId),
+                    },
+                  });
+
+                  logInfo('✅ DEBUG: Version snapshot auto-created successfully', {
+                    component: 'ProposalAPI',
+                    operation: 'PUT',
+                    proposalId: id,
+                    version: nextVersion,
+                    createdProducts: createdCount,
+                    totalValue: newTotalValue,
+                    userStory: 'US-3.2',
+                    hypothesis: 'H4',
+                  });
+                }
+              }
+            }
           }
 
           // 3. ✅ FIXED: Handle section data by updating ProposalSection records

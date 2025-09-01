@@ -76,3 +76,5 @@ is superior and should be used for all new development.
 - `src/components/bridges/SmeManagementBridge.tsx`
 
 These will be migrated to modern patterns in future phases.
+
+

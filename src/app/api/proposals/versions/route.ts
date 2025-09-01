@@ -4,6 +4,7 @@ import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getCache, setCache } from '@/lib/redis';
+import { logInfo } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -62,29 +63,19 @@ export async function GET(request: NextRequest) {
                u.name as "createdByName",
                pv."changeType",
                COALESCE(pv."changesSummary", '') as "changesSummary",
+               -- Priority: calculatedTotalValue > value > recalculate from current proposal > 0
                COALESCE(
+                 (pv.snapshot->>'calculatedTotalValue')::numeric,
+                 (pv.snapshot->>'value')::numeric,
                  (
-                   SELECT COALESCE(SUM(
-                     COALESCE((pjson->>'total')::numeric,
-                              (COALESCE((pjson->>'quantity')::numeric,0)) *
-                              (COALESCE((pjson->>'unitPrice')::numeric,0)) *
-                              (1 - COALESCE((pjson->>'discount')::numeric,0)/100))
-                   ), 0)
-                   FROM jsonb_array_elements(COALESCE(pv.snapshot->'products', '[]'::jsonb)) AS pjson
-                 ),
-                 (
-                   SELECT COALESCE(SUM(
-                     COALESCE((p2->>'total')::numeric,
-                              (COALESCE((p2->>'quantity')::numeric,0)) *
-                              (COALESCE((p2->>'unitPrice')::numeric,0)) *
-                              (1 - COALESCE((p2->>'discount')::numeric,0)/100))
-                   ), 0)
-                   FROM jsonb_array_elements(
-                     COALESCE(pv.snapshot->'metadata'->'wizardData'->'step4'->'products', '[]'::jsonb)
-                   ) AS p2
+                   SELECT COALESCE(SUM(pp.total), 0)
+                   FROM proposal_products pp
+                   WHERE pp."proposalId" = pv."proposalId"
                  ),
                  0
-               ) AS "totalValue"
+               ) AS "totalValue",
+               pv.snapshot->>'value' AS "rawValue",
+               pv.snapshot AS "fullSnapshot"
         FROM proposal_versions pv
         LEFT JOIN proposals p ON p.id = pv."proposalId"
         LEFT JOIN users u ON u.id = pv."createdBy"
@@ -103,26 +94,52 @@ export async function GET(request: NextRequest) {
       changeType: string;
       changesSummary: string | null;
       totalValue: any;
+      rawValue: string | null;
+      fullSnapshot: any;
     }>;
 
     const hasNextPage = rows.length > limit;
     const sliced = hasNextPage ? rows.slice(0, limit) : rows;
 
-    const data = sliced.map(r => ({
-      id: r.id,
-      proposalId: r.proposalId,
-      proposalTitle: r.proposalTitle || 'Proposal',
-      version: r.version,
-      timestamp: r.createdAt,
-      changeType: r.changeType,
-      description: r.changesSummary || '',
-      changedBy: r.createdBy || undefined,
-      createdByName: r.createdByName || undefined,
-      totalValue:
-        r.totalValue !== null && r.totalValue !== undefined
-          ? Number((r as any).totalValue)
-          : undefined,
-    }));
+    const data = sliced.map(r => {
+      const totalValue = Number(r.totalValue) || 0;
+
+      logInfo('🔍 DEBUG: Version history item processing', {
+        component: 'ProposalVersionsAPI',
+        operation: 'GET',
+        versionId: r.id,
+        proposalId: r.proposalId,
+        version: r.version,
+        rawTotalValue: r.totalValue,
+        rawValue: r.rawValue,
+        processedTotalValue: totalValue,
+        totalValueType: typeof totalValue,
+        fullSnapshotKeys: Object.keys(r.fullSnapshot || {}),
+        snapshotCalculatedTotalValue: r.fullSnapshot?.calculatedTotalValue,
+        snapshotOriginalStoredValue: r.fullSnapshot?.originalStoredValue,
+        recalculatedFromCurrentProducts: totalValue > 0 && !r.fullSnapshot?.calculatedTotalValue && !r.fullSnapshot?.value,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+
+      const result = {
+        id: r.id,
+        proposalId: r.proposalId,
+        proposalTitle: r.proposalTitle || 'Proposal',
+        version: r.version,
+        timestamp: r.createdAt,
+        changeType: r.changeType,
+        description: r.changesSummary || '',
+        changedBy: r.createdBy || undefined,
+        createdByName: r.createdByName || undefined,
+        totalValue:
+          r.totalValue !== null && r.totalValue !== undefined
+            ? Number((r as any).totalValue)
+            : undefined,
+      };
+
+      return result;
+    });
 
     const next = hasNextPage
       ? {

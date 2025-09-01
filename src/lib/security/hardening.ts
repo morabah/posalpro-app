@@ -70,7 +70,7 @@ export class RateLimiter {
 
 // Global in-memory rate limiters for edge middleware (Redis client is Node-only and not usable here)
 export const authRateLimiter = new RateLimiter(60000, 5); // 5 requests/min for auth
-export const apiRateLimiter = new RateLimiter(60000, 100); // 100 requests/min for API
+export const apiRateLimiter = new RateLimiter(60000, 300); // 300 requests/min for API (increased for dev)
 export const strictRateLimiter = new RateLimiter(900000, 3); // 3 req per 15 min for sensitive
 
 // Input validation and sanitization
@@ -389,10 +389,10 @@ export function createSecurityMiddleware() {
 
     if (path.startsWith('/api/auth')) {
       // Relax auth rate limit in development to accommodate NextAuth client calls
-      limiter = isDev ? new RateLimiter(60000, 60) : authRateLimiter;
+      limiter = isDev ? new RateLimiter(60000, 200) : authRateLimiter;
     } else if (path.includes('admin') || path.includes('sensitive')) {
       // Use higher threshold in development to avoid noisy 429s during health checks
-      limiter = isDev ? new RateLimiter(60000, 60) : strictRateLimiter;
+      limiter = isDev ? new RateLimiter(60000, 200) : strictRateLimiter;
     }
 
     // Check limiter
