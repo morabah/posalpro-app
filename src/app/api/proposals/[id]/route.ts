@@ -257,35 +257,49 @@ export const PUT = createRoute(
         updateData.dueDate = new Date(basicFields.dueDate);
       }
 
-      // ✅ FIXED: Save complex nested data to metadata field
-      if (teamData || contentData || productData || sectionData || reviewData || planType) {
-        updateData.metadata = {
-          teamData,
-          contentData,
-          productData,
-          sectionData,
-          reviewData,
-          submittedAt: new Date().toISOString(),
-          wizardVersion: 'modern',
-          planType,
-        };
+              // ✅ FIXED: Save complex nested data to metadata field
+        if (teamData || contentData || productData || sectionData || reviewData || planType) {
+          updateData.metadata = {
+            teamData,
+            contentData,
+            productData,
+            sectionData,
+            reviewData,
+            submittedAt: new Date().toISOString(),
+            wizardVersion: 'modern',
+            planType,
+          };
 
-        // ✅ ADDED: Debug logging to verify metadata is being set
-        logInfo('Setting metadata for proposal update', {
-          component: 'ProposalAPI',
-          operation: 'PUT',
-          proposalId: id,
-          metadataKeys: Object.keys(updateData.metadata),
-          hasTeamData: !!teamData,
-          hasContentData: !!contentData,
-          hasProductData: !!productData,
-          hasSectionData: !!sectionData,
-          hasReviewData: !!reviewData,
-          hasPlanType: !!planType,
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        });
-      }
+          // ✅ ENHANCED: Generate meaningful change summary
+          const changes = [];
+          if (teamData) changes.push('team assignments');
+          if (contentData) changes.push('content sections');
+          if (productData) changes.push('product catalog');
+          if (sectionData) changes.push('proposal sections');
+          if (reviewData) changes.push('review details');
+          if (planType) changes.push('proposal plan');
+
+          updateData.changesSummary = changes.length > 0
+            ? `Updated ${changes.join(', ')}`
+            : 'Proposal content modified';
+
+          // ✅ ADDED: Debug logging to verify metadata is being set
+          logInfo('Setting metadata for proposal update', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            metadataKeys: Object.keys(updateData.metadata),
+            changesSummary: updateData.changesSummary,
+            hasTeamData: !!teamData,
+            hasContentData: !!contentData,
+            hasProductData: !!productData,
+            hasSectionData: !!sectionData,
+            hasReviewData: !!reviewData,
+            hasPlanType: !!planType,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+        }
 
       // ✅ ADDED: Debug logging to verify updateData structure
       logInfo('Updating proposal with data', {

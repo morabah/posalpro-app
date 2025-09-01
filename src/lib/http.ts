@@ -49,6 +49,8 @@ const DEFAULT_CONFIG: HttpClientConfig = {
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
   defaultHeaders: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate', // ✅ CACHE CONTROL: Prevent all forms of caching
+    'Pragma': 'no-cache', // ✅ PRAGMA HEADER: Additional cache bypass for HTTP/1.0 compatibility
   },
   timeout: 30000, // 30 seconds
   retries: 1,
@@ -75,7 +77,9 @@ export class HttpClient {
 
     // Prepare request options
     const requestOptions: RequestInit = {
-      credentials: "include",      ...options,
+      credentials: "include",
+      cache: 'no-store', // ✅ EXPLICIT CACHE BYPASS: Prevent browser from caching responses
+      ...options,
       headers: {
         ...this.config.defaultHeaders,
         ...options.headers,

@@ -201,6 +201,30 @@ export default function ProposalVersionHistoryPage() {
     return map;
   }, [versionHistory]);
 
+  // Generate meaningful change descriptions
+  const getChangeDescription = useCallback((entry: VersionHistoryEntry): string => {
+    if (entry.description && entry.description.trim()) {
+      return entry.description;
+    }
+
+    // Generate descriptive text based on change type
+    switch (entry.changeType) {
+      case 'create':
+        return 'Proposal was initially created';
+      case 'update':
+        if (entry.totalValue !== undefined) {
+          return `Proposal updated (Total: ${formatCurrency(entry.totalValue)})`;
+        }
+        return 'Proposal content was modified';
+      case 'delete':
+        return 'Proposal was deleted';
+      case 'batch_import':
+        return 'Proposal was imported in bulk';
+      default:
+        return `Proposal ${entry.changeType.replace('_', ' ')}`;
+    }
+  }, []);
+
   const [openProposals, setOpenProposals] = useState<Record<string, boolean>>({});
   const toggleProposalOpen = useCallback((pid: string) => {
     setOpenProposals(prev => ({ ...prev, [pid]: !prev[pid] }));
@@ -325,6 +349,12 @@ export default function ProposalVersionHistoryPage() {
       }>;
     } | null>(null);
     const [productNames, setProductNames] = useState<Record<string, string>>({});
+    const [versionDetails, setVersionDetails] = useState<{
+      totalValue?: number;
+      customerName?: string;
+      createdByName?: string;
+      changeType?: string;
+    } | null>(null);
     const api = apiClient;
 
     useEffect(() => {
@@ -350,8 +380,13 @@ export default function ProposalVersionHistoryPage() {
               productsMap?: Record<string, { name: string }>;
             };
           };
-          if (!cancelled && res?.success && res?.data?.diff) {
-            setDiff(res.data.diff);
+          if (!cancelled && res?.success && res?.data) {
+            // Set diff information
+            if (res.data.diff) {
+              setDiff(res.data.diff);
+            }
+
+            // Set product names map
             const pm: Record<string, string> | undefined = res?.data?.productsMap
               ? Object.fromEntries(
                   Object.entries(res.data.productsMap as Record<string, { name: string }>).map(
@@ -360,6 +395,15 @@ export default function ProposalVersionHistoryPage() {
                 )
               : undefined;
             if (pm) setProductNames(prev => ({ ...prev, ...pm }));
+
+            // Set version details - handle the extended response
+            const extendedData = res.data as any;
+            setVersionDetails({
+              totalValue: extendedData.totalValue,
+              customerName: extendedData.customerName,
+              createdByName: extendedData.createdByName,
+              changeType: extendedData.changeType,
+            });
           }
         } catch {
           if (!cancelled) setError('Failed to load change details');
@@ -378,42 +422,125 @@ export default function ProposalVersionHistoryPage() {
 
     if (loading) return <p className="text-gray-500">Loading change details...</p>;
     if (error) return <p className="text-red-600">{error}</p>;
-    if (!diff) return <p className="text-gray-700">{entry.description}</p>;
+
+    // If no diff data, show the basic description with enhanced formatting
+    if (!diff) {
+      return (
+        <div className="text-gray-700">
+          <p className="font-medium">{getChangeDescription(entry)}</p>
+          {versionDetails && (
+            <div className="mt-2 text-sm text-gray-600 space-y-1">
+              {versionDetails.totalValue !== undefined && (
+                <p>Total Value: <span className="font-medium">{formatCurrency(versionDetails.totalValue)}</span></p>
+              )}
+              {versionDetails.customerName && (
+                <p>Customer: <span className="font-medium">{versionDetails.customerName}</span></p>
+              )}
+              {versionDetails.createdByName && (
+                <p>Modified by: <span className="font-medium">{versionDetails.createdByName}</span></p>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
+        {/* Version Summary */}
+        <div className="bg-gray-50 p-3 rounded-md">
+          <p className="font-medium text-gray-900 mb-2">{getChangeDescription(entry)}</p>
+          {versionDetails && (
+            <div className="text-sm text-gray-600 space-y-1">
+              {versionDetails.totalValue !== undefined && (
+                <p>Total Value: <span className="font-medium">{formatCurrency(versionDetails.totalValue)}</span></p>
+              )}
+              {versionDetails.customerName && (
+                <p>Customer: <span className="font-medium">{versionDetails.customerName}</span></p>
+              )}
+              {versionDetails.createdByName && (
+                <p>Modified by: <span className="font-medium">{versionDetails.createdByName}</span></p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Changes Breakdown */}
         {diff.added.length > 0 && (
-          <div>
-            <span className="font-medium text-green-700">Added:</span>
-            <ul className="list-disc list-inside text-gray-800">
+          <div className="border-l-4 border-green-500 pl-4">
+            <span className="font-medium text-green-700 text-sm uppercase tracking-wide">Added Products</span>
+            <ul className="mt-2 space-y-1">
               {diff.added.map((id, index) => (
-                <li key={`add-${id}-${index}`}>{productNames[id] || id}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {diff.removed.length > 0 && (
-          <div>
-            <span className="font-medium text-red-700">Removed:</span>
-            <ul className="list-disc list-inside text-gray-800">
-              {diff.removed.map((id, index) => (
-                <li key={`rem-${id}-${index}`}>{productNames[id] || id}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {diff.updated.length > 0 && (
-          <div>
-            <span className="font-medium text-blue-700">Updated:</span>
-            <ul className="list-disc list-inside text-gray-800">
-              {diff.updated.map((u, index) => (
-                <li key={`upd-${u.productId}-${index}`}>
-                  {productNames[u.productId] || u.productId}: qty {String(u.from.quantity || 'N/A')}{' '}
-                  → {String(u.to.quantity || 'N/A')}, price {String(u.from.unitPrice || 'N/A')} →{' '}
-                  {String(u.to.unitPrice || 'N/A')}, discount {String(u.from.discount || 'N/A')}% →{' '}
-                  {String(u.to.discount || 'N/A')}%
+                <li key={`add-${id}-${index}`} className="text-sm text-gray-800 flex items-center">
+                  <span className="w-2 h-2 bg-green-500 rounded-full mr-2 flex-shrink-0"></span>
+                  {productNames[id] || `Product ${id}`}
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {diff.removed.length > 0 && (
+          <div className="border-l-4 border-red-500 pl-4">
+            <span className="font-medium text-red-700 text-sm uppercase tracking-wide">Removed Products</span>
+            <ul className="mt-2 space-y-1">
+              {diff.removed.map((id, index) => (
+                <li key={`rem-${id}-${index}`} className="text-sm text-gray-800 flex items-center">
+                  <span className="w-2 h-2 bg-red-500 rounded-full mr-2 flex-shrink-0"></span>
+                  {productNames[id] || `Product ${id}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {diff.updated.length > 0 && (
+          <div className="border-l-4 border-blue-500 pl-4">
+            <span className="font-medium text-blue-700 text-sm uppercase tracking-wide">Updated Products</span>
+            <ul className="mt-2 space-y-2">
+              {diff.updated.map((u, index) => {
+                const changes = [];
+                if (u.from.quantity !== u.to.quantity) {
+                  changes.push(`Quantity: ${u.from.quantity || 0} → ${u.to.quantity || 0}`);
+                }
+                if (u.from.unitPrice !== u.to.unitPrice) {
+                  changes.push(`Price: ${formatCurrency(Number(u.from.unitPrice) || 0)} → ${formatCurrency(Number(u.to.unitPrice) || 0)}`);
+                }
+                if (u.from.discount !== u.to.discount) {
+                  changes.push(`Discount: ${(u.from.discount || 0)}% → ${(u.to.discount || 0)}%`);
+                }
+
+                return (
+                  <li key={`upd-${u.productId}-${index}`} className="text-sm text-gray-800">
+                    <div className="flex items-start">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-2 mt-1.5 flex-shrink-0"></span>
+                      <div>
+                        <span className="font-medium">{productNames[u.productId] || `Product ${u.productId}`}</span>
+                        <div className="ml-4 mt-1 space-y-0.5">
+                          {changes.map((change, idx) => (
+                            <div key={idx} className="text-xs text-gray-600">{change}</div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* Summary */}
+        {(diff.added.length > 0 || diff.removed.length > 0 || diff.updated.length > 0) && (
+          <div className="bg-blue-50 p-3 rounded-md">
+            <div className="text-sm text-blue-800">
+              <span className="font-medium">Summary:</span>{' '}
+              {diff.added.length > 0 && `${diff.added.length} added`}
+              {diff.added.length > 0 && (diff.removed.length > 0 || diff.updated.length > 0) && ', '}
+              {diff.removed.length > 0 && `${diff.removed.length} removed`}
+              {(diff.added.length > 0 || diff.removed.length > 0) && diff.updated.length > 0 && ', '}
+              {diff.updated.length > 0 && `${diff.updated.length} updated`}
+            </div>
           </div>
         )}
       </div>
@@ -670,7 +797,7 @@ export default function ProposalVersionHistoryPage() {
                                     </span>
                                   </div>
                                   <p className="text-gray-700 mb-2">
-                                    {truncateText(entry.description, 240)}
+                                    {truncateText(getChangeDescription(entry), 240)}
                                   </p>
                                   <div className="grid grid-cols-3 gap-4 text-sm">
                                     <div>

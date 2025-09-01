@@ -7,13 +7,13 @@
  * Uses the ProposalWizard component in edit mode
  */
 
+import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { ProposalWizard } from '@/components/proposals/ProposalWizard';
 import { qk } from '@/features/proposals/keys';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError } from '@/lib/logger';
 import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
