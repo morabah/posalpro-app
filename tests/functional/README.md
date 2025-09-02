@@ -2,28 +2,28 @@
 
 ## Test Module Coverage Matrix
 
-| Test Category                     | Customer Tests                        | Product Tests                         | Version-History Tests                 | Description                                                     |
-| --------------------------------- | ------------------------------------- | ------------------------------------- | ------------------------------------- | --------------------------------------------------------------- |
-| **🔐 Authentication & RBAC**      | ✅ `auth-tests.ts`                    | ✅ `auth-tests.ts`                    | ✅ `auth-tests.ts`                    | Login, session management, role-based access control            |
-| **📚 API Functionality**          | ✅ `api-tests.ts`                     | ✅ `api-tests.ts`                     | ✅ `api-tests.ts`                     | Core CRUD operations, data retrieval, API structure validation  |
-| **🔒 Data Integrity**             | ✅ `data-integrity-tests.ts`          | ✅ `data-integrity-tests.ts`          | ✅ `data-integrity-tests.ts`          | Data consistency, uniqueness constraints, referential integrity |
-| **⚡ Performance**                | ✅ `performance-tests.ts`             | ✅ `performance-tests.ts`             | ✅ `performance-tests.ts`             | Response times, pagination performance, caching behavior        |
-| **🚨 Error Handling**             | ✅ `error-handling-tests.ts`          | ✅ `error-handling-tests.ts`          | ✅ `error-handling-tests.ts`          | Invalid inputs, error responses, graceful failure handling      |
-| **🔍 Field Validation**           | ✅ `field-validation-tests.ts`        | ✅ `field-validation-tests.ts`        | ✅ `field-validation-tests.ts`        | Database schema compliance, Zod validation, field constraints   |
-| **🔎 Search & Filtering**         | ✅ `search-filtering-tests.ts`        | ✅ `search-filtering-tests.ts`        | ✅ `search-filtering-tests.ts`        | Search functionality, filtering capabilities, sorting options   |
-| **📊 Statistics & Analytics**     | ✅ `statistics-analytics-tests.ts`    | ✅ `statistics-analytics-tests.ts`    | ✅ `statistics-analytics-tests.ts`    | Analytics endpoints, reporting features, metrics validation     |
-| **🔄 Bulk Operations**            | ✅ `bulk-operations-tests.ts`         | ✅ `bulk-operations-tests.ts`         | ✅ `bulk-operations-tests.ts`         | Batch operations, bulk updates, mass data processing            |
-| **🔎 Detailed Views**             | ✅ `detailed-views-tests.ts`          | ✅ `detailed-views-tests.ts`          | ✅ `detailed-views-tests.ts`          | Detailed record views, comprehensive data display               |
-| **🔄 Workflow**                   | ✅ `workflow-tests.ts`                | ✅ `workflow-tests.ts`                | ✅ `workflow-tests.ts`                | Complete user workflows, multi-step processes                   |
-| **🛡️ Permissions**                | ✅ `permissions-tests.ts`             | ✅ `permissions-tests.ts`             | ✅ `permissions-tests.ts`             | Access control, permission validation, RBAC enforcement         |
-| **🏗️ Architecture Compliance**    | ✅ `architecture-compliance-tests.ts` | ✅ `architecture-compliance-tests.ts` | ✅ `architecture-compliance-tests.ts` | CORE_REQUIREMENTS.md compliance, architectural patterns         |
-| **🔒 Security**                   | ✅ `security-tests.ts`                | ✅ `security-tests.ts`                | ✅ `security-tests.ts`                | SQL injection, XSS, CSRF, data exposure prevention              |
-| **🔗 Integration**                | ✅ `integration-tests.ts`             | ✅ `integration-tests.ts`             | ✅ `integration-tests.ts`             | Cross-module data flow, API communication, service dependencies |
-| **📊 Load & Stress**              | ✅ `load-stress-tests.ts`             | ✅ `load-stress-tests.ts`             | ✅ `load-stress-tests.ts`             | Concurrent users, memory leaks, sustained load testing          |
-| **🔍 Schema Validation**          | ✅ `schema-validation-tests.ts`       | ✅ `schema-validation-tests.ts`       | ✅ `schema-validation-tests.ts`       | Database schema integrity, API response validation              |
-| **📱 Mobile & Accessibility**     | ✅ `mobile-accessibility-tests.ts`    | ✅ `mobile-accessibility-tests.ts`    | ✅ `mobile-accessibility-tests.ts`    | WCAG 2.1 AA compliance, mobile responsiveness                   |
-| **🚀 Deployment & Configuration** | ✅ `deployment-config-tests.ts`       | ✅ `deployment-config-tests.ts`       | ✅ `deployment-config-tests.ts`       | Environment variables, SSL/TLS, CDN, health checks              |
-| **📋 Audit & Compliance**         | ✅ `audit-compliance-tests.ts`        | ✅ `audit-compliance-tests.ts`        | ✅ `audit-compliance-tests.ts`        | GDPR, audit trails, data retention, compliance monitoring       |
+| Test Category                     | Customer Tests                        | Product Tests                         | Proposal Tests                         | Version-History Tests                 | Description                                                     |
+| --------------------------------- | ------------------------------------- | ------------------------------------- | ------------------------------------- | ------------------------------------- | --------------------------------------------------------------- |
+| **🔐 Authentication & RBAC**      | ✅ `auth-tests.ts`                    | ✅ `auth-tests.ts`                    | ✅ `auth-tests.ts`                    | ✅ `auth-tests.ts`                    | Login, session management, role-based access control            |
+| **📚 API Functionality**          | ✅ `api-tests.ts`                     | ✅ `api-tests.ts`                     | ✅ `api-tests.ts`                     | ✅ `api-tests.ts`                     | Core CRUD operations, data retrieval, API structure validation  |
+| **🔒 Data Integrity**             | ✅ `data-integrity-tests.ts`          | ✅ `data-integrity-tests.ts`          | ✅ `data-integrity-tests.ts`          | ✅ `data-integrity-tests.ts`          | Data consistency, uniqueness constraints, referential integrity |
+| **⚡ Performance**                | ✅ `performance-tests.ts`             | ✅ `performance-tests.ts`             | ✅ `performance-tests.ts`             | ✅ `performance-tests.ts`             | Response times, pagination performance, caching behavior        |
+| **🚨 Error Handling**             | ✅ `error-handling-tests.ts`          | ✅ `error-handling-tests.ts`          | ✅ `error-handling-tests.ts`          | ✅ `error-handling-tests.ts`          | Invalid inputs, error responses, graceful failure handling      |
+| **🔍 Field Validation**           | ✅ `field-validation-tests.ts`        | ✅ `field-validation-tests.ts`        | ✅ `field-validation-tests.ts`        | ✅ `field-validation-tests.ts`        | Database schema compliance, Zod validation, field constraints   |
+| **🔎 Search & Filtering**         | ✅ `search-filtering-tests.ts`        | ✅ `search-filtering-tests.ts`        | ✅ `search-filtering-tests.ts`        | ✅ `search-filtering-tests.ts`        | Search functionality, filtering capabilities, sorting options   |
+| **📊 Statistics & Analytics**     | ✅ `statistics-analytics-tests.ts`    | ✅ `statistics-analytics-tests.ts`    | ✅ `statistics-analytics-tests.ts`    | ✅ `statistics-analytics-tests.ts`    | Analytics endpoints, reporting features, metrics validation     |
+| **🔄 Bulk Operations**            | ✅ `bulk-operations-tests.ts`         | ✅ `bulk-operations-tests.ts`         | ✅ `bulk-operations-tests.ts`         | ✅ `bulk-operations-tests.ts`         | Batch operations, bulk updates, mass data processing            |
+| **🔎 Detailed Views**             | ✅ `detailed-views-tests.ts`          | ✅ `detailed-views-tests.ts`          | ✅ `detailed-views-tests.ts`          | ✅ `detailed-views-tests.ts`          | Detailed record views, comprehensive data display               |
+| **🔄 Workflow**                   | ✅ `workflow-tests.ts`                | ✅ `workflow-tests.ts`                | ✅ `workflow-tests.ts`                | ✅ `workflow-tests.ts`                | Complete user workflows, multi-step processes                   |
+| **🛡️ Permissions**                | ✅ `permissions-tests.ts`             | ✅ `permissions-tests.ts`             | ✅ `permissions-tests.ts`             | ✅ `permissions-tests.ts`             | Access control, permission validation, RBAC enforcement         |
+| **🏗️ Architecture Compliance**    | ✅ `architecture-compliance-tests.ts` | ✅ `architecture-compliance-tests.ts` | ✅ `architecture-compliance-tests.ts` | ✅ `architecture-compliance-tests.ts` | CORE_REQUIREMENTS.md compliance, architectural patterns         |
+| **🔒 Security**                   | ✅ `security-tests.ts`                | ✅ `security-tests.ts`                | ✅ `security-tests.ts`                | ✅ `security-tests.ts`                | SQL injection, XSS, CSRF, data exposure prevention              |
+| **🔗 Integration**                | ✅ `integration-tests.ts`             | ✅ `integration-tests.ts`             | ✅ `integration-tests.ts`             | ✅ `integration-tests.ts`             | Cross-module data flow, API communication, service dependencies |
+| **📊 Load & Stress**              | ✅ `load-stress-tests.ts`             | ✅ `load-stress-tests.ts`             | ✅ `load-stress-tests.ts`             | ✅ `load-stress-tests.ts`             | Concurrent users, memory leaks, sustained load testing          |
+| **🔍 Schema Validation**          | ✅ `schema-validation-tests.ts`       | ✅ `schema-validation-tests.ts`       | ✅ `schema-validation-tests.ts`       | ✅ `schema-validation-tests.ts`       | Database schema integrity, API response validation              |
+| **📱 Mobile & Accessibility**     | ✅ `mobile-accessibility-tests.ts`    | ✅ `mobile-accessibility-tests.ts`    | ✅ `mobile-accessibility-tests.ts`    | ✅ `mobile-accessibility-tests.ts`    | WCAG 2.1 AA compliance, mobile responsiveness                   |
+| **🚀 Deployment & Configuration** | ✅ `deployment-config-tests.ts`       | ✅ `deployment-config-tests.ts`       | ✅ `deployment-config-tests.ts`       | ✅ `deployment-config-tests.ts`       | Environment variables, SSL/TLS, CDN, health checks              |
+| **📋 Audit & Compliance**         | ✅ `audit-compliance-tests.ts`        | ✅ `audit-compliance-tests.ts`        | ✅ `audit-compliance-tests.ts`        | ✅ `audit-compliance-tests.ts`        | GDPR, audit trails, data retention, compliance monitoring       |
 
 ## Test Suite Structure
 
@@ -36,6 +36,11 @@ tests/functional/
 │   └── README.md                       # Module documentation
 ├── product/
 │   ├── Product_main_orchestra.ts       # Main orchestrator
+│   ├── api-client.ts                   # Shared API client
+│   ├── [21 test modules]               # Individual test suites
+│   └── README.md                       # Module documentation
+├── proposal/
+│   ├── Proposal_main_orchestra.ts      # Main orchestrator
 │   ├── api-client.ts                   # Shared API client
 │   ├── [21 test modules]               # Individual test suites
 │   └── README.md                       # Module documentation
@@ -52,6 +57,7 @@ tests/functional/
 | ------------------- | -------------- | ------- | -------------- | -------------- | -------------------------------------- |
 | **Customer**        | ✅ Full        | ✅ Full | ✅ Full        | ✅ **NEW**     | Complete customer lifecycle management |
 | **Product**         | ✅ Full        | ✅ Full | ✅ Full        | ✅ Full        | Complete product catalog management    |
+| **Proposal**        | ✅ Full        | ✅ Full | ✅ Full        | ✅ Full        | Complete proposal lifecycle management |
 | **Version-History** | ❌ (Immutable) | ✅ Full | ❌ (Immutable) | ❌ (Immutable) | Read-only audit trail                  |
 
 ## Running Tests
@@ -66,6 +72,10 @@ npx tsx Customer_main_orchestra.ts
 # Product tests
 cd tests/functional/product
 npx tsx Product_main_orchestra.ts
+
+# Proposal tests
+cd tests/functional/proposal
+npx tsx Proposal_main_orchestra.ts
 
 # Version-history tests
 cd tests/functional/version-history
@@ -96,6 +106,14 @@ Each test module provides:
 ## Detailed Test File Inventory
 
 ### Customer Module Tests (21 Files)
+
+- 🔐 `auth-tests.ts` - Authentication & RBAC validation
+
+### Product Module Tests (21 Files)
+
+- 🔐 `auth-tests.ts` - Authentication & RBAC validation
+
+### Proposal Module Tests (21 Files)
 
 - 🔐 `auth-tests.ts` - Authentication & RBAC validation
 - 📚 `api-tests.ts` - Core API functionality & CRUD operations
