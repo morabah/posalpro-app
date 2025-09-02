@@ -51,70 +51,70 @@ export class WorkflowTests {
               throw new Error('Product creation did not return valid ID');
             }
 
-          // 2. Read product
-          const readRes = await this.api.request('GET', `/api/products/${productId}`);
-          if (readRes.status !== 200) {
-            await this.api.cleanupTestProduct(productId);
-            throw new Error(`Failed to read product: ${readRes.status}`);
-          }
+            // 2. Read product
+            const readRes = await this.api.request('GET', `/api/products/${productId}`);
+            if (readRes.status !== 200) {
+              await this.api.cleanupTestProduct(productId);
+              throw new Error(`Failed to read product: ${readRes.status}`);
+            }
 
-          const readData = await readRes.json();
-          const readProduct = readData.data || readData;
+            const readData = await readRes.json();
+            const readProduct = readData.data || readData;
 
-          // 3. Update product
-          const updateData = {
-            name: `${newProduct.name} - Updated`,
-            price: 89.99,
-            stockQuantity: 45,
-            description: `${newProduct.description} - Updated`,
-          };
+            // 3. Update product
+            const updateData = {
+              name: `${newProduct.name} - Updated`,
+              price: 89.99,
+              stockQuantity: 45,
+              description: `${newProduct.description} - Updated`,
+            };
 
-          const updateRes = await this.api.request(
-            'PATCH',
-            `/api/products/${productId}`,
-            updateData
-          );
-          if (updateRes.status !== 200) {
-            await this.api.cleanupTestProduct(productId);
-            throw new Error(`Failed to update product: ${updateRes.status}`);
-          }
+            const updateRes = await this.api.request(
+              'PATCH',
+              `/api/products/${productId}`,
+              updateData
+            );
+            if (updateRes.status !== 200) {
+              await this.api.cleanupTestProduct(productId);
+              throw new Error(`Failed to update product: ${updateRes.status}`);
+            }
 
-          // 4. Verify update
-          const verifyRes = await this.api.request('GET', `/api/products/${productId}`);
-          if (verifyRes.status !== 200) {
-            await this.api.cleanupTestProduct(productId);
-            throw new Error(`Failed to verify update: ${verifyRes.status}`);
-          }
+            // 4. Verify update
+            const verifyRes = await this.api.request('GET', `/api/products/${productId}`);
+            if (verifyRes.status !== 200) {
+              await this.api.cleanupTestProduct(productId);
+              throw new Error(`Failed to verify update: ${verifyRes.status}`);
+            }
 
-          const verifyData = await verifyRes.json();
-          const verifyProduct = verifyData.data || verifyData;
+            const verifyData = await verifyRes.json();
+            const verifyProduct = verifyData.data || verifyData;
 
-          const updateSuccessful =
-            verifyProduct.name === updateData.name &&
-            verifyProduct.price === updateData.price &&
-            verifyProduct.stockQuantity === updateData.stockQuantity;
+            const updateSuccessful =
+              verifyProduct.name === updateData.name &&
+              verifyProduct.price === updateData.price &&
+              verifyProduct.stockQuantity === updateData.stockQuantity;
 
-          // 5. Delete product
-          const deleteRes = await this.api.request('DELETE', `/api/products/${productId}`);
-          if (deleteRes.status !== 200 && deleteRes.status !== 204) {
-            await this.api.cleanupTestProduct(productId);
-            throw new Error(`Failed to delete product: ${deleteRes.status}`);
-          }
+            // 5. Delete product
+            const deleteRes = await this.api.request('DELETE', `/api/products/${productId}`);
+            if (deleteRes.status !== 200 && deleteRes.status !== 204) {
+              await this.api.cleanupTestProduct(productId);
+              throw new Error(`Failed to delete product: ${deleteRes.status}`);
+            }
 
-          // 6. Verify deletion
-          const verifyDeleteRes = await this.api.request('GET', `/api/products/${productId}`);
-          const deletionConfirmed = verifyDeleteRes.status === 404;
+            // 6. Verify deletion
+            const verifyDeleteRes = await this.api.request('GET', `/api/products/${productId}`);
+            const deletionConfirmed = verifyDeleteRes.status === 404;
 
-          return {
-            lifecycleCompleted: true,
-            createSuccessful: true,
-            readSuccessful: true,
-            updateSuccessful,
-            deleteSuccessful: deleteRes.status === 200 || deleteRes.status === 204,
-            deletionConfirmed,
-            workflowComplete: updateSuccessful && deletionConfirmed,
-            productId,
-          };
+            return {
+              lifecycleCompleted: true,
+              createSuccessful: true,
+              readSuccessful: true,
+              updateSuccessful,
+              deleteSuccessful: deleteRes.status === 200 || deleteRes.status === 204,
+              deletionConfirmed,
+              workflowComplete: updateSuccessful && deletionConfirmed,
+              productId,
+            };
           } catch (error) {
             // Ensure cleanup on any error
             if (productId) {

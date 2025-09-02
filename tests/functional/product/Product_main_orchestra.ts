@@ -48,7 +48,9 @@ export class ProductFunctionalTestOrchestrator {
   }
 
   // Sequential execution for race-condition prone tests
-  private async runSequentialTests(testModules: Array<{ name: string; runner: () => Promise<any[]> }>) {
+  private async runSequentialTests(
+    testModules: Array<{ name: string; runner: () => Promise<any[]> }>
+  ) {
     const results = [];
     for (const { name, runner } of testModules) {
       console.log(`\n🔄 Running ${name} (sequential to avoid race conditions)...`);

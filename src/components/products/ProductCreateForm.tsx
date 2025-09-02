@@ -6,8 +6,12 @@ import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { SearchableDropdown } from '@/components/ui/SearchableDropdown';
+import {
+  useCreateProduct,
+  useProductCategories,
+  useProductTags,
+} from '@/features/products/hooks/useProducts';
 import { useFormValidation } from '@/hooks/useFormValidation';
-import { useCreateProduct, useProductCategories, useProductTags } from '@/features/products/hooks/useProducts';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';
