@@ -1052,6 +1052,233 @@ export const PUT = createRoute(
 );
 
 // ====================
+// PATCH /api/proposals/[id] - Partial update proposal (for version creation)
+// ====================
+
+export const PATCH = createRoute(
+  {
+    roles: ['admin', 'manager', 'sales', 'System Administrator', 'Administrator'],
+    body: WizardProposalUpdateSchema,
+  },
+  async ({ req, body, user }) => {
+    const id = req.url.split('/').pop()?.split('?')[0];
+
+    if (!id) {
+      return Response.json(fail('VALIDATION_ERROR', 'Proposal ID is required'), { status: 400 });
+    }
+
+    try {
+      logInfo('Partial proposal update (PATCH)', {
+        component: 'ProposalAPI',
+        operation: 'PATCH',
+        proposalId: id,
+        userId: user.id,
+        userStory: 'US-5.1',
+        hypothesis: 'H8',
+      });
+
+      // Get current proposal data
+      const currentProposal = await prisma.proposal.findUnique({
+        where: { id },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          products: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  sku: true,
+                  category: true,
+                },
+              },
+            },
+          },
+          sections: {
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+
+      if (!currentProposal) {
+        logError('Proposal not found for PATCH update', null, {
+          component: 'ProposalAPI',
+          operation: 'PATCH',
+          proposalId: id,
+          userId: user.id,
+          userStory: 'US-5.1',
+          hypothesis: 'H8',
+        });
+        return Response.json(
+          { code: ErrorCodes.DATA.NOT_FOUND, message: 'Proposal not found' },
+          { status: 404 }
+        );
+      }
+
+      // Extract changesSummary for version creation
+      const { changesSummary, ...updateData } = body as any;
+
+      // Process the update data (simplified version of PUT method)
+      const processedUpdateData: any = {
+        ...updateData,
+        updatedAt: new Date(),
+      };
+
+      // Handle value conversion
+      if (processedUpdateData.value !== undefined) {
+        processedUpdateData.value = Number(processedUpdateData.value);
+      }
+
+      // Handle customer relationship
+      if (processedUpdateData.customer && processedUpdateData.customer.id) {
+        processedUpdateData.customer = {
+          connect: { id: processedUpdateData.customer.id },
+        };
+      }
+
+      // Handle dueDate conversion
+      if (processedUpdateData.dueDate) {
+        processedUpdateData.dueDate = new Date(processedUpdateData.dueDate);
+      }
+
+      // Perform the update
+      const updatedProposal = await prisma.proposal.update({
+        where: { id },
+        data: processedUpdateData,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          products: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  sku: true,
+                  category: true,
+                },
+              },
+            },
+          },
+          sections: {
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+
+      // Create version snapshot for PATCH updates (version creation trigger)
+      const lastVersion =
+        (
+          await prisma.proposalVersion.findFirst({
+            where: { proposalId: id },
+            orderBy: { version: 'desc' },
+            select: { version: true },
+          })
+        )?.version || 0;
+
+      const nextVersion = lastVersion + 1;
+
+      // Create version snapshot
+      const snapshot = {
+        id: updatedProposal.id,
+        title: updatedProposal.title,
+        status: updatedProposal.status,
+        priority: updatedProposal.priority,
+        value: updatedProposal.value,
+        currency: updatedProposal.currency,
+        customerId: updatedProposal.customerId,
+        metadata: updatedProposal.metadata,
+        products: updatedProposal.products,
+        sections: updatedProposal.sections,
+        updatedAt: updatedProposal.updatedAt,
+        changeSummary: changesSummary || 'Proposal updated via PATCH',
+        changeType: 'update' as const,
+      };
+
+      await prisma.proposalVersion.create({
+        data: {
+          proposalId: id,
+          version: nextVersion,
+          createdBy: user.id || 'system',
+          changeType: 'update',
+          changesSummary: changesSummary || `Proposal updated: ${Object.keys(updateData).join(', ')}`,
+          snapshot: snapshot as any,
+          productIds: updatedProposal.products.map(p => p.productId),
+        },
+      });
+
+      logInfo('Proposal partially updated with version creation', {
+        component: 'ProposalAPI',
+        operation: 'PATCH',
+        proposalId: id,
+        userId: user.id,
+        version: nextVersion,
+        updatedFields: Object.keys(updateData),
+        userStory: 'US-5.1',
+        hypothesis: 'H8',
+      });
+
+      // Transform response data
+      const transformedProposal = {
+        ...updatedProposal,
+        description: updatedProposal.description || '',
+        metadata: updatedProposal.metadata || {},
+        customer: updatedProposal.customer
+          ? {
+              ...updatedProposal.customer,
+              email: updatedProposal.customer.email || '',
+              industry: (updatedProposal.customer as any).industry || '',
+            }
+          : undefined,
+        title: updatedProposal.title || 'Untitled Proposal',
+        products: updatedProposal.products
+          ? updatedProposal.products
+              .filter(pp => pp.product)
+              .map(pp => ({
+                ...pp,
+                name: pp.product?.name || `Product ${pp.productId}`,
+                category: pp.product?.category?.[0] || 'General',
+              }))
+          : [],
+      };
+
+      const responsePayload = { ok: true, data: transformedProposal };
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+    } catch (error) {
+      const processedError = errorHandlingService.processError(
+        error,
+        'Failed to partially update proposal',
+        undefined,
+        {
+          component: 'ProposalAPI',
+          operation: 'PATCH',
+          proposalId: id,
+          userId: user.id,
+          userStory: 'US-5.1',
+          hypothesis: 'H8',
+        }
+      );
+      throw processedError;
+    }
+  }
+);
+
+// ====================
 // DELETE /api/proposals/[id] - Delete proposal
 // ====================
 

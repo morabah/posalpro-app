@@ -17,10 +17,10 @@ import {
 import { logError, logInfo, logWarn } from '@/lib/logger';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
 
 // Import consolidated schemas from feature folder
 import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
@@ -185,6 +185,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       // Handle null values from database
       description: product.description || '',
       price: product.price ?? 0,
+      category: Array.isArray(product.category)
+        ? product.category.join(', ')
+        : String(product.category || ''),
+      stockQuantity: product.stockQuantity || 0,
+      status: product.status || 'ACTIVE',
       attributes: product.attributes || undefined,
       usageAnalytics: product.usageAnalytics || undefined,
       statistics: {
@@ -192,7 +197,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         usageInProposals: product._count.proposalProducts,
         validationRulesCount: product._count.validationRules,
       },
-      recentUsage: product.proposalProducts.map((pp) => ({
+      recentUsage: product.proposalProducts.map(pp => ({
         proposalId: pp.proposal.id,
         proposalTitle: pp.proposal.title,
         proposalStatus: pp.proposal.status,
@@ -203,7 +208,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         usedAt: pp.createdAt,
       })),
       allRelationships: [
-        ...product.relationships.map((rel) => ({
+        ...product.relationships.map(rel => ({
           id: rel.id,
           type: rel.type,
           direction: 'outgoing' as const,
@@ -334,9 +339,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Update product with version increment
-    const updatedProduct = await prisma.product.update(({
+    const updatedProduct = await prisma.product.update({
       where: { id },
-      data: ({
+      data: {
         ...validatedData,
         ...(validatedData.attributes
           ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
@@ -349,7 +354,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
           hypothesis: ['H3', 'H4'],
           userStories: ['US-3.1', 'US-3.2'],
         } as unknown as Prisma.InputJsonValue,
-      }) as any,
+      } as any,
       select: {
         id: true,
         name: true,
@@ -361,13 +366,15 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         tags: true,
         attributes: true,
         images: true,
+        stockQuantity: true,
+        status: true,
         isActive: true,
         version: true,
         userStoryMappings: true,
         createdAt: true,
         updatedAt: true,
       },
-    }) as any);
+    } as any);
 
     // Track product update for analytics
     await trackProductUpdateEvent(
@@ -382,6 +389,11 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       ...updatedProduct,
       description: updatedProduct.description || '',
       price: updatedProduct.price ?? 0,
+      category: Array.isArray(updatedProduct.category)
+        ? updatedProduct.category.join(', ')
+        : String(updatedProduct.category || ''),
+      stockQuantity: updatedProduct.stockQuantity || 0,
+      status: updatedProduct.status || 'ACTIVE',
       attributes: updatedProduct.attributes || undefined,
       usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
     };
@@ -516,6 +528,11 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
         ...archivedProduct,
         description: (archivedProduct as any).description || '',
         price: (archivedProduct as any).price ?? 0,
+        category: Array.isArray((archivedProduct as any).category)
+          ? (archivedProduct as any).category.join(', ')
+          : String((archivedProduct as any).category || ''),
+        stockQuantity: (archivedProduct as any).stockQuantity || 0,
+        status: (archivedProduct as any).status || 'ACTIVE',
         attributes: (archivedProduct as any).attributes || undefined,
         usageAnalytics: (archivedProduct as any).usageAnalytics || undefined,
       };
@@ -776,9 +793,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const validatedData = ProductUpdateSchema.parse(body);
 
     // Update product
-    const updatedProduct = await prisma.product.update(({
+    const updatedProduct = await prisma.product.update({
       where: { id },
-      data: ({
+      data: {
         ...validatedData,
         ...(validatedData.attributes
           ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
@@ -787,7 +804,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           ? { usageAnalytics: validatedData.usageAnalytics as unknown as Prisma.InputJsonValue }
           : {}),
         updatedAt: new Date(),
-      }) as any,
+      } as any,
       include: {
         relationships: {
           include: {
@@ -818,7 +835,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           },
         },
       },
-    }) as any);
+    } as any);
 
     // Track analytics event
     await trackProductUpdateEvent(

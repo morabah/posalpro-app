@@ -4,24 +4,16 @@
  * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createRoute } from '@/lib/api/route';
 import { ok } from '@/lib/api/response';
-import prisma from '@/lib/prisma';
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { createRoute } from '@/lib/api/route';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { logInfo } from '@/lib/logger';
+import prisma from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 // Import centralized schemas
-import {
-  PermissionsQuerySchema,
-  PermissionCreateSchema,
-  PermissionUpdateSchema,
-  type PermissionsQuery,
-  type PermissionCreate,
-  type PermissionUpdate,
-  type PermissionUpdate as PermissionUpdateData,
-} from '@/features/admin/schemas';
+import { PermissionsQuerySchema, PermissionUpdateSchema } from '@/features/admin/schemas';
 
 /**
  * Component Traceability Matrix
@@ -238,7 +230,6 @@ export async function PUT(request: NextRequest) {
   const { id, ...updateData } = body;
 
   try {
-
     if (!id) {
       return NextResponse.json({ error: 'Permission ID is required' }, { status: 400 });
     }

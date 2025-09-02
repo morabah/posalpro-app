@@ -76,6 +76,8 @@ export const GET = createRoute(
           tags: true,
           attributes: true,
           images: true,
+          stockQuantity: true,
+          status: true,
           isActive: true,
           version: true,
           usageAnalytics: true,
@@ -98,6 +100,13 @@ export const GET = createRoute(
         ...item,
         description: item.description || '',
         price: item.price ? Number(item.price) : 0,
+        category: Array.isArray(item.category)
+          ? item.category
+          : item.category
+            ? [item.category]
+            : [],
+        stockQuantity: item.stockQuantity || 0,
+        status: item.status || 'ACTIVE',
         attributes: item.attributes || undefined,
         usageAnalytics: item.usageAnalytics || undefined,
       }));
@@ -175,6 +184,8 @@ export const POST = createRoute(
           tags: true,
           attributes: true,
           images: true,
+          stockQuantity: true,
+          status: true,
           isActive: true,
           version: true,
           usageAnalytics: true,
@@ -189,6 +200,13 @@ export const POST = createRoute(
         ...product,
         description: product.description || '',
         price: product.price ? Number(product.price) : 0,
+        category: Array.isArray(product.category)
+          ? product.category
+          : product.category
+            ? [product.category]
+            : [],
+        stockQuantity: product.stockQuantity || 0,
+        status: product.status || 'ACTIVE',
         attributes: product.attributes || undefined,
         usageAnalytics: product.usageAnalytics || undefined,
       };

@@ -5,13 +5,13 @@ import { logger } from '@/lib/logger';
  * Component Traceability: US-4.2, H4, H6
  */
 
+import { CustomerProposalsQuerySchema } from '@/features/customers/schemas';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { CustomerProposalsQuerySchema } from '@/features/customers/schemas';
 import { z } from 'zod';
 
 /**

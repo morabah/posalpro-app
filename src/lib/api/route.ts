@@ -1,6 +1,6 @@
 // API route wrapper with authentication, RBAC, validation, and logging
 import { authOptions } from '@/lib/auth';
-import { badRequest, errorToJson, forbidden, unauthorized } from '@/lib/errors';
+import { badRequest, errorToJson, forbidden, StandardError, unauthorized } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 import { getOrCreateRequestId } from '@/lib/requestId';
 import { getServerSession } from 'next-auth';
@@ -308,7 +308,18 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
     } catch (error) {
       // Handle errors
       const duration = Date.now() - startTime;
-      const status = error instanceof Error && 'status' in error ? (error as any).status : 500;
+
+      // Determine HTTP status code from error
+      let status = 500; // Default to internal server error
+
+      if (error instanceof StandardError) {
+        // Use the error code to HTTP status mapping
+        const { errorCodeToHttpStatus } = await import('@/lib/errors/ErrorCodes');
+        status = errorCodeToHttpStatus[error.code] ?? 500;
+      } else if (error instanceof Error && 'status' in error) {
+        status = (error as any).status;
+      }
+
       const payload = errorToJson(error);
 
       logError('route_request_error', {

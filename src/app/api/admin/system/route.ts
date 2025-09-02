@@ -1,11 +1,10 @@
-import { authOptions } from '@/lib/auth';
-import { createApiErrorResponse, ErrorCodes, ErrorHandlingService } from '@/lib/errors';
-import { logInfo, logError } from '@/lib/logger';
 import { ok } from '@/lib/api/response';
+import { createRoute } from '@/lib/api/route';
+import { authOptions } from '@/lib/auth';
+import { createApiErrorResponse, ErrorCodes } from '@/lib/errors';
+import { logError, logInfo } from '@/lib/logger';
 import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import { createRoute } from '@/lib/api/route';
 import { z } from 'zod';
 
 // System configuration schema
@@ -70,7 +69,6 @@ export const GET = createRoute(
     apiVersion: '1',
   },
   async ({ req, user, requestId }) => {
-
     // User is already validated by createRoute roles check
     // No additional permission validation needed
 

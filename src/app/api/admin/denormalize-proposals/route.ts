@@ -96,7 +96,10 @@ export async function POST(request: NextRequest) {
           approvalCount: proposal.approvals.length,
 
           // Financial calculations
-          totalValue: proposal.products.reduce((sum, product) => sum + Number(product.total || 0), 0),
+          totalValue: proposal.products.reduce(
+            (sum, product) => sum + Number(product.total || 0),
+            0
+          ),
 
           // Activity tracking
           lastActivityAt: proposal.updatedAt || new Date(),

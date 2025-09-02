@@ -1,0 +1,487 @@
+🌐 Testing against: http://localhost:3000
+🚀 Starting Version History Functional Tests
+==========================================
+
+🔐 Testing Authentication & RBAC
+✅ Unauthorized access should fail - 169ms
+   Requests: 1
+   Data: {
+  "success": true
+}...
+{"timestamp":"2025-09-01T23:33:23.999Z","level":"info","message":"Functional test login successful","metadata":{"component":"VersionHistoryFunctionalTester","operation":"login","email":"admin@posalpro.com","userId":"cmf0qu7zm008reg9zqjmu5c1i","userRoles":["System Administrator"],"hasRequiredRole":false}}
+✅ Login with valid credentials - 406ms
+   Requests: 3
+   Data: {
+  "success": true
+}...
+✅ Authenticated user can access version history - 48ms
+   Requests: 4
+   Data: {
+  "success": true
+}...
+
+📚 Testing Version History API Functionality
+✅ List all versions with pagination - 65ms
+   Data: {
+  "itemCount": 10
+}...
+✅ Get versions for specific proposal - 120ms
+   Data: {
+  "proposalId": "cmf0r4nhx003pjr108n13ity6",
+  "versionCount": 5
+}...
+✅ Version data structure validation - 41ms
+   Data: {
+  "validated": true,
+  "fields": [
+    "id",
+    "proposalId",
+    "version",
+    "changeType",
+    "createdAt"
+  ]
+}...
+
+🔒 Testing Data Integrity
+✅ Version history maintains chronological order - 99ms
+   Data: {
+  "checked": 20,
+  "chronological": true
+}...
+✅ Version numbers are sequential - 118ms
+   Data: {
+  "proposalId": "cmf0r4nhx003pjr108n13ity6",
+  "versions": [
+    52,
+    51,
+    50,
+    49,
+    48
+  ]
+}...
+
+⚡ Testing Performance
+✅ Version history API response time - 71ms
+   Data: {
+  "duration": 71,
+  "status": 200
+}...
+✅ Pagination performance with large dataset - 74ms
+   Data: {
+  "duration": 74,
+  "itemCount": 100,
+  "status": 200
+}...
+
+🚨 Testing Error Handling
+✅ Invalid proposal ID returns 404 - 36ms
+   Data: {
+  "status": 500,
+  "handled": true
+}...
+✅ Invalid query parameters are handled - 31ms
+   Data: {
+  "status": 500,
+  "handled": true
+}...
+
+📝 Testing Version Creation Workflow
+✅ Version creation trigger on proposal update - 122ms
+   Data: {
+  "proposalId": "cmf0r4nhx003pjr108n13ity6",
+  "versionsBefore": 4,
+  "versionsAfter": 5,
+  "latestVersion": 53
+}...
+✅ Version content preservation - 71ms
+   Data: {
+  "latestVersion": 53,
+  "previousVersion": 52,
+  "changeTypes": [
+    "update",
+    "update"
+  ]
+}...
+
+🔍 Testing Search & Filtering
+✅ Basic search functionality - 49ms
+   Data: {
+  "found": 5,
+  "hasPagination": true
+}...
+✅ Filter by change type - 123ms
+   Data: {
+  "filteredItems": 20,
+  "baselineItems": 20,
+  "filterApplied": true,
+  "changeType": "update"
+}...
+✅ Date range filtering - 128ms
+   Data: {
+  "itemsReturned": 20,
+  "baselineItems": 20,
+  "dateRange": {
+    "from": "2025-07-03",
+    "to": "2025-09-01"
+  },
+  "filterApplied": true
+}...
+
+📊 Testing Statistics & Analytics
+✅ Version statistics endpoint - 54ms
+   Data: {
+  "hasData": true,
+  "responseStructure": "object",
+  "endpointWorking": true
+}...
+✅ User activity statistics - 280ms
+   Data: {
+  "totalVersions": 20,
+  "uniqueUsers": 1,
+  "topContributor": "cmf0qu7zm008reg9zqjmu5c1i"
+}...
+
+🔄 Testing Bulk Operations
+✅ Bulk delete validation - 1812ms
+   Data: {
+  "status": "validation_working",
+  "message": "Empty array validation works",
+  "errorCode": "VAL_4000",
+  "errorMessage": "Invalid request body",
+  "httpStatus": 500
+}...
+✅ Bulk delete with valid data - 39ms
+   Data: {
+  "deleted": 0,
+  "failed": 2,
+  "totalRequested": 2
+}...
+
+🔎 Testing Detailed Version Views
+✅ Version detail with diff - 137ms
+   Data: {
+  "version": 53,
+  "hasDiff": false,
+  "hasSnapshot": false,
+  "fields": [
+    "items",
+    "pagination"
+  ]
+}...
+✅ Version comparison data - 46ms
+   Data: {
+  "comparisons": [
+    {
+      "versions": "52 → 53",
+      "timeGap": 10969,
+      "chronological": true
+    },
+    {
+      "versions": "51 → 52",
+      "timeGap": 1080,
+      "chronological": true...
+
+🔒 Testing Advanced Permissions
+✅ Role-based version access - 114ms
+   Data: {
+  "endpointsTested": 3,
+  "accessible": 3,
+  "allAccessible": true
+}...
+✅ Cross-proposal version isolation - 113ms
+   Data: {
+  "proposals": 3,
+  "isolationResults": [
+    {
+      "proposalId": "cmf0r4nhx003pjr108n13ity6",
+      "versionCount": 5,
+      "correctProposal": true,
+      "isolated": true
+    },
+    {
+      "pr...
+
+🔄 Testing Complete User Workflows
+✅ End-to-end proposal lifecycle with versions - 217ms
+   Data: {
+  "proposalId": "cmf0r4nhx003pjr108n13ity6",
+  "initialVersions": 10,
+  "finalVersions": 10,
+  "versionCreated": false,
+  "historyAccessible": true,
+  "workflowComplete": false
+}...
+✅ Version history data consistency - 1125ms
+   Data: {
+  "request1Items": 10,
+  "request2Items": 10,
+  "consistentItems": 10,
+  "consistencyRatio": 1,
+  "dataConsistent": true
+}...
+✅ Concurrent version access - 60ms
+   Data: {
+  "concurrentRequests": 3,
+  "allSuccessful": true,
+  "responseStatuses": [
+    200,
+    200,
+    200
+  ]
+}...
+✅ Service Layer HTTP Client Consistency - 27ms
+   Data: {
+  "httpClientPattern": "consistent",
+  "responseStructure": "ok_data_envelope",
+  "serviceLayerWorking": true
+}...
+✅ Multi-Layer Response Format Coordination - 30ms
+   Data: {
+  "responseFormat": "coordinated",
+  "hasOkEnvelope": true,
+  "hasDataField": true,
+  "hasItemsArray": true,
+  "layerCoordination": "working"
+}...
+✅ Wizard Payload Data Structure Transformation - 32ms
+   Data: {
+  "wizardTransformation": "detected",
+  "proposalsChecked": 5,
+  "wizardFieldsDetected": true,
+  "transformationTest": "completed"
+}...
+✅ React Hook Order Stability - 56ms
+   Data: {
+  "hookOrder": "stable",
+  "consistentResponses": 3,
+  "noViolations": true,
+  "stabilityTest": "passed"
+}...
+✅ Centralized Query Key Management - 86ms
+   Data: {
+  "queryKeyManagement": "centralized",
+  "endpointsTested": 3,
+  "successfulEndpoints": 3,
+  "implementedEndpoints": 3,
+  "consistencyTest": "passed"
+}...
+✅ Feature-Based Architecture Compliance - 31ms
+   Data: {
+  "featureStructure": "version-history",
+  "requiredFiles": 4,
+  "missingFiles": 0,
+  "complianceCheck": "passed",
+  "architecturePattern": "feature-based"
+}...
+✅ Database-First Design Field Alignment - 25ms
+   Data: {
+  "databaseAlignment": "checked",
+  "expectedFields": 5,
+  "missingFields": 0,
+  "extraFields": 1,
+  "fieldAlignment": "correct",
+  "designPattern": "database-first"
+}...
+✅ Service Layer HTTP Client Pattern Compliance - 59ms
+   Data: {
+  "httpClientPatterns": "validated",
+  "endpointsTested": 2,
+  "correctPatterns": 2,
+  "patternCompliance": "passed",
+  "serviceLayerStandard": "http_client_consistent"
+}...
+✅ Zod Schema Centralization Validation - 30ms
+   Data: {
+  "schemaCentralization": "validated",
+  "featureModule": "version-history",
+  "requiredFields": 4,
+  "hasRequiredFields": true,
+  "typeValidation": "4/4",
+  "schemaCompliance": "passed"
+}...
+✅ React Query Configuration Standards - 59ms
+   Data: {
+  "reactQueryConfig": "tested",
+  "firstRequestMs": 31,
+  "secondRequestMs": 28,
+  "cachingEffective": true,
+  "responsesConsistent": true,
+  "performanceStandards": "met"
+}...
+✅ Error Handling Pattern Compliance - 58ms
+   Data: {
+  "errorHandlingPattern": "centralized",
+  "errorStructure": "code_message",
+  "errorStatusCode": 500,
+  "validRequestWorks": true,
+  "complianceCheck": "passed",
+  "errorHandlingStandard": "central...
+✅ Project Architecture File Structure - 1ms
+   Data: {
+  "architecturePattern": "modern",
+  "featureBasedStructure": true,
+  "coreDirectories": 5,
+  "featureModules": 4,
+  "serviceLayer": 4,
+  "centralizedKeys": true,
+  "reactQueryIntegration": true,
+  ...
+❌ Service Layer Architecture Patterns - 0ms
+   Error: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+✅ React Query Integration Architecture - 149ms
+   Data: {
+  "reactQueryIntegration": "advanced",
+  "queryKeys": "centralized",
+  "hookPatterns": "consistent",
+  "totalQueries": 3,
+  "workingQueries": 3,
+  "implementedQueries": 3,
+  "cachingBehavior": "cons...
+✅ State Management Architecture - 155ms
+   Data: {
+  "stateManagementArchitecture": "separated",
+  "uiStateZustand": true,
+  "serverStateReactQuery": true,
+  "separationOfConcerns": true,
+  "uiStateEphemeral": true,
+  "serverStateCached": true,
+  "a...
+✅ TypeScript and Schema Architecture - 30ms
+   Data: {
+  "typeScriptArchitecture": "strict",
+  "schemaCentralization": "enforced",
+  "typeValidation": "5/5",
+  "requiredFields": true,
+  "optionalFields": true,
+  "consistentStructure": true,
+  "zodValida...
+✅ Admin Page Data Access & API Response Format - 33ms
+   Data: {
+  "adminDataAccess": "working",
+  "responseFormat": "correct",
+  "dataStructure": "accessible",
+  "usersArrayFound": true,
+  "usersCount": 5,
+  "canMapUsers": true,
+  "adminPageIssue": "resolved"
+}...
+✅ Service Method Parameter Validation - 101ms
+   Data: {
+  "serviceParameterValidation": "tested",
+  "totalServices": 3,
+  "successfulServices": 3,
+  "availableServices": 3,
+  "correctFormats": 1,
+  "parameterValidation": "passed",
+  "responseFormatValida...
+✅ Feature-Based Architecture Code Patterns - 98ms
+   Data: {
+  "featureBasedArchitecture": "compliant",
+  "requiredFiles": 9,
+  "missingFiles": 0,
+  "patternsValidated": 9,
+  "architecturePattern": "feature-based"
+}...
+✅ Service Layer HTTP Client Patterns - 47ms
+   Data: {
+  "serviceLayerPatterns": "partial",
+  "totalEndpoints": 5,
+  "workingEndpoints": 1,
+  "httpClientPattern": "direct_data_parameters",
+  "patternCompliance": false
+}...
+✅ Zustand vs React Query State Management Separation - 0ms
+   Data: {
+  "stateManagementSeparation": "compliant",
+  "zustandForUIState": true,
+  "reactQueryForServerState": true,
+  "functionalUpdates": true,
+  "properSeparation": true
+}...
+✅ Centralized Error Handling Patterns - 16ms
+   Data: {
+  "errorHandlingPattern": "centralized",
+  "totalErrorTests": 3,
+  "properErrorResponses": 3,
+  "errorHandlingService": true,
+  "centralizedErrors": true
+}...
+✅ React Query Configuration Standards - 74ms
+   Data: {
+  "reactQueryConfig": "standardized",
+  "totalQueryTests": 3,
+  "cachingEffective": 0,
+  "performanceStandards": 3,
+  "staleTime30s": true,
+  "gcTime120s": true,
+  "queryStandards": false
+}...
+❌ Database-Schema Enum Alignment - 4ms
+   Error: Cannot test enum alignment - API not accessible
+✅ Zustand v5 useShallow Pattern Compliance - 0ms
+   Data: {
+  "zustandV5Compliance": "compliant",
+  "useShallowUsage": true,
+  "immutableUpdates": true,
+  "compositeSelectors": true,
+  "storePatterns": "modern",
+  "v5BestPractices": true
+}...
+✅ HTTP Client Direct Data Parameters - 7ms
+   Data: {
+  "httpClientPattern": "mixed",
+  "totalPostTests": 2,
+  "directDataAccepted": 0,
+  "noManualJsonStringify": true,
+  "httpClientStandard": false
+}...
+❌ UI Filter Completeness vs Schema - 4ms
+   Error: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+✅ Schema Validation Error Handling - 8ms
+   Data: {
+  "schemaValidationErrorHandling": "comprehensive",
+  "totalValidationTests": 2,
+  "properErrorResponses": 2,
+  "tryCatchBlocks": true,
+  "detailedLogging": true,
+  "errorHandlingCompleteness": true...
+❌ Complete Data Flow Architecture - 3ms
+   Error: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+❌ Multi-Layer Data Structure Coordination - 7ms
+   Error: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+❌ Payload Content Flow Through All Layers - 5ms
+   Error: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+❌ Data Transformation Pipeline Validation - 0ms
+   Error: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+🔍 Fetching version history data for field validation...
+🔍 Fetching proposals data for field validation...
+🔍 Fetching customers data for field validation...
+🔍 Fetching products data for field validation...
+❌ Comprehensive Page Field Validation - 1561ms
+   Error: Cannot test field validation - some APIs not responding
+
+📊 Functional Test Summary
+========================
+Total Tests: 61
+✅ Passed: 53
+❌ Failed: 8
+⏰ Timeout: 0
+⏭️ Skipped: 0
+
+🔍 Issue Detection:
+📋 Schema Errors Detected: 0
+🔄 Infinite Loops Detected: 0
+📊 Total Requests Made: 8
+
+❌ Failed Tests:
+   - Service Layer Architecture Patterns: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+   - Database-Schema Enum Alignment: Cannot test enum alignment - API not accessible
+   - UI Filter Completeness vs Schema: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+   - Complete Data Flow Architecture: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+   - Multi-Layer Data Structure Coordination: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+   - Payload Content Flow Through All Layers: Unexpected token 'R', "Rate limit exceeded" is not valid JSON
+   - Data Transformation Pipeline Validation: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+   - Comprehensive Page Field Validation: Cannot test field validation - some APIs not responding
+
+🎯 Success Rate: 86.9%
+{"timestamp":"2025-09-01T23:33:31.999Z","level":"info","message":"Functional Test Suite Completed","metadata":{"component":"VersionHistoryFunctionalTester","operation":"test_summary","total":61,"passed":53,"failed":8,"timeout":0,"skipped":0,"schemaErrors":0,"infiniteLoops":0,"totalRequests":8,"successRate":86.9,"userStory":"US-5.1","hypothesis":"H8"}}

@@ -694,7 +694,7 @@ export class CustomerService {
           cause: error,
           metadata: {
             component: 'CustomerService',
-          operation: 'updateSegmentation',
+            operation: 'updateSegmentation',
             customerId,
             prismaCode: error.code,
           },

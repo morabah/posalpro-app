@@ -1,0 +1,391 @@
+🌐 Testing against: http://localhost:3000
+🚀 Starting Version History Functional Tests
+==========================================
+
+🔐 Testing Authentication & RBAC
+✅ Unauthorized access should fail - 215ms
+   Requests: 1
+   Data: {
+  "success": true
+}...
+{"timestamp":"2025-09-02T05:33:32.055Z","level":"info","message":"Functional test login successful","metadata":{"component":"VersionHistoryFunctionalTester","operation":"login","email":"admin@posalpro.com","userId":"cmf0qu7zm008reg9zqjmu5c1i","userRoles":["System Administrator"],"hasRequiredRole":false}}
+✅ Login with valid credentials - 687ms
+   Requests: 3
+   Data: {
+  "success": true
+}...
+❌ Authenticated user can access version history - 129ms
+   Requests: 4
+   Error: Expected 200, got 500
+
+📚 Testing Version History API Functionality
+❌ List all versions with pagination - 48ms
+   Error: Invalid response structure
+❌ Get versions for specific proposal - 101ms
+   Error: Invalid response structure. Expected data.data.items array, got: {"code":"SYS_1000","message":"\nInvalid `prisma.proposalVersion.findMany()` invocation:\n\n{\n  where: {\n    proposalId: \"cmf0r4nhx003pjr108n13ity6\"\n  },\n  select: {\n    id: true,\n    proposalId: true,\n    version: true,\n    changeType: true,\n    changesSummary: true,\n    createdAt: true,\n    updatedAt: true,\n    ~~~~~~~~~\n    createdBy: true,\n?   snapshot?: true,\n?   productIds?: true,\n?   proposal?: true\n  },\n  orderBy: [\n    {\n      createdAt: \"desc\"\n    },\n    {\n      id: \"desc\"\n    }\n  ],\n  take: 6,\n  skip: 0\n}\n\nUnknown field `updatedAt` for select statement on model `ProposalVersion`. Available options are marked with ?.","details":"Error: \nInvalid `prisma.proposalVersion.findMany()` invocation:\n\n{\n  where: {\n    proposalId: \"cmf0r4nhx003pjr108n13ity6\"\n  },\n  select: {\n    id: true,\n    proposalId: true,\n    version: true,\n    changeType: true,\n    changesSummary: true,\n    createdAt: true,\n    updatedAt: true,\n    ~~~~~~~~~\n    createdBy: true,\n?   snapshot?: true,\n?   productIds?: true,\n?   proposal?: true\n  },\n  orderBy: [\n    {\n      createdAt: \"desc\"\n    },\n    {\n      id: \"desc\"\n    }\n  ],\n  take: 6,\n  skip: 0\n}\n\nUnknown field `updatedAt` for select statement on model `ProposalVersion`. Available options are marked with ?.\n    at eval (webpack-internal:///(rsc)/./src/app/api/proposals/[id]/versions/route.ts:71:15)\n    at async eval (webpack-internal:///(rsc)/./src/lib/api/route.ts:149:34)\n    at async AppRouteRouteModule.do (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:5:38696)\n    at async AppRouteRouteModule.handle (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:5:45978)\n    at async responseGenerator (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&page=%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute.ts&appDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app%2Fsrc%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:203:38)\n    at async AppRouteRouteModule.handleResponse (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:1:187565)\n    at async handleResponse (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&page=%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute.ts&appDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app%2Fsrc%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:265:32)\n    at async handler (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&page=%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute.ts&appDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app%2Fsrc%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:317:13)\n    at async DevServer.renderToResponseWithComponentsImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1422:9)\n    at async DevServer.renderPageComponent (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1474:24)\n    at async DevServer.renderToResponseImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1514:32)\n    at async DevServer.pipeImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1025:25)\n    at async NextNodeServer.handleCatchallRenderRequest (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/next-server.js:393:17)\n    at async DevServer.handleRequestImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:916:17)\n    at async /Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/dev/next-dev-server.js:399:20\n    at async Span.traceAsyncFn (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/trace/trace.js:157:20)\n    at async DevServer.handleRequest (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/dev/next-dev-server.js:395:24)\n    at async invokeRender (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/router-server.js:240:21)\n    at async handleRequest (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/router-server.js:437:24)\n    at async requestHandlerImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/router-server.js:485:13)\n    at async Server.requestListener (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/start-server.js:226:13)"}
+✅ Version data structure validation - 50ms
+   Data: {
+  "validated": false,
+  "reason": "No versions to validate"
+}...
+
+🔒 Testing Data Integrity
+✅ Version history maintains chronological order - 59ms
+   Data: {
+  "checked": 0,
+  "reason": "Insufficient data for chronological test"
+}...
+✅ Version numbers are sequential - 118ms
+   Data: {
+  "reason": "Insufficient versions for sequential test"
+}...
+
+⚡ Testing Performance
+❌ Version history API response time - 50ms
+   Error: API returned status 500
+❌ Pagination performance with large dataset - 64ms
+   Error: API returned status 500
+
+🚨 Testing Error Handling
+✅ Invalid proposal ID returns 404 - 58ms
+   Data: {
+  "status": 500,
+  "handled": true
+}...
+✅ Invalid query parameters are handled - 34ms
+   Data: {
+  "status": 500,
+  "handled": true
+}...
+
+📝 Testing Version Creation Workflow
+❌ Version creation trigger on proposal update - 184ms
+   Error: No versions found after proposal update
+⏭️ Version content preservation - 0ms
+   Error: Insufficient version history
+✅ Version content preservation - 114ms
+
+🔍 Testing Search & Filtering
+❌ Basic search functionality - 49ms
+   Error: Search failed with status: 500
+❌ Filter by change type - 77ms
+   Error: Filter failed with status: 500
+❌ Date range filtering - 76ms
+   Error: Date filter failed with status: 500
+
+📊 Testing Statistics & Analytics
+✅ Version statistics endpoint - 70ms
+   Data: {
+  "hasData": true,
+  "responseStructure": "object",
+  "endpointWorking": true
+}...
+❌ User activity statistics - 60ms
+   Error: Failed to fetch versions for user analysis
+
+🔄 Testing Bulk Operations
+✅ Bulk delete validation - 51ms
+   Data: {
+  "status": "insufficient_data",
+  "message": "Not enough versions for bulk test"
+}...
+✅ Bulk delete with valid data - 108ms
+   Data: {
+  "deleted": 0,
+  "failed": 2,
+  "totalRequested": 2
+}...
+
+🔎 Testing Detailed Version Views
+⏭️ Version detail with diff - 0ms
+   Error: Insufficient versions
+✅ Version detail with diff - 121ms
+✅ Version comparison data - 43ms
+   Data: {
+  "status": "insufficient_data",
+  "message": "Not enough versions for comparison"
+}...
+
+🔒 Testing Advanced Permissions
+✅ Role-based version access - 146ms
+   Data: {
+  "endpointsTested": 3,
+  "accessible": 1,
+  "allAccessible": false
+}...
+✅ Cross-proposal version isolation - 152ms
+   Data: {
+  "proposals": 3,
+  "isolationResults": [],
+  "allIsolated": true
+}...
+
+🔄 Testing Complete User Workflows
+✅ End-to-end proposal lifecycle with versions - 383ms
+   Data: {
+  "proposalId": "cmf0r4nhx003pjr108n13ity6",
+  "initialVersions": 0,
+  "finalVersions": 0,
+  "versionCreated": false,
+  "historyAccessible": false,
+  "workflowComplete": false
+}...
+❌ Version history data consistency - 3462ms
+   Error: Failed to fetch version history consistently
+❌ Concurrent version access - 2930ms
+   Error: 3 concurrent requests failed
+✅ Service Layer HTTP Client Consistency - 4549ms
+   Data: {
+  "httpClientPattern": "consistent",
+  "responseStructure": "ok_data_envelope",
+  "serviceLayerWorking": true
+}...
+✅ Multi-Layer Response Format Coordination - 132ms
+   Data: {
+  "status": "endpoint_error",
+  "message": "Cannot test response format"
+}...
+✅ Wizard Payload Data Structure Transformation - 67ms
+   Data: {
+  "wizardTransformation": "detected",
+  "proposalsChecked": 5,
+  "wizardFieldsDetected": true,
+  "transformationTest": "completed"
+}...
+❌ React Hook Order Stability - 198ms
+   Error: Hook order stability test failed - inconsistent responses
+✅ Centralized Query Key Management - 284ms
+   Data: {
+  "queryKeyManagement": "centralized",
+  "endpointsTested": 3,
+  "successfulEndpoints": 1,
+  "implementedEndpoints": 3,
+  "consistencyTest": "partial"
+}...
+✅ Feature-Based Architecture Compliance - 75ms
+   Data: {
+  "featureStructure": "version-history",
+  "requiredFiles": 4,
+  "missingFiles": 1,
+  "complianceCheck": "failed",
+  "architecturePattern": "feature-based"
+}...
+✅ Database-First Design Field Alignment - 67ms
+   Data: {
+  "status": "endpoint_error",
+  "message": "Cannot test field alignment"
+}...
+✅ Service Layer HTTP Client Pattern Compliance - 169ms
+   Data: {
+  "httpClientPatterns": "validated",
+  "endpointsTested": 2,
+  "correctPatterns": 1,
+  "patternCompliance": "partial",
+  "serviceLayerStandard": "http_client_consistent"
+}...
+✅ Zod Schema Centralization Validation - 46ms
+   Data: {
+  "status": "endpoint_error",
+  "message": "Cannot test schema centralization"
+}...
+✅ React Query Configuration Standards - 106ms
+   Data: {
+  "status": "endpoint_error",
+  "message": "Cannot test caching behavior"
+}...
+✅ Error Handling Pattern Compliance - 111ms
+   Data: {
+  "errorHandlingPattern": "centralized",
+  "errorStructure": "code_message",
+  "errorStatusCode": 500,
+  "validRequestWorks": false,
+  "complianceCheck": "passed",
+  "errorHandlingStandard": "centra...
+✅ Project Architecture File Structure - 0ms
+   Data: {
+  "architecturePattern": "modern",
+  "featureBasedStructure": true,
+  "coreDirectories": 5,
+  "featureModules": 4,
+  "serviceLayer": 4,
+  "centralizedKeys": true,
+  "reactQueryIntegration": true,
+  ...
+❌ Service Layer Architecture Patterns - 0ms
+   Error: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+✅ React Query Integration Architecture - 304ms
+   Data: {
+  "reactQueryIntegration": "advanced",
+  "queryKeys": "centralized",
+  "hookPatterns": "consistent",
+  "totalQueries": 3,
+  "workingQueries": 1,
+  "implementedQueries": 3,
+  "cachingBehavior": "vari...
+✅ State Management Architecture - 309ms
+   Data: {
+  "stateManagementArchitecture": "separated",
+  "uiStateZustand": false,
+  "serverStateReactQuery": true,
+  "separationOfConcerns": true,
+  "uiStateEphemeral": true,
+  "serverStateCached": true,
+  "...
+✅ TypeScript and Schema Architecture - 157ms
+   Data: {
+  "typeScriptArchitecture": "error",
+  "status": 500
+}...
+✅ Admin Page Data Access & API Response Format - 233ms
+   Data: {
+  "adminDataAccess": "working",
+  "responseFormat": "correct",
+  "dataStructure": "accessible",
+  "usersArrayFound": true,
+  "usersCount": 5,
+  "canMapUsers": true,
+  "adminPageIssue": "resolved"
+}...
+✅ Service Method Parameter Validation - 178ms
+   Data: {
+  "serviceParameterValidation": "tested",
+  "totalServices": 3,
+  "successfulServices": 3,
+  "availableServices": 3,
+  "correctFormats": 1,
+  "parameterValidation": "passed",
+  "responseFormatValida...
+✅ Feature-Based Architecture Code Patterns - 646ms
+   Data: {
+  "featureBasedArchitecture": "compliant",
+  "requiredFiles": 9,
+  "missingFiles": 0,
+  "patternsValidated": 9,
+  "architecturePattern": "feature-based"
+}...
+✅ Service Layer HTTP Client Patterns - 216ms
+   Data: {
+  "serviceLayerPatterns": "partial",
+  "totalEndpoints": 5,
+  "workingEndpoints": 3,
+  "httpClientPattern": "direct_data_parameters",
+  "patternCompliance": false
+}...
+✅ Zustand vs React Query State Management Separation - 0ms
+   Data: {
+  "stateManagementSeparation": "compliant",
+  "zustandForUIState": true,
+  "reactQueryForServerState": true,
+  "functionalUpdates": true,
+  "properSeparation": true
+}...
+✅ Centralized Error Handling Patterns - 126ms
+   Data: {
+  "errorHandlingPattern": "inconsistent",
+  "totalErrorTests": 3,
+  "properErrorResponses": 1,
+  "errorHandlingService": true,
+  "centralizedErrors": false
+}...
+✅ React Query Configuration Standards - 251ms
+   Data: {
+  "reactQueryConfig": "standardized",
+  "totalQueryTests": 3,
+  "cachingEffective": 0,
+  "performanceStandards": 3,
+  "staleTime30s": true,
+  "gcTime120s": true,
+  "queryStandards": false
+}...
+❌ Database-Schema Enum Alignment - 50ms
+   Error: Cannot test enum alignment - API not accessible
+✅ Zustand v5 useShallow Pattern Compliance - 0ms
+   Data: {
+  "zustandV5Compliance": "compliant",
+  "useShallowUsage": true,
+  "immutableUpdates": true,
+  "compositeSelectors": true,
+  "storePatterns": "modern",
+  "v5BestPractices": true
+}...
+✅ HTTP Client Direct Data Parameters - 63ms
+   Data: {
+  "httpClientPattern": "mixed",
+  "totalPostTests": 2,
+  "directDataAccepted": 0,
+  "noManualJsonStringify": true,
+  "httpClientStandard": false
+}...
+✅ UI Filter Completeness vs Schema - 43ms
+   Data: {
+  "uiFilterCompleteness": "complete",
+  "totalFilterOptions": 7,
+  "availableDataTypes": 0,
+  "missingUIFilters": [],
+  "schemaUIMatch": true
+}...
+✅ Schema Validation Error Handling - 79ms
+   Data: {
+  "schemaValidationErrorHandling": "comprehensive",
+  "totalValidationTests": 2,
+  "properErrorResponses": 2,
+  "tryCatchBlocks": true,
+  "detailedLogging": true,
+  "errorHandlingCompleteness": true...
+🔄 Testing complete round-trip validation...
+❌ Complete Data Flow Architecture - 2052ms
+   Error: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+✅ Multi-Layer Data Structure Coordination - 189ms
+   Data: {
+  "multiLayerCoordination": "comprehensive_test",
+  "apiLayerStructure": "❌ INVALID",
+  "serviceLayerUnwrap": "❌ WRAPPED DATA",
+  "hookLayerHandling": "❌ INVALID STRUCTURE",
+  "componentAccess": "❌ ...
+❌ Payload Content Flow Through All Layers - 72ms
+   Error: Cannot test payload flow - API not responding correctly
+❌ Data Transformation Pipeline Validation - 2003ms
+   Error: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+🔍 Fetching version history data (attempt 1/3)...
+🔍 Fetching proposals data (attempt 1/3)...
+🔍 Fetching customers data (attempt 1/3)...
+🔍 Fetching products data (attempt 1/3)...
+❌ Comprehensive Page Field Validation - 3442ms
+   Error: Cannot test field validation - some APIs not responding
+
+📊 Functional Test Summary
+========================
+Total Tests: 63
+✅ Passed: 42
+❌ Failed: 19
+⏰ Timeout: 0
+⏭️ Skipped: 2
+
+🔍 Issue Detection:
+📋 Schema Errors Detected: 0
+🔄 Infinite Loops Detected: 0
+📊 Total Requests Made: 8
+
+❌ Failed Tests:
+   - Authenticated user can access version history: Expected 200, got 500
+   - List all versions with pagination: Invalid response structure
+   - Get versions for specific proposal: Invalid response structure. Expected data.data.items array, got: {"code":"SYS_1000","message":"\nInvalid `prisma.proposalVersion.findMany()` invocation:\n\n{\n  where: {\n    proposalId: \"cmf0r4nhx003pjr108n13ity6\"\n  },\n  select: {\n    id: true,\n    proposalId: true,\n    version: true,\n    changeType: true,\n    changesSummary: true,\n    createdAt: true,\n    updatedAt: true,\n    ~~~~~~~~~\n    createdBy: true,\n?   snapshot?: true,\n?   productIds?: true,\n?   proposal?: true\n  },\n  orderBy: [\n    {\n      createdAt: \"desc\"\n    },\n    {\n      id: \"desc\"\n    }\n  ],\n  take: 6,\n  skip: 0\n}\n\nUnknown field `updatedAt` for select statement on model `ProposalVersion`. Available options are marked with ?.","details":"Error: \nInvalid `prisma.proposalVersion.findMany()` invocation:\n\n{\n  where: {\n    proposalId: \"cmf0r4nhx003pjr108n13ity6\"\n  },\n  select: {\n    id: true,\n    proposalId: true,\n    version: true,\n    changeType: true,\n    changesSummary: true,\n    createdAt: true,\n    updatedAt: true,\n    ~~~~~~~~~\n    createdBy: true,\n?   snapshot?: true,\n?   productIds?: true,\n?   proposal?: true\n  },\n  orderBy: [\n    {\n      createdAt: \"desc\"\n    },\n    {\n      id: \"desc\"\n    }\n  ],\n  take: 6,\n  skip: 0\n}\n\nUnknown field `updatedAt` for select statement on model `ProposalVersion`. Available options are marked with ?.\n    at eval (webpack-internal:///(rsc)/./src/app/api/proposals/[id]/versions/route.ts:71:15)\n    at async eval (webpack-internal:///(rsc)/./src/lib/api/route.ts:149:34)\n    at async AppRouteRouteModule.do (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:5:38696)\n    at async AppRouteRouteModule.handle (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:5:45978)\n    at async responseGenerator (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&page=%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute.ts&appDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app%2Fsrc%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:203:38)\n    at async AppRouteRouteModule.handleResponse (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:1:187565)\n    at async handleResponse (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&page=%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute.ts&appDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app%2Fsrc%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:265:32)\n    at async handler (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&page=%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fproposals%2F%5Bid%5D%2Fversions%2Froute.ts&appDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app%2Fsrc%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FVolumes%2FRabah_SSD%2Fenrpreneurship%2FPosalPro%2FMVP2%2Fposalpro-app&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:317:13)\n    at async DevServer.renderToResponseWithComponentsImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1422:9)\n    at async DevServer.renderPageComponent (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1474:24)\n    at async DevServer.renderToResponseImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1514:32)\n    at async DevServer.pipeImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:1025:25)\n    at async NextNodeServer.handleCatchallRenderRequest (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/next-server.js:393:17)\n    at async DevServer.handleRequestImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/base-server.js:916:17)\n    at async /Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/dev/next-dev-server.js:399:20\n    at async Span.traceAsyncFn (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/trace/trace.js:157:20)\n    at async DevServer.handleRequest (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/dev/next-dev-server.js:395:24)\n    at async invokeRender (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/router-server.js:240:21)\n    at async handleRequest (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/router-server.js:437:24)\n    at async requestHandlerImpl (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/router-server.js:485:13)\n    at async Server.requestListener (/Volumes/Rabah_SSD/enrpreneurship/PosalPro/MVP2/posalpro-app/node_modules/next/dist/server/lib/start-server.js:226:13)"}
+   - Version history API response time: API returned status 500
+   - Pagination performance with large dataset: API returned status 500
+   - Version creation trigger on proposal update: No versions found after proposal update
+   - Basic search functionality: Search failed with status: 500
+   - Filter by change type: Filter failed with status: 500
+   - Date range filtering: Date filter failed with status: 500
+   - User activity statistics: Failed to fetch versions for user analysis
+   - Version history data consistency: Failed to fetch version history consistently
+   - Concurrent version access: 3 concurrent requests failed
+   - React Hook Order Stability: Hook order stability test failed - inconsistent responses
+   - Service Layer Architecture Patterns: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+   - Database-Schema Enum Alignment: Cannot test enum alignment - API not accessible
+   - Complete Data Flow Architecture: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+   - Payload Content Flow Through All Layers: Cannot test payload flow - API not responding correctly
+   - Data Transformation Pipeline Validation: INFINITE_LOOP_DETECTED: Too many requests to /api/proposals/versions?limit=1 (6)
+   - Comprehensive Page Field Validation: Cannot test field validation - some APIs not responding
+
+🎯 Success Rate: 68.9%
+{"timestamp":"2025-09-02T05:33:57.025Z","level":"info","message":"Functional Test Suite Completed","metadata":{"component":"VersionHistoryFunctionalTester","operation":"test_summary","total":63,"passed":42,"failed":19,"timeout":0,"skipped":2,"schemaErrors":0,"infiniteLoops":0,"totalRequests":8,"successRate":68.9,"userStory":"US-5.1","hypothesis":"H8"}}

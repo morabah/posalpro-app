@@ -66,6 +66,13 @@ export const GET = createRoute(
         where.industry = { contains: query!.industry, mode: 'insensitive' };
       }
 
+      if (query!.companySize) {
+        const size = String(query!.companySize).toUpperCase();
+        if ((['STARTUP', 'SMALL', 'MEDIUM', 'LARGE', 'ENTERPRISE'] as string[]).includes(size)) {
+          where.companySize = size as any;
+        }
+      }
+
       // Build order by
       const orderBy: Prisma.CustomerOrderByWithRelationInput[] = [
         { [query!.sortBy]: query!.sortOrder } as Prisma.CustomerOrderByWithRelationInput,

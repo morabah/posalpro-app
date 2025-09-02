@@ -12,7 +12,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 // Import centralized schemas
-import { UserCreateSchema, UserUpdateSchema, UsersQuerySchema, type UserUpdate, type UserUpdate as UserUpdateData } from '@/features/admin/schemas';
+import { UserCreateSchema, UserUpdateSchema, UsersQuerySchema } from '@/features/admin/schemas';
 
 /**
  * Component Traceability Matrix
@@ -196,13 +196,16 @@ export const GET = createRoute(
       operation: 'GET',
       totalCount,
       usersCount: users.length,
-      firstUser: users.length > 0 ? {
-        id: users[0].id,
-        email: users[0].email,
-        status: users[0].status,
-        rolesCount: users[0].roles?.length || 0,
-        roles: users[0].roles?.map(r => r.role.name) || []
-      } : null,
+      firstUser:
+        users.length > 0
+          ? {
+              id: users[0].id,
+              email: users[0].email,
+              status: users[0].status,
+              rolesCount: users[0].roles?.length || 0,
+              roles: users[0].roles?.map(r => r.role.name) || [],
+            }
+          : null,
       requestId,
     });
 
@@ -224,12 +227,15 @@ export const GET = createRoute(
       operation: 'GET',
       rawUsersCount: users.length,
       transformedUsersCount: transformedUsers.length,
-      firstTransformedUser: transformedUsers.length > 0 ? {
-        id: transformedUsers[0].id,
-        email: transformedUsers[0].email,
-        role: transformedUsers[0].role,
-        status: transformedUsers[0].status
-      } : null,
+      firstTransformedUser:
+        transformedUsers.length > 0
+          ? {
+              id: transformedUsers[0].id,
+              email: transformedUsers[0].email,
+              role: transformedUsers[0].role,
+              status: transformedUsers[0].status,
+            }
+          : null,
       requestId,
     });
 
@@ -267,10 +273,13 @@ export const GET = createRoute(
       operation: 'GET',
       responseUsersCount: responseData.users.length,
       responsePagination: responseData.pagination,
-      firstResponseUser: responseData.users.length > 0 ? {
-        id: responseData.users[0].id,
-        email: responseData.users[0].email
-      } : null,
+      firstResponseUser:
+        responseData.users.length > 0
+          ? {
+              id: responseData.users[0].id,
+              email: responseData.users[0].email,
+            }
+          : null,
       requestId,
     });
 

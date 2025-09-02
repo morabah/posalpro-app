@@ -50,7 +50,7 @@ const DEFAULT_CONFIG: HttpClientConfig = {
   defaultHeaders: {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-cache, no-store, must-revalidate', // ✅ CACHE CONTROL: Prevent all forms of caching
-    'Pragma': 'no-cache', // ✅ PRAGMA HEADER: Additional cache bypass for HTTP/1.0 compatibility
+    Pragma: 'no-cache', // ✅ PRAGMA HEADER: Additional cache bypass for HTTP/1.0 compatibility
   },
   timeout: 30000, // 30 seconds
   retries: 1,
@@ -77,7 +77,7 @@ export class HttpClient {
 
     // Prepare request options
     const requestOptions: RequestInit = {
-      credentials: "include",
+      credentials: 'include',
       cache: 'no-store', // ✅ EXPLICIT CACHE BYPASS: Prevent browser from caching responses
       ...options,
       headers: {
@@ -274,7 +274,10 @@ export class HttpClient {
         status: response.status,
         dataType: typeof data,
         dataKeys: data && typeof data === 'object' ? Object.keys(data) : null,
-        dataPreview: data && typeof data === 'object' ? JSON.stringify(data).substring(0, 200) : String(data).substring(0, 200),
+        dataPreview:
+          data && typeof data === 'object'
+            ? JSON.stringify(data).substring(0, 200)
+            : String(data).substring(0, 200),
         requestId,
       });
     } catch (error) {
@@ -304,6 +307,20 @@ export class HttpClient {
       const isSuccess = apiResponse.ok !== undefined ? apiResponse.ok : apiResponse.success;
       const message = apiResponse.message || 'API request failed';
       const code = apiResponse.code || 'API_ERROR';
+
+      logDebug('HTTP client detected API envelope', {
+        component: 'HttpClient',
+        operation: 'handleResponse',
+        isSuccess,
+        hasData: 'data' in apiResponse,
+        dataType: typeof apiResponse.data,
+        dataKeys:
+          apiResponse.data && typeof apiResponse.data === 'object'
+            ? Object.keys(apiResponse.data)
+            : null,
+        url: response.url,
+        requestId,
+      });
 
       if (!isSuccess) {
         throw new HttpClientError(message, response.status, code, requestId, apiResponse.details);

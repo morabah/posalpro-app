@@ -12,14 +12,26 @@
 
 'use client';
 
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { useAuth } from '@/components/providers/AuthProvider';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import {
+  ChartBarIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  CogIcon,
+  DocumentArrowDownIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  ShieldCheckIcon,
+  XCircleIcon,
+} from '@heroicons/react/24/outline';
+import { useCallback, useEffect, useState } from 'react';
 // TODO: Implement validation feature - temporarily disabled
 // import {
 //   useValidationMetrics,
@@ -37,18 +49,6 @@ type ValidationQuery = {
   status?: string;
   timeFilter?: string;
 };
-import {
-  ChartBarIcon,
-  CheckCircleIcon,
-  ClockIcon,
-  CogIcon,
-  DocumentArrowDownIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  ShieldCheckIcon,
-  XCircleIcon,
-} from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useState } from 'react';
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -90,9 +90,15 @@ export default function ValidationDashboardPage() {
 
   // UI State management
   const [activeTab, setActiveTab] = useState<string>('issues');
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'configuration' | 'license' | 'technical' | 'compliance'>('all');
-  const [selectedSeverity, setSelectedSeverity] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
-  const [timeFilter, setTimeFilter] = useState<'last-7-days' | 'last-30-days' | 'last-90-days'>('last-30-days');
+  const [selectedFilter, setSelectedFilter] = useState<
+    'all' | 'configuration' | 'license' | 'technical' | 'compliance'
+  >('all');
+  const [selectedSeverity, setSelectedSeverity] = useState<
+    'all' | 'critical' | 'high' | 'medium' | 'low'
+  >('all');
+  const [timeFilter, setTimeFilter] = useState<'last-7-days' | 'last-30-days' | 'last-90-days'>(
+    'last-30-days'
+  );
 
   // Query parameters for issues
   const issueQueryParams: ValidationQuery = {
@@ -129,7 +135,11 @@ export default function ValidationDashboardPage() {
   const refetchRules = useCallback(() => {}, []);
 
   const resolveIssueMutation = { mutate: () => {}, mutateAsync: async () => {}, isLoading: false };
-  const exportReportMutation = { mutate: () => {}, mutateAsync: async () => ({}), isLoading: false };
+  const exportReportMutation = {
+    mutate: () => {},
+    mutateAsync: async () => ({}),
+    isLoading: false,
+  };
 
   // Combined loading state
   const loading = metricsLoading || issuesLoading || rulesLoading;
@@ -163,11 +173,7 @@ export default function ValidationDashboardPage() {
     );
 
     // Refetch all queries
-    await Promise.all([
-      refetchMetrics(),
-      refetchIssues(),
-      refetchRules(),
-    ]);
+    await Promise.all([refetchMetrics(), refetchIssues(), refetchRules()]);
   }, [refetchMetrics, refetchIssues, refetchRules, analytics]);
 
   // Track data load success
@@ -502,7 +508,16 @@ export default function ValidationDashboardPage() {
                 <div className="flex items-center space-x-4">
                   <select
                     value={selectedFilter}
-                    onChange={e => setSelectedFilter(e.target.value as "configuration" | "all" | "license" | "technical" | "compliance")}
+                    onChange={e =>
+                      setSelectedFilter(
+                        e.target.value as
+                          | 'configuration'
+                          | 'all'
+                          | 'license'
+                          | 'technical'
+                          | 'compliance'
+                      )
+                    }
                     className="block w-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   >
                     <option value="all">All Types</option>
@@ -513,7 +528,11 @@ export default function ValidationDashboardPage() {
                   </select>
                   <select
                     value={selectedSeverity}
-                    onChange={e => setSelectedSeverity(e.target.value as "high" | "medium" | "low" | "critical" | "all")}
+                    onChange={e =>
+                      setSelectedSeverity(
+                        e.target.value as 'high' | 'medium' | 'low' | 'critical' | 'all'
+                      )
+                    }
                     className="block w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   >
                     <option value="all">All Severity</option>
