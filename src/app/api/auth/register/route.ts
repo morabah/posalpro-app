@@ -15,33 +15,8 @@ import { rateLimiter } from '@/lib/security';
 import { createUser } from '@/lib/services/userService';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { NextRequest, NextResponse } from 'next/server';
+import { RegisterSchema } from '@/features/auth';
 import { z } from 'zod';
-
-// Validation schema for registration
-const registerSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'Password must contain uppercase, lowercase, number and special character'
-    ),
-  department: z.string().min(2, 'Department is required'),
-  roles: z.array(z.string()).min(1, 'At least one role must be selected'),
-  acceptTerms: z.boolean().refine(val => val === true, 'Terms must be accepted'),
-  marketingConsent: z.boolean().optional(),
-  // Additional fields from wireframe
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  companyName: z.string().optional(),
-  jobTitle: z.string().optional(),
-  phone: z.string().optional(),
-  // Notification preferences
-  notificationChannels: z.array(z.enum(['EMAIL', 'SMS', 'PUSH', 'IN_APP'])).optional(),
-  notificationFrequency: z.enum(['immediate', 'daily', 'weekly', 'monthly']).optional(),
-});
 
 // Rate limiting configuration (5 attempts per minute)
 // Uses established Redis-based infrastructure from src/lib/security.ts
@@ -77,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
-    const validatedData = registerSchema.parse(body);
+    const validatedData = RegisterSchema.parse(body);
 
     // Combine first and last name
     const fullName = `${validatedData.firstName} ${validatedData.lastName}`;

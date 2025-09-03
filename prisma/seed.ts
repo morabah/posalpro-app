@@ -1595,6 +1595,7 @@ async function main() {
   const customersData = [
     {
       name: 'Al Noor Technologies',
+      email: 'contact@alnoor-tech.com',
       industry: 'Technology',
       tier: 'ENTERPRISE',
       status: 'ACTIVE',
@@ -1618,6 +1619,7 @@ async function main() {
     },
     {
       name: 'Al Quds Financial',
+      email: 'contact@alquds-financial.com',
       industry: 'Financial Services',
       tier: 'ENTERPRISE',
       status: 'ACTIVE',
@@ -1634,6 +1636,7 @@ async function main() {
     },
     {
       name: 'Shifa Health Innovations',
+      email: 'contact@shifa-health.com',
       industry: 'Healthcare',
       tier: 'PREMIUM',
       status: 'ACTIVE',
@@ -1650,6 +1653,7 @@ async function main() {
     },
     {
       name: 'Al Hadid Manufacturing',
+      email: 'contact@alhadid-mfg.com',
       industry: 'Manufacturing',
       tier: 'STANDARD',
       status: 'ACTIVE',
@@ -1666,6 +1670,7 @@ async function main() {
     },
     {
       name: 'Al Ilm Education Systems',
+      email: 'contact@alilm-edu.com',
       industry: 'Education',
       tier: 'STANDARD',
       status: 'ACTIVE',
@@ -1687,6 +1692,7 @@ async function main() {
     const customer = await prisma.customer.create({
       data: {
         name: customerData.name,
+        email: customerData.email,
         industry: customerData.industry,
         tier: customerData.tier as 'STANDARD' | 'PREMIUM' | 'ENTERPRISE' | 'VIP',
         status: customerData.status as 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'CHURNED',
@@ -2227,39 +2233,42 @@ async function main() {
         currency: proposalData.currency,
         tags: proposalData.tags,
         // Build wizard-compatible product snapshot for step 4
-        wizardProducts: proposalData.products
-          .map(productName => {
-            const product = createdProducts[productName];
-            if (!product) return null;
-            return {
-              id: product.id,
-              name: product.name,
-              included: true,
-              quantity: 1,
-              unitPrice: product.price,
-              totalPrice: product.price,
-              category: product.category?.[0] ?? 'General',
-              configuration: {},
-              customizations: [],
-              notes: '',
-            };
-          })
-          .filter(
-            (
-              p
-            ): p is {
-              id: string;
-              name: string;
-              included: boolean;
-              quantity: number;
-              unitPrice: number;
-              totalPrice: number;
-              category: string;
-              configuration: Record<string, unknown>;
-              customizations: string[];
-              notes: string;
-            } => p !== null
-          ),
+        wizardProducts: (() => {
+          const wizardProducts = proposalData.products
+            .map(productName => {
+              const product = createdProducts[productName];
+              if (!product) return null;
+              return {
+                id: product.id,
+                name: product.name,
+                included: true,
+                quantity: 1,
+                unitPrice: product.price,
+                totalPrice: product.price,
+                category: product.category?.[0] ?? 'General',
+                configuration: {},
+                customizations: [],
+                notes: '',
+              };
+            })
+            .filter(
+              (
+                p
+              ): p is {
+                id: string;
+                name: string;
+                included: boolean;
+                quantity: number;
+                unitPrice: number;
+                totalPrice: number;
+                category: string;
+                configuration: Record<string, unknown>;
+                customizations: string[];
+                notes: string;
+              } => p !== null
+            );
+          return wizardProducts;
+        })(),
 
         metadata: toPrismaJson({
           createdBy: creator.id,

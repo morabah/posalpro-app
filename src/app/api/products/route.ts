@@ -17,7 +17,7 @@ import {
   ProductListSchema,
   ProductQuerySchema,
   ProductSchema,
-} from '@/features/products/schemas';
+} from '@/features/products';
 
 // GET /api/products - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(
@@ -153,8 +153,6 @@ export const POST = createRoute(
       const product = await prisma.product.create({
         data: {
           ...body!,
-          hypothesis: ['H5'],
-          userStories: ['US-4.1'],
         },
         select: {
           id: true,

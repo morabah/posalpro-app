@@ -4,6 +4,16 @@
  * Component Traceability: US-1.1, US-1.2, US-1.3
  */
 
+import {
+  SearchQuerySchema,
+  sortByField,
+  sortByRelevance,
+  type PaginationInfo,
+  type SearchFilters,
+  type SearchQuery,
+  type SearchResponse,
+  type SearchResult,
+} from '@/features/search';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
@@ -13,94 +23,8 @@ import { logError, logInfo } from '@/lib/logger';
 import { decidePaginationStrategy } from '@/lib/utils/selectiveHydration';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 
-/**
- * Type definitions for search functionality
- */
-
-// Database-agnostic ID validation (CORE_REQUIREMENTS.md)
-const databaseIdSchema = z
-  .string()
-  .min(1, 'ID is required')
-  .refine(id => id !== 'undefined' && id.trim().length > 0);
-
-interface SearchFilters {
-  dateFrom?: string;
-  dateTo?: string;
-  status?: string;
-  priority?: string;
-  category?: string;
-  customerId?: string;
-  userId?: string;
-  contentType?: string;
-  priceRange?: [number, number];
-  industry?: string;
-  tier?: string;
-  department?: string;
-  role?: string;
-  [key: string]: unknown;
-}
-
-interface SearchQuery {
-  q: string;
-  type: 'all' | 'content' | 'proposals' | 'products' | 'customers' | 'users';
-  page: number;
-  limit: number;
-  sortBy: 'relevance' | 'date' | 'title' | 'status' | 'id';
-  sortOrder: 'asc' | 'desc';
-  cursor?: string;
-  fields?: string[];
-  filters?: string;
-}
-
-interface SearchResult {
-  id: string;
-  entityType: string;
-  title?: string;
-  name?: string;
-  description?: string | null;
-  relevanceScore?: number;
-  url?: string;
-  metadata?: Record<string, unknown> | null;
-  createdAt: Date;
-  updatedAt: Date;
-  type?: string;
-  tags?: string[] | null;
-  status?: string;
-  [key: string]: unknown;
-}
-
-interface PaginationInfo {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-  hasMore: boolean;
-  nextPage: number | null;
-  prevPage: number | null;
-  nextCursor?: string | null;
-}
-
-interface SearchResponse {
-  results: SearchResult[];
-  pagination: PaginationInfo;
-  facets: {
-    types: Array<{ type: string; count: number }>;
-    statuses: Array<{ status: string; count: number }>;
-    dateRanges: Array<{ range: string; count: number }>;
-  };
-  searchTerm: string;
-  totalTime: number;
-  suggestions: string[];
-  meta: {
-    paginationType: 'cursor' | 'offset';
-    paginationReason: string;
-    totalCount: number;
-    executionTime: number;
-  };
-}
-
+// Session types (keeping these local as they're NextAuth specific)
 interface SessionUser {
   id: string;
   email?: string;
@@ -112,21 +36,6 @@ interface AuthenticatedSession {
   user: SessionUser;
   expires: string;
 }
-
-/**
- * Enhanced search query validation schema with cursor pagination
- */
-const SearchQuerySchema = z.object({
-  q: z.string().min(1, 'Search query is required'),
-  type: z.enum(['all', 'content', 'proposals', 'products', 'customers', 'users']).default('all'),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  sortBy: z.enum(['relevance', 'date', 'title', 'status', 'id']).default('relevance'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  cursor: databaseIdSchema.optional(),
-  fields: z.string().optional(),
-  filters: z.string().optional(),
-});
 
 /**
  * Global search endpoint with enhanced filtering and cursor pagination
@@ -150,10 +59,7 @@ export async function GET(request: NextRequest) {
     const queryParams = Object.fromEntries(searchParams);
 
     const parsedQuery = SearchQuerySchema.parse(queryParams);
-    validatedQuery = {
-      ...parsedQuery,
-      fields: parsedQuery.fields ? parsedQuery.fields.split(',') : undefined,
-    } as SearchQuery;
+    validatedQuery = parsedQuery as SearchQuery;
 
     // Determine pagination strategy
     const { useCursorPagination, reason } = decidePaginationStrategy({
@@ -161,7 +67,7 @@ export async function GET(request: NextRequest) {
       limit: validatedQuery.limit,
       sortBy: validatedQuery.sortBy,
       sortOrder: validatedQuery.sortOrder,
-      fields: validatedQuery.fields?.join(','),
+      fields: validatedQuery.fields ? validatedQuery.fields.join(',') : undefined,
       page: validatedQuery.page,
     });
 
@@ -654,73 +560,5 @@ async function searchUsers(searchTerm: string, filters: SearchFilters, query: Se
       },
     },
     take: query.limit,
-  });
-}
-
-/**
- * Sort results by relevance score
- */
-function sortByRelevance(results: SearchResult[], searchTerm: string) {
-  return results.sort((a, b) => {
-    const scoreA = calculateRelevanceScore(a, searchTerm);
-    const scoreB = calculateRelevanceScore(b, searchTerm);
-    return scoreB - scoreA;
-  });
-}
-
-/**
- * Calculate relevance score for search result
- */
-function calculateRelevanceScore(item: SearchResult, searchTerm: string): number {
-  let score = 0;
-  const term = searchTerm.toLowerCase();
-
-  // Title/name match gets highest score
-  const title = item.title || item.name || '';
-  if (title.toLowerCase().includes(term)) {
-    score += title.toLowerCase() === term ? 100 : 50;
-  }
-
-  // Description match
-  if (item.description?.toLowerCase().includes(term)) {
-    score += 25;
-  }
-
-  // Tag match
-  if (item.tags?.some((tag: string) => tag.toLowerCase().includes(term))) {
-    score += 15;
-  }
-
-  // Exact matches get bonus
-  if (title.toLowerCase() === term) {
-    score += 200;
-  }
-
-  return score;
-}
-
-/**
- * Sort results by specified field
- */
-function sortByField(results: SearchResult[], field: string, order: 'asc' | 'desc') {
-  return results.sort((a, b) => {
-    let valueA: string | number | Date = a[field] as string | number | Date;
-    let valueB: string | number | Date = b[field] as string | number | Date;
-
-    // Handle different field types
-    if (typeof valueA === 'string' && typeof valueB === 'string') {
-      valueA = valueA.toLowerCase();
-      valueB = valueB.toLowerCase();
-    }
-
-    // Handle missing values for title/name
-    if (field === 'title') {
-      valueA = a.title || a.name || '';
-      valueB = b.title || b.name || '';
-    }
-
-    if (valueA < valueB) return order === 'asc' ? -1 : 1;
-    if (valueA > valueB) return order === 'asc' ? 1 : -1;
-    return 0;
   });
 }

@@ -4,7 +4,7 @@
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 
-import { qk } from '@/features/proposals/keys';
+import { proposalKeys } from '@/features/proposals';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { proposalService } from '@/services/proposalService';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,7 +17,7 @@ export function useProposal(
   }
 ) {
   return useQuery({
-    queryKey: qk.proposals.byId(proposalId),
+    queryKey: proposalKeys.proposals.byId(proposalId),
     queryFn: async () => {
       logDebug('Fetching proposal', {
         component: 'useProposal',
@@ -29,23 +29,19 @@ export function useProposal(
 
       try {
         const startTime = Date.now();
-        const response = await proposalService.getProposal(proposalId);
+        const data = await proposalService.getProposal(proposalId);
         const loadTime = Date.now() - startTime;
 
-        if (response.ok) {
-          logInfo('Proposal fetched successfully', {
-            component: 'useProposal',
-            operation: 'fetchProposal',
-            proposalId,
-            loadTime,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
+        logInfo('Proposal fetched successfully', {
+          component: 'useProposal',
+          operation: 'fetchProposal',
+          proposalId,
+          loadTime,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        });
 
-          return response.data;
-        } else {
-          throw new Error(response.message || 'Failed to fetch proposal');
-        }
+        return data;
       } catch (error) {
         logError('Failed to fetch proposal', {
           component: 'useProposal',
@@ -81,23 +77,19 @@ export function useCreateProposal() {
 
       try {
         const startTime = Date.now();
-        const response = await proposalService.createProposal(data);
+        const result = await proposalService.createProposal(data);
         const loadTime = Date.now() - startTime;
 
-        if (response.ok) {
-          logInfo('Proposal created successfully', {
-            component: 'useCreateProposal',
-            operation: 'createProposal',
-            proposalId: response.data.id,
-            loadTime,
-            userStory: 'US-3.1',
-            hypothesis: 'H4',
-          });
+        logInfo('Proposal created successfully', {
+          component: 'useCreateProposal',
+          operation: 'createProposal',
+          proposalId: result.id,
+          loadTime,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
 
-          return response.data;
-        } else {
-          throw new Error(response.message || 'Failed to create proposal');
-        }
+        return result;
       } catch (error) {
         logError('Failed to create proposal', {
           component: 'useCreateProposal',
@@ -111,9 +103,9 @@ export function useCreateProposal() {
     },
     onSuccess: data => {
       // Invalidate and refetch proposals list
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
       // Set the new proposal data in cache
-      queryClient.setQueryData(qk.proposals.byId(data.id), data);
+      queryClient.setQueryData(proposalKeys.proposals.byId(data.id), data);
     },
     onError: error => {
       logError('Proposal creation failed', {
@@ -142,23 +134,19 @@ export function useUpdateProposal() {
 
       try {
         const startTime = Date.now();
-        const response = await proposalService.updateProposal(id, data);
+        const result = await proposalService.updateProposal(id, data);
         const loadTime = Date.now() - startTime;
 
-        if (response.ok) {
-          logInfo('Proposal updated successfully', {
-            component: 'useUpdateProposal',
-            operation: 'updateProposal',
-            proposalId: id,
-            loadTime,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
+        logInfo('Proposal updated successfully', {
+          component: 'useUpdateProposal',
+          operation: 'updateProposal',
+          proposalId: id,
+          loadTime,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        });
 
-          return response.data;
-        } else {
-          throw new Error(response.message || 'Failed to update proposal');
-        }
+        return result;
       } catch (error) {
         logError('Failed to update proposal', {
           component: 'useUpdateProposal',
@@ -182,18 +170,18 @@ export function useUpdateProposal() {
 
       // ✅ AGGRESSIVE CACHE INVALIDATION: Force complete refresh
       // 1. Remove all cached data for this proposal
-      queryClient.removeQueries({ queryKey: qk.proposals.byId(variables.id) });
+      queryClient.removeQueries({ queryKey: proposalKeys.proposals.byId(variables.id) });
 
       // 2. Invalidate all proposal-related queries to force refetch
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
-      queryClient.invalidateQueries({ queryKey: qk.proposals.byId(variables.id) });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.byId(variables.id) });
 
       // 3. Set fresh data immediately to prevent loading states
-      queryClient.setQueryData(qk.proposals.byId(variables.id), data);
+      queryClient.setQueryData(proposalKeys.proposals.byId(variables.id), data);
 
       // 4. Force refetch to ensure data consistency
       queryClient.refetchQueries({
-        queryKey: qk.proposals.byId(variables.id),
+        queryKey: proposalKeys.proposals.byId(variables.id),
         type: 'active',
       });
 
@@ -235,7 +223,7 @@ export function useDeleteProposal() {
 
       try {
         const startTime = Date.now();
-        await proposalService.deleteProposal(id);
+        const result = await proposalService.deleteProposal(id);
         const loadTime = Date.now() - startTime;
 
         logInfo('Proposal deleted successfully', {
@@ -262,9 +250,9 @@ export function useDeleteProposal() {
     },
     onSuccess: id => {
       // Remove the proposal from cache
-      queryClient.removeQueries({ queryKey: qk.proposals.byId(id) });
+      queryClient.removeQueries({ queryKey: proposalKeys.proposals.byId(id) });
       // Invalidate proposals list
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
     },
     onError: (error, id) => {
       logError('Proposal deletion failed', {

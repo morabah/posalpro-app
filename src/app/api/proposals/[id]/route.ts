@@ -4,13 +4,12 @@
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
-import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals/schemas';
+import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals';
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
-import { formatCurrency } from '@/lib/utils';
 import { Prisma } from '@prisma/client';
 
 // ====================
@@ -27,12 +26,12 @@ export const GET = createRoute(
     if (!id) {
       return Response.json(fail('VALIDATION_ERROR', 'Proposal ID is required'), { status: 400 });
     }
+
     try {
       logInfo('Fetching proposal', {
-        component: 'ProposalAPI',
-        operation: 'GET',
         proposalId: id,
-        userId: user.id,
+        component: 'IndividualProposalEndpoint',
+        operation: 'GET',
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
@@ -45,10 +44,16 @@ export const GET = createRoute(
               id: true,
               name: true,
               email: true,
+              industry: true,
             },
           },
           sections: {
-            orderBy: { order: 'asc' },
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              order: true,
+            },
           },
           products: {
             include: {
@@ -56,8 +61,8 @@ export const GET = createRoute(
                 select: {
                   id: true,
                   name: true,
-                  sku: true,
                   category: true,
+                  description: true,
                 },
               },
             },
@@ -74,12 +79,10 @@ export const GET = createRoute(
 
       if (!proposal) {
         logError('Proposal not found', null, {
-          component: 'ProposalAPI',
-          operation: 'GET',
           proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'GET',
           userId: user.id,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
         });
         return Response.json(
           { code: ErrorCodes.DATA.NOT_FOUND, message: 'Proposal not found' },
@@ -90,46 +93,39 @@ export const GET = createRoute(
       // Transform null values to appropriate defaults before validation
       const transformedProposal = {
         ...proposal,
-        description: proposal.description || '',
-        userStoryTracking: proposal.userStoryTracking || {},
         customer: proposal.customer
           ? {
               ...proposal.customer,
-              email: proposal.customer.email || '',
-              industry: (proposal.customer as any).industry || '',
+              email: proposal.customer.email || undefined,
             }
           : undefined,
-        title: proposal.title || 'Untitled Proposal', // Handle empty titles
-        // ✅ FIXED: Handle null product relations and missing product names
+        title: proposal.title || 'Untitled Proposal',
         products: proposal.products
           ? proposal.products
-              .filter(pp => pp.product) // Remove orphaned ProposalProduct records
-              .map(pp => ({
+              .filter((pp: any) => pp.product) // Remove orphaned ProposalProduct records
+              .map((pp: any) => ({
                 ...pp,
-                name: pp.product?.name || `Product ${pp.productId}`, // Handle null product names
-                category: pp.product?.category?.[0] || 'General', // Handle null category
+                name: pp.product?.name || `Product ${pp.productId}`,
+                category: pp.product?.category || 'General',
               }))
           : [],
       };
 
       logInfo('Proposal fetched successfully', {
-        component: 'ProposalAPI',
-        operation: 'GET',
         proposalId: id,
+        component: 'IndividualProposalEndpoint',
+        operation: 'GET',
         userId: user.id,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
       });
 
       // Validate response against schema
       const validationResult = ProposalSchema.safeParse(transformedProposal);
       if (!validationResult.success) {
         logError('Proposal schema validation failed', validationResult.error, {
-          component: 'ProposalAPI',
-          operation: 'GET',
           proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'GET',
         });
-        // Return the transformed proposal data anyway for now, but log the validation error
         const responsePayload = { ok: true, data: transformedProposal };
         return new Response(JSON.stringify(responsePayload), {
           status: 200,
@@ -148,15 +144,13 @@ export const GET = createRoute(
         'Failed to fetch proposal',
         undefined,
         {
-          component: 'ProposalAPI',
-          operation: 'GET',
           proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'GET',
           userId: user.id,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
         }
       );
-      throw processedError; // createRoute handles errorToJson automatically
+      throw processedError;
     }
   }
 );
@@ -168,7 +162,7 @@ export const GET = createRoute(
 export const PUT = createRoute(
   {
     roles: ['admin', 'manager', 'sales', 'System Administrator', 'Administrator'],
-    body: WizardProposalUpdateSchema, // ✅ Use wizard schema for flat payload structure
+    body: WizardProposalUpdateSchema,
   },
   async ({ req, body, user }) => {
     const id = req.url.split('/').pop()?.split('?')[0];
@@ -177,66 +171,17 @@ export const PUT = createRoute(
       return Response.json(fail('VALIDATION_ERROR', 'Proposal ID is required'), { status: 400 });
     }
 
-    // ✅ ADDED: Debug logging to see what's being received
-    const bodyData = body as any;
-
-    // 🔍 DEBUG: Log incoming body data
-    console.log('🔍 DEBUG: Incoming body data', {
-      proposalId: id,
-      bodyKeys: Object.keys(bodyData),
-      bodyValue: bodyData.value,
-      bodyValueType: typeof bodyData.value,
-      hasProductData: !!bodyData.productData,
-      productDataKeys: bodyData.productData ? Object.keys(bodyData.productData) : [],
-      hasChangesSummary: !!bodyData.changesSummary,
-      changesSummaryValue: bodyData.changesSummary,
-      bodyStringified: JSON.stringify(bodyData).substring(0, 500) + '...',
-    });
-
-    logInfo('Received proposal update request', {
-      component: 'ProposalAPI',
-      operation: 'PUT',
-      proposalId: id,
-      bodyKeys: Object.keys(bodyData || {}),
-      hasTeamData: !!bodyData?.teamData,
-      hasContentData: !!bodyData?.contentData,
-      hasProductData: !!bodyData?.productData,
-      hasSectionData: !!bodyData?.sectionData,
-      hasReviewData: !!bodyData?.reviewData,
-      userStory: 'US-3.2',
-      hypothesis: 'H4',
-    });
-
-    // ✅ ADDED: Detailed logging of the actual body structure
-    logInfo('DEBUG: Full request body structure', {
-      component: 'ProposalAPI',
-      operation: 'PUT',
-      proposalId: id,
-      bodyType: typeof bodyData,
-      bodySize: bodyData ? JSON.stringify(bodyData).length : 0,
-      topLevelKeys: Object.keys(bodyData || {}),
-      teamDataKeys: bodyData?.teamData ? Object.keys(bodyData.teamData) : null,
-      contentDataKeys: bodyData?.contentData ? Object.keys(bodyData.contentData) : null,
-      productDataKeys: bodyData?.productData ? Object.keys(bodyData.productData) : null,
-      sectionDataKeys: bodyData?.sectionData ? Object.keys(bodyData.sectionData) : null,
-      reviewDataKeys: bodyData?.reviewData ? Object.keys(bodyData.reviewData) : null,
-      productCount: bodyData?.productData?.products?.length || 0,
-      userStory: 'US-3.2',
-      hypothesis: 'H4',
-    });
-
     try {
       logInfo('Updating proposal', {
-        component: 'ProposalAPI',
-        operation: 'PUT',
         proposalId: id,
-        userId: user.id,
-        updates: Object.keys(body!),
+        component: 'IndividualProposalEndpoint',
+        operation: 'PUT',
         userStory: 'US-3.2',
-        hypothesis: 'H4',
+        hypothesis: 'H7',
+        userId: user.id,
       });
 
-      // ✅ FIXED: Handle wizard flat payload structure
+      // Extract wizard-specific fields from the flat payload structure
       const {
         teamData,
         contentData,
@@ -245,36 +190,22 @@ export const PUT = createRoute(
         reviewData,
         planType,
         customer,
-        customerId, // Remove customerId to prevent Prisma conflict
-        changesSummary, // Extract changesSummary separately (not a Proposal field)
+        customerId,
+        changesSummary,
         ...basicFields
       } = body as any;
 
-      // ✅ FIXED: Convert string values to appropriate types before database update
+      // Process basic fields with proper type conversion
       const processedBasicFields = {
         ...basicFields,
-        // Convert value to number if it's a string (common issue from form inputs)
         value: basicFields.value !== undefined ? Number(basicFields.value) : undefined,
       };
 
-      console.log('🔍 DEBUG: Processed basic fields', {
-        proposalId: id,
-        basicFieldsValue: basicFields.value,
-        basicFieldsValueType: typeof basicFields.value,
-        processedBasicFieldsValue: processedBasicFields.value,
-        processedBasicFieldsValueType: typeof processedBasicFields.value,
-        basicFieldsKeys: Object.keys(basicFields),
-        processedBasicFieldsKeys: Object.keys(processedBasicFields),
-        changesSummary: changesSummary,
-        changesSummaryType: typeof changesSummary,
-      });
-
       const updateData: any = {
         ...processedBasicFields,
-        updatedAt: new Date(),
       };
 
-      // ✅ FIXED: Handle customer relationship properly
+      // Handle customer relationship
       if (customer && customer.id) {
         updateData.customer = {
           connect: { id: customer.id },
@@ -286,7 +217,7 @@ export const PUT = createRoute(
         updateData.dueDate = new Date(basicFields.dueDate);
       }
 
-      // ✅ FIXED: Save complex nested data to userStoryTracking field
+      // Save complex nested data to userStoryTracking field
       if (teamData || contentData || productData || sectionData || reviewData || planType) {
         updateData.userStoryTracking = {
           teamData,
@@ -294,89 +225,32 @@ export const PUT = createRoute(
           productData,
           sectionData,
           reviewData,
-          submittedAt: new Date().toISOString(),
-          wizardVersion: 'modern',
           planType,
-          // Store changesSummary in userStoryTracking for version snapshots
-          _changesSummary: changesSummary,
+          changesSummary,
         };
-
-        // ✅ ENHANCED: Generate meaningful change summary
-        const changes = [];
-        if (teamData) changes.push('team assignments');
-        if (contentData) changes.push('content sections');
-        if (productData) changes.push('product catalog');
-        if (sectionData) changes.push('proposal sections');
-        if (reviewData) changes.push('review details');
-        if (planType) changes.push('proposal plan');
-
-        // ✅ ADDED: Debug logging to verify userStoryTracking is being set
-        logInfo('Setting userStoryTracking for proposal update', {
-          component: 'ProposalAPI',
-          operation: 'PUT',
-          proposalId: id,
-          userStoryTrackingKeys: Object.keys(updateData.userStoryTracking),
-          changesSummaryInUserStoryTracking: updateData.userStoryTracking._changesSummary,
-          hasTeamData: !!teamData,
-          hasContentData: !!contentData,
-          hasProductData: !!productData,
-          hasSectionData: !!sectionData,
-          hasReviewData: !!reviewData,
-          hasPlanType: !!planType,
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        });
       }
 
-      // ✅ ADDED: Debug logging to verify updateData structure
-      logInfo('Updating proposal with data', {
-        component: 'ProposalAPI',
-        operation: 'PUT',
-        proposalId: id,
-        updateDataKeys: Object.keys(updateData),
-        hasUserStoryTracking: !!updateData.userStoryTracking,
-        userStoryTrackingKeys: updateData.userStoryTracking
-          ? Object.keys(updateData.userStoryTracking)
-          : [],
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-
-      // ✅ FIXED: Use transaction with timeout to ensure data consistency and prevent network timeouts
-      const transactionStartTime = Date.now();
-      logInfo('Starting proposal update transaction', {
-        component: 'ProposalAPI',
-        operation: 'PUT',
-        proposalId: id,
-        userId: user.id,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-
-      // Store update data for version creation
-      const capturedUpdateData = updateData;
-
+      // Use transaction for data consistency
       const proposal = await prisma.$transaction(
         async tx => {
           const currentUserId = user.id;
-          // 1. Update the proposal
-          console.log('🔍 DEBUG: About to update proposal', {
-            proposalId: id,
-            updateDataKeys: Object.keys(updateData),
-            updateDataValue: updateData.value,
-            updateDataValueType: typeof updateData.value,
-            updateDataStringified: JSON.stringify(updateData).substring(0, 300) + '...',
-          });
 
-          const updatedProposal = await tx.proposal.update({
+          // 1. Update the proposal
+          await tx.proposal.update({
             where: { id },
             data: updateData,
+          });
+
+          // 2. Fetch the complete proposal with all relations for the response
+          const updatedProposal = await tx.proposal.findUnique({
+            where: { id },
             include: {
               customer: {
                 select: {
                   id: true,
                   name: true,
                   email: true,
+                  industry: true,
                 },
               },
               sections: {
@@ -385,25 +259,16 @@ export const PUT = createRoute(
                   title: true,
                   content: true,
                   order: true,
-                  type: true,
                 },
-                orderBy: { order: 'asc' },
               },
               products: {
-                select: {
-                  id: true,
-                  productId: true,
-                  quantity: true,
-                  unitPrice: true,
-                  discount: true,
-                  total: true,
-                  configuration: true,
+                include: {
                   product: {
                     select: {
                       id: true,
                       name: true,
-                      sku: true,
                       category: true,
+                      description: true,
                     },
                   },
                 },
@@ -418,405 +283,58 @@ export const PUT = createRoute(
             },
           });
 
-          // 2. ✅ FIXED: Handle product data by updating ProposalProduct records
-          logInfo('🔍 DEBUG: Checking product data structure', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            hasProductData: !!productData,
-            productDataType: typeof productData,
-            productDataKeys: productData ? Object.keys(productData) : [],
-            hasProductsArray: productData && productData.products,
-            productsArrayType:
-              productData && productData.products ? typeof productData.products : null,
-            isProductsArray:
-              productData && productData.products && Array.isArray(productData.products),
-            productsLength:
-              productData && productData.products && Array.isArray(productData.products)
-                ? productData.products.length
-                : 0,
-            rawProductData: productData,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
-
-          // 🔍 DEBUG: Log detailed product data for first few products
+          // 3. Handle product data updates
           if (productData && productData.products && Array.isArray(productData.products)) {
-            productData.products.slice(0, 3).forEach((product: any, index: number) => {
-              console.log('🔍 DEBUG: Product data analysis', {
-                index: index,
-                productId: product.productId,
-                productIdType: typeof product.productId,
-                name: product.name,
-                nameType: typeof product.name,
-                quantity: product.quantity,
-                quantityType: typeof product.quantity,
-                unitPrice: product.unitPrice,
-                unitPriceType: typeof product.unitPrice,
-                discount: product.discount,
-                discountType: typeof product.discount,
-                total: product.total,
-                totalType: typeof product.total,
-                configuration: product.configuration,
-                configurationType: typeof product.configuration,
-              });
-            });
-          }
-
-          if (productData && productData.products && Array.isArray(productData.products)) {
-            logInfo('Processing product data for proposal update', {
-              component: 'ProposalAPI',
-              operation: 'PUT',
-              proposalId: id,
-              productCount: productData.products.length,
-              productDataStructure: productData.products.map((p: any) => ({
-                id: p.id,
-                productId: p.productId,
-                name: p.name,
-                quantity: p.quantity,
-                unitPrice: p.unitPrice,
-                total: p.total,
-                hasProductId: !!p.productId,
-                hasQuantity: !!p.quantity,
-                hasUnitPrice: !!p.unitPrice,
-              })),
-              userStory: 'US-3.2',
-              hypothesis: 'H4',
-            });
-
             // Delete existing proposal products
             await tx.proposalProduct.deleteMany({
               where: { proposalId: id },
             });
 
-            // Create new proposal products with better validation
-            let createdCount = 0;
-            let skippedCount = 0;
-
-            logInfo('Starting product creation process', {
-              component: 'ProposalAPI',
-              operation: 'PUT',
-              proposalId: id,
-              totalProductsToProcess: productData.products.length,
-              userStory: 'US-3.2',
-              hypothesis: 'H4',
-            });
-
+            // Create new proposal products
             for (const product of productData.products) {
-              // ✅ FIXED: Better validation and data transformation
               const productId = product.productId;
               const quantity = Number(product.quantity) || 1;
               const unitPrice = Number(product.unitPrice) || 0;
               const discount = Number(product.discount) || 0;
 
-              logInfo('Processing product for creation', {
-                component: 'ProposalAPI',
-                operation: 'PUT',
-                proposalId: id,
-                productData: {
-                  originalId: product.id,
-                  productId: productId,
-                  name: product.name,
-                  quantity: quantity,
-                  unitPrice: unitPrice,
-                  discount: discount,
-                  total: product.total,
-                },
-                validation: {
-                  hasProductId: !!productId,
-                  quantityValid: quantity > 0,
-                  unitPriceValid: unitPrice >= 0,
-                },
-                userStory: 'US-3.2',
-                hypothesis: 'H4',
-              });
-
               if (productId && quantity > 0 && unitPrice >= 0) {
                 const calculatedTotal = quantity * unitPrice * (1 - discount / 100);
                 const total = Number(product.total) || calculatedTotal;
 
-                try {
-                  const createdProduct = await tx.proposalProduct.create({
-                    data: {
-                      proposalId: id,
-                      productId: productId,
-                      quantity: quantity,
-                      unitPrice: unitPrice,
-                      discount: discount,
-                      total: total,
-                      configuration: product.configuration || {},
-                    },
-                  });
-                  createdCount++;
-
-                  logInfo('Successfully created proposal product', {
-                    component: 'ProposalAPI',
-                    operation: 'PUT',
+                await tx.proposalProduct.create({
+                  data: {
                     proposalId: id,
-                    createdProductId: createdProduct.id,
-                    productId: productId,
-                    name: product.name,
-                    quantity: quantity,
-                    unitPrice: unitPrice,
-                    total: total,
-                    userStory: 'US-3.2',
-                    hypothesis: 'H4',
-                  });
-                } catch (createError) {
-                  skippedCount++;
-                  logError('Failed to create proposal product', createError, {
-                    component: 'ProposalAPI',
-                    operation: 'PUT',
-                    proposalId: id,
-                    productId: productId,
-                    name: product.name,
-                    userStory: 'US-3.2',
-                    hypothesis: 'H4',
-                  });
-                }
-              } else {
-                skippedCount++;
-                logError('Skipping invalid product data', {
-                  component: 'ProposalAPI',
-                  operation: 'PUT',
-                  proposalId: id,
-                  product: {
-                    id: product.id,
-                    name: product.name,
-                    productId: productId,
-                    quantity: quantity,
-                    unitPrice: unitPrice,
-                    isValid: false,
-                    validationFailures: {
-                      noProductId: !productId,
-                      invalidQuantity: quantity <= 0,
-                      invalidUnitPrice: unitPrice < 0,
-                    },
+                    productId,
+                    quantity,
+                    unitPrice,
+                    discount,
+                    total,
                   },
-                  userStory: 'US-3.2',
-                  hypothesis: 'H4',
                 });
               }
             }
 
-            logInfo('Proposal products updated successfully', {
-              component: 'ProposalAPI',
-              operation: 'PUT',
-              proposalId: id,
-              totalProducts: productData.products.length,
-              productsCreated: createdCount,
-              skippedProducts: productData.products.length - createdCount,
-              userStory: 'US-3.2',
-              hypothesis: 'H4',
+            // Recalculate proposal total value
+            const totalValueResult = (await prisma.$queryRaw(
+              Prisma.sql`
+                SELECT COALESCE(SUM(total), 0) as totalValue
+                FROM proposal_products
+                WHERE "proposalId" = ${id}
+              `
+            )) as Array<{ totalvalue: number }>;
+
+            const newTotalValue = Number(totalValueResult[0]?.totalvalue || 0);
+
+            await tx.proposal.update({
+              where: { id },
+              data: {
+                value: newTotalValue,
+              },
             });
-
-            // ✅ FIXED: Recalculate proposal total value after product updates
-            if (createdCount > 0) {
-              logInfo('🔍 DEBUG: Starting proposal value recalculation', {
-                component: 'ProposalAPI',
-                operation: 'PUT',
-                proposalId: id,
-                createdCount: createdCount,
-                skippedProducts: productData.products.length - createdCount,
-                userStory: 'US-3.2',
-                hypothesis: 'H4',
-              });
-
-              const totalValueResult = (await prisma.$queryRaw(
-                Prisma.sql`
-                  SELECT COALESCE(SUM(total), 0) as totalValue
-                  FROM proposal_products
-                  WHERE "proposalId" = ${id}
-                `
-              )) as Array<{ totalvalue: number }>;
-
-              const newTotalValue = Number(totalValueResult[0]?.totalvalue || 0);
-
-              logInfo('🔍 DEBUG: Total value calculation result', {
-                component: 'ProposalAPI',
-                operation: 'PUT',
-                proposalId: id,
-                rawResult: totalValueResult,
-                totalValueResult: totalValueResult[0]?.totalvalue,
-                newTotalValue: newTotalValue,
-                newTotalValueType: typeof newTotalValue,
-                userStory: 'US-3.2',
-                hypothesis: 'H4',
-              });
-
-              // Update the proposal's value field
-              console.log('🔍 DEBUG: About to update proposal value field', {
-                proposalId: id,
-                newTotalValue: newTotalValue,
-                newTotalValueType: typeof newTotalValue,
-              });
-
-              await tx.proposal.update({
-                where: { id },
-                data: {
-                  value: newTotalValue,
-                  updatedAt: new Date(),
-                },
-              });
-
-              logInfo('✅ DEBUG: Proposal total value updated successfully', {
-                component: 'ProposalAPI',
-                operation: 'PUT',
-                proposalId: id,
-                oldValue: processedBasicFields.value || 0,
-                newValue: newTotalValue,
-                valueDifference: newTotalValue - (processedBasicFields.value || 0),
-                userStory: 'US-3.2',
-                hypothesis: 'H4',
-              });
-
-              // Update processedBasicFields to reflect the new value
-              processedBasicFields.value = newTotalValue;
-
-              logInfo('🔍 DEBUG: Final processed data', {
-                component: 'ProposalAPI',
-                operation: 'PUT',
-                proposalId: id,
-                processedBasicFieldsValue: processedBasicFields.value,
-                processedBasicFieldsValueType: typeof processedBasicFields.value,
-                userStory: 'US-3.2',
-                hypothesis: 'H4',
-              });
-
-              // ✅ NEW: Auto-create version snapshot when products are actually updated
-              if (createdCount > 0) {
-                logInfo('🔍 DEBUG: Auto-creating version snapshot for product changes', {
-                  component: 'ProposalAPI',
-                  operation: 'PUT',
-                  proposalId: id,
-                  createdCount: createdCount,
-                  hasProductData: !!productData,
-                  userStory: 'US-3.2',
-                  hypothesis: 'H4',
-                });
-
-                // Get current proposal data for version snapshot
-                const currentProposal = await tx.proposal.findUnique({
-                  where: { id },
-                  include: {
-                    products: {
-                      select: {
-                        productId: true,
-                        quantity: true,
-                        unitPrice: true,
-                        total: true,
-                        configuration: true,
-                      },
-                    },
-                    sections: {
-                      select: {
-                        id: true,
-                        title: true,
-                        content: true,
-                        order: true,
-                      },
-                    },
-                    creator: {
-                      select: {
-                        id: true,
-                        name: true,
-                        email: true,
-                      },
-                    },
-                  },
-                });
-
-                // Get user name for version creation
-                const userName = currentUserId
-                  ? currentProposal?.creator?.name ||
-                    (await tx.user
-                      .findUnique({
-                        where: { id: currentUserId },
-                        select: { name: true },
-                      })
-                      .then(user => user?.name || 'Unknown User'))
-                  : 'system';
-
-                if (currentProposal) {
-                  // Get next version number
-                  const lastVersion =
-                    (
-                      await tx.proposalVersion.findFirst({
-                        where: { proposalId: id },
-                        orderBy: { version: 'desc' },
-                        select: { version: true },
-                      })
-                    )?.version || 0;
-
-                  const nextVersion = lastVersion + 1;
-
-                  // Create comprehensive snapshot
-                  const snapshot = {
-                    id: currentProposal.id,
-                    title: currentProposal.title,
-                    status: currentProposal.status,
-                    priority: currentProposal.priority,
-                    value: newTotalValue, // Use the newly calculated total
-                    currency: currentProposal.currency,
-                    customerId: currentProposal.customerId,
-                    userStoryTracking: currentProposal.userStoryTracking,
-                    products: currentProposal.products,
-                    sections: currentProposal.sections,
-                    updatedAt: currentProposal.updatedAt,
-                    calculatedTotalValue: newTotalValue,
-                    originalStoredValue: currentProposal.value,
-                    changeSummary: `Product catalog updated: ${createdCount} products modified`,
-                    changeType: 'update' as const,
-                  };
-
-                  // Create version snapshot with enhanced data
-                  await tx.proposalVersion.create({
-                    data: {
-                      proposalId: id,
-                      version: nextVersion,
-                      createdBy: currentUserId || 'system',
-                      changeType: 'update',
-                      changesSummary: `Product catalog updated: ${createdCount} products modified, total value: ${formatCurrency(newTotalValue)}`,
-                      snapshot: {
-                        ...snapshot,
-                        createdByName: userName,
-                        totalValue: newTotalValue,
-                        changeDetails: {
-                          modifiedProducts: createdCount,
-                          totalValueChange: newTotalValue - (currentProposal.value || 0),
-                          updatedAt: new Date().toISOString(),
-                        },
-                      } as any,
-                      productIds: currentProposal.products.map(p => p.productId),
-                    },
-                  });
-
-                  logInfo('✅ DEBUG: Version snapshot auto-created successfully', {
-                    component: 'ProposalAPI',
-                    operation: 'PUT',
-                    proposalId: id,
-                    version: nextVersion,
-                    createdProducts: createdCount,
-                    totalValue: newTotalValue,
-                    userStory: 'US-3.2',
-                    hypothesis: 'H4',
-                  });
-                }
-              }
-            }
           }
 
-          // 3. ✅ FIXED: Handle section data by updating ProposalSection records
+          // 3. Handle section data updates
           if (sectionData && sectionData.sections && Array.isArray(sectionData.sections)) {
-            logInfo('Processing section data for proposal update', {
-              component: 'ProposalAPI',
-              operation: 'PUT',
-              proposalId: id,
-              sectionCount: sectionData.sections.length,
-              userStory: 'US-3.2',
-              hypothesis: 'H4',
-            });
-
             // Delete existing proposal sections
             await tx.proposalSection.deleteMany({
               where: { proposalId: id },
@@ -830,383 +348,81 @@ export const PUT = createRoute(
                     proposalId: id,
                     title: section.title,
                     content: section.content,
-                    order: section.order || 1,
-                    type: section.type || 'TEXT',
+                    order: section.order || 0,
                   },
                 });
               }
             }
-
-            logInfo('Proposal sections updated successfully', {
-              component: 'ProposalAPI',
-              operation: 'PUT',
-              proposalId: id,
-              sectionsCreated: sectionData.sections.length,
-              userStory: 'US-3.2',
-              hypothesis: 'H4',
-            });
           }
 
-          // 4. Fetch the updated proposal with all relations and verify data integrity
-          const finalProposal = await tx.proposal.findUnique({
-            where: { id },
-            include: {
-              customer: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
-              sections: {
-                orderBy: { order: 'asc' },
-              },
-              products: {
-                include: {
-                  product: {
-                    select: {
-                      id: true,
-                      name: true,
-                      sku: true,
-                      category: true,
-                    },
-                  },
-                },
-              },
-              assignedTo: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
-            },
-          });
-
-          // ✅ ADDED: Verification logic to ensure data integrity
-          if (finalProposal && productData?.products) {
-            const savedProductCount = finalProposal.products.length;
-            const expectedProductCount = productData.products.filter(
-              (p: any) => p.productId && p.quantity > 0
-            ).length;
-            const savedTotal = finalProposal.products.reduce(
-              (sum, p) => sum + Number(p.total || 0),
-              0
-            );
-            const expectedTotal = productData.totalValue || 0;
-
-            logInfo('Data verification after proposal update', {
-              component: 'ProposalAPI',
-              operation: 'PUT',
-              proposalId: id,
-              verification: {
-                products: {
-                  expected: expectedProductCount,
-                  saved: savedProductCount,
-                  match: savedProductCount === expectedProductCount,
-                },
-                total: {
-                  expected: expectedTotal,
-                  saved: savedTotal,
-                  match: Math.abs(savedTotal - expectedTotal) < 0.01,
-                },
-              },
-              userStory: 'US-3.2',
-              hypothesis: 'H4',
-            });
-
-            // Log verification mismatch if any
-            if (
-              savedProductCount !== expectedProductCount ||
-              Math.abs(savedTotal - expectedTotal) >= 0.01
-            ) {
-              logError('Verification mismatch detected', {
-                component: 'ProposalAPI',
-                operation: 'PUT',
-                proposalId: id,
-                mismatch: {
-                  productCount: savedProductCount !== expectedProductCount,
-                  total: Math.abs(savedTotal - expectedTotal) >= 0.01,
-                },
-                details: {
-                  expectedProducts: expectedProductCount,
-                  savedProducts: savedProductCount,
-                  expectedTotal: expectedTotal,
-                  savedTotal: savedTotal,
-                },
-                userStory: 'US-3.2',
-                hypothesis: 'H4',
-              });
-            }
+          if (!updatedProposal) {
+            throw new Error('Failed to retrieve updated proposal');
           }
 
-          return finalProposal;
+          return updatedProposal;
         },
         {
-          timeout: 15000, // 15 second timeout to prevent network connection loss
-          isolationLevel: 'ReadCommitted',
+          timeout: 15000,
         }
       );
 
-      const transactionDuration = Date.now() - transactionStartTime;
-      logInfo('Proposal update transaction completed', {
-        component: 'ProposalAPI',
-        operation: 'PUT',
-        proposalId: id,
-        transactionDuration,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-
-      // ✅ NEW: Create version snapshot for general field updates (not just product updates)
-      try {
-        // Get current proposal data for version snapshot
-        const currentProposal = await prisma.proposal.findUnique({
-          where: { id },
-          include: {
-            products: {
-              select: {
-                productId: true,
-                quantity: true,
-                unitPrice: true,
-                total: true,
-                configuration: true,
-              },
-            },
-            sections: {
-              select: {
-                id: true,
-                title: true,
-                content: true,
-                order: true,
-              },
-            },
-            creator: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        });
-
-        if (currentProposal) {
-          // Get user name for version creation
-          const userName = currentUserId
-            ? currentProposal.creator?.name ||
-              (await prisma.user
-                .findUnique({
-                  where: { id: currentUserId },
-                  select: { name: true },
-                })
-                .then(user => user?.name || 'Unknown User'))
-            : 'system';
-
-          // Get next version number
-          const lastVersion =
-            (
-              await prisma.proposalVersion.findFirst({
-                where: { proposalId: id },
-                orderBy: { version: 'desc' },
-                select: { version: true },
-              })
-            )?.version || 0;
-
-          const nextVersion = lastVersion + 1;
-
-          // Create comprehensive snapshot
-          const snapshot = {
-            id: currentProposal.id,
-            title: currentProposal.title,
-            status: currentProposal.status,
-            priority: currentProposal.priority,
-            value: currentProposal.value,
-            currency: currentProposal.currency,
-            customerId: currentProposal.customerId,
-            userStoryTracking: currentProposal.userStoryTracking,
-            products: currentProposal.products,
-            sections: currentProposal.sections,
-            updatedAt: currentProposal.updatedAt,
-            changeSummary: 'General proposal update',
-            changeType: 'update' as const,
-          };
-
-          // Create version snapshot with enhanced data
-          await prisma.proposalVersion.create({
-            data: {
-              proposalId: id,
-              version: nextVersion,
-              createdBy: currentUserId || 'system',
-              changeType: 'update',
-              changesSummary: `Proposal updated: ${Object.keys(capturedUpdateData || {}).join(', ')}`,
-              snapshot: {
-                ...snapshot,
-                createdByName: userName,
-                totalValue: currentProposal.value,
-                changeDetails: {
-                  updatedFields: Object.keys(capturedUpdateData || {}),
-                  updatedAt: new Date().toISOString(),
-                },
-              } as any,
-              productIds: currentProposal.products.map(p => p.productId),
-            },
-          });
-
-          logInfo('✅ Version snapshot created for general update', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            version: nextVersion,
-            updatedFields: Object.keys(capturedUpdateData || {}),
-            userStory: 'US-5.1',
-            hypothesis: 'H8',
-          });
-        }
-      } catch (versionError) {
-        logError('Failed to create version snapshot', versionError as Error, {
-          component: 'ProposalAPI',
-          operation: 'PUT',
-          proposalId: id,
-          userStory: 'US-5.1',
-          hypothesis: 'H8',
-        });
-        // Don't fail the entire update if version creation fails
-      }
-
-      // Transform null values to appropriate defaults before validation
+      // Transform response data
       const transformedProposal = {
         ...proposal,
-        description: proposal?.description || '',
-        userStoryTracking: proposal?.userStoryTracking || {},
-        customer: proposal?.customer
+        customer: proposal.customer
           ? {
               ...proposal.customer,
-              email: proposal.customer.email || '',
-              industry: (proposal.customer as any).industry || '',
+              email: proposal.customer.email || undefined,
             }
           : undefined,
-        title: proposal?.title || 'Untitled Proposal', // Handle empty titles
-        // ✅ FIXED: Handle null product relations and missing product names
-        products: proposal?.products
+        title: proposal.title || 'Untitled Proposal',
+        products: proposal.products
           ? proposal.products
-              .filter(pp => pp.product) // Remove orphaned ProposalProduct records
+              .filter(pp => pp.product)
               .map(pp => ({
                 ...pp,
-                name: pp.product?.name || `Product ${pp.productId}`, // Handle null product names
-                category: pp.product?.category?.[0] || 'General', // Handle null category
+                name: pp.product?.name || `Product ${pp.productId}`,
+                category: pp.product?.category || 'General',
               }))
           : [],
       };
 
       logInfo('Proposal updated successfully', {
-        component: 'ProposalAPI',
-        operation: 'PUT',
         proposalId: id,
+        component: 'IndividualProposalEndpoint',
+        operation: 'PUT',
         userId: user.id,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
       });
 
-      // Validate response against schema
-      const validationResult = ProposalSchema.safeParse(transformedProposal);
-      if (!validationResult.success) {
-        logError('Proposal schema validation failed after update', validationResult.error, {
-          component: 'ProposalAPI',
-          operation: 'PUT',
-          proposalId: id,
-        });
-        // Return the transformed proposal data anyway for now, but log the validation error
-        const responsePayload = { ok: true, data: transformedProposal };
-        return new Response(JSON.stringify(responsePayload), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      const responsePayload = { ok: true, data: validationResult.data };
+      const responsePayload = { ok: true, data: transformedProposal };
       return new Response(JSON.stringify(responsePayload), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {
-      // Handle specific network and timeout errors
-      if (error instanceof Error) {
-        if (error.message.includes('timeout') || error.message.includes('Load failed')) {
-          logError('Network timeout during proposal update', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            error: error.message,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              code: 'NETWORK_TIMEOUT',
-              message:
-                'Request timed out. Please try again with a smaller update or check your connection.',
-              details: { proposalId: id },
-            }),
-            {
-              status: 408, // Request Timeout
-              headers: { 'Content-Type': 'application/json' },
-            }
-          );
-        }
-
-        if (error.message.includes('connection') || error.message.includes('network')) {
-          logError('Network connection error during proposal update', {
-            component: 'ProposalAPI',
-            operation: 'PUT',
-            proposalId: id,
-            error: error.message,
-            userStory: 'US-3.2',
-            hypothesis: 'H4',
-          });
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              code: 'NETWORK_ERROR',
-              message:
-                'Network connection lost. Please check your internet connection and try again.',
-              details: { proposalId: id },
-            }),
-            {
-              status: 503, // Service Unavailable
-              headers: { 'Content-Type': 'application/json' },
-            }
-          );
-        }
-      }
-
       const processedError = errorHandlingService.processError(
         error,
         'Failed to update proposal',
         undefined,
         {
-          component: 'ProposalAPI',
-          operation: 'PUT',
           proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'PUT',
           userId: user.id,
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
         }
       );
-      throw processedError; // createRoute handles errorToJson automatically
+      throw processedError;
     }
   }
 );
 
 // ====================
-// PATCH /api/proposals/[id] - Partial update proposal (for version creation)
+// PATCH /api/proposals/[id] - Partial update proposal
 // ====================
 
 export const PATCH = createRoute(
   {
     roles: ['admin', 'manager', 'sales', 'System Administrator', 'Administrator'],
-    body: WizardProposalUpdateSchema,
   },
   async ({ req, body, user }) => {
     const id = req.url.split('/').pop()?.split('?')[0];
@@ -1217,65 +433,20 @@ export const PATCH = createRoute(
 
     try {
       logInfo('Partial proposal update (PATCH)', {
-        component: 'ProposalAPI',
-        operation: 'PATCH',
         proposalId: id,
+        component: 'IndividualProposalEndpoint',
+        operation: 'PATCH',
+        userStory: 'US-3.2',
+        hypothesis: 'H7',
         userId: user.id,
-        userStory: 'US-5.1',
-        hypothesis: 'H8',
       });
-
-      // Get current proposal data
-      const currentProposal = await prisma.proposal.findUnique({
-        where: { id },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          products: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  sku: true,
-                  category: true,
-                },
-              },
-            },
-          },
-          sections: {
-            orderBy: { order: 'asc' },
-          },
-        },
-      });
-
-      if (!currentProposal) {
-        logError('Proposal not found for PATCH update', null, {
-          component: 'ProposalAPI',
-          operation: 'PATCH',
-          proposalId: id,
-          userId: user.id,
-          userStory: 'US-5.1',
-          hypothesis: 'H8',
-        });
-        return Response.json(
-          { code: ErrorCodes.DATA.NOT_FOUND, message: 'Proposal not found' },
-          { status: 404 }
-        );
-      }
 
       // Extract changesSummary for version creation
       const { changesSummary, ...updateData } = body as any;
 
-      // Process the update data (simplified version of PUT method)
+      // Process the update data
       const processedUpdateData: any = {
         ...updateData,
-        updatedAt: new Date(),
       };
 
       // Handle value conversion
@@ -1296,15 +467,21 @@ export const PATCH = createRoute(
       }
 
       // Perform the update
-      const updatedProposal = await prisma.proposal.update({
+      await prisma.proposal.update({
         where: { id },
         data: processedUpdateData,
+      });
+
+      // Fetch the complete proposal with all relations for the response
+      const updatedProposal = await prisma.proposal.findUnique({
+        where: { id },
         include: {
           customer: {
             select: {
               id: true,
               name: true,
               email: true,
+              industry: true,
             },
           },
           products: {
@@ -1313,94 +490,96 @@ export const PATCH = createRoute(
                 select: {
                   id: true,
                   name: true,
-                  sku: true,
                   category: true,
+                  description: true,
                 },
               },
             },
           },
           sections: {
-            orderBy: { order: 'asc' },
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              order: true,
+            },
           },
         },
       });
 
-      // Create version snapshot for PATCH updates (version creation trigger)
+      // Create version snapshot
       const lastVersion =
         (
           await prisma.proposalVersion.findFirst({
             where: { proposalId: id },
             orderBy: { version: 'desc' },
-            select: { version: true },
           })
         )?.version || 0;
 
       const nextVersion = lastVersion + 1;
 
-      // Create version snapshot
+      if (!updatedProposal) {
+        throw new Error('Failed to retrieve updated proposal');
+      }
+
       const snapshot = {
-        id: updatedProposal.id,
         title: updatedProposal.title,
         status: updatedProposal.status,
         priority: updatedProposal.priority,
         value: updatedProposal.value,
-        currency: updatedProposal.currency,
-        customerId: updatedProposal.customerId,
-        userStoryTracking: updatedProposal.userStoryTracking,
-        products: updatedProposal.products,
-        sections: updatedProposal.sections,
+        dueDate: updatedProposal.dueDate,
         updatedAt: updatedProposal.updatedAt,
-        changeSummary: changesSummary || 'Proposal updated via PATCH',
-        changeType: 'update' as const,
+        customerId: updatedProposal.customerId,
+        products: updatedProposal.products?.map((p: any) => ({
+          productId: p.productId,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          total: p.total,
+        })),
       };
 
       await prisma.proposalVersion.create({
         data: {
           proposalId: id,
           version: nextVersion,
-          createdBy: user.id || 'system',
-          changeType: 'update',
+          changeType: 'UPDATE',
           changesSummary:
             changesSummary || `Proposal updated: ${Object.keys(updateData).join(', ')}`,
           snapshot: snapshot as any,
-          productIds: updatedProposal.products.map(p => p.productId),
         },
       });
 
-      logInfo('Proposal partially updated with version creation', {
-        component: 'ProposalAPI',
-        operation: 'PATCH',
-        proposalId: id,
-        userId: user.id,
-        version: nextVersion,
-        updatedFields: Object.keys(updateData),
-        userStory: 'US-5.1',
-        hypothesis: 'H8',
-      });
+      if (!updatedProposal) {
+        throw new Error('Failed to retrieve updated proposal');
+      }
 
       // Transform response data
       const transformedProposal = {
         ...updatedProposal,
-        description: updatedProposal.description || '',
-        userStoryTracking: updatedProposal.userStoryTracking || {},
         customer: updatedProposal.customer
           ? {
               ...updatedProposal.customer,
-              email: updatedProposal.customer.email || '',
-              industry: (updatedProposal.customer as any).industry || '',
+              email: updatedProposal.customer.email || undefined,
             }
           : undefined,
-        title: updatedProposal.title || 'Untitled Proposal',
         products: updatedProposal.products
           ? updatedProposal.products
               .filter(pp => pp.product)
               .map(pp => ({
                 ...pp,
                 name: pp.product?.name || `Product ${pp.productId}`,
-                category: pp.product?.category?.[0] || 'General',
+                category: pp.product?.category || 'General',
               }))
           : [],
       };
+
+      logInfo('Proposal partially updated with version creation', {
+        proposalId: id,
+        component: 'IndividualProposalEndpoint',
+        operation: 'PATCH',
+        version: nextVersion,
+        userId: user.id,
+      });
 
       const responsePayload = { ok: true, data: transformedProposal };
       return new Response(JSON.stringify(responsePayload), {
@@ -1413,12 +592,10 @@ export const PATCH = createRoute(
         'Failed to partially update proposal',
         undefined,
         {
-          component: 'ProposalAPI',
-          operation: 'PATCH',
           proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'PATCH',
           userId: user.id,
-          userStory: 'US-5.1',
-          hypothesis: 'H8',
         }
       );
       throw processedError;
@@ -1440,27 +617,43 @@ export const DELETE = createRoute(
     if (!id) {
       return Response.json(fail('VALIDATION_ERROR', 'Proposal ID is required'), { status: 400 });
     }
+
     try {
       logInfo('Deleting proposal', {
-        component: 'ProposalAPI',
-        operation: 'DELETE',
         proposalId: id,
-        userId: user.id,
+        component: 'IndividualProposalEndpoint',
+        operation: 'DELETE',
         userStory: 'US-3.2',
         hypothesis: 'H4',
+        userId: user.id,
       });
 
-      await prisma.proposal.delete({
-        where: { id },
+      // Use transaction to ensure all related data is cleaned up
+      await prisma.$transaction(async tx => {
+        // Delete related records first due to foreign key constraints
+        await tx.proposalVersion.deleteMany({
+          where: { proposalId: id },
+        });
+
+        await tx.proposalProduct.deleteMany({
+          where: { proposalId: id },
+        });
+
+        await tx.proposalSection.deleteMany({
+          where: { proposalId: id },
+        });
+
+        // Finally delete the proposal
+        await tx.proposal.delete({
+          where: { id },
+        });
       });
 
       logInfo('Proposal deleted successfully', {
-        component: 'ProposalAPI',
-        operation: 'DELETE',
         proposalId: id,
+        component: 'IndividualProposalEndpoint',
+        operation: 'DELETE',
         userId: user.id,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
       });
 
       const responsePayload = { ok: true, data: { success: true } };
@@ -1474,15 +667,13 @@ export const DELETE = createRoute(
         'Failed to delete proposal',
         undefined,
         {
-          component: 'ProposalAPI',
-          operation: 'DELETE',
           proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'DELETE',
           userId: user.id,
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
         }
       );
-      throw processedError; // createRoute handles errorToJson automatically
+      throw processedError;
     }
   }
 );

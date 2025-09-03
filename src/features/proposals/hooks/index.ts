@@ -1,6 +1,7 @@
 /**
  * PosalPro MVP2 - Proposals Hooks Index
  * Centralized exports for proposal-related React Query hooks
+ * Standardized structure for consistency across feature modules
  * All hooks are now implemented locally within the features module
  */
 

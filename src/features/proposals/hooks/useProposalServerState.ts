@@ -28,11 +28,7 @@ export function usePersistProposalWizard() {
       step?: number;
     }): Promise<{ success: boolean; timestamp: number }> => {
       // Use the existing service which transforms wizard payload to API schema
-      const res = await proposalService.updateProposal(proposalId, wizardData);
-
-      if (!res.ok) {
-        throw new Error(res.message || 'Failed to persist proposal wizard data');
-      }
+      await proposalService.updateProposal(proposalId, wizardData);
 
       return { success: true, timestamp: Date.now() };
     },

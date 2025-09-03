@@ -9,10 +9,15 @@ import { createRoute } from '@/lib/api/route';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { z } from 'zod';
 
 // Import centralized schemas
-import { UserCreateSchema, UserUpdateSchema, UsersQuerySchema } from '@/features/admin/schemas';
+import {
+  UserCreateSchema,
+  UserUpdateSchema,
+  UsersQuerySchema,
+  UpdateUserWithIdSchema,
+  DeleteUserSchema,
+} from '@/features/admin/schemas';
 
 /**
  * Component Traceability Matrix
@@ -388,10 +393,6 @@ export const POST = createRoute(
 );
 
 // PUT /api/admin/users - Update user with modern createRoute wrapper
-const UpdateUserWithIdSchema = UserUpdateSchema.extend({
-  id: z.string().min(1),
-});
-
 export const PUT = createRoute(
   {
     roles: ['System Administrator', 'Administrator'],
@@ -448,10 +449,6 @@ export const PUT = createRoute(
 );
 
 // DELETE /api/admin/users - Delete user with modern createRoute wrapper
-const DeleteUserSchema = z.object({
-  id: z.string().min(1),
-});
-
 export const DELETE = createRoute(
   {
     roles: ['System Administrator', 'Administrator'],

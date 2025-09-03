@@ -16,6 +16,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
+import { useEmailValidation } from '@/hooks/useEmailValidation';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
@@ -141,9 +142,9 @@ function CustomerCreationPageComponent() {
       website: '',
       address: '',
       industry: '',
-      annualRevenue: undefined,
-      employeeCount: undefined,
-      tier: 'bronze',
+      revenue: undefined,
+      companySize: '',
+      tier: 'STANDARD',
       tags: [],
     } as CustomerEditData,
     customerValidationSchema,
@@ -152,6 +153,15 @@ function CustomerCreationPageComponent() {
       validateOnBlur: true,
     }
   );
+
+  // ✅ EMAIL UNIQUENESS VALIDATION HOOK
+  const emailValidation = useEmailValidation({
+    debounceMs: 500, // 500ms debounce for better UX
+    apiEndpoint: '/api/customers/validate-email',
+    userStory: 'US-1.1', // Customer Management
+    hypothesis: 'H1', // Customer Experience
+    entityType: 'Customer',
+  });
 
   // ✅ ANALYTICS INTEGRATION: Page view tracking
   useEffect(() => {
@@ -187,6 +197,36 @@ function CustomerCreationPageComponent() {
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+
+      // Check email validation status
+      if (emailValidation.isValidating) {
+        handleAsyncError(
+          new StandardError({
+            message: 'Please wait for email validation to complete',
+            code: ErrorCodes.VALIDATION.OPERATION_IN_PROGRESS,
+            metadata: {
+              component: 'CustomerCreationPage',
+              operation: 'email_validation_in_progress',
+            },
+          })
+        );
+        return;
+      }
+
+      if (!emailValidation.isValid || emailValidation.exists) {
+        handleAsyncError(
+          new StandardError({
+            message: emailValidation.error || 'Email validation failed',
+            code: ErrorCodes.VALIDATION.INVALID_INPUT,
+            metadata: {
+              component: 'CustomerCreationPage',
+              operation: 'email_validation_failed',
+              emailExists: emailValidation.exists,
+            },
+          })
+        );
+        return;
+      }
 
       // Use the validation hook to check for errors
       if (validation.hasErrors) {
@@ -385,13 +425,31 @@ function CustomerCreationPageComponent() {
                           label="Email Address"
                           type="email"
                           value={validation.formData.email}
-                          onChange={value => validation.handleFieldChange('email', value)}
-                          onBlur={() => validation.handleFieldBlur('email')}
-                          error={validation.getFieldError('email')}
-                          touched={validation.isFieldTouched('email')}
+                          onChange={value => {
+                            validation.handleFieldChange('email', value);
+                            emailValidation.handleEmailChange(value);
+                          }}
+                          onBlur={() => {
+                            validation.handleFieldBlur('email');
+                            // Email uniqueness validation happens on change with debounce
+                          }}
+                          error={
+                            validation.getFieldError('email') ||
+                            emailValidation.error ||
+                            (emailValidation.exists ? 'Email already exists' : null)
+                          }
+                          touched={validation.isFieldTouched('email') || emailValidation.exists}
                           required
                           placeholder="customer@example.com"
                           className="min-h-[44px]"
+                          isLoading={emailValidation.isValidating}
+                          helperText={
+                            emailValidation.isValidating
+                              ? 'Checking email availability...'
+                              : emailValidation.isValid
+                                ? 'Email is available'
+                                : null
+                          }
                         />
 
                         <FormField
@@ -452,28 +510,27 @@ function CustomerCreationPageComponent() {
                     {/* Additional Information */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField
-                        name="annualRevenue"
+                        name="revenue"
                         label="Annual Revenue"
                         type="number"
-                        value={validation.formData.annualRevenue}
-                        onChange={value => validation.handleFieldChange('annualRevenue', value)}
-                        onBlur={() => validation.handleFieldBlur('annualRevenue')}
-                        error={validation.getFieldError('annualRevenue')}
-                        touched={validation.isFieldTouched('annualRevenue')}
+                        value={validation.formData.revenue}
+                        onChange={value => validation.handleFieldChange('revenue', value)}
+                        onBlur={() => validation.handleFieldBlur('revenue')}
+                        error={validation.getFieldError('revenue')}
+                        touched={validation.isFieldTouched('revenue')}
                         placeholder="0"
                         className="min-h-[44px]"
                       />
 
                       <FormField
-                        name="employeeCount"
-                        label="Employee Count"
-                        type="number"
-                        value={validation.formData.employeeCount}
-                        onChange={value => validation.handleFieldChange('employeeCount', value)}
-                        onBlur={() => validation.handleFieldBlur('employeeCount')}
-                        error={validation.getFieldError('employeeCount')}
-                        touched={validation.isFieldTouched('employeeCount')}
-                        placeholder="0"
+                        name="companySize"
+                        label="Company Size"
+                        value={validation.formData.companySize}
+                        onChange={value => validation.handleFieldChange('companySize', value)}
+                        onBlur={() => validation.handleFieldBlur('companySize')}
+                        error={validation.getFieldError('companySize')}
+                        touched={validation.isFieldTouched('companySize')}
+                        placeholder="Select company size"
                         className="min-h-[44px]"
                       />
                     </div>

@@ -15,8 +15,7 @@ import { logDebug, logError } from '@/lib/logger';
 import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
-import { useUpdateProposal } from '@/features/proposals/hooks';
-import type { WizardProposalUpdateData } from '@/features/proposals/schemas';
+import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 

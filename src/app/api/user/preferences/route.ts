@@ -125,7 +125,6 @@ export async function PUT(request: NextRequest) {
 
     // Update user preferences using Prisma transaction (UserPreferences relation)
     const result = await prisma.$transaction(async tx => {
-
       const existing = await tx.userPreferences.findUnique({
         where: { userId: user.id },
         select: {

@@ -1,0 +1,8 @@
+{
+  "cookies": [
+    "next-auth.callback-url=http%3A%2F%2Flocalhost%3A3000%2Fdashboard; Path=/; HttpOnly; SameSite=Lax",
+    "next-auth.session-token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..pMhSHewjHwx0-5IZ.yS6KkZpbPdB5z0FLpduJlrsl6UzAvp4cVI9socttnuSrJhGTOhg8zTxR8Ek5lBngG5B5ED-CQZgCkCzZ777snXnI1Fmc-c6MFtUg2439z1zCicymRF-ZMceO26m2TDKE9GSPYKh16-KPPnujxQ_i2Zy1PooXFBMUc0Urbtj3hcBrj4eTq8Yho0ryVwQphX8b-64P3wCICcu9RZjgDt0zu3hxsSLJvxhQk-tSndLGDzH_tWOarLADaRPIiB8LZC2oot40y5YwjOlgKz5DX5y2tDfJxZmH5SHx90yIXPkiaNueqcLvku-0IHTVlrEQ2Dth-etu92a_-LOugrQL3GSZvWzZ11Tl_ZA38LkesH4Qaldf50GUlHo2wJtyvWAw7NtyBrSLD6AkDkBZsM5YgwKINQVOJD5OQ7pyf0_APTiGlKChH7lEcw1XaawBlAo2pWBzFChjSEBsTltFxA0-fZGThTujPl995KHWPcgUgg.03I-0bQcAK-NzfE3SCEmrQ; Path=/; Expires=Thu",
+    "04 Sep 2025 09:18:18 GMT; HttpOnly; SameSite=Lax"
+  ],
+  "timestamp": "2025-09-03T09:18:18.512Z"
+}

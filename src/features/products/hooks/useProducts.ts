@@ -18,7 +18,7 @@ import {
 // Query Keys - Using centralized keys
 // ====================
 
-import { qk } from '@/features/products/keys';
+import { productKeys } from '@/features/products';
 
 // ====================
 // Infinite Query Hook
@@ -34,7 +34,7 @@ export function useInfiniteProductsMigrated({
 }: {
   search?: string;
   limit?: number;
-  sortBy?: 'createdAt' | 'name' | 'price' | 'isActive';
+  sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   category?: string;
   isActive?: boolean;
@@ -42,7 +42,7 @@ export function useInfiniteProductsMigrated({
   const { get } = useHttpClient();
 
   return useInfiniteQuery({
-    queryKey: qk.products.list(search, limit, sortBy, sortOrder, category, isActive),
+    queryKey: productKeys.products.list(search, limit, sortBy, sortOrder, { category, isActive }),
     queryFn: async ({ pageParam }) => {
       logDebug('Fetching products with cursor pagination', {
         component: 'useInfiniteProductsMigrated',
@@ -98,7 +98,7 @@ export function useProductMigrated(id: string) {
   const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
-    queryKey: qk.products.byId(id),
+    queryKey: productKeys.products.byId(id),
     queryFn: async () => {
       logDebug('Fetching single product', {
         component: 'useProductMigrated',
@@ -127,7 +127,7 @@ export function useProductWithRelationshipsMigrated(id: string) {
   const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
-    queryKey: qk.products.relationships(id),
+    queryKey: productKeys.products.relationships(id),
     queryFn: async () => {
       logDebug('Fetching product with relationships', {
         component: 'useProductWithRelationshipsMigrated',
@@ -156,7 +156,7 @@ export function useProductStatsMigrated() {
   const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
-    queryKey: qk.products.stats(),
+    queryKey: productKeys.products.stats(),
     queryFn: async () => {
       logDebug('Fetching product stats', {
         component: 'useProductStatsMigrated',
@@ -183,7 +183,7 @@ export function useProductSearchMigrated(query: string, limit: number = 10) {
   const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
-    queryKey: qk.products.search(query, limit),
+    queryKey: productKeys.products.search(query, limit),
     queryFn: async () => {
       logDebug('Searching products', {
         component: 'useProductSearchMigrated',
@@ -216,7 +216,7 @@ export function useProductsByIds(ids: string[]) {
 
   const results = useQueries({
     queries: ids.map(id => ({
-      queryKey: qk.products.byId(id),
+      queryKey: productKeys.products.byId(id),
       queryFn: async () => {
         logDebug('Fetching product by ID', {
           component: 'useProductsByIds',
@@ -290,9 +290,9 @@ export function useCreateProduct() {
     },
     onSuccess: data => {
       // Invalidate and refetch products list
-      queryClient.invalidateQueries({ queryKey: qk.products.all });
+      queryClient.invalidateQueries({ queryKey: productKeys.products.all });
       // Set the new product data in cache
-      queryClient.setQueryData(qk.products.byId(data.id), data);
+      queryClient.setQueryData(productKeys.products.byId(data.id), data);
     },
     onError: error => {
       logError('Product creation failed', {
@@ -349,9 +349,9 @@ export function useUpdateProduct() {
     },
     onSuccess: (data, variables) => {
       // Update the specific product in cache
-      queryClient.setQueryData(qk.products.byId(variables.id), data);
+      queryClient.setQueryData(productKeys.products.byId(variables.id), data);
       // Invalidate products list to reflect changes
-      queryClient.invalidateQueries({ queryKey: qk.products.all });
+      queryClient.invalidateQueries({ queryKey: productKeys.products.all });
     },
     onError: (error, variables) => {
       logError('Product update failed', {
@@ -409,9 +409,9 @@ export function useDeleteProduct() {
     },
     onSuccess: id => {
       // Remove the product from cache
-      queryClient.removeQueries({ queryKey: qk.products.byId(id) });
+      queryClient.removeQueries({ queryKey: productKeys.products.byId(id) });
       // Invalidate products list
-      queryClient.invalidateQueries({ queryKey: qk.products.all });
+      queryClient.invalidateQueries({ queryKey: productKeys.products.all });
     },
     onError: (error, id) => {
       logError('Product deletion failed', {
@@ -474,10 +474,10 @@ export function useBulkDeleteProducts() {
     onSuccess: ids => {
       // Remove all deleted products from cache
       ids.forEach(id => {
-        queryClient.removeQueries({ queryKey: qk.products.byId(id) });
+        queryClient.removeQueries({ queryKey: productKeys.products.byId(id) });
       });
       // Invalidate products list
-      queryClient.invalidateQueries({ queryKey: qk.products.all });
+      queryClient.invalidateQueries({ queryKey: productKeys.products.all });
     },
     onError: (error, ids) => {
       logError('Products bulk deletion failed', {
@@ -539,7 +539,7 @@ export function useCreateProductRelationshipMigrated() {
     onSuccess: (_data, variables) => {
       // Invalidate the relationships query
       queryClient.invalidateQueries({
-        queryKey: qk.products.relationships(variables.sourceProductId),
+        queryKey: productKeys.products.relationships(variables.sourceProductId),
       });
     },
   });
@@ -579,7 +579,7 @@ export function useDeleteProductRelationshipMigrated() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: qk.products.relationships(variables.sourceProductId),
+        queryKey: productKeys.products.relationships(variables.sourceProductId),
       });
     },
   });
@@ -593,7 +593,7 @@ export function useProductCategories(search?: string) {
   const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
-    queryKey: qk.products.categories(),
+    queryKey: productKeys.products.categories(),
     queryFn: async () => {
       logDebug('Fetching product categories', {
         component: 'useProductCategories',
@@ -630,7 +630,7 @@ export function useProductTags(search?: string) {
   const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
-    queryKey: qk.products.tags(),
+    queryKey: productKeys.products.tags(),
     queryFn: async () => {
       logDebug('Fetching product tags', {
         component: 'useProductTags',
@@ -671,7 +671,7 @@ export function useProductCategoriesMigrated() {
   const { get, post, put, delete: del } = useHttpClient();
 
   return useQuery({
-    queryKey: qk.products.categories(),
+    queryKey: productKeys.products.categories(),
     queryFn: async () => {
       logDebug('Fetching product categories', {
         component: 'useProductCategoriesMigrated',

@@ -6,50 +6,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { createApiErrorResponse, ErrorCodes } from '@/lib/errors';
-
-// Validation schema for login
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-  role: z.string().optional(),
-  rememberMe: z.boolean().optional(),
-});
-
-// Role-based redirection map from SITEMAP.md
-const roleRedirectionMap: Record<string, string> = {
-  Administrator: '/admin/system',
-  'Proposal Manager': '/proposals/manage',
-  'Bid Manager': '/proposals/manage',
-  'Technical SME': '/sme/contribution',
-  'Technical Director': '/validation/dashboard',
-  'Business Development Manager': '/customers/profile',
-  'Presales Engineer': '/products/validation',
-  'Proposal Specialist': '/proposals/create',
-};
-
-const getDefaultRedirect = (roles: string[]): string => {
-  if (roles.includes('Admin')) return '/admin/system';
-  if (roles.includes('Executive')) return '/dashboard/overview';
-  if (roles.includes('Proposal Manager')) return '/proposals/list';
-  if (roles.includes('Bid Manager')) return '/proposals/list';
-  if (roles.includes('Sales')) return '/customers/dashboard';
-  if (roles.includes('SME')) return '/sme/assignments';
-  return '/dashboard';
-};
+import { LoginSchema, ROLE_REDIRECTION_MAP, getDefaultRedirect } from '@/features/auth';
 
 export async function POST(request: NextRequest) {
   try {
     // Parse and validate request body
     const body = await request.json();
-    const validatedData = loginSchema.parse(body);
+    const validatedData = LoginSchema.parse(body);
 
     // Create sign-in URL with role-based redirection
     const primaryRole = validatedData.role;
     const redirectUrl =
-      primaryRole && roleRedirectionMap[primaryRole]
-        ? roleRedirectionMap[primaryRole]
+      primaryRole && ROLE_REDIRECTION_MAP[primaryRole]
+        ? ROLE_REDIRECTION_MAP[primaryRole]
         : getDefaultRedirect(primaryRole ? [primaryRole] : []);
 
     return NextResponse.json(

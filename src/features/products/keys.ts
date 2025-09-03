@@ -1,25 +1,41 @@
 /**
  * PosalPro MVP2 - Product Query Keys
  * Centralized React Query keys for product-related queries
- * Follows assessment recommendations for consistency and maintainability
+ * Standardized structure for consistency across feature modules
+ * Follows assessment recommendations for maintainability
  */
 
 export const qk = {
   products: {
-    all: ["products"] as const,
+    // ====================
+    // Base Query Keys
+    // ====================
+    all: ['products'] as const,
+    lists: () => [...qk.products.all, 'list'] as const,
+
+    // ====================
+    // Standard CRUD Keys
+    // ====================
     list: (
       search: string,
       limit: number,
-      sortBy: "createdAt" | "name" | "price" | "isActive",
-      sortOrder: "asc" | "desc",
-      category?: string,
-      isActive?: boolean
-    ) => ["products", "list", search, limit, sortBy, sortOrder, category, isActive] as const,
-    byId: (id: string) => ["products", "byId", id] as const,
-    search: (query: string, limit: number) => ["products", "search", query, limit] as const,
-    relationships: (productId: string) => ["products", "relationships", productId] as const,
-    stats: () => ["products", "stats"] as const,
-    categories: () => ["products", "categories"] as const,
-    tags: () => ["products", "tags"] as const,
+      sortBy: string,
+      sortOrder: 'asc' | 'desc',
+      filters?: Record<string, unknown>
+    ) => [
+      ...qk.products.lists(),
+      { search, limit, sortBy, sortOrder, filters }
+    ] as const,
+
+    byId: (id: string) => [...qk.products.all, 'byId', id] as const,
+    search: (query: string, limit: number) => [...qk.products.all, 'search', query, limit] as const,
+
+    // ====================
+    // Feature-Specific Keys
+    // ====================
+    stats: () => [...qk.products.all, 'stats'] as const,
+    categories: () => [...qk.products.all, 'categories'] as const,
+    tags: () => [...qk.products.all, 'tags'] as const,
+    relationships: (productId: string) => [...qk.products.all, 'relationships', productId] as const,
   },
 } as const;

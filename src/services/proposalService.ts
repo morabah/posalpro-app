@@ -9,7 +9,6 @@
  * ✅ IMPLEMENTS: Modern architecture with proper separation of concerns
  */
 
-import { ApiResponse } from '@/lib/api/response';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
@@ -19,7 +18,7 @@ import {
   ProposalCreateSchema,
   type ProposalCreateData,
   type ProposalQueryData,
-} from '@/features/proposals/schemas';
+} from '@/features/proposals';
 
 // ====================
 // Type Definitions (Aligned with API schemas)
@@ -57,7 +56,7 @@ export interface ProposalProduct {
 // Import consolidated schemas
 // ====================
 
-import { type Proposal } from '@/features/proposals/schemas';
+import { type Proposal } from '@/features/proposals';
 
 // Re-export types for backward compatibility
 export type { Proposal };
@@ -105,7 +104,7 @@ export class ProposalService {
 
   async getProposals(
     params: Partial<ProposalQueryData> = {}
-  ): Promise<ApiResponse<{ items: Proposal[]; nextCursor: string | null }>> {
+  ): Promise<{ items: Proposal[]; nextCursor: string | null }> {
     const start = performance.now();
     logDebug('Fetching proposals', {
       component: 'ProposalService',
@@ -159,7 +158,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -168,15 +167,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposals' }
       );
       logError('Failed to fetch proposals', processed, { component: 'ProposalService' });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 
-  async getProposal(id: string): Promise<ApiResponse<Proposal>> {
+  async getProposal(id: string): Promise<Proposal> {
     const start = performance.now();
     logDebug('Fetching proposal', {
       component: 'ProposalService',
@@ -198,7 +193,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -207,15 +202,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposal', proposalId: id }
       );
       logError('Failed to fetch proposal', processed, { component: 'ProposalService' });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 
-  async createProposal(proposal: ProposalCreate): Promise<ApiResponse<Proposal>> {
+  async createProposal(proposal: ProposalCreate): Promise<Proposal> {
     const start = performance.now();
     logDebug('Creating proposal', {
       component: 'ProposalService',
@@ -240,7 +231,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -249,15 +240,11 @@ export class ProposalService {
         { context: 'ProposalService.createProposal' }
       );
       logError('Failed to create proposal', processed, { component: 'ProposalService' });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 
-  async updateProposal(id: string, proposal: ProposalUpdate): Promise<ApiResponse<Proposal>> {
+  async updateProposal(id: string, proposal: ProposalUpdate): Promise<Proposal> {
     const start = performance.now();
     logDebug('Updating proposal', {
       component: 'ProposalService',
@@ -283,7 +270,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -292,11 +279,7 @@ export class ProposalService {
         { context: 'ProposalService.updateProposal', proposalId: id }
       );
       logError('Failed to update proposal', processed, { component: 'ProposalService' });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 
@@ -342,7 +325,7 @@ export class ProposalService {
     return processedBasicFields;
   }
 
-  async deleteProposal(id: string): Promise<ApiResponse<{ message: string }>> {
+  async deleteProposal(id: string): Promise<{ message: string }> {
     const start = performance.now();
     logDebug('Deleting proposal', {
       component: 'ProposalService',
@@ -364,7 +347,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -373,25 +356,19 @@ export class ProposalService {
         { context: 'ProposalService.deleteProposal', proposalId: id }
       );
       logError('Failed to delete proposal', processed, { component: 'ProposalService' });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 
-  async getProposalStats(): Promise<
-    ApiResponse<{
-      total: number;
-      byStatus: Record<string, number>;
-      overdue: number;
-      totalValue: number;
-      winRate: number;
-      recentActivity: number;
-      averageValue: number;
-    }>
-  > {
+  async getProposalStats(): Promise<{
+    total: number;
+    byStatus: Record<string, number>;
+    overdue: number;
+    totalValue: number;
+    winRate: number;
+    recentActivity: number;
+    averageValue: number;
+  }> {
     const start = performance.now();
     logDebug('Fetching proposal stats', {
       component: 'ProposalService',
@@ -419,7 +396,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -428,15 +405,11 @@ export class ProposalService {
         { context: 'ProposalService.getProposalStats' }
       );
       logError('Failed to fetch proposal stats', processed, { component: 'ProposalService' });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 
-  async bulkDeleteProposals(ids: string[]): Promise<ApiResponse<{ deleted: number }>> {
+  async bulkDeleteProposals(ids: string[]): Promise<{ deleted: number }> {
     const start = performance.now();
     logDebug('Bulk deleting proposals', {
       component: 'ProposalService',
@@ -459,7 +432,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -468,11 +441,7 @@ export class ProposalService {
         { context: 'ProposalService.bulkDeleteProposals', proposalIds: ids }
       );
       logError('Failed to bulk delete proposals', processed, { component: 'ProposalService' });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 
@@ -480,7 +449,7 @@ export class ProposalService {
     id: string,
     status: string,
     metadata?: Record<string, unknown>
-  ): Promise<ApiResponse<Proposal>> {
+  ): Promise<Proposal> {
     const start = performance.now();
     logDebug('Updating proposal workflow status', {
       component: 'ProposalService',
@@ -504,7 +473,7 @@ export class ProposalService {
         hypothesis: 'H4',
       });
 
-      return { ok: true, data };
+      return data;
     } catch (error: unknown) {
       const processed = this.errorHandlingService.processError(
         error,
@@ -515,11 +484,7 @@ export class ProposalService {
       logError('Failed to update proposal workflow status', processed, {
         component: 'ProposalService',
       });
-      return {
-        ok: false,
-        code: processed.code || 'UNKNOWN_ERROR',
-        message: processed.message,
-      };
+      throw processed;
     }
   }
 }

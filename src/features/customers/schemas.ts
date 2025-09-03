@@ -60,11 +60,24 @@ export const CompanySizeSchema = z.enum(['STARTUP', 'SMALL', 'MEDIUM', 'LARGE', 
 export const CustomerSchema = z.object({
   id: z.string(),
   name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email format').nullable(),
+  email: z.string().email('Invalid email format'),
+  phone: z.string().nullable().optional(),
+  website: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
   industry: CustomerIndustrySchema.optional().nullable(),
+  companySize: z.string().nullable().optional(),
+  revenue: z.number().nullable().optional(),
   status: CustomerStatusSchema,
   tier: CustomerTierSchema.optional(),
   tags: z.array(z.string()).optional(),
+  metadata: z.record(z.unknown()).nullable().optional(),
+  segmentation: z.record(z.unknown()).nullable().optional(),
+  riskScore: z.number().nullable().optional(),
+  ltv: z.number().nullable().optional(),
+  lastContact: z.string().nullable().optional(),
+  cloudId: z.string().nullable().optional(),
+  lastSyncedAt: z.string().nullable().optional(),
+  syncStatus: z.string().nullable().optional(),
   createdAt: z
     .union([z.string(), z.date()])
     .transform(val => (val instanceof Date ? val.toISOString() : val)),
@@ -73,15 +86,36 @@ export const CustomerSchema = z.object({
     .transform(val => (val instanceof Date ? val.toISOString() : val)),
 });
 
-export const CustomerCreateSchema = CustomerSchema.omit({
+export const CustomerCreateSchema = CustomerSchema.extend({
+  // Override with more specific validation for create
+  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  // Remove fields that shouldn't be set during creation
+  metadata: true,
+  segmentation: true,
+  riskScore: true,
+  ltv: true,
+  lastContact: true,
+  cloudId: true,
+  lastSyncedAt: true,
+  syncStatus: true,
+});
+
+// Email validation schema for uniqueness checking
+export const EmailValidationSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  excludeId: z.string().optional(),
 });
 
 export const CustomerUpdateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200).optional(),
   email: z.string().email('Invalid email format').optional(),
+  phone: z.string().optional(),
+  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
+  address: z.string().optional(),
   industry: CustomerIndustrySchema.optional(),
   tier: CustomerTierSchema.optional(),
   status: CustomerStatusSchema.optional(),
@@ -89,6 +123,8 @@ export const CustomerUpdateSchema = z.object({
   segmentation: z.any().optional(),
   riskScore: z.number().min(0).max(100).optional().nullable(),
   ltv: z.number().min(0).optional().nullable(),
+  companySize: z.string().optional(),
+  revenue: z.number().optional().nullable(),
 });
 
 // ====================
@@ -255,11 +291,12 @@ export const CustomerQuerySchema = z.object({
   search: z.string().trim().default(''),
   limit: z.coerce.number().min(1).max(100).default(20),
   cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'status']).default('createdAt'),
+  sortBy: z.enum(['createdAt', 'name', 'status', 'revenue']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   status: CustomerStatusSchema.optional(),
   tier: CustomerTierSchema.optional(),
   industry: CustomerIndustrySchema.optional(),
+  companySize: z.string().optional(),
 });
 
 export const CustomerSearchSchema = z.object({

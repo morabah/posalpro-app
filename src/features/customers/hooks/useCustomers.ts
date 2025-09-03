@@ -17,7 +17,7 @@ import {
 } from '@tanstack/react-query';
 
 // Using centralized query keys
-import { qk } from '@/features/customers/keys';
+import { customerKeys } from '@/features/customers';
 
 // Infinite query for customer list with cursor pagination
 export function useInfiniteCustomers({
@@ -28,9 +28,17 @@ export function useInfiniteCustomers({
   status,
   tier,
   industry,
-}: CustomerQuery) {
+}: {
+  search?: string;
+  limit?: number;
+  sortBy?: 'createdAt' | 'name' | 'status' | 'revenue';
+  sortOrder?: 'asc' | 'desc';
+  status?: 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
+  tier?: 'STANDARD' | 'PREMIUM' | 'ENTERPRISE';
+  industry?: string;
+}) {
   return useInfiniteQuery({
-    queryKey: qk.customers.list(search, limit, sortBy, sortOrder, status, tier, industry),
+    queryKey: customerKeys.customers.list(search, limit, sortBy, sortOrder, { status, tier, industry }),
     queryFn: ({ pageParam }) =>
       customerService.getCustomers({
         search,
@@ -54,7 +62,7 @@ export function useInfiniteCustomers({
 // Single customer query
 export function useCustomer(id: string) {
   return useQuery({
-    queryKey: qk.customers.detail(id),
+    queryKey: customerKeys.customers.detail(id),
     queryFn: () => customerService.getCustomer(id),
     enabled: !!id,
     staleTime: 60_000,
@@ -67,7 +75,7 @@ export function useCustomer(id: string) {
 // Customer search query
 export function useCustomerSearch(query: string, limit: number = 10) {
   return useQuery({
-    queryKey: qk.customers.search(query, limit),
+    queryKey: customerKeys.customers.search(query, limit),
     queryFn: () => customerService.searchCustomers(query, limit),
     enabled: !!query && query.length >= 2,
     staleTime: 30_000, // 30 seconds for search results
@@ -81,7 +89,7 @@ export function useCustomerSearch(query: string, limit: number = 10) {
 export function useCustomersByIds(ids: string[]) {
   const results = useQueries({
     queries: ids.map(id => ({
-      queryKey: qk.customers.detail(id),
+      queryKey: customerKeys.customers.detail(id),
       queryFn: () => customerService.getCustomer(id),
       enabled: !!id,
       staleTime: 60_000,
@@ -127,10 +135,10 @@ export function useCreateCustomer() {
     },
     onSuccess: response => {
       // Invalidate and refetch customers list
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+      queryClient.invalidateQueries({ queryKey: customerKeys.customers.all });
       // Set the new customer data in cache
       if (response) {
-        queryClient.setQueryData(qk.customers.detail(response.id), response);
+        queryClient.setQueryData(customerKeys.customers.detail(response.id), response);
       }
     },
     onError: (error, variables) => {
@@ -174,10 +182,10 @@ export function useUpdateCustomer() {
     onSuccess: (response, variables) => {
       // Update the specific customer in cache
       if (response) {
-        queryClient.setQueryData(qk.customers.detail(variables.id), response);
+        queryClient.setQueryData(customerKeys.customers.detail(variables.id), response);
       }
       // Invalidate customers list to reflect changes
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+      queryClient.invalidateQueries({ queryKey: customerKeys.customers.all });
     },
     onError: (error, variables) => {
       analytics.trackOptimized('customer_update_failed', {
@@ -220,9 +228,9 @@ export function useDeleteCustomer() {
     },
     onSuccess: (response, id) => {
       // Remove the customer from cache
-      queryClient.removeQueries({ queryKey: qk.customers.detail(id) });
+      queryClient.removeQueries({ queryKey: customerKeys.customers.detail(id) });
       // Invalidate customers list
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+      queryClient.invalidateQueries({ queryKey: customerKeys.customers.all });
     },
     onError: (error, id) => {
       analytics.trackOptimized('customer_delete_failed', {
@@ -256,10 +264,10 @@ export function useDeleteCustomersBulk() {
     onSuccess: (response, ids) => {
       // Remove all deleted customers from cache
       ids.forEach(id => {
-        queryClient.removeQueries({ queryKey: qk.customers.detail(id) });
+        queryClient.removeQueries({ queryKey: customerKeys.customers.detail(id) });
       });
       // Invalidate customers list
-      queryClient.invalidateQueries({ queryKey: qk.customers.all });
+      queryClient.invalidateQueries({ queryKey: customerKeys.customers.all });
     },
     onError: (error, ids) => {
       analytics.trackOptimized('customers_bulk_delete_failed', {

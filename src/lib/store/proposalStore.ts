@@ -510,28 +510,15 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
 
       // Submit to API using proposalService for consistency
       const { proposalService } = await import('@/services/proposalService');
-      const response = await proposalService.createProposal(proposalData);
+      const result = await proposalService.createProposal(proposalData);
 
       logDebug('API response received', {
         component: 'ProposalStore',
         operation: 'submit_proposal',
-        ok: response.ok,
+        proposalId: result.id,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
-
-      if (!response.ok) {
-        logError('API submission failed', {
-          component: 'ProposalStore',
-          operation: 'submit_proposal',
-          error: response.message,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
-        throw new Error(`Failed to submit proposal: ${response.message}`);
-      }
-
-      const result = response.data;
 
       logDebug('Proposal submitted successfully', {
         component: 'ProposalStore',
@@ -598,21 +585,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
       };
 
       // ✅ FIXED: Use service layer with proper error handling
-      const response = await proposalService.updateProposal(proposalId, proposalData);
-
-      if (!response.ok) {
-        logError('Proposal update failed', {
-          component: 'ProposalStore',
-          operation: 'update_proposal',
-          proposalId,
-          error: response.message,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
-        throw new Error(`Failed to update proposal: ${response.message}`);
-      }
-
-      const result = response.data;
+      const result = await proposalService.updateProposal(proposalId, proposalData);
 
       logDebug('Proposal updated successfully', {
         component: 'ProposalStore',

@@ -14,8 +14,8 @@ export interface CustomerEditData {
   industry?: string;
   tags: string[];
   tier: string;
-  annualRevenue?: number;
-  employeeCount?: number;
+  revenue?: number;
+  companySize?: string;
 }
 
 // ✅ Customer Validation Schema
@@ -58,26 +58,21 @@ export const customerValidationSchema = createValidationSchema({
     message: 'Industry must be less than 50 characters',
   },
 
-  annualRevenue: {
+  revenue: {
     required: false,
     custom: (value: any) => {
       if (value !== undefined && value !== null) {
         if (value < 0) return VALIDATION_MESSAGES.positiveNumber;
-        // Allow zero values for annual revenue
+        // Allow zero values for revenue
       }
       return null;
     },
   },
 
-  employeeCount: {
+  companySize: {
     required: false,
-    custom: (value: any) => {
-      if (value !== undefined && value !== null) {
-        if (value < 0) return VALIDATION_MESSAGES.positiveNumber;
-        // Allow zero values for employee count
-      }
-      return null;
-    },
+    maxLength: 50,
+    message: 'Company size must be less than 50 characters',
   },
 
   tier: {
@@ -202,20 +197,16 @@ export function validateCustomerData(data: Partial<CustomerEditData>): string[] 
     errors.push('Industry must be less than 50 characters');
   }
 
-  if (data.annualRevenue !== undefined && data.annualRevenue !== null) {
-    if (data.annualRevenue < 0) {
+  if (data.revenue !== undefined && data.revenue !== null) {
+    if (data.revenue < 0) {
       errors.push(VALIDATION_MESSAGES.positiveNumber);
-    } else if (data.annualRevenue === 0) {
+    } else if (data.revenue === 0) {
       errors.push(VALIDATION_MESSAGES.nonZero);
     }
   }
 
-  if (data.employeeCount !== undefined && data.employeeCount !== null) {
-    if (data.employeeCount < 0) {
-      errors.push(VALIDATION_MESSAGES.positiveNumber);
-    } else if (data.employeeCount === 0) {
-      errors.push(VALIDATION_MESSAGES.nonZero);
-    }
+  if (data.companySize && data.companySize.length > 50) {
+    errors.push('Company size must be less than 50 characters');
   }
 
   if (!data.tier) {

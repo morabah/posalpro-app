@@ -4,25 +4,12 @@ import { apiClient } from '@/lib/api/client';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { Customer } from '@/services/customerService';
+import { CustomerCreateSchema } from '@/features/customers/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Building, DollarSign, Globe, Loader2, Mail, MapPin, Save, Tag, X } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-
-// Customer creation validation schema
-const CustomerCreateSchema = z.object({
-  name: z.string().min(1, 'Company name is required').max(200),
-  email: z.string().email('Invalid email format').optional().or(z.literal('')),
-  phone: z.string().max(20).optional().or(z.literal('')),
-  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
-  address: z.string().max(500).optional().or(z.literal('')),
-  industry: z.string().max(100).optional().or(z.literal('')),
-  companySize: z.string().max(50).optional().or(z.literal('')),
-  revenue: z.number().min(0).optional(),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
-  tags: z.array(z.string()).default([]),
-});
 
 type CustomerFormData = z.infer<typeof CustomerCreateSchema>;
 
@@ -88,6 +75,15 @@ export function CustomerCreationSidebar({
   } = useForm<CustomerFormData>({
     resolver: zodResolver(CustomerCreateSchema),
     defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      website: '',
+      address: '',
+      industry: undefined,
+      companySize: '',
+      revenue: undefined,
+      status: 'ACTIVE',
       tier: 'STANDARD',
       tags: [],
     },
@@ -108,7 +104,7 @@ export function CustomerCreationSidebar({
     setValue('tags', newTags);
   };
 
-  const onSubmit = async (data: CustomerFormData) => {
+  const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     setMessage(null);
 
@@ -116,7 +112,7 @@ export function CustomerCreationSidebar({
       const { logDebug } = await import('@/lib/logger');
       await logDebug('[CustomerCreationSidebar] Submitting customer data', { data });
 
-      // Clean up empty strings and convert revenue to number
+      // Clean up empty strings and ensure proper data types
       const cleanData = {
         ...data,
         email: data.email || undefined,
@@ -126,6 +122,14 @@ export function CustomerCreationSidebar({
         industry: data.industry || undefined,
         companySize: data.companySize || undefined,
         revenue: data.revenue || undefined,
+        metadata: data.metadata || undefined,
+        segmentation: data.segmentation || undefined,
+        riskScore: data.riskScore || undefined,
+        ltv: data.ltv || undefined,
+        lastContact: data.lastContact || undefined,
+        cloudId: data.cloudId || undefined,
+        lastSyncedAt: data.lastSyncedAt || undefined,
+        syncStatus: data.syncStatus || undefined,
       };
 
       const response = await apiClient.post('/customers', cleanData);

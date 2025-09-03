@@ -8,21 +8,9 @@ import prisma from '@/lib/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { RoleAssignmentSchema, RoleRemovalSchema } from '@/features/admin';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
-
-const RoleAssignmentSchema = z.object({
-  userId: z.string().uuid({ message: 'Invalid userId' }).or(z.string().min(1)),
-  roleId: z.string().uuid().optional(),
-  roleName: z.string().min(1).optional(),
-});
-
-const RoleRemovalSchema = z.object({
-  userId: z.string().uuid({ message: 'Invalid userId' }).or(z.string().min(1)),
-  roleId: z.string().uuid().optional(),
-  roleName: z.string().min(1).optional(),
-});
 
 // Use standardized RBAC check
 async function ensureAdmin(req: NextRequest): Promise<{ ok: boolean; reason?: string }> {

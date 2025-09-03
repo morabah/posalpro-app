@@ -1,6 +1,7 @@
 /**
  * PosalPro MVP2 - Products Hooks Index
  * Centralized exports for product-related React Query hooks
+ * Standardized structure for consistency across feature modules
  * All hooks are now implemented locally within the features module
  */
 

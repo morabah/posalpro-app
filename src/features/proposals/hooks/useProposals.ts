@@ -24,7 +24,7 @@ import {
 // Query Keys - Using centralized keys
 // ====================
 
-import { qk } from '@/features/proposals/keys';
+import { proposalKeys } from '@/features/proposals';
 
 // ====================
 // Infinite Query Hook
@@ -58,16 +58,12 @@ export function useInfiniteProposals({
   assignedTo?: string;
 } = {}) {
   return useInfiniteQuery({
-    queryKey: qk.proposals.list(
-      search,
-      limit,
-      sortBy,
-      sortOrder,
+    queryKey: proposalKeys.proposals.list(search, limit, sortBy, sortOrder, {
       status,
       priority,
       customerId,
-      assignedTo
-    ),
+      assignedTo,
+    }),
     queryFn: async ({ pageParam }) => {
       logDebug('Fetching proposals with cursor pagination', {
         component: 'useInfiniteProposals',
@@ -96,7 +92,7 @@ export function useInfiniteProposals({
       if (assignedTo) params.append('assignedTo', assignedTo);
       if (pageParam) params.append('cursor', pageParam);
 
-      const response = await proposalService.getProposals({
+      const data = await proposalService.getProposals({
         search,
         limit,
         cursor: pageParam,
@@ -108,21 +104,17 @@ export function useInfiniteProposals({
         assignedTo,
       });
 
-      if (response.ok) {
-        logInfo('Proposals fetched successfully', {
-          component: 'useInfiniteProposals',
-          operation: 'queryFn',
-          count: response.data.items?.length || 0,
-          hasNextPage: !!response.data.nextCursor,
-          loadTime: Date.now(),
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        });
+      logInfo('Proposals fetched successfully', {
+        component: 'useInfiniteProposals',
+        operation: 'queryFn',
+        count: data.items?.length || 0,
+        hasNextPage: !!data.nextCursor,
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
 
-        return response.data;
-      } else {
-        throw new Error(response.message || 'Failed to fetch proposals');
-      }
+      return data;
     },
     initialPageParam: null as string | null,
     getNextPageParam: lastPage => lastPage?.nextCursor || undefined,
@@ -139,7 +131,7 @@ export function useInfiniteProposals({
 
 export function useProposal(id: string) {
   return useQuery({
-    queryKey: qk.proposals.byId(id),
+    queryKey: proposalKeys.proposals.byId(id),
     queryFn: async () => {
       logDebug('Fetching proposal', {
         component: 'useProposal',
@@ -149,22 +141,18 @@ export function useProposal(id: string) {
         hypothesis: 'H4',
       });
 
-      const response = await proposalService.getProposal(id);
+      const data = await proposalService.getProposal(id);
 
-      if (response.ok) {
-        logInfo('Proposal fetched successfully', {
-          component: 'useProposal',
-          operation: 'queryFn',
-          proposalId: id,
-          loadTime: Date.now(),
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
+      logInfo('Proposal fetched successfully', {
+        component: 'useProposal',
+        operation: 'queryFn',
+        proposalId: id,
+        loadTime: Date.now(),
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
 
-        return response.data;
-      } else {
-        throw new Error(response.message || 'Failed to fetch proposal');
-      }
+      return data;
     },
     enabled: !!id,
     staleTime: 5000, // ✅ REDUCED: Short stale time for responsiveness
@@ -181,7 +169,7 @@ export function useProposal(id: string) {
 export function useProposalsByIds(ids: string[]) {
   const results = useQueries({
     queries: ids.map(id => ({
-      queryKey: qk.proposals.byId(id),
+      queryKey: proposalKeys.proposals.byId(id),
       queryFn: async () => {
         logDebug('Fetching proposal by ID', {
           component: 'useProposalsByIds',
@@ -191,13 +179,8 @@ export function useProposalsByIds(ids: string[]) {
           hypothesis: 'H4',
         });
 
-        const response = await proposalService.getProposal(id);
-
-        if (response.ok) {
-          return response.data;
-        } else {
-          throw new Error(response.message || 'Failed to fetch proposal');
-        }
+        const data = await proposalService.getProposal(id);
+        return data;
       },
       enabled: !!id,
       staleTime: 30000,
@@ -219,7 +202,7 @@ export function useProposalsByIds(ids: string[]) {
 
 export function useProposalStats() {
   return useQuery({
-    queryKey: qk.proposals.stats(),
+    queryKey: proposalKeys.proposals.stats(),
     queryFn: async () => {
       logDebug('Fetching proposal stats', {
         component: 'useProposalStats',
@@ -228,21 +211,17 @@ export function useProposalStats() {
         hypothesis: 'H4',
       });
 
-      const response = await proposalService.getProposalStats();
+      const data = await proposalService.getProposalStats();
 
-      if (response.ok) {
-        logInfo('Proposal stats fetched successfully', {
-          component: 'useProposalStats',
-          operation: 'queryFn',
-          loadTime: Date.now(),
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        });
+      logInfo('Proposal stats fetched successfully', {
+        component: 'useProposalStats',
+        operation: 'queryFn',
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
 
-        return response.data;
-      } else {
-        throw new Error(response.message || 'Failed to fetch proposal stats');
-      }
+      return data;
     },
     staleTime: 60000, // 1 minute
     gcTime: 300000, // 5 minutes
@@ -271,9 +250,9 @@ export function useDueProposals({
   sortOrder?: 'asc' | 'desc';
 }) {
   return useQuery({
-    queryKey: qk.proposals.due(dueBefore, dueAfter, openOnly, limit, sortBy, sortOrder),
+    queryKey: proposalKeys.proposals.due(dueBefore, dueAfter, openOnly, limit, sortBy, sortOrder),
     queryFn: async () => {
-      const response = await proposalService.getProposals({
+      const data = await proposalService.getProposals({
         limit,
         sortBy: sortBy as any,
         sortOrder,
@@ -282,11 +261,8 @@ export function useDueProposals({
         ...(openOnly ? { openOnly } : {}),
       });
 
-      if (response.ok) {
-        // Ensure we always return an array, never undefined
-        return response.data?.items || [];
-      }
-      throw new Error(response.message || 'Failed to fetch due proposals');
+      // Ensure we always return an array, never undefined
+      return data?.items || [];
     },
     staleTime: 60000,
     gcTime: 300000,
@@ -313,33 +289,29 @@ export function useCreateProposal() {
         hypothesis: 'H4',
       });
 
-      const response = await proposalService.createProposal(proposal);
+      const data = await proposalService.createProposal(proposal);
 
-      if (response.ok) {
-        logInfo('Proposal created successfully', {
-          component: 'useCreateProposal',
-          operation: 'mutationFn',
-          proposalId: response.data.id,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
+      logInfo('Proposal created successfully', {
+        component: 'useCreateProposal',
+        operation: 'mutationFn',
+        proposalId: data.id,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
 
-        return response.data;
-      } else {
-        throw new Error(response.message || 'Failed to create proposal');
-      }
+      return data;
     },
-    onSuccess: (response, proposal) => {
+    onSuccess: (data, proposal) => {
       // ✅ IMMEDIATE CACHE UPDATES - Following MIGRATION_LESSONS.md
-      queryClient.setQueryData(qk.proposals.byId(response.id), response);
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
-      queryClient.invalidateQueries({ queryKey: qk.proposals.stats() });
+      queryClient.setQueryData(proposalKeys.proposals.byId(data.id), data);
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.stats() });
 
       // Track analytics
       analytics.trackOptimized(
         'proposal_created',
         {
-          proposalId: response.id,
+          proposalId: data.id,
           title: proposal.basicInfo.title,
           customerId: proposal.basicInfo.customerId,
           status: 'DRAFT', // Default status for new proposals
@@ -375,37 +347,35 @@ export function useUpdateProposal() {
         hypothesis: 'H4',
       });
 
-      const response = await proposalService.updateProposal(id, proposal);
+      const data = await proposalService.updateProposal(id, proposal);
 
-      if (response.ok) {
-        logInfo('Proposal updated successfully', {
-          component: 'useUpdateProposal',
-          operation: 'mutationFn',
-          proposalId: id,
-          loadTime: Date.now(),
-          userStory: 'US-3.2',
-          hypothesis: 'H4',
-        });
+      logInfo('Proposal updated successfully', {
+        component: 'useUpdateProposal',
+        operation: 'mutationFn',
+        proposalId: id,
+        loadTime: Date.now(),
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
 
-        return response.data;
-      } else {
-        throw new Error(response.message || 'Failed to update proposal');
-      }
+      return data;
     },
-    onSuccess: (response, { id, proposal }) => {
+    onSuccess: (data, { id, proposal }) => {
       // ✅ FIXED: Aggressive cache management strategy from MIGRATION_LESSONS.md
 
       // 1. Immediate cache updates
-      queryClient.setQueryData(qk.proposals.byId(id), response);
+      queryClient.setQueryData(proposalKeys.proposals.byId(id), data);
 
       // 2. Comprehensive invalidation
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
-      queryClient.invalidateQueries({ queryKey: qk.proposals.byId(id) });
-      queryClient.refetchQueries({ queryKey: qk.proposals.byId(id) });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.byId(id) });
+      queryClient.refetchQueries({ queryKey: proposalKeys.proposals.byId(id) });
 
       // 3. Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: qk.proposals.stats() });
-      queryClient.invalidateQueries({ queryKey: qk.proposals.list('', 20, 'createdAt', 'desc') });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.stats() });
+      queryClient.invalidateQueries({
+        queryKey: proposalKeys.proposals.list('', 20, 'createdAt', 'desc'),
+      });
 
       // Track analytics
       analytics.trackOptimized(
@@ -444,7 +414,7 @@ export function useDeleteProposal() {
         hypothesis: 'H4',
       });
 
-      const response = await proposalService.deleteProposal(id);
+      const data = await proposalService.deleteProposal(id);
 
       logInfo('Proposal deleted successfully', {
         component: 'useDeleteProposal',
@@ -455,11 +425,11 @@ export function useDeleteProposal() {
         hypothesis: 'H4',
       });
 
-      return response;
+      return data;
     },
     onSuccess: (response, id) => {
       // Invalidate all proposal queries
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
 
       // Track analytics
       analytics.trackOptimized(
@@ -529,7 +499,7 @@ export function useDeleteProposalsBulk() {
     },
     onSuccess: (response, ids) => {
       // Invalidate all proposal queries
-      queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
 
       // Track analytics
       analytics.trackOptimized(

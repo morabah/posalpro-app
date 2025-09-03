@@ -48,6 +48,15 @@ export const UsersQuerySchema = z.object({
   department: z.string().optional(),
 });
 
+// User operation schemas for API routes
+export const UpdateUserWithIdSchema = UserUpdateSchema.extend({
+  id: z.string().min(1),
+});
+
+export const DeleteUserSchema = z.object({
+  id: z.string().min(1),
+});
+
 // Role Management Schemas
 export const RoleSchema = z.object({
   id: z.string(),
@@ -60,22 +69,30 @@ export const RoleSchema = z.object({
   permissions: z.array(z.string()),
   permissionsList: z.array(z.string()),
   lastModified: z.date(),
-  parent: z.object({
-    id: z.string(),
-    name: z.string(),
-    level: z.number(),
-  }).optional(),
-  children: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    level: z.number(),
-  })).optional(),
+  parent: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      level: z.number(),
+    })
+    .optional(),
+  children: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        level: z.number(),
+      })
+    )
+    .optional(),
   performanceExpectations: z.record(z.number()).optional(),
-  activeUsers: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    assignedAt: z.date(),
-  })),
+  activeUsers: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      assignedAt: z.date(),
+    })
+  ),
 });
 
 export const RoleCreateSchema = z.object({
@@ -103,6 +120,25 @@ export const RolesQuerySchema = z.object({
   accessLevel: z.string().optional(),
 });
 
+// Role Assignment Schemas (for user role management)
+export const RoleAssignmentSchema = z.object({
+  userId: z.string().uuid({ message: 'Invalid userId' }).or(z.string().min(1)),
+  roleId: z.string().uuid().optional(),
+  roleName: z.string().min(1).optional(),
+});
+
+export const RoleRemovalSchema = z.object({
+  userId: z.string().uuid({ message: 'Invalid userId' }).or(z.string().min(1)),
+  roleId: z.string().uuid().optional(),
+  roleName: z.string().min(1).optional(),
+});
+
+// User Role Query Schema
+export const UserRolesQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+  email: z.string().email().optional(),
+});
+
 // Permission Management Schemas
 export const PermissionSchema = z.object({
   id: z.string(),
@@ -112,20 +148,24 @@ export const PermissionSchema = z.object({
   displayName: z.string(),
   description: z.string(),
   constraints: z.record(z.unknown()).optional(),
-  roles: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    level: z.number(),
-    grantedAt: z.date(),
-  })),
-  users: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    email: z.string(),
-    grantedAt: z.date(),
-    expiresAt: z.date().optional(),
-    isActive: z.boolean(),
-  })),
+  roles: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      level: z.number(),
+      grantedAt: z.date(),
+    })
+  ),
+  users: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string(),
+      grantedAt: z.date(),
+      expiresAt: z.date().optional(),
+      isActive: z.boolean(),
+    })
+  ),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -170,16 +210,18 @@ export const SystemMetricsSchema = z.object({
   totalContent: z.number(),
   lastBackup: z.date(),
   lastSync: z.date().nullable(),
-  recentAuditLogs: z.array(z.object({
-    id: z.string(),
-    timestamp: z.date(),
-    user: z.string(),
-    action: z.string(),
-    type: z.string(),
-    severity: z.string(),
-    details: z.string(),
-    ipAddress: z.string(),
-  })),
+  recentAuditLogs: z.array(
+    z.object({
+      id: z.string(),
+      timestamp: z.date(),
+      user: z.string(),
+      action: z.string(),
+      type: z.string(),
+      severity: z.string(),
+      details: z.string(),
+      ipAddress: z.string(),
+    })
+  ),
   avgResponseTime: z.number(),
   errorRate: z.number(),
   throughput: z.number(),
@@ -262,6 +304,8 @@ export type User = z.infer<typeof UserSchema>;
 export type UserCreate = z.infer<typeof UserCreateSchema>;
 export type UserUpdate = z.infer<typeof UserUpdateSchema>;
 export type UsersQuery = z.infer<typeof UsersQuerySchema>;
+export type UpdateUserWithId = z.infer<typeof UpdateUserWithIdSchema>;
+export type DeleteUser = z.infer<typeof DeleteUserSchema>;
 
 export type Role = z.infer<typeof RoleSchema>;
 export type RoleCreate = z.infer<typeof RoleCreateSchema>;

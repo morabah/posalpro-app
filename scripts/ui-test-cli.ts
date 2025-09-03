@@ -7,6 +7,8 @@
  * Extends the existing app-cli with UI-specific testing capabilities
  */
 
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../src/lib/db/prisma';
 import { logError, logInfo } from '../src/lib/logger';
 
@@ -25,9 +27,56 @@ interface TestResult {
 class UITestCLI {
   private testResults: TestResult[] = [];
   private sessionCookies: string[] = [];
+  private isAuthenticated: boolean = false;
 
   constructor() {
     this.testResults = [];
+    this.loadSession();
+  }
+
+  private loadSession() {
+    // Try to load existing session from file
+    const sessionFile = path.resolve(process.cwd(), '.posalpro-ui-session.json');
+    if (fs.existsSync(sessionFile)) {
+      try {
+        const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
+        if (sessionData.cookies && Array.isArray(sessionData.cookies)) {
+          this.sessionCookies = sessionData.cookies;
+          this.isAuthenticated = true;
+          logInfo('Loaded existing session', {
+            component: 'UITestCLI',
+            cookiesCount: this.sessionCookies.length,
+          });
+        }
+      } catch (error) {
+        logError('Failed to load session', {
+          component: 'UITestCLI',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  }
+
+  private saveSession() {
+    const sessionFile = path.resolve(process.cwd(), '.posalpro-ui-session.json');
+    try {
+      fs.writeFileSync(
+        sessionFile,
+        JSON.stringify(
+          {
+            cookies: this.sessionCookies,
+            timestamp: new Date().toISOString(),
+          },
+          null,
+          2
+        )
+      );
+    } catch (error) {
+      logError('Failed to save session', {
+        component: 'UITestCLI',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 
   // Enhanced fetch wrapper
@@ -58,6 +107,24 @@ class UITestCLI {
     }
   }
 
+  // Server health check
+  private async checkServerHealth(): Promise<boolean> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      });
+      return response.ok;
+    } catch (error) {
+      logError('Server health check failed', {
+        component: 'UITestCLI',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        baseUrl: BASE_URL,
+      });
+      return false;
+    }
+  }
+
   // Authentication testing
   async testAuthentication() {
     logInfo('Testing authentication flows', {
@@ -66,31 +133,133 @@ class UITestCLI {
     });
 
     await this.runTest('Login with valid credentials', async () => {
-      const response = await this.fetch(`${BASE_URL}/api/auth/signin`, {
+      // Skip if already authenticated
+      if (this.isAuthenticated && this.sessionCookies.length > 0) {
+        return {
+          success: true,
+          message: 'Already authenticated',
+          cookies: this.sessionCookies.length,
+        };
+      }
+
+      // Step 1: Get CSRF token from NextAuth
+      const csrfResponse = await this.fetch(`${BASE_URL}/api/auth/csrf`, {
+        method: 'GET',
+      });
+
+      if (!csrfResponse.ok) {
+        const errorText = await csrfResponse.text();
+        throw new Error(
+          `CSRF token fetch failed: ${csrfResponse.status} ${csrfResponse.statusText} - ${errorText}`
+        );
+      }
+
+      const csrfData = await csrfResponse.json();
+      const csrfToken = csrfData.csrfToken;
+
+      const csrfCookies = csrfResponse.headers.get('set-cookie');
+      if (csrfCookies) {
+        // Add CSRF cookies to our collection
+        this.sessionCookies = csrfCookies.split(',').map(c => c.trim());
+      }
+
+      // Step 2: Validate credentials with PosalPro login endpoint
+      const validateResponse = await this.fetch(`${BASE_URL}/api/auth/login`, {
         method: 'POST',
         body: JSON.stringify({
           email: 'admin@posalpro.com',
-          password: 'Admin123!',
+          password: 'ProposalPro2024!',
+          role: 'System Administrator',
+          rememberMe: true,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Login failed: ${response.status} ${response.statusText}`);
+      if (!validateResponse.ok) {
+        const errorText = await validateResponse.text();
+        throw new Error(
+          `Login validation failed: ${validateResponse.status} ${validateResponse.statusText} - ${errorText}`
+        );
       }
 
-      const cookies = response.headers.get('set-cookie');
-      if (cookies) {
-        this.sessionCookies = cookies.split(',').map(c => c.trim());
+      // Step 3: Use NextAuth callback with real CSRF token
+      const authResponse = await this.fetch(`${BASE_URL}/api/auth/callback/credentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          csrfToken: csrfToken,
+          email: 'admin@posalpro.com',
+          password: 'ProposalPro2024!',
+          callbackUrl: `${BASE_URL}/dashboard`,
+        }).toString(),
+        redirect: 'manual',
+      });
+
+      if (!authResponse.ok && authResponse.status !== 302) {
+        const errorText = await authResponse.text();
+        throw new Error(
+          `NextAuth authentication failed: ${authResponse.status} ${authResponse.statusText} - ${errorText}`
+        );
+      }
+
+      // Step 4: Verify session by calling NextAuth session endpoint
+      const sessionResponse = await this.fetch(`${BASE_URL}/api/auth/session`, {
+        method: 'GET',
+      });
+
+      if (!sessionResponse.ok) {
+        const errorText = await sessionResponse.text();
+        throw new Error(
+          `Session verification failed: ${sessionResponse.status} ${sessionResponse.statusText} - ${errorText}`
+        );
+      }
+
+      // Combine cookies from both responses
+      let allCookies: string[] = [];
+      const authCookieHeader = authResponse.headers.get('set-cookie');
+      const sessionCookieHeader = sessionResponse.headers.get('set-cookie');
+
+      if (authCookieHeader) {
+        allCookies = allCookies.concat(authCookieHeader.split(',').map(c => c.trim()));
+      }
+      if (sessionCookieHeader) {
+        allCookies = allCookies.concat(sessionCookieHeader.split(',').map(c => c.trim()));
+      }
+
+      if (allCookies.length > 0) {
+        // Filter out duplicates and keep only relevant cookies
+        this.sessionCookies = allCookies.filter(
+          (cookie, index, arr) =>
+            arr.findIndex(c => c.split('=')[0] === cookie.split('=')[0]) === index
+        );
+        this.isAuthenticated = true;
+        this.saveSession(); // Save session for future use
+        console.log(
+          `🔐 Login successful: ${this.sessionCookies.length} cookies, authenticated: ${this.isAuthenticated}`
+        );
+      } else {
+        throw new Error('No session cookies received from authentication flow');
       }
 
       return { success: true, cookies: this.sessionCookies.length };
     });
 
     await this.runTest('Access protected route', async () => {
+      if (!this.isAuthenticated || this.sessionCookies.length === 0) {
+        throw new Error('Not authenticated - authentication test must pass first');
+      }
+
       const response = await this.fetch(`${BASE_URL}/api/proposals`);
 
       if (response.status === 401) {
-        throw new Error('Unauthorized access - authentication required');
+        throw new Error('Unauthorized access - authentication failed');
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to access protected route: ${response.status} ${response.statusText}`
+        );
       }
 
       return { success: true, status: response.status };
@@ -423,6 +592,16 @@ class UITestCLI {
 
     console.log(`🧪 Starting UI Tests: ${testType.toUpperCase()}`);
     console.log('='.repeat(50));
+
+    // Check server health first
+    console.log('🔍 Checking server health...');
+    const serverHealthy = await this.checkServerHealth();
+    if (!serverHealthy) {
+      throw new Error(
+        `Server is not responding at ${BASE_URL}. Make sure the development server is running with 'npm run dev:smart'`
+      );
+    }
+    console.log('✅ Server is healthy');
 
     try {
       switch (testType) {

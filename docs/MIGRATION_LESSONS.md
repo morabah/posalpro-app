@@ -98,7 +98,73 @@ const handleUpdate = useCallback(
 );
 ```
 
-### **4. Cache Management Issues**
+### **4. Frontend-Backend Field Value Mismatch Issues**
+
+**Problem**: Frontend sends field values using different conventions than
+backend schema expects
+
+**Symptoms**:
+
+- 500 "Invalid request body" errors despite valid data structure
+- Schema validation failures for enum/choice fields
+- Frontend form defaults don't match backend enum values
+
+**Root Cause**: UI uses user-friendly values (bronze/silver/gold) while database
+uses technical values (STANDARD/PREMIUM/ENTERPRISE)
+
+**Solution**:
+
+```typescript
+// ✅ Schema preprocessing for value normalization
+export const CustomerTierSchema = z.preprocess(
+  val => {
+    if (typeof val === 'string') {
+      const normalized = val.toLowerCase();
+      switch (normalized) {
+        case 'bronze':
+        case 'standard':
+          return 'STANDARD';
+        case 'silver':
+        case 'premium':
+          return 'PREMIUM';
+        case 'gold':
+        case 'enterprise':
+          return 'ENTERPRISE';
+        default:
+          return val.toUpperCase();
+      }
+    }
+    return val;
+  },
+  z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE'])
+);
+
+// ✅ API route field transformation (alternative approach)
+const { tier, ...otherData } = body;
+const customer = await prisma.customer.create({
+  data: {
+    ...otherData,
+    tier: tier === 'bronze' ? 'STANDARD' : tier === 'silver' ? 'PREMIUM' : tier,
+  },
+});
+```
+
+**Prevention**:
+
+- Use schema preprocessing for enum field value mapping
+- Test with actual frontend form data, not just CLI/Postman
+- Map user-friendly values to database values at schema level
+- Handle both old and new value formats for backward compatibility
+
+**Debug Strategy**:
+
+1. Add debug logging to see exact request body:
+   `console.log('Request body:', JSON.stringify(body, null, 2))`
+2. Test CLI with same data frontend sends to isolate schema vs auth issues
+3. Check schema enum values vs frontend form defaults
+4. Add preprocessing to transform values before validation
+
+### **5. Cache Management Issues**
 
 **Problem**: Stale data, insufficient invalidation
 
@@ -1545,3 +1611,232 @@ pattern during initial implementation, not as cleanup phase.
 **Result**: **COMPLETE APIRESPONSE STANDARDIZATION** - All services now follow
 consistent unwrapped data pattern, eliminating type errors and ensuring reliable
 data flow.
+
+---
+
+## 🔧 **Database Schema Mismatch Detection (Latest)**
+
+### **Migration Goal**: Implement systematic detection of database-frontend schema mismatches
+
+**Final Status**: ✅ **SUCCESSFUL** - CLI-based schema mismatch detection now
+identifies all cross-layer inconsistencies before they cause runtime errors.
+
+### **Core Challenge**: Silent schema mismatches between database, API schemas, and frontend components
+
+**Problem**: Components use fields that don't exist in database schemas, or
+schemas miss fields that exist in the database, causing runtime errors and data
+access failures.
+
+**Symptoms**:
+
+- Runtime errors when accessing non-existent database fields
+- Schema validation failures for existing data
+- Components failing to load data due to field mismatches
+- Silent data truncation or null values
+
+### **Solution: CLI-Based Schema Analysis**
+
+#### **Detection Command**
+
+```bash
+npm run app:cli -- --command "schema detect-mismatch ComponentName"
+```
+
+#### **Analysis Process**
+
+1. **Component Field Extraction**: Scans component files for form fields, state
+   properties, and data access patterns
+2. **API Endpoint Analysis**: Identifies API routes and response structures
+3. **Schema Field Mapping**: Extracts fields from Zod schemas (CustomerSchema,
+   CustomerCreateSchema, etc.)
+4. **Database Field Validation**: Checks against Prisma schema for actual
+   database fields
+5. **TypeScript Interface Analysis**: Validates TypeScript interfaces against
+   actual usage
+6. **Cross-Layer Mismatch Detection**: Compares all layers for inconsistencies
+
+#### **Typical Mismatch Patterns Found**
+
+1. **Missing Schema Fields** (Most Common):
+
+   ```
+   🚨 missing_schema_field: Component field 'phone' not found in any schema
+   Field: phone
+   Component: CustomerCreationSidebar.tsx
+   ```
+
+   **Cause**: Frontend uses fields not defined in Zod schemas **Impact**: Schema
+   validation fails, data rejected **Fix**: Add missing fields to appropriate
+   Zod schema
+
+2. **Schema-Component Field Misalignment**:
+
+   ```
+   🚨 field_name_mismatch: Schema uses 'annualRevenue' but component uses 'revenue'
+   ```
+
+   **Cause**: Inconsistent field naming across layers **Impact**: Data
+   transformation errors, null values **Fix**: Standardize field names using
+   database as source of truth
+
+3. **Type Mismatches**:
+   ```
+   🚨 type_mismatch: Component expects string but schema defines number
+   ```
+   **Cause**: Type definitions don't match actual data types **Impact**: Runtime
+   type errors, data corruption **Fix**: Align types with database schema
+   definitions
+
+### **Fix Implementation Process**
+
+#### **Step 1: Identify Mismatches**
+
+```bash
+# Analyze specific component
+npm run app:cli -- --command "schema detect-mismatch CustomerCreationSidebar"
+
+# Analyze entire feature
+npm run app:cli -- --command "schema detect-mismatch Customer*"
+```
+
+#### **Step 2: Update Zod Schemas**
+
+```typescript
+// ❌ BEFORE: Missing fields
+export const CustomerCreateSchema = CustomerSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// ✅ AFTER: Include all required fields
+export const CustomerCreateSchema = CustomerSchema.extend({
+  phone: z.string().optional(),
+  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
+  address: z.string().optional(),
+  companySize: z.string().optional(),
+  revenue: z.number().optional().nullable(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+```
+
+#### **Step 3: Update Validation Interfaces**
+
+```typescript
+// Update CustomerEditData interface to match schema
+export interface CustomerEditData {
+  name: string;
+  email: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  industry?: string;
+  tags: string[];
+  tier: string;
+  revenue?: number; // ✅ Changed from annualRevenue
+  companySize?: string; // ✅ Changed from employeeCount
+}
+```
+
+#### **Step 4: Update Component Form Fields**
+
+```typescript
+// Update form field names to match corrected schema
+<FormField
+  name="revenue"          // ✅ Changed from "annualRevenue"
+  label="Annual Revenue"
+  type="number"
+  value={validation.formData.revenue}
+  onChange={value => validation.handleFieldChange('revenue', value)}
+/>
+```
+
+#### **Step 5: Verify Fix**
+
+```bash
+# Re-run analysis to confirm mismatches resolved
+npm run app:cli -- --command "schema detect-mismatch CustomerCreationSidebar"
+
+# Expected output: ✅ No mismatches found
+```
+
+### **Success Metrics**
+
+**Before Detection**:
+
+- Silent schema validation failures
+- Runtime data access errors
+- Components failing to load data
+- Inconsistent field naming across layers
+
+**After Detection & Fix**:
+
+- ✅ **5 schema mismatches resolved** (phone, website, address, companySize,
+  revenue)
+- ✅ **Consistent field naming** (revenue vs annualRevenue, companySize vs
+  employeeCount)
+- ✅ **Successful customer creation** at
+  `http://localhost:3000/customers/create`
+- ✅ **100% TypeScript compliance** after schema alignment
+- ✅ **Database-API-Frontend alignment** achieved
+
+### **Prevention Framework (Database Mismatch Detection)**
+
+1. **Pre-Implementation Schema Check**:
+
+   ```bash
+   # Always run before implementing new features
+   npm run app:cli -- --command "schema detect-mismatch FeatureName*"
+   ```
+
+2. **Database-First Field Naming**:
+   - Use database column names as source of truth
+   - Avoid frontend-specific naming conventions
+   - Maintain consistency across all layers
+
+3. **Schema Completeness Validation**:
+   - Include all database fields in Zod schemas
+   - Add optional fields for future extensibility
+   - Validate schema against actual database data
+
+4. **Automated Detection Integration**:
+   - Add to CI/CD pipeline for pre-deployment validation
+   - Run as part of `npm run type-check` process
+   - Create dashboards for schema health monitoring
+
+5. **Component-Schema Sync Process**:
+   - Update schemas first, then components
+   - Use TypeScript inference for type safety
+   - Test with real data before deployment
+
+### **Detection Command Usage Examples**
+
+```bash
+# Analyze specific component
+npm run app:cli -- --command "schema detect-mismatch CustomerCreationSidebar"
+
+# Analyze feature area
+npm run app:cli -- --command "schema detect-mismatch Product*"
+
+# Analyze entire domain
+npm run app:cli -- --command "schema detect-mismatch Customer*"
+
+# Analyze API endpoints
+npm run app:cli -- --command "schema detect-mismatch *Api*"
+```
+
+### **Common Mismatch Resolution Patterns**
+
+| Mismatch Type        | Pattern                             | Solution                                      |
+| -------------------- | ----------------------------------- | --------------------------------------------- |
+| Missing Fields       | Component uses field not in schema  | Add to Zod schema with appropriate validation |
+| Field Name Mismatch  | Different names across layers       | Standardize using database names              |
+| Type Mismatch        | Component expects different type    | Align with database schema types              |
+| Optional vs Required | Schema requires, component optional | Make consistent based on business rules       |
+
+**Result**: **SUCCESSFUL DATABASE MISMATCH DETECTION** - CLI-based analysis now
+systematically identifies and resolves all schema inconsistencies before they
+cause runtime failures.

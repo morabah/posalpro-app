@@ -17,7 +17,7 @@ import {
   ProposalListSchema,
   ProposalQuerySchema,
   ProposalSchema,
-} from '@/features/proposals/schemas';
+} from '@/features/proposals';
 
 // GET /api/proposals - Retrieve proposals with filtering and cursor pagination
 export const GET = createRoute(

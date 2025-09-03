@@ -10,7 +10,7 @@ import {
   useCreateProduct,
   useProductCategories,
   useProductTags,
-} from '@/features/products/hooks/useProducts';
+} from '@/features/products';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { analytics } from '@/lib/analytics';

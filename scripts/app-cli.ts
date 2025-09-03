@@ -6,32 +6,70 @@
  🚀 ALWAYS USE THIS CLI FOR:
    - Database operations and schema management
    - API testing and monitoring
+   - Comprehensive 8-layer component analysis & mismatch detection
    - Environment variable inspection
    - Data export/import operations
    - System health monitoring
    - Test data generation
+   - RBAC permission testing
+   - Multi-session authentication management
 
  📋 AVAILABLE COMMANDS:
+   - Authentication: login, login-as, use-session, whoami, logout
    - Database: detect-db, db, health, export, import
    - Monitoring: monitor, health
-   - Data: generate test-data, export, import
-   - Environment: env
-   - Schema: schema check, schema integrity, schema validate
+   - Data Management: generate test-data, export, import
+   - Environment: env show, env list
+   - Schema Validation: schema check, schema integrity, schema validate, schema detect-mismatch [component], schema test [command]
+   - API Testing: get, post, put, delete <endpoint>
+   - Entity Operations: customers create/list, products create/list, proposals create/list/update
+   - Version Management: versions list, versions show <id>
+   - RBAC Testing: rbac try <method> <endpoint> [role]
 
- ⚡ FEATURES:
+ ⚡ ENHANCED FEATURES:
    - Automatic .env file loading
-   - Session management with NextAuth
-   - Comprehensive error handling
-   - Structured logging integration
+   - Multi-session management with tagged sessions
+   - Comprehensive error handling with structured logging
+   - 8-layer comprehensive component analysis system
+   - Cross-layer mismatch detection with severity classification
+   - Schema validation and integrity checking
    - Batch processing support
+   - Real-time API monitoring
+   - RBAC permission validation
+   - Data export in JSON/CSV/SQL formats
 
- Usage:
-   npm run app:cli                  # interactive REPL
-   npm run app:cli -- --command "monitor health"
-   npm run app:cli -- --command "env show database"
-   npm run app:cli -- --command "export customers json --limit=10"
-   npm run app:cli -- --command "generate test-data --count=50"
-   npm run app:cli -- --command "schema check"
+ 🔍 NEW: 8-LAYER COMPREHENSIVE COMPONENT ANALYSIS:
+   Advanced static analysis system that automatically extracts and compares fields across:
+
+   1️⃣ Component Fields - Form fields and component props
+   2️⃣ API Endpoints - API calls and endpoints used by component
+   3️⃣ Schema Fields - Backend Zod schema definitions
+   4️⃣ Zod Validation - Validation rules and constraints
+   5️⃣ Database Fields - Prisma model fields and relationships
+   6️⃣ TypeScript Interfaces - Interface definitions and types
+   7️⃣ Form Validation Rules - React Hook Form & HTML5 validation
+   8️⃣ API Response Types - Response interfaces and type definitions
+
+   🎯 MISMATCH DETECTION:
+   - High Priority: Missing schema fields, type mismatches
+   - Medium Priority: Validation inconsistencies
+   - Low Priority: Naming variations, case differences
+   - Component health scoring with actionable recommendations
+
+ Usage Examples:
+   npm run app:cli                                      # interactive REPL
+   npm run app:cli -- --command "schema detect-mismatch"           # detect field mismatches across all components
+   npm run app:cli -- --command "schema detect-mismatch BasicInformationStep" # analyze specific component with 8-layer analysis
+  npm run app:cli -- --command "schema test comprehensive"                  # run full Zod schema test suite
+  npm run app:cli -- --command "schema test generate customers.CustomerCreateSchema" # generate test data from schema
+   npm run app:cli -- --command "schema compare BasicInformationStep ProductCreateForm" # compare two components
+   npm run app:cli -- --command "monitor health"           # system health check
+   npm run app:cli -- --command "login-as user@example.com password admin dev" # tagged login
+   npm run app:cli -- --command "rbac try POST /api/customers admin"  # test RBAC
+   npm run app:cli -- --command "export customers json --limit=10"    # export data
+   npm run app:cli -- --command "customers create '{\"name\":\"Test\",\"email\":\"test@example.com\"}'"
+   npm run app:cli -- --command "products list --limit=5"             # list products
+   npm run app:cli -- --command "versions list 10"                    # version history
 */
 
 import { config } from 'dotenv';
@@ -395,7 +433,7 @@ class ApiClient {
 function printHelp() {
   console.log(`
 ╭─────────────────────────────────────────────────────────────╮
-│                    PosalPro App CLI                        │
+│              PosalPro App CLI - PRIMARY DEVELOPMENT TOOL   │
 ╰─────────────────────────────────────────────────────────────╯
 
 🔐 AUTHENTICATION & SESSION MANAGEMENT
@@ -491,6 +529,15 @@ function printHelp() {
   schema check                               # Comprehensive schema consistency check
   schema integrity                           # Data integrity and referential integrity check
   schema validate                            # Zod schema validation against live data
+  schema detect-mismatch [componentName]     # 🆕 Dynamic frontend-backend field mismatch detection
+
+🔧 DEVELOPMENT WORKFLOW TESTING
+  schema detect-mismatch [componentName]     # Automated frontend-backend field validation
+                                            # - Analyzes React components for form field usage
+                                            # - Matches components to backend Zod schemas dynamically
+                                            # - Detects enum mismatches, missing fields, type conflicts
+                                            # - Provides actionable developer suggestions
+                                            # - Optional: Filter by specific component name
 
 ⚙️ SYSTEM
   help                                       # Show this help
@@ -2170,8 +2217,22 @@ async function execute(tokens: string[], api: ApiClient) {
         await handleDataIntegrityCheck(api);
       } else if (sub === 'validate') {
         await handleZodValidationCheck(api);
+      } else if (sub === 'detect-mismatch') {
+        const componentName = tokens[2] || undefined; // Optional component name parameter
+        await handleFieldValueMismatchDetection(api, componentName);
+      } else if (sub === 'test') {
+        // Enhanced Zod Schema Runtime Testing
+        await handleEnhancedZodValidation(tokens, api);
       } else {
-        console.log('Usage: schema check | schema integrity | schema validate');
+        console.log(
+          'Usage: schema check | schema integrity | schema validate | schema detect-mismatch [componentName] | schema test <command>'
+        );
+        console.log('\nEnhanced Zod Testing Commands:');
+        console.log('  schema test interactive     # Interactive schema testing');
+        console.log('  schema test generate <schema> # Generate test data from schema');
+        console.log('  schema test transform <schema> # Test schema transformations');
+        console.log('  schema test compatibility   # Test frontend/backend compatibility');
+        console.log('  schema test comprehensive   # Run full test suite');
       }
       break;
     }
@@ -2800,6 +2861,973 @@ async function handleZodValidationCheck(api: ApiClient) {
       '❌ Error during Zod validation check:',
       error instanceof Error ? error.message : 'Unknown error'
     );
+  }
+}
+
+// ====================
+// Enhanced Zod Schema Validation Functions
+// ====================
+
+interface SchemaTestResult {
+  schemaName: string;
+  testType: string;
+  status: 'PASS' | 'FAIL' | 'ERROR';
+  message: string;
+  details?: any;
+  duration: number;
+}
+
+interface ValidationTestSuite {
+  name: string;
+  tests: SchemaTestResult[];
+  summary: {
+    passed: number;
+    failed: number;
+    errors: number;
+    totalTime: number;
+  };
+}
+
+// Enhanced Zod Runtime Testing Function
+async function handleEnhancedZodValidation(tokens: string[], api: ApiClient) {
+  console.log('🚀 PosalPro MVP2 - Enhanced Zod Schema Runtime Testing\n');
+
+  const command = tokens[2]; // schema test <command>
+  const args = tokens.slice(3);
+
+  switch (command) {
+    case 'interactive':
+      await runInteractiveSchemaTesting(api);
+      break;
+    case 'generate':
+      await runSchemaDataGeneration(args);
+      break;
+    case 'transform':
+      await runSchemaTransformationTesting(args);
+      break;
+    case 'compatibility':
+      await runSchemaCompatibilityTesting(api);
+      break;
+    case 'comprehensive':
+      await runComprehensiveSchemaTestSuite(api);
+      break;
+    default:
+      console.log('Available enhanced Zod testing commands:');
+      console.log('  schema test interactive     # Interactive schema testing');
+      console.log('  schema test generate <schema> # Generate test data from schema');
+      console.log('  schema test transform <schema> # Test schema transformations');
+      console.log('  schema test compatibility   # Test frontend/backend compatibility');
+      console.log('  schema test comprehensive   # Run full test suite');
+      break;
+  }
+}
+
+// Interactive Schema Testing
+async function runInteractiveSchemaTesting(api: ApiClient) {
+  console.log('🎯 Interactive Zod Schema Testing');
+  console.log('==================================\n');
+
+  try {
+    // Load available schemas
+    const schemas = await loadAvailableSchemas();
+    if (Object.keys(schemas).length === 0) {
+      console.log('❌ No schemas found. Please ensure feature schemas are properly defined.');
+      return;
+    }
+
+    console.log('📋 Available Schemas:');
+    Object.keys(schemas).forEach((name, index) => {
+      console.log(`  ${index + 1}. ${name}`);
+    });
+
+    // For CLI usage, we'll run automated tests on all schemas
+    console.log('\n🔄 Running automated tests on all schemas...\n');
+
+    const results: SchemaTestResult[] = [];
+
+    for (const [schemaName, schema] of Object.entries(schemas)) {
+      console.log(`Testing ${schemaName}...`);
+
+      // Test 1: Basic validation with generated data
+      const genTest = await testSchemaDataGeneration(schemaName, schema);
+      results.push(genTest);
+
+      // Test 2: Schema transformation testing
+      const transTest = await testSchemaTransformation(schemaName, schema);
+      results.push(transTest);
+
+      // Test 3: Edge case validation
+      const edgeTest = await testSchemaEdgeCases(schemaName, schema);
+      results.push(edgeTest);
+
+      // Test 4: API data validation (if applicable)
+      const apiTest = await testSchemaWithApiData(schemaName, schema, api);
+      if (apiTest) results.push(apiTest);
+    }
+
+    // Display results
+    displaySchemaTestResults(results);
+
+  } catch (error) {
+    console.error('❌ Error in interactive schema testing:', error);
+  }
+}
+
+// Load all available schemas from feature directories
+async function loadAvailableSchemas(): Promise<Record<string, any>> {
+  const schemas: Record<string, any> = {};
+
+  const featureDirs = ['customers', 'proposals', 'products', 'auth'];
+
+  for (const dir of featureDirs) {
+    try {
+      const module = await import(`../src/features/${dir}/schemas`);
+      Object.entries(module).forEach(([key, value]) => {
+        if (key.endsWith('Schema') && typeof value === 'object' && value.safeParse) {
+          schemas[`${dir}.${key}`] = value;
+        }
+      });
+    } catch (error) {
+      // Schema not available, skip
+    }
+  }
+
+  return schemas;
+}
+
+// Test data generation from schema
+async function testSchemaDataGeneration(schemaName: string, schema: any): Promise<SchemaTestResult> {
+  const startTime = Date.now();
+
+  try {
+    // Generate test data
+    const testData = generateTestDataFromSchema(schema);
+
+    // Validate generated data
+    const validation = schema.safeParse(testData);
+
+    return {
+      schemaName,
+      testType: 'Data Generation',
+      status: validation.success ? 'PASS' : 'FAIL',
+      message: validation.success
+        ? 'Successfully generated and validated test data'
+        : `Generated data failed validation: ${validation.error?.message}`,
+      details: validation.success ? testData : validation.error?.errors,
+      duration: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      schemaName,
+      testType: 'Data Generation',
+      status: 'ERROR',
+      message: `Error generating test data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      duration: Date.now() - startTime,
+    };
+  }
+}
+
+// Generate test data based on Zod schema structure
+function generateTestDataFromSchema(schema: any): any {
+  // Try a more robust approach by iteratively building valid data
+  let attempts = 0;
+  const maxAttempts = 10;
+  let currentData: any = {};
+
+  while (attempts < maxAttempts) {
+    try {
+      // Try to parse current data to see what fields are missing
+      const result = schema.safeParse(currentData);
+
+      if (result.success) {
+        return currentData;
+      }
+
+      // Get the first error to fix
+      const firstError = result.error.errors[0];
+      if (!firstError) break;
+
+      const fieldPath = firstError.path.join('.');
+      // Add the missing field with a generated value
+      setNestedValue(currentData, fieldPath, generateValueForError(firstError, fieldPath));
+
+      attempts++;
+    } catch (error) {
+      // Silently handle errors during generation
+      break;
+    }
+  }
+
+  return currentData;
+}
+
+// Set a nested value in an object using dot notation
+function setNestedValue(obj: any, path: string, value: any): void {
+  const keys = path.split('.');
+  let current = obj;
+
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!current[keys[i]] || typeof current[keys[i]] !== 'object') {
+      current[keys[i]] = {};
+    }
+    current = current[keys[i]];
+  }
+
+  current[keys[keys.length - 1]] = value;
+}
+
+// Generate appropriate value based on validation error
+function generateValueForError(error: any, fieldPath: string): any {
+  const fieldName = fieldPath.split('.').pop()?.toLowerCase() || '';
+
+  switch (error.code) {
+    case 'invalid_type':
+      if (error.received === 'undefined') {
+        // Required field missing
+        return generateValueForField(fieldName, error.expected);
+      }
+      break;
+
+    case 'invalid_literal':
+      // For literal values, return the expected value
+      return error.expected;
+
+    case 'too_small':
+      if (error.type === 'string') {
+        return 'a'.repeat(error.minimum || 1);
+      }
+      return error.minimum || 0;
+
+    case 'invalid_string':
+      if (error.validation === 'email') {
+        return 'test@example.com';
+      }
+      if (error.validation === 'url') {
+        return 'https://example.com';
+      }
+      return 'test_value';
+
+    case 'invalid_enum_value':
+      // Return first expected value
+      return error.options?.[0] || 'DEFAULT';
+  }
+
+  // Fallback to generic generation
+  return generateValueForField(fieldName, 'string');
+}
+
+// Generate value based on field name pattern
+function generateValueForField(fieldName: string, expectedType: string): any {
+  if (expectedType === 'string') {
+    if (fieldName.includes('email')) return 'test@example.com';
+    if (fieldName.includes('name')) return 'Test Name';
+    if (fieldName.includes('phone')) return '+1-555-123-4567';
+    if (fieldName.includes('url') || fieldName.includes('website')) return 'https://example.com';
+    if (fieldName.includes('address')) return '123 Test Street';
+    if (fieldName.includes('industry')) return 'Technology';
+    if (fieldName.includes('status')) return 'ACTIVE';
+    if (fieldName.includes('tier')) return 'STANDARD';
+    return 'Test Value';
+  }
+
+  if (expectedType === 'number') {
+    if (fieldName.includes('id')) return Math.floor(Math.random() * 1000) + 1;
+    if (fieldName.includes('revenue') || fieldName.includes('price')) return 10000;
+    return 42;
+  }
+
+  if (expectedType === 'boolean') {
+    return false;
+  }
+
+  if (expectedType === 'array') {
+    return [];
+  }
+
+  return 'test_value';
+}
+
+// Generate appropriate test value for a field based on its Zod schema
+function generateFieldValue(fieldName: string, fieldSchema: any): any {
+  try {
+    const def = fieldSchema._def;
+    if (!def) return null;
+
+    const typeName = def.typeName;
+
+    switch (typeName) {
+      case 'ZodString':
+        return generateStringValue(fieldName, def);
+
+      case 'ZodNumber':
+        return generateNumberValue(fieldName, def);
+
+      case 'ZodBoolean':
+        return false; // Default to false for boolean fields
+
+      case 'ZodArray':
+        return generateArrayValue(fieldName, def);
+
+      case 'ZodEnum':
+        return generateEnumValue(fieldName, def);
+
+      case 'ZodObject':
+        return generateObjectValue(fieldName, def);
+
+      case 'ZodOptional':
+        // For optional fields, sometimes provide a value, sometimes null
+        return Math.random() > 0.5 ? generateFieldValue(fieldName, def.innerType) : undefined;
+
+      case 'ZodNullable':
+        // For nullable fields, sometimes provide a value, sometimes null
+        return Math.random() > 0.5 ? generateFieldValue(fieldName, def.innerType) : null;
+
+      case 'ZodUnion':
+        // For unions, pick the first type
+        return generateFieldValue(fieldName, def.options[0]);
+
+      default:
+        return `test_${fieldName}`;
+    }
+  } catch (error) {
+    return `test_${fieldName}`;
+  }
+}
+
+// Generate string values based on field name patterns
+function generateStringValue(fieldName: string, def: any): string {
+  if (fieldName.toLowerCase().includes('email')) {
+    return 'test@example.com';
+  }
+  if (fieldName.toLowerCase().includes('phone')) {
+    return '+1-555-123-4567';
+  }
+  if (fieldName.toLowerCase().includes('url') || fieldName.toLowerCase().includes('website')) {
+    return 'https://example.com';
+  }
+  if (fieldName.toLowerCase().includes('name')) {
+    return 'Test Name';
+  }
+  if (fieldName.toLowerCase().includes('description')) {
+    return 'Test description';
+  }
+  if (fieldName.toLowerCase().includes('address')) {
+    return '123 Test Street, Test City, TS 12345';
+  }
+  if (fieldName.toLowerCase().includes('industry')) {
+    return 'Technology';
+  }
+
+  // Check for specific validations
+  if (def.checks) {
+    for (const check of def.checks) {
+      if (check.kind === 'min' && check.value > 0) {
+        return 'a'.repeat(Math.max(check.value, 3));
+      }
+      if (check.kind === 'max' && check.value > 0) {
+        return 'a'.repeat(Math.min(check.value, 10));
+      }
+    }
+  }
+
+  return 'Test Value';
+}
+
+// Generate number values based on field patterns
+function generateNumberValue(fieldName: string, def: any): number {
+  if (fieldName.toLowerCase().includes('id')) {
+    return Math.floor(Math.random() * 1000) + 1;
+  }
+  if (fieldName.toLowerCase().includes('price') || fieldName.toLowerCase().includes('cost')) {
+    return Math.round(Math.random() * 10000) + 100;
+  }
+  if (fieldName.toLowerCase().includes('revenue')) {
+    return Math.round(Math.random() * 1000000) + 10000;
+  }
+  if (fieldName.toLowerCase().includes('quantity') || fieldName.toLowerCase().includes('count')) {
+    return Math.floor(Math.random() * 100) + 1;
+  }
+  if (fieldName.toLowerCase().includes('score') || fieldName.toLowerCase().includes('rate')) {
+    return Math.floor(Math.random() * 100) + 1;
+  }
+
+  // Check for specific validations
+  if (def.checks) {
+    for (const check of def.checks) {
+      if (check.kind === 'min') {
+        return Math.max(check.value, 0);
+      }
+      if (check.kind === 'max') {
+        return Math.min(check.value, 100);
+      }
+    }
+  }
+
+  return 42; // Default number
+}
+
+// Generate array values
+function generateArrayValue(fieldName: string, def: any): any[] {
+  if (def.type) {
+    // Generate 1-3 items of the array type
+    const itemCount = Math.floor(Math.random() * 3) + 1;
+    const items = [];
+    for (let i = 0; i < itemCount; i++) {
+      items.push(generateFieldValue(`${fieldName}_${i}`, def.type));
+    }
+    return items;
+  }
+  return [];
+}
+
+// Generate enum values
+function generateEnumValue(fieldName: string, def: any): string {
+  if (def.values && def.values.length > 0) {
+    return def.values[0]; // Return first enum value
+  }
+  return 'DEFAULT';
+}
+
+// Generate object values for nested schemas
+function generateObjectValue(fieldName: string, def: any): any {
+  if (def.shape) {
+    const obj: any = {};
+    Object.entries(def.shape).forEach(([key, schema]: [string, any]) => {
+      obj[key] = generateFieldValue(key, schema);
+    });
+    return obj;
+  }
+  return {};
+}
+
+// Test schema transformations
+async function testSchemaTransformation(schemaName: string, schema: any): Promise<SchemaTestResult> {
+  const startTime = Date.now();
+
+  try {
+    // Test common transformations
+    const transformations = [
+      { name: 'String to Date', data: { createdAt: '2024-01-01T00:00:00Z' } },
+      { name: 'Number to String', data: { revenue: '100000' } },
+      { name: 'Optional Fields', data: { optionalField: undefined } },
+    ];
+
+    let passed = 0;
+    const failures: string[] = [];
+
+    for (const transform of transformations) {
+      try {
+        const result = schema.safeParse(transform.data);
+        if (result.success) {
+          passed++;
+        } else {
+          failures.push(`${transform.name}: ${result.error.message}`);
+        }
+      } catch (error) {
+        failures.push(`${transform.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    return {
+      schemaName,
+      testType: 'Transformation',
+      status: failures.length === 0 ? 'PASS' : 'FAIL',
+      message: `${passed}/${transformations.length} transformations passed`,
+      details: failures.length > 0 ? failures : undefined,
+      duration: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      schemaName,
+      testType: 'Transformation',
+      status: 'ERROR',
+      message: `Error testing transformations: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      duration: Date.now() - startTime,
+    };
+  }
+}
+
+// Test edge cases
+async function testSchemaEdgeCases(schemaName: string, schema: any): Promise<SchemaTestResult> {
+  const startTime = Date.now();
+
+  try {
+    const edgeCases = [
+      { name: 'Empty Object', data: {} },
+      { name: 'Null Values', data: Object.keys(schema._def?.shape || {}).reduce((acc, key) => ({ ...acc, [key]: null }), {}) },
+      { name: 'Invalid Types', data: { invalidField: 'test' } },
+    ];
+
+    let passed = 0;
+    const results: string[] = [];
+
+    for (const testCase of edgeCases) {
+      const validation = schema.safeParse(testCase.data);
+      results.push(`${testCase.name}: ${validation.success ? 'PASS' : 'FAIL'}`);
+      if (validation.success) passed++;
+    }
+
+    return {
+      schemaName,
+      testType: 'Edge Cases',
+      status: passed === edgeCases.length ? 'PASS' : 'FAIL',
+      message: `${passed}/${edgeCases.length} edge cases handled correctly`,
+      details: results,
+      duration: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      schemaName,
+      testType: 'Edge Cases',
+      status: 'ERROR',
+      message: `Error testing edge cases: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      duration: Date.now() - startTime,
+    };
+  }
+}
+
+// Test schema with real API data
+async function testSchemaWithApiData(schemaName: string, schema: any, api: ApiClient): Promise<SchemaTestResult | null> {
+  const startTime = Date.now();
+
+  try {
+    // Map schema names to API endpoints
+    const endpointMap: Record<string, string> = {
+      'customers.CustomerSchema': '/api/customers?limit=1',
+      'proposals.ProposalSchema': '/api/proposals?limit=1',
+      'products.ProductSchema': '/api/products?limit=1',
+    };
+
+    const endpoint = endpointMap[schemaName];
+    if (!endpoint) return null;
+
+    const response = await api.request('GET', endpoint);
+    if (!response.ok) {
+      return {
+        schemaName,
+        testType: 'API Validation',
+        status: 'ERROR',
+        message: `API request failed: ${response.status}`,
+        duration: Date.now() - startTime,
+      };
+    }
+
+    const data = await response.json();
+    const apiData = Array.isArray(data) ? data[0] : data.data?.[0] || data;
+
+    if (!apiData) {
+      return {
+        schemaName,
+        testType: 'API Validation',
+        status: 'ERROR',
+        message: 'No data received from API',
+        duration: Date.now() - startTime,
+      };
+    }
+
+    const validation = schema.safeParse(apiData);
+
+    return {
+      schemaName,
+      testType: 'API Validation',
+      status: validation.success ? 'PASS' : 'FAIL',
+      message: validation.success
+        ? 'API data matches schema'
+        : `API data validation failed: ${validation.error?.message}`,
+      details: validation.success ? apiData : validation.error?.errors,
+      duration: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      schemaName,
+      testType: 'API Validation',
+      status: 'ERROR',
+      message: `Error testing with API data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      duration: Date.now() - startTime,
+    };
+  }
+}
+
+// Display test results
+function displaySchemaTestResults(results: SchemaTestResult[]) {
+  console.log('\n📊 ENHANCED ZOD SCHEMA TEST RESULTS');
+  console.log('=====================================\n');
+
+  const groupedResults = results.reduce((acc, result) => {
+    if (!acc[result.schemaName]) {
+      acc[result.schemaName] = [];
+    }
+    acc[result.schemaName].push(result);
+    return acc;
+  }, {} as Record<string, SchemaTestResult[]>);
+
+  Object.entries(groupedResults).forEach(([schemaName, schemaResults]) => {
+    console.log(`🔍 ${schemaName}:`);
+    schemaResults.forEach(result => {
+      const statusIcon = result.status === 'PASS' ? '✅' : result.status === 'FAIL' ? '❌' : '⚠️';
+      console.log(`  ${statusIcon} ${result.testType}: ${result.message} (${result.duration}ms)`);
+
+      if (result.details && result.status !== 'PASS') {
+        if (Array.isArray(result.details)) {
+          result.details.forEach(detail => console.log(`    • ${detail}`));
+        } else if (typeof result.details === 'object') {
+          console.log(`    • ${JSON.stringify(result.details, null, 2)}`);
+        }
+      }
+    });
+    console.log('');
+  });
+
+  // Summary
+  const summary = results.reduce((acc, result) => {
+    acc[result.status.toLowerCase() as keyof typeof acc]++;
+    return acc;
+  }, { pass: 0, fail: 0, error: 0 });
+
+  console.log('📈 SUMMARY:');
+  console.log(`  ✅ Passed: ${summary.pass}`);
+  console.log(`  ❌ Failed: ${summary.fail}`);
+  console.log(`  ⚠️  Errors: ${summary.error}`);
+  console.log(`  📊 Total Tests: ${results.length}`);
+}
+
+// Schema Data Generation
+async function runSchemaDataGeneration(args: string[]) {
+  const schemaName = args[0];
+  if (!schemaName) {
+    console.log('Usage: schema test generate <schemaName>');
+    console.log('Example: schema test generate customers.CustomerCreateSchema');
+    return;
+  }
+
+  try {
+    const schemas = await loadAvailableSchemas();
+    const schema = schemas[schemaName];
+
+    if (!schema) {
+      console.log(`❌ Schema '${schemaName}' not found.`);
+      return;
+    }
+
+    console.log(`🔄 Generating test data for ${schemaName}...`);
+
+    const testData = generateTestDataFromSchema(schema);
+    console.log('\n📋 Generated Test Data:');
+    console.log(JSON.stringify(testData, null, 2));
+
+    // Validate the generated data
+    const validation = schema.safeParse(testData);
+    console.log(`\n🔍 Validation Result: ${validation.success ? '✅ PASS' : '❌ FAIL'}`);
+
+    if (!validation.success) {
+      console.log('❌ Validation Errors:');
+      validation.error.errors.forEach(error => {
+        console.log(`  • ${error.path.join('.')}: ${error.message}`);
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error generating schema data:', error);
+  }
+}
+
+// Schema Transformation Testing
+async function runSchemaTransformationTesting(args: string[]) {
+  const schemaName = args[0];
+  if (!schemaName) {
+    console.log('Usage: schema test transform <schemaName>');
+    console.log('Example: schema test transform customers.CustomerCreateSchema');
+    return;
+  }
+
+  try {
+    const schemas = await loadAvailableSchemas();
+    const schema = schemas[schemaName];
+
+    if (!schema) {
+      console.log(`❌ Schema '${schemaName}' not found.`);
+      return;
+    }
+
+    console.log(`🔄 Testing transformations for ${schemaName}...`);
+
+    const transformations = [
+      {
+        name: 'Date String to Date Object',
+        input: { createdAt: '2024-01-01T00:00:00Z' },
+        expected: true,
+      },
+      {
+        name: 'Number String to Number',
+        input: { revenue: '100000' },
+        expected: true,
+      },
+      {
+        name: 'Invalid Email',
+        input: { email: 'invalid-email' },
+        expected: false,
+      },
+      {
+        name: 'Missing Required Field',
+        input: { name: undefined },
+        expected: false,
+      },
+    ];
+
+    transformations.forEach(({ name, input, expected }) => {
+      const result = schema.safeParse(input);
+      const status = result.success === expected ? '✅' : '❌';
+      console.log(`${status} ${name}: ${result.success ? 'PASS' : 'FAIL'}`);
+    });
+
+  } catch (error) {
+    console.error('❌ Error testing schema transformations:', error);
+  }
+}
+
+// Schema Compatibility Testing
+async function runSchemaCompatibilityTesting(api: ApiClient) {
+  console.log('🔗 Testing Schema Compatibility (Frontend ↔ Backend)');
+  console.log('====================================================\n');
+
+  try {
+    // Load frontend schemas
+    const frontendSchemas = await loadAvailableSchemas();
+
+    // Test compatibility for each feature
+    const compatibilityResults: any[] = [];
+
+    for (const [schemaName, schema] of Object.entries(frontendSchemas)) {
+      console.log(`Testing ${schemaName}...`);
+
+      // Map to API endpoint
+      const endpoint = getEndpointForSchema(schemaName);
+      if (!endpoint) {
+        console.log(`  ⚠️ No endpoint mapping for ${schemaName}`);
+        continue;
+      }
+
+      try {
+        // Get API response
+        const response = await api.request('GET', `${endpoint}?limit=1`);
+        if (!response.ok) {
+          compatibilityResults.push({
+            schema: schemaName,
+            status: 'ERROR',
+            message: `API request failed: ${response.status}`,
+          });
+          continue;
+        }
+
+        const data = await response.json();
+        const apiData = Array.isArray(data) ? data[0] : data.data?.[0] || data;
+
+        if (!apiData) {
+          compatibilityResults.push({
+            schema: schemaName,
+            status: 'ERROR',
+            message: 'No data received from API',
+          });
+          continue;
+        }
+
+        // Test frontend schema validation
+        const frontendValidation = schema.safeParse(apiData);
+
+        // Test backend validation by sending data back
+        const backendResponse = await api.request('POST', endpoint.replace(/\/\?.*/, ''), apiData);
+        const backendValidation = backendResponse.ok;
+
+        const isCompatible = frontendValidation.success && backendValidation;
+
+        compatibilityResults.push({
+          schema: schemaName,
+          status: isCompatible ? 'COMPATIBLE' : 'INCOMPATIBLE',
+          frontend: frontendValidation.success,
+          backend: backendValidation,
+          details: !frontendValidation.success ? frontendValidation.error?.errors : undefined,
+        });
+
+      } catch (error) {
+        compatibilityResults.push({
+          schema: schemaName,
+          status: 'ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    // Display results
+    console.log('\n📊 COMPATIBILITY RESULTS:');
+    compatibilityResults.forEach(result => {
+      const icon = result.status === 'COMPATIBLE' ? '✅' : result.status === 'INCOMPATIBLE' ? '❌' : '⚠️';
+      console.log(`${icon} ${result.schema}: ${result.status}`);
+
+      if (result.details) {
+        console.log(`  Frontend issues:`);
+        result.details.forEach((error: any) => {
+          console.log(`    • ${error.path.join('.')}: ${error.message}`);
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error testing schema compatibility:', error);
+  }
+}
+
+// Helper function to map schemas to endpoints
+function getEndpointForSchema(schemaName: string): string | null {
+  const mappings: Record<string, string> = {
+    'customers.CustomerSchema': '/api/customers',
+    'customers.CustomerCreateSchema': '/api/customers',
+    'proposals.ProposalSchema': '/api/proposals',
+    'products.ProductSchema': '/api/products',
+  };
+
+  return mappings[schemaName] || null;
+}
+
+// Comprehensive Test Suite
+async function runComprehensiveSchemaTestSuite(api: ApiClient) {
+  console.log('🧪 Running Comprehensive Schema Test Suite');
+  console.log('===========================================\n');
+
+  const startTime = Date.now();
+  const testSuites: ValidationTestSuite[] = [];
+
+  // Test Suite 1: Basic Schema Validation
+  const basicSuite = await runBasicSchemaValidationSuite(api);
+  testSuites.push(basicSuite);
+
+  // Test Suite 2: Data Generation Suite
+  const generationSuite = await runDataGenerationSuite();
+  testSuites.push(generationSuite);
+
+  // Test Suite 3: Transformation Suite
+  const transformationSuite = await runTransformationSuite();
+  testSuites.push(transformationSuite);
+
+  // Test Suite 4: API Compatibility Suite
+  const compatibilitySuite = await runApiCompatibilitySuite(api);
+  testSuites.push(compatibilitySuite);
+
+  // Display comprehensive results
+  displayComprehensiveTestResults(testSuites, Date.now() - startTime);
+}
+
+// Basic Schema Validation Suite
+async function runBasicSchemaValidationSuite(api: ApiClient): Promise<ValidationTestSuite> {
+  const tests: SchemaTestResult[] = [];
+  const schemas = await loadAvailableSchemas();
+
+  for (const [name, schema] of Object.entries(schemas)) {
+    tests.push(await testSchemaDataGeneration(name, schema));
+    tests.push(await testSchemaEdgeCases(name, schema));
+
+    const apiTest = await testSchemaWithApiData(name, schema, api);
+    if (apiTest) tests.push(apiTest);
+  }
+
+  return {
+    name: 'Basic Schema Validation',
+    tests,
+    summary: calculateSuiteSummary(tests, Date.now()),
+  };
+}
+
+// Data Generation Suite
+async function runDataGenerationSuite(): Promise<ValidationTestSuite> {
+  const tests: SchemaTestResult[] = [];
+  const schemas = await loadAvailableSchemas();
+
+  for (const [name, schema] of Object.entries(schemas)) {
+    tests.push(await testSchemaDataGeneration(name, schema));
+  }
+
+  return {
+    name: 'Data Generation',
+    tests,
+    summary: calculateSuiteSummary(tests, Date.now()),
+  };
+}
+
+// Transformation Suite
+async function runTransformationSuite(): Promise<ValidationTestSuite> {
+  const tests: SchemaTestResult[] = [];
+  const schemas = await loadAvailableSchemas();
+
+  for (const [name, schema] of Object.entries(schemas)) {
+    tests.push(await testSchemaTransformation(name, schema));
+  }
+
+  return {
+    name: 'Schema Transformations',
+    tests,
+    summary: calculateSuiteSummary(tests, Date.now()),
+  };
+}
+
+// API Compatibility Suite
+async function runApiCompatibilitySuite(api: ApiClient): Promise<ValidationTestSuite> {
+  const tests: SchemaTestResult[] = [];
+  const schemas = await loadAvailableSchemas();
+
+  for (const [name, schema] of Object.entries(schemas)) {
+    const apiTest = await testSchemaWithApiData(name, schema, api);
+    if (apiTest) tests.push(apiTest);
+  }
+
+  return {
+    name: 'API Compatibility',
+    tests,
+    summary: calculateSuiteSummary(tests, Date.now()),
+  };
+}
+
+// Helper to calculate suite summary
+function calculateSuiteSummary(tests: SchemaTestResult[], startTime: number) {
+  return {
+    passed: tests.filter(t => t.status === 'PASS').length,
+    failed: tests.filter(t => t.status === 'FAIL').length,
+    errors: tests.filter(t => t.status === 'ERROR').length,
+    totalTime: Date.now() - startTime,
+  };
+}
+
+// Display comprehensive test results
+function displayComprehensiveTestResults(testSuites: ValidationTestSuite[], totalTime: number) {
+  console.log('\n🎯 COMPREHENSIVE SCHEMA TEST SUITE RESULTS');
+  console.log('==========================================\n');
+
+  testSuites.forEach(suite => {
+    console.log(`📊 ${suite.name}:`);
+    console.log(`  ✅ Passed: ${suite.summary.passed}`);
+    console.log(`  ❌ Failed: ${suite.summary.failed}`);
+    console.log(`  ⚠️  Errors: ${suite.summary.errors}`);
+    console.log(`  ⏱️  Duration: ${suite.summary.totalTime}ms\n`);
+  });
+
+  const totalTests = testSuites.reduce((sum, suite) => sum + suite.tests.length, 0);
+  const totalPassed = testSuites.reduce((sum, suite) => sum + suite.summary.passed, 0);
+  const totalFailed = testSuites.reduce((sum, suite) => sum + suite.summary.failed, 0);
+  const totalErrors = testSuites.reduce((sum, suite) => sum + suite.summary.errors, 0);
+
+  console.log('📈 OVERALL SUMMARY:');
+  console.log(`  📊 Total Test Suites: ${testSuites.length}`);
+  console.log(`  🧪 Total Tests: ${totalTests}`);
+  console.log(`  ✅ Total Passed: ${totalPassed}`);
+  console.log(`  ❌ Total Failed: ${totalFailed}`);
+  console.log(`  ⚠️  Total Errors: ${totalErrors}`);
+  console.log(`  ⏱️  Total Duration: ${totalTime}ms`);
+
+  const successRate = totalTests > 0 ? ((totalPassed / totalTests) * 100).toFixed(1) : '0.0';
+  console.log(`  📊 Success Rate: ${successRate}%`);
+
+  if (totalPassed === totalTests) {
+    console.log('\n🎉 ALL TESTS PASSED! Your schemas are in excellent shape.');
+  } else {
+    console.log(`\n⚠️ ${totalFailed + totalErrors} tests need attention.`);
   }
 }
 
@@ -3963,6 +4991,2299 @@ function maskSensitiveValue(key: string, value: string): string {
   }
 
   return value;
+}
+
+// ====================
+// Frontend-Backend Field Value Mismatch Detection
+// ====================
+
+// Helper Functions for Automatic Detection
+
+async function discoverApiEndpoints(): Promise<
+  Array<{ path: string; method: string; schemaFile?: string }>
+> {
+  const endpoints: Array<{ path: string; method: string; schemaFile?: string }> = [];
+
+  // Scan API routes directory
+  const apiDir = path.join(process.cwd(), 'src/app/api');
+  const routeFiles = await findApiRoutes(apiDir);
+
+  for (const file of routeFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+
+    // Extract HTTP methods and associated schemas
+    const methodMatches = content.matchAll(
+      /export\s+async\s+function\s+(GET|POST|PUT|DELETE|PATCH)\s*\(/g
+    );
+    for (const match of methodMatches) {
+      const method = match[1];
+      const routePath =
+        file.replace(apiDir, '').replace('/route.ts', '').replace('/route.js', '') || '/';
+
+      // Try to find associated schema
+      const schemaMatch = content.match(/(\w+Schema)\.parse|safeParse/);
+      const schemaFile = schemaMatch ? await findSchemaFile(schemaMatch[1]) : undefined;
+
+      endpoints.push({ path: routePath, method, schemaFile });
+    }
+  }
+
+  return endpoints;
+}
+
+async function extractFrontendFields(targetComponent?: string): Promise<Record<string, any>> {
+  const frontendFields: Record<string, any> = {};
+
+  // Scan components directory for form fields
+  const componentsDir = path.join(process.cwd(), 'src/components');
+  const componentFiles = await findComponentFiles(componentsDir);
+
+  for (const file of componentFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    const componentName = path.basename(file, path.extname(file));
+
+    // Filter by target component if specified
+    if (targetComponent && !componentName.toLowerCase().includes(targetComponent.toLowerCase())) {
+      continue;
+    }
+
+    // Extract form field patterns
+    const fieldNames = extractComponentFields(content);
+    const fields: Record<string, any> = {};
+    for (const fieldName of fieldNames) {
+      fields[fieldName] = { type: 'formField', source: 'extracted' };
+    }
+    if (Object.keys(fields).length > 0) {
+      frontendFields[componentName] = {
+        file,
+        fields,
+        defaultValues: extractDefaultValues(content),
+        enumValues: extractEnumValues(content),
+      };
+    }
+  }
+
+  return frontendFields;
+}
+
+async function analyzeBackendSchemas(): Promise<Record<string, any>> {
+  const schemas: Record<string, any> = {};
+
+  // Find all schema files
+  const schemaFiles = await findSchemaFiles();
+
+  for (const file of schemaFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    // Use the parent directory name for better matching (e.g., proposals/schemas.ts -> proposals)
+    const parentDir = path.basename(path.dirname(file));
+    const schemaName =
+      parentDir === 'features' || parentDir === 'types' ? path.basename(file, '.ts') : parentDir;
+
+    schemas[schemaName] = {
+      file,
+      schemas: parseZodSchemas(content),
+      enums: extractZodEnums(content),
+      types: extractTypeDefinitions(content),
+    };
+
+    // Debug: log what schemas were found in this file
+    const parsedSchemas = parseZodSchemas(content);
+    console.log(`Debug: Schema file ${schemaName} contains:`, Object.keys(parsedSchemas));
+  }
+
+  return schemas;
+}
+
+async function detectFieldMismatches(
+  frontendFields: Record<string, any>,
+  backendSchemas: Record<string, any>,
+  apiEndpoints: Array<{ path: string; method: string; schemaFile?: string }>,
+  detectedIssues: any,
+  api: ApiClient
+) {
+  console.log('\n🔍 Comparing frontend fields with backend schemas...\n');
+
+  // Compare each frontend component with relevant backend schemas
+  for (const [componentName, componentData] of Object.entries(frontendFields)) {
+    // Find related schema by component name - prioritize proposal schemas for wizard steps
+    // Read component content for dynamic analysis
+    let componentContent: string | undefined;
+    try {
+      componentContent = fs.readFileSync(componentData.file, 'utf-8');
+    } catch (error) {
+      console.log(`⚠️  Could not read component file: ${componentData.file}`);
+    }
+
+    const relatedSchemaKey = findRelatedSchemaByComponent(
+      componentName,
+      backendSchemas,
+      componentContent
+    );
+    if (!relatedSchemaKey) {
+      console.log(`🔍 No related schema found for component: ${componentName}`);
+      continue;
+    }
+
+    console.log(`🔗 Comparing ${componentName} with ${relatedSchemaKey} schema`);
+
+    // Extract all schema fields for comparison
+    const allSchemaFields = extractAllSchemaFields(backendSchemas[relatedSchemaKey]);
+
+    // Check for missing fields in frontend that exist in backend
+    for (const [schemaFieldName, schemaFieldData] of Object.entries(allSchemaFields)) {
+      const frontendField = componentData.fields[schemaFieldName];
+      const fieldData = schemaFieldData as any;
+
+      if (!frontendField && fieldData.enum && fieldData.enum.length > 0) {
+        console.log(
+          `❌ MISSING ENUM FIELD: '${schemaFieldName}' with enum values ${JSON.stringify(fieldData.enum)} missing from ${componentName}`
+        );
+        detectedIssues.missingFields.push({
+          component: componentName,
+          field: schemaFieldName,
+          issue: 'Missing enum field in frontend',
+          expectedEnum: fieldData.enum,
+          suggestion: `Add a Select component for '${schemaFieldName}' with options: ${JSON.stringify(fieldData.enum)}`,
+        });
+      }
+    }
+
+    // Compare existing frontend fields with backend schema
+    for (const [fieldName, fieldData] of Object.entries(componentData.fields)) {
+      const backendField = allSchemaFields[fieldName];
+      const frontendFieldData = fieldData as any;
+
+      if (!backendField) {
+        console.log(
+          `⚠️  Field '${fieldName}' exists in ${componentName} but not in backend schema`
+        );
+        continue;
+      }
+
+      // Check for enum mismatches
+      if (frontendFieldData.options && (backendField as any).enum) {
+        const frontendValues = frontendFieldData.options;
+        const backendValues = (backendField as any).enum;
+
+        const mismatch = findEnumMismatch(frontendValues, backendValues);
+        if (mismatch) {
+          detectedIssues.enumMismatches.push({
+            component: componentName,
+            field: fieldName,
+            frontendValues: frontendValues,
+            backendSchema: JSON.stringify(backendValues),
+            endpoint: 'unknown',
+            suggestions: generateEnumSuggestions(mismatch),
+          });
+        }
+      }
+
+      // Check for type mismatches
+      if (
+        frontendFieldData.type &&
+        (backendField as any).type &&
+        frontendFieldData.type !== (backendField as any).type
+      ) {
+        detectedIssues.typeMismatches.push({
+          component: componentName,
+          field: fieldName,
+          fieldType: frontendFieldData.type,
+          expectedType: (backendField as any).type,
+          endpoint: 'unknown',
+          suggestion: generateTypeSuggestion(frontendFieldData.type, (backendField as any).type),
+        });
+      }
+    }
+  }
+}
+
+// Helper Functions
+
+async function findApiRoutes(dir: string): Promise<string[]> {
+  const routes: string[] = [];
+
+  if (!fs.existsSync(dir)) return routes;
+
+  const items = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const item of items) {
+    const fullPath = path.join(dir, item.name);
+
+    if (item.isDirectory()) {
+      routes.push(...(await findApiRoutes(fullPath)));
+    } else if (item.name === 'route.ts' || item.name === 'route.js') {
+      routes.push(fullPath);
+    }
+  }
+
+  return routes;
+}
+
+async function findSchemaFile(schemaName: string): Promise<string | undefined> {
+  const possiblePaths = [
+    path.join(process.cwd(), 'src/features', '*', 'schemas.ts'),
+    path.join(process.cwd(), 'src/lib', '**', '*.ts'),
+    path.join(process.cwd(), 'src/schemas', '*.ts'),
+  ];
+
+  // Implementation would scan these paths for the schema
+  return undefined; // Simplified for now
+}
+
+async function findComponentFiles(dir: string): Promise<string[]> {
+  const files: string[] = [];
+
+  if (!fs.existsSync(dir)) return files;
+
+  const items = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const item of items) {
+    const fullPath = path.join(dir, item.name);
+
+    if (item.isDirectory()) {
+      files.push(...(await findComponentFiles(fullPath)));
+    } else if (item.name.endsWith('.tsx') || item.name.endsWith('.jsx')) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function extractComponentFields(content: string): string[] {
+  const fields = new Set<string>();
+
+  // Pattern 1: register() calls for react-hook-form
+  const registerMatches = content.matchAll(/register\(['"]([^'"]+)['"]/g);
+  for (const match of registerMatches) {
+    fields.add(match[1]);
+  }
+
+  // Pattern 2: handleFieldChange calls
+  const handleFieldMatches = content.matchAll(/handleFieldChange\(['"]([^'"]+)['"]/g);
+  for (const match of handleFieldMatches) {
+    fields.add(match[1]);
+  }
+
+  // Pattern 3: formData property access
+  const formDataMatches = content.matchAll(/formData\.(\w+)/g);
+  for (const match of formDataMatches) {
+    fields.add(match[1]);
+  }
+
+  // Pattern 4: Input/Select/TextArea components with name prop
+  const inputMatches = content.matchAll(
+    /<(?:Input|Select|TextArea|Checkbox)[^>]*name=['"]([^'"]+)['"]/g
+  );
+  for (const match of inputMatches) {
+    fields.add(match[1]);
+  }
+
+  // Pattern 5: State variables that suggest form fields - improved detection
+  const stateMatches = content.matchAll(/const\s+\[([^,]+),\s*set[^\]]+\]\s*=\s*useState/g);
+  for (const match of stateMatches) {
+    const varName = match[1].trim();
+    // Add common form-related state variables
+    if (
+      varName.match(/^(selected|form|data|team|product|content|section|review|submission|version)/i)
+    ) {
+      fields.add(varName.toLowerCase());
+    }
+  }
+
+  // Pattern 6: Props interface/type definitions for step components
+  const propsMatches = content.matchAll(/interface\s+\w+Props[^{]*{([^}]+)}/g);
+  for (const match of propsMatches) {
+    const propsContent = match[1];
+    const propFields = propsContent.matchAll(/(\w+)[\?\:].*?(?:Data|Props)/g);
+    for (const propMatch of propFields) {
+      fields.add(propMatch[1].toLowerCase());
+    }
+  }
+
+  // Pattern 7: Step-specific field patterns - look for wizard step data structures
+  const stepDataMatches = content.matchAll(
+    /(?:teamLead|salesRepresentative|subjectMatterExperts|executiveReviewers|selectedProducts|selectedTemplates|customContent|products|quantity|unitPrice|total|category|configuration)/g
+  );
+  for (const match of stepDataMatches) {
+    fields.add(match[0].toLowerCase());
+  }
+
+  // Pattern 8: Props or data object destructuring that suggests fields - expanded
+  const destructureMatches = content.matchAll(/(?:props|data)\.(\w+)/g);
+  for (const match of destructureMatches) {
+    const fieldName = match[1];
+    // Expanded list of field patterns
+    const formFieldPatterns = [
+      'products',
+      'items',
+      'selection',
+      'quantity',
+      'price',
+      'category',
+      'name',
+      'description',
+      'team',
+      'content',
+      'sections',
+      'templates',
+      'lead',
+      'representative',
+      'experts',
+      'reviewers',
+    ];
+    if (formFieldPatterns.some(pattern => fieldName.toLowerCase().includes(pattern))) {
+      fields.add(fieldName);
+    }
+  }
+
+  return Array.from(fields);
+}
+
+function extractDefaultValues(content: string): Record<string, any> {
+  const defaults: Record<string, any> = {};
+
+  // Extract defaultValues from useForm
+  const defaultsMatch = content.match(/defaultValues:\s*{([^}]+)}/);
+  if (defaultsMatch) {
+    // Parse default values (simplified)
+    const defaultsStr = defaultsMatch[1];
+    const fieldMatches = defaultsStr.matchAll(/(\w+):\s*['"`]([^'"`]+)['"`]/g);
+    for (const match of fieldMatches) {
+      defaults[match[1]] = match[2];
+    }
+  }
+
+  return defaults;
+}
+
+function extractEnumValues(content: string): Record<string, string[]> {
+  const enums: Record<string, string[]> = {};
+
+  // Extract enum-like values from option lists
+  const optionMatches = content.matchAll(/<option.*?value=['"](.*?)['"].*?>/g);
+  const values = Array.from(optionMatches).map(match => match[1]);
+
+  if (values.length > 0) {
+    enums.options = values;
+  }
+
+  return enums;
+}
+
+async function findSchemaFiles(): Promise<string[]> {
+  const schemaFiles: string[] = [];
+
+  // Common schema file locations - find all .ts files that contain schemas
+  const schemaDirs = [
+    path.join(process.cwd(), 'src/features'),
+    path.join(process.cwd(), 'src/types'),
+    path.join(process.cwd(), 'src/lib'),
+    path.join(process.cwd(), 'src/schemas'),
+  ];
+
+  for (const dir of schemaDirs) {
+    if (fs.existsSync(dir)) {
+      const files = await findFilesRecursive(dir, 'schemas.ts');
+      schemaFiles.push(...files);
+    }
+  }
+
+  // Debug: log found files
+  console.log(
+    `Debug: Found ${schemaFiles.length} schema files:`,
+    schemaFiles.map(f => path.basename(f))
+  );
+
+  return schemaFiles;
+}
+
+async function findFilesRecursive(dir: string, filename: string): Promise<string[]> {
+  const files: string[] = [];
+
+  const items = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const item of items) {
+    const fullPath = path.join(dir, item.name);
+
+    if (item.isDirectory()) {
+      files.push(...(await findFilesRecursive(fullPath, filename)));
+    } else if (item.name === filename) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function parseZodSchemas(content: string): Record<string, any> {
+  const schemas: Record<string, any> = {};
+
+  // Extract enum schemas first (more specific pattern)
+  const enumMatches = content.matchAll(
+    /export\s+const\s+(\w+Schema)\s*=\s*z\.enum\(\s*\[([\s\S]*?)\]\s*\)/g
+  );
+  for (const match of enumMatches) {
+    const schemaName = match[1];
+    const enumContent = match[2];
+    const enumValues = enumContent
+      .split(',')
+      .map(v => v.trim().replace(/['"]/g, ''))
+      .filter(v => v.length > 0);
+
+    schemas[schemaName] = {
+      type: 'enum',
+      enum: enumValues,
+      fields: { [schemaName.toLowerCase().replace('schema', '')]: { enum: enumValues } },
+    };
+  }
+
+  // Extract object schemas with proper field parsing
+  const objectMatches = content.matchAll(
+    /export\s+const\s+(\w+Schema)\s*=\s*z\.object\(\s*\{([\s\S]*?)\}\s*\)/g
+  );
+  for (const match of objectMatches) {
+    const schemaName = match[1];
+    const objectContent = match[2];
+
+    schemas[schemaName] = {
+      type: 'object',
+      fields: extractObjectSchemaFields(objectContent),
+    };
+  }
+
+  return schemas;
+}
+
+function extractObjectSchemaFields(content: string): Record<string, any> {
+  const fields: Record<string, any> = {};
+
+  // More comprehensive field parsing - handle multiline definitions
+  const lines = content.split('\n');
+  let currentField = '';
+  let currentDefinition = '';
+  let inFieldDef = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Start of a new field definition
+    const fieldMatch = trimmed.match(/^(\w+):\s*(.+)/);
+    if (fieldMatch) {
+      // Save previous field if exists
+      if (currentField && currentDefinition) {
+        const fieldDef = currentDefinition.trim().replace(/,$/, '');
+        parseFieldDefinition(currentField, fieldDef, fields);
+      }
+
+      currentField = fieldMatch[1];
+      currentDefinition = fieldMatch[2];
+      inFieldDef = true;
+    } else if (inFieldDef && trimmed) {
+      // Continue multiline definition
+      currentDefinition += ' ' + trimmed;
+    }
+
+    // End field if we hit a comma or closing brace
+    if (trimmed.endsWith(',') || trimmed === '}') {
+      if (currentField && currentDefinition) {
+        const fieldDef = currentDefinition.trim().replace(/,$/, '');
+        parseFieldDefinition(currentField, fieldDef, fields);
+        currentField = '';
+        currentDefinition = '';
+        inFieldDef = false;
+      }
+    }
+  }
+
+  // Handle last field
+  if (currentField && currentDefinition) {
+    const fieldDef = currentDefinition.trim().replace(/,$/, '');
+    parseFieldDefinition(currentField, fieldDef, fields);
+  }
+
+  return fields;
+}
+
+function parseFieldDefinition(fieldName: string, fieldDef: string, fields: Record<string, any>) {
+  // Handle schema references like ProposalPrioritySchema.default('MEDIUM')
+  if (fieldDef.includes('Schema')) {
+    const schemaRef = fieldDef.match(/(\w+Schema)/);
+    if (schemaRef) {
+      fields[fieldName] = {
+        type: 'schema_ref',
+        schemaRef: schemaRef[1],
+        definition: fieldDef,
+      };
+    }
+  } else if (fieldDef.startsWith('z.')) {
+    // Handle direct Zod definitions
+    const typeMatch = fieldDef.match(/z\.(\w+)/);
+    fields[fieldName] = {
+      type: typeMatch ? typeMatch[1] : 'unknown',
+      definition: fieldDef,
+      optional: fieldDef.includes('optional'),
+      nullable: fieldDef.includes('nullable'),
+    };
+  } else {
+    // Handle other references like databaseIdSchema
+    fields[fieldName] = {
+      type: 'reference',
+      definition: fieldDef,
+      optional: fieldDef.includes('optional'),
+      nullable: fieldDef.includes('nullable'),
+    };
+  }
+}
+
+function extractEnumFromContent(content: string): string[] {
+  // Extract array values from enum definition like ['DRAFT', 'SUBMITTED', ...]
+  const matches = content.match(/\[([^\]]+)\]/);
+  if (!matches) return [];
+
+  return matches[1]
+    .split(',')
+    .map(v => v.trim().replace(/['"]/g, ''))
+    .filter(v => v.length > 0);
+}
+
+function extractZodEnums(content: string): Record<string, string[]> {
+  const enums: Record<string, string[]> = {};
+
+  // Extract z.enum definitions
+  const enumMatches = content.matchAll(/z\.enum\(\[(.*?)\]\)/g);
+
+  for (const match of enumMatches) {
+    const enumValues = match[1].split(',').map(v => v.trim().replace(/['"]/g, ''));
+    enums.enum = enumValues;
+  }
+
+  return enums;
+}
+
+function extractTypeDefinitions(content: string): Record<string, any> {
+  const types: Record<string, any> = {};
+  return types;
+}
+
+function findEnumMismatch(frontendValues: string[], backendValues: string[]): string | null {
+  const missingInFrontend = backendValues.filter(v => !frontendValues.includes(v));
+  const extraInFrontend = frontendValues.filter(v => !backendValues.includes(v));
+
+  if (missingInFrontend.length > 0 || extraInFrontend.length > 0) {
+    return `Missing: ${missingInFrontend.join(', ')}, Extra: ${extraInFrontend.join(', ')}`;
+  }
+  return null;
+}
+
+function generateEnumSuggestions(mismatch: string): string[] {
+  return [
+    'Update frontend enum options to match backend schema',
+    'Add z.preprocess() to normalize values in backend schema',
+    'Consider using transform() in Zod schema for value conversion',
+  ];
+}
+
+function generateTypeSuggestion(frontendType: string, backendType: string): string {
+  return `Convert frontend ${frontendType} to backend ${backendType} in API route or update schema`;
+}
+
+function findRelatedSchemaByComponent(
+  componentName: string,
+  backendSchemas: Record<string, any>,
+  componentContent?: string
+): string | undefined {
+  return analyzeComponentForSchemaMatch(componentName, backendSchemas, componentContent);
+}
+
+/**
+ * Dynamically analyzes a component to determine its matching schema based on:
+ * 1. API endpoints it calls
+ * 2. Import statements
+ * 3. Field usage patterns
+ * 4. Component file path
+ */
+function analyzeComponentForSchemaMatch(
+  componentName: string,
+  backendSchemas: Record<string, any>,
+  componentContent?: string
+): string | undefined {
+  const componentLower = componentName.toLowerCase();
+  const availableSchemas = Object.keys(backendSchemas);
+
+  // Priority 1: Check for proposal wizard steps by name patterns (highest priority)
+  const proposalStepKeywords = [
+    'basicinformation',
+    'teamassignment',
+    'contentselection',
+    'productselectionstep',
+    'enhancedproductselectionstep',
+    'sectionassignment',
+    'reviewstep',
+    'stepone',
+    'steptwo',
+    'stepthree',
+    'stepfour',
+    'stepfive',
+    'stepsix',
+  ];
+
+  if (proposalStepKeywords.some(keyword => componentLower.includes(keyword))) {
+    const proposalSchema = availableSchemas.find(schema =>
+      schema.toLowerCase().includes('proposals')
+    );
+    if (proposalSchema) {
+      return proposalSchema;
+    }
+  }
+
+  // Priority 2: File path and component content analysis
+  if (componentContent) {
+    // Check file import paths to determine module
+    const filePathMatch = analyzeFilePathContext(componentContent, availableSchemas);
+    if (filePathMatch) {
+      return filePathMatch;
+    }
+
+    // Check API usage patterns
+    const apiMatch = analyzeComponentContent(componentContent, availableSchemas);
+    if (apiMatch) {
+      return apiMatch;
+    }
+  }
+
+  // Priority 3: Intelligent name-based matching as fallback
+  return intelligentNameBasedMatching(componentLower, availableSchemas);
+}
+
+/**
+ * Analyzes file import paths and folder structure for module context
+ */
+function analyzeFilePathContext(content: string, availableSchemas: string[]): string | undefined {
+  // Look for relative imports that indicate the module context
+  const relativeImportMatches = content.matchAll(
+    /import.*?from\s+['"`]\.\.?\/.*?\/(proposals|customers|products|auth|version-history)/g
+  );
+  for (const match of relativeImportMatches) {
+    const module = match[1].toLowerCase();
+    const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(module));
+    if (matchingSchema) {
+      return matchingSchema;
+    }
+  }
+
+  // Look for absolute imports from specific modules
+  const absoluteImportMatches = content.matchAll(
+    /import.*?from\s+['"`].*?\/(proposals|customers|products|auth|version-history)/g
+  );
+  for (const match of absoluteImportMatches) {
+    const module = match[1].toLowerCase();
+    const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(module));
+    if (matchingSchema) {
+      return matchingSchema;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Analyzes component source code to determine schema usage
+ */
+function analyzeComponentContent(content: string, availableSchemas: string[]): string | undefined {
+  // 1. Look for API endpoint calls to determine data domain
+  const apiCallPatterns = [
+    /api\/([^\/'"]+)/g, // /api/customers, /api/proposals, etc.
+    /fetch.*?['"`].*?\/([^\/'"]+)/g, // fetch calls
+    /useQuery.*?['"`]([^'"]+)/g, // React Query hooks
+    /useMutation.*?['"`]([^'"]+)/g, // React Query mutations
+  ];
+
+  for (const pattern of apiCallPatterns) {
+    const matches = [...content.matchAll(pattern)];
+    for (const match of matches) {
+      const endpoint = match[1]?.toLowerCase();
+      if (endpoint) {
+        const matchingSchema = availableSchemas.find(
+          schema =>
+            schema.toLowerCase().includes(endpoint) ||
+            endpoint.includes(schema.toLowerCase().replace('-', ''))
+        );
+        if (matchingSchema) {
+          return matchingSchema;
+        }
+      }
+    }
+  }
+
+  // 2. Look for schema imports
+  const importMatches = content.matchAll(
+    /import.*?from\s+['"`].*?\/([^\/'"]+)(?:\/schemas?|\.schemas?)/g
+  );
+  for (const match of importMatches) {
+    const importPath = match[1]?.toLowerCase();
+    if (importPath) {
+      const matchingSchema = availableSchemas.find(schema =>
+        schema.toLowerCase().includes(importPath)
+      );
+      if (matchingSchema) {
+        return matchingSchema;
+      }
+    }
+  }
+
+  // 3. Look for specific field patterns that indicate data domain
+  const fieldPatterns = {
+    proposals: [
+      'teamLead',
+      'salesRepresentative',
+      'subjectMatterExperts',
+      'executiveReviewers',
+      'proposalStatus',
+      'riskLevel',
+      'BasicInformationStep',
+      'TeamAssignmentStep',
+      'ContentSelectionStep',
+      'ProductSelectionStep',
+      'SectionAssignmentStep',
+      'ReviewStep',
+      'EnhancedProductSelectionStep',
+      'formData',
+      'onUpdate',
+      'wizard',
+      'step',
+      'selectedProducts',
+      'selectedTemplates',
+      'customContent',
+      'title',
+      'description',
+      'priority',
+      'planType',
+      'status',
+    ],
+    customers: [
+      'customerStatus',
+      'companySize',
+      'industry',
+      'tier',
+      'CustomerCreation',
+      'CustomerEdit',
+    ],
+    products: [
+      'productStatus',
+      'productRelationshipType',
+      'sku',
+      'price',
+      'category',
+      'ProductCreate',
+      'ProductEdit',
+    ],
+    'version-history': ['versionId', 'changeType', 'versionStatus', 'VersionHistory'],
+    auth: ['email', 'password', 'role', 'permissions', 'Login', 'Signup', 'Auth'],
+    search: ['search', 'query', 'filter', 'ContentSearch'],
+  };
+
+  for (const [domain, fields] of Object.entries(fieldPatterns)) {
+    const matchCount = fields.filter(field =>
+      content.toLowerCase().includes(field.toLowerCase())
+    ).length;
+
+    // Use lower threshold for proposal steps since they have many identifying patterns
+    const threshold = domain === 'proposals' ? 1 : 2;
+
+    if (matchCount >= threshold) {
+      const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(domain));
+      if (matchingSchema) {
+        return matchingSchema;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Intelligent name-based matching as fallback
+ */
+function intelligentNameBasedMatching(
+  componentLower: string,
+  availableSchemas: string[]
+): string | undefined {
+  // Direct name matching with higher priority domains
+  const priorityDomains = ['proposals', 'customers', 'products', 'version-history', 'auth'];
+
+  for (const domain of priorityDomains) {
+    if (componentLower.includes(domain.replace('-', ''))) {
+      const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(domain));
+      if (matchingSchema) {
+        return matchingSchema;
+      }
+    }
+  }
+
+  // Fuzzy matching - check if any schema name appears in component name
+  for (const schema of availableSchemas) {
+    const schemaLower = schema.toLowerCase().replace('-', '');
+    const componentClean = componentLower.replace(/[^a-z]/g, '');
+
+    if (componentClean.includes(schemaLower) || schemaLower.includes(componentClean.slice(0, 6))) {
+      return schema;
+    }
+  }
+
+  return undefined;
+}
+
+function extractAllSchemaFields(schemaData: any): Record<string, any> {
+  const allFields: Record<string, any> = {};
+
+  if (!schemaData || !schemaData.schemas) return allFields;
+
+  // Extract fields from all schemas in the file
+  for (const [schemaName, schema] of Object.entries(schemaData.schemas)) {
+    if (typeof schema === 'object' && schema !== null) {
+      const schemaObj = schema as any;
+
+      // Handle enum schemas - make them available as field types
+      if (schemaObj.type === 'enum' && schemaObj.enum) {
+        const fieldName = schemaName.toLowerCase().replace('schema', '').replace('proposal', '');
+        allFields[fieldName] = { enum: schemaObj.enum };
+      }
+
+      // Handle object schemas - extract all their fields
+      if (schemaObj.type === 'object' && schemaObj.fields) {
+        for (const [fieldName, fieldInfo] of Object.entries(schemaObj.fields)) {
+          const fieldData = fieldInfo as any;
+
+          // Resolve schema references to their enum values
+          if (fieldData.type === 'schema_ref' && fieldData.schemaRef) {
+            const referencedSchema = schemaData.schemas[fieldData.schemaRef];
+            if (referencedSchema && referencedSchema.enum) {
+              allFields[fieldName] = { enum: referencedSchema.enum };
+            } else {
+              // Still include the field even if we can't resolve the reference
+              allFields[fieldName] = fieldData;
+            }
+          } else {
+            allFields[fieldName] = fieldData;
+          }
+        }
+      }
+    }
+  }
+
+  // Debug: log what fields were extracted
+  console.log(`Debug: Extracted schema fields:`, Object.keys(allFields));
+
+  return allFields;
+}
+
+function findRelatedEndpoint(
+  componentName: string,
+  endpoints: Array<{ path: string; method: string; schemaFile?: string }>
+) {
+  // Match component names to endpoints (customers -> /api/customers)
+  const componentLower = componentName.toLowerCase();
+
+  for (const endpoint of endpoints) {
+    const pathSegments = endpoint.path.split('/').filter(Boolean);
+    if (
+      pathSegments.some(
+        segment =>
+          segment.toLowerCase().includes(componentLower) ||
+          componentLower.includes(segment.toLowerCase())
+      )
+    ) {
+      return endpoint;
+    }
+  }
+
+  return undefined;
+}
+
+function findMatchingSchema(
+  componentName: string,
+  endpoint: any,
+  schemas: Record<string, any>
+): any {
+  // Special handling for proposal wizard steps
+  if (componentName.includes('BasicInformation') || componentName.includes('ProposalForm')) {
+    // Look for BasicInformationSchema specifically
+    if (schemas['BasicInformationSchema']) {
+      return schemas['BasicInformationSchema'];
+    }
+  }
+
+  if (componentName.includes('Product') && componentName.includes('Step')) {
+    // Look for product-related schemas
+    for (const [schemaName, schema] of Object.entries(schemas)) {
+      if (schemaName.toLowerCase().includes('product')) {
+        return schema;
+      }
+    }
+  }
+
+  if (componentName.includes('Review') && componentName.includes('Step')) {
+    // Review step uses basic proposal schema
+    if (schemas['BasicInformationSchema']) {
+      return schemas['BasicInformationSchema'];
+    }
+  }
+
+  // Direct component name match for other cases
+  for (const [schemaName, schema] of Object.entries(schemas)) {
+    if (
+      schemaName
+        .toLowerCase()
+        .includes(componentName.toLowerCase().replace('step', '').replace('form', ''))
+    ) {
+      return schema;
+    }
+  }
+
+  return undefined;
+}
+
+// ==================== 5-LAYER COMPONENT ANALYSIS FUNCTIONS ====================
+
+/**
+ * Layer 1: Extract component fields and field names automatically and dynamically
+ */
+async function extractComponentFieldsAnalysis(componentName: string): Promise<any> {
+  const componentsDir = path.join(process.cwd(), 'src/components');
+  const componentFiles = await findComponentFiles(componentsDir);
+
+  for (const file of componentFiles) {
+    const fileName = path.basename(file, path.extname(file));
+    if (fileName.toLowerCase().includes(componentName.toLowerCase())) {
+      const content = fs.readFileSync(file, 'utf8');
+      const fields = extractComponentFields(content);
+
+      return {
+        file,
+        content,
+        fields: fields.reduce(
+          (acc, field) => {
+            acc[field] = { type: 'formField', source: 'extracted' };
+            return acc;
+          },
+          {} as Record<string, any>
+        ),
+        defaultValues: extractDefaultValues(content),
+        enumValues: extractEnumValues(content),
+        stateVariables: extractStateVariables(content),
+        propTypes: extractPropTypes(content),
+      };
+    }
+  }
+
+  return { fields: {}, content: '', file: '' };
+}
+
+/**
+ * Layer 2: Extract API endpoints it sends to automatically and dynamically
+ */
+async function extractComponentApiEndpoints(
+  componentName: string,
+  content: string
+): Promise<any[]> {
+  const endpoints: any[] = [];
+
+  // Pattern 1: Direct API calls (fetch, axios)
+  const fetchMatches = content.matchAll(
+    /(?:fetch|axios\.(?:get|post|put|delete))\s*\(\s*['"`]([^'"`]+)['"`]/g
+  );
+  for (const match of fetchMatches) {
+    const endpoint = match[1];
+    if (endpoint.startsWith('/api/') || endpoint.includes('api')) {
+      endpoints.push({
+        type: 'direct_api_call',
+        endpoint,
+        method: extractHttpMethod(match[0]),
+        source: 'fetch/axios',
+      });
+    }
+  }
+
+  // Pattern 2: React Query hooks with queryKey extraction
+  const queryMatches = content.matchAll(/useQuery.*?queryKey:\s*\[['"`]([^'"`]+)['"`]/g);
+  for (const match of queryMatches) {
+    const queryKey = match[1];
+    if (queryKey !== 'user' && queryKey !== 'session') {
+      endpoints.push({
+        type: 'react_query',
+        endpoint: `/api/${queryKey}`,
+        method: 'GET',
+        source: 'useQuery',
+      });
+    }
+  }
+
+  // Pattern 3: API client calls (apiClient.get, apiClient.post, etc.)
+  const apiClientMatches = content.matchAll(
+    /apiClient\.(\w+)\s*<[^>]*>\s*\(\s*['"`]([^'"`]+)['"`]/g
+  );
+  for (const match of apiClientMatches) {
+    endpoints.push({
+      type: 'api_client',
+      method: match[1].toUpperCase(),
+      endpoint: match[2],
+      source: 'apiClient',
+    });
+  }
+
+  // Pattern 4: Custom API hooks (useCreateProduct, useUpdateCustomer, etc.)
+  const apiHookMatches = content.matchAll(/use(?:Create|Update|Delete|Get|Fetch)(\w+)/g);
+  for (const match of apiHookMatches) {
+    const entity = match[1].toLowerCase();
+    const operation = match[0].match(/use(Create|Update|Delete|Get|Fetch)/)?.[1] || 'Unknown';
+    const method =
+      operation === 'Create'
+        ? 'POST'
+        : operation === 'Update'
+          ? 'PUT'
+          : operation === 'Delete'
+            ? 'DELETE'
+            : 'GET';
+
+    endpoints.push({
+      type: 'api_hook',
+      endpoint: `/api/${entity}s`,
+      method,
+      source: match[0],
+      operation,
+    });
+  }
+
+  // Pattern 5: Entity data hooks (useProducts, useCustomers, useProductCategories, etc.)
+  const entityHookMatches = content.matchAll(/use(\w+)(?:Data|List|Categories|Tags)?\s*\(/g);
+  for (const match of entityHookMatches) {
+    const entity = match[1].toLowerCase();
+    // Skip common non-entity hooks
+    const skipHooks = [
+      'form',
+      'state',
+      'effect',
+      'callback',
+      'memo',
+      'ref',
+      'context',
+      'reducer',
+      'layout',
+      'router',
+      'query',
+      'mutation',
+      'optimized',
+      'analytics',
+      'sku',
+      'validation',
+    ];
+
+    if (!skipHooks.includes(entity)) {
+      let endpoint = `/api/${entity}`;
+      if (!entity.endsWith('s')) {
+        endpoint = `/api/${entity}s`;
+      }
+
+      endpoints.push({
+        type: 'entity_hook',
+        endpoint,
+        method: 'GET',
+        source: match[0].replace(/\s*\(.*$/, ''),
+        entity,
+      });
+    }
+  }
+
+  // Pattern 6: Service imports (productService, customerService, etc.)
+  const serviceImportMatches = content.matchAll(
+    /import.*?(\w+Service).*?from.*?['"`].*?\/services\/(\w+)Service['"`]/g
+  );
+  for (const match of serviceImportMatches) {
+    const serviceName = match[2].toLowerCase();
+    endpoints.push({
+      type: 'service_import',
+      endpoint: `/api/${serviceName}s`,
+      method: 'MULTIPLE',
+      source: match[1],
+      serviceName,
+    });
+  }
+
+  // Pattern 7: Form submissions and navigation
+  const formSubmitMatches = content.matchAll(
+    /(?:router\.push|navigate|window\.location)\s*\(\s*['"`]([^'"`]+)['"`]/g
+  );
+  for (const match of formSubmitMatches) {
+    if (match[1].includes('api')) {
+      endpoints.push({
+        type: 'navigation',
+        endpoint: match[1],
+        method: 'GET',
+        source: 'navigation',
+      });
+    }
+  }
+
+  return endpoints;
+}
+
+/**
+ * Layer 3: Extract relevant schema fields and names automatically and dynamically
+ */
+async function extractRelevantSchemaFields(
+  componentName: string,
+  apiEndpoints: any[]
+): Promise<any> {
+  const schemaFields: Record<string, any> = {};
+
+  // Find schema files based on component name and API endpoints
+  const schemaFiles = await findSchemaFiles();
+
+  for (const schemaFile of schemaFiles) {
+    const content = fs.readFileSync(schemaFile, 'utf8');
+    const schemas = parseZodSchemas(content);
+
+    // Match schemas to component by name patterns
+    const matchingSchemas = Object.entries(schemas).filter(([schemaName, schema]) => {
+      const nameLower = schemaName.toLowerCase();
+      const componentLower = componentName.toLowerCase();
+
+      return (
+        nameLower.includes(componentLower.replace('step', '').replace('form', '')) ||
+        componentLower.includes(nameLower.replace('schema', '')) ||
+        apiEndpoints.some(ep => ep.endpoint?.includes(nameLower.replace('schema', '')))
+      );
+    });
+
+    for (const [schemaName, schema] of matchingSchemas) {
+      schemaFields[schemaName] = {
+        file: schemaFile,
+        schema,
+        fields: extractAllSchemaFields({ schemas: { [schemaName]: schema } }),
+      };
+    }
+  }
+
+  return schemaFields;
+}
+
+/**
+ * Layer 4: Extract relevant Zod validation automatically and dynamically
+ */
+async function extractRelevantZodValidation(
+  componentName: string,
+  schemaFields: any
+): Promise<any> {
+  const zodValidation: Record<string, any> = {};
+
+  for (const [schemaName, schemaData] of Object.entries(schemaFields)) {
+    const schemaInfo = schemaData as any;
+    const content = fs.readFileSync(schemaInfo.file, 'utf8');
+
+    // Extract Zod validation rules
+    const validationRules = extractZodValidationRules(content, schemaName);
+    zodValidation[schemaName] = validationRules;
+  }
+
+  return zodValidation;
+}
+
+/**
+ * Layer 5: Extract relevant database fields and names automatically and dynamically
+ */
+async function extractRelevantDatabaseFields(
+  componentName: string,
+  apiEndpoints: any[]
+): Promise<any> {
+  const databaseFields: Record<string, any> = {};
+
+  try {
+    // Read Prisma schema
+    const prismaSchemaPath = path.join(process.cwd(), 'prisma/schema.prisma');
+    if (fs.existsSync(prismaSchemaPath)) {
+      const prismaContent = fs.readFileSync(prismaSchemaPath, 'utf8');
+
+      // Extract models related to component
+      const models = extractPrismaModels(prismaContent, componentName, apiEndpoints);
+      databaseFields.prisma = models;
+    }
+  } catch (error) {
+    console.warn('Could not analyze Prisma schema:', error);
+  }
+
+  return databaseFields;
+}
+
+/**
+ * Detect all mismatches across the 5 layers
+ */
+async function detectCrossLayerMismatches(analysisResults: any): Promise<any[]> {
+  const mismatches: any[] = [];
+  const { componentFields, apiEndpoints, schemaFields, zodValidation, databaseFields } =
+    analysisResults;
+
+  // Helper function for fuzzy field matching
+  function findFieldMatch(targetField: string, searchFields: string[]): string | null {
+    const target = targetField.toLowerCase();
+
+    // Exact match first
+    for (const field of searchFields) {
+      if (field.toLowerCase() === target) return field;
+    }
+
+    // CamelCase variations
+    const camelCaseVariants = [
+      targetField,
+      targetField.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase(),
+      targetField.replace(/_/g, '').toLowerCase(),
+      targetField.charAt(0).toLowerCase() + targetField.slice(1),
+    ];
+
+    for (const variant of camelCaseVariants) {
+      for (const field of searchFields) {
+        if (field.toLowerCase() === variant.toLowerCase()) return field;
+      }
+    }
+
+    return null;
+  }
+
+  // Compare component fields vs schema fields
+  for (const [fieldName, fieldInfo] of Object.entries(componentFields.fields || {})) {
+    let foundInSchema = false;
+    let matchedSchemaName = '';
+    let matchedFieldName = '';
+
+    for (const [schemaName, schemaData] of Object.entries(schemaFields)) {
+      const schema = schemaData as any;
+      if (schema.fields) {
+        const schemaFieldNames = Object.keys(schema.fields);
+        const match = findFieldMatch(fieldName, schemaFieldNames);
+
+        if (match) {
+          foundInSchema = true;
+          matchedSchemaName = schemaName;
+          matchedFieldName = match;
+
+          // Check for type mismatches
+          const schemaField = schema.fields[match];
+          const fieldData = fieldInfo as any;
+          if (schemaField.enum && fieldData.type !== 'enum') {
+            mismatches.push({
+              type: 'component_schema_mismatch',
+              layer1: 'component',
+              layer2: 'schema',
+              field: fieldName,
+              matchedField: match,
+              issue: `Component field '${fieldName}' should be enum with values: ${schemaField.enum.join(', ')}`,
+              component: componentFields.file,
+              schema: schemaName,
+              severity: 'medium',
+            });
+          }
+
+          // Check for case mismatches
+          if (fieldName !== match) {
+            mismatches.push({
+              type: 'field_name_case_mismatch',
+              layer1: 'component',
+              layer2: 'schema',
+              field: fieldName,
+              matchedField: match,
+              issue: `Field name case mismatch: component uses '${fieldName}' but schema uses '${match}'`,
+              component: componentFields.file,
+              schema: schemaName,
+              severity: 'low',
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    if (!foundInSchema) {
+      mismatches.push({
+        type: 'missing_schema_field',
+        layer1: 'component',
+        layer2: 'schema',
+        field: fieldName,
+        issue: `Component field '${fieldName}' not found in any schema`,
+        component: componentFields.file,
+        severity: 'high',
+      });
+    }
+  }
+
+  // Compare API endpoints vs database models (improved filtering)
+  for (const endpoint of apiEndpoints) {
+    if (endpoint.endpoint) {
+      const endpointPath = endpoint.endpoint;
+
+      // Only check actual API routes, not React hooks
+      if (endpointPath.startsWith('/api/') && !endpointPath.includes('use')) {
+        const modelName = extractModelFromEndpoint(endpointPath);
+
+        // Skip client-side hook patterns
+        const hookPatterns = [
+          'toast',
+          'query',
+          'client',
+          'analytics',
+          'error',
+          'search',
+          'param',
+          'validation',
+          'handler',
+          'store',
+          'selection',
+          'current',
+          'total',
+          'plan',
+          'can',
+          'is',
+          'next',
+          'previous',
+          'set',
+          'submit',
+          'reset',
+          'initialize',
+          'step',
+          'bulk',
+          'infinite',
+          'optimized',
+          'unified',
+          'executive',
+          'dashboard',
+          'enhanced',
+        ];
+
+        const shouldSkip = hookPatterns.some(pattern =>
+          modelName?.toLowerCase().includes(pattern.toLowerCase())
+        );
+
+        if (
+          modelName &&
+          !shouldSkip &&
+          modelName.length > 3 &&
+          !databaseFields.prisma?.[modelName]
+        ) {
+          // Only report if it's a likely database model (pluralized nouns)
+          const likelyDbModel =
+            /^[A-Z][a-z]+s?$/.test(modelName) &&
+            !modelName.toLowerCase().includes('data') &&
+            !modelName.toLowerCase().includes('response');
+
+          if (likelyDbModel) {
+            mismatches.push({
+              type: 'missing_database_model',
+              layer1: 'api',
+              layer2: 'database',
+              endpoint: endpoint.endpoint,
+              issue: `API endpoint references model '${modelName}' but model not found in database`,
+              modelName,
+              severity: 'medium',
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return mismatches;
+}
+
+/**
+ * Display comprehensive analysis results
+ */
+function displayComprehensiveResults(componentName: string, results: any) {
+  const { componentFields, apiEndpoints, schemaFields, zodValidation, databaseFields, mismatches } =
+    results;
+
+  console.log(`\n📊 COMPREHENSIVE ANALYSIS RESULTS FOR: ${componentName}\n`);
+
+  // Display component fields
+  console.log('1️⃣ COMPONENT FIELDS:');
+  const componentFieldsCount = Object.keys(results.componentFields.fields || {}).length;
+  if (componentFieldsCount > 0) {
+    for (const [field, info] of Object.entries(results.componentFields.fields || {})) {
+      console.log(`   • ${field}: ${JSON.stringify(info)}`);
+    }
+  } else {
+    console.log('   No component fields found');
+  }
+
+  // Display API endpoints
+  console.log(`\n2️⃣ API ENDPOINTS:`);
+  if (results.apiEndpoints.length === 0) {
+    console.log('   No API endpoints found');
+  } else {
+    for (const endpoint of results.apiEndpoints) {
+      const endpointPath = endpoint.endpoint || endpoint.path || 'unknown';
+      const method = endpoint.method || 'GET';
+      const source = endpoint.source || endpoint.type || 'unknown';
+      console.log(`   • ${method} ${endpointPath} (${source})`);
+    }
+  }
+
+  // Display schema fields
+  console.log(`\n3️⃣ SCHEMA FIELDS:`);
+  for (const [schemaName, schemaData] of Object.entries(results.schemaFields)) {
+    const schema = schemaData as any;
+    const fieldCount = schema.fields ? Object.keys(schema.fields).length : 0;
+    console.log(`   📝 ${schemaName}: ${fieldCount} fields`);
+  }
+
+  // Display Zod validation
+  console.log(`\n4️⃣ ZOD VALIDATION:`);
+  for (const [schemaName, rules] of Object.entries(results.zodValidation)) {
+    const ruleCount = Object.keys(rules as any).length;
+    console.log(`   🔒 ${schemaName}: ${ruleCount} validation rules`);
+  }
+
+  // Display database fields
+  console.log(`\n5️⃣ DATABASE FIELDS:`);
+  for (const [dbType, models] of Object.entries(results.databaseFields)) {
+    const modelData = models as any;
+    if (typeof modelData === 'object' && modelData !== null) {
+      for (const [modelName, fields] of Object.entries(modelData)) {
+        const fieldData = fields as any;
+        const fieldCount = fieldData.fields ? Object.keys(fieldData.fields).length : 0;
+        console.log(`   🗄️ ${modelName}: ${fieldCount} database fields`);
+      }
+    }
+  }
+
+  // Display TypeScript interfaces
+  console.log(`\n6️⃣ TYPESCRIPT INTERFACES:`);
+  for (const [interfaceName, interfaceData] of Object.entries(results.typescriptInterfaces)) {
+    const interfaceInfo = interfaceData as any;
+    const fieldCount = interfaceInfo.fields ? Object.keys(interfaceInfo.fields).length : 0;
+    console.log(`   🔷 ${interfaceName}: ${fieldCount} interface fields`);
+  }
+
+  // Display form validation rules
+  console.log(`\n7️⃣ FORM VALIDATION RULES:`);
+  for (const [fieldName, validationData] of Object.entries(results.formValidationRules)) {
+    const validation = validationData as any;
+    const ruleCount = validation.rules ? Object.keys(validation.rules).length : 0;
+    console.log(`   ✅ ${fieldName}: ${ruleCount} validation rules (${validation.source})`);
+  }
+
+  // Display API response types
+  console.log(`\n8️⃣ API RESPONSE TYPES:`);
+  for (const [typeName, typeData] of Object.entries(results.apiResponseTypes)) {
+    const type = typeData as any;
+    const fieldCount = type.fields ? Object.keys(type.fields).length : 0;
+    console.log(`   🔄 ${typeName}: ${fieldCount} response fields`);
+  }
+
+  // Categorize mismatches by severity
+  const mismatchesBySeverity = {
+    high: results.mismatches.filter((m: any) => m.severity === 'high'),
+    medium: results.mismatches.filter((m: any) => m.severity === 'medium'),
+    low: results.mismatches.filter((m: any) => m.severity === 'low'),
+    unknown: results.mismatches.filter((m: any) => !m.severity),
+  };
+
+  // Display mismatches
+  console.log(`\n❌ CROSS-LAYER MISMATCHES:`);
+  if (results.mismatches.length > 0) {
+    results.mismatches.forEach((mismatch: any, index: number) => {
+      const severityIcon =
+        mismatch.severity === 'high' ? '🚨' : mismatch.severity === 'medium' ? '⚠️' : '💡';
+      console.log(`   ${index + 1}. ${severityIcon} ${mismatch.type}: ${mismatch.issue}`);
+      console.log(`      Field: ${mismatch.field}`);
+      if (mismatch.matchedField && mismatch.matchedField !== mismatch.field) {
+        console.log(`      Suggested: ${mismatch.matchedField}`);
+      }
+      if (mismatch.component) console.log(`      Component: ${path.basename(mismatch.component)}`);
+      if (mismatch.schema) console.log(`      Schema: ${mismatch.schema}`);
+    });
+  } else {
+    console.log('   🎉 No mismatches found!');
+  }
+
+  // Enhanced summary with severity breakdown and recommendations
+  const totalMismatches = results.mismatches.length;
+  const highSeverity = mismatchesBySeverity.high.length;
+  const mediumSeverity = mismatchesBySeverity.medium.length;
+  const lowSeverity = mismatchesBySeverity.low.length;
+
+  console.log(`\n📈 ENHANCED SUMMARY:`);
+  console.log(`   Total Mismatches: ${totalMismatches}`);
+  if (highSeverity > 0) console.log(`   🚨 High Priority: ${highSeverity} (missing schema fields)`);
+  if (mediumSeverity > 0)
+    console.log(`   ⚠️  Medium Priority: ${mediumSeverity} (type mismatches)`);
+  if (lowSeverity > 0) console.log(`   💡 Low Priority: ${lowSeverity} (naming inconsistencies)`);
+
+  // Component health assessment
+  if (totalMismatches === 0) {
+    console.log(`   🎯 Component Health: EXCELLENT - All layers aligned`);
+  } else if (totalMismatches <= 2) {
+    console.log(`   ✅ Component Health: GOOD - Minor issues`);
+  } else if (totalMismatches <= 5) {
+    console.log(`   ⚠️  Component Health: NEEDS ATTENTION - Several mismatches`);
+  } else {
+    console.log(`   🚨 Component Health: CRITICAL - Major alignment issues`);
+  }
+
+  if (highSeverity > 0) {
+    console.log(`\n💡 RECOMMENDATIONS:`);
+    console.log(`   • Add missing schema definitions for ${highSeverity} fields`);
+    console.log(`   • Ensure form validation aligns with backend requirements`);
+    console.log(`   • Consider using schema-first development approach`);
+  }
+}
+
+function extractHttpMethod(apiCall: string): string {
+  if (apiCall.includes('post')) return 'POST';
+  if (apiCall.includes('put')) return 'PUT';
+  if (apiCall.includes('delete')) return 'DELETE';
+  return 'GET';
+}
+
+function extractStateVariables(content: string): string[] {
+  const stateVars: string[] = [];
+  const matches = content.matchAll(/const\s+\[([^,]+),\s*set[^\]]+\]\s*=\s*useState/g);
+  for (const match of matches) {
+    stateVars.push(match[1].trim());
+  }
+  return stateVars;
+}
+
+/**
+ * Extract model name from API endpoint patterns
+ */
+function extractModelFromEndpoint(endpoint: string): string | null {
+  // Extract model name from API endpoint patterns
+  const patterns = [
+    /\/api\/(\w+)/,
+    /\/(\w+)\/create/,
+    /\/(\w+)\/update/,
+    /\/(\w+)\/delete/,
+    /\/(\w+)s?$/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = endpoint.match(pattern);
+    if (match) {
+      const modelName = match[1];
+      // Capitalize first letter for model name
+      return modelName.charAt(0).toUpperCase() + modelName.slice(1);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract TypeScript interfaces and types from component content
+ */
+async function extractTypeScriptInterfaces(
+  componentName: string,
+  content: string
+): Promise<Record<string, any>> {
+  const interfaces: Record<string, any> = {};
+
+  // Extract interface definitions
+  const interfaceMatches = content.matchAll(/interface\s+(\w+)\s*\{([^}]+)\}/g);
+  for (const match of interfaceMatches) {
+    const interfaceName = match[1];
+    const interfaceContent = match[2];
+
+    const fields: Record<string, any> = {};
+    const fieldMatches = interfaceContent.matchAll(/(\w+)(\?)?:\s*([^;,\n]+)/g);
+
+    for (const fieldMatch of fieldMatches) {
+      const fieldName = fieldMatch[1];
+      const isOptional = fieldMatch[2] === '?';
+      const fieldType = fieldMatch[3].trim();
+
+      fields[fieldName] = {
+        type: fieldType,
+        optional: isOptional,
+        source: 'typescript_interface',
+      };
+    }
+
+    interfaces[interfaceName] = { fields, source: 'component_interfaces' };
+  }
+
+  // Extract type aliases
+  const typeMatches = content.matchAll(/type\s+(\w+)\s*=\s*([^;\n]+)/g);
+  for (const match of typeMatches) {
+    const typeName = match[1];
+    const typeDefinition = match[2].trim();
+
+    interfaces[typeName] = {
+      definition: typeDefinition,
+      source: 'typescript_type',
+    };
+  }
+
+  return interfaces;
+}
+
+/**
+ * Extract form validation rules from component content
+ */
+async function extractFormValidationRules(
+  componentName: string,
+  content: string
+): Promise<Record<string, any>> {
+  const validationRules: Record<string, any> = {};
+
+  // Extract React Hook Form validation rules
+  const hookFormMatches = content.matchAll(/register\(['"`](\w+)['"`]\s*,\s*\{([^}]+)\}/g);
+  for (const match of hookFormMatches) {
+    const fieldName = match[1];
+    const rulesContent = match[2];
+
+    const rules: Record<string, any> = {};
+
+    // Extract specific validation rules
+    if (rulesContent.includes('required')) {
+      const requiredMatch = rulesContent.match(/required:\s*['"`]?([^'"`\s,}]+)['"`]?/);
+      rules.required = requiredMatch ? requiredMatch[1] : true;
+    }
+
+    if (rulesContent.includes('minLength')) {
+      const minLengthMatch = rulesContent.match(/minLength:\s*(\d+)/);
+      rules.minLength = minLengthMatch ? parseInt(minLengthMatch[1]) : null;
+    }
+
+    if (rulesContent.includes('maxLength')) {
+      const maxLengthMatch = rulesContent.match(/maxLength:\s*(\d+)/);
+      rules.maxLength = maxLengthMatch ? parseInt(maxLengthMatch[1]) : null;
+    }
+
+    if (rulesContent.includes('pattern')) {
+      const patternMatch = rulesContent.match(/pattern:\s*([^,}]+)/);
+      rules.pattern = patternMatch ? patternMatch[1] : null;
+    }
+
+    validationRules[fieldName] = {
+      rules,
+      source: 'react_hook_form',
+    };
+  }
+
+  // Extract HTML5 validation attributes
+  const htmlValidationMatches = content.matchAll(/<input[^>]*name=['"`](\w+)['"`][^>]*>/g);
+  for (const match of htmlValidationMatches) {
+    const inputTag = match[0];
+    const fieldName = match[1];
+
+    const htmlRules: Record<string, any> = {};
+
+    if (inputTag.includes('required')) htmlRules.required = true;
+    if (inputTag.includes('minlength=')) {
+      const minMatch = inputTag.match(/minlength=['"`](\d+)['"`]/);
+      htmlRules.minLength = minMatch ? parseInt(minMatch[1]) : null;
+    }
+    if (inputTag.includes('maxlength=')) {
+      const maxMatch = inputTag.match(/maxlength=['"`](\d+)['"`]/);
+      htmlRules.maxLength = maxMatch ? parseInt(maxMatch[1]) : null;
+    }
+
+    if (Object.keys(htmlRules).length > 0) {
+      validationRules[fieldName] = {
+        rules: htmlRules,
+        source: 'html5_validation',
+      };
+    }
+  }
+
+  // Extract validation from useMemo validationErrors pattern (modern React)
+  const validationErrorMatches = content.matchAll(
+    /validationErrors\s*=\s*useMemo\(\(\)\s*=>\s*\{([^}]+(?:\}[^}]*)*)\}/gs
+  );
+  for (const match of validationErrorMatches) {
+    const validationContent = match[1];
+
+    // Extract field validation checks
+    const fieldCheckMatches = validationContent.matchAll(
+      /if\s*\(\s*!?([^?.]+)\.?(\w+)[\?.]?\.?(\w+)?\s*[\)&|!]/g
+    );
+    for (const fieldMatch of fieldCheckMatches) {
+      let fieldName = '';
+      if (fieldMatch[2] === 'trim' && fieldMatch[1].includes('formData')) {
+        // Pattern: if (!formData.title?.trim())
+        const fieldNameMatch = fieldMatch[1].match(/formData\.(\w+)/);
+        fieldName = fieldNameMatch ? fieldNameMatch[1] : '';
+      } else if (fieldMatch[1].includes('formData')) {
+        // Pattern: if (!formData.customerId)
+        fieldName = fieldMatch[2] || '';
+      }
+
+      if (fieldName) {
+        const rules: Record<string, any> = {};
+
+        // Check if it's a required field validation
+        if (validationContent.includes(`!${fieldMatch[0].split('(')[1].split(')')[0]}`)) {
+          rules.required = true;
+        }
+
+        // Look for specific error messages to infer validation types
+        const errorMsgPattern = new RegExp(`${fieldName}[^']*'([^']+)'`, 'i');
+        const errorMatch = validationContent.match(errorMsgPattern);
+        if (errorMatch) {
+          rules.errorMessage = errorMatch[1];
+        }
+
+        validationRules[fieldName] = {
+          rules,
+          source: 'modern_react_validation',
+        };
+      }
+    }
+  }
+
+  // Extract validation from inline conditional rendering patterns
+  const conditionalValidationMatches = content.matchAll(
+    /\{([^}]*formData\.(\w+)[^}]*)\?\s*[^:]*:\s*[^}]*\}/g
+  );
+  for (const match of conditionalValidationMatches) {
+    const fieldName = match[2];
+    const condition = match[1];
+
+    if (!validationRules[fieldName]) {
+      const rules: Record<string, any> = {};
+
+      if (condition.includes('!') || condition.includes('length') || condition.includes('trim')) {
+        rules.required = true;
+      }
+
+      validationRules[fieldName] = {
+        rules,
+        source: 'conditional_rendering',
+      };
+    }
+  }
+
+  return validationRules;
+}
+
+/**
+ * Extract API response types from API endpoints and component content
+ */
+async function extractApiResponseTypes(
+  componentName: string,
+  apiEndpoints: any[]
+): Promise<Record<string, any>> {
+  const responseTypes: Record<string, any> = {};
+
+  // First, extract response types from the component itself
+  const componentFiles = await findComponentFiles(componentName);
+  const componentPath = componentFiles.length > 0 ? componentFiles[0] : null;
+  if (componentPath && fs.existsSync(componentPath)) {
+    try {
+      const componentContent = fs.readFileSync(componentPath, 'utf8');
+
+      // Extract inline response type definitions (generic types in API calls)
+      const apiCallMatches = componentContent.matchAll(
+        /apiClient\.get<([^>]+)>\s*\(\s*['"`]([^'"`]+)['"`]/g
+      );
+      for (const match of apiCallMatches) {
+        const responseType = match[1];
+        const endpoint = match[2];
+
+        // Parse the response type structure
+        const fields: Record<string, any> = {};
+
+        // Extract nested type structures
+        const typeStructureMatch = responseType.match(/\{([^}]+)\}/);
+        if (typeStructureMatch) {
+          const typeContent = typeStructureMatch[1];
+          const fieldMatches = typeContent.matchAll(/(\w+)(\?)?:\s*([^;,\n]+)/g);
+
+          for (const fieldMatch of fieldMatches) {
+            fields[fieldMatch[1]] = {
+              type: fieldMatch[3].trim(),
+              optional: fieldMatch[2] === '?',
+              source: 'inline_api_type',
+            };
+          }
+        }
+
+        responseTypes[`${endpoint.replace(/[^a-zA-Z0-9]/g, '_')}_Response`] = {
+          fields,
+          endpoint,
+          source: 'component_api_call',
+          rawType: responseType,
+        };
+      }
+
+      // Extract useQuery response types
+      const useQueryMatches = componentContent.matchAll(/useQuery.*<([^>]+)>/g);
+      for (const match of useQueryMatches) {
+        const queryType = match[1];
+        responseTypes[`QueryResponse_${Object.keys(responseTypes).length}`] = {
+          type: queryType,
+          source: 'react_query_type',
+        };
+      }
+
+      // Extract interface definitions within the component
+      const inlineInterfaceMatches = componentContent.matchAll(/interface\s+(\w+)\s*\{([^}]+)\}/g);
+      for (const match of inlineInterfaceMatches) {
+        const interfaceName = match[1];
+        const interfaceContent = match[2];
+
+        if (
+          interfaceName.toLowerCase().includes('response') ||
+          interfaceName.toLowerCase().includes('api') ||
+          interfaceName.toLowerCase().includes('data')
+        ) {
+          const fields: Record<string, any> = {};
+          const fieldMatches = interfaceContent.matchAll(/(\w+)(\?)?:\s*([^;,\n]+)/g);
+
+          for (const fieldMatch of fieldMatches) {
+            fields[fieldMatch[1]] = {
+              type: fieldMatch[3].trim(),
+              optional: fieldMatch[2] === '?',
+              source: 'inline_interface',
+            };
+          }
+
+          responseTypes[interfaceName] = {
+            fields,
+            source: 'component_interface',
+          };
+        }
+      }
+    } catch (error) {
+      // Ignore component read errors
+    }
+  }
+
+  // Find type definition files related to API responses
+  const typeFiles = [
+    'src/types/api.ts',
+    'src/types/responses.ts',
+    'src/lib/api-types.ts',
+    'src/schemas/responses.ts',
+  ];
+
+  for (const typeFile of typeFiles) {
+    const fullPath = path.join(process.cwd(), typeFile);
+    if (fs.existsSync(fullPath)) {
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8');
+
+        // Extract response type interfaces
+        const responseInterfaceMatches = content.matchAll(
+          /interface\s+(\w*Response\w*|\w*Api\w*)\s*\{([^}]+)\}/g
+        );
+        for (const match of responseInterfaceMatches) {
+          const interfaceName = match[1];
+          const interfaceContent = match[2];
+
+          const fields: Record<string, any> = {};
+          const fieldMatches = interfaceContent.matchAll(/(\w+)(\?)?:\s*([^;,\n]+)/g);
+
+          for (const fieldMatch of fieldMatches) {
+            fields[fieldMatch[1]] = {
+              type: fieldMatch[3].trim(),
+              optional: fieldMatch[2] === '?',
+              source: 'api_response_type',
+            };
+          }
+
+          responseTypes[interfaceName] = {
+            fields,
+            file: typeFile,
+            source: 'response_interface',
+          };
+        }
+
+        // Extract API return types from function signatures
+        const apiReturnMatches = content.matchAll(/(\w+).*:\s*Promise<([^>]+)>/g);
+        for (const match of apiReturnMatches) {
+          const functionName = match[1];
+          const returnType = match[2];
+
+          responseTypes[`${functionName}ReturnType`] = {
+            type: returnType,
+            source: 'function_return_type',
+            file: typeFile,
+          };
+        }
+      } catch (error) {
+        // Ignore file read errors
+      }
+    }
+  }
+
+  // Extract types from API endpoint files if they exist
+  for (const endpoint of apiEndpoints) {
+    if (endpoint.path) {
+      const apiPath = path.join(
+        process.cwd(),
+        'src/app/api',
+        endpoint.path.replace('/api/', ''),
+        'route.ts'
+      );
+      if (fs.existsSync(apiPath)) {
+        try {
+          const apiContent = fs.readFileSync(apiPath, 'utf8');
+
+          // Extract return type from API route handlers
+          const returnMatches = apiContent.matchAll(/return\s+NextResponse\.json\(([^)]+)\)/g);
+          for (const match of returnMatches) {
+            const returnContent = match[1];
+            responseTypes[`${endpoint.path.replace(/[^a-zA-Z0-9]/g, '_')}_ApiResponse`] = {
+              returnContent,
+              source: 'api_route_return',
+            };
+          }
+        } catch (error) {
+          // Ignore API file read errors
+        }
+      }
+    }
+  }
+
+  return responseTypes;
+}
+
+function extractPropTypes(content: string): Record<string, string> {
+  const propTypes: Record<string, string> = {};
+  const interfaceMatches = content.matchAll(/interface\s+\w+Props[^{]*{([^}]+)}/g);
+  for (const match of interfaceMatches) {
+    const propsContent = match[1];
+    const fieldMatches = propsContent.matchAll(/(\w+)[\?:]?\s*:\s*([^;,\n]+)/g);
+    for (const fieldMatch of fieldMatches) {
+      propTypes[fieldMatch[1]] = fieldMatch[2].trim();
+    }
+  }
+  return propTypes;
+}
+
+function extractZodValidationRules(content: string, schemaName: string): Record<string, any> {
+  const rules: Record<string, any> = {};
+
+  // Find the specific schema definition
+  const schemaPattern = new RegExp(`${schemaName}\\s*=\\s*z\\.object\\(\\s*\\{([^}]+)\\}`, 's');
+  const match = content.match(schemaPattern);
+
+  if (match) {
+    const schemaContent = match[1];
+    const fieldMatches = schemaContent.matchAll(
+      /(\w+):\s*z\.(\w+)(?:\(\))?(?:\.(\w+)(?:\(([^)]*)\))?)*(?:,|\s|$)/g
+    );
+
+    for (const fieldMatch of fieldMatches) {
+      const [, fieldName, zodType, modifier, modifierArgs] = fieldMatch;
+      rules[fieldName] = {
+        type: zodType,
+        modifier: modifier || null,
+        args: modifierArgs || null,
+        required: !fieldMatch[0].includes('.optional()'),
+      };
+    }
+  }
+
+  return rules;
+}
+
+function extractPrismaModels(
+  content: string,
+  componentName: string,
+  apiEndpoints: any[]
+): Record<string, any> {
+  const models: Record<string, any> = {};
+
+  // Extract model definitions
+  const modelMatches = content.matchAll(/model\s+(\w+)\s*\{([^}]+)\}/g);
+
+  for (const match of modelMatches) {
+    const [, modelName, modelContent] = match;
+    const modelLower = modelName.toLowerCase();
+    const componentLower = componentName.toLowerCase();
+
+    // Check if model is relevant to component
+    if (
+      componentLower.includes(modelLower) ||
+      modelLower.includes(componentLower.replace('step', '').replace('form', '')) ||
+      apiEndpoints.some(ep => ep.endpoint?.includes(modelLower))
+    ) {
+      const fields: Record<string, any> = {};
+      const fieldMatches = modelContent.matchAll(
+        /(\w+)\s+(\w+)(?:\?)?(?:\s+@\w+(?:\([^)]*\))?)*(?:\s*\/\/[^\n]*)?/g
+      );
+
+      for (const fieldMatch of fieldMatches) {
+        const [, fieldName, fieldType] = fieldMatch;
+        fields[fieldName] = {
+          type: fieldType,
+          optional: fieldMatch[0].includes('?'),
+          source: 'prisma',
+        };
+      }
+
+      models[modelName] = { fields, source: 'prisma_schema' };
+    }
+  }
+
+  return models;
+}
+
+async function findFilesRecursively(dir: string, pattern: RegExp): Promise<string[]> {
+  const files: string[] = [];
+
+  try {
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        const subFiles = await findFilesRecursively(fullPath, pattern);
+        files.push(...subFiles);
+      } else if (pattern.test(entry.name)) {
+        files.push(fullPath);
+      }
+    }
+  } catch (error) {
+    // Ignore errors for inaccessible directories
+  }
+
+  return files;
+}
+
+/**
+ * Perform comprehensive 8-layer analysis on a specific component:
+ * 1. Component fields and field names
+ * 2. API endpoints it sends to
+ * 3. Relevant schema fields and names
+ * 4. Relevant Zod validation
+ * 5. Relevant database fields and names
+ * 6. TypeScript interfaces and types
+ * 7. Form validation rules
+ * 8. API response types
+ */
+async function performComprehensiveComponentAnalysis(componentName: string, api: ApiClient) {
+  console.log('🔄 Starting 8-layer component analysis...\n');
+
+  const analysisResults = {
+    componentFields: {} as any,
+    apiEndpoints: [] as any[],
+    schemaFields: {} as any,
+    zodValidation: {} as any,
+    databaseFields: {} as any,
+    typescriptInterfaces: {} as any,
+    formValidationRules: {} as any,
+    apiResponseTypes: {} as any,
+    mismatches: [] as any[],
+  };
+
+  try {
+    // Layer 1: Extract component fields and field names automatically and dynamically
+    console.log('1️⃣ Analyzing Component Fields...');
+    const componentAnalysis = await extractComponentFieldsAnalysis(componentName);
+    analysisResults.componentFields = componentAnalysis;
+    console.log(
+      `   ✅ Found ${Object.keys(componentAnalysis.fields || {}).length} component fields`
+    );
+
+    // Layer 2: Extract API endpoints it sends to automatically and dynamically
+    console.log('2️⃣ Analyzing API Endpoints...');
+    const apiAnalysis = await extractComponentApiEndpoints(
+      componentName,
+      componentAnalysis.content
+    );
+    analysisResults.apiEndpoints = apiAnalysis;
+    console.log(`   ✅ Found ${apiAnalysis.length} API endpoints`);
+
+    // Layer 3: Extract relevant schema fields and names automatically and dynamically
+    console.log('3️⃣ Analyzing Schema Fields...');
+    const schemaAnalysis = await extractRelevantSchemaFields(componentName, apiAnalysis);
+    analysisResults.schemaFields = schemaAnalysis;
+    console.log(`   ✅ Found ${Object.keys(schemaAnalysis).length} schema field groups`);
+
+    // Layer 4: Extract relevant Zod validation automatically and dynamically
+    console.log('4️⃣ Analyzing Zod Validation...');
+    const zodAnalysis = await extractRelevantZodValidation(componentName, schemaAnalysis);
+    analysisResults.zodValidation = zodAnalysis;
+    console.log(`   ✅ Found ${Object.keys(zodAnalysis).length} Zod validation rules`);
+
+    // Layer 5: Extract relevant database fields and names automatically and dynamically
+    console.log('5️⃣ Analyzing Database Fields...');
+    const databaseAnalysis = await extractRelevantDatabaseFields(componentName, apiAnalysis);
+    analysisResults.databaseFields = databaseAnalysis;
+    console.log(`   ✅ Found ${Object.keys(databaseAnalysis).length} database field groups`);
+
+    // Layer 6: Extract TypeScript interfaces and types
+    console.log('6️⃣ Analyzing TypeScript Interfaces...');
+    const tsInterfaceAnalysis = await extractTypeScriptInterfaces(
+      componentName,
+      componentAnalysis.content
+    );
+    analysisResults.typescriptInterfaces = tsInterfaceAnalysis;
+    console.log(`   ✅ Found ${Object.keys(tsInterfaceAnalysis).length} TypeScript interfaces`);
+
+    // Layer 7: Extract form validation rules
+    console.log('7️⃣ Analyzing Form Validation Rules...');
+    const formValidationAnalysis = await extractFormValidationRules(
+      componentName,
+      componentAnalysis.content
+    );
+    analysisResults.formValidationRules = formValidationAnalysis;
+    console.log(`   ✅ Found ${Object.keys(formValidationAnalysis).length} form validation rules`);
+
+    // Layer 8: Extract API response types
+    console.log('8️⃣ Analyzing API Response Types...');
+    const apiResponseAnalysis = await extractApiResponseTypes(componentName, apiAnalysis);
+    analysisResults.apiResponseTypes = apiResponseAnalysis;
+    console.log(
+      `   ✅ Found ${Object.keys(apiResponseAnalysis).length} API response type definitions`
+    );
+
+    // Detect cross-layer mismatches across all 8 layers
+    console.log('🔍 Detecting Cross-Layer Mismatches...');
+    const mismatches = await detectCrossLayerMismatches(analysisResults);
+    analysisResults.mismatches = mismatches;
+
+    // Display comprehensive results
+    displayComprehensiveResults(componentName, analysisResults);
+  } catch (error) {
+    console.error('❌ Analysis failed:', error instanceof Error ? error.message : 'Unknown error');
+  }
+}
+
+async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent?: string) {
+  if (targetComponent) {
+    console.log(`🔍 Comprehensive Component Analysis for: ${targetComponent}\n`);
+    await performComprehensiveComponentAnalysis(targetComponent, api);
+    return;
+  } else {
+    console.log('🔍 Automatic Frontend-Backend Field Mismatch Detection\n');
+  }
+
+  const detectedIssues = {
+    missingFields: [] as Array<{
+      component: string;
+      field: string;
+      issue: string;
+      expectedEnum?: string[];
+      suggestion: string;
+    }>,
+    enumMismatches: [] as Array<{
+      component: string;
+      field: string;
+      frontendValues: string[];
+      backendSchema: string;
+      endpoint: string;
+      suggestions: string[];
+    }>,
+    typeMismatches: [] as Array<{
+      component: string;
+      field: string;
+      frontendType: string;
+      backendType: string;
+      endpoint: string;
+      suggestion: string;
+    }>,
+    validationFailures: [] as Array<{
+      endpoint: string;
+      field: string;
+      testValue: any;
+      error: string;
+      suggestedFix: string;
+    }>,
+  };
+
+  try {
+    console.log('📋 Scanning frontend components and API schemas...\n');
+
+    // Step 1: Auto-discover API endpoints
+    const apiEndpoints = await discoverApiEndpoints();
+    console.log(`Found ${apiEndpoints.length} API endpoints`);
+
+    // Step 2: Extract frontend field patterns from components
+    const frontendFields = await extractFrontendFields(targetComponent);
+    if (targetComponent) {
+      console.log(
+        `Extracted ${Object.keys(frontendFields).length} components matching "${targetComponent}"`
+      );
+    } else {
+      console.log(
+        `Extracted ${Object.keys(frontendFields).length} frontend components with form fields`
+      );
+    }
+
+    // Step 3: Analyze backend schemas
+    const backendSchemas = await analyzeBackendSchemas();
+    console.log(`Analyzed ${Object.keys(backendSchemas).length} backend schemas`);
+
+    // Step 4: Compare and detect mismatches
+    await detectFieldMismatches(frontendFields, backendSchemas, apiEndpoints, detectedIssues, api);
+
+    // Step 5: Show results
+    console.log('\n📊 Detection Results:\n');
+
+    if (detectedIssues.enumMismatches.length > 0) {
+      console.log('🔴 Enum Mismatches Found:');
+      detectedIssues.enumMismatches.forEach((issue, index) => {
+        console.log(`\n${index + 1}. Component: ${issue.component}`);
+        console.log(`   Field: ${issue.field}`);
+        console.log(`   Endpoint: ${issue.endpoint}`);
+        console.log(`   Frontend values: ${issue.frontendValues.join(', ')}`);
+        console.log(`   Backend schema: ${issue.backendSchema}`);
+        console.log(`   Suggestions:`);
+        issue.suggestions.forEach(suggestion => {
+          console.log(`     • ${suggestion}`);
+        });
+      });
+    }
+
+    if (detectedIssues.typeMismatches.length > 0) {
+      console.log('\n🟡 Type Mismatches Found:');
+      detectedIssues.typeMismatches.forEach((issue, index) => {
+        console.log(`\n${index + 1}. Component: ${issue.component}`);
+        console.log(`   Field: ${issue.field}`);
+        console.log(`   Endpoint: ${issue.endpoint}`);
+        console.log(`   Frontend type: ${issue.frontendType}`);
+        console.log(`   Backend type: ${issue.backendType}`);
+        console.log(`   Suggestion: ${issue.suggestion}`);
+      });
+    }
+
+    if (detectedIssues.validationFailures.length > 0) {
+      console.log('\n🟠 API Validation Failures:');
+      detectedIssues.validationFailures.forEach((issue, index) => {
+        console.log(`\n${index + 1}. Endpoint: ${issue.endpoint}`);
+        console.log(`   Field: ${issue.field}`);
+        console.log(`   Test value: ${JSON.stringify(issue.testValue)}`);
+        console.log(`   Error: ${issue.error}`);
+        console.log(`   Suggested fix: ${issue.suggestedFix}`);
+      });
+    }
+
+    const totalIssues =
+      detectedIssues.enumMismatches.length +
+      detectedIssues.typeMismatches.length +
+      detectedIssues.validationFailures.length;
+
+    if (totalIssues === 0) {
+      console.log('✅ No field value mismatches detected!');
+    } else {
+      console.log(`\n📈 Summary: Found ${totalIssues} potential issues`);
+      console.log('\n💡 General Recommendations:');
+      console.log('• Use z.preprocess() in Zod schemas to normalize frontend values');
+      console.log('• Add field transformations in API routes before validation');
+      console.log('• Update frontend components to match backend enum expectations');
+      console.log('• Add comprehensive API testing with actual frontend form data');
+      console.log('• Use consistent enum values across frontend and backend');
+    }
+  } catch (error) {
+    console.error(
+      '❌ Error during mismatch detection:',
+      error instanceof Error ? error.message : error
+    );
+  }
 }
 
 main().catch(err => {

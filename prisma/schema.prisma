@@ -497,7 +497,7 @@ model BaselineMetrics {
 model Customer {
   id           String            @id @default(cuid())
   name         String
-  email        String?
+  email        String            @unique
   phone        String?
   website      String?
   address      String?

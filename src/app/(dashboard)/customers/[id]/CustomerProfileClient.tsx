@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/Card';
 import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useCustomer } from '@/features/customers/hooks';
+import type { Customer } from '@/features/customers/schemas';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
@@ -74,24 +75,6 @@ interface CustomerApiResponse {
   [key: string]: unknown;
 }
 
-interface Customer {
-  id: string;
-  name: string;
-  industry: string;
-  address: string;
-  phone: string;
-  website: string;
-  email: string;
-  tier: CustomerTier;
-  annualRevenue: number;
-  employeeCount: number;
-  healthScore: number;
-  engagementLevel: 'low' | 'medium' | 'high';
-  lastContact: Date;
-  nextActionDue: Date;
-  tags: string[];
-}
-
 export function CustomerProfileClient({ customerId }: { customerId: string }) {
   const router = useRouter();
   const { trackOptimized } = useOptimizedAnalytics();
@@ -111,8 +94,8 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       website: undefined,
       address: undefined,
       industry: undefined,
-      annualRevenue: undefined,
-      employeeCount: undefined,
+      revenue: undefined,
+      companySize: '',
       tier: 'bronze',
       tags: [],
     },
@@ -137,30 +120,18 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     (raw: CustomerApiResponse, previous?: Customer | null): Customer => ({
       id: String(raw.id ?? previous?.id ?? ''),
       name: String(raw.name ?? previous?.name ?? ''),
-      industry: raw.industry ? String(raw.industry) : (previous?.industry ?? ''),
-      address: raw.address ? String(raw.address) : (previous?.address ?? ''),
-      phone: raw.phone ? String(raw.phone) : (previous?.phone ?? ''),
-      website: raw.website ? String(raw.website) : (previous?.website ?? ''),
-      email: raw.email ? String(raw.email) : (previous?.email ?? ''),
-      tier: (previous?.tier as CustomerTier) || CustomerTier.BRONZE,
-      annualRevenue: typeof raw.revenue === 'number' ? raw.revenue : previous?.annualRevenue || 0,
-      employeeCount:
-        typeof raw.employeeCount === 'number' ? raw.employeeCount : previous?.employeeCount || 0,
-      healthScore:
-        typeof raw.statistics?.healthScore === 'number'
-          ? raw.statistics.healthScore
-          : previous?.healthScore || 0,
-      engagementLevel:
-        (raw.statistics?.engagementLevel as Customer['engagementLevel']) ||
-        previous?.engagementLevel ||
-        'low',
-      lastContact: raw.lastContact
-        ? new Date(raw.lastContact)
-        : previous?.lastContact || new Date(),
-      nextActionDue: raw.nextActionDue
-        ? new Date(raw.nextActionDue)
-        : previous?.nextActionDue || new Date(),
-      tags: Array.isArray(raw.tags) ? raw.tags : previous?.tags || [],
+      email: String(raw.email ?? previous?.email ?? ''),
+      phone: raw.phone ? String(raw.phone) : (previous?.phone ?? null),
+      website: raw.website ? String(raw.website) : (previous?.website ?? null),
+      address: raw.address ? String(raw.address) : (previous?.address ?? null),
+      industry: (raw.industry as any) ?? previous?.industry ?? null,
+      companySize: raw.employeeCount ? String(raw.employeeCount) : (previous?.companySize ?? null),
+      revenue: typeof raw.revenue === 'number' ? raw.revenue : (previous?.revenue ?? null),
+      status: 'ACTIVE',
+      tier: 'STANDARD',
+      tags: Array.isArray(raw.tags) ? raw.tags : (previous?.tags ?? []),
+      createdAt: '',
+      updatedAt: '',
     }),
     []
   );
@@ -187,8 +158,8 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         website: customer.website,
         email: customer.email,
         tier: customer.tier,
-        annualRevenue: customer.annualRevenue,
-        employeeCount: customer.employeeCount,
+        revenue: customer.revenue ?? undefined,
+        companySize: customer.companySize ?? '',
         tags: [...customer.tags],
       };
       validation.resetForm(initialData);
@@ -226,8 +197,8 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       };
 
       // Only add revenue if it's defined
-      if (data.annualRevenue !== undefined) {
-        payload.revenue = data.annualRevenue;
+      if (data.revenue !== undefined) {
+        payload.revenue = data.revenue;
       }
 
       // Note: employeeCount field removed as it doesn't exist in Customer schema
@@ -417,14 +388,14 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   <span>•</span>
                   <div className="space-y-1">
                     <FormField
-                      name="employeeCount"
+                      name="companySize"
                       label=""
-                      type="number"
-                      value={validation.formData.employeeCount}
-                      onChange={value => validation.handleFieldChange('employeeCount', value)}
-                      onBlur={() => validation.handleFieldBlur('employeeCount')}
-                      error={validation.getFieldError('employeeCount')}
-                      touched={validation.isFieldTouched('employeeCount')}
+                      type="text"
+                      value={validation.formData.companySize}
+                      onChange={value => validation.handleFieldChange('companySize', value)}
+                      onBlur={() => validation.handleFieldBlur('companySize')}
+                      error={validation.getFieldError('companySize')}
+                      touched={validation.isFieldTouched('companySize')}
                       className="w-20"
                       inputClassName="w-20 border-b bg-transparent focus:outline-none"
                       placeholder="0"
@@ -434,14 +405,14 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   <span>•</span>
                   <div className="space-y-1">
                     <FormField
-                      name="annualRevenue"
+                      name="revenue"
                       label=""
                       type="number"
-                      value={validation.formData.annualRevenue}
-                      onChange={value => validation.handleFieldChange('annualRevenue', value)}
-                      onBlur={() => validation.handleFieldBlur('annualRevenue')}
-                      error={validation.getFieldError('annualRevenue')}
-                      touched={validation.isFieldTouched('annualRevenue')}
+                      value={validation.formData.revenue}
+                      onChange={value => validation.handleFieldChange('revenue', value)}
+                      onBlur={() => validation.handleFieldBlur('revenue')}
+                      error={validation.getFieldError('revenue')}
+                      touched={validation.isFieldTouched('revenue')}
                       className="w-32"
                       inputClassName="w-32 border-b bg-transparent focus:outline-none"
                       placeholder="0"

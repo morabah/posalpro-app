@@ -1,0 +1,67 @@
+[
+  {
+    "id": "cmf2y890z00apt6f2f7h44knp",
+    "name": "Al Noor Technologies",
+    "email": null,
+    "industry": "Technology",
+    "status": "ACTIVE",
+    "tier": "ENTERPRISE",
+    "tags": [
+      "Technology"
+    ],
+    "createdAt": "2025-09-02T19:36:09.395Z",
+    "updatedAt": "2025-09-02T19:36:31.357Z"
+  },
+  {
+    "id": "cmf2y891600aut6f2tmxddv0v",
+    "name": "Al Quds Financial",
+    "email": null,
+    "industry": "Financial Services",
+    "status": "ACTIVE",
+    "tier": "ENTERPRISE",
+    "tags": [
+      "Financial Services"
+    ],
+    "createdAt": "2025-09-02T19:36:09.402Z",
+    "updatedAt": "2025-09-02T19:36:31.358Z"
+  },
+  {
+    "id": "cmf2y891700axt6f2bmbvyr5i",
+    "name": "Shifa Health Innovations",
+    "email": null,
+    "industry": "Healthcare",
+    "status": "ACTIVE",
+    "tier": "PREMIUM",
+    "tags": [
+      "Healthcare"
+    ],
+    "createdAt": "2025-09-02T19:36:09.404Z",
+    "updatedAt": "2025-09-02T19:36:09.404Z"
+  },
+  {
+    "id": "cmf2y891900b0t6f25iubk1ik",
+    "name": "Al Hadid Manufacturing",
+    "email": null,
+    "industry": "Manufacturing",
+    "status": "ACTIVE",
+    "tier": "STANDARD",
+    "tags": [
+      "Manufacturing"
+    ],
+    "createdAt": "2025-09-02T19:36:09.405Z",
+    "updatedAt": "2025-09-02T19:36:09.405Z"
+  },
+  {
+    "id": "cmf2y891a00b3t6f27yuq6tb5",
+    "name": "Al Ilm Education Systems",
+    "email": null,
+    "industry": "Education",
+    "status": "ACTIVE",
+    "tier": "STANDARD",
+    "tags": [
+      "Education"
+    ],
+    "createdAt": "2025-09-02T19:36:09.407Z",
+    "updatedAt": "2025-09-02T19:36:09.407Z"
+  }
+]

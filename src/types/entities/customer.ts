@@ -22,7 +22,7 @@ export enum CustomerTier {
 export interface Customer {
   id: string;
   name: string;
-  email?: string | null;
+  email: string;
   phone?: string | null;
   website?: string | null;
   address?: string | null;
@@ -109,7 +109,7 @@ export interface CustomerProfileMetrics {
 // Customer Form Types
 export interface CreateCustomerData {
   name: string;
-  email?: string;
+  email: string;
   phone?: string;
   website?: string;
   address?: string;
@@ -209,7 +209,7 @@ export interface CustomerValidationResult {
 export interface CustomerData {
   id: string;
   name: string;
-  email: string | null;
+  email: string;
   phone: string | null;
   status: CustomerStatus;
   tier: CustomerTier;
