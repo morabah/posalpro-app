@@ -16,8 +16,8 @@
 
  📋 AVAILABLE COMMANDS:
    - Authentication: login, login-as, use-session, whoami, logout
-   - Database: detect-db, db, health, export, import
-   - Monitoring: monitor, health
+   - Database: detect-db, db, health, health:db, export, import
+   - Monitoring: monitor, health, health:api
    - Data Management: generate test-data, export, import
    - Environment: env show, env list
    - Schema Validation: schema check, schema integrity, schema validate, schema detect-mismatch [component], schema test [command]
@@ -64,6 +64,8 @@
   npm run app:cli -- --command "schema test generate customers.CustomerCreateSchema" # generate test data from schema
    npm run app:cli -- --command "schema compare BasicInformationStep ProductCreateForm" # compare two components
    npm run app:cli -- --command "monitor health"           # system health check
+   npm run app:cli -- --command "health:db"                # quick database connectivity test
+   npm run app:cli -- --command "health:api"               # quick API health check
    npm run app:cli -- --command "login-as user@example.com password admin dev" # tagged login
    npm run app:cli -- --command "rbac try POST /api/customers admin"  # test RBAC
    npm run app:cli -- --command "export customers json --limit=10"    # export data
@@ -453,6 +455,10 @@ function printHelp() {
 🗄️ DATABASE OPERATIONS
   detect-db                                  # Auto-detect database connection details
   health                                     # System health monitoring dashboard
+  health:db                                  # Quick database connectivity test
+  health:api                                 # Quick API health check
+  jobs:drain                                 # Process background jobs from outbox
+  jobs:test                                  # Create sample jobs for testing
   db <model> <action> [json]                 # Direct Prisma operations
   export <model> [format] [options]          # Export data from database
   import <model> <file> [options]            # Import data to database
@@ -1367,6 +1373,53 @@ async function execute(tokens: string[], api: ApiClient) {
     }
     case 'health': {
       await handleHealth(api);
+      break;
+    }
+    case 'health:db': {
+      const startDb = Date.now();
+      await prisma.$queryRaw`SELECT 1`;
+      console.log(`DB ok (${Date.now() - startDb}ms)`);
+      break;
+    }
+    case 'health:api': {
+      const startApi = Date.now();
+      const r = await fetchOrig(`${(api as any).baseUrl}/api/health`);
+      console.log(`API ${r.status} (${Date.now() - startApi}ms)`);
+      break;
+    }
+    case 'jobs:drain': {
+      console.log('🚀 Starting outbox drain process...');
+      const startTime = Date.now();
+
+      // Import and run the drain script
+      const { execSync } = require('child_process');
+      try {
+        execSync('tsx scripts/outbox-drain.ts', {
+          stdio: 'inherit',
+          cwd: process.cwd(),
+        });
+        const duration = Date.now() - startTime;
+        console.log(`✅ Outbox drain completed in ${duration}ms`);
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        console.log(`❌ Outbox drain failed after ${duration}ms`);
+        console.error('Error:', error.message);
+      }
+      break;
+    }
+    case 'jobs:test': {
+      console.log('🧪 Creating sample outbox jobs...');
+
+      // Import and run the test script
+      const { execSync } = require('child_process');
+      try {
+        execSync('tsx scripts/test-outbox.ts', {
+          stdio: 'inherit',
+          cwd: process.cwd(),
+        });
+      } catch (error) {
+        console.error('❌ Failed to create test jobs:', error.message);
+      }
       break;
     }
     case 'export': {
@@ -2967,7 +3020,6 @@ async function runInteractiveSchemaTesting(api: ApiClient) {
 
     // Display results
     displaySchemaTestResults(results);
-
   } catch (error) {
     console.error('❌ Error in interactive schema testing:', error);
   }
@@ -2996,7 +3048,10 @@ async function loadAvailableSchemas(): Promise<Record<string, any>> {
 }
 
 // Test data generation from schema
-async function testSchemaDataGeneration(schemaName: string, schema: any): Promise<SchemaTestResult> {
+async function testSchemaDataGeneration(
+  schemaName: string,
+  schema: any
+): Promise<SchemaTestResult> {
   const startTime = Date.now();
 
   try {
@@ -3301,7 +3356,10 @@ function generateObjectValue(fieldName: string, def: any): any {
 }
 
 // Test schema transformations
-async function testSchemaTransformation(schemaName: string, schema: any): Promise<SchemaTestResult> {
+async function testSchemaTransformation(
+  schemaName: string,
+  schema: any
+): Promise<SchemaTestResult> {
   const startTime = Date.now();
 
   try {
@@ -3324,7 +3382,9 @@ async function testSchemaTransformation(schemaName: string, schema: any): Promis
           failures.push(`${transform.name}: ${result.error.message}`);
         }
       } catch (error) {
-        failures.push(`${transform.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        failures.push(
+          `${transform.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     }
 
@@ -3354,7 +3414,13 @@ async function testSchemaEdgeCases(schemaName: string, schema: any): Promise<Sch
   try {
     const edgeCases = [
       { name: 'Empty Object', data: {} },
-      { name: 'Null Values', data: Object.keys(schema._def?.shape || {}).reduce((acc, key) => ({ ...acc, [key]: null }), {}) },
+      {
+        name: 'Null Values',
+        data: Object.keys(schema._def?.shape || {}).reduce(
+          (acc, key) => ({ ...acc, [key]: null }),
+          {}
+        ),
+      },
       { name: 'Invalid Types', data: { invalidField: 'test' } },
     ];
 
@@ -3387,7 +3453,11 @@ async function testSchemaEdgeCases(schemaName: string, schema: any): Promise<Sch
 }
 
 // Test schema with real API data
-async function testSchemaWithApiData(schemaName: string, schema: any, api: ApiClient): Promise<SchemaTestResult | null> {
+async function testSchemaWithApiData(
+  schemaName: string,
+  schema: any,
+  api: ApiClient
+): Promise<SchemaTestResult | null> {
   const startTime = Date.now();
 
   try {
@@ -3453,13 +3523,16 @@ function displaySchemaTestResults(results: SchemaTestResult[]) {
   console.log('\n📊 ENHANCED ZOD SCHEMA TEST RESULTS');
   console.log('=====================================\n');
 
-  const groupedResults = results.reduce((acc, result) => {
-    if (!acc[result.schemaName]) {
-      acc[result.schemaName] = [];
-    }
-    acc[result.schemaName].push(result);
-    return acc;
-  }, {} as Record<string, SchemaTestResult[]>);
+  const groupedResults = results.reduce(
+    (acc, result) => {
+      if (!acc[result.schemaName]) {
+        acc[result.schemaName] = [];
+      }
+      acc[result.schemaName].push(result);
+      return acc;
+    },
+    {} as Record<string, SchemaTestResult[]>
+  );
 
   Object.entries(groupedResults).forEach(([schemaName, schemaResults]) => {
     console.log(`🔍 ${schemaName}:`);
@@ -3479,10 +3552,13 @@ function displaySchemaTestResults(results: SchemaTestResult[]) {
   });
 
   // Summary
-  const summary = results.reduce((acc, result) => {
-    acc[result.status.toLowerCase() as keyof typeof acc]++;
-    return acc;
-  }, { pass: 0, fail: 0, error: 0 });
+  const summary = results.reduce(
+    (acc, result) => {
+      acc[result.status.toLowerCase() as keyof typeof acc]++;
+      return acc;
+    },
+    { pass: 0, fail: 0, error: 0 }
+  );
 
   console.log('📈 SUMMARY:');
   console.log(`  ✅ Passed: ${summary.pass}`);
@@ -3525,7 +3601,6 @@ async function runSchemaDataGeneration(args: string[]) {
         console.log(`  • ${error.path.join('.')}: ${error.message}`);
       });
     }
-
   } catch (error) {
     console.error('❌ Error generating schema data:', error);
   }
@@ -3579,7 +3654,6 @@ async function runSchemaTransformationTesting(args: string[]) {
       const status = result.success === expected ? '✅' : '❌';
       console.log(`${status} ${name}: ${result.success ? 'PASS' : 'FAIL'}`);
     });
-
   } catch (error) {
     console.error('❌ Error testing schema transformations:', error);
   }
@@ -3647,7 +3721,6 @@ async function runSchemaCompatibilityTesting(api: ApiClient) {
           backend: backendValidation,
           details: !frontendValidation.success ? frontendValidation.error?.errors : undefined,
         });
-
       } catch (error) {
         compatibilityResults.push({
           schema: schemaName,
@@ -3660,7 +3733,8 @@ async function runSchemaCompatibilityTesting(api: ApiClient) {
     // Display results
     console.log('\n📊 COMPATIBILITY RESULTS:');
     compatibilityResults.forEach(result => {
-      const icon = result.status === 'COMPATIBLE' ? '✅' : result.status === 'INCOMPATIBLE' ? '❌' : '⚠️';
+      const icon =
+        result.status === 'COMPATIBLE' ? '✅' : result.status === 'INCOMPATIBLE' ? '❌' : '⚠️';
       console.log(`${icon} ${result.schema}: ${result.status}`);
 
       if (result.details) {
@@ -3670,7 +3744,6 @@ async function runSchemaCompatibilityTesting(api: ApiClient) {
         });
       }
     });
-
   } catch (error) {
     console.error('❌ Error testing schema compatibility:', error);
   }

@@ -45,8 +45,49 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      // Get user data (using working pattern from other routes)
-      const user = await prisma.user.findUnique({
+      // First check if user exists, create if not
+      let user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          department: true,
+          status: true,
+          lastLogin: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      // Auto-sync: Create user in database if authenticated but not found
+      if (!user) {
+        logger.info(`🔄 Auto-syncing authenticated user for profile: ${session.user.email}`);
+        user = await prisma.user.create({
+          data: {
+            email: session.user.email,
+            name: session.user.name || session.user.email?.split('@')[0] || 'User',
+            department: 'General',
+            status: 'ACTIVE',
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            department: true,
+            status: true,
+            lastLogin: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+        logger.info(
+          `✅ Created user in database for profile: ${user.name} (${session.user.email})`
+        );
+      }
+
+      // Get full user data including preferences and roles
+      const fullUser = await prisma.user.findUnique({
         where: { email: session.user.email },
         select: {
           id: true,
@@ -79,10 +120,10 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      if (!user) {
+      if (!fullUser) {
         return createApiErrorResponse(
           new StandardError({
-            message: 'User not found',
+            message: 'Failed to retrieve user data after sync',
             code: ErrorCodes.DATA.NOT_FOUND,
             metadata: {
               component: 'ProfileRoute',
@@ -90,32 +131,32 @@ export async function GET(request: NextRequest) {
               userEmail: session.user.email,
             },
           }),
-          'User not found',
+          'Failed to retrieve user data',
           ErrorCodes.DATA.NOT_FOUND,
           404,
-          { userFriendlyMessage: 'User account not found. Please log in again.' }
+          { userFriendlyMessage: 'Unable to load user data. Please try again.' }
         );
       }
 
       // Extract profile data from UserPreferences.dashboardLayout.profile if available
-      const storedProfile = (user.preferences?.dashboardLayout as any)?.profile || {};
+      const storedProfile = (fullUser.preferences?.dashboardLayout as any)?.profile || {};
 
       // Split name into first and last name (fallback pattern)
-      const nameParts = user.name.trim().split(' ');
+      const nameParts = fullUser.name.trim().split(' ');
       const defaultFirstName = nameParts[0] || '';
       const defaultLastName = nameParts.slice(1).join(' ') || '';
 
       // Combine data from User table and UserPreferences
       const profileData = {
         // Basic user data from User table
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        department: user.department,
-        status: user.status,
-        lastLogin: user.lastLogin?.toISOString(),
-        createdAt: user.createdAt.toISOString(),
-        updatedAt: user.updatedAt.toISOString(),
+        id: fullUser.id,
+        name: fullUser.name,
+        email: fullUser.email,
+        department: fullUser.department,
+        status: fullUser.status,
+        lastLogin: fullUser.lastLogin?.toISOString(),
+        createdAt: fullUser.createdAt.toISOString(),
+        updatedAt: fullUser.updatedAt.toISOString(),
 
         // Extended profile data from UserPreferences (with fallbacks)
         firstName: storedProfile.firstName || defaultFirstName,
@@ -130,7 +171,7 @@ export async function GET(request: NextRequest) {
 
         // User roles
         roles:
-          user.roles?.map((userRole: any) => ({
+          fullUser.roles?.map((userRole: any) => ({
             id: userRole.role.id,
             name: userRole.role.name,
             description: userRole.role.description,
@@ -143,17 +184,17 @@ export async function GET(request: NextRequest) {
           lastName: storedProfile.lastName || defaultLastName,
           title: storedProfile.title,
           phone: storedProfile.phone,
-          department: user.department,
+          department: fullUser.department,
           bio: storedProfile.bio,
           expertiseAreas: storedProfile.expertiseAreas,
         }),
 
         // Last updated timestamp
-        lastUpdated: storedProfile.lastUpdated || user.updatedAt.toISOString(),
+        lastUpdated: storedProfile.lastUpdated || fullUser.updatedAt.toISOString(),
       };
 
       logger.info('Profile retrieved for user: ' + session.user.email, {
-        userId: user.id,
+        userId: fullUser.id,
         profileCompleteness: profileData.profileCompleteness,
       });
 

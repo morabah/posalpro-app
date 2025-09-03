@@ -204,16 +204,20 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
               status: response.status,
             });
           } else {
-            console.error('🔍 DEBUG: Version snapshot creation failed', {
-              proposalId: proposalId,
+            logError('Version snapshot creation failed', new Error(`HTTP ${response.status}: ${response.statusText}`), {
+              component: 'EditProposalPage',
+              operation: 'versionSnapshot',
+              proposalId,
               status: response.status,
               statusText: response.statusText,
             });
           }
         } catch (versionError) {
           const isError = versionError instanceof Error;
-          console.error('🔍 DEBUG: Version snapshot creation failed', {
-            proposalId: proposalId,
+          logError('Version snapshot creation failed', isError ? versionError : new Error(String(versionError)), {
+            component: 'EditProposalPage',
+            operation: 'versionSnapshot',
+            proposalId,
             error: isError ? versionError.message : String(versionError),
           });
           // Don't fail the entire operation if version creation fails

@@ -14,7 +14,7 @@ model User {
   id                       String                           @id @default(cuid())
   email                    String                           @unique
   name                     String
-  password                 String
+  password                 String?
   department               String
   status                   UserStatus                       @default(ACTIVE)
   createdAt                DateTime                         @default(now())
@@ -23,7 +23,6 @@ model User {
   accessibilityConfig      AccessibilityConfiguration?
   approvalDecisions        ApprovalDecision[]
   approvalWorkflows        ApprovalWorkflow[]
-  auditLogs                AuditLog[]
   communicationPrefs       CommunicationPreferences?
   createdContent           Content[]
   contentAccessLogs        ContentAccessLog[]
@@ -49,8 +48,13 @@ model User {
   @@index([name])
   @@index([department])
   @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([lastLogin])
   @@index([department], map: "idx_users_department")
   @@index([status], map: "idx_users_status")
+  @@index([createdAt], map: "idx_users_created_at")
+  @@index([updatedAt], map: "idx_users_updated_at")
   @@map("users")
 }
 
@@ -70,6 +74,14 @@ model Role {
   children                Role[]           @relation("RoleHierarchy")
   userRoles               UserRole[]
 
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([parentId])
+  @@index([level])
+  @@index([isSystem])
+  @@index([createdAt], map: "idx_roles_created_at")
+  @@index([updatedAt], map: "idx_roles_updated_at")
+  @@index([parentId], map: "idx_roles_parent_id")
   @@map("roles")
 }
 
@@ -85,6 +97,13 @@ model Permission {
   userPermissions UserPermission[]
 
   @@unique([resource, action, scope])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([resource])
+  @@index([action])
+  @@index([scope])
+  @@index([createdAt], map: "idx_permissions_created_at")
+  @@index([updatedAt], map: "idx_permissions_updated_at")
   @@map("permissions")
 }
 
@@ -100,6 +119,15 @@ model UserRole {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([assignedBy])
+  @@index([assignedAt])
+  @@index([expiresAt])
+  @@index([isActive])
+  @@index([userId], map: "idx_user_roles_user_id")
+  @@index([roleId], map: "idx_user_roles_role_id")
+  @@index([assignedBy], map: "idx_user_roles_assigned_by")
   @@map("user_roles")
 }
 
@@ -219,26 +247,44 @@ model UserSession {
 }
 
 model AuditLog {
-  id           String        @id @default(cuid())
-  userId       String?
-  userRole     String?
-  action       String
-  entity       String
-  entityId     String
-  changes      Json
-  ipAddress    String
-  userAgent    String
-  success      Boolean
-  errorMessage String?
-  severity     AuditSeverity
-  category     AuditCategory
-  timestamp    DateTime      @default(now())
-  user         User?         @relation(fields: [userId], references: [id])
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  actorId  String?
+  model    String
+  action   String
+  targetId String?
+  diff     Json?
+  ip       String?
 
-  @@index([userId, timestamp])
-  @@index([entity, entityId])
-  @@index([timestamp, severity])
-  @@map("audit_logs")
+  @@index([model, action])
+  @@index([actorId, at])
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  label     String
+  keyHash   String   @unique
+  scopes    String[]
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  @@index([keyHash])
+  @@index([revoked])
+  @@index([createdAt])
+}
+
+model Idempotency {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  route     String
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  userId    String?
+
+  @@index([key])
+  @@index([route])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model SecurityEvent {
@@ -525,8 +571,17 @@ model Customer {
   @@index([cloudId])
   @@index([name])
   @@index([email])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([lastContact])
+  @@index([lastSyncedAt])
+  @@index([tier])
+  @@index([status])
   @@index([email], map: "idx_customers_email")
   @@index([industry], map: "idx_customers_industry")
+  @@index([createdAt], map: "idx_customers_created_at")
+  @@index([updatedAt], map: "idx_customers_updated_at")
+  @@index([lastContact], map: "idx_customers_last_contact")
   @@map("customers")
 }
 
@@ -545,6 +600,14 @@ model CustomerContact {
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, isPrimary])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([email])
+  @@index([isActive])
+  @@index([customerId], map: "idx_customer_contacts_customer_id")
+  @@index([createdAt], map: "idx_customer_contacts_created_at")
+  @@index([updatedAt], map: "idx_customer_contacts_updated_at")
   @@map("customer_contacts")
 }
 
@@ -598,8 +661,23 @@ model Proposal {
   @@index([customerId, status])
   @@index([createdBy])
   @@index([cloudId])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([submittedAt])
+  @@index([approvedAt])
+  @@index([dueDate])
+  @@index([validUntil])
+  @@index([lastActivityAt])
+  @@index([statsUpdatedAt])
+  @@index([customerId])
+  @@index([status])
+  @@index([priority])
+  @@index([projectType])
   @@index([createdBy], map: "idx_proposals_created_by")
   @@index([customerId, status], map: "idx_proposals_customer_status")
+  @@index([createdAt], map: "idx_proposals_created_at")
+  @@index([updatedAt], map: "idx_proposals_updated_at")
+  @@index([dueDate], map: "idx_proposals_due_date")
   @@map("proposals")
 }
 
@@ -694,6 +772,12 @@ model Product {
   @@index([sku])
   @@index([category], type: Gin)
   @@index([tags], type: Gin)
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([status])
+  @@index([currency])
+  @@index([createdAt], map: "idx_products_created_at")
+  @@index([updatedAt], map: "idx_products_updated_at")
   @@map("products")
 }
 
@@ -802,6 +886,16 @@ model Content {
   @@index([tags])
   @@index([category])
   @@index([cloudId])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([createdBy])
+  @@index([lastSyncedAt])
+  @@index([isActive])
+  @@index([isPublic])
+  @@index([type])
+  @@index([createdBy], map: "idx_content_created_by")
+  @@index([createdAt], map: "idx_content_created_at")
+  @@index([updatedAt], map: "idx_content_updated_at")
   @@index([category], map: "idx_content_category")
   @@map("content")
 }
@@ -1273,4 +1367,19 @@ enum EntityType {
   PROPOSAL_SECTION
   PROPOSAL_PRODUCT
   PRODUCT_RELATIONSHIP
+}
+
+model Outbox {
+  id        String   @id @default(cuid())
+  type      String
+  payload   Json
+  status    String   @default("pending")  // pending, processing, done, error
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attempts  Int      @default(0)
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([type])
+  @@index([status, createdAt])
 }

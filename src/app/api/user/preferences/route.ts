@@ -29,17 +29,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // First check if user exists
-    const user = await prisma.user.findUnique({
+    // First check if user exists, create if not
+    let user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
+    // Auto-sync: Create user in database if authenticated but not found
     if (!user) {
-      return NextResponse.json(
-        { code: ErrorCodes.DATA.NOT_FOUND, message: 'User not found' },
-        { status: 404 }
-      );
+      console.log(`🔄 Auto-syncing authenticated user: ${session.user.email}`);
+      user = await prisma.user.create({
+        data: {
+          email: session.user.email,
+          name: session.user.name || session.user.email?.split('@')[0] || 'User',
+          department: 'General',
+          status: 'ACTIVE',
+        },
+        select: { id: true, name: true },
+      });
+      console.log(`✅ Created user in database: ${user.name} (${session.user.email})`);
     }
 
     // Get user preferences using Prisma transaction (UserPreferences relation)
@@ -110,17 +118,25 @@ export async function PUT(request: NextRequest) {
 
     const newPreferences = validation.data;
 
-    // First check if user exists
-    const user = await prisma.user.findUnique({
+    // First check if user exists, create if not
+    let user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
+    // Auto-sync: Create user in database if authenticated but not found
     if (!user) {
-      return NextResponse.json(
-        { code: ErrorCodes.DATA.NOT_FOUND, message: 'User not found' },
-        { status: 404 }
-      );
+      console.log(`🔄 Auto-syncing authenticated user: ${session.user.email}`);
+      user = await prisma.user.create({
+        data: {
+          email: session.user.email,
+          name: session.user.name || session.user.email?.split('@')[0] || 'User',
+          department: 'General',
+          status: 'ACTIVE',
+        },
+        select: { id: true, name: true },
+      });
+      console.log(`✅ Created user in database: ${user.name} (${session.user.email})`);
     }
 
     // Update user preferences using Prisma transaction (UserPreferences relation)

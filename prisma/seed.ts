@@ -190,195 +190,204 @@ async function main() {
     // Top-up PROPOSALS to at least 50 with realistic fields and relationships
     const TARGET_PROPOSALS = 50;
     const currentProposals = await prisma.proposal.count();
+    const currentCustomers = await prisma.customer.count();
+
     if (currentProposals < TARGET_PROPOSALS) {
-      console.log(
-        `📋 Proposals low (${currentProposals}) — generating up to ${TARGET_PROPOSALS}...`
-      );
-
-      // Resolve helper maps
-      const customers = await prisma.customer.findMany({
-        select: { id: true, name: true, industry: true },
-      });
-      const products = await prisma.product.findMany({
-        select: { id: true, name: true, price: true },
-      });
-      const users = await prisma.user.findMany({ select: { id: true, email: true } });
-
-      const emailToId = new Map(users.map(u => [u.email, u.id] as const));
-
-      const pickUserId = (emails: string[]) => {
-        const choices = emails.map(e => emailToId.get(e)).filter(Boolean) as string[];
-        return choices.length ? pick(choices) : users.length ? pick(users).id : undefined;
-      };
-
-      const toCreate = TARGET_PROPOSALS - currentProposals;
-      for (let i = 0; i < toCreate; i++) {
-        const customer = pick(customers);
-        const creatorId = pick(users).id;
-        // Spread dates across past and future to create overdue and upcoming
-        const dueDate = new Date(Date.now() + randomInt(-60, 120) * 24 * 60 * 60 * 1000);
-        const rfp = `RFP-${new Date().getFullYear()}-${String(currentProposals + i + 1).padStart(3, '0')}`;
-        const selectedProducts = Array.from({ length: randomInt(1, 3) }, () => pick(products));
-        const value = selectedProducts.reduce(
-          (sum, p) => sum + Number(p.price) * randomInt(1, 3),
-          0
+      if (currentCustomers === 0) {
+        console.log('⚠️ No customers found, skipping proposal creation for now');
+        console.log('💡 Run full seed (npm run db:reset) or ensure customers exist first');
+      } else {
+        console.log(
+          `📋 Proposals low (${currentProposals}) — generating up to ${TARGET_PROPOSALS}...`
         );
 
-        const teamLead = pickUserId(['pm1@posalpro.com', 'pm2@posalpro.com']);
-        const salesRep = pickUserId(['pm2@posalpro.com', 'pm1@posalpro.com']);
-        const sme = pickUserId(['sme1@posalpro.com', 'sme2@posalpro.com', 'sme3@posalpro.com']);
+        // Resolve helper maps
+        const customers = await prisma.customer.findMany({
+          select: { id: true, name: true, industry: true },
+        });
+        const products = await prisma.product.findMany({
+          select: { id: true, name: true, price: true },
+        });
+        const users = await prisma.user.findMany({ select: { id: true, email: true } });
 
-        const status = pick([
-          ProposalStatus.DRAFT,
-          ProposalStatus.IN_REVIEW,
-          ProposalStatus.PENDING_APPROVAL,
-          ProposalStatus.APPROVED,
-          ProposalStatus.SUBMITTED,
-          ProposalStatus.ACCEPTED,
-          ProposalStatus.DECLINED,
-        ]);
+        const emailToId = new Map(users.map(u => [u.email, u.id] as const));
 
-        const submittedAt =
-          status === ProposalStatus.SUBMITTED ||
-          status === ProposalStatus.ACCEPTED ||
-          status === ProposalStatus.DECLINED
-            ? new Date(Date.now() - randomInt(2, 30) * 24 * 60 * 60 * 1000)
-            : undefined;
-        const approvedAt =
-          status === ProposalStatus.APPROVED || status === ProposalStatus.ACCEPTED
-            ? new Date(Date.now() - randomInt(1, 10) * 24 * 60 * 60 * 1000)
-            : undefined;
+        const pickUserId = (emails: string[]) => {
+          const choices = emails.map(e => emailToId.get(e)).filter(Boolean) as string[];
+          return choices.length ? pick(choices) : users.length ? pick(users).id : undefined;
+        };
 
-        const newProposal = await prisma.proposal.create({
-          data: {
-            title: `${pick(['Cloud', 'Analytics', 'Security', 'IoT', 'Data'])} ${pick([
-              'Transformation',
-              'Implementation',
-              'Optimization',
-              'Migration',
-              'Modernization',
-            ])} for ${customer.name}`,
-            description: 'Auto-generated realistic project with full metadata and assignments.',
-            status,
-            priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
-            customerId: customer.id,
-            createdBy: creatorId,
-            dueDate,
-            submittedAt,
-            approvedAt,
-            // Store RFP only in metadata wizardData to match current schema
-            metadata: toPrismaJson({
-              wizardData: {
-                step1: {
-                  client: {
-                    name: customer.name,
-                    industry: customer.industry,
-                    contactPerson: 'Primary Contact',
-                    contactEmail: 'contact@example.com',
-                    contactPhone: '+1-555-0000',
+        const toCreate = TARGET_PROPOSALS - currentProposals;
+        for (let i = 0; i < toCreate; i++) {
+          const customer = pick(customers);
+          const creatorId = pick(users).id;
+          // Spread dates across past and future to create overdue and upcoming
+          const dueDate = new Date(Date.now() + randomInt(-60, 120) * 24 * 60 * 60 * 1000);
+          const rfp = `RFP-${new Date().getFullYear()}-${String(currentProposals + i + 1).padStart(3, '0')}`;
+          const selectedProducts = Array.from({ length: randomInt(1, 3) }, () => pick(products));
+          const value = selectedProducts.reduce(
+            (sum, p) => sum + Number(p.price) * randomInt(1, 3),
+            0
+          );
+
+          const teamLead = pickUserId(['pm1@posalpro.com', 'pm2@posalpro.com']);
+          const salesRep = pickUserId(['pm2@posalpro.com', 'pm1@posalpro.com']);
+          const sme = pickUserId(['sme1@posalpro.com', 'sme2@posalpro.com', 'sme3@posalpro.com']);
+
+          const status = pick([
+            ProposalStatus.DRAFT,
+            ProposalStatus.IN_REVIEW,
+            ProposalStatus.PENDING_APPROVAL,
+            ProposalStatus.APPROVED,
+            ProposalStatus.SUBMITTED,
+            ProposalStatus.ACCEPTED,
+            ProposalStatus.DECLINED,
+          ]);
+
+          const submittedAt =
+            status === ProposalStatus.SUBMITTED ||
+            status === ProposalStatus.ACCEPTED ||
+            status === ProposalStatus.DECLINED
+              ? new Date(Date.now() - randomInt(2, 30) * 24 * 60 * 60 * 1000)
+              : undefined;
+          const approvedAt =
+            status === ProposalStatus.APPROVED || status === ProposalStatus.ACCEPTED
+              ? new Date(Date.now() - randomInt(1, 10) * 24 * 60 * 60 * 1000)
+              : undefined;
+
+          const newProposal = await prisma.proposal.create({
+            data: {
+              title: `${pick(['Cloud', 'Analytics', 'Security', 'IoT', 'Data'])} ${pick([
+                'Transformation',
+                'Implementation',
+                'Optimization',
+                'Migration',
+                'Modernization',
+              ])} for ${customer?.name || 'Unknown Customer'}`,
+              description: 'Auto-generated realistic project with full metadata and assignments.',
+              status,
+              priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
+              customerId: customer?.id || 'unknown-customer',
+              createdBy: creatorId,
+              dueDate,
+              submittedAt,
+              approvedAt,
+              // Store RFP only in metadata wizardData to match current schema
+              metadata: toPrismaJson({
+                wizardData: {
+                  step1: {
+                    client: {
+                      name: customer?.name || 'Unknown Customer',
+                      industry: customer?.industry || 'Technology',
+                      contactPerson: 'Primary Contact',
+                      contactEmail: 'contact@example.com',
+                      contactPhone: '+1-555-0000',
+                    },
+                    details: {
+                      title: 'Auto Generated Proposal',
+                      rfpReferenceNumber: rfp,
+                      dueDate,
+                      estimatedValue: value,
+                      priority: 'MEDIUM',
+                      description: 'Generated by seed for realistic testing',
+                    },
                   },
-                  details: {
-                    title: 'Auto Generated Proposal',
-                    rfpReferenceNumber: rfp,
-                    dueDate,
-                    estimatedValue: value,
-                    priority: 'MEDIUM',
-                    description: 'Generated by seed for realistic testing',
+                  step2: {
+                    teamLead,
+                    salesRepresentative: salesRep,
+                    subjectMatterExperts: { TECHNICAL: sme },
+                  },
+                  step3: { selectedContent: [] },
+                  step4: { products: selectedProducts.map(p => p.id) },
+                  step5: {
+                    sections: [
+                      { id: '1', title: 'Executive Summary', required: true, estimatedHours: 6 },
+                      {
+                        id: '2',
+                        title: 'Understanding & Requirements',
+                        required: true,
+                        estimatedHours: 10,
+                      },
+                      { id: '3', title: 'Technical Approach', required: true, estimatedHours: 18 },
+                      { id: '4', title: 'Implementation Plan', required: true, estimatedHours: 14 },
+                      {
+                        id: '5',
+                        title: 'Pricing & Commercial Terms',
+                        required: true,
+                        estimatedHours: 10,
+                      },
+                    ],
+                    sectionAssignments: {
+                      'Executive Summary': teamLead,
+                      'Technical Approach': sme,
+                      'Pricing & Commercial Terms': salesRep,
+                    },
                   },
                 },
-                step2: {
+                teamAssignments: {
                   teamLead,
                   salesRepresentative: salesRep,
                   subjectMatterExperts: { TECHNICAL: sme },
                 },
-                step3: { selectedContent: [] },
-                step4: { products: selectedProducts.map(p => p.id) },
-                step5: {
-                  sections: [
-                    { id: '1', title: 'Executive Summary', required: true, estimatedHours: 6 },
-                    {
-                      id: '2',
-                      title: 'Understanding & Requirements',
-                      required: true,
-                      estimatedHours: 10,
-                    },
-                    { id: '3', title: 'Technical Approach', required: true, estimatedHours: 18 },
-                    { id: '4', title: 'Implementation Plan', required: true, estimatedHours: 14 },
-                    {
-                      id: '5',
-                      title: 'Pricing & Commercial Terms',
-                      required: true,
-                      estimatedHours: 10,
-                    },
-                  ],
-                  sectionAssignments: {
-                    'Executive Summary': teamLead,
-                    'Technical Approach': sme,
-                    'Pricing & Commercial Terms': salesRep,
-                  },
-                },
+              }),
+              value,
+              currency: 'USD',
+              tags: ['auto', 'seed', 'demo'],
+              creatorEmail: pick(users).email,
+              customerName: customer?.name || 'Unknown Customer',
+              assignedTo: {
+                connect: [teamLead, salesRep, sme].filter(Boolean).map(id => ({ id })),
               },
-              teamAssignments: {
-                teamLead,
-                salesRepresentative: salesRep,
-                subjectMatterExperts: { TECHNICAL: sme },
-              },
-            }),
-            value,
-            currency: 'USD',
-            tags: ['auto', 'seed', 'demo'],
-            creatorEmail: pick(users).email,
-            customerName: customer.name,
-            assignedTo: { connect: [teamLead, salesRep, sme].filter(Boolean).map(id => ({ id })) },
-          },
-        });
-
-        // Link products
-        for (const prod of selectedProducts) {
-          await prisma.proposalProduct.create({
-            data: {
-              proposalId: newProposal.id,
-              productId: prod.id,
-              quantity: randomInt(1, 3),
-              unitPrice: prod.price,
-              total: prod.price,
             },
           });
-        }
 
-        // Add sections
-        const secDefs: { title: string; type: SectionType; order: number }[] = [
-          { title: 'Executive Summary', type: SectionType.TEXT, order: 1 },
-          { title: 'Technical Requirements', type: SectionType.TEXT, order: 2 },
-          { title: 'Product Configuration', type: SectionType.PRODUCTS, order: 3 },
-          { title: 'Implementation Plan', type: SectionType.TEXT, order: 4 },
-          { title: 'Pricing and Terms', type: SectionType.PRICING, order: 5 },
-        ];
-        for (const s of secDefs) {
-          await prisma.proposalSection.create({
-            data: {
-              proposalId: newProposal.id,
-              title: s.title,
-              content: `${s.title} details for ${newProposal.title}`,
-              type: s.type,
-              order: s.order,
-            },
+          // Link products
+          for (const prod of selectedProducts) {
+            await prisma.proposalProduct.create({
+              data: {
+                proposalId: newProposal.id,
+                productId: prod.id,
+                quantity: randomInt(1, 3),
+                unitPrice: prod.price,
+                total: prod.price,
+              },
+            });
+          }
+
+          // Add sections
+          const secDefs: { title: string; type: SectionType; order: number }[] = [
+            { title: 'Executive Summary', type: SectionType.TEXT, order: 1 },
+            { title: 'Technical Requirements', type: SectionType.TEXT, order: 2 },
+            { title: 'Product Configuration', type: SectionType.PRODUCTS, order: 3 },
+            { title: 'Implementation Plan', type: SectionType.TEXT, order: 4 },
+            { title: 'Pricing and Terms', type: SectionType.PRICING, order: 5 },
+          ];
+          for (const s of secDefs) {
+            await prisma.proposalSection.create({
+              data: {
+                proposalId: newProposal.id,
+                title: s.title,
+                content: `${s.title} details for ${newProposal.title}`,
+                type: s.type,
+                order: s.order,
+              },
+            });
+          }
+
+          // Update counts
+          const productCount = await prisma.proposalProduct.count({
+            where: { proposalId: newProposal.id },
+          });
+          const sectionCount = await prisma.proposalSection.count({
+            where: { proposalId: newProposal.id },
+          });
+          await prisma.proposal.update({
+            where: { id: newProposal.id },
+            data: { productCount, sectionCount },
           });
         }
-
-        // Update counts
-        const productCount = await prisma.proposalProduct.count({
-          where: { proposalId: newProposal.id },
-        });
-        const sectionCount = await prisma.proposalSection.count({
-          where: { proposalId: newProposal.id },
-        });
-        await prisma.proposal.update({
-          where: { id: newProposal.id },
-          data: { productCount, sectionCount },
-        });
+        console.log('✅ Proposals topped up');
       }
-      console.log('✅ Proposals topped up');
     }
 
     // Backfill missing rfpReferenceNumber and counts for any existing proposals
@@ -659,11 +668,11 @@ async function main() {
           const value = selectedProducts.reduce((sum, p) => sum + Number(p.price), 0);
           await prisma.proposal.create({
             data: {
-              title: `Won Proposal ${i + 1} for ${customer.name}`,
+              title: `Won Proposal ${i + 1} for ${customer?.name || 'Unknown Customer'}`,
               description: 'Seeded accepted proposal for reporting metrics.',
               status: ProposalStatus.ACCEPTED,
               priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
-              customerId: customer.id,
+              customerId: customer?.id || 'unknown-customer',
               createdBy: creator.id,
               dueDate,
               submittedAt: new Date(Date.now() - (i + 10) * day),
@@ -672,7 +681,7 @@ async function main() {
               currency: 'USD',
               tags: ['won', 'seed'],
               creatorEmail: creator.email,
-              customerName: customer.name,
+              customerName: customer?.name || 'Unknown Customer',
               products: {
                 create: selectedProducts.map(p => ({
                   productId: p.id,
@@ -700,7 +709,7 @@ async function main() {
           const value = selectedProducts.reduce((sum, p) => sum + Number(p.price), 0);
           await prisma.proposal.create({
             data: {
-              title: `Overdue Proposal ${i + 1} for ${customer.name}`,
+              title: `Overdue Proposal ${i + 1} for ${customer?.name || 'Unknown Customer'}`,
               description: 'Seeded overdue proposal for reporting metrics.',
               status: pick([
                 ProposalStatus.DRAFT,
@@ -709,7 +718,7 @@ async function main() {
                 ProposalStatus.SUBMITTED,
               ]),
               priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
-              customerId: customer.id,
+              customerId: customer?.id || 'unknown-customer',
               createdBy: creator.id,
               dueDate,
               submittedAt: new Date(Date.now() - (i + 12) * day),
@@ -717,7 +726,7 @@ async function main() {
               currency: 'USD',
               tags: ['overdue', 'seed'],
               creatorEmail: creator.email,
-              customerName: customer.name,
+              customerName: customer?.name || 'Unknown Customer',
               products: {
                 create: selectedProducts.map(p => ({
                   productId: p.id,
@@ -768,6 +777,11 @@ async function main() {
           select: { id: true, name: true, price: true },
         });
         const users = await prisma.user.findMany({ select: { id: true, email: true } });
+
+        if (customers.length === 0) {
+          console.log('⚠️ No customers available for balanced status seeding');
+          return;
+        }
         const pick = <T>(arr: Array<T>): T => arr[Math.floor(Math.random() * arr.length)];
         const randomInt = (min: number, max: number) =>
           Math.floor(Math.random() * (max - min + 1)) + min;
@@ -783,17 +797,17 @@ async function main() {
             const dueDate = new Date(Date.now() + randomInt(-30, 60) * 24 * 60 * 60 * 1000);
             await prisma.proposal.create({
               data: {
-                title: `${String(entry.status)} Proposal for ${customer.name}`,
+                title: `${String(entry.status)} Proposal for ${customer?.name || 'Unknown Customer'}`,
                 description: 'Balanced status seed entry',
                 status: entry.status,
                 priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
-                customerId: customer.id,
+                customerId: customer?.id || 'unknown-customer',
                 createdBy: creator.id,
                 dueDate,
                 value,
                 currency: 'USD',
                 tags: ['seed', 'balanced'],
-                customerName: customer.name,
+                customerName: customer?.name || 'Unknown Customer',
                 creatorEmail: creator.email,
                 products: {
                   create: selectedProducts.map(p => ({
@@ -844,15 +858,15 @@ async function main() {
           if (customer && product && user) {
             await prisma.proposal.create({
               data: {
-                title: `Overdue ${String(pr)} Priority for ${customer.name}`,
+                title: `Overdue ${String(pr)} Priority for ${customer?.name || 'Unknown Customer'}`,
                 status: ProposalStatus.IN_REVIEW,
                 priority: pr,
-                customerId: customer.id,
+                customerId: customer?.id || 'unknown-customer',
                 createdBy: user.id,
                 dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
                 value: product.price,
                 currency: 'USD',
-                customerName: customer.name,
+                customerName: customer?.name || 'Unknown Customer',
                 creatorEmail: user.email,
                 products: {
                   create: [
@@ -895,15 +909,15 @@ async function main() {
           const value = selected.reduce((sum, p) => sum + Number(p.price), 0);
           const proposal = await prisma.proposal.create({
             data: {
-              title: `Bundle Combo ${i + 1} for ${customer.name}`,
+              title: `Bundle Combo ${i + 1} for ${customer?.name || 'Unknown Customer'}`,
               status: ProposalStatus.SUBMITTED,
               priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
-              customerId: customer.id,
+              customerId: customer?.id || 'unknown-customer',
               createdBy: user?.id || pick(await prisma.user.findMany({ select: { id: true } })).id,
               dueDate: new Date(Date.now() + (i + 10) * 24 * 60 * 60 * 1000),
               value,
               currency: 'USD',
-              customerName: customer.name,
+              customerName: customer?.name || 'Unknown Customer',
               creatorEmail: user?.email,
               assignedTo: user ? { connect: [{ id: user.id }] } : undefined,
             },
@@ -1526,6 +1540,39 @@ async function main() {
       status: 'ACTIVE',
       roleName: 'Proposal Manager',
     },
+    // Additional QA test users
+    {
+      email: 'qa.manager@posalpro.com',
+      name: 'QA Manager',
+      password: defaultPassword,
+      department: 'Quality Assurance',
+      status: 'ACTIVE',
+      roleName: 'Proposal Manager',
+    },
+    {
+      email: 'qa.sme@posalpro.com',
+      name: 'QA SME',
+      password: defaultPassword,
+      department: 'Quality Assurance',
+      status: 'ACTIVE',
+      roleName: 'SME',
+    },
+    {
+      email: 'qa.content@posalpro.com',
+      name: 'QA Content Manager',
+      password: defaultPassword,
+      department: 'Quality Assurance',
+      status: 'ACTIVE',
+      roleName: 'Content Manager',
+    },
+    {
+      email: 'qa.admin@posalpro.com',
+      name: 'QA Admin',
+      password: defaultPassword,
+      department: 'Quality Assurance',
+      status: 'ACTIVE',
+      roleName: 'System Administrator',
+    },
   ];
 
   const createdUsers: Record<string, any> = {};
@@ -1707,7 +1754,7 @@ async function main() {
     for (const contactData of customerData.contacts) {
       await prisma.customerContact.create({
         data: {
-          customerId: customer.id,
+          customerId: customer?.id || 'unknown-customer',
           name: contactData.name,
           email: contactData.email,
           phone: contactData.phone,
@@ -2209,6 +2256,14 @@ async function main() {
     const customer = createdCustomers[proposalData.customerName];
     const creator = createdUsers[proposalData.creatorEmail];
 
+    // Skip if customer or creator not found (defensive programming)
+    if (!customer || !creator) {
+      console.log(
+        `⚠️ Skipping proposal for ${proposalData.customerName} - customer/creator not found`
+      );
+      continue;
+    }
+
     // Resolve team user IDs
     const resolveUserId = (email?: string) => (email ? createdUsers[email]?.id : undefined);
     const teamLeadId = resolveUserId(proposalData.team?.teamLead);
@@ -2226,7 +2281,7 @@ async function main() {
         description: proposalData.description,
         status: proposalData.status,
         priority: proposalData.priority,
-        customerId: customer.id,
+        customerId: customer?.id || 'unknown-customer',
         createdBy: creator.id,
         dueDate: proposalData.dueDate,
         value: proposalData.value,
@@ -2521,8 +2576,16 @@ async function main() {
   console.log('\n🔗 Additional test accounts available with same password:');
   console.log('   - admin@posalpro.com (System Administrator)');
   console.log('   - pm1@posalpro.com (Proposal Manager)');
+  console.log('   - pm2@posalpro.com (Proposal Manager)');
   console.log('   - sme1@posalpro.com (Senior SME)');
+  console.log('   - sme2@posalpro.com (SME)');
+  console.log('   - sme3@posalpro.com (SME)');
   console.log('   - content1@posalpro.com (Content Manager)');
+  console.log('   - content2@posalpro.com (Content Manager)');
+  console.log('   - qa.manager@posalpro.com (QA Proposal Manager)');
+  console.log('   - qa.sme@posalpro.com (QA SME)');
+  console.log('   - qa.content@posalpro.com (QA Content Manager)');
+  console.log('   - qa.admin@posalpro.com (QA Administrator)');
 }
 
 main()

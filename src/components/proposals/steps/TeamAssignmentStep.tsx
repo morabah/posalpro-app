@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/Label';
 import { useApiClient } from '@/hooks/useApiClient';
 // useApiClient returns raw JSON; no ApiResponse wrapper here
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { logDebug } from '@/lib/logger';
+import { logDebug, logError } from '@/lib/logger';
 import { ProposalTeamData, useProposalActions } from '@/lib/store/proposalStore';
 import { User } from '@/services/userService';
 import { UserType } from '@/types';
@@ -114,8 +114,9 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
           });
           return usersArray;
         } else {
-          console.error('[DEBUG] Failed to load users - no users found in response');
-          console.error('[DEBUG] Response structure:', {
+          logError('Failed to load users - no users found in response', new Error('No users found in API response'), {
+            component: 'TeamAssignmentStep',
+            operation: 'loadUsers',
             hasResponse: !!response,
             hasData: !!response?.data,
             hasUsers: !!response?.data?.users,
@@ -125,7 +126,10 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
           throw new Error('No users found in API response');
         }
       } catch (error) {
-        console.error('[DEBUG] API call failed:', error);
+        logError('API call failed', error instanceof Error ? error : new Error(String(error)), {
+          component: 'TeamAssignmentStep',
+          operation: 'loadUsers',
+        });
         throw error;
       }
     },

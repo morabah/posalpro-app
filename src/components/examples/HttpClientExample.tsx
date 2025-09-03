@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { useHttpClient } from '@/hooks/useHttpClient';
 import { useCreateProduct, useDeleteProduct, useProducts } from '@/hooks/useProductsWithHttpClient';
-import { logDebug } from '@/lib/logger';
+import { logDebug, logError } from '@/lib/logger';
 import { useState } from 'react';
 
 export function HttpClientExample() {
@@ -55,7 +55,10 @@ export function HttpClientExample() {
       });
       console.log('POST response:', postResponse);
     } catch (error) {
-      console.error('Direct API call failed:', error);
+      logError('Direct API call failed', error instanceof Error ? error : new Error(String(error)), {
+        component: 'HttpClientExample',
+        operation: 'directApiCall',
+      });
     }
   };
 
@@ -76,7 +79,11 @@ export function HttpClientExample() {
 
       setNewProductName('');
     } catch (error) {
-      console.error('Failed to create product:', error);
+      logError('Failed to create product', error instanceof Error ? error : new Error(String(error)), {
+        component: 'HttpClientExample',
+        operation: 'createProduct',
+        productName: newProductName,
+      });
     }
   };
 
@@ -84,7 +91,11 @@ export function HttpClientExample() {
     try {
       await deleteProduct.mutateAsync(id);
     } catch (error) {
-      console.error('Failed to delete product:', error);
+      logError('Failed to delete product', error instanceof Error ? error : new Error(String(error)), {
+        component: 'HttpClientExample',
+        operation: 'deleteProduct',
+        productId: id,
+      });
     }
   };
 

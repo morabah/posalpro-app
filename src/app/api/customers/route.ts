@@ -6,18 +6,13 @@
 
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import { logInfo as structuredLogInfo } from '@/lib/log';
 import { logError, logInfo } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 import { CustomerStatus, CustomerTier, Prisma as PrismaClient } from '@prisma/client';
 
 // Import consolidated schemas from feature folder
-import {
-  CustomerCreateSchema,
-  CustomerListSchema,
-  CustomerQuerySchema,
-  CustomerSchema,
-  CustomerUpdateSchema,
-} from '@/features/customers';
+import { CustomerListSchema, CustomerQuerySchema, CustomerSchema } from '@/features/customers';
 
 // GET /api/customers - Retrieve customers with filtering and cursor pagination
 export const GET = createRoute(
@@ -146,113 +141,134 @@ export const GET = createRoute(
 
 // POST /api/customers - Create a new customer (Direct Next.js route for testing)
 export const POST = async (request: Request) => {
-    try {
-      console.log('🚀 CUSTOMER API ROUTE CALLED - Entry point reached');
+  try {
+    structuredLogInfo('Customer API route called', {
+      component: 'CustomerAPI',
+      operation: 'POST',
+      endpoint: '/api/customers',
+    });
 
-      const body = await request.json();
-      console.log('🔍 DEBUG: Raw body received:', JSON.stringify(body, null, 2));
+    const body = await request.json();
+    structuredLogInfo('Processing customer creation request', {
+      component: 'CustomerAPI',
+      operation: 'POST',
+      bodyKeys: Object.keys(body),
+    });
 
-      if (!body) {
-        throw new Error('Request body is missing or empty');
-      }
-
-      if (!body.name) {
-        throw new Error('Customer name is required');
-      }
-
-      logInfo('Creating customer', {
-        component: 'CustomerAPI',
-        operation: 'POST',
-        userId: 'anonymous',
-        customerName: body.name,
-      });
-
-      // Transform and prepare data for database insertion
-      const customerData = {
-        name: body.name,
-        email: body.email || null,
-        phone: body.phone || null,
-        website: body.website || null,
-        address: body.address || null,
-        industry: body.industry || null,
-        companySize: body.companySize || null,
-        revenue: body.revenue ? new PrismaClient.Decimal(body.revenue) : null,
-        status: body.status || 'ACTIVE',
-        tier: body.tier || 'STANDARD',
-        tags: body.tags || [],
-        metadata: body.metadata || null,
-        segmentation: body.segmentation || null,
-        riskScore: body.riskScore ? new PrismaClient.Decimal(body.riskScore) : null,
-        ltv: body.ltv ? new PrismaClient.Decimal(body.ltv) : null,
-        lastContact: body.lastContact || null,
-        cloudId: body.cloudId || null,
-        lastSyncedAt: body.lastSyncedAt || null,
-        syncStatus: body.syncStatus || null,
-      };
-
-      console.log('📝 Customer data prepared for database:', customerData);
-
-      const customer = await prisma.customer.create({
-        data: customerData,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          website: true,
-          address: true,
-          industry: true,
-          companySize: true,
-          revenue: true,
-          status: true,
-          tier: true,
-          tags: true,
-          metadata: true,
-          segmentation: true,
-          riskScore: true,
-          ltv: true,
-          createdAt: true,
-          updatedAt: true,
-          lastContact: true,
-          cloudId: true,
-          lastSyncedAt: true,
-          syncStatus: true,
-        },
-      });
-
-      console.log('✅ Customer created successfully:', customer);
-
-      logInfo('Customer created successfully', {
-        component: 'CustomerAPI',
-        operation: 'POST',
-        userId: 'anonymous',
-        customerId: customer.id,
-        customerName: customer.name,
-      });
-
-      // Validate response against schema
-      const validationResult = CustomerSchema.safeParse(customer);
-      if (!validationResult.success) {
-        logError('Customer schema validation failed after creation', validationResult.error, {
-          component: 'CustomerAPI',
-          operation: 'POST',
-          customerId: customer.id,
-        });
-      }
-
-      const responsePayload = { ok: true, data: validationResult.success ? validationResult.data : customer };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      logError('Failed to create customer', {
-        component: 'CustomerAPI',
-        operation: 'POST',
-        userId: 'anonymous',
-        customerName: body?.name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    if (!body) {
+      throw new Error('Request body is missing or empty');
     }
+
+    if (!body.name) {
+      throw new Error('Customer name is required');
+    }
+
+    logInfo('Creating customer', {
+      component: 'CustomerAPI',
+      operation: 'POST',
+      userId: 'anonymous',
+      customerName: body.name,
+    });
+
+    // Transform and prepare data for database insertion
+    const customerData = {
+      name: body.name,
+      email: body.email || null,
+      phone: body.phone || null,
+      website: body.website || null,
+      address: body.address || null,
+      industry: body.industry || null,
+      companySize: body.companySize || null,
+      revenue: body.revenue ? new PrismaClient.Decimal(body.revenue) : null,
+      status: body.status || 'ACTIVE',
+      tier: body.tier || 'STANDARD',
+      tags: body.tags || [],
+      metadata: body.metadata || null,
+      segmentation: body.segmentation || null,
+      riskScore: body.riskScore ? new PrismaClient.Decimal(body.riskScore) : null,
+      ltv: body.ltv ? new PrismaClient.Decimal(body.ltv) : null,
+      lastContact: body.lastContact || null,
+      cloudId: body.cloudId || null,
+      lastSyncedAt: body.lastSyncedAt || null,
+      syncStatus: body.syncStatus || null,
+    };
+
+    structuredLogInfo('Customer data prepared for database', {
+      component: 'CustomerAPI',
+      operation: 'POST',
+      customerName: customerData.name,
+      hasEmail: !!customerData.email,
+    });
+
+    const customer = await prisma.customer.create({
+      data: customerData,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        website: true,
+        address: true,
+        industry: true,
+        companySize: true,
+        revenue: true,
+        status: true,
+        tier: true,
+        tags: true,
+        metadata: true,
+        segmentation: true,
+        riskScore: true,
+        ltv: true,
+        createdAt: true,
+        updatedAt: true,
+        lastContact: true,
+        cloudId: true,
+        lastSyncedAt: true,
+        syncStatus: true,
+      },
+    });
+
+    structuredLogInfo('Customer created successfully', {
+      component: 'CustomerAPI',
+      operation: 'POST',
+      customerId: customer.id,
+      customerName: customer.name,
+    });
+
+    logInfo('Customer created successfully', {
+      component: 'CustomerAPI',
+      operation: 'POST',
+      userId: 'anonymous',
+      customerId: customer.id,
+      customerName: customer.name,
+    });
+
+    // Validate response against schema
+    const validationResult = CustomerSchema.safeParse(customer);
+    if (!validationResult.success) {
+      logError('Customer schema validation failed after creation', validationResult.error, {
+        component: 'CustomerAPI',
+        operation: 'POST',
+        customerId: customer.id,
+      });
+    }
+
+    const responsePayload = {
+      ok: true,
+      data: validationResult.success ? validationResult.data : customer,
+    };
+    return new Response(JSON.stringify(responsePayload), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    logError('Failed to create customer', {
+      component: 'CustomerAPI',
+      operation: 'POST',
+      userId: 'anonymous',
+      customerName: body?.name,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
+};

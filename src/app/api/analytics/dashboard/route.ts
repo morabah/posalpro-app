@@ -5,12 +5,13 @@
  */
 
 import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { assertApiKey } from '@/server/api/apiKeyGuard';
 import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { z } from 'zod';
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -60,6 +61,9 @@ export async function GET(request: NextRequest) {
   let session: Session | null = null;
 
   try {
+    // API Key protection for analytics data
+    await assertApiKey(request, 'analytics:read');
+
     await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     // Authentication check
     session = await getServerSession(authOptions);
@@ -172,26 +176,27 @@ async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | nul
       where.timestamp = { gte: dateFilter };
     }
 
-    const [totalEvents, avgImprovement, successfulEvents, hypothesisBreakdown] = await prisma.$transaction([
-      prisma.hypothesisValidationEvent.count({ where }),
-      prisma.hypothesisValidationEvent.aggregate({
-        where,
-        _avg: { performanceImprovement: true },
-      }),
-      prisma.hypothesisValidationEvent.count({
-        where: {
-          ...where,
-          performanceImprovement: { gt: 0 },
-        },
-      }),
-      prisma.hypothesisValidationEvent.groupBy({
-        by: ['hypothesis'],
-        where,
-        orderBy: { hypothesis: 'asc' },
-        _count: { _all: true },
-        _avg: { performanceImprovement: true },
-      }),
-    ]);
+    const [totalEvents, avgImprovement, successfulEvents, hypothesisBreakdown] =
+      await prisma.$transaction([
+        prisma.hypothesisValidationEvent.count({ where }),
+        prisma.hypothesisValidationEvent.aggregate({
+          where,
+          _avg: { performanceImprovement: true },
+        }),
+        prisma.hypothesisValidationEvent.count({
+          where: {
+            ...where,
+            performanceImprovement: { gt: 0 },
+          },
+        }),
+        prisma.hypothesisValidationEvent.groupBy({
+          by: ['hypothesis'],
+          where,
+          orderBy: { hypothesis: 'asc' },
+          _count: { _all: true },
+          _avg: { performanceImprovement: true },
+        }),
+      ]);
 
     return {
       totalEvents,

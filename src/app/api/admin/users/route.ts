@@ -337,8 +337,11 @@ export const POST = createRoute(
       );
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(userData.password, 12);
+    // Hash password if provided (optional for OAuth users)
+    let hashedPassword: string | undefined;
+    if (userData.password) {
+      hashedPassword = await bcrypt.hash(userData.password, 12);
+    }
 
     // Create user in database
     const newUser = await prisma.user.create({

@@ -83,7 +83,7 @@ interface AuthUserRecord {
   name: string;
   department: string;
   status: string;
-  password: string;
+  password: string | null;
   createdAt: Date;
   updatedAt: Date;
   lastLogin: Date | null;
@@ -93,7 +93,7 @@ interface AuthUserRecord {
 export interface CreateUserData {
   email: string;
   name: string;
-  password: string;
+  password?: string; // Optional for OAuth users
   department: string;
 }
 
@@ -110,7 +110,12 @@ export async function createUser(data: CreateUserData): Promise<UserWithoutPassw
     throw new Error('A user with this email already exists');
   }
 
-  const passwordHash = await hashPassword(data.password);
+  // Handle password for traditional vs OAuth users
+  let passwordHash: string | undefined;
+  if (data.password) {
+    passwordHash = await hashPassword(data.password);
+  }
+
   const created = await prisma.user.create({
     data: {
       email: data.email,

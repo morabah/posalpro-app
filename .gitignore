@@ -73,6 +73,9 @@ local_db/
 *.sqlite
 *.sqlite3
 
+# Database backups
+backups/
+
 # Additional development files
 .cache/
 .temp/

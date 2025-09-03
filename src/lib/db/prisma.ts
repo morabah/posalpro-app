@@ -22,14 +22,14 @@ declare global {
 const getDatabaseUrl = (): string => {
   // Check if we're in a Netlify environment (has NETLIFY env var)
   const isNetlify = process.env['NETLIFY'] === 'true';
-  
+
   // For Netlify deployment, prioritize NETLIFY_DATABASE_URL, then DATABASE_URL
   if (isNetlify) {
     const netlifyUrl = process.env['NETLIFY_DATABASE_URL'] as string | undefined;
     if (netlifyUrl) {
       return netlifyUrl;
     }
-    
+
     const fallbackUrl = process.env['DATABASE_URL'] as string | undefined;
     if (fallbackUrl) {
       return fallbackUrl;
@@ -152,5 +152,31 @@ if (!globalThis.prismaMiddlewareRegistered) {
       throw err;
     }
   });
+
+  // Audit logging middleware - lightweight write operation tracking
+  prisma.$use(async (params, next) => {
+    const write = ["create", "update", "delete", "upsert"];
+    const isWrite = write.includes(params.action.toLowerCase());
+
+    // Skip audit logging for AuditLog operations to prevent infinite recursion
+    const isAuditLogOperation = params.model?.toLowerCase() === 'auditlog';
+
+    const result = await next(params);
+    if (isWrite && !isAuditLogOperation) {
+      // Fire and forget - don't block the main operation
+      prisma.auditLog.create({
+        data: {
+          model: params.model ?? "Unknown",
+          action: params.action,
+          targetId: (result as any)?.id ?? null,
+          diff: { params: params.args },
+        }
+      }).catch(() => {
+        // Silently ignore audit log errors to not impact main flow
+      });
+    }
+    return result;
+  });
+
   globalThis.prismaMiddlewareRegistered = true;
 }

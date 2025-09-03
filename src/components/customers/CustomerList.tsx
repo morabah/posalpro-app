@@ -9,6 +9,7 @@ import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/features/customers/hooks';
 import { analytics } from '@/lib/analytics';
+import { logError } from '@/lib/logger';
 import {
   customerSelectors,
   CustomerSortBy,
@@ -43,7 +44,11 @@ function CustomerListHeader() {
           'H4'
         );
       } catch (error) {
-        console.error('Bulk delete failed:', error);
+        logError('Bulk delete failed', error instanceof Error ? error : new Error(String(error)), {
+          component: 'CustomerList',
+          operation: 'bulkDelete',
+          selectedIdsCount: selectedIds.length,
+        });
       }
     }
   }, [deleteBulk]);

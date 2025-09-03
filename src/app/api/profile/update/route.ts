@@ -121,28 +121,25 @@ export async function PUT(request: NextRequest) {
 
     // Update the user profile in the database using proper schema pattern
     try {
-      // First, get the user to check if they exist
-      const existingUser = await prisma.user.findUnique({
+      // First check if user exists, create if not
+      let existingUser = await prisma.user.findUnique({
         where: { email: session.user.email },
         include: { preferences: true },
       });
 
+      // Auto-sync: Create user in database if authenticated but not found
       if (!existingUser) {
-        return createApiErrorResponse(
-          new StandardError({
-            message: 'User not found',
-            code: ErrorCodes.DATA.NOT_FOUND,
-            metadata: {
-              component: 'ProfileUpdateRoute',
-              operation: 'updateProfile',
-              userEmail: session.user.email,
-            },
-          }),
-          'User not found',
-          ErrorCodes.DATA.NOT_FOUND,
-          404,
-          { userFriendlyMessage: 'User account not found. Please log in again.' }
-        );
+        logger.info(`🔄 Auto-syncing authenticated user for profile update: ${session.user.email}`);
+        existingUser = await prisma.user.create({
+          data: {
+            email: session.user.email,
+            name: session.user.name || session.user.email?.split('@')[0] || 'User',
+            department: 'General',
+            status: 'ACTIVE',
+          },
+          include: { preferences: true },
+        });
+        logger.info(`✅ Created user in database for profile update: ${existingUser.name} (${session.user.email})`);
       }
 
       // Use transaction to update both User and UserPreferences

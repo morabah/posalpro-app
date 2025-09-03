@@ -9,6 +9,21 @@ import { NextRequest, NextResponse } from 'next/server';
 // Compose security + RBAC + request id
 const securityMiddleware = createSecurityMiddleware();
 
+// Edge Runtime compatible UUID generation
+function generateUUID(): string {
+  // Use Web Crypto API if available, fallback to simple implementation
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  // Fallback UUID generation for Edge Runtime
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // Cheap session cookie check (no validation, just presence)
 function hasSessionCookie(req: NextRequest): boolean {
   return Boolean(
@@ -27,6 +42,12 @@ function hasBearerToken(req: NextRequest): boolean {
 const adminRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const ADMIN_RATE_LIMIT = 60; // requests per 60s per IP
 const ADMIN_RATE_WINDOW_MS = 60_000;
+
+// Basic token-bucket rate limiter for all API routes
+const ENABLE = process.env.RATE_LIMIT;
+const buckets = new Map<string, { tokens: number; ts: number }>();
+const WINDOW_MS = 60_000;
+const LIMIT = 100;
 
 function rateLimitAdmin(req: NextRequest): NextResponse | null {
   const { pathname } = req.nextUrl;
@@ -138,31 +159,59 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
 }
 
 export async function middleware(req: NextRequest) {
+  // Basic token-bucket rate limiting for API routes
+  if (ENABLE) {
+    const ip = (req.headers.get('x-forwarded-for') ?? '127.0.0.1').split(',')[0].trim();
+    const now = Date.now();
+    const b = buckets.get(ip) ?? { tokens: LIMIT, ts: now };
+    const refill = Math.floor((now - b.ts) / WINDOW_MS) * LIMIT;
+    const tokens = Math.min(LIMIT, b.tokens + Math.max(0, refill));
+    const nextB = { tokens: tokens - 1, ts: now };
+    buckets.set(ip, nextB);
+    if (nextB.tokens < 0) {
+      const res = new NextResponse('Too Many Requests', { status: 429 });
+      const rid = req.headers.get('x-request-id') ?? generateUUID();
+      res.headers.set('x-request-id', rid);
+      (globalThis as any).__requestId = rid;
+      return SecurityHeaders.applyToResponse(res);
+    }
+  }
+
+  // Request correlation - forward/emit x-request-id for traceability
+  const rid = req.headers.get('x-request-id') ?? generateUUID();
+  (globalThis as any).__requestId = rid;
+
   // Bypass for PWA/static assets to avoid unnecessary rate limiting (icons, SW, manifest)
   const p = req.nextUrl.pathname;
   if (p.startsWith('/icons/') || p === '/manifest.json' || p === '/sw.js' || p === '/favicon.ico') {
-    return SecurityHeaders.applyToResponse(NextResponse.next());
+    const res = NextResponse.next();
+    res.headers.set('x-request-id', rid);
+    return SecurityHeaders.applyToResponse(res);
   }
   // Security headers, rate limiting, audit logging
   const securityResult = await securityMiddleware(req);
   if (securityResult.status === 429) {
+    securityResult.headers.set('x-request-id', rid);
     return securityResult;
   }
 
   // Allow CSP reports without auth
   if (req.nextUrl.pathname.startsWith('/api/security/csp-report')) {
+    securityResult.headers.set('x-request-id', rid);
     return SecurityHeaders.applyToResponse(securityResult);
   }
 
   // Rate limit admin paths early
   const rateLimited = rateLimitAdmin(req);
   if (rateLimited) {
+    rateLimited.headers.set('x-request-id', rid);
     return SecurityHeaders.applyToResponse(rateLimited);
   }
 
   // Edge-level auth enforcement for admin routes
   const edgeAuthResult = await enforceEdgeAuth(req);
   if (edgeAuthResult) {
+    edgeAuthResult.headers.set('x-request-id', rid);
     return SecurityHeaders.applyToResponse(edgeAuthResult);
   }
 
@@ -170,20 +219,16 @@ export async function middleware(req: NextRequest) {
   const r = (enhancedRBACMiddleware as unknown as (req: NextRequest) => NextResponse)(req);
   if (r && r instanceof NextResponse) {
     // Apply security headers on RBAC response as well
+    r.headers.set('x-request-id', rid);
     return SecurityHeaders.applyToResponse(r);
   }
 
   // Fallback: attach request id and headers
-  const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
   const res = NextResponse.next();
-  res.headers.set('x-request-id', requestId);
+  res.headers.set('x-request-id', rid);
   return SecurityHeaders.applyToResponse(res);
 }
 
 export const config = {
-  matcher: [
-    '/((?!api/health|_next/static|_next/image|favicon.ico|icons/|manifest\.json|sw\.js).*)',
-    '/admin/:path*',
-    '/api/((?!auth|health).*)',
-  ],
+  matcher: ['/api/:path*'],
 };

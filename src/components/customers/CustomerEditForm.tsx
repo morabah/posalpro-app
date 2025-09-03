@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/forms/Input';
 import { useCustomer, useUpdateCustomer } from '@/features/customers/hooks';
 import { CustomerUpdate } from '@/features/customers/schemas';
 import { Customer } from '@/services/customerService';
+import { logError } from '@/lib/logger';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -77,7 +78,11 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
         // Navigate to customer detail page after successful update
         router.push(`/customers/${customerId}`);
       } catch (error) {
-        console.error('Failed to update customer:', error);
+        logError('Failed to update customer', error instanceof Error ? error : new Error(String(error)), {
+          component: 'CustomerEditForm',
+          operation: 'updateCustomer',
+          customerId,
+        });
       }
     },
     [customerId, formData, updateCustomer, router]

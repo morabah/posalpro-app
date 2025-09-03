@@ -2,6 +2,7 @@ import { createRoute } from '@/lib/api/route';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError } from '@/lib/logger';
+import { logWarn } from '@/lib/log';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { prisma } from '@/lib/prisma';
 import { DashboardStatsQuerySchema } from '@/features/dashboard/schemas';
@@ -142,7 +143,12 @@ export const GET = createRoute(
       [proposalMetrics, customerMetrics, revenueMetrics, timeMetrics, riskMetrics] = results;
     } catch (error) {
       // Use fallback data if queries timeout or fail
-      console.warn('Dashboard queries failed, using fallback data:', error);
+      logWarn('Dashboard queries failed, using fallback data', {
+        component: 'DashboardAPI',
+        operation: 'GET',
+        endpoint: '/api/dashboard/enhanced-stats',
+        error: error instanceof Error ? error.message : String(error)
+      });
       proposalMetrics = [fallbackData];
       customerMetrics = [fallbackData];
       revenueMetrics = [];

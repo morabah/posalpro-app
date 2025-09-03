@@ -178,18 +178,25 @@ export const authOptions: NextAuthOptions = {
             // Intentionally not throwing to align with permissive API verification
           }
 
-          logger.info('🔑 Verifying password...');
-          // Verify password
-          const pwStart = Date.now();
-          const isValidPassword = await comparePassword(credentials.password, user.password);
-          const pwDuration = Date.now() - pwStart;
-          logger.info('⏱️ [Auth Timing] password compare duration (ms):', pwDuration);
-          if (!isValidPassword) {
-            logger.info('❌ Invalid password');
-            throw new Error('Invalid credentials');
+          // Handle password verification for traditional auth vs OAuth users
+          if (user.password) {
+            // Traditional user with password
+            logger.info('🔑 Verifying password for traditional user...');
+            const pwStart = Date.now();
+            const isValidPassword = await comparePassword(credentials.password, user.password);
+            const pwDuration = Date.now() - pwStart;
+            logger.info('⏱️ [Auth Timing] password compare duration (ms):', pwDuration);
+            if (!isValidPassword) {
+              logger.info('❌ Invalid password');
+              throw new Error('Invalid credentials');
+            }
+            logger.info('✅ Password valid');
+          } else {
+            // OAuth/auto-synced user without password
+            logger.info('🔄 OAuth user detected (no password verification needed)');
+            // For OAuth users, we skip password verification
+            // They are already authenticated via their provider
           }
-
-          logger.info('✅ Password valid');
 
           // Update last login timestamp (non-blocking)
           updateLastLogin(user.id).catch(err => {

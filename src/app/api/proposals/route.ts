@@ -10,6 +10,7 @@
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import { assertIdempotent } from '@/server/api/idempotency';
 
 // Import consolidated schemas from feature folder
 import {
@@ -186,8 +187,14 @@ export const POST = createRoute(
     roles: ['admin', 'sales', 'manager', 'System Administrator', 'Administrator'],
     body: ProposalCreateSchema,
   },
-  async ({ body, user }) => {
+  async ({ body, user, req }) => {
     try {
+      // Add idempotency protection to prevent duplicate proposal creation
+      await assertIdempotent(req, '/api/proposals', {
+        userId: user.id, // Scope to specific user to prevent key conflicts
+        ttlMs: 24 * 60 * 60 * 1000, // 24 hours
+      });
+
       logInfo('Creating proposal', {
         component: 'ProposalAPI',
         operation: 'POST',
