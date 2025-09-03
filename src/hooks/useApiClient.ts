@@ -101,12 +101,39 @@ class ApiClientSingleton {
       if (!response.ok) {
         // Build actionable, user-friendly error for common auth cases
         const status = response.status;
+        // Handle both wrapped JSON and unwrapped string responses per CORE_REQUIREMENTS.md §464
         let parsed: unknown = null;
+        let rawTextResponse = '';
         try {
           parsed = (await response.clone().json()) as unknown;
         } catch {
-          // ignore parse errors
+          // If JSON parsing fails, try to get the raw text response (unwrapped format)
+          try {
+            rawTextResponse = await response.clone().text();
+          } catch {
+            // ignore parse errors
+          }
         }
+
+        // Helper function to extract error message from response (handles both wrapped and unwrapped)
+        const extractErrorMessage = (): string | undefined => {
+          // First try unwrapped string response (middleware format)
+          if (rawTextResponse) {
+            return rawTextResponse;
+          }
+
+          // Then try wrapped JSON response (API format)
+          if (parsed && typeof parsed === 'object') {
+            if ('error' in parsed && typeof (parsed as any).error === 'string') {
+              return (parsed as any).error;
+            }
+            if ('message' in parsed && typeof (parsed as any).message === 'string') {
+              return (parsed as any).message;
+            }
+          }
+
+          return undefined;
+        };
 
         const method = String(defaultOptions.method || 'GET');
         const baseMetadata = {
@@ -120,25 +147,13 @@ class ApiClientSingleton {
 
         if (status === 401 || status === 403) {
           const code = status === 401 ? ErrorCodes.AUTH.UNAUTHORIZED : ErrorCodes.AUTH.FORBIDDEN;
+          const errorMessage = extractErrorMessage() || `Access denied (${status})`;
           const std = new StandardError({
-            message:
-              (parsed &&
-              typeof parsed === 'object' &&
-              'error' in parsed &&
-              typeof (parsed as any).error === 'string'
-                ? (parsed as any).error
-                : undefined) || `Access denied (${status})`,
+            message: errorMessage,
             code,
             metadata: {
               ...baseMetadata,
-              serverMessage:
-                parsed && typeof parsed === 'object'
-                  ? typeof (parsed as any).error === 'string'
-                    ? (parsed as any).error
-                    : typeof (parsed as any).message === 'string'
-                      ? (parsed as any).message
-                      : undefined
-                  : undefined,
+              serverMessage: extractErrorMessage(),
             },
           });
           // Record and throw the standardized error so UIs can show friendly guidance
@@ -148,25 +163,13 @@ class ApiClientSingleton {
 
         // Handle 409 Conflict errors (duplicate entities)
         if (status === 409) {
+          const errorMessage = extractErrorMessage() || 'Resource already exists';
           const std = new StandardError({
-            message:
-              (parsed &&
-              typeof parsed === 'object' &&
-              'error' in parsed &&
-              typeof (parsed as any).error === 'string'
-                ? (parsed as any).error
-                : undefined) || 'Resource already exists',
+            message: errorMessage,
             code: ErrorCodes.VALIDATION.DUPLICATE_ENTITY,
             metadata: {
               ...baseMetadata,
-              serverMessage:
-                parsed && typeof parsed === 'object'
-                  ? typeof (parsed as any).error === 'string'
-                    ? (parsed as any).error
-                    : typeof (parsed as any).message === 'string'
-                      ? (parsed as any).message
-                      : undefined
-                  : undefined,
+              serverMessage: extractErrorMessage(),
             },
           });
           this.errorHandlingService.processError(std);
@@ -174,32 +177,42 @@ class ApiClientSingleton {
         }
 
         // Fallback for other HTTP errors
+        const errorMessage =
+          extractErrorMessage() || `API request failed: ${status} ${response.statusText}`;
         const std = new StandardError({
-          message:
-            (parsed &&
-            typeof parsed === 'object' &&
-            'error' in parsed &&
-            typeof (parsed as any).error === 'string'
-              ? (parsed as any).error
-              : undefined) || `API request failed: ${status} ${response.statusText}`,
+          message: errorMessage,
           code: ErrorCodes.API.NETWORK_ERROR,
           metadata: {
             ...baseMetadata,
-            serverMessage:
-              parsed && typeof parsed === 'object'
-                ? typeof (parsed as any).error === 'string'
-                  ? (parsed as any).error
-                  : typeof (parsed as any).message === 'string'
-                    ? (parsed as any).message
-                    : undefined
-                : undefined,
+            serverMessage: extractErrorMessage(),
           },
         });
         this.errorHandlingService.processError(std);
         throw std;
       }
 
-      const data = (await response.json()) as T;
+      // Handle both wrapped JSON and unwrapped string responses per CORE_REQUIREMENTS.md §464
+      let data: T;
+      const contentType = response.headers.get('content-type');
+
+      if (contentType?.includes('application/json')) {
+        data = (await response.json()) as T;
+      } else {
+        // Handle unwrapped string responses (middleware format)
+        const textResponse = await response.text();
+        // For error responses, throw the unwrapped string as an error
+        if (!response.ok) {
+          throw new Error(textResponse);
+        }
+        // For success responses, try to parse as JSON or return as string
+        try {
+          data = JSON.parse(textResponse) as T;
+        } catch {
+          // If it's not valid JSON, return as string (for simple string responses)
+          data = textResponse as unknown as T;
+        }
+      }
+
       return data;
     } catch (error) {
       // If it's already a StandardError, bubble up after logging

@@ -68,20 +68,20 @@ export class ProposalFunctionalTestOrchestrator {
     return results;
   }
 
-  // Authentication method with fallback to test mode
+  // Authentication method with enhanced fallback
   private async authenticate(): Promise<boolean> {
     try {
-      console.log('🔐 Attempting real authentication...');
+      console.log('🔐 Attempting enhanced authentication...');
       const loginSuccess = await this.api.login('admin@posalpro.com', 'ProposalPro2024!');
       if (loginSuccess) {
-        console.log('✅ Real authentication successful');
+        console.log('✅ Enhanced authentication successful');
         return true;
       } else {
-        console.log('⚠️ Real authentication failed, falling back to test mode...');
+        console.log('⚠️ Enhanced authentication failed, falling back to test mode...');
         return await this.testModeAuth();
       }
     } catch (error) {
-      console.log('⚠️ Real authentication error, falling back to test mode...');
+      console.log('⚠️ Enhanced authentication error, falling back to test mode...');
       return await this.testModeAuth();
     }
   }
@@ -89,17 +89,17 @@ export class ProposalFunctionalTestOrchestrator {
   // Test mode authentication for development testing
   private async testModeAuth(): Promise<boolean> {
     try {
-      console.log('🔧 Using test mode authentication bypass');
+      console.log('🔧 Using enhanced authentication bypass');
       const testAuthSuccess = await this.api.testModeAuth();
       if (testAuthSuccess) {
-        console.log('✅ Test mode authentication successful');
+        console.log('✅ Enhanced authentication bypass successful');
         return true;
       } else {
-        console.log('❌ Test mode authentication failed');
+        console.log('❌ Enhanced authentication bypass failed');
         return false;
       }
     } catch (error) {
-      console.log('❌ Test mode authentication error:', error);
+      console.log('❌ Enhanced authentication bypass error:', error);
       return false;
     }
   }
@@ -413,8 +413,7 @@ export class ProposalFunctionalTestOrchestrator {
 // CLI runner
 async function main() {
   const args = process.argv.slice(2);
-  const baseUrl =
-    args.find((arg, i) => args[i - 1] === '--base') || args[1] || 'http://localhost:3000';
+  const baseUrl = args[0] || 'http://localhost:3000';
 
   console.log(`🌐 Testing against: ${baseUrl}`);
 

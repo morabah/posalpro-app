@@ -61,16 +61,10 @@ export const CustomerSchema = z.object({
   id: z.string(),
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email format').nullable(),
-  phone: z.string().nullable(),
-  website: z.string().url().optional().or(z.literal('')).nullable(),
-  address: z.string().nullable(),
   industry: CustomerIndustrySchema.optional().nullable(),
-  companySize: CompanySizeSchema.optional().nullable(),
-  revenue: z.number().optional().nullable(),
   status: CustomerStatusSchema,
   tier: CustomerTierSchema.optional(),
   tags: z.array(z.string()).optional(),
-  metadata: z.any().nullable(),
   createdAt: z
     .union([z.string(), z.date()])
     .transform(val => (val instanceof Date ? val.toISOString() : val)),
@@ -88,16 +82,10 @@ export const CustomerCreateSchema = CustomerSchema.omit({
 export const CustomerUpdateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200).optional(),
   email: z.string().email('Invalid email format').optional(),
-  phone: z.string().max(20).optional(),
-  website: z.string().url().optional().or(z.literal('')).optional(),
-  address: z.string().max(500).optional(),
   industry: CustomerIndustrySchema.optional(),
-  companySize: CompanySizeSchema.optional(),
-  revenue: z.number().min(0).optional().nullable(),
   tier: CustomerTierSchema.optional(),
   status: CustomerStatusSchema.optional(),
   tags: z.array(z.string()).optional(),
-  metadata: z.any().optional(),
   segmentation: z.any().optional(),
   riskScore: z.number().min(0).max(100).optional().nullable(),
   ltv: z.number().min(0).optional().nullable(),
@@ -267,12 +255,11 @@ export const CustomerQuerySchema = z.object({
   search: z.string().trim().default(''),
   limit: z.coerce.number().min(1).max(100).default(20),
   cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'status', 'revenue']).default('createdAt'),
+  sortBy: z.enum(['createdAt', 'name', 'status']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   status: CustomerStatusSchema.optional(),
   tier: CustomerTierSchema.optional(),
   industry: CustomerIndustrySchema.optional(),
-  companySize: CompanySizeSchema.optional(),
 });
 
 export const CustomerSearchSchema = z.object({
@@ -283,7 +270,6 @@ export const CustomerSearchSchema = z.object({
       status: CustomerStatusSchema.optional(),
       tier: CustomerTierSchema.optional(),
       industry: CustomerIndustrySchema.optional(),
-      companySize: CompanySizeSchema.optional(),
       tags: z.array(z.string()).optional(),
     })
     .optional(),
@@ -375,7 +361,9 @@ export const CustomerProposalsQuerySchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  sortBy: z.enum(['title', 'createdAt', 'updatedAt', 'dueDate', 'value', 'status']).default('createdAt'),
+  sortBy: z
+    .enum(['title', 'createdAt', 'updatedAt', 'dueDate', 'value', 'status'])
+    .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   includeProducts: z.coerce.boolean().default(false),
   includeStatistics: z.coerce.boolean().default(true),

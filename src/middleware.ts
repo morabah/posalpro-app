@@ -1,8 +1,8 @@
 import enhancedRBACMiddleware from '@/lib/auth/enhancedMiddleware';
-import { createSecurityMiddleware, SecurityHeaders } from '@/lib/security/hardening';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
+import { createSecurityMiddleware, SecurityHeaders } from '@/lib/security/hardening';
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -50,13 +50,10 @@ function rateLimitAdmin(req: NextRequest): NextResponse | null {
   adminRateLimitMap.set(ip, bucket);
 
   if (bucket.count > ADMIN_RATE_LIMIT) {
-    return NextResponse.json(
-      { error: 'Too Many Requests', code: 'RATE_LIMITED' },
-      {
-        status: 429,
-        headers: { 'retry-after': Math.ceil((bucket.resetAt - now) / 1000).toString() },
-      }
-    );
+    return NextResponse.json('Rate limit exceeded', {
+      status: 429,
+      headers: { 'retry-after': Math.ceil((bucket.resetAt - now) / 1000).toString() },
+    });
   }
   return null;
 }
@@ -73,7 +70,7 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
     if (!hasToken) {
       // API paths → JSON 401; pages → redirect to login
       if (pathname.startsWith('/api/')) {
-        return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
+        return NextResponse.json('Authentication required', { status: 401 });
       }
 
       // Redirect pages to login
@@ -88,7 +85,7 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
       const token = await getToken({ req });
 
       if (!token) {
-        return NextResponse.json({ error: 'Unauthorized', code: 'TOKEN_INVALID' }, { status: 401 });
+        return NextResponse.json('Invalid authentication token', { status: 401 });
       }
 
       // Capability-based check preferred over raw role
@@ -116,10 +113,7 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
       }
 
       if (!(hasAdminCapability || hasAdminRole || endpointAuthorized)) {
-        return NextResponse.json(
-          { error: 'Forbidden', code: 'ADMIN_ACCESS_REQUIRED' },
-          { status: 403 }
-        );
+        return NextResponse.json('Admin access required', { status: 403 });
       }
     } catch (error) {
       // Use standardized error handling for middleware
@@ -136,10 +130,7 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
       });
       errorHandlingService.processError(standardError);
 
-      return NextResponse.json(
-        { error: 'Authentication failed', code: 'TOKEN_INVALID' },
-        { status: 401 }
-      );
+      return NextResponse.json('Authentication failed', { status: 401 });
     }
   }
 
@@ -149,12 +140,7 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
 export async function middleware(req: NextRequest) {
   // Bypass for PWA/static assets to avoid unnecessary rate limiting (icons, SW, manifest)
   const p = req.nextUrl.pathname;
-  if (
-    p.startsWith('/icons/') ||
-    p === '/manifest.json' ||
-    p === '/sw.js' ||
-    p === '/favicon.ico'
-  ) {
+  if (p.startsWith('/icons/') || p === '/manifest.json' || p === '/sw.js' || p === '/favicon.ico') {
     return SecurityHeaders.applyToResponse(NextResponse.next());
   }
   // Security headers, rate limiting, audit logging

@@ -91,7 +91,7 @@ export const GET = createRoute(
       const transformedProposal = {
         ...proposal,
         description: proposal.description || '',
-        metadata: proposal.metadata || {},
+        userStoryTracking: proposal.userStoryTracking || {},
         customer: proposal.customer
           ? {
               ...proposal.customer,
@@ -286,9 +286,9 @@ export const PUT = createRoute(
         updateData.dueDate = new Date(basicFields.dueDate);
       }
 
-      // ✅ FIXED: Save complex nested data to metadata field
+      // ✅ FIXED: Save complex nested data to userStoryTracking field
       if (teamData || contentData || productData || sectionData || reviewData || planType) {
-        updateData.metadata = {
+        updateData.userStoryTracking = {
           teamData,
           contentData,
           productData,
@@ -297,7 +297,7 @@ export const PUT = createRoute(
           submittedAt: new Date().toISOString(),
           wizardVersion: 'modern',
           planType,
-          // Store changesSummary in metadata for version snapshots
+          // Store changesSummary in userStoryTracking for version snapshots
           _changesSummary: changesSummary,
         };
 
@@ -310,13 +310,13 @@ export const PUT = createRoute(
         if (reviewData) changes.push('review details');
         if (planType) changes.push('proposal plan');
 
-        // ✅ ADDED: Debug logging to verify metadata is being set
-        logInfo('Setting metadata for proposal update', {
+        // ✅ ADDED: Debug logging to verify userStoryTracking is being set
+        logInfo('Setting userStoryTracking for proposal update', {
           component: 'ProposalAPI',
           operation: 'PUT',
           proposalId: id,
-          metadataKeys: Object.keys(updateData.metadata),
-          changesSummaryInMetadata: updateData.metadata._changesSummary,
+          userStoryTrackingKeys: Object.keys(updateData.userStoryTracking),
+          changesSummaryInUserStoryTracking: updateData.userStoryTracking._changesSummary,
           hasTeamData: !!teamData,
           hasContentData: !!contentData,
           hasProductData: !!productData,
@@ -334,8 +334,10 @@ export const PUT = createRoute(
         operation: 'PUT',
         proposalId: id,
         updateDataKeys: Object.keys(updateData),
-        hasMetadata: !!updateData.metadata,
-        metadataKeys: updateData.metadata ? Object.keys(updateData.metadata) : [],
+        hasUserStoryTracking: !!updateData.userStoryTracking,
+        userStoryTrackingKeys: updateData.userStoryTracking
+          ? Object.keys(updateData.userStoryTracking)
+          : [],
         userStory: 'US-3.2',
         hypothesis: 'H4',
       });
@@ -350,6 +352,9 @@ export const PUT = createRoute(
         userStory: 'US-3.2',
         hypothesis: 'H4',
       });
+
+      // Store update data for version creation
+      const capturedUpdateData = updateData;
 
       const proposal = await prisma.$transaction(
         async tx => {
@@ -711,8 +716,26 @@ export const PUT = createRoute(
                         order: true,
                       },
                     },
+                    creator: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                      },
+                    },
                   },
                 });
+
+                // Get user name for version creation
+                const userName = currentUserId
+                  ? currentProposal?.creator?.name ||
+                    (await tx.user
+                      .findUnique({
+                        where: { id: currentUserId },
+                        select: { name: true },
+                      })
+                      .then(user => user?.name || 'Unknown User'))
+                  : 'system';
 
                 if (currentProposal) {
                   // Get next version number
@@ -736,7 +759,7 @@ export const PUT = createRoute(
                     value: newTotalValue, // Use the newly calculated total
                     currency: currentProposal.currency,
                     customerId: currentProposal.customerId,
-                    metadata: currentProposal.metadata,
+                    userStoryTracking: currentProposal.userStoryTracking,
                     products: currentProposal.products,
                     sections: currentProposal.sections,
                     updatedAt: currentProposal.updatedAt,
@@ -746,7 +769,7 @@ export const PUT = createRoute(
                     changeType: 'update' as const,
                   };
 
-                  // Create version snapshot
+                  // Create version snapshot with enhanced data
                   await tx.proposalVersion.create({
                     data: {
                       proposalId: id,
@@ -754,7 +777,16 @@ export const PUT = createRoute(
                       createdBy: currentUserId || 'system',
                       changeType: 'update',
                       changesSummary: `Product catalog updated: ${createdCount} products modified, total value: ${formatCurrency(newTotalValue)}`,
-                      snapshot: snapshot as any,
+                      snapshot: {
+                        ...snapshot,
+                        createdByName: userName,
+                        totalValue: newTotalValue,
+                        changeDetails: {
+                          modifiedProducts: createdCount,
+                          totalValueChange: newTotalValue - (currentProposal.value || 0),
+                          updatedAt: new Date().toISOString(),
+                        },
+                      } as any,
                       productIds: currentProposal.products.map(p => p.productId),
                     },
                   });
@@ -926,11 +958,127 @@ export const PUT = createRoute(
         hypothesis: 'H4',
       });
 
+      // ✅ NEW: Create version snapshot for general field updates (not just product updates)
+      try {
+        // Get current proposal data for version snapshot
+        const currentProposal = await prisma.proposal.findUnique({
+          where: { id },
+          include: {
+            products: {
+              select: {
+                productId: true,
+                quantity: true,
+                unitPrice: true,
+                total: true,
+                configuration: true,
+              },
+            },
+            sections: {
+              select: {
+                id: true,
+                title: true,
+                content: true,
+                order: true,
+              },
+            },
+            creator: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        });
+
+        if (currentProposal) {
+          // Get user name for version creation
+          const userName = currentUserId
+            ? currentProposal.creator?.name ||
+              (await prisma.user
+                .findUnique({
+                  where: { id: currentUserId },
+                  select: { name: true },
+                })
+                .then(user => user?.name || 'Unknown User'))
+            : 'system';
+
+          // Get next version number
+          const lastVersion =
+            (
+              await prisma.proposalVersion.findFirst({
+                where: { proposalId: id },
+                orderBy: { version: 'desc' },
+                select: { version: true },
+              })
+            )?.version || 0;
+
+          const nextVersion = lastVersion + 1;
+
+          // Create comprehensive snapshot
+          const snapshot = {
+            id: currentProposal.id,
+            title: currentProposal.title,
+            status: currentProposal.status,
+            priority: currentProposal.priority,
+            value: currentProposal.value,
+            currency: currentProposal.currency,
+            customerId: currentProposal.customerId,
+            userStoryTracking: currentProposal.userStoryTracking,
+            products: currentProposal.products,
+            sections: currentProposal.sections,
+            updatedAt: currentProposal.updatedAt,
+            changeSummary: 'General proposal update',
+            changeType: 'update' as const,
+          };
+
+          // Create version snapshot with enhanced data
+          await prisma.proposalVersion.create({
+            data: {
+              proposalId: id,
+              version: nextVersion,
+              createdBy: currentUserId || 'system',
+              changeType: 'update',
+              changesSummary: `Proposal updated: ${Object.keys(capturedUpdateData || {}).join(', ')}`,
+              snapshot: {
+                ...snapshot,
+                createdByName: userName,
+                totalValue: currentProposal.value,
+                changeDetails: {
+                  updatedFields: Object.keys(capturedUpdateData || {}),
+                  updatedAt: new Date().toISOString(),
+                },
+              } as any,
+              productIds: currentProposal.products.map(p => p.productId),
+            },
+          });
+
+          logInfo('✅ Version snapshot created for general update', {
+            component: 'ProposalAPI',
+            operation: 'PUT',
+            proposalId: id,
+            version: nextVersion,
+            updatedFields: Object.keys(capturedUpdateData || {}),
+            userStory: 'US-5.1',
+            hypothesis: 'H8',
+          });
+        }
+      } catch (versionError) {
+        logError('Failed to create version snapshot', versionError as Error, {
+          component: 'ProposalAPI',
+          operation: 'PUT',
+          proposalId: id,
+          userStory: 'US-5.1',
+          hypothesis: 'H8',
+        });
+        // Don't fail the entire update if version creation fails
+      }
+
       // Transform null values to appropriate defaults before validation
       const transformedProposal = {
         ...proposal,
         description: proposal?.description || '',
-        metadata: proposal?.metadata || {},
+        userStoryTracking: proposal?.userStoryTracking || {},
         customer: proposal?.customer
           ? {
               ...proposal.customer,
@@ -1198,7 +1346,7 @@ export const PATCH = createRoute(
         value: updatedProposal.value,
         currency: updatedProposal.currency,
         customerId: updatedProposal.customerId,
-        metadata: updatedProposal.metadata,
+        userStoryTracking: updatedProposal.userStoryTracking,
         products: updatedProposal.products,
         sections: updatedProposal.sections,
         updatedAt: updatedProposal.updatedAt,
@@ -1212,7 +1360,8 @@ export const PATCH = createRoute(
           version: nextVersion,
           createdBy: user.id || 'system',
           changeType: 'update',
-          changesSummary: changesSummary || `Proposal updated: ${Object.keys(updateData).join(', ')}`,
+          changesSummary:
+            changesSummary || `Proposal updated: ${Object.keys(updateData).join(', ')}`,
           snapshot: snapshot as any,
           productIds: updatedProposal.products.map(p => p.productId),
         },
@@ -1233,7 +1382,7 @@ export const PATCH = createRoute(
       const transformedProposal = {
         ...updatedProposal,
         description: updatedProposal.description || '',
-        metadata: updatedProposal.metadata || {},
+        userStoryTracking: updatedProposal.userStoryTracking || {},
         customer: updatedProposal.customer
           ? {
               ...updatedProposal.customer,
@@ -1258,7 +1407,6 @@ export const PATCH = createRoute(
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,

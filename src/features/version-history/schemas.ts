@@ -48,6 +48,7 @@ export const VersionHistoryEntrySchema = z.object({
   createdAt: z.coerce.date(),
   snapshot: z.record(z.unknown()).optional(),
   productIds: z.array(databaseIdSchema).optional(),
+  changeDetails: z.record(z.unknown()).optional(),
 });
 
 // ====================

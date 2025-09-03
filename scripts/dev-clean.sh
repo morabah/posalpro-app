@@ -114,16 +114,19 @@ check_database() {
         if pg_ctl -D /opt/homebrew/var/postgresql@14 status >/dev/null 2>&1; then
             print_check "warn" "PostgreSQL running but service out of sync" "Process running, but brew services shows '$brew_status'"
 
-            # Offer to fix the sync issue
+            # Offer to fix the sync issue (5 second timeout)
             echo ""
-            echo -e "${YELLOW}Would you like to fix the PostgreSQL service synchronization now? (y/N)${NC}"
-            read -r fix_response
-            if [[ "$fix_response" =~ ^[Yy]$ ]]; then
-                if fix_postgres_sync; then
-                    # Re-run the check
-                    check_database
-                    return
+            echo -e "${YELLOW}Would you like to fix the PostgreSQL service synchronization now? (y/N) [5s timeout]${NC}"
+            if read -t 5 -r fix_response; then
+                if [[ "$fix_response" =~ ^[Yy]$ ]]; then
+                    if fix_postgres_sync; then
+                        # Re-run the check
+                        check_database
+                        return
+                    fi
                 fi
+            else
+                echo -e "${DIM}Timeout reached, continuing without fixing sync...${NC}"
             fi
         else
             print_check "fail" "PostgreSQL service is not running" "Run: brew services start postgresql@14"
@@ -424,25 +427,80 @@ display_health_summary() {
     echo ""
 }
 
-# Function to offer database seeding
+# Function to check schema consistency
+check_schema_consistency() {
+    print_header "🔍 Schema & Data Consistency"
+
+    # Check if database is healthy first
+    if [ $HEALTH_ISSUES -gt 0 ]; then
+        print_check "warn" "Skipping schema checks" "Database issues detected - fix database first"
+        return
+    fi
+
+    # Check if app-cli is available
+    if ! command -v npm &> /dev/null; then
+        print_check "warn" "Cannot run schema checks" "npm not available"
+        return
+    fi
+
+    # Run schema consistency check
+    echo -e "  ${INFO} ${BLUE}Running schema consistency validation...${NC}"
+
+    if npm run schema:check --silent 2>/dev/null | grep -q "NO INCONSISTENCIES FOUND"; then
+        print_check "pass" "Schema consistency verified" "All layers properly aligned"
+    else
+        print_check "warn" "Schema inconsistencies detected" "Run: npm run schema:all for details"
+    fi
+
+    # Run data integrity check
+    if npm run schema:integrity --silent 2>/dev/null | grep -q "ALL DATA INTEGRITY CHECKS PASSED"; then
+        print_check "pass" "Data integrity verified" "No orphaned records or constraint violations"
+    else
+        print_check "warn" "Data integrity issues detected" "Run: npm run schema:integrity for details"
+    fi
+
+    # Run Zod validation check
+    if npm run schema:validate --silent 2>/dev/null | grep -q "ALL ZOD VALIDATIONS PASSED"; then
+        print_check "pass" "Zod validation verified" "All schemas match live data"
+    else
+        print_check "warn" "Zod validation issues detected" "Run: npm run schema:validate for details"
+    fi
+}
+
+# Function to offer database seeding and schema testing
 offer_database_seeding() {
     if [ $WARNINGS_COUNT -gt 0 ]; then
         echo ""
-        echo -e "${YELLOW}Would you like to seed the database now? This will add sample users and data. (y/N)${NC}"
-        read -r seed_response
-        if [[ "$seed_response" =~ ^[Yy]$ ]]; then
-            echo -e "${INFO} ${BLUE}Seeding database...${NC}"
-            if npm run db:seed >/dev/null 2>&1; then
-                echo -e "${CHECK_MARK} ${GREEN}Database seeded successfully${NC}"
-                # Re-check user count
-                local user_count=$(psql -U mohamedrabah -d posalpro_mvp2 -t -c "SELECT count(*) FROM users;" 2>/dev/null | xargs)
-                if [ -n "$user_count" ] && [ "$user_count" -gt 0 ]; then
-                    echo -e "${CHECK_MARK} ${GREEN}Verified: $user_count users now available${NC}"
+        echo -e "${YELLOW}Would you like to seed the database now? This will add sample users and data. (y/N) [5s timeout]${NC}"
+        if read -t 5 -r seed_response; then
+            if [[ "$seed_response" =~ ^[Yy]$ ]]; then
+                echo -e "${INFO} ${BLUE}Seeding database...${NC}"
+                if npm run db:seed >/dev/null 2>&1; then
+                    echo -e "${CHECK_MARK} ${GREEN}Database seeded successfully${NC}"
+                    # Re-check user count
+                    local user_count=$(psql -U mohamedrabah -d posalpro_mvp2 -t -c "SELECT count(*) FROM users;" 2>/dev/null | xargs)
+                    if [ -n "$user_count" ] && [ "$user_count" -gt 0 ]; then
+                        echo -e "${CHECK_MARK} ${GREEN}Verified: $user_count users now available${NC}"
+                    fi
+                else
+                    echo -e "${CROSS_MARK} ${RED}Database seeding failed${NC}"
+                    echo -e "${DIM}You can run manually: npm run db:seed${NC}"
                 fi
-            else
-                echo -e "${CROSS_MARK} ${RED}Database seeding failed${NC}"
-                echo -e "${DIM}You can run manually: npm run db:seed${NC}"
             fi
+        else
+            echo -e "${DIM}Timeout reached, skipping database seeding...${NC}"
+        fi
+
+        # Offer schema testing (5 second timeout)
+        echo ""
+        echo -e "${YELLOW}Would you like to run comprehensive schema testing now? (y/N) [5s timeout]${NC}"
+        if read -t 5 -r schema_response; then
+            if [[ "$schema_response" =~ ^[Yy]$ ]]; then
+                echo -e "${INFO} ${BLUE}Running comprehensive schema tests...${NC}"
+                npm run schema:all
+            fi
+        else
+            echo -e "${DIM}Timeout reached, skipping schema testing...${NC}"
         fi
     fi
 }
@@ -469,6 +527,7 @@ main() {
     check_authentication
     check_connectivity
     check_offline_readiness
+    check_schema_consistency
 
     # Display preliminary summary
     display_health_summary
@@ -476,13 +535,17 @@ main() {
     # Offer database seeding if there are warnings
     offer_database_seeding
 
-    # If critical issues found, ask user to continue
+    # If critical issues found, ask user to continue (5 second timeout)
     if [ $HEALTH_ISSUES -gt 0 ]; then
-        echo -e "${YELLOW}Critical issues detected. Continue anyway? (y/N)${NC}"
-        read -r response
-        if [[ ! "$response" =~ ^[Yy]$ ]]; then
-            echo -e "${RED}Startup cancelled. Please fix the issues above.${NC}"
-            exit 1
+        echo -e "${YELLOW}Critical issues detected. Continue anyway? (y/N) [5s timeout]${NC}"
+        if read -t 5 -r response; then
+            if [[ ! "$response" =~ ^[Yy]$ ]]; then
+                echo -e "${RED}Startup cancelled. Please fix the issues above.${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${DIM}Timeout reached, continuing despite critical issues...${NC}"
+            echo -e "${DIM}Note: Server may not function properly with unresolved issues${NC}"
         fi
     fi
 
@@ -503,6 +566,7 @@ main() {
     echo -e "  ${BOLD}Environment:${NC} ${NODE_ENV:-development}"
     echo -e "  ${BOLD}API Base URL:${NC} http://localhost:$available_port/api"
     echo -e "  ${BOLD}Health Checks:${NC} ${CHECKS_PASSED}/${TOTAL_CHECKS} passed"
+    echo -e "  ${BOLD}Schema Testing:${NC} Available via npm run schema:*"
 
     if [ $WARNINGS_COUNT -gt 0 ]; then
         echo -e "  ${YELLOW}Note: $WARNINGS_COUNT warnings - monitor console for issues${NC}"
@@ -510,6 +574,12 @@ main() {
 
     echo ""
     echo -e "${BOLD}${GREEN}${CHECK_MARK} System ready for development!${NC}"
+    echo ""
+    echo -e "${BOLD}${CYAN}🚀 Schema Testing Commands:${NC}"
+    echo -e "  npm run schema:check     - Schema consistency validation"
+    echo -e "  npm run schema:integrity - Data integrity checks"
+    echo -e "  npm run schema:validate  - Zod validation testing"
+    echo -e "  npm run schema:all       - Run all schema tests"
     echo ""
 
     # Start the server in background to run post-startup checks

@@ -10,7 +10,6 @@
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import type { Prisma } from '@prisma/client';
 
 // Import consolidated schemas from feature folder
 import {
@@ -74,14 +73,7 @@ export const GET = createRoute(
           sku: true,
           category: true,
           tags: true,
-          attributes: true,
-          images: true,
-          stockQuantity: true,
-          status: true,
           isActive: true,
-          version: true,
-          usageAnalytics: true,
-          userStoryMappings: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -105,10 +97,6 @@ export const GET = createRoute(
           : item.category
             ? [item.category]
             : [],
-        stockQuantity: item.stockQuantity || 0,
-        status: item.status || 'ACTIVE',
-        attributes: item.attributes || undefined,
-        usageAnalytics: item.usageAnalytics || undefined,
       }));
 
       // Validate response against schema
@@ -165,13 +153,8 @@ export const POST = createRoute(
       const product = await prisma.product.create({
         data: {
           ...body!,
-          attributes: body!.attributes ? (body!.attributes as Prisma.InputJsonValue) : undefined,
-          usageAnalytics: {
-            createdBy: user.id,
-            createdAt: new Date().toISOString(),
-            hypothesis: ['H5'],
-            userStories: ['US-4.1'],
-          },
+          hypothesis: ['H5'],
+          userStories: ['US-4.1'],
         },
         select: {
           id: true,
@@ -182,14 +165,7 @@ export const POST = createRoute(
           sku: true,
           category: true,
           tags: true,
-          attributes: true,
-          images: true,
-          stockQuantity: true,
-          status: true,
           isActive: true,
-          version: true,
-          usageAnalytics: true,
-          userStoryMappings: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -205,10 +181,6 @@ export const POST = createRoute(
           : product.category
             ? [product.category]
             : [],
-        stockQuantity: product.stockQuantity || 0,
-        status: product.status || 'ACTIVE',
-        attributes: product.attributes || undefined,
-        usageAnalytics: product.usageAnalytics || undefined,
       };
 
       // Validate response against schema

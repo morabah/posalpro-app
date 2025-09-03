@@ -2226,6 +2226,41 @@ async function main() {
         value: proposalData.value,
         currency: proposalData.currency,
         tags: proposalData.tags,
+        // Build wizard-compatible product snapshot for step 4
+        wizardProducts: proposalData.products
+          .map(productName => {
+            const product = createdProducts[productName];
+            if (!product) return null;
+            return {
+              id: product.id,
+              name: product.name,
+              included: true,
+              quantity: 1,
+              unitPrice: product.price,
+              totalPrice: product.price,
+              category: product.category?.[0] ?? 'General',
+              configuration: {},
+              customizations: [],
+              notes: '',
+            };
+          })
+          .filter(
+            (
+              p
+            ): p is {
+              id: string;
+              name: string;
+              included: boolean;
+              quantity: number;
+              unitPrice: number;
+              totalPrice: number;
+              category: string;
+              configuration: Record<string, unknown>;
+              customizations: string[];
+              notes: string;
+            } => p !== null
+          ),
+
         metadata: toPrismaJson({
           createdBy: creator.id,
           createdAt: new Date().toISOString(),
@@ -2236,41 +2271,6 @@ async function main() {
             salesRepresentative: salesRepId,
             subjectMatterExperts: smeIds,
           },
-
-          // Build wizard-compatible product snapshot for step 4
-          wizardProducts: proposalData.products
-            .map(productName => {
-              const product = createdProducts[productName];
-              if (!product) return null;
-              return {
-                id: product.id,
-                name: product.name,
-                included: true,
-                quantity: 1,
-                unitPrice: product.price,
-                totalPrice: product.price,
-                category: product.category?.[0] ?? 'General',
-                configuration: {},
-                customizations: [],
-                notes: '',
-              };
-            })
-            .filter(
-              (
-                p
-              ): p is {
-                id: string;
-                name: string;
-                included: boolean;
-                quantity: number;
-                unitPrice: number;
-                totalPrice: number;
-                category: string;
-                configuration: Record<string, unknown>;
-                customizations: string[];
-                notes: string;
-              } => p !== null
-            ),
 
           wizardData: {
             step1: {

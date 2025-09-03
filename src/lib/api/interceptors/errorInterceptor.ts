@@ -133,7 +133,11 @@ class ErrorInterceptor {
   processError(
     error: Error | ApiResponse,
     request: ApiRequest,
-    options: ErrorHandlerOptions = { showUserNotification: true, logError: true, trackAnalytics: true }
+    options: ErrorHandlerOptions = {
+      showUserNotification: true,
+      logError: true,
+      trackAnalytics: true,
+    }
   ): ProcessedError {
     let status: number;
     let responseData: unknown;
@@ -142,12 +146,26 @@ class ErrorInterceptor {
     if ('status' in error) {
       // API Response error
       status = typeof error.status === 'number' ? error.status : 0;
-      responseData = 'data' in error ? (error as { data?: unknown }).data ?? null : null;
-      const rdForMsg =
-        typeof responseData === 'object' && responseData !== null ? (responseData as Record<string, unknown>) : null;
-      const msgFromMessage = rdForMsg && typeof rdForMsg.message === 'string' ? (rdForMsg.message as string) : undefined;
-      const msgFromError = rdForMsg && typeof rdForMsg.error === 'string' ? (rdForMsg.error as string) : undefined;
-      originalMessage = msgFromMessage || msgFromError || `HTTP ${status}` || 'Unknown API error';
+      responseData = 'data' in error ? ((error as { data?: unknown }).data ?? null) : null;
+
+      // Handle both wrapped and unwrapped response formats
+      if (typeof responseData === 'string') {
+        // Unwrapped response (middleware format)
+        originalMessage = responseData;
+      } else if (typeof responseData === 'object' && responseData !== null) {
+        // Wrapped response (API format)
+        const rdForMsg = responseData as Record<string, unknown>;
+        const msgFromMessage =
+          rdForMsg && typeof rdForMsg.message === 'string'
+            ? (rdForMsg.message as string)
+            : undefined;
+        const msgFromError =
+          rdForMsg && typeof rdForMsg.error === 'string' ? (rdForMsg.error as string) : undefined;
+        originalMessage = msgFromMessage || msgFromError || `HTTP ${status}` || 'Unknown API error';
+      } else {
+        // No response data
+        originalMessage = `HTTP ${status}` || 'Unknown API error';
+      }
     } else {
       // Network or other error
       const err = error as Error;
@@ -161,10 +179,28 @@ class ErrorInterceptor {
     const severity = this.getSeverity(category, status);
     const retryable = options.retryable ?? this.isRetryable(category, status);
 
-    const rdForMeta =
-      typeof responseData === 'object' && responseData !== null ? (responseData as Record<string, unknown>) : null;
-    const codeMeta = rdForMeta && typeof rdForMeta.code === 'string' ? (rdForMeta.code as string) : undefined;
-    const requestIdMeta = rdForMeta && typeof rdForMeta.requestId === 'string' ? (rdForMeta.requestId as string) : undefined;
+    // Extract metadata from response data (handle both wrapped and unwrapped formats)
+    let codeMeta: string | undefined;
+    let requestIdMeta: string | undefined;
+
+    if (typeof responseData === 'string') {
+      // Unwrapped response (middleware format) - no metadata available
+      codeMeta = undefined;
+      requestIdMeta = undefined;
+    } else if (typeof responseData === 'object' && responseData !== null) {
+      // Wrapped response (API format) - extract metadata
+      const rdForMeta = responseData as Record<string, unknown>;
+      codeMeta =
+        rdForMeta && typeof rdForMeta.code === 'string' ? (rdForMeta.code as string) : undefined;
+      requestIdMeta =
+        rdForMeta && typeof rdForMeta.requestId === 'string'
+          ? (rdForMeta.requestId as string)
+          : undefined;
+    } else {
+      // No response data
+      codeMeta = undefined;
+      requestIdMeta = undefined;
+    }
 
     const processedError: ProcessedError = {
       category,

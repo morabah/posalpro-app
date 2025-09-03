@@ -100,7 +100,7 @@ export const GET = createRoute(
           currency: true,
           status: true,
           tags: true,
-          metadata: true,
+          userStoryTracking: true,
           createdAt: true,
           updatedAt: true,
           customer: {
@@ -136,7 +136,7 @@ export const GET = createRoute(
         ...item,
         value: item.value ? Number(item.value) : undefined,
         description: item.description || '',
-        metadata: item.metadata || {},
+        userStoryTracking: item.userStoryTracking || {},
         customer: item.customer
           ? {
               ...item.customer,
@@ -224,7 +224,7 @@ export const POST = createRoute(
             status: 'DRAFT',
             tags: body!.basicInfo.tags || [],
             createdBy: user.id,
-            metadata: {
+            userStoryTracking: {
               projectType: body!.basicInfo.projectType,
               teamData: body!.teamData,
               contentData: body!.contentData,
@@ -246,7 +246,7 @@ export const POST = createRoute(
             currency: true,
             status: true,
             tags: true,
-            metadata: true,
+            userStoryTracking: true,
             createdAt: true,
             updatedAt: true,
             customer: {
@@ -306,7 +306,7 @@ export const POST = createRoute(
         ...proposal,
         value: proposal.value ? Number(proposal.value) : undefined,
         description: proposal.description || '',
-        metadata: proposal.metadata || {},
+        userStoryTracking: proposal.userStoryTracking || {},
         customer: proposal.customer
           ? {
               ...proposal.customer,

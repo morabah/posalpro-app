@@ -1,0 +1,58 @@
+{
+  "timestamp": "2025-09-02T18:35:22.323Z",
+  "summary": {
+    "totalTests": 6,
+    "passedTests": 6,
+    "failedTests": 0,
+    "fixedTests": 0,
+    "totalIssues": 0,
+    "criticalIssues": 0,
+    "highIssues": 0,
+    "mediumIssues": 0,
+    "lowIssues": 0
+  },
+  "issues": [],
+  "results": [
+    {
+      "testName": "Referential Integrity",
+      "status": "PASS",
+      "duration": 66,
+      "details": "All referential integrity checks passed"
+    },
+    {
+      "testName": "Data Consistency",
+      "status": "PASS",
+      "duration": 4,
+      "details": "All data consistency checks passed"
+    },
+    {
+      "testName": "Schema Compliance",
+      "status": "PASS",
+      "duration": 17,
+      "details": "All schema compliance checks passed"
+    },
+    {
+      "testName": "Data Validation",
+      "status": "PASS",
+      "duration": 5,
+      "details": "All data validation checks passed"
+    },
+    {
+      "testName": "Performance Constraints",
+      "status": "PASS",
+      "duration": 13,
+      "details": "All performance constraint checks passed"
+    },
+    {
+      "testName": "Business Logic Validation",
+      "status": "PASS",
+      "duration": 9,
+      "details": "All business logic validation checks passed"
+    }
+  ],
+  "config": {
+    "verbose": true,
+    "fixIssues": false,
+    "reportOnly": false
+  }
+}

@@ -1,11 +1,11 @@
 // API route wrapper with authentication, RBAC, validation, and logging
 import { authOptions } from '@/lib/auth';
-import { badRequest, errorToJson, forbidden, StandardError, unauthorized } from '@/lib/errors';
+import { badRequest, forbidden, StandardError, unauthorized } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
-import { getOrCreateRequestId } from '@/lib/requestId';
-import { getServerSession } from 'next-auth';
 import { getCache, setCache } from '@/lib/redis';
+import { getOrCreateRequestId } from '@/lib/requestId';
 import { createHash } from 'crypto';
+import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 
 // Role types
@@ -80,7 +80,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
     // Helper: decorate response headers consistently
     const decorate = (headers: Headers) => {
       headers.set('x-request-id', requestId);
-      headers.set('x-api-version', (config.apiVersion ?? '1'));
+      headers.set('x-api-version', config.apiVersion ?? '1');
       if (config.deprecated) {
         headers.set('Deprecation', 'true');
         if (config.deprecated.sunset) headers.set('Sunset', config.deprecated.sunset);
@@ -93,7 +93,9 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
 
     // Helper: compute stable hash of arbitrary input
     const hash = (input: unknown) =>
-      createHash('sha256').update(typeof input === 'string' ? input : JSON.stringify(input)).digest('hex');
+      createHash('sha256')
+        .update(typeof input === 'string' ? input : JSON.stringify(input))
+        .digest('hex');
 
     // Helper: minimal safe header subset for caching
     const pickSafeHeaders = (h: HeadersInit) => {
@@ -180,20 +182,28 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         // Idempotency (auth path)
         const idempotencyKey = req.headers.get('idempotency-key') || undefined;
         const idempotencyEnabled =
-          (config.idempotency?.enabled ?? true) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+          (config.idempotency?.enabled ?? true) &&
+          ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
         let cacheKey: string | null = null;
         if (idempotencyEnabled && idempotencyKey) {
           const scopePart = (config.idempotency?.scope ?? 'user') === 'user' ? user.id : 'global';
           const payloadHash = hash({ body, queryParams: Object.fromEntries(url.searchParams) });
           cacheKey = `idemp:${scopePart}:${method}:${url.pathname}:${idempotencyKey}:${payloadHash}`;
-          const cached = await getCache<{ status: number; headers: Record<string, string>; body: string }>(
-            cacheKey
-          );
+          const cached = await getCache<{
+            status: number;
+            headers: Record<string, string>;
+            body: string;
+          }>(cacheKey);
           if (cached) {
             const headers = new Headers(cached.headers);
             decorate(headers);
             headers.set('x-idempotent-replay', 'true');
-            logInfo('route_idempotent_replay', { path: url.pathname, method, requestId, userId: user.id });
+            logInfo('route_idempotent_replay', {
+              path: url.pathname,
+              method,
+              requestId,
+              userId: user.id,
+            });
             return new Response(cached.body, { status: cached.status, headers });
           }
         }
@@ -216,14 +226,21 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           try {
             const ttl = config.idempotency?.ttlSeconds ?? 60 * 60 * 24; // 24h
             const bodyText = await response.clone().text();
-            await setCache(cacheKey, {
-              status: response.status,
-              headers: pickSafeHeaders(response.headers),
-              body: bodyText,
-            }, ttl);
+            await setCache(
+              cacheKey,
+              {
+                status: response.status,
+                headers: pickSafeHeaders(response.headers),
+                body: bodyText,
+              },
+              ttl
+            );
           } catch (e) {
             // Swallow cache errors; never break main path
-            logError('route_idempotent_cache_write_failed', { error: (e as Error)?.message, requestId });
+            logError('route_idempotent_cache_write_failed', {
+              error: (e as Error)?.message,
+              requestId,
+            });
           }
         }
 
@@ -247,16 +264,26 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         // Idempotency pre-check (unauth path)
         const idempKeyUnauth = req.headers.get('idempotency-key') || undefined;
         const idempEnabledUnauth =
-          (config.idempotency?.enabled ?? true) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+          (config.idempotency?.enabled ?? true) &&
+          ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
         if (idempEnabledUnauth && idempKeyUnauth) {
           const payloadHash = hash({ queryParams: Object.fromEntries(url.searchParams) });
           const preKey = `idemp:anonymous:${method}:${url.pathname}:${idempKeyUnauth}:${payloadHash}`;
-          const cached = await getCache<{ status: number; headers: Record<string, string>; body: string }>(preKey);
+          const cached = await getCache<{
+            status: number;
+            headers: Record<string, string>;
+            body: string;
+          }>(preKey);
           if (cached) {
             const headers = new Headers(cached.headers);
             decorate(headers);
             headers.set('x-idempotent-replay', 'true');
-            logInfo('route_idempotent_replay', { path: url.pathname, method, requestId, userId: 'anonymous' });
+            logInfo('route_idempotent_replay', {
+              path: url.pathname,
+              method,
+              requestId,
+              userId: 'anonymous',
+            });
             return new Response(cached.body, { status: cached.status, headers });
           }
         }
@@ -280,13 +307,20 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           try {
             const ttl = config.idempotency?.ttlSeconds ?? 60 * 60 * 24; // 24h
             const bodyText = await response.clone().text();
-            await setCache(cacheKey, {
-              status: response.status,
-              headers: pickSafeHeaders(response.headers),
-              body: bodyText,
-            }, ttl);
+            await setCache(
+              cacheKey,
+              {
+                status: response.status,
+                headers: pickSafeHeaders(response.headers),
+                body: bodyText,
+              },
+              ttl
+            );
           } catch (e) {
-            logError('route_idempotent_cache_write_failed', { error: (e as Error)?.message, requestId });
+            logError('route_idempotent_cache_write_failed', {
+              error: (e as Error)?.message,
+              requestId,
+            });
           }
         }
 
@@ -320,7 +354,8 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         status = (error as any).status;
       }
 
-      const payload = errorToJson(error);
+      // Return unwrapped response format per CORE_REQUIREMENTS.md §464
+      const payload = error instanceof StandardError ? error.message : 'An error occurred';
 
       logError('route_request_error', {
         path: url.pathname,

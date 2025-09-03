@@ -176,6 +176,7 @@ export class VersionHistoryService {
           changesSummary: true,
           createdAt: true,
           createdBy: true,
+          snapshot: true, // Include snapshot for enhanced data
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit + 1, // +1 to check if there's a next page
@@ -205,16 +206,23 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => ({
-        id: version.id,
-        proposalId: version.proposalId,
-        version: version.version,
-        changeType: version.changeType as any,
-        changesSummary: version.changesSummary || undefined,
-        createdAt: version.createdAt,
+      const transformedItems = items.map(version => {
+        const snapshot = version.snapshot as any;
+        return {
+          id: version.id,
+          proposalId: version.proposalId,
+          version: version.version,
+          changeType: version.changeType as any,
+          changesSummary: version.changesSummary || undefined,
+          createdAt: version.createdAt,
+          createdBy: version.createdBy || undefined,
 
-        createdBy: version.createdBy || undefined,
-      }));
+          // Extract enhanced data from snapshot
+          createdByName: snapshot?.createdByName || undefined,
+          totalValue: snapshot?.totalValue || snapshot?.value || undefined,
+          changeDetails: snapshot?.changeDetails || undefined,
+        };
+      });
 
       const data: VersionHistoryList = {
         items: transformedItems,
@@ -417,6 +425,7 @@ export class VersionHistoryService {
           changesSummary: true,
           createdAt: true,
           createdBy: true,
+          snapshot: true, // Include snapshot for enhanced data
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit + 1, // +1 to check if there's a next page
@@ -446,16 +455,23 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => ({
-        id: version.id,
-        proposalId: version.proposalId,
-        version: version.version,
-        changeType: version.changeType as any,
-        changesSummary: version.changesSummary || undefined,
-        createdAt: version.createdAt,
+      const transformedItems = items.map(version => {
+        const snapshot = version.snapshot as any;
+        return {
+          id: version.id,
+          proposalId: version.proposalId,
+          version: version.version,
+          changeType: version.changeType as any,
+          changesSummary: version.changesSummary || undefined,
+          createdAt: version.createdAt,
+          createdBy: version.createdBy || undefined,
 
-        createdBy: version.createdBy || undefined,
-      }));
+          // Extract enhanced data from snapshot
+          createdByName: snapshot?.createdByName || undefined,
+          totalValue: snapshot?.totalValue || snapshot?.value || undefined,
+          changeDetails: snapshot?.changeDetails || undefined,
+        };
+      });
 
       const data: VersionHistoryList = {
         items: transformedItems,
@@ -804,6 +820,7 @@ export class VersionHistoryService {
           changesSummary: true,
           createdAt: true,
           createdBy: true,
+          snapshot: true, // Include snapshot for enhanced data
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit + 1, // +1 to check if there's a next page
@@ -833,16 +850,23 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => ({
-        id: version.id,
-        proposalId: version.proposalId,
-        version: version.version,
-        changeType: version.changeType as any,
-        changesSummary: version.changesSummary || undefined,
-        createdAt: version.createdAt,
+      const transformedItems = items.map(version => {
+        const snapshot = version.snapshot as any;
+        return {
+          id: version.id,
+          proposalId: version.proposalId,
+          version: version.version,
+          changeType: version.changeType as any,
+          changesSummary: version.changesSummary || undefined,
+          createdAt: version.createdAt,
+          createdBy: version.createdBy || undefined,
 
-        createdBy: version.createdBy || undefined,
-      }));
+          // Extract enhanced data from snapshot
+          createdByName: snapshot?.createdByName || undefined,
+          totalValue: snapshot?.totalValue || snapshot?.value || undefined,
+          changeDetails: snapshot?.changeDetails || undefined,
+        };
+      });
 
       const data: VersionHistoryList = {
         items: transformedItems,
@@ -943,6 +967,7 @@ export class VersionHistoryService {
           changesSummary: true,
           createdAt: true,
           createdBy: true,
+          snapshot: true, // Include snapshot for enhanced data
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit + 1, // +1 to check if there's a next page
@@ -972,16 +997,23 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => ({
-        id: version.id,
-        proposalId: version.proposalId,
-        version: version.version,
-        changeType: version.changeType as any,
-        changesSummary: version.changesSummary || undefined,
-        createdAt: version.createdAt,
+      const transformedItems = items.map(version => {
+        const snapshot = version.snapshot as any;
+        return {
+          id: version.id,
+          proposalId: version.proposalId,
+          version: version.version,
+          changeType: version.changeType as any,
+          changesSummary: version.changesSummary || undefined,
+          createdAt: version.createdAt,
+          createdBy: version.createdBy || undefined,
 
-        createdBy: version.createdBy || undefined,
-      }));
+          // Extract enhanced data from snapshot
+          createdByName: snapshot?.createdByName || undefined,
+          totalValue: snapshot?.totalValue || snapshot?.value || undefined,
+          changeDetails: snapshot?.changeDetails || undefined,
+        };
+      });
 
       const data: VersionHistoryList = {
         items: transformedItems,

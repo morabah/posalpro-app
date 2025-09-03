@@ -89,7 +89,8 @@ export class ApiClient {
     this.requestTracker.set(path, count + 1);
 
     // Allow more requests for architectural compliance tests (they make multiple validation calls)
-    const isArchitecturalTest = path.includes('/api/proposals/versions') || path.includes('/api/proposals');
+    const isArchitecturalTest =
+      path.includes('/api/proposals/versions') || path.includes('/api/proposals');
     const limit = isArchitecturalTest ? 100 : this.maxRequestsPerEndpoint;
 
     if (count >= limit) {
@@ -301,7 +302,7 @@ export class ApiClient {
       customerId: null, // Will be set by test if needed
       status: 'DRAFT',
       priority: 'MEDIUM',
-      value: 50000.00,
+      value: 50000.0,
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
       tags: ['test', 'automated'],
       requirements: ['Test requirement 1', 'Test requirement 2'],
