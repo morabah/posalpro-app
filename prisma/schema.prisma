@@ -10,6 +10,13 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Debug: Force environment variable loading
+generator debug {
+  provider = "prisma-client-js"
+  previewFeatures = []
+  binaryTargets = ["native"]
+}
+
 model Tenant {
   id           String   @id @default(cuid())
   name         String
