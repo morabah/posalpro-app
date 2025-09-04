@@ -40,15 +40,17 @@
   PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
 
-  # Secrets required in Netlify Dashboard (do NOT commit values here):
-  # DATABASE_URL = "<set in Netlify UI>"
-  # DIRECT_URL = "<set in Netlify UI>"
+  # ⚠️  CRITICAL: Database configuration required for authentication to work
+  # These MUST be set in Netlify Dashboard Environment Variables (Site Settings → Environment Variables)
+  #
+  # DATABASE_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require&pgbouncer=true&connection_limit=1"
+  # DIRECT_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul.gwc.azure.neon.tech/neondb?sslmode=require"
   # NEXTAUTH_URL = "https://posalpro-mvp2.windsurf.build"
-  # NEXTAUTH_SECRET = "<set in Netlify UI>"
-  # JWT_SECRET = "<set in Netlify UI>"
-  # CSRF_SECRET = "<set in Netlify UI>"
-  # NETLIFY_DATABASE_URL = "<optional: set in Netlify UI>"
-  # NETLIFY_DATABASE_URL_UNPOOLED = "<optional: set in Netlify UI>"
+  # NEXTAUTH_SECRET = "2731a3012e2f22bdabd344cb733f07aad06f770b82423b3d58c06d8a285433f9"
+  # JWT_SECRET = "posalpro-jwt-secret-production-key-32-chars-minimum-secure"
+  # CSRF_SECRET = "posalpro-csrf-protection-secret-32-chars-minimum"
+
+  # 🚨 AUTHENTICATION WILL FAIL WITHOUT THESE ENVIRONMENT VARIABLES 🚨
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

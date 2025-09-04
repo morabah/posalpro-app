@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail } from '@/lib/services/userService';
 import { comparePassword } from '@/lib/auth/passwordUtils';
 import { logDebug } from '@/lib/logger';
+import { getUserByEmail } from '@/lib/services/userService';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
         id: user.id,
         email: user.email,
         name: user.name,
-        roles: user.roles.map(r => r.role.name)
-      }
+        roles: user.roles.map(r => r.role.name),
+      },
     });
   } catch (error) {
     logDebug('Auth test error:', error);
