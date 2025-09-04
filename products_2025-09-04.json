@@ -1,0 +1,42 @@
+[
+  {
+    "id": "cmf542fyn00cifeklrjrhzueu",
+    "name": "Sahab Cloud Platform",
+    "description": "Comprehensive cloud infrastructure and management platform",
+    "price": "15000",
+    "currency": "USD",
+    "sku": "ECP-3.0",
+    "category": [
+      "Cloud Infrastructure"
+    ],
+    "tags": [
+      "cloud",
+      "infrastructure",
+      "enterprise",
+      "scalable"
+    ],
+    "isActive": true,
+    "createdAt": "2025-09-04T07:55:08.496Z",
+    "updatedAt": "2025-09-04T07:55:08.496Z"
+  },
+  {
+    "id": "cmf542fyu00ckfeklowx3op6j",
+    "name": "Bayan Analytics Suite",
+    "description": "Advanced AI-powered analytics and business intelligence platform",
+    "price": "12000",
+    "currency": "USD",
+    "sku": "AAS-2.1",
+    "category": [
+      "Analytics"
+    ],
+    "tags": [
+      "ai",
+      "analytics",
+      "business-intelligence",
+      "machine-learning"
+    ],
+    "isActive": true,
+    "createdAt": "2025-09-04T07:55:08.502Z",
+    "updatedAt": "2025-09-04T07:55:08.502Z"
+  }
+]

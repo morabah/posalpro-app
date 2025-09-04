@@ -1,0 +1,41 @@
+[
+  {
+    "id": "cmf542fxt00bwfekl8wvoifrk",
+    "name": "Al Noor Technologies",
+    "email": "contact@alnoor-tech.com",
+    "industry": "Technology",
+    "status": "ACTIVE",
+    "tier": "ENTERPRISE",
+    "tags": [
+      "Technology"
+    ],
+    "createdAt": "2025-09-04T07:55:08.466Z",
+    "updatedAt": "2025-09-04T15:39:59.504Z"
+  },
+  {
+    "id": "cmf542fyi00c2fekljacuaxec",
+    "name": "Al Quds Financial",
+    "email": "contact@alquds-financial.com",
+    "industry": "Financial Services",
+    "status": "ACTIVE",
+    "tier": "ENTERPRISE",
+    "tags": [
+      "Financial Services"
+    ],
+    "createdAt": "2025-09-04T07:55:08.490Z",
+    "updatedAt": "2025-09-04T15:39:59.506Z"
+  },
+  {
+    "id": "cmf542fyj00c6fekl1d7k9q63",
+    "name": "Shifa Health Innovations",
+    "email": "contact@shifa-health.com",
+    "industry": "Healthcare",
+    "status": "ACTIVE",
+    "tier": "PREMIUM",
+    "tags": [
+      "Healthcare"
+    ],
+    "createdAt": "2025-09-04T07:55:08.492Z",
+    "updatedAt": "2025-09-04T07:55:08.492Z"
+  }
+]
