@@ -97,7 +97,7 @@ export const authOptions: NextAuthOptions = {
         secure: process.env.NODE_ENV === 'production',
         domain:
           process.env.NODE_ENV === 'production'
-            ? '.windsurf.build'  // Allow cookies for all windsurf.build subdomains
+            ? '.windsurf.build' // Allow cookies for all windsurf.build subdomains
             : undefined,
       },
     },
