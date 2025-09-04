@@ -1,7 +1,8 @@
 [build]
-  command = "bash ./netlify-deploy.sh"
+  command = "rm -f .env.local && bash ./netlify-deploy.sh"
   publish = ".next"
   # Let @netlify/plugin-nextjs handle the build output automatically
+  # ✅ FIX: Remove .env.local to prevent build-time env var conflicts
 
 [build.environment]
   # Align with production environment
