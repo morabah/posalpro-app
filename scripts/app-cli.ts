@@ -248,10 +248,12 @@ class ApiClient {
   private baseUrl: string;
   private jar: CookieJar;
   private tenantId: string | null;
+  private currentSessionTag: string;
 
   constructor(baseUrl: string, tenantId: string | null = null) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.tenantId = tenantId;
+    this.currentSessionTag = 'default';
     const defaultSessionPath = path.resolve(process.cwd(), '.posalpro-cli-session.json');
     const storage = process.env.APP_CLI_SESSION_FILE || defaultSessionPath;
     this.jar = new CookieJar(storage);
@@ -260,7 +262,86 @@ class ApiClient {
   switchSession(tag: string) {
     const safe = slugify(tag || 'default');
     const sessionPath = path.resolve(process.cwd(), `.posalpro-cli-session-${safe}.json`);
-    this.jar = new CookieJar(sessionPath);
+
+    logDebug('CLI: Switching session', {
+      component: 'AppCLI',
+      operation: 'switch_session',
+      fromTag: this.currentSessionTag || 'default',
+      toTag: tag,
+      newPath: sessionPath,
+    });
+
+    // Save current session cookies before switching
+    const currentCookies = new Map(this.jar.cookies);
+
+    // Create new session jar
+    const newJar = new CookieJar(sessionPath);
+
+    // Copy all cookies from current session to new session
+    // This preserves authentication cookies across session switches
+    currentCookies.forEach((value, key) => {
+      newJar.cookies.set(key, value);
+    });
+
+    // Save the new session with copied cookies
+    newJar.saveToDisk();
+
+    // Update the jar reference
+    this.jar = newJar;
+    this.currentSessionTag = tag;
+
+    // Save active session information for persistence across CLI commands
+    const activeSessionPath = path.resolve(process.cwd(), '.posalpro-cli-active-session.json');
+    logDebug('CLI: Preparing to save active session', {
+      component: 'AppCLI',
+      operation: 'prepare_save_active_session',
+      tag,
+      path: activeSessionPath,
+    });
+
+    try {
+      const activeSession = { tag, timestamp: Date.now() };
+      const activeSessionData = JSON.stringify(activeSession, null, 2);
+
+      logDebug('CLI: Writing active session file', {
+        component: 'AppCLI',
+        operation: 'write_active_session_file',
+        tag,
+        dataLength: activeSessionData.length,
+        path: activeSessionPath,
+      });
+
+      fs.writeFileSync(activeSessionPath, activeSessionData);
+
+      // Verify the file was written
+      const verifyData = fs.readFileSync(activeSessionPath, 'utf8');
+      const verifyParsed = JSON.parse(verifyData);
+
+      logInfo('CLI: Active session saved and verified', {
+        component: 'AppCLI',
+        operation: 'save_active_session_success',
+        tag,
+        path: activeSessionPath,
+        savedTag: verifyParsed.tag,
+        savedTimestamp: verifyParsed.timestamp,
+      });
+    } catch (err) {
+      logError('CLI: Failed to save active session', {
+        component: 'AppCLI',
+        operation: 'save_active_session_error',
+        error: (err as Error)?.message,
+        tag,
+        path: activeSessionPath,
+      });
+    }
+
+    logInfo('CLI: Session switched successfully', {
+      component: 'AppCLI',
+      operation: 'switch_session_success',
+      tag,
+      cookiesCopied: currentCookies.size,
+      sessionFile: sessionPath,
+    });
   }
 
   getTenantId(): string | null {
@@ -1335,8 +1416,13 @@ async function execute(tokens: string[], api: ApiClient) {
         break;
       }
       const sessionTag = tag || (email.includes('@') ? email.split('@')[0] : email);
-      (api as any).switchSession(sessionTag);
+
+      // First login with the default session to get proper authentication
       await api.login(email, password, role);
+
+      // Then switch to the named session and copy the authentication cookies
+      (api as any).switchSession(sessionTag);
+
       console.log(`Login successful as ${email}. Session tag: ${sessionTag}`);
       break;
     }
@@ -2406,6 +2492,54 @@ async function main() {
   const tenantId = tenantIdx >= 0 && args[tenantIdx + 1] ? args[tenantIdx + 1] : null;
   const normalizedBase = normalizeBaseUrl(base);
   const api = new ApiClient(normalizedBase, tenantId);
+
+  // Load active session if one exists
+  const activeSessionPath = path.resolve(process.cwd(), '.posalpro-cli-active-session.json');
+  logDebug('CLI: Checking for active session file', {
+    component: 'AppCLI',
+    operation: 'check_active_session',
+    path: activeSessionPath,
+    exists: fs.existsSync(activeSessionPath),
+  });
+
+  if (fs.existsSync(activeSessionPath)) {
+    try {
+      const activeSession = JSON.parse(fs.readFileSync(activeSessionPath, 'utf8'));
+      logDebug('CLI: Active session file contents', {
+        component: 'AppCLI',
+        operation: 'active_session_contents',
+        activeSession,
+      });
+
+      if (activeSession.tag && activeSession.tag !== 'default') {
+        logInfo('CLI: Loading active session', {
+          component: 'AppCLI',
+          operation: 'load_active_session',
+          tag: activeSession.tag,
+        });
+        api.switchSession(activeSession.tag);
+      } else {
+        logDebug('CLI: Active session tag is default or missing', {
+          component: 'AppCLI',
+          operation: 'skip_active_session',
+          tag: activeSession.tag,
+        });
+      }
+    } catch (err) {
+      logError('CLI: Failed to load active session', {
+        component: 'AppCLI',
+        operation: 'load_active_session_error',
+        error: (err as Error)?.message,
+        path: activeSessionPath,
+      });
+    }
+  } else {
+    logDebug('CLI: No active session file found', {
+      component: 'AppCLI',
+      operation: 'no_active_session',
+      path: activeSessionPath,
+    });
+  }
 
   // Log the base URL and tenant being used
   logInfo('CLI: Base URL and tenant configured', {

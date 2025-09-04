@@ -20,7 +20,7 @@ import {
   useCustomerSelection,
   useCustomerStore,
 } from '@/lib/store/customerStore';
-import { Customer } from '@/services/customerService';
+import type { Customer } from '@/features/customers';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useMemo } from 'react';
 

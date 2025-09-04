@@ -3,6 +3,7 @@ export * from './errors/ErrorCodes';
 export { ErrorCodes } from './errors/ErrorCodes';
 export * from './errors/ErrorHandlingService';
 export { ErrorHandlingService, errorHandlingService } from './errors/ErrorHandlingService';
+export * from './errors/ProblemDetails';
 export * from './errors/StandardError';
 export { StandardError } from './errors/StandardError';
 
@@ -10,6 +11,8 @@ export { StandardError } from './errors/StandardError';
 export type ErrorCode = import('./errors/ErrorCodes').ErrorCode;
 
 // Import StandardError for legacy functions
+import { errorHandlingService } from './errors/ErrorHandlingService';
+import { ProblemDetails } from './errors/ProblemDetails';
 import { StandardError } from './errors/StandardError';
 
 // Legacy helper functions (keeping for backward compatibility)
@@ -81,43 +84,37 @@ export const timeoutError = (message = 'Request timeout', details?: unknown) =>
   });
 
 // Import Prisma error handling
-import { isPrismaError, handlePrismaError } from './errors/PrismaErrorHandler';
+import { handlePrismaError, isPrismaError } from './errors/PrismaErrorHandler';
 
-// Convert any error to a consistent JSON format
-export function errorToJson(error: unknown): {
-  code: string;
-  message: string;
-  details?: unknown;
-} {
+// Convert any error to ProblemDetails format
+export function errorToJson(error: unknown): ProblemDetails {
   if (error instanceof StandardError) {
-    return {
-      code: error.code,
-      message: error.message,
-      details: error.metadata?.userSafeDetails,
-    };
+    return errorHandlingService.convertToProblemDetails(error);
   }
 
   // Handle Prisma errors
   if (isPrismaError(error)) {
     const standardError = handlePrismaError(error);
-    return {
-      code: standardError.code,
-      message: standardError.message,
-      details: standardError.metadata?.userSafeDetails,
-    };
+    return errorHandlingService.convertToProblemDetails(standardError);
   }
 
   if (error instanceof Error) {
-    return {
-      code: 'SYS_1000',
+    const standardError = new StandardError({
       message: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    };
+      code: 'SYS_1000',
+      metadata: {
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      },
+    });
+    return errorHandlingService.convertToProblemDetails(standardError);
   }
 
-  return {
-    code: 'SYS_1000',
+  const standardError = new StandardError({
     message: 'An unknown error occurred',
-    details: process.env.NODE_ENV === 'development' ? error : undefined,
-  };
+    code: 'SYS_1000',
+    metadata: {
+      originalError: process.env.NODE_ENV === 'development' ? error : undefined,
+    },
+  });
+  return errorHandlingService.convertToProblemDetails(standardError);
 }

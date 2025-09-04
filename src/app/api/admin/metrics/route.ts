@@ -4,10 +4,12 @@
  * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
-import { createRoute } from '@/lib/api/route';
 import { ok } from '@/lib/api/response';
+import { RBACMiddleware } from '@/lib/auth';
+import { forbidden } from '@/lib/errors';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 import prisma from '@/lib/prisma';
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { getServerSession } from 'next-auth';
 
 /**
  * Component Traceability Matrix
@@ -20,19 +22,53 @@ const COMPONENT_MAPPING = {
   testCases: ['TC-H8-001', 'TC-H8-002'],
 };
 
-// GET /api/admin/metrics - Fetch system metrics from database with modern createRoute wrapper
-export const GET = createRoute(
-  {
-    roles: ['System Administrator', 'Administrator'],
-    apiVersion: '1',
-  },
-  async ({ req, user, requestId }) => {
+// GET /api/admin/metrics - Fetch system metrics with RBAC enforcement
+export async function GET(req: Request) {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+
+  try {
+    // Authentication check
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      throw forbidden('Authentication required');
+    }
+
+    const user = session.user as {
+      id: string;
+      email: string;
+      roles?: string[];
+    };
+
+    // RBAC Enforcement - Admin access required
+    const rbacValidation = RBACMiddleware.validateAdminAccess(user.roles || []);
+    if (!rbacValidation.allowed) {
+      logError('RBAC Access Denied', {
+        component: 'AdminMetricsAPI',
+        operation: 'GET',
+        userId: user.id,
+        userRoles: user.roles,
+        reason: rbacValidation.reason,
+        requestId,
+      });
+      throw forbidden(rbacValidation.reason || 'Access denied');
+    }
+
+    logDebug('RBAC Access Granted', {
+      component: 'AdminMetricsAPI',
+      operation: 'GET',
+      userId: user.id,
+      userRoles: user.roles,
+      requestId,
+    });
+
     // Get database health and statistics
-    const startTime = Date.now();
+    const dbStartTime = Date.now();
 
     // Test database connectivity with a simple query instead of raw SQL
     await prisma.user.findFirst();
-    const dbResponseTime = Date.now() - startTime;
+    const dbResponseTime = Date.now() - dbStartTime;
 
     // Optimized transaction for admin metrics
     const [totalUsers, activeUsers, totalProposals, totalProducts, totalContent, recentAuditLogs] =
@@ -128,19 +164,25 @@ export const GET = createRoute(
       requestId,
     });
 
-    logInfo('Admin system metrics fetched successfully', {
-      component: 'AdminMetricsAPI',
-      operation: 'GET',
-      userId: user.id,
-      requestId,
-    });
-
     return ok({
       ...metrics,
       timestamp: new Date().toISOString(),
     });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    logError('Admin metrics API error', {
+      component: 'AdminMetricsAPI',
+      operation: 'GET',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration,
+      requestId,
+    });
+
+    // Re-throw to let Next.js handle the error response
+    throw error;
   }
-);
+}
 
 // Helper function to determine system health
 function checkSystemHealth(responseTime: number) {

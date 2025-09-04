@@ -16,7 +16,8 @@ import {
   useUnifiedProposalActions,
   useUnifiedProposalStep4Data,
 } from '@/lib/store/unifiedProposalStore';
-import { productService, type Product } from '@/services/productService';
+import type { Product } from '@/features/products';
+import { useInfiniteProductsMigrated } from '@/features/products/hooks';
 import { useQuery } from '@tanstack/react-query';
 // Import existing hooks for server state (avoiding duplicates)
 import { usePersistProposalWizard } from '@/features/proposals/hooks';
@@ -82,57 +83,33 @@ export function EnhancedProductSelectionStep({
     }
   }, [step4Data]);
 
-  // Fetch products using React Query
+  // Fetch products using feature hooks
   const {
     data: productsData,
     isLoading: productsLoading,
     error: productsError,
-  } = useQuery<Product[]>({
-    queryKey: ['products', 'enhanced-wizard'],
-    queryFn: async () => {
-      logDebug('Fetching products for enhanced wizard', {
-        component: 'EnhancedProductSelectionStep',
-        operation: 'fetchProducts',
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
-
-      try {
-        const response = await productService.getProducts({
-          search: '',
-          limit: 100,
-          isActive: true,
-          sortBy: 'name',
-          sortOrder: 'asc',
-        });
-
-        if (response?.items) {
-          return response.items;
-        }
-        throw new Error('Failed to load products: Invalid response format');
-      } catch (error) {
-        logError('Failed to fetch products for enhanced wizard', error, {
-          component: 'EnhancedProductSelectionStep',
-          operation: 'fetchProducts',
-        });
-        throw error;
-      }
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+  } = useInfiniteProductsMigrated({
+    search: '',
+    limit: 100,
+    sortBy: 'name',
+    sortOrder: 'asc',
+    isActive: true,
   });
+
+  // Flatten the paginated data for compatibility
+  const flattenedProductsData = productsData?.pages?.flatMap(page => page.items) || [];
 
   // Product options for dropdown
   const productOptions = useMemo(() => {
-    if (!productsData) return [];
+    if (!flattenedProductsData) return [];
 
-    return productsData
+    return flattenedProductsData
       .filter(product => !selectedProducts.some(selected => selected.productId === product.id))
       .map(product => ({
         value: product.id,
         label: `${product.name} - $${product.price?.toFixed(2) || '0.00'}`,
       }));
-  }, [productsData, selectedProducts]);
+  }, [flattenedProductsData, selectedProducts]);
 
   // Calculate total amount with memoization
   const totalAmount = useMemo(() => {
@@ -413,7 +390,7 @@ export function EnhancedProductSelectionStep({
             placeholder="Select a product..."
             options={productOptions}
             onChange={value => {
-              const product = productsData?.find(p => p.id === value);
+              const product = flattenedProductsData?.find(p => p.id === value);
               if (product) {
                 handleAddProduct(product);
               }

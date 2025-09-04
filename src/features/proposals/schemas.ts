@@ -434,3 +434,5 @@ export type ProposalUpdateData = z.infer<typeof ProposalUpdateSchema>;
 export type WizardProposalUpdateData = z.infer<typeof WizardProposalUpdateSchema>;
 export type ProposalMetadata = z.infer<typeof ProposalMetadataSchema>;
 export type Proposal = z.infer<typeof ProposalSchema>;
+export type ProposalStatus = z.infer<typeof ProposalStatusSchema>;
+export type ProposalPriority = z.infer<typeof ProposalPrioritySchema>;

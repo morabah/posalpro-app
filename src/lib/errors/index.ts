@@ -11,3 +11,6 @@ export * from './ErrorCodes';
 
 // Re-export StandardError
 export * from './StandardError';
+
+// Re-export ProblemDetails
+export * from './ProblemDetails';

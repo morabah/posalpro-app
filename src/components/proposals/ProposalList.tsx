@@ -11,13 +11,13 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { ProposalPrioritySchema, ProposalStatusSchema } from '@/features/proposals';
 import {
   useDeleteProposal,
   useDeleteProposalsBulk,
   useInfiniteProposals,
   useProposalStats,
 } from '@/features/proposals/hooks';
-import { ProposalPriority, ProposalStatus } from '@/services/proposalService';
 import {
   AlertTriangleIcon,
   ArrowUpDownIcon,
@@ -36,6 +36,7 @@ import {
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 
 // Simple formatter functions since the utils module doesn't exist
 const formatCurrency = (amount: number, currency: string) => {
@@ -57,8 +58,8 @@ const formatDate = (date: Date | string) => {
 // Status Badge Component
 // ====================
 
-function StatusBadge({ status }: { status: (typeof ProposalStatus)[keyof typeof ProposalStatus] }) {
-  const getStatusConfig = (status: (typeof ProposalStatus)[keyof typeof ProposalStatus]) => {
+function StatusBadge({ status }: { status: z.infer<typeof ProposalStatusSchema> }) {
+  const getStatusConfig = (status: z.infer<typeof ProposalStatusSchema>) => {
     switch (status) {
       case 'DRAFT':
         return { label: 'Draft', className: 'bg-gray-100 text-gray-800' };
@@ -90,14 +91,8 @@ function StatusBadge({ status }: { status: (typeof ProposalStatus)[keyof typeof 
 // Priority Badge Component
 // ====================
 
-function PriorityBadge({
-  priority,
-}: {
-  priority: (typeof ProposalPriority)[keyof typeof ProposalPriority];
-}) {
-  const getPriorityConfig = (
-    priority: (typeof ProposalPriority)[keyof typeof ProposalPriority]
-  ) => {
+function PriorityBadge({ priority }: { priority: z.infer<typeof ProposalPrioritySchema> }) {
+  const getPriorityConfig = (priority: z.infer<typeof ProposalPrioritySchema>) => {
     switch (priority) {
       case 'LOW':
         return { label: 'Low', className: 'bg-green-100 text-green-800' };
@@ -137,13 +132,12 @@ function DashboardMetrics() {
 
     // Compute inProgress from byStatus (backend returns byStatus counts)
     const byStatus = stats.byStatus || {};
-    const inProgress = (
+    const inProgress =
       (byStatus.DRAFT || 0) +
       (byStatus.IN_REVIEW || 0) +
       (byStatus.PENDING_APPROVAL || 0) +
       (byStatus.SUBMITTED || 0) +
-      (byStatus.IN_PROGRESS || 0)
-    );
+      (byStatus.IN_PROGRESS || 0);
 
     return {
       total: stats.total || 0,

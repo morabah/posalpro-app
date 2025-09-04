@@ -15,7 +15,7 @@
 import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useProposal, useUpdateProposal } from '@/features/proposals/hooks';
+import { useCreateProposal, useProposal, useUpdateProposal } from '@/features/proposals/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { http } from '@/lib/http';
 import { logDebug, logError } from '@/lib/logger';
@@ -341,10 +341,10 @@ export function ProposalWizard({
 
       if (hasBasic && hasTeam) {
         const proposalBody = buildCreateBodyFromStore();
-        const { proposalService } = await import('@/services/proposalService');
+        const createProposal = useCreateProposal();
 
         try {
-          const response = await proposalService.createProposal(proposalBody as any);
+          await createProposal.mutateAsync(proposalBody as any);
           toast.success('Draft saved');
           router.push('/proposals');
           return;

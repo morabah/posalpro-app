@@ -14,7 +14,9 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useCreateProposal, useUpdateProposal } from '@/hooks/useProposal';
 import { logInfo } from '@/lib/logger';
 import { BasicInformationSchema } from '@/lib/validation/proposalValidation';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -29,93 +31,62 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
   const createProposalMutation = useCreateProposal();
   const updateProposalMutation = useUpdateProposal();
 
-  const [formData, setFormData] = useState({
-    title: proposal?.title || '',
-    description: proposal?.description || '',
-    customerId: proposal?.customerId || '',
-    dueDate: proposal?.dueDate ? new Date(proposal.dueDate).toISOString().split('T')[0] : '',
-    value: proposal?.value?.toString() || '',
-    currency: proposal?.currency || 'USD',
-    tags: proposal?.tags || [],
+  // ✅ REACT HOOK FORM SETUP
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors: formErrors, isValid },
+    watch,
+    setValue,
+    reset,
+  } = useForm({
+    resolver: zodResolver(BasicInformationSchema),
+    mode: 'onChange',
+    defaultValues: {
+      title: proposal?.title || '',
+      description: proposal?.description || '',
+      customerId: proposal?.customerId || '',
+      dueDate: proposal?.dueDate ? new Date(proposal.dueDate).toISOString().split('T')[0] : '',
+      value: proposal?.value?.toString() || '',
+      currency: proposal?.currency || 'USD',
+      tags: proposal?.tags || [],
+    },
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [tagInput, setTagInput] = useState('');
 
   // ====================
   // Event Handlers
   // ====================
 
-  const handleFieldChange = useCallback(
-    (field: keyof typeof formData, value: string | string[]) => {
-      setFormData(prev => ({ ...prev, [field]: value }));
-
-      // Clear error for this field
-      if (errors[field]) {
-        setErrors(prev => ({ ...prev, [field]: '' }));
-      }
-
-      logInfo('Proposal form field updated', {
-        component: 'ProposalForm_p',
-        operation: 'handleFieldChange',
-        field,
-        userStory: proposal?.id ? 'US-3.2' : 'US-3.1',
-        hypothesis: 'H4',
-      });
-    },
-    [errors, proposal?.id]
-  );
-
   const handleTagAdd = useCallback(() => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      const newTags = [...formData.tags, tagInput.trim()];
-      handleFieldChange('tags', newTags);
-      setTagInput('');
+    if (tagInput.trim()) {
+      const currentTags = watch('tags') || [];
+      if (!currentTags.includes(tagInput.trim())) {
+        setValue('tags', [...currentTags, tagInput.trim()]);
+        setTagInput('');
+      }
     }
-  }, [tagInput, formData.tags, handleFieldChange]);
+  }, [tagInput, setValue, watch]);
 
   const handleTagRemove = useCallback(
     (tagToRemove: string) => {
-      const newTags = formData.tags.filter((tag: string) => tag !== tagToRemove);
-      handleFieldChange('tags', newTags);
+      const currentTags = watch('tags') || [];
+      setValue(
+        'tags',
+        currentTags.filter(tag => tag !== tagToRemove)
+      );
     },
-    [formData.tags, handleFieldChange]
+    [setValue, watch]
   );
 
-  const validateForm = useCallback(() => {
-    try {
-      const dataToValidate = {
-        ...formData,
-        value: formData.value ? parseFloat(formData.value) : undefined,
-        dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
-      };
-
-      BasicInformationSchema.parse(dataToValidate);
-      setErrors({});
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const newErrors: Record<string, string> = {};
-        error.errors.forEach(err => {
-          const path = err.path.join('.');
-          newErrors[path] = err.message;
-        });
-        setErrors(newErrors);
-      }
-      return false;
-    }
-  }, [formData]);
-
-  const handleSubmit = useCallback(async () => {
-    if (!validateForm()) {
-      toast.error('Please fix the validation errors before submitting');
-      return;
-    }
-
+  // ✅ FORM SUBMISSION HANDLER
+  const onSubmit = async (data: any) => {
     const submitData = {
-      ...formData,
-      value: formData.value ? parseFloat(formData.value) : undefined,
-      dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+      ...data,
+      value: data.value ? parseFloat(data.value) : undefined,
+      dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
     };
 
     try {
@@ -135,7 +106,7 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
       if (proposal?.id) {
         await updateProposalMutation.mutateAsync({
           id: proposal.id,
-          data: submitData
+          data: submitData,
         });
         toast.success('Proposal updated successfully');
       } else {
@@ -155,15 +126,7 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
       });
       toast.error(proposal?.id ? 'Failed to update proposal' : 'Failed to create proposal');
     }
-  }, [
-    validateForm,
-    formData,
-    proposal?.id,
-    analytics,
-    updateProposalMutation,
-    createProposalMutation,
-    onSuccess,
-  ]);
+  };
 
   // ====================
   // Render
@@ -192,13 +155,15 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
               Title *
             </Label>
             <Input
+              {...register('title')}
               id="title"
-              value={formData.title}
-              onChange={e => handleFieldChange('title', e.target.value)}
+              value={watch('title') || ''}
               placeholder="Enter proposal title"
-              className={errors.title ? 'border-red-500' : ''}
+              className={formErrors.title ? 'border-red-500' : ''}
             />
-            {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title}</p>}
+            {formErrors.title && (
+              <p className="text-sm text-red-600 mt-1">{formErrors.title.message}</p>
+            )}
           </div>
 
           {/* Description */}
@@ -207,15 +172,15 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
               Description
             </Label>
             <Textarea
+              {...register('description')}
               id="description"
-              value={formData.description}
-              onChange={e => handleFieldChange('description', e.target.value)}
+              value={watch('description') || ''}
               placeholder="Enter proposal description"
               rows={3}
-              className={errors.description ? 'border-red-500' : ''}
+              className={formErrors.description ? 'border-red-500' : ''}
             />
-            {errors.description && (
-              <p className="text-sm text-red-600 mt-1">{errors.description}</p>
+            {formErrors.description && (
+              <p className="text-sm text-red-600 mt-1">{formErrors.description.message}</p>
             )}
           </div>
 
@@ -225,13 +190,15 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
               Customer ID *
             </Label>
             <Input
+              {...register('customerId')}
               id="customerId"
-              value={formData.customerId}
-              onChange={e => handleFieldChange('customerId', e.target.value)}
+              value={watch('customerId') || ''}
               placeholder="Enter customer ID"
-              className={errors.customerId ? 'border-red-500' : ''}
+              className={formErrors.customerId ? 'border-red-500' : ''}
             />
-            {errors.customerId && <p className="text-sm text-red-600 mt-1">{errors.customerId}</p>}
+            {formErrors.customerId && (
+              <p className="text-sm text-red-600 mt-1">{formErrors.customerId.message}</p>
+            )}
           </div>
 
           {/* Due Date */}
@@ -240,13 +207,15 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
               Due Date
             </Label>
             <Input
+              {...register('dueDate')}
               id="dueDate"
               type="date"
-              value={formData.dueDate}
-              onChange={e => handleFieldChange('dueDate', e.target.value)}
-              className={errors.dueDate ? 'border-red-500' : ''}
+              value={watch('dueDate') || ''}
+              className={formErrors.dueDate ? 'border-red-500' : ''}
             />
-            {errors.dueDate && <p className="text-sm text-red-600 mt-1">{errors.dueDate}</p>}
+            {formErrors.dueDate && (
+              <p className="text-sm text-red-600 mt-1">{formErrors.dueDate.message}</p>
+            )}
           </div>
 
           {/* Value and Currency */}
@@ -256,30 +225,39 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
                 Estimated Value
               </Label>
               <Input
+                {...register('value', {
+                  setValueAs: value => (value === '' ? undefined : value),
+                })}
                 id="value"
                 type="number"
                 step="0.01"
-                value={formData.value}
-                onChange={e => handleFieldChange('value', e.target.value)}
+                value={watch('value') || ''}
                 placeholder="0.00"
-                className={errors.value ? 'border-red-500' : ''}
+                className={formErrors.value ? 'border-red-500' : ''}
               />
-              {errors.value && <p className="text-sm text-red-600 mt-1">{errors.value}</p>}
+              {formErrors.value && (
+                <p className="text-sm text-red-600 mt-1">{formErrors.value.message}</p>
+              )}
             </div>
             <div>
               <Label htmlFor="currency" className="text-sm font-medium text-gray-700">
                 Currency
               </Label>
-              <Select
-                value={formData.currency}
-                onChange={value => handleFieldChange('currency', value)}
-                options={[
-                  { value: 'USD', label: 'USD' },
-                  { value: 'EUR', label: 'EUR' },
-                  { value: 'GBP', label: 'GBP' },
-                  { value: 'CAD', label: 'CAD' },
-                ]}
-                placeholder="Select currency"
+              <Controller
+                name="currency"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    options={[
+                      { value: 'USD', label: 'USD' },
+                      { value: 'EUR', label: 'EUR' },
+                      { value: 'GBP', label: 'GBP' },
+                      { value: 'CAD', label: 'CAD' },
+                    ]}
+                    placeholder="Select currency"
+                  />
+                )}
               />
             </div>
           </div>
@@ -303,9 +281,9 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
                 Add
               </Button>
             </div>
-            {formData.tags.length > 0 && (
+            {(watch('tags') || []).length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {formData.tags.map((tag: string) => (
+                {(watch('tags') || []).map((tag: string) => (
                   <span
                     key={tag}
                     className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
@@ -332,9 +310,9 @@ export function ProposalForm_p({ proposal, onSuccess, onCancel }: ProposalFormPr
           Cancel
         </Button>
         <Button
-          onClick={handleSubmit}
+          onClick={handleSubmit(onSubmit)}
           type="button"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !isValid}
           className="bg-blue-600 hover:bg-blue-700"
         >
           {isSubmitting

@@ -15,7 +15,7 @@
  */
 
 import { secureSessionManager } from '@/lib/auth/secureSessionManager';
-import { logger } from '@/lib/logger';
+import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 import { NextAuthOptions, type User as NextAuthUser, type Session } from 'next-auth';
 import type { JWT as NextAuthJWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -132,32 +132,32 @@ export const authOptions: NextAuthOptions = {
         const hasPassword = Boolean(credentials?.password);
         const role = credentials?.role;
 
-        logger.info('🔐 Authorization attempt:', {
+        logInfo('🔐 Authorization attempt:', {
           email,
           hasPassword,
           role,
         });
 
         if (!email || !credentials?.password) {
-          logger.info('❌ Missing credentials');
+          logInfo('❌ Missing credentials');
           throw new Error('Email and password are required');
         }
 
         try {
           const authStart = Date.now();
-          logger.info('🔍 Looking up user:', email);
+          logInfo('🔍 Looking up user:', email);
           // Find user in database
           const dbStart = Date.now();
           const user = await getUserByEmail(email);
           const dbDuration = Date.now() - dbStart;
-          logger.info('⏱️ [Auth Timing] getUserByEmail duration (ms):', dbDuration);
+          logInfo('⏱️ [Auth Timing] getUserByEmail duration (ms):', dbDuration);
 
           if (!user) {
-            logger.info('❌ User not found');
+            logInfo('❌ User not found');
             throw new Error('Invalid credentials');
           }
 
-          logger.info('✅ User found:', {
+          logInfo('✅ User found:', {
             id: user.id,
             email: user.email,
             status: user.status,
@@ -166,14 +166,14 @@ export const authOptions: NextAuthOptions = {
 
           // Check if user is active
           if (user.status !== 'ACTIVE') {
-            logger.info('❌ User not active:', user.status);
+            logInfo('❌ User not active:', user.status);
             throw new Error('Account is not active');
           }
 
           // Align behavior with /api/auth/login: do not hard-fail on role mismatch
           const roles = user.roles.map(userRole => userRole.role.name);
           if (credentials.role && !roles.includes(credentials.role)) {
-            logger.warn('⚠️ Role mismatch (continuing without strict rejection):', {
+            logWarn('⚠️ Role mismatch (continuing without strict rejection):', {
               user: user.email,
               selectedRole: credentials.role,
               userRoles: roles,
@@ -184,38 +184,38 @@ export const authOptions: NextAuthOptions = {
           // Handle password verification for traditional auth vs OAuth users
           if (user.password) {
             // Traditional user with password
-            logger.info('🔑 Verifying password for traditional user...');
+            logInfo('🔑 Verifying password for traditional user...');
             const pwStart = Date.now();
             const isValidPassword = await comparePassword(credentials.password, user.password);
             const pwDuration = Date.now() - pwStart;
-            logger.info('⏱️ [Auth Timing] password compare duration (ms):', pwDuration);
+            logInfo('⏱️ [Auth Timing] password compare duration (ms):', pwDuration);
             if (!isValidPassword) {
-              logger.info('❌ Invalid password');
+              logInfo('❌ Invalid password');
               throw new Error('Invalid credentials');
             }
-            logger.info('✅ Password valid');
+            logInfo('✅ Password valid');
           } else {
             // OAuth/auto-synced user without password
-            logger.info('🔄 OAuth user detected (no password verification needed)');
+            logInfo('🔄 OAuth user detected (no password verification needed)');
             // For OAuth users, we skip password verification
             // They are already authenticated via their provider
           }
 
           // Update last login timestamp (non-blocking)
           updateLastLogin(user.id).catch(err => {
-            logger.warn('lastLogin update failed (non-blocking):', err);
+            logWarn('lastLogin update failed (non-blocking):', err);
           });
 
           // For now, we'll assign basic permissions based on roles
           // In the future, this can be extended to use the actual permissions from the database
           const permissions = generatePermissionsFromRoles(roles);
 
-          logger.info(
+          logInfo(
             '🔐 Authentication successful for: ' + user.email + ' Roles: ' + JSON.stringify(roles)
           );
 
           const totalDuration = Date.now() - authStart;
-          logger.info('⏱️ [Auth Timing] authorize total duration (ms):', totalDuration);
+          logInfo('⏱️ [Auth Timing] authorize total duration (ms):', totalDuration);
 
           return {
             id: user.id,
@@ -227,7 +227,7 @@ export const authOptions: NextAuthOptions = {
             permissions: permissions,
           };
         } catch (error) {
-          logger.error('Authentication error:', error);
+          logError('Authentication error:', error);
           throw error;
         }
       },
@@ -259,7 +259,7 @@ export const authOptions: NextAuthOptions = {
             token.sessionId = sessionId;
           }
         } catch (err) {
-          logger.warn('[Auth] Failed to create secure session (continuing)', {
+          logWarn('[Auth] Failed to create secure session (continuing)', {
             error: (err as Error)?.message,
           });
         }
@@ -274,10 +274,7 @@ export const authOptions: NextAuthOptions = {
         const now = Date.now();
         const cached = sessionCache.get(throttleKey);
         if (cached && now - cached.timestamp < 2000) {
-          logger.info(
-            '📦 [Auth Cache] Dev throttle: returning throttled session for:',
-            token.email
-          );
+          logInfo('📦 [Auth Cache] Dev throttle: returning throttled session for:', token.email);
           return cached.session;
         }
         // After building session below, we will set this throttle entry
@@ -290,7 +287,7 @@ export const authOptions: NextAuthOptions = {
       // Check cache first
       const cached = sessionCache.get(cacheKey);
       if (cached && now - cached.timestamp < SESSION_CACHE_TTL) {
-        logger.info('📦 [Auth Cache] Returning cached session for:', token.email);
+        logInfo('📦 [Auth Cache] Returning cached session for:', token.email);
         return cached.session;
       }
 
@@ -341,13 +338,13 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signIn({ user }) {
       // Track successful sign-in events
-      logger.info('✅ User signed in successfully:', user.email);
+      logInfo('✅ User signed in successfully:', user.email);
     },
 
     async signOut({ token }: { token?: NextAuthJWT }) {
       // Track sign-out events and clear cache
       if (token && 'email' in token && token.email) {
-        logger.info('👋 User signed out:', token.email);
+        logInfo('👋 User signed out:', token.email);
         // Clear session cache for this user
         const cacheKey = `${token.email}-${token.id}`;
         sessionCache.delete(cacheKey);
@@ -368,6 +365,7 @@ function generatePermissionsFromRoles(roles: string[]): string[] {
     'System Administrator': ['*:*'],
     'Proposal Manager': ['proposals:read', 'proposals:write', 'proposals:manage'],
     'Subject Matter Expert (SME)': ['content:read', 'content:write', 'validation:execute'],
+    'Senior SME': ['content:read', 'content:write', 'validation:execute', 'mentoring:execute'],
     Executive: ['proposals:approve', 'reports:read', 'analytics:read'],
     'Content Manager': ['content:read', 'content:write', 'content:manage'],
     'Technical SME': ['content:read', 'content:write', 'validation:execute'],
@@ -383,4 +381,162 @@ function generatePermissionsFromRoles(roles: string[]): string[] {
   });
 
   return Array.from(permissions);
+}
+
+/**
+ * RBAC Middleware - Role-Based Access Control
+ * Enforces proper role-based access to admin endpoints
+ */
+export class RBACMiddleware {
+  private static readonly ROLE_HIERARCHY: Record<string, number> = {
+    'System Administrator': 1,
+    Executive: 2,
+    'Proposal Manager': 3,
+    'Senior SME': 4,
+    SME: 5,
+    'Technical SME': 5,
+    'Content Manager': 6,
+    'Proposal Specialist': 7,
+    'Business Development Manager': 8,
+  };
+
+  /**
+   * Check if user has required role level
+   */
+  static hasRequiredRole(userRoles: string[], requiredRole: string): boolean {
+    logDebug('RBAC: Checking required role level', {
+      component: 'RBACMiddleware',
+      operation: 'hasRequiredRole',
+      userRoles,
+      requiredRole,
+      userRolesCount: userRoles?.length || 0,
+    });
+
+    if (!userRoles || userRoles.length === 0) {
+      logWarn('RBAC: No user roles provided', {
+        component: 'RBACMiddleware',
+        operation: 'hasRequiredRole',
+        requiredRole,
+      });
+      return false;
+    }
+
+    const requiredLevel = this.ROLE_HIERARCHY[requiredRole];
+    if (!requiredLevel) {
+      logWarn('RBAC: Required role not found in hierarchy', {
+        component: 'RBACMiddleware',
+        operation: 'hasRequiredRole',
+        requiredRole,
+        availableRoles: Object.keys(this.ROLE_HIERARCHY),
+      });
+      return false;
+    }
+
+    const results = userRoles.map(userRole => {
+      const userLevel = this.ROLE_HIERARCHY[userRole];
+      const hasAccess = userLevel && userLevel <= requiredLevel;
+      return {
+        userRole,
+        userLevel,
+        requiredLevel,
+        hasAccess,
+      };
+    });
+
+    const hasRequiredRole = results.some(result => result.hasAccess);
+
+    logDebug('RBAC: Role level check results', {
+      component: 'RBACMiddleware',
+      operation: 'hasRequiredRole',
+      userRoles,
+      requiredRole,
+      requiredLevel,
+      results,
+      hasRequiredRole,
+    });
+
+    return hasRequiredRole;
+  }
+
+  /**
+   * Check if user has specific role
+   */
+  static hasRole(userRoles: string[], role: string): boolean {
+    return userRoles?.includes(role) || false;
+  }
+
+  /**
+   * Check if user has admin privileges (System Administrator or Executive)
+   */
+  static isAdmin(userRoles: string[]): boolean {
+    return this.hasRequiredRole(userRoles, 'Executive');
+  }
+
+  /**
+   * Check if user has super admin privileges (System Administrator only)
+   */
+  static isSuperAdmin(userRoles: string[]): boolean {
+    return this.hasRole(userRoles, 'System Administrator');
+  }
+
+  /**
+   * Get user role level
+   */
+  static getRoleLevel(role: string): number {
+    return this.ROLE_HIERARCHY[role] || 999;
+  }
+
+  /**
+   * Validate admin access
+   */
+  static validateAdminAccess(userRoles: string[]): { allowed: boolean; reason?: string } {
+    logDebug('RBAC: Validating admin access', {
+      component: 'RBACMiddleware',
+      operation: 'validateAdminAccess',
+      userRoles,
+      userRolesCount: userRoles?.length || 0,
+    });
+
+    if (!userRoles || userRoles.length === 0) {
+      logWarn('RBAC: Admin access denied - no roles assigned', {
+        component: 'RBACMiddleware',
+        operation: 'validateAdminAccess',
+        userRoles,
+      });
+      return { allowed: false, reason: 'No roles assigned' };
+    }
+
+    const isAdminCheck = this.isAdmin(userRoles);
+    logDebug('RBAC: Admin access check result', {
+      component: 'RBACMiddleware',
+      operation: 'validateAdminAccess',
+      userRoles,
+      isAdminCheck,
+      executiveRoleCheck: this.hasRole(userRoles, 'Executive'),
+      systemAdminRoleCheck: this.hasRole(userRoles, 'System Administrator'),
+    });
+
+    if (isAdminCheck) {
+      logInfo('RBAC: Admin access granted', {
+        component: 'RBACMiddleware',
+        operation: 'validateAdminAccess',
+        userRoles,
+      });
+      return { allowed: true };
+    }
+
+    const reason = `Insufficient privileges. Required: System Administrator or Executive. Current roles: ${userRoles.join(', ')}`;
+
+    logWarn('RBAC: Admin access denied', {
+      component: 'RBACMiddleware',
+      operation: 'validateAdminAccess',
+      userRoles,
+      reason,
+    });
+
+    return {
+      allowed: false,
+      reason,
+    };
+  }
 }

@@ -3,7 +3,6 @@
 import { Card } from '@/components/ui/Card';
 import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
-import { useFormValidation } from '@/hooks/useFormValidation';
 import { productValidationSchema } from '@/lib/validation/productValidation';
 import {
   CubeIcon,
@@ -12,43 +11,38 @@ import {
   ScaleIcon,
   TagIcon,
 } from '@heroicons/react/24/outline';
-import React from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
-// ✅ Example Product Form using the new validation library
+// ✅ Example Product Form using React Hook Form + Zod validation
 export function ProductFormExample() {
-  // ✅ Initialize form data
-  const initialData = {
-    name: '',
-    description: '',
-    sku: '',
-    price: undefined as number | undefined,
-    cost: undefined as number | undefined,
-    category: '',
-    tags: [] as string[],
-    status: 'draft' as 'active' | 'inactive' | 'draft',
-    weight: undefined as number | undefined,
-  };
-
-  // ✅ Use the reusable validation hook
-  const validation = useFormValidation(initialData, productValidationSchema, {
-    validateOnChange: true,
-    validateOnBlur: true,
+  // ✅ REACT HOOK FORM SETUP
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors, isValid },
+    watch,
+    setValue,
+  } = useForm({
+    resolver: zodResolver(productValidationSchema as any),
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      description: '',
+      sku: '',
+      price: undefined,
+      cost: undefined,
+      category: '',
+      tags: [],
+      status: 'draft',
+      weight: undefined,
+    },
   });
 
-  // ✅ Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validate all fields
-    const errors = validation.validateAll();
-
-    if (Object.keys(errors).length > 0) {
-      console.log('Validation errors:', errors);
-      return;
-    }
-
-    // Form is valid, proceed with submission
-    console.log('Form data:', validation.formData);
+  // ✅ FORM SUBMISSION HANDLER
+  const onSubmit = async (data: any) => {
+    console.log('Form data:', data);
     // Here you would typically call your API
   };
 
@@ -57,9 +51,19 @@ export function ProductFormExample() {
       <div className="p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Product Form Example</h2>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Error Summary */}
-          <FormErrorSummary errors={validation.validationErrors} />
+          <FormErrorSummary
+            errors={Object.entries(errors).reduce(
+              (acc, [key, error]) => {
+                if (error?.message && typeof error.message === 'string') {
+                  acc[key] = error.message;
+                }
+                return acc;
+              },
+              {} as Record<string, string>
+            )}
+          />
 
           {/* Basic Information */}
           <div className="space-y-4">
@@ -67,14 +71,14 @@ export function ProductFormExample() {
 
             {/* Product Name */}
             <FormField
+              {...register('name')}
               name="name"
               label="Product Name"
               placeholder="Enter product name"
-              value={validation.formData.name}
-              onChange={value => validation.handleFieldChange('name', value)}
-              onBlur={() => validation.handleFieldBlur('name')}
-              error={validation.getFieldError('name')}
-              touched={validation.isFieldTouched('name')}
+              value={watch('name') || ''}
+              onBlur={() => register('name').onBlur}
+              error={errors.name?.message}
+              touched={!!errors.name}
               required
               icon={<CubeIcon className="w-5 h-5" />}
             />

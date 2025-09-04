@@ -9,6 +9,9 @@ import { createRoute } from '@/lib/api/route';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { RBACMiddleware } from '@/lib/auth';
+import { forbidden, badRequest } from '@/lib/errors';
+import { getServerSession } from 'next-auth';
 
 // Import centralized schemas
 import {
@@ -32,18 +35,69 @@ const COMPONENT_MAPPING = {
 
 // Using centralized schemas from @/features/admin/schemas
 
-// GET /api/admin/users - Fetch users from database with modern createRoute wrapper
-export const GET = createRoute(
-  {
-    roles: ['System Administrator', 'Administrator'],
-    query: UsersQuerySchema,
-    apiVersion: '1',
-  },
-  async ({ req, user, query, requestId }) => {
-    const { page, limit, search, role, status, department } = query;
+// GET /api/admin/users - Fetch users from database with RBAC enforcement
+export async function GET(req: Request) {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
 
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+  try {
+    // Authentication check
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      throw forbidden('Authentication required');
+    }
+
+    const user = session.user as {
+      id: string;
+      email: string;
+      roles?: string[];
+    };
+
+    // RBAC Enforcement - Admin access required
+    logDebug('Admin Users API - Pre-RBAC Check', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      userId: user.id,
+      userEmail: user.email,
+      userRoles: user.roles,
+      userRolesType: typeof user.roles,
+      userRolesLength: user.roles?.length || 0,
+      requestId,
+    });
+
+    const rbacValidation = RBACMiddleware.validateAdminAccess(user.roles || []);
+    if (!rbacValidation.allowed) {
+      logError('RBAC Access Denied', {
+        component: 'AdminUsersAPI',
+        operation: 'GET',
+        userId: user.id,
+        userRoles: user.roles,
+        reason: rbacValidation.reason,
+        requestId,
+      });
+      throw forbidden(rbacValidation.reason || 'Access denied');
+    }
+
+    logDebug('RBAC Access Granted', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      userId: user.id,
+      userRoles: user.roles,
+      requestId,
+    });
+
+    // Parse query parameters
+    const url = new URL(req.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = parseInt(url.searchParams.get('limit') || '10');
+    const search = url.searchParams.get('search') || '';
+    const role = url.searchParams.get('role') || '';
+    const status = url.searchParams.get('status') || '';
+    const department = url.searchParams.get('department') || '';
+
+    const pageNum = parseInt(page.toString());
+    const limitNum = parseInt(limit.toString());
     const skip = (pageNum - 1) * limitNum;
 
     logDebug('Admin users API - handler started', {
@@ -51,7 +105,12 @@ export const GET = createRoute(
       operation: 'GET',
       userId: user.id,
       userRoles: user.roles,
-      query,
+      page: pageNum,
+      limit: limitNum,
+      search,
+      role,
+      status,
+      department,
       requestId,
     });
 
@@ -289,18 +348,71 @@ export const GET = createRoute(
     });
 
     return ok(responseData);
-  }
-);
+  } catch (error) {
+    const duration = Date.now() - startTime;
 
-// POST /api/admin/users - Create new user with modern createRoute wrapper
-export const POST = createRoute(
-  {
-    roles: ['System Administrator', 'Administrator'],
-    body: UserCreateSchema,
-    apiVersion: '1',
-  },
-  async ({ req, user, body, requestId }) => {
-    const userData = body;
+    logError('Admin users API error', {
+      component: 'AdminUsersAPI',
+      operation: 'GET',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration,
+      requestId,
+    });
+
+    // Re-throw to let Next.js handle the error response
+    throw error;
+  }
+}
+
+// POST /api/admin/users - Create new user with RBAC enforcement
+export async function POST(req: Request) {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+
+  try {
+    // Authentication check
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      throw forbidden('Authentication required');
+    }
+
+    const user = session.user as {
+      id: string;
+      email: string;
+      roles?: string[];
+    };
+
+    // RBAC Enforcement - Admin access required
+    const rbacValidation = RBACMiddleware.validateAdminAccess(user.roles || []);
+    if (!rbacValidation.allowed) {
+      logError('RBAC Access Denied', {
+        component: 'AdminUsersAPI',
+        operation: 'POST',
+        userId: user.id,
+        userRoles: user.roles,
+        reason: rbacValidation.reason,
+        requestId,
+      });
+      throw forbidden(rbacValidation.reason || 'Access denied');
+    }
+
+    logDebug('RBAC Access Granted', {
+      component: 'AdminUsersAPI',
+      operation: 'POST',
+      userId: user.id,
+      userRoles: user.roles,
+      requestId,
+    });
+
+    // Parse request body
+    const contentType = req.headers.get('content-type');
+    if (!contentType?.includes('application/json')) {
+      throw badRequest('Content-Type must be application/json');
+    }
+
+    const body = await req.json();
+    const userData = UserCreateSchema.parse(body);
 
     logDebug('Creating admin user', {
       component: 'AdminUsersAPI',
@@ -398,17 +510,70 @@ export const POST = createRoute(
       },
       201
     );
-  }
-);
+  } catch (error) {
+    const duration = Date.now() - startTime;
 
-// PUT /api/admin/users - Update user with modern createRoute wrapper
-export const PUT = createRoute(
-  {
-    roles: ['System Administrator', 'Administrator'],
-    body: UpdateUserWithIdSchema,
-    apiVersion: '1',
-  },
-  async ({ req, user, body, requestId }) => {
+    logError('Admin users API error', {
+      component: 'AdminUsersAPI',
+      operation: 'POST',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration,
+      requestId,
+    });
+
+    // Re-throw to let Next.js handle the error response
+    throw error;
+  }
+}
+
+// PUT /api/admin/users - Update user with RBAC enforcement
+export async function PUT(req: Request) {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+
+  try {
+    // Authentication check
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      throw forbidden('Authentication required');
+    }
+
+    const user = session.user as {
+      id: string;
+      email: string;
+      roles?: string[];
+    };
+
+    // RBAC Enforcement - Admin access required
+    const rbacValidation = RBACMiddleware.validateAdminAccess(user.roles || []);
+    if (!rbacValidation.allowed) {
+      logError('RBAC Access Denied', {
+        component: 'AdminUsersAPI',
+        operation: 'PUT',
+        userId: user.id,
+        userRoles: user.roles,
+        reason: rbacValidation.reason,
+        requestId,
+      });
+      throw forbidden(rbacValidation.reason || 'Access denied');
+    }
+
+    logDebug('RBAC Access Granted', {
+      component: 'AdminUsersAPI',
+      operation: 'PUT',
+      userId: user.id,
+      userRoles: user.roles,
+      requestId,
+    });
+
+    // Parse request body
+    const contentType = req.headers.get('content-type');
+    if (!contentType?.includes('application/json')) {
+      throw badRequest('Content-Type must be application/json');
+    }
+
+    const body = await req.json();
     const { id, ...updateData } = body;
 
     logDebug('Updating admin user', {
@@ -454,18 +619,70 @@ export const PUT = createRoute(
       status: updatedUser.status,
       updatedAt: updatedUser.updatedAt,
     });
-  }
-);
+  } catch (error) {
+    const duration = Date.now() - startTime;
 
-// DELETE /api/admin/users - Delete user with modern createRoute wrapper
-export const DELETE = createRoute(
-  {
-    roles: ['System Administrator', 'Administrator'],
-    query: DeleteUserSchema,
-    apiVersion: '1',
-  },
-  async ({ req, user, query, requestId }) => {
-    const { id: deleteUserId } = query;
+    logError('Admin users API error', {
+      component: 'AdminUsersAPI',
+      operation: 'PUT',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration,
+      requestId,
+    });
+
+    // Re-throw to let Next.js handle the error response
+    throw error;
+  }
+}
+
+// DELETE /api/admin/users - Delete user with RBAC enforcement
+export async function DELETE(req: Request) {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+
+  try {
+    // Authentication check
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      throw forbidden('Authentication required');
+    }
+
+    const user = session.user as {
+      id: string;
+      email: string;
+      roles?: string[];
+    };
+
+    // RBAC Enforcement - Admin access required
+    const rbacValidation = RBACMiddleware.validateAdminAccess(user.roles || []);
+    if (!rbacValidation.allowed) {
+      logError('RBAC Access Denied', {
+        component: 'AdminUsersAPI',
+        operation: 'DELETE',
+        userId: user.id,
+        userRoles: user.roles,
+        reason: rbacValidation.reason,
+        requestId,
+      });
+      throw forbidden(rbacValidation.reason || 'Access denied');
+    }
+
+    logDebug('RBAC Access Granted', {
+      component: 'AdminUsersAPI',
+      operation: 'DELETE',
+      userId: user.id,
+      userRoles: user.roles,
+      requestId,
+    });
+
+    // Parse query parameters
+    const url = new URL(req.url);
+    const deleteUserId = url.searchParams.get('id');
+
+    if (!deleteUserId) {
+      throw badRequest('User ID is required');
+    }
 
     logDebug('Deleting admin user', {
       component: 'AdminUsersAPI',
@@ -506,5 +723,18 @@ export const DELETE = createRoute(
     });
 
     return ok({ message: 'User deleted successfully' });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    logError('Admin users API error', {
+      component: 'AdminUsersAPI',
+      operation: 'DELETE',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration,
+      requestId,
+    });
+
+    // Re-throw to let Next.js handle the error response
+    throw error;
   }
-);
+}

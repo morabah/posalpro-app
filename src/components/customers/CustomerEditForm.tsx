@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { useCustomer, useUpdateCustomer } from '@/features/customers/hooks';
 import { CustomerUpdate } from '@/features/customers/schemas';
-import { Customer } from '@/services/customerService';
 import { logError } from '@/lib/logger';
+import { customerValidationSchema } from '@/lib/validation/customerValidation';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import React from 'react';
+import { useForm } from 'react-hook-form';
 
 interface CustomerEditFormProps {
   customerId: string;
@@ -20,73 +22,76 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
   const { data: customerData, isLoading, isError } = useCustomer(customerId);
   const updateCustomer = useUpdateCustomer();
 
-  const [formData, setFormData] = useState<CustomerUpdate & { id?: string }>({
-    name: '',
-    email: '',
-    phone: '',
-    website: '',
-    address: '',
-    industry: undefined,
-    companySize: undefined,
-    revenue: undefined,
-    status: 'ACTIVE',
-    tier: 'STANDARD',
-    tags: [],
+  // ✅ React Hook Form Setup
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors, isValid, touchedFields },
+    watch,
+    setValue,
+    trigger,
+    reset,
+  } = useForm<CustomerUpdate>({
+    resolver: zodResolver(customerValidationSchema as any),
+    mode: 'onBlur',
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      website: '',
+      address: '',
+      industry: undefined,
+      companySize: '',
+      revenue: undefined,
+      tier: 'STANDARD',
+      tags: [],
+    },
   });
 
-  // Update form data when customer data loads
-  useEffect(() => {
+  // ✅ RESET FORM WHEN CUSTOMER DATA LOADS
+  React.useEffect(() => {
     if (customerData) {
-      setFormData({
+      reset({
         name: customerData.name || '',
         email: customerData.email || '',
         phone: customerData.phone || '',
         website: customerData.website || '',
         address: customerData.address || '',
         industry: customerData.industry || undefined,
-        companySize: customerData.companySize || undefined,
-        revenue: customerData.revenue,
+        companySize: customerData.companySize || '',
+        revenue: customerData.revenue ?? undefined,
         status: customerData.status || 'ACTIVE',
         tier: customerData.tier || 'STANDARD',
         tags: customerData.tags || [],
       });
     }
-  }, [customerData]);
+  }, [customerData, reset]);
 
-  const handleInputChange = useCallback(
-    (field: keyof Customer, value: string | number | string[]) => {
-      setFormData(prev => ({
-        ...prev,
-        [field]: value,
-      }));
-    },
-    []
-  );
+  // ✅ FORM SUBMISSION HANDLER
+  const onSubmit = async (data: CustomerUpdate) => {
+    if (!customerId) return;
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
+    try {
+      await updateCustomer.mutateAsync({
+        id: customerId,
+        data,
+      });
 
-      if (!customerId) return;
-
-      try {
-        await updateCustomer.mutateAsync({
-          id: customerId,
-          data: formData,
-        });
-
-        // Navigate to customer detail page after successful update
-        router.push(`/customers/${customerId}`);
-      } catch (error) {
-        logError('Failed to update customer', error instanceof Error ? error : new Error(String(error)), {
+      // Navigate to customer detail page after successful update
+      router.push(`/customers/${customerId}`);
+    } catch (error) {
+      logError(
+        'Failed to update customer',
+        error instanceof Error ? error : new Error(String(error)),
+        {
           component: 'CustomerEditForm',
           operation: 'updateCustomer',
           customerId,
-        });
-      }
-    },
-    [customerId, formData, updateCustomer, router]
-  );
+        }
+      );
+    }
+  };
 
   if (isLoading) {
     return (
@@ -139,7 +144,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
             <h2 className="text-lg font-medium text-gray-900">Customer Information</h2>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Basic Information */}
               <div className="space-y-4">
@@ -148,10 +153,10 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     Full Name *
                   </label>
                   <Input
+                    {...register('name')}
                     id="name"
                     type="text"
-                    value={formData.name || ''}
-                    onChange={e => handleInputChange('name', e.target.value)}
+                    value={watch('name') || ''}
                     required
                     placeholder="Enter customer's full name"
                     className="min-h-[44px]"
@@ -163,10 +168,10 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     Email Address *
                   </label>
                   <Input
+                    {...register('email')}
                     id="email"
                     type="email"
-                    value={formData.email || ''}
-                    onChange={e => handleInputChange('email', e.target.value)}
+                    value={watch('email') || ''}
                     required
                     placeholder="customer@example.com"
                     className="min-h-[44px]"
@@ -178,10 +183,10 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     Phone Number
                   </label>
                   <Input
+                    {...register('phone')}
                     id="phone"
                     type="tel"
-                    value={formData.phone || ''}
-                    onChange={e => handleInputChange('phone', e.target.value)}
+                    value={watch('phone') || ''}
                     placeholder="+1 (555) 123-4567"
                     className="min-h-[44px]"
                   />
@@ -195,10 +200,10 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     Website
                   </label>
                   <Input
+                    {...register('website')}
                     id="website"
                     type="url"
-                    value={formData.website || ''}
-                    onChange={e => handleInputChange('website', e.target.value)}
+                    value={watch('website') || ''}
                     placeholder="https://example.com"
                     className="min-h-[44px]"
                   />
@@ -209,10 +214,10 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     Industry
                   </label>
                   <Input
+                    {...register('industry')}
                     id="industry"
                     type="text"
-                    value={formData.industry || ''}
-                    onChange={e => handleInputChange('industry', e.target.value)}
+                    value={watch('industry') || ''}
                     placeholder="Technology, Healthcare, Finance, etc."
                     className="min-h-[44px]"
                   />
@@ -223,10 +228,10 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     Address
                   </label>
                   <Input
+                    {...register('address')}
                     id="address"
                     type="text"
-                    value={formData.address || ''}
-                    onChange={e => handleInputChange('address', e.target.value)}
+                    value={watch('address') || ''}
                     placeholder="Enter full address"
                     className="min-h-[44px]"
                   />

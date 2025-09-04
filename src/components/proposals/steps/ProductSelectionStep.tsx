@@ -10,14 +10,17 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { Tooltip } from '@/components/ui/Tooltip';
+import type { Product } from '@/features/products';
+import { useInfiniteProductsMigrated, useProductCategories } from '@/features/products/hooks';
 import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
-import { productService, type Product } from '@/services/productService';
-import { useQuery } from '@tanstack/react-query';
+import { zodResolver } from '@hookform/resolvers/zod';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 interface ProductSelectionStepProps {
   data?: ProposalProductData;
@@ -26,6 +29,17 @@ interface ProductSelectionStepProps {
   onUpdate?: (data: ProposalProductData) => void;
   proposalId?: string; // ✅ ADDED: For unique localStorage keys per proposal
 }
+
+// ✅ REACT HOOK FORM SCHEMA FOR FILTER CONTROLS
+const filterSchema = z.object({
+  search: z.string().optional(),
+  category: z.string().optional(),
+  sortBy: z.string().optional(),
+  sortOrder: z.string().optional(),
+  showSelectedOnly: z.boolean().optional(),
+});
+
+type FilterFormData = z.infer<typeof filterSchema>;
 
 export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   data,
@@ -68,33 +82,40 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     () => (proposalId ? `wizard:step4:products:${proposalId}` : 'wizard:step4:products'),
     [proposalId]
   );
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'price' | 'isActive'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [category, setCategory] = useState<string>('');
-  const [showSelectedOnly, setShowSelectedOnly] = useState<boolean>(false);
+  // ✅ REACT HOOK FORM SETUP FOR FILTER CONTROLS
+  const { register, control, watch, setValue } = useForm<FilterFormData>({
+    resolver: zodResolver(filterSchema),
+    defaultValues: {
+      search: '',
+      category: '',
+      sortBy: 'name',
+      sortOrder: 'asc',
+      showSelectedOnly: false,
+    },
+  });
+
+  // Watch form values for easier access
+  const search = watch('search') || '';
+  const category = watch('category') || '';
+  const sortBy = (watch('sortBy') as 'createdAt' | 'name' | 'price' | 'isActive') || 'name';
+  const sortOrder = (watch('sortOrder') as 'asc' | 'desc') || 'asc';
+  const showSelectedOnly = watch('showSelectedOnly') || false;
 
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const saved = JSON.parse(raw) as {
-          search?: string;
-          sortBy?: typeof sortBy;
-          sortOrder?: typeof sortOrder;
-          category?: string;
-          showSelectedOnly?: boolean;
-        };
-        if (saved.search) setSearch(saved.search);
-        if (saved.sortBy) setSortBy(saved.sortBy);
-        if (saved.sortOrder) setSortOrder(saved.sortOrder);
-        if (typeof saved.category === 'string') setCategory(saved.category);
-        if (typeof saved.showSelectedOnly === 'boolean')
-          setShowSelectedOnly(saved.showSelectedOnly);
+        const saved = JSON.parse(raw) as FilterFormData;
+        if (saved.search !== undefined) setValue('search', saved.search);
+        if (saved.sortBy) setValue('sortBy', saved.sortBy);
+        if (saved.sortOrder) setValue('sortOrder', saved.sortOrder);
+        if (saved.category !== undefined) setValue('category', saved.category);
+        if (saved.showSelectedOnly !== undefined)
+          setValue('showSelectedOnly', saved.showSelectedOnly);
       }
     } catch {}
-  }, [STORAGE_KEY]); // ✅ FIXED: Include STORAGE_KEY in dependency to re-load when proposal changes
+  }, [STORAGE_KEY, setValue]); // ✅ FIXED: Include STORAGE_KEY in dependency to re-load when proposal changes
 
   // ✅ FIXED: Reset UI state when proposal changes to prevent stale data
   useEffect(() => {
@@ -108,13 +129,13 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       }
 
       // Clear previous state when switching proposals
-      setSearch('');
-      setSortBy('name');
-      setSortOrder('asc');
-      setCategory('');
-      setShowSelectedOnly(false);
+      setValue('search', '');
+      setValue('sortBy', 'name');
+      setValue('sortOrder', 'asc');
+      setValue('category', '');
+      setValue('showSelectedOnly', false);
     }
-  }, [proposalId]);
+  }, [proposalId, setValue]);
 
   useEffect(() => {
     try {
@@ -124,7 +145,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         JSON.stringify({ search, sortBy, sortOrder, category, showSelectedOnly })
       );
     } catch {}
-  }, [search, sortBy, sortOrder, category, showSelectedOnly]);
+  }, [STORAGE_KEY, search, sortBy, sortOrder, category, showSelectedOnly]);
 
   // Debounced search for API fetch
   const [debouncedSearch, setDebouncedSearch] = useState(search);
@@ -142,84 +163,20 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     data: productsData,
     isLoading: productsLoading,
     error: productsError,
-  } = useQuery<Product[]>({
-    queryKey: [
-      'products',
-      'proposal-wizard',
-      { search: debouncedSearch, sortBy, sortOrder, category },
-    ],
-    queryFn: async () => {
-      if (process.env.NODE_ENV === 'development') {
-        logDebug('ProductSelectionStep: Fetching products', {
-          component: 'ProductSelectionStep',
-          operation: 'fetchProducts',
-          search: debouncedSearch,
-          sortBy,
-        });
-      }
-
-      try {
-        const response = await productService.getProducts({
-          search: debouncedSearch,
-          limit: 50,
-          isActive: true,
-          sortBy,
-          sortOrder,
-          category: category || undefined,
-        });
-
-        if (response?.items) {
-          if (process.env.NODE_ENV === 'development') {
-            logDebug('ProductSelectionStep: Products loaded', {
-              component: 'ProductSelectionStep',
-              operation: 'fetchProducts',
-              count: response.items.length,
-            });
-          }
-          return response.items;
-        }
-
-        // This should not happen with the updated service, but keeping as fallback
-        logError('Unexpected response format from product service', {
-          component: 'ProductSelectionStep',
-          operation: 'fetchProducts',
-          response,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
-        return [];
-
-        // Log the actual response structure for debugging
-        logError('Invalid response format from products API', {
-          component: 'ProductSelectionStep',
-          operation: 'fetchProducts',
-          responseStructure: {
-            hasItems: 'items' in response,
-            itemCount: 'items' in response ? response.items?.length : 0,
-            responseType: typeof response,
-            responseKeys: Object.keys(response as Record<string, unknown>),
-          },
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
-
-        throw new Error('Failed to load products: Invalid response format');
-      } catch (error) {
-        logError('Failed to fetch products for proposal wizard', {
-          component: 'ProductSelectionStep',
-          operation: 'fetchProducts',
-          error: error instanceof Error ? error.message : 'Unknown error',
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
-        });
-        throw error;
-      }
-    },
-    staleTime: 30000, // 30 seconds - shorter for better responsiveness
-    gcTime: 120000, // 2 minutes
-    retry: 2,
-    refetchOnWindowFocus: false,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteProductsMigrated({
+    search: debouncedSearch,
+    limit: 50,
+    sortBy,
+    sortOrder,
+    category: category || undefined,
+    isActive: true,
   });
+
+  // Flatten the paginated data for compatibility
+  const flattenedProductsData: Product[] = productsData?.pages?.flatMap(page => page.items) || [];
 
   // Quick lookup sets
   const selectedSet = useMemo(
@@ -231,27 +188,17 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     [selectedProducts]
   );
 
-  // Categories for filter
-  const { data: categoryData } = useQuery<{
-    categories: Array<{ name: string; count: number; avgPrice: number; totalUsage: number }>;
-  }>({
-    queryKey: ['product-categories', { activeOnly: true }],
-    queryFn: async () => {
-      const res = await productService.getCategories({ activeOnly: true, includeStats: false });
-      return res || { categories: [] };
-    },
-    staleTime: 300000,
-    gcTime: 600000,
-  });
+  // Categories for filter using feature hook
+  const { data: categoryData } = useProductCategories();
 
   // Displayed list supports "selected only"
   const productsMap = useMemo(
-    () => new Map((productsData || []).map(p => [p.id, p] as const)),
-    [productsData]
+    () => new Map((flattenedProductsData || []).map(p => [p.id, p] as const)),
+    [flattenedProductsData]
   );
   const displayedItems: Product[] = useMemo(() => {
     if (!showSelectedOnly) {
-      const items = productsData || [];
+      const items = flattenedProductsData || [];
       if (!items.length) return items;
       const pinned = items.filter(p => selectedSet.has(p.id));
       const rest = items.filter(p => !selectedSet.has(p.id));
@@ -279,14 +226,14 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
           updatedAt: new Date(),
         } as unknown as Product)
     );
-  }, [showSelectedOnly, selectedProducts, productsMap, productsData, selectedSet]);
+  }, [showSelectedOnly, selectedProducts, productsMap, flattenedProductsData, selectedSet]);
 
   // Handle product addition
   const handleAddProduct = useCallback(
     (productId: string) => {
-      if (!productsData || productsError) return;
+      if (!flattenedProductsData || productsError) return;
 
-      const product = productsData.find(p => p.id === productId);
+      const product = flattenedProductsData.find(p => p.id === productId);
       if (product && !selectedProducts.find(p => p.productId === productId)) {
         const newProduct: ProposalProductData['products'][0] = {
           id: `temp-${Date.now()}`, // Temporary ID for UI
@@ -333,7 +280,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         );
       }
     },
-    [productsData, selectedProducts, analytics, productsError]
+    [flattenedProductsData, selectedProducts, analytics, productsError]
   );
 
   // Handle quantity change
@@ -542,17 +489,19 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Search Products</label>
             <Input
+              {...register('search')}
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => setValue('search', e.target.value)}
               placeholder="Search by name, SKU, or description..."
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
             <select
+              {...register('category')}
               className="border rounded px-3 py-2 text-sm w-full"
               value={category}
-              onChange={e => setCategory(e.target.value)}
+              onChange={e => setValue('category', e.target.value)}
             >
               <option value="">All categories</option>
               {(categoryData?.categories || []).map(c => (
@@ -564,30 +513,44 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
-            <select
-              className="border rounded px-3 py-2 text-sm w-full"
-              value={`${sortBy}:${sortOrder}`}
-              onChange={e => {
-                const [sb, so] = e.target.value.split(':') as [typeof sortBy, typeof sortOrder];
-                setSortBy(sb);
-                setSortOrder(so);
-              }}
-            >
-              <option value="name:asc">Name (A→Z)</option>
-              <option value="name:desc">Name (Z→A)</option>
-              <option value="price:asc">Price (Low→High)</option>
-              <option value="price:desc">Price (High→Low)</option>
-              <option value="createdAt:desc">Newest</option>
-              <option value="createdAt:asc">Oldest</option>
-            </select>
+            <Controller
+              name="sortBy"
+              control={control}
+              render={({ field }) => (
+                <select
+                  {...field}
+                  className="border rounded px-3 py-2 text-sm w-full"
+                  value={`${sortBy}:${sortOrder}`}
+                  onChange={e => {
+                    const [sb, so] = e.target.value.split(':') as [typeof sortBy, typeof sortOrder];
+                    setValue('sortBy', sb);
+                    setValue('sortOrder', so);
+                  }}
+                >
+                  <option value="name:asc">Name (A→Z)</option>
+                  <option value="name:desc">Name (Z→A)</option>
+                  <option value="price:asc">Price (Low→High)</option>
+                  <option value="price:desc">Price (High→Low)</option>
+                  <option value="createdAt:desc">Newest</option>
+                  <option value="createdAt:asc">Oldest</option>
+                </select>
+              )}
+            />
           </div>
           <div className="flex items-center gap-2">
-            <input
-              id="show-selected-only"
-              type="checkbox"
-              className="accent-blue-600"
-              checked={showSelectedOnly}
-              onChange={e => setShowSelectedOnly(e.target.checked)}
+            <Controller
+              name="showSelectedOnly"
+              control={control}
+              render={({ field: { value, ...field } }) => (
+                <input
+                  {...field}
+                  id="show-selected-only"
+                  type="checkbox"
+                  className="accent-blue-600"
+                  checked={showSelectedOnly}
+                  onChange={e => setValue('showSelectedOnly', e.target.checked)}
+                />
+              )}
             />
             <label htmlFor="show-selected-only" className="text-sm text-gray-700">
               Show selected only

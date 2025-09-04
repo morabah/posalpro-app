@@ -37,6 +37,17 @@ src/features/[domain]/
 ├── hooks/           # React Query hooks
 └── index.ts         # Feature exports
 
+src/app/(dashboard)/[domain]/
+├── [id]/
+│   ├── page.tsx     # Server component with Suspense boundaries
+│   ├── loading.tsx  # Route-level loading UI with user feedback
+│   └── error.tsx    # Route-level error boundary with recovery
+├── create/
+│   ├── page.tsx     # Creation form with validation
+│   ├── loading.tsx  # Loading states during form setup
+│   └── error.tsx    # Error handling for creation failures
+└── page.tsx         # List/index page with data fetching
+
 src/services/        # Service layer (HTTP client services for frontend)
 src/lib/services/   # Database services (Prisma-based for API routes)
 src/lib/store/       # Zustand stores (UI state only) - CANONICAL LOCATION
@@ -124,36 +135,42 @@ Both directories contain services for core entities:
 **This is by design**: Frontend needs HTTP services, backend needs database
 services.
 
-#### **Import Guidelines**
+#### **Import Patterns**
 
-- **Frontend Components**:
-  `import { Customer } from '@/services/customerService'`
-- **API Routes**:
-  `import { customerService } from '@/lib/services/customerService'`
-- **Specialized Services**:
-  `import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService'`
+- **Feature-First**: Always import from feature modules (`@/features/[domain]`)
+- **Service Layer**: Use appropriate service based on context (frontend vs
+  database)
+- **Cross-Domain**: Import shared utilities from centralized locations
 
 ---
 
-**📊 Data Flow Architecture:**
+**📊 Complete Data Flow Architecture:**
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   UI        │───▶│ React Query │───▶│  Service    │
-│ Components  │    │   Hooks     │    │   Layer     │
-└─────────────┘    └─────────────┘    └─────────────┘
-       │                   │                   │
-       ▼                   ▼                   ▼
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Zustand     │    │ Centralized │    │   API       │
-│ UI State    │    │ Query Keys  │    │  Routes     │
-└─────────────┘    └─────────────┘    └─────────────┘
-                                               │
-                                               ▼
-                                       ┌─────────────┐
-                                       │  Database   │
-                                       │   Schema    │
-                                       └─────────────┘
+│ Route       │    │   UI        │    │ React Query │
+│ Boundaries  │    │ Components  │    │   Hooks     │
+│ loading.tsx │    │             │    │             │
+│ error.tsx   │    └─────────────┘    └─────────────┘
+└─────────────┘             │                   │
+       │                    ▼                   ▼
+       │           ┌─────────────┐    ┌─────────────┐
+       │           │ Zustand     │    │  Service    │
+       │           │ UI State    │    │   Layer     │
+       │           └─────────────┘    └─────────────┘
+       │                    │                   │
+       └────────────────────┼───────────────────┼─────────────────┐
+                            ▼                   ▼                 │
+                   ┌─────────────┐    ┌─────────────┐            │
+                   │ Centralized │    │   API       │            │
+                   │ Query Keys  │    │  Routes     │            │
+                   └─────────────┘    └─────────────┘            │
+                                   │                            │
+                                   ▼                            ▼
+                          ┌─────────────┐             ┌─────────────┐
+                          │  Database   │◀────────────┤ Error       │
+                          │   Schema    │             │ Boundaries  │
+                          └─────────────┘             └─────────────┘
 ```
 
 ## 🎯 **IMPLEMENTATION PRIORITIES**
@@ -442,6 +459,25 @@ try {
     errorCode: processedError.code,
   });
   throw processedError;
+}
+```
+
+**🛡️ ProblemDetails Standard (RFC 7807)**
+
+```typescript
+// ✅ CORRECT: Standardized error response format
+{
+  "type": "https://api.posalpro.com/errors/validation",
+  "code": "VAL_4000",
+  "message": "Validation failed",
+  "fields": [
+    {
+      "field": "email",
+      "message": "Invalid email format",
+      "code": "invalid_string"
+    }
+  ],
+  "timestamp": "2025-09-04T14:12:39.651Z"
 }
 ```
 
@@ -772,25 +808,24 @@ return useInfiniteQuery({
 
 **Development Workflow**
 
-- Use `npm run app:cli` for API testing with real auth
 - Test with real database data, never mocks
 - Use feature flags for gradual rollouts
-- Keep development and production environments identical
+- Keep development and production environments consistent
+- Follow established CLI patterns for testing
 
 **Debugging Patterns**
 
-- Use structured logger (`@/lib/log`) with automatic request ID correlation
-- Check React Query DevTools for cache issues
-- Use browser network tab for API debugging
-- Monitor memory usage in development
-- Search logs by requestId for complete request tracing
+- Use structured logger with automatic request ID correlation
+- Leverage development tools for cache and performance issues
+- Monitor API responses and memory usage in development
+- Use request IDs for tracing across all layers
 
 **Performance Monitoring**
 
-- Watch for infinite re-renders with React DevTools
-- Monitor bundle size with `npm run build`
-- Use Lighthouse for performance audits
-- Track API response times
+- Monitor for unnecessary re-renders
+- Track bundle size and API response times
+- Use performance tools for optimization
+- Establish performance budgets and monitoring
 
 ## ⚠️ **WHAT NOT TO DO** {#what-not-to-do}
 
@@ -808,86 +843,28 @@ return useInfiniteQuery({
 9. **Don't implement custom caching systems**
 10. **Don't ignore TypeScript strict mode errors**
 
-**❌ Common Mistakes**
+**❌ Common Implementation Mistakes**
 
-- Array access on individual selectors (`stepData[1]` instead of
-  `useStepData(1)`)
+- Array access on individual selectors instead of proper selector usage
 - Inline useMemo in JSX causing hook order violations
-- Missing dependency arrays in useEffect
-- Unstable callback dependencies causing infinite loops
+- Missing or incorrect dependency arrays in useEffect/useCallback
+- Unstable callback dependencies causing infinite re-renders
 - Manual JSON serialization in HTTP client calls
-- Using console.log/console.error instead of structured logger (`@/lib/log`)
-- **Multi-layer response format mismatch** (`data.field` vs `data.data.field`)
+- Using console.log/console.error instead of structured logging
+- Response format mismatches between layers
 
-### **Multi-Layer Response Format Coordination (MANDATORY)**
+### **Data Flow Consistency**
 
-**✅ SUCCESS**: Systematic standardization achieved across entire codebase.
+**Consistent Data Patterns**: Maintain uniform data structures across all
+layers.
 
-**Success Metrics**:
+- **Service Layer**: Return domain data directly (unwrapped)
+- **Hook Layer**: Handle data access patterns consistently
+- **Component Layer**: Use hooks for data access, not direct service calls
+- **Schema Layer**: Match API response structure exactly
 
-- ✅ **0 TypeScript compilation errors**
-- ✅ **All service methods return consistent unwrapped data**
-- ✅ **All hooks handle unwrapped data correctly**
-- ✅ **Data flows seamlessly from API → Service → Hook → Component**
-- ✅ **Production-ready codebase** (102/102 static pages generated)
-
-#### **Service Layer (MANDATORY)**
-
-```typescript
-// ✅ CORRECT: Always return unwrapped domain data
-async getData(): Promise<DomainData> {
-  const response = await http.get<DomainData>(endpoint);
-  return response; // ✅ Return unwrapped data directly
-}
-
-// ✅ APPLIED: Admin, Proposal, Product services standardized
-async getUsers(): Promise<UsersListResponse> {
-  const response = await http.get<UsersListResponse>(endpoint);
-  return response; // ✅ Unwrapped data pattern
-}
-```
-
-#### **Hook Layer (MANDATORY)**
-
-```typescript
-// ✅ CORRECT: Direct data access without ApiResponse wrapper
-export function useDomainData(params) {
-  return useQuery({ ... }); // ✅ No explicit return type annotation
-}
-
-// ✅ APPLIED: All hooks updated for unwrapped data
-const result = await adminService.getRoles({...});
-return result.roles || []; // ✅ Direct property access
-```
-
-#### **Component Layer (MANDATORY)**
-
-```typescript
-// ✅ CORRECT: Direct data access from hooks
-const { data, isLoading } = useDomainData(params);
-useEffect(() => {
-  if (data?.items) {
-    // ✅ Handle unwrapped data structure
-    setState(data.items);
-  }
-}, [data]);
-```
-
-#### **Schema Layer (MANDATORY)**
-
-```typescript
-// ✅ CORRECT: Match actual API response structure
-export const DomainResponseSchema = z.object({
-  // Include ALL fields actually returned by API
-  items: z.array(DomainSchema),
-  nextCursor: z.string().nullable(),
-  meta: z.object({...}).optional(),
-});
-```
-
-**Prevention**: Apply unwrapped data pattern during initial implementation, not
-cleanup phase. Services throw errors instead of returning ApiResponse error
-objects.
+**Prevention**: Establish data patterns during initial implementation to avoid
+cleanup phases.
 
 ## 🛡️ **WHAT TO TAKE CARE OF** {#what-to-take-care}
 
@@ -895,73 +872,57 @@ objects.
 
 1. **Platform Safeguards**: Environment validation, security headers, rate
    limiting, and request-ID propagation
-2. **Database Schema Alignment**: Always check Prisma schema first
+2. **Database Schema Alignment**: Always check database schema first
 3. **Type Safety**: 100% TypeScript compliance, no `any` types
-4. **Structured Logging**: Use `@/lib/log` for all logging with automatic
-   request ID correlation
-5. **Error Boundaries**: Every async operation must have error handling
-6. **Performance Budget**: Monitor bundle size and runtime performance
-7. **Accessibility**: WCAG 2.1 AA compliance for all UI components
-8. **Security**: Input validation, RBAC enforcement, secure defaults
-9. **API Key Protection**: Use `assertApiKey()` for sensitive endpoints with
-   scoped access
-10. **Idempotency**: Protect POST operations with `assertIdempotent()` to
-    prevent duplicates
-11. **Error Boundaries**: Use `src/app/error.tsx` for route errors and
-    `src/app/global-error.tsx` for root errors
-12. **Testing**: Real data testing, not mocks
-13. **Documentation**: Update docs after every implementation
-14. **Analytics**: Track user interactions and hypothesis validation
-15. **Mobile Responsiveness**: Touch targets, responsive design
-16. **Background Processing**: Use outbox pattern with `jobs:drain` CLI command
-    for async operations
-17. **Seed Data Management**: Use `npm run db:seed` for consistent QA testing
-    environments
-18. **Database Safety**: Include null checks and defensive programming in
-    migrations
-19. **CLI Testing Infrastructure**: Use `npm run app:cli` commands for
-    comprehensive testing
+4. **Structured Logging**: Use centralized logging with request correlation
+5. **Route Boundaries**: Every route must have loading.tsx and error.tsx
+6. **Error Handling**: Comprehensive error boundaries and processing
+7. **Performance**: Monitor bundle size and runtime performance
+8. **Accessibility**: WCAG 2.1 AA compliance for all UI components
+9. **Security**: Input validation, authorization, secure defaults
+10. **API Security**: Protect sensitive endpoints with proper authentication
+11. **Data Integrity**: Prevent duplicates and ensure consistency
+12. **User Experience**: Loading states and error recovery mechanisms
+13. **Testing**: Real data testing with comprehensive coverage
+14. **Documentation**: Update docs after every implementation
+15. **Analytics**: Track user interactions and feature validation
+16. **Mobile Responsiveness**: Touch targets, responsive design
+17. **Background Processing**: Async operations with proper patterns
+18. **Data Management**: Consistent seed data and testing environments
+19. **Database Safety**: Defensive programming and null checks
+20. **Testing Infrastructure**: Comprehensive CLI and automated testing
 
 **Quality Gates**
 
 - [ ] Platform safeguards implemented (environment validation, security headers,
       rate limiting, request-ID propagation)
-- [ ] `npm run type-check` passes (0 errors)
-- [ ] `npm run audit:duplicates` shows no conflicts
-- [ ] `npm run build` succeeds
-- [ ] Lighthouse score >85 for performance
-- [ ] All API routes tested with `npm run app:cli`
-- [ ] Seed data created successfully (`npm run db:seed`)
-- [ ] CLI commands tested (`npm run app:cli jobs:drain`, `jobs:test`)
-- [ ] Error boundaries verified (`/test-error`, `/test-error-simple`)
-- [ ] Component Traceability Matrix updated
-- [ ] Documentation updated in IMPLEMENTATION_LOG.md
+- [ ] Route boundaries implemented (loading.tsx and error.tsx for all routes)
+- [ ] Type checking passes with no errors
+- [ ] No duplicate implementations or conflicts
+- [ ] Build process completes successfully
+- [ ] Performance standards met
+- [ ] All API endpoints tested
+- [ ] Seed data created and functional
+- [ ] CLI commands tested and working
+- [ ] Error handling verified
+- [ ] Component traceability maintained
+- [ ] Documentation updated after implementation
 
 ## 📚 **REFERENCE DOCUMENTS**
 
 **Mandatory Reading (Pre-Implementation)**
 
-- **MIGRATION_LESSONS.md**: Real-world patterns and anti-patterns
-- **PROPOSAL_MIGRATION_ASSESSMENT.md**: Complete implementation blueprint
-- **PROJECT_REFERENCE.md**: Architecture overview and API docs
-- **DEVELOPMENT_STANDARDS.md**: Code quality and patterns
-- **seed-data-usage.md**: Complete seed data and QA testing guide
-- **error-boundaries-usage.md**: Error boundary implementation and testing guide
-- **Structured Logger**: Use `@/lib/log` for all logging (automatic request ID
-  correlation)
+- **PROJECT_REFERENCE.md**: Architecture overview and API documentation
+- **DEVELOPMENT_STANDARDS.md**: Code quality and implementation patterns
+- **Structured Logger**: Use `@/lib/log` for all logging with automatic request
+  ID correlation
 
 **Implementation References**
 
-- Use proposal/customer/product modules as gold standards
-- Check existing hooks in `src/hooks/` before creating new ones
-- Review service patterns in `src/services/`
-- Follow store patterns in `src/lib/store/`
-
----
-
-**🎯 Remember**: This document reflects the actual working patterns from your
-modern implementation. Always reference the working code in
-proposal/customer/product modules when in doubt.\*\*
+- Review existing feature modules for patterns and structure
+- Check shared hooks in `src/hooks/` before creating new ones
+- Follow established service patterns in `src/services/`
+- Use store patterns from `src/lib/store/` for state management
 
 ---
 
@@ -973,12 +934,13 @@ document to every Cursor prompt when working on new features.
 **Quick Reference Flow:**
 
 1. **Check existing implementations first** (`npm run audit:duplicates`)
-2. **Follow Feature-Based Architecture** (src/features/[domain]/)
+2. **Follow Feature-Based Architecture** (`src/features/[domain]/`)
 3. **Database-First Design** (check Prisma schema)
-4. **Use modern patterns** (React Query + Zustand + Service Layer)
-5. **Use structured logging** (`@/lib/log`) with automatic request ID
+4. **Implement Route Boundaries** (loading.tsx and error.tsx for all routes)
+5. **Use modern patterns** (React Query + Zustand + Service Layer)
+6. **Use structured logging** (`@/lib/log`) with automatic request ID
    correlation
-6. **Reference working modules** (proposal/customer/product)
+7. **Reference existing feature modules for patterns**
 
 **Key Sections to Reference:**
 
@@ -989,5 +951,5 @@ document to every Cursor prompt when working on new features.
 - **What NOT to Do** - Common anti-patterns to avoid
 - **Tips & Tricks** - Development workflow patterns
 
-**🎯 Gold Standard**: Use proposal/customer/product modules as templates for all
-new implementations.\*\*
+**🎯 Implementation Principle**: Follow established patterns while adapting to
+specific domain requirements.

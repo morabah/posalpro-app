@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ProposalContentData, useProposalActions } from '@/lib/store/proposalStore';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 interface ContentSelectionStepProps {
   data?: ProposalContentData;
@@ -19,6 +22,14 @@ interface ContentSelectionStepProps {
   onBack: () => void;
   onUpdate?: (data: ProposalContentData) => void;
 }
+
+// ✅ REACT HOOK FORM SCHEMA FOR CONTENT SELECTION
+const contentSelectionSchema = z.object({
+  search: z.string().optional(),
+  selectedTemplates: z.array(z.string()).optional(),
+});
+
+type ContentSelectionFormData = z.infer<typeof contentSelectionSchema>;
 
 // Mock content templates - in real app, these would come from API
 const CONTENT_TEMPLATES = [
@@ -63,7 +74,16 @@ export function ContentSelectionStep({
   const analytics = useOptimizedAnalytics();
   const { setStepData } = useProposalActions();
 
-  // Local state for form data
+  // ✅ REACT HOOK FORM SETUP FOR CONTENT SELECTION
+  const { register, control, watch, setValue } = useForm<ContentSelectionFormData>({
+    resolver: zodResolver(contentSelectionSchema),
+    defaultValues: {
+      search: '',
+      selectedTemplates: data?.selectedTemplates || [],
+    },
+  });
+
+  // Local state for form data (keeping custom content separate for now)
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>(
     data?.selectedTemplates || []
   );
@@ -82,11 +102,15 @@ export function ContentSelectionStep({
   const handleTemplateToggle = useCallback(
     (templateId: string) => {
       setSelectedTemplates(prev => {
+        let newSelected;
         if (prev.includes(templateId)) {
-          return prev.filter(id => id !== templateId);
+          newSelected = prev.filter(id => id !== templateId);
         } else {
-          return [...prev, templateId];
+          newSelected = [...prev, templateId];
         }
+        // Update React Hook Form value
+        setValue('selectedTemplates', newSelected);
+        return newSelected;
       });
 
       analytics.trackOptimized('content_template_toggled', {

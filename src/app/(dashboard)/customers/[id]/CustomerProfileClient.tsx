@@ -17,7 +17,6 @@ import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useCustomer } from '@/features/customers/hooks';
 import type { Customer } from '@/features/customers/schemas';
-import { useFormValidation } from '@/hooks/useFormValidation';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -38,9 +37,11 @@ import {
   XCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 // ✅ TYPES
@@ -59,7 +60,16 @@ interface CustomerStatistics {
 interface CustomerApiResponse {
   id?: string | number;
   name?: string;
-  industry?: 'TECHNOLOGY' | 'HEALTHCARE' | 'FINANCE' | 'RETAIL' | 'MANUFACTURING' | 'EDUCATION' | 'GOVERNMENT' | 'OTHER' | null;
+  industry?:
+    | 'TECHNOLOGY'
+    | 'HEALTHCARE'
+    | 'FINANCE'
+    | 'RETAIL'
+    | 'MANUFACTURING'
+    | 'EDUCATION'
+    | 'GOVERNMENT'
+    | 'OTHER'
+    | null;
   address?: string | null;
   phone?: string | null;
   website?: string | null;
@@ -92,26 +102,32 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   // ✅ EDIT STATE (local, not queried)
   const [isEditing, setIsEditing] = useState(false);
 
-  // ✅ REUSABLE VALIDATION HOOK
-  const validation = useFormValidation<CustomerEditData>(
-    {
+  // ✅ REACT HOOK FORM SETUP
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors, isValid, touchedFields },
+    watch,
+    setValue,
+    trigger,
+    reset,
+  } = useForm<CustomerEditData>({
+    resolver: zodResolver(customerValidationSchema as any),
+    mode: 'onBlur',
+    defaultValues: {
       name: '',
       email: '',
-      phone: undefined,
-      website: undefined,
-      address: undefined,
-      industry: undefined,
+      phone: '',
+      website: '',
+      address: '',
+      industry: '',
       revenue: undefined,
       companySize: '',
-      tier: 'bronze',
+      tier: 'STANDARD',
       tags: [],
     },
-    customerValidationSchema,
-    {
-      validateOnChange: false, // Don't validate on change initially
-      validateOnBlur: true,
-    }
-  );
+  });
 
   // ✅ REACT QUERY: Query Keys
   const CUSTOMER_QUERY_KEYS = useMemo(
@@ -128,25 +144,25 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       id: String(raw.id ?? previous?.id ?? ''),
       name: String(raw.name ?? previous?.name ?? ''),
       email: String(raw.email ?? previous?.email ?? ''),
-      phone: raw.phone ?? (previous?.phone ?? undefined),
-      website: raw.website ?? (previous?.website ?? undefined),
-      address: raw.address ?? (previous?.address ?? undefined),
-      industry: raw.industry ?? (previous?.industry ?? undefined),
-      companySize: raw.companySize ?? (previous?.companySize ?? null),
+      phone: raw.phone ?? previous?.phone ?? undefined,
+      website: raw.website ?? previous?.website ?? undefined,
+      address: raw.address ?? previous?.address ?? undefined,
+      industry: raw.industry ?? previous?.industry ?? undefined,
+      companySize: raw.companySize ?? previous?.companySize ?? null,
       revenue: typeof raw.revenue === 'number' ? raw.revenue : (previous?.revenue ?? null),
-      status: raw.status ?? (previous?.status ?? 'ACTIVE'),
-      tier: raw.tier ?? (previous?.tier ?? undefined),
+      status: raw.status ?? previous?.status ?? 'ACTIVE',
+      tier: raw.tier ?? previous?.tier ?? undefined,
       tags: Array.isArray(raw.tags) ? raw.tags : (previous?.tags ?? []),
-      metadata: raw.metadata ?? (previous?.metadata ?? null),
-      segmentation: raw.segmentation ?? (previous?.segmentation ?? null),
-      riskScore: raw.riskScore ?? (previous?.riskScore ?? null),
-      ltv: raw.ltv ?? (previous?.ltv ?? null),
-      lastContact: raw.lastContact ?? (previous?.lastContact ?? null),
-      cloudId: raw.cloudId ?? (previous?.cloudId ?? null),
-      lastSyncedAt: raw.lastSyncedAt ?? (previous?.lastSyncedAt ?? null),
-      syncStatus: raw.syncStatus ?? (previous?.syncStatus ?? null),
-      createdAt: raw.createdAt ?? (previous?.createdAt ?? ''),
-      updatedAt: raw.updatedAt ?? (previous?.updatedAt ?? ''),
+      metadata: raw.metadata ?? previous?.metadata ?? null,
+      segmentation: raw.segmentation ?? previous?.segmentation ?? null,
+      riskScore: raw.riskScore ?? previous?.riskScore ?? null,
+      ltv: raw.ltv ?? previous?.ltv ?? null,
+      lastContact: raw.lastContact ?? previous?.lastContact ?? null,
+      cloudId: raw.cloudId ?? previous?.cloudId ?? null,
+      lastSyncedAt: raw.lastSyncedAt ?? previous?.lastSyncedAt ?? null,
+      syncStatus: raw.syncStatus ?? previous?.syncStatus ?? null,
+      createdAt: raw.createdAt ?? previous?.createdAt ?? '',
+      updatedAt: raw.updatedAt ?? previous?.updatedAt ?? '',
     }),
     []
   );
@@ -161,6 +177,24 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     }
     return mapApiToCustomer(customerResponse);
   }, [customerResponse, mapApiToCustomer]);
+
+  // ✅ RESET FORM WHEN CUSTOMER DATA LOADS
+  React.useEffect(() => {
+    if (customer) {
+      reset({
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone ?? '',
+        website: customer.website ?? '',
+        address: customer.address ?? '',
+        industry: customer.industry ?? '',
+        revenue: customer.revenue ?? undefined,
+        companySize: customer.companySize ?? '',
+        tier: customer.tier ?? 'STANDARD',
+        tags: customer.tags ?? [],
+      });
+    }
+  }, [customer, reset]);
 
   // ✅ Initialize edit data when entering edit mode
   const handleEditToggle = useCallback(() => {
@@ -177,13 +211,24 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         companySize: customer.companySize ?? '',
         tags: customer.tags ? [...customer.tags] : [],
       };
-      validation.resetForm(initialData);
+      reset(initialData);
       setIsEditing(true);
     } else {
       setIsEditing(false);
-      validation.resetForm();
+      reset({
+        name: '',
+        email: '',
+        phone: '',
+        website: '',
+        address: '',
+        industry: '',
+        revenue: undefined,
+        companySize: '',
+        tier: 'STANDARD',
+        tags: [],
+      });
     }
-  }, [isEditing, customer, validation]);
+  }, [isEditing, customer, reset]);
 
   // ✅ REACT QUERY: Update customer mutation
   const { mutateAsync: saveCustomer, isPending: isSaving } = useMutation({
@@ -273,7 +318,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       });
       void logInfo('[CustomerProfile] onSuccess mutation', { customerId });
       setIsEditing(false);
-      validation.resetForm();
     },
     onError: (err: unknown) => {
       const message =
@@ -295,12 +339,60 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     },
   });
 
+  // ✅ FORM SUBMISSION HANDLER
+  const onSubmit = async (data: CustomerEditData) => {
+    try {
+      await saveCustomer(data);
+      setIsEditing(false);
+
+      void logInfo('[CustomerProfile] Update success', {
+        customerId,
+        userStory: 'US-2.2',
+        hypothesis: 'H4',
+      });
+
+      // ✅ ANALYTICS: Track successful update
+      trackOptimized(
+        'customer_updated',
+        {
+          userStory: 'US-2.2',
+          hypothesis: 'H4',
+          component: 'CustomerProfileClient',
+          customerId,
+        },
+        'high'
+      );
+    } catch (error) {
+      void logError('[CustomerProfile] Update failed', {
+        customerId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userStory: 'US-2.2',
+        hypothesis: 'H4',
+      });
+
+      errorHandlingService.processError({
+        message: 'Failed to update customer',
+        code: ErrorCodes.DATA.QUERY_FAILED,
+        metadata: {
+          component: 'CustomerProfileClient',
+          operation: 'UPDATE',
+          customerId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      });
+    }
+  };
+
   // ✅ UI HELPERS
   const getTierDisplay = (tier: CustomerTier) => {
     const displays = {
       [CustomerTier.STANDARD]: { label: 'Standard', color: 'text-gray-600', bg: 'bg-gray-100' },
       [CustomerTier.PREMIUM]: { label: 'Premium', color: 'text-blue-600', bg: 'bg-blue-100' },
-      [CustomerTier.ENTERPRISE]: { label: 'Enterprise', color: 'text-purple-600', bg: 'bg-purple-100' },
+      [CustomerTier.ENTERPRISE]: {
+        label: 'Enterprise',
+        color: 'text-purple-600',
+        bg: 'bg-purple-100',
+      },
     } as const;
     return displays[tier] || displays[CustomerTier.STANDARD]; // Fallback to STANDARD if tier not found
   };
@@ -370,13 +462,13 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
               <div className="space-y-2">
                 <div className="space-y-1">
                   <FormField
+                    {...register('name')}
                     name="name"
                     label=""
-                    value={validation.formData.name}
-                    onChange={value => validation.handleFieldChange('name', value)}
-                    onBlur={() => validation.handleFieldBlur('name')}
-                    error={validation.getFieldError('name')}
-                    touched={validation.isFieldTouched('name')}
+                    value={watch('name') || ''}
+                    onBlur={() => register('name').onBlur}
+                    error={errors.name?.message}
+                    touched={!!touchedFields.name}
                     required
                     className="text-2xl font-bold text-gray-900"
                     inputClassName="text-2xl font-bold text-gray-900 border-b-2 bg-transparent focus:outline-none"
@@ -386,13 +478,13 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 <div className="flex items-center space-x-4 text-sm">
                   <div className="space-y-1">
                     <FormField
+                      {...register('industry')}
                       name="industry"
                       label=""
-                      value={validation.formData.industry}
-                      onChange={value => validation.handleFieldChange('industry', value)}
-                      onBlur={() => validation.handleFieldBlur('industry')}
-                      error={validation.getFieldError('industry')}
-                      touched={validation.isFieldTouched('industry')}
+                      value={watch('industry') || ''}
+                      onBlur={() => register('industry').onBlur}
+                      error={errors.industry?.message}
+                      touched={!!touchedFields.industry}
                       className="border-b bg-transparent focus:outline-none"
                       inputClassName="border-b bg-transparent focus:outline-none"
                       placeholder="Industry"
@@ -401,14 +493,14 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   <span>•</span>
                   <div className="space-y-1">
                     <FormField
+                      {...register('companySize')}
                       name="companySize"
                       label=""
                       type="text"
-                      value={validation.formData.companySize}
-                      onChange={value => validation.handleFieldChange('companySize', value)}
-                      onBlur={() => validation.handleFieldBlur('companySize')}
-                      error={validation.getFieldError('companySize')}
-                      touched={validation.isFieldTouched('companySize')}
+                      value={watch('companySize') || ''}
+                      onBlur={() => register('companySize').onBlur}
+                      error={errors.companySize?.message}
+                      touched={!!touchedFields.companySize}
                       className="w-20"
                       inputClassName="w-20 border-b bg-transparent focus:outline-none"
                       placeholder="0"
@@ -418,14 +510,16 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   <span>•</span>
                   <div className="space-y-1">
                     <FormField
+                      {...register('revenue', {
+                        setValueAs: value => (value === '' ? undefined : Number(value)),
+                      })}
                       name="revenue"
                       label=""
                       type="number"
-                      value={validation.formData.revenue}
-                      onChange={value => validation.handleFieldChange('revenue', value)}
-                      onBlur={() => validation.handleFieldBlur('revenue')}
-                      error={validation.getFieldError('revenue')}
-                      touched={validation.isFieldTouched('revenue')}
+                      value={watch('revenue') || ''}
+                      onBlur={() => register('revenue').onBlur}
+                      error={errors.revenue?.message}
+                      touched={!!touchedFields.revenue}
                       className="w-32"
                       inputClassName="w-32 border-b bg-transparent focus:outline-none"
                       placeholder="0"
@@ -443,8 +537,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   <span>{customer.companySize || 'N/A'} employees</span>
                   <span>•</span>
                   <span>
-                    {customer.revenue ? formatLargeNumber(customer.revenue) : 'N/A'}{' '}
-                    revenue
+                    {customer.revenue ? formatLargeNumber(customer.revenue) : 'N/A'} revenue
                   </span>
                 </div>
               </div>
@@ -476,10 +569,10 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => saveCustomer(validation.formData)}
+                  onClick={handleSubmit(onSubmit)}
                   variant="primary"
                   className="flex items-center min-h-[44px]"
-                  disabled={isSaving || !validation.isValid}
+                  disabled={isSaving || !isValid}
                   aria-label="Save changes"
                 >
                   <CheckIcon className="w-4 h-4 mr-2" />
@@ -502,234 +595,248 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       </div>
 
       {/* Validation Error Summary */}
-      {isEditing && validation.hasErrors && (
+      {isEditing && Object.keys(errors).length > 0 && (
         <div className="mb-6">
-          <FormErrorSummary errors={validation.validationErrors} />
+          <FormErrorSummary
+            errors={Object.entries(errors).reduce(
+              (acc, [key, error]) => {
+                if (error?.message && typeof error.message === 'string') {
+                  acc[key] = error.message;
+                }
+                return acc;
+              },
+              {} as Record<string, string>
+            )}
+          />
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column - Customer Overview */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Basic Information */}
-          <Card>
-            <div className="p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
-              <div className="space-y-3">
-                <div className="flex items-center">
-                  <BuildingOfficeIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing ? (
-                    <FormField
-                      name="name"
-                      label=""
-                      value={validation.formData.name}
-                      onChange={value => validation.handleFieldChange('name', value)}
-                      onBlur={() => validation.handleFieldBlur('name')}
-                      error={validation.getFieldError('name')}
-                      touched={validation.isFieldTouched('name')}
-                      required
-                      className="flex-1"
-                      inputClassName="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
-                      placeholder="Company name"
-                    />
-                  ) : (
-                    <span className="text-gray-900">{customer.name}</span>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <MapPinIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing ? (
-                    <FormField
-                      name="address"
-                      label=""
-                      value={validation.formData.address}
-                      onChange={value => validation.handleFieldChange('address', value)}
-                      onBlur={() => validation.handleFieldBlur('address')}
-                      error={validation.getFieldError('address')}
-                      touched={validation.isFieldTouched('address')}
-                      className="flex-1"
-                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
-                      placeholder="Address"
-                    />
-                  ) : (
-                    <span className="text-gray-700">{customer.address}</span>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <PhoneIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing ? (
-                    <FormField
-                      name="phone"
-                      label=""
-                      type="tel"
-                      value={validation.formData.phone}
-                      onChange={value => validation.handleFieldChange('phone', value)}
-                      onBlur={() => validation.handleFieldBlur('phone')}
-                      error={validation.getFieldError('phone')}
-                      touched={validation.isFieldTouched('phone')}
-                      className="flex-1"
-                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
-                      placeholder="Phone number"
-                    />
-                  ) : (
-                    <span className="text-gray-700">{customer.phone}</span>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing ? (
-                    <FormField
-                      name="email"
-                      label=""
-                      type="email"
-                      value={validation.formData.email}
-                      onChange={value => validation.handleFieldChange('email', value)}
-                      onBlur={() => validation.handleFieldBlur('email')}
-                      error={validation.getFieldError('email')}
-                      touched={validation.isFieldTouched('email')}
-                      required
-                      className="flex-1"
-                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
-                      placeholder="Email address"
-                    />
-                  ) : (
-                    <span className="text-gray-700">{customer.email}</span>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <GlobeAltIcon className="w-5 h-5 text-gray-400 mr-3" />
-                  {isEditing ? (
-                    <FormField
-                      name="website"
-                      label=""
-                      type="url"
-                      value={validation.formData.website}
-                      onChange={value => validation.handleFieldChange('website', value)}
-                      onBlur={() => validation.handleFieldBlur('website')}
-                      error={validation.getFieldError('website')}
-                      touched={validation.isFieldTouched('website')}
-                      className="flex-1"
-                      inputClassName="flex-1 border-b bg-transparent focus:outline-none"
-                      placeholder="Website URL"
-                    />
-                  ) : (
-                    <a
-                      href={`https://${customer.website}`}
-                      className="text-blue-600 hover:text-blue-800"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {customer.website}
-                    </a>
-                  )}
-                </div>
-                <div className="flex items-center justify-between mt-4">
-                  <span
-                    className={`px-3 py-1 text-sm rounded-full ${tierDisplay?.bg || 'bg-gray-100'} ${tierDisplay?.color || 'text-gray-600'}`}
-                  >
-                    {tierDisplay?.label || 'Unknown Tier'}
-                  </span>
-                  <span className="text-sm text-gray-600">{customer.industry}</span>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {customer.tags && customer.tags.length > 0 ? (
-                    customer.tags.map((tag, index) => (
-                      <span
-                        key={index}
-                        className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Customer Overview */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Basic Information */}
+            <Card>
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center">
+                    <BuildingOfficeIcon className="w-5 h-5 text-gray-400 mr-3" />
+                    {isEditing ? (
+                      <FormField
+                        {...register('name')}
+                        name="name"
+                        label=""
+                        value={watch('name') || ''}
+                        onBlur={() => register('name').onBlur}
+                        error={errors.name?.message}
+                        touched={!!touchedFields.name}
+                        required
+                        className="flex-1"
+                        inputClassName="flex-1 border-b border-gray-300 bg-transparent focus:outline-none focus:border-blue-500"
+                        placeholder="Company name"
+                      />
+                    ) : (
+                      <span className="text-gray-900">{customer.name}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <MapPinIcon className="w-5 h-5 text-gray-400 mr-3" />
+                    {isEditing ? (
+                      <FormField
+                        {...register('address')}
+                        name="address"
+                        label=""
+                        value={watch('address') || ''}
+                        onBlur={() => register('address').onBlur}
+                        error={errors.address?.message}
+                        touched={!!touchedFields.address}
+                        className="flex-1"
+                        inputClassName="flex-1 border-b bg-transparent focus:outline-none"
+                        placeholder="Address"
+                      />
+                    ) : (
+                      <span className="text-gray-700">{customer.address}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <PhoneIcon className="w-5 h-5 text-gray-400 mr-3" />
+                    {isEditing ? (
+                      <FormField
+                        {...register('phone')}
+                        name="phone"
+                        label=""
+                        type="tel"
+                        value={watch('phone') || ''}
+                        onBlur={() => register('phone').onBlur}
+                        error={errors.phone?.message}
+                        touched={!!touchedFields.phone}
+                        className="flex-1"
+                        inputClassName="flex-1 border-b bg-transparent focus:outline-none"
+                        placeholder="Phone number"
+                      />
+                    ) : (
+                      <span className="text-gray-700">{customer.phone}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3" />
+                    {isEditing ? (
+                      <FormField
+                        {...register('email')}
+                        name="email"
+                        label=""
+                        type="email"
+                        value={watch('email') || ''}
+                        onBlur={() => register('email').onBlur}
+                        error={errors.email?.message}
+                        touched={!!touchedFields.email}
+                        required
+                        className="flex-1"
+                        inputClassName="flex-1 border-b bg-transparent focus:outline-none"
+                        placeholder="Email address"
+                      />
+                    ) : (
+                      <span className="text-gray-700">{customer.email}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <GlobeAltIcon className="w-5 h-5 text-gray-400 mr-3" />
+                    {isEditing ? (
+                      <FormField
+                        {...register('website')}
+                        name="website"
+                        label=""
+                        type="url"
+                        value={watch('website') || ''}
+                        onBlur={() => register('website').onBlur}
+                        error={errors.website?.message}
+                        touched={!!touchedFields.website}
+                        className="flex-1"
+                        inputClassName="flex-1 border-b bg-transparent focus:outline-none"
+                        placeholder="Website URL"
+                      />
+                    ) : (
+                      <a
+                        href={`https://${customer.website}`}
+                        className="text-blue-600 hover:text-blue-800"
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        {tag}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-gray-500">No tags</span>
-                  )}
+                        {customer.website}
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mt-4">
+                    <span
+                      className={`px-3 py-1 text-sm rounded-full ${tierDisplay?.bg || 'bg-gray-100'} ${tierDisplay?.color || 'text-gray-600'}`}
+                    >
+                      {tierDisplay?.label || 'Unknown Tier'}
+                    </span>
+                    <span className="text-sm text-gray-600">{customer.industry}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {customer.tags && customer.tags.length > 0 ? (
+                      customer.tags.map((tag, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+                        >
+                          {tag}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500">No tags</span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
+            </Card>
 
-          {/* Customer Health */}
-          <Card>
-            <div className="p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Customer Health</h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Health Score</span>
-                    <span
-                      className={`text-lg font-bold ${getHealthColor(customer?.riskScore ? Number(customer.riskScore) : 50)}`}
-                    >
-                      {customer?.riskScore ? Number(customer.riskScore) : 50}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${
-                        (customer?.riskScore ? Number(customer.riskScore) : 50) >= 80
-                          ? 'bg-green-500'
-                          : (customer?.riskScore ? Number(customer.riskScore) : 50) >= 60
-                            ? 'bg-yellow-500'
-                            : 'bg-red-500'
-                      }`}
-                      style={{ width: `${customer?.riskScore ? Number(customer.riskScore) : 50}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+            {/* Customer Health */}
+            <Card>
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Customer Health</h3>
+                <div className="space-y-4">
                   <div>
-                    <span className="text-gray-600">Engagement:</span>
-                    <div className="font-medium capitalize">medium</div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Health Score</span>
+                      <span
+                        className={`text-lg font-bold ${getHealthColor(customer?.riskScore ? Number(customer.riskScore) : 50)}`}
+                      >
+                        {customer?.riskScore ? Number(customer.riskScore) : 50}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${
+                          (customer?.riskScore ? Number(customer.riskScore) : 50) >= 80
+                            ? 'bg-green-500'
+                            : (customer?.riskScore ? Number(customer.riskScore) : 50) >= 60
+                              ? 'bg-yellow-500'
+                              : 'bg-red-500'
+                        }`}
+                        style={{
+                          width: `${customer?.riskScore ? Number(customer.riskScore) : 50}%`,
+                        }}
+                      ></div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Last Contact:</span>
-                    <div className="font-medium">
-                      {customer.lastContact
-                        ? new Date(customer.lastContact).toLocaleDateString()
-                        : 'Never'}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Engagement:</span>
+                      <div className="font-medium capitalize">medium</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Last Contact:</span>
+                      <div className="font-medium">
+                        {customer.lastContact
+                          ? new Date(customer.lastContact).toLocaleDateString()
+                          : 'Never'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center text-sm text-blue-800">
+                      <CalendarIcon className="w-4 h-4 mr-2" />
+                      Next action due: {new Date().toLocaleDateString()}
                     </div>
                   </div>
                 </div>
-                <div className="p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center text-sm text-blue-800">
-                    <CalendarIcon className="w-4 h-4 mr-2" />
-                    Next action due: {new Date().toLocaleDateString()}
-                  </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Right Column - Detailed Information */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Customer Overview</h3>
+                <p className="text-gray-600">
+                  Detailed customer information and analytics would be displayed here. This includes
+                  proposal history, activity timeline, segmentation data, and AI-powered insights
+                  based on the customer ID:{' '}
+                  <code className="bg-gray-100 px-2 py-1 rounded">{customerId}</code>
+                </p>
+                <div className="mt-4 flex space-x-4">
+                  <Button
+                    variant="primary"
+                    onClick={() => router.push(`/proposals/create?customer=${customerId}`)}
+                  >
+                    Create Proposal
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => trackOptimized('view_full_profile', { customerId })}
+                  >
+                    View Full Profile
+                  </Button>
                 </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
-
-        {/* Right Column - Detailed Information */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <div className="p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Customer Overview</h3>
-              <p className="text-gray-600">
-                Detailed customer information and analytics would be displayed here. This includes
-                proposal history, activity timeline, segmentation data, and AI-powered insights
-                based on the customer ID:{' '}
-                <code className="bg-gray-100 px-2 py-1 rounded">{customerId}</code>
-              </p>
-              <div className="mt-4 flex space-x-4">
-                <Button
-                  variant="primary"
-                  onClick={() => router.push(`/proposals/create?customer=${customerId}`)}
-                >
-                  Create Proposal
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => trackOptimized('view_full_profile', { customerId })}
-                >
-                  View Full Profile
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
+      </form>
     </div>
   );
 }

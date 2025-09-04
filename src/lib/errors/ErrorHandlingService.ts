@@ -14,6 +14,12 @@ import {
   ErrorCodes,
   errorCodeToHttpStatus,
 } from './ErrorCodes';
+import {
+  getProblemTypeUri,
+  mapZodErrorsToFields,
+  ProblemDetails,
+  ProblemField,
+} from './ProblemDetails';
 import { ErrorMetadata, StandardError } from './StandardError';
 
 function hasName(value: unknown): value is { name: unknown } {
@@ -211,6 +217,9 @@ export class ErrorHandlingService {
       code: err.code,
     }));
 
+    // Map Zod errors to ProblemField format for fields array
+    const fields = mapZodErrorsToFields(formattedErrors);
+
     return new StandardError({
       message: defaultMessage || 'Validation failed',
       code: ErrorCodes.VALIDATION.INVALID_INPUT,
@@ -218,12 +227,42 @@ export class ErrorHandlingService {
       metadata: {
         ...metadata,
         validationErrors: formattedErrors,
+        fields, // Add fields array for ProblemDetails format
       },
     });
   }
 
   /**
-   * Create a standardized API error response
+   * Convert StandardError to ProblemDetails format
+   */
+  public convertToProblemDetails(standardError: StandardError, status?: number): ProblemDetails {
+    const problemDetails: ProblemDetails = {
+      type: getProblemTypeUri(standardError.code),
+      code: standardError.code,
+      message: standardError.message,
+      timestamp: standardError.timestamp,
+    };
+
+    // Add HTTP status if provided
+    if (status) {
+      problemDetails.status = status;
+    }
+
+    // Add fields array for validation errors
+    if (standardError.metadata?.fields && Array.isArray(standardError.metadata.fields)) {
+      problemDetails.fields = standardError.metadata.fields as ProblemField[];
+    }
+
+    // Add additional details
+    if (standardError.metadata?.userSafeDetails) {
+      problemDetails.details = standardError.metadata.userSafeDetails;
+    }
+
+    return problemDetails;
+  }
+
+  /**
+   * Create a standardized API error response using ProblemDetails format
    */
   public createApiErrorResponse(
     error: unknown,
@@ -240,18 +279,11 @@ export class ErrorHandlingService {
     // Log the error
     this.logError(standardError);
 
-    // Return standardized response
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message: standardError.message,
-          code: standardError.code,
-          details: standardError.metadata?.userSafeDetails || undefined,
-        },
-      },
-      { status }
-    );
+    // Convert to ProblemDetails format
+    const problemDetails = this.convertToProblemDetails(standardError, status);
+
+    // Return ProblemDetails response
+    return NextResponse.json(problemDetails, { status });
   }
 
   /**

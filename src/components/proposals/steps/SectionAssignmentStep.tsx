@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/forms/Input';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ProposalSectionData, useProposalActions } from '@/lib/store/proposalStore';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 
 interface SectionAssignmentStepProps {
   data?: ProposalSectionData;
@@ -19,6 +20,21 @@ interface SectionAssignmentStepProps {
   onBack: () => void;
   onUpdate?: (data: ProposalSectionData) => void;
 }
+
+// ✅ REACT HOOK FORM SCHEMA FOR SECTION ASSIGNMENT
+const sectionAssignmentSchema = z.object({
+  sections: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        content: z.string(),
+      })
+    )
+    .optional(),
+});
+
+type SectionAssignmentFormData = z.infer<typeof sectionAssignmentSchema>;
 
 // Mock section templates - in real app, these would come from API
 const SECTION_TEMPLATES = [

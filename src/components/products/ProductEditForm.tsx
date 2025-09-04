@@ -6,7 +6,7 @@ import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { SearchableDropdown } from '@/components/ui/SearchableDropdown';
-import { useFormValidation } from '@/hooks/useFormValidation';
+import type { ProductUpdate } from '@/features/products';
 import {
   useProductCategories,
   useProductMigrated,
@@ -16,9 +16,10 @@ import {
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { logError, logInfo } from '@/lib/logger';
 import { productCreateValidationSchema } from '@/lib/validation/productValidation';
-import { ProductUpdate } from '@/services/productService';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 interface ProductEditFormProps {
@@ -34,30 +35,52 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
   const { data: categoriesData, isLoading: categoriesLoading } = useProductCategories();
   const { data: tagsData, isLoading: tagsLoading } = useProductTags();
 
-  // ✅ Get product data safely
-  const productData = product || null;
+  // ✅ REACT HOOK FORM SETUP
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors, isValid, touchedFields },
+    watch,
+    setValue,
+    trigger,
+    reset,
+  } = useForm<ProductUpdate>({
+    resolver: zodResolver(productCreateValidationSchema as any),
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      description: '',
+      sku: '',
+      price: 0,
+      currency: 'USD',
+      category: [],
+      tags: [],
+      isActive: true,
+      images: [],
+      version: 1,
+      userStoryMappings: ['US-4.1'],
+    },
+  });
 
-  // ✅ REUSABLE VALIDATION HOOK - Initialize with product data if available
-  const validation = useFormValidation(
-    {
-      name: productData?.name || '',
-      description: productData?.description || '',
-      sku: productData?.sku || '',
-      price: productData?.price || 0,
-      currency: productData?.currency || 'USD',
-      category: productData?.category || [],
-      tags: productData?.tags || [],
-      isActive: productData?.isActive ?? true,
-      images: productData?.images || [],
-      version: productData?.version || 1,
-      userStoryMappings: productData?.userStoryMappings || ['US-4.1'],
-    } as ProductUpdate,
-    productCreateValidationSchema,
-    {
-      validateOnChange: true,
-      validateOnBlur: true,
+  // ✅ Reset form when product data is loaded
+  useEffect(() => {
+    if (product) {
+      reset({
+        name: product.name || '',
+        description: product.description || '',
+        sku: product.sku || '',
+        price: product.price || 0,
+        currency: product.currency || 'USD',
+        category: product.category || [],
+        tags: product.tags || [],
+        isActive: product.isActive ?? true,
+        images: product.images || [],
+        version: product.version || 1,
+        userStoryMappings: product.userStoryMappings || ['US-4.1'],
+      });
     }
-  );
+  }, [product, reset]);
 
   // ✅ SKU VALIDATION HOOK - Same as ProductCreateForm
   const skuValidation = useSkuValidation({
@@ -65,36 +88,22 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
     excludeId: productId, // Exclude current product from SKU validation
   });
 
+  // ✅ Watch SKU field for validation
+  const watchedSku = watch('sku');
+
   // 🚀 MODERN PATTERN: Use the hook's built-in handler
   const handleSkuChange = useCallback(
     (value: string) => {
-      skuValidation.handleSkuChange(value, validation.handleFieldChange);
+      skuValidation.handleSkuChange(value, (field, val) => {
+        setValue(field as keyof ProductUpdate, val);
+        trigger(field as keyof ProductUpdate);
+      });
     },
-    [skuValidation, validation.handleFieldChange]
+    [skuValidation, setValue, trigger]
   );
 
-  // ✅ Handle form submission - Same validation logic as ProductCreateForm
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validate all fields
-    const errors = validation.validateAll();
-    if (Object.keys(errors).length > 0) {
-      // Show user-friendly error message instead of just logging
-      const errorMessages = Object.values(errors).join(', ');
-      toast.error(`Please fix the following errors: ${errorMessages}`);
-
-      logError('Product update: Validation failed', {
-        component: 'ProductEditForm',
-        operation: 'handleSubmit',
-        errors,
-        productId,
-        userStory: 'US-4.1',
-        hypothesis: 'H5',
-      });
-      return;
-    }
-
+  // ✅ Handle form submission with React Hook Form
+  const onSubmit = async (data: ProductUpdate) => {
     // Check SKU validation
     if (skuValidation.exists || skuValidation.error) {
       const errorMessage = skuValidation.error || 'SKU already exists';
@@ -102,10 +111,10 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
 
       logError('Product update: SKU validation failed', {
         component: 'ProductEditForm',
-        operation: 'handleSubmit',
-        productId,
-        sku: validation.formData.sku as string,
+        operation: 'onSubmit',
+        sku: data.sku,
         skuError: skuValidation.error,
+        productId,
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
@@ -115,40 +124,25 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
     try {
       logInfo('Product update: Starting product update', {
         component: 'ProductEditForm',
-        operation: 'handleSubmit',
-        productId,
+        operation: 'onSubmit',
         productData: {
-          name: validation.formData.name as string,
-          sku: validation.formData.sku as string,
-          price: validation.formData.price as number,
+          name: data.name,
+          sku: data.sku,
+          price: data.price,
         },
+        productId,
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
 
-      const productData: ProductUpdate = {
-        name: validation.formData.name as string,
-        description: (validation.formData.description as string) || undefined,
-        sku: validation.formData.sku as string,
-        price: validation.formData.price as number,
-        currency: validation.formData.currency as string,
-        category: validation.formData.category as string[],
-        tags: validation.formData.tags as string[],
-        isActive: validation.formData.isActive as boolean,
-        attributes: validation.formData.attributes as Record<string, string | number | boolean>,
-        images: validation.formData.images as string[],
-        version: validation.formData.version as number,
-        userStoryMappings: validation.formData.userStoryMappings as string[],
-      };
-
-      const result = await updateProduct.mutateAsync({ id: productId, data: productData });
+      const result = await updateProduct.mutateAsync({ id: productId, data });
 
       // ✅ Always redirect on successful update, regardless of result structure
       toast.success('Product updated successfully!');
 
       logInfo('Product update: Product updated successfully', {
         component: 'ProductEditForm',
-        operation: 'handleSubmit',
+        operation: 'onSubmit',
         productId,
         userStory: 'US-4.1',
         hypothesis: 'H5',
@@ -162,7 +156,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
 
       logError('Product update: Failed to update product', {
         component: 'ProductEditForm',
-        operation: 'handleSubmit',
+        operation: 'onSubmit',
         productId,
         error: errorMessage,
         userStory: 'US-4.1',
@@ -209,7 +203,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
   }
 
   // ✅ Ensure we have product data before rendering form
-  if (!productData) {
+  if (!product) {
     return (
       <Card className="p-8">
         <div className="text-center">
@@ -227,9 +221,19 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
       <div className="p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Edit Product</h2>
 
-        <form onSubmit={handleSubmit} className="space-y-6" key={productId}>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" key={productId}>
           {/* Error Summary */}
-          <FormErrorSummary errors={validation.validationErrors} />
+          <FormErrorSummary
+            errors={Object.entries(errors).reduce(
+              (acc, [key, error]) => {
+                if (error?.message && typeof error.message === 'string') {
+                  acc[key] = error.message;
+                }
+                return acc;
+              },
+              {} as Record<string, string>
+            )}
+          />
 
           {/* Basic Information */}
           <div className="space-y-4">
@@ -237,33 +241,37 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
 
             {/* Product Name */}
             <FormField
+              {...register('name')}
               name="name"
               label="Product Name"
               placeholder="Enter product name"
-              value={validation.formData.name as string}
-              onChange={value => validation.handleFieldChange('name', value)}
-              onBlur={() => validation.handleFieldBlur('name')}
-              error={validation.getFieldError('name')}
-              touched={validation.isFieldTouched('name')}
+              value={watch('name') || ''}
+              onBlur={() => register('name').onBlur}
+              error={errors.name?.message}
+              touched={!!touchedFields.name}
               required
             />
 
             {/* SKU */}
             <FormField
+              {...register('sku')}
               name="sku"
               label="SKU"
               placeholder="PROD-001"
-              value={validation.formData.sku as string}
-              onChange={handleSkuChange}
-              onBlur={() => validation.handleFieldBlur('sku')}
-              error={validation.getFieldError('sku') || skuValidation.error || undefined}
-              touched={validation.isFieldTouched('sku')}
+              value={watchedSku || ''}
+              onChange={e => {
+                register('sku').onChange(e);
+                handleSkuChange(e.target.value);
+              }}
+              onBlur={() => register('sku').onBlur}
+              error={errors.sku?.message || skuValidation.error || undefined}
+              touched={!!touchedFields.sku}
               required
             />
             {skuValidation.isValidating && (
               <p className="text-sm text-blue-600">Validating SKU...</p>
             )}
-            {!skuValidation.isValidating && validation.formData.sku && (
+            {!skuValidation.isValidating && watchedSku && (
               <p className="text-sm text-gray-500">
                 Use uppercase letters, numbers, hyphens, and underscores only
               </p>
@@ -271,15 +279,15 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
 
             {/* Price */}
             <FormField
+              {...register('price', { valueAsNumber: true })}
               name="price"
               label="Price"
               type="number"
               placeholder="0.00"
-              value={validation.formData.price as number}
-              onChange={value => validation.handleFieldChange('price', parseFloat(value) || 0)}
-              onBlur={() => validation.handleFieldBlur('price')}
-              error={validation.getFieldError('price')}
-              touched={validation.isFieldTouched('price')}
+              value={watch('price') || ''}
+              onBlur={() => register('price').onBlur}
+              error={errors.price?.message}
+              touched={!!touchedFields.price}
               required
             />
 
@@ -289,10 +297,8 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
                 Currency
               </label>
               <select
+                {...register('currency')}
                 id="currency"
-                value={validation.formData.currency as string}
-                onChange={e => validation.handleFieldChange('currency', e.target.value)}
-                onBlur={() => validation.handleFieldBlur('currency')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="USD">USD</option>
@@ -302,62 +308,79 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
                 <option value="AUD">AUD</option>
                 <option value="JPY">JPY</option>
               </select>
-              {validation.getFieldError('currency') && (
-                <p className="mt-1 text-sm text-red-600">{validation.getFieldError('currency')}</p>
+              {errors.currency && (
+                <p className="mt-1 text-sm text-red-600">{errors.currency.message}</p>
               )}
             </div>
 
             {/* Description */}
             <FormField
+              {...register('description')}
               name="description"
               label="Description"
               type="textarea"
               placeholder="Enter product description"
-              value={validation.formData.description as string}
-              onChange={value => validation.handleFieldChange('description', value)}
-              onBlur={() => validation.handleFieldBlur('description')}
-              error={validation.getFieldError('description')}
-              touched={validation.isFieldTouched('description')}
+              value={watch('description') || ''}
+              onBlur={() => register('description').onBlur}
+              error={errors.description?.message}
+              touched={!!touchedFields.description}
             />
 
             {/* Category */}
-            <SearchableDropdown
-              label="Category"
-              placeholder="Select or type categories"
-              value={
-                Array.isArray(validation.formData.category) ? validation.formData.category : []
-              }
-              onChange={categories => validation.handleFieldChange('category', categories)}
-              options={categoriesData?.categories || []}
-              isLoading={categoriesLoading}
-              error={validation.getFieldError('category')}
+            <Controller
+              name="category"
+              control={control}
+              render={({ field }) => (
+                <SearchableDropdown
+                  label="Category"
+                  placeholder="Select or type categories"
+                  value={field.value || []}
+                  onChange={field.onChange}
+                  options={categoriesData?.categories || []}
+                  isLoading={categoriesLoading}
+                  error={errors.category?.message}
+                />
+              )}
             />
 
             {/* Tags */}
-            <SearchableDropdown
-              label="Tags"
-              placeholder="Select or type tags"
-              value={Array.isArray(validation.formData.tags) ? validation.formData.tags : []}
-              onChange={tags => validation.handleFieldChange('tags', tags)}
-              options={tagsData?.tags || []}
-              isLoading={tagsLoading}
-              error={validation.getFieldError('tags')}
+            <Controller
+              name="tags"
+              control={control}
+              render={({ field }) => (
+                <SearchableDropdown
+                  label="Tags"
+                  placeholder="Select or type tags"
+                  value={field.value || []}
+                  onChange={field.onChange}
+                  options={tagsData?.tags || []}
+                  isLoading={tagsLoading}
+                  error={errors.tags?.message}
+                />
+              )}
             />
 
             {/* Is Active */}
             <div className="flex items-center">
-              <Checkbox
-                id="isActive"
-                checked={validation.formData.isActive as boolean}
-                onChange={e => validation.handleFieldChange('isActive', e.target.checked)}
-                onBlur={() => validation.handleFieldBlur('isActive')}
+              <Controller
+                name="isActive"
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <Checkbox
+                      id="isActive"
+                      checked={field.value ?? true}
+                      onChange={checked => field.onChange(checked)}
+                    />
+                    <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+                      Active
+                    </label>
+                  </>
+                )}
               />
-              <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
-                Active
-              </label>
             </div>
-            {validation.getFieldError('isActive') && (
-              <p className="mt-1 text-sm text-red-600">{validation.getFieldError('isActive')}</p>
+            {errors.isActive && (
+              <p className="mt-1 text-sm text-red-600">{errors.isActive.message}</p>
             )}
           </div>
 
@@ -376,9 +399,9 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
               variant="primary"
               disabled={
                 updateProduct.isPending ||
-                validation.hasErrors ||
+                !isValid ||
                 skuValidation.exists ||
-                (skuValidation.isValidating && Boolean(validation.formData.sku))
+                (skuValidation.isValidating && Boolean(watchedSku))
               }
             >
               {updateProduct.isPending ? (

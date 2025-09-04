@@ -1,6 +1,12 @@
 // API route wrapper with authentication, RBAC, validation, and logging
 import { authOptions } from '@/lib/auth';
-import { badRequest, forbidden, StandardError, unauthorized } from '@/lib/errors';
+import {
+  badRequest,
+  errorHandlingService,
+  forbidden,
+  StandardError,
+  unauthorized,
+} from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import { getOrCreateRequestId } from '@/lib/requestId';
@@ -345,38 +351,37 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         });
       }
     } catch (error) {
-      // Handle errors
+      // Handle errors using ProblemDetails format
       const duration = Date.now() - startTime;
 
-      // Determine HTTP status code from error
-      let status = 500; // Default to internal server error
+      // Create ProblemDetails response
+      const problemResponse = errorHandlingService.createApiErrorResponse(
+        error,
+        'An error occurred',
+        undefined,
+        500
+      );
 
-      if (error instanceof StandardError) {
-        // Use the error code to HTTP status mapping
-        const { errorCodeToHttpStatus } = await import('@/lib/errors/ErrorCodes');
-        status = errorCodeToHttpStatus[error.code] ?? 500;
-      } else if (error instanceof Error && 'status' in error) {
-        status = (error as any).status;
-      }
+      // Get the status from the response
+      const status = problemResponse.status;
 
-      // Return unwrapped response format per CORE_REQUIREMENTS.md §464
-      const payload = error instanceof StandardError ? error.message : 'An error occurred';
-
+      // Log the error (already done in createApiErrorResponse)
       logError('route_request_error', {
         path: url.pathname,
         method: req.method,
         status,
         duration,
         requestId,
-        error: payload,
+        error: error instanceof StandardError ? error.message : 'Unknown error',
       });
 
-      const errorHeaders = new Headers({ 'Content-Type': 'application/json' });
-      decorate(errorHeaders);
+      // Add request headers to the response
+      const responseHeaders = new Headers(problemResponse.headers);
+      decorate(responseHeaders);
 
-      return new Response(JSON.stringify(payload), {
+      return new Response(problemResponse.body, {
         status,
-        headers: errorHeaders,
+        headers: responseHeaders,
       });
     }
   };

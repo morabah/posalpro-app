@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/forms/Button';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useEmailValidation } from '@/hooks/useEmailValidation';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
-import { useFormValidation } from '@/hooks/useFormValidation';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -28,12 +27,14 @@ import type { CustomerEditData } from '@/lib/validation/customerValidation';
 import { customerValidationSchema } from '@/lib/validation/customerValidation';
 import { ApiResponse } from '@/types/api';
 import { ArrowLeftIcon, UserPlusIcon } from '@heroicons/react/24/outline';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 interface CustomerResponse {
   id: string;
@@ -133,9 +134,19 @@ function CustomerCreationPageComponent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  // ✅ REUSABLE VALIDATION HOOK
-  const validation = useFormValidation(
-    {
+  // ✅ REACT HOOK FORM SETUP
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors, isValid, touchedFields },
+    watch,
+    setValue,
+    trigger,
+  } = useForm<CustomerEditData>({
+    resolver: zodResolver(customerValidationSchema as any),
+    mode: 'onChange',
+    defaultValues: {
       name: '',
       email: '',
       phone: '',
@@ -146,13 +157,8 @@ function CustomerCreationPageComponent() {
       companySize: '',
       tier: 'STANDARD',
       tags: [],
-    } as CustomerEditData,
-    customerValidationSchema,
-    {
-      validateOnChange: true,
-      validateOnBlur: true,
-    }
-  );
+    },
+  });
 
   // ✅ EMAIL UNIQUENESS VALIDATION HOOK
   const emailValidation = useEmailValidation({
@@ -193,142 +199,103 @@ function CustomerCreationPageComponent() {
     });
   }, [analytics]);
 
-  // ✅ SECURITY: Input sanitization for form submission
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
+  // ✅ Handle form submission with React Hook Form
+  const onSubmit = async (data: CustomerEditData) => {
+    // Check email validation status
+    if (emailValidation.isValidating) {
+      handleAsyncError(
+        new StandardError({
+          message: 'Please wait for email validation to complete',
+          code: ErrorCodes.VALIDATION.OPERATION_FAILED,
+          metadata: {
+            component: 'CustomerCreationPage',
+            operation: 'email_validation_in_progress',
+          },
+        })
+      );
+      return;
+    }
 
-      // Check email validation status
-      if (emailValidation.isValidating) {
-        handleAsyncError(
-          new StandardError({
-            message: 'Please wait for email validation to complete',
-            code: ErrorCodes.VALIDATION.OPERATION_FAILED,
-            metadata: {
-              component: 'CustomerCreationPage',
-              operation: 'email_validation_in_progress',
-            },
-          })
-        );
-        return;
-      }
+    if (!emailValidation.isValid || emailValidation.exists) {
+      handleAsyncError(
+        new StandardError({
+          message: emailValidation.error || 'Email validation failed',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'CustomerCreationPage',
+            operation: 'email_validation_failed',
+            emailExists: emailValidation.exists,
+          },
+        })
+      );
+      return;
+    }
 
-      if (!emailValidation.isValid || emailValidation.exists) {
-        handleAsyncError(
-          new StandardError({
-            message: emailValidation.error || 'Email validation failed',
-            code: ErrorCodes.VALIDATION.INVALID_INPUT,
-            metadata: {
-              component: 'CustomerCreationPage',
-              operation: 'email_validation_failed',
-              emailExists: emailValidation.exists,
-            },
-          })
-        );
-        return;
-      }
+    setLoading(true);
 
-      // Use the validation hook to check for errors
-      if (validation.hasErrors) {
-        handleAsyncError(
-          new StandardError({
-            message: 'Please fix the validation errors before creating the customer',
-            code: ErrorCodes.VALIDATION.INVALID_INPUT,
-            metadata: {
-              component: 'CustomerCreationPage',
-              operation: 'form_validation',
-            },
-          })
-        );
-        return;
-      }
+    try {
+      // ✅ SECURITY: Permissions handled by createRoute wrapper in API
+      // No manual RBAC validation needed in client code
 
-      // Validate all fields
-      const errors = validation.validateAll();
-      if (Object.keys(errors).length > 0) {
-        handleAsyncError(
-          new StandardError({
-            message: `Validation failed: ${Object.values(errors).join(', ')}`,
-            code: ErrorCodes.VALIDATION.INVALID_INPUT,
-            metadata: {
-              component: 'CustomerCreationPage',
-              operation: 'form_validation',
-            },
-          })
-        );
-        return;
-      }
+      logDebug('Customer creation: Starting API call', {
+        component: 'CustomerCreationPage',
+        operation: 'customer_create',
+        userStory: 'US-2.1',
+        hypothesis: 'H4',
+        formData: { name: data.name, email: data.email },
+      });
 
-      setLoading(true);
+      const response = await apiClient.post<ApiResponse<CustomerResponse>>('/api/customers', data);
 
-      try {
-        // ✅ SECURITY: Permissions handled by createRoute wrapper in API
-        // No manual RBAC validation needed in client code
-
-        logDebug('Customer creation: Starting API call', {
+      if (response.success) {
+        logInfo('Customer creation: Success', {
           component: 'CustomerCreationPage',
-          operation: 'customer_create',
+          operation: 'customer_create_success',
           userStory: 'US-2.1',
           hypothesis: 'H4',
-          formData: { name: validation.formData.name, email: validation.formData.email },
+          customerId: response.data!.id,
         });
 
-        const response = await apiClient.post<ApiResponse<CustomerResponse>>(
-          '/api/customers',
-          validation.formData
-        );
-
-        if (response.success) {
-          logInfo('Customer creation: Success', {
-            component: 'CustomerCreationPage',
-            operation: 'customer_create_success',
+        // ✅ ANALYTICS: Track successful creation
+        analytics(
+          'customer_created',
+          {
             userStory: 'US-2.1',
             hypothesis: 'H4',
+            component: 'CustomerCreationPage',
             customerId: response.data!.id,
-          });
-
-          // ✅ ANALYTICS: Track successful creation
-          analytics(
-            'customer_created',
-            {
-              userStory: 'US-2.1',
-              hypothesis: 'H4',
-              component: 'CustomerCreationPage',
-              customerId: response.data!.id,
-              customerName: response.data!.name,
-            },
-            'high'
-          );
-
-          // Navigate to the newly created customer
-          router.push(`/customers/${response.data!.id}`);
-        }
-      } catch (error) {
-        logError('Customer creation: Failed', {
-          component: 'CustomerCreationPage',
-          operation: 'customer_create_error',
-          userStory: 'US-2.1',
-          hypothesis: 'H4',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-
-        handleAsyncError(
-          new StandardError({
-            message: 'Failed to create customer',
-            code: ErrorCodes.DATA.QUERY_FAILED,
-            metadata: {
-              component: 'CustomerCreationPage',
-              operation: 'POST',
-              error: error instanceof Error ? error.message : 'Unknown error',
-            },
-          })
+            customerName: response.data!.name,
+          },
+          'high'
         );
-      } finally {
-        setLoading(false);
+
+        // Navigate to the newly created customer
+        router.push(`/customers/${response.data!.id}`);
       }
-    },
-    [validation, apiClient, router, handleAsyncError, analytics]
-  );
+    } catch (error) {
+      logError('Customer creation: Failed', {
+        component: 'CustomerCreationPage',
+        operation: 'customer_create_error',
+        userStory: 'US-2.1',
+        hypothesis: 'H4',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      handleAsyncError(
+        new StandardError({
+          message: 'Failed to create customer',
+          code: ErrorCodes.DATA.QUERY_FAILED,
+          metadata: {
+            component: 'CustomerCreationPage',
+            operation: 'POST',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        })
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ✅ PERFORMANCE METRICS: Performance monitoring
   useEffect(() => {
@@ -394,66 +361,71 @@ function CustomerCreationPageComponent() {
                   </div>
 
                   <form
-                    onSubmit={handleSubmit}
+                    onSubmit={handleSubmit(onSubmit)}
                     className="p-6 space-y-6"
                     role="form"
                     aria-label="Customer creation form"
                   >
                     {/* Validation Error Summary */}
-                    {validation.hasErrors && (
-                      <FormErrorSummary errors={validation.validationErrors} />
-                    )}
+                    <FormErrorSummary
+                      errors={Object.entries(errors).reduce(
+                        (acc, [key, error]) => {
+                          if (error?.message && typeof error.message === 'string') {
+                            acc[key] = error.message;
+                          }
+                          return acc;
+                        },
+                        {} as Record<string, string>
+                      )}
+                    />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Basic Information */}
                       <div className="space-y-4">
                         <FormField
+                          {...register('name')}
                           name="name"
                           label="Company Name"
-                          value={validation.formData.name}
-                          onChange={value => validation.handleFieldChange('name', value)}
-                          onBlur={() => validation.handleFieldBlur('name')}
-                          error={validation.getFieldError('name')}
-                          touched={validation.isFieldTouched('name')}
+                          value={watch('name') || ''}
+                          onBlur={() => register('name').onBlur}
+                          error={errors.name?.message}
+                          touched={!!touchedFields.name}
                           required
                           placeholder="Enter company name"
                           className="min-h-[44px]"
                         />
 
                         <FormField
+                          {...register('email')}
                           name="email"
                           label="Email Address"
                           type="email"
-                          value={validation.formData.email}
-                          onChange={value => {
-                            validation.handleFieldChange('email', value);
-                            emailValidation.handleEmailChange(value);
+                          value={watch('email') || ''}
+                          onChange={e => {
+                            register('email').onChange(e);
+                            emailValidation.handleEmailChange(e.target.value);
                           }}
-                          onBlur={() => {
-                            validation.handleFieldBlur('email');
-                            // Email uniqueness validation happens on change with debounce
-                          }}
+                          onBlur={() => register('email').onBlur}
                           error={
-                            validation.getFieldError('email') ||
+                            errors.email?.message ||
                             emailValidation.error ||
                             (emailValidation.exists ? 'Email already exists' : undefined)
                           }
-                          touched={validation.isFieldTouched('email') || emailValidation.exists}
+                          touched={!!touchedFields.email || emailValidation.exists}
                           required
                           placeholder="customer@example.com"
                           className="min-h-[44px]"
-
                         />
 
                         <FormField
+                          {...register('phone')}
                           name="phone"
                           label="Phone Number"
                           type="tel"
-                          value={validation.formData.phone}
-                          onChange={value => validation.handleFieldChange('phone', value)}
-                          onBlur={() => validation.handleFieldBlur('phone')}
-                          error={validation.getFieldError('phone')}
-                          touched={validation.isFieldTouched('phone')}
+                          value={watch('phone') || ''}
+                          onBlur={() => register('phone').onBlur}
+                          error={errors.phone?.message}
+                          touched={!!touchedFields.phone}
                           placeholder="+1 (555) 123-4567"
                           className="min-h-[44px]"
                         />
@@ -462,38 +434,38 @@ function CustomerCreationPageComponent() {
                       {/* Company Information */}
                       <div className="space-y-4">
                         <FormField
+                          {...register('industry')}
                           name="industry"
                           label="Industry"
-                          value={validation.formData.industry}
-                          onChange={value => validation.handleFieldChange('industry', value)}
-                          onBlur={() => validation.handleFieldBlur('industry')}
-                          error={validation.getFieldError('industry')}
-                          touched={validation.isFieldTouched('industry')}
+                          value={watch('industry') || ''}
+                          onBlur={() => register('industry').onBlur}
+                          error={errors.industry?.message}
+                          touched={!!touchedFields.industry}
                           placeholder="Technology, Healthcare, Finance, etc."
                           className="min-h-[44px]"
                         />
 
                         <FormField
+                          {...register('address')}
                           name="address"
                           label="Address"
-                          value={validation.formData.address}
-                          onChange={value => validation.handleFieldChange('address', value)}
-                          onBlur={() => validation.handleFieldBlur('address')}
-                          error={validation.getFieldError('address')}
-                          touched={validation.isFieldTouched('address')}
+                          value={watch('address') || ''}
+                          onBlur={() => register('address').onBlur}
+                          error={errors.address?.message}
+                          touched={!!touchedFields.address}
                           placeholder="Enter full address"
                           className="min-h-[44px]"
                         />
 
                         <FormField
+                          {...register('website')}
                           name="website"
                           label="Website"
                           type="url"
-                          value={validation.formData.website}
-                          onChange={value => validation.handleFieldChange('website', value)}
-                          onBlur={() => validation.handleFieldBlur('website')}
-                          error={validation.getFieldError('website')}
-                          touched={validation.isFieldTouched('website')}
+                          value={watch('website') || ''}
+                          onBlur={() => register('website').onBlur}
+                          error={errors.website?.message}
+                          touched={!!touchedFields.website}
                           placeholder="https://example.com"
                           className="min-h-[44px]"
                         />
@@ -503,26 +475,28 @@ function CustomerCreationPageComponent() {
                     {/* Additional Information */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField
+                        {...register('revenue', {
+                          setValueAs: value => (value === '' ? undefined : Number(value)),
+                        })}
                         name="revenue"
                         label="Annual Revenue"
                         type="number"
-                        value={validation.formData.revenue}
-                        onChange={value => validation.handleFieldChange('revenue', value)}
-                        onBlur={() => validation.handleFieldBlur('revenue')}
-                        error={validation.getFieldError('revenue')}
-                        touched={validation.isFieldTouched('revenue')}
+                        value={watch('revenue') || ''}
+                        onBlur={() => register('revenue').onBlur}
+                        error={errors.revenue?.message}
+                        touched={!!touchedFields.revenue}
                         placeholder="0"
                         className="min-h-[44px]"
                       />
 
                       <FormField
+                        {...register('companySize')}
                         name="companySize"
                         label="Company Size"
-                        value={validation.formData.companySize}
-                        onChange={value => validation.handleFieldChange('companySize', value)}
-                        onBlur={() => validation.handleFieldBlur('companySize')}
-                        error={validation.getFieldError('companySize')}
-                        touched={validation.isFieldTouched('companySize')}
+                        value={watch('companySize') || ''}
+                        onBlur={() => register('companySize').onBlur}
+                        error={errors.companySize?.message}
+                        touched={!!touchedFields.companySize}
                         placeholder="Select company size"
                         className="min-h-[44px]"
                       />
@@ -538,7 +512,7 @@ function CustomerCreationPageComponent() {
                       </Link>
                       <Button
                         type="submit"
-                        disabled={loading || validation.hasErrors || !validation.isValid}
+                        disabled={loading || !isValid}
                         className="inline-flex items-center min-h-[44px] px-4 py-2"
                         aria-label={loading ? 'Creating customer...' : 'Create customer'}
                         data-testid="create-customer-submit"

@@ -13,10 +13,10 @@ import { Select } from '@/components/ui/forms/Select';
 import { Label } from '@/components/ui/Label';
 import { useApiClient } from '@/hooks/useApiClient';
 // useApiClient returns raw JSON; no ApiResponse wrapper here
+import type { User } from '@/features/admin';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError } from '@/lib/logger';
 import { ProposalTeamData, useProposalActions } from '@/lib/store/proposalStore';
-import { User } from '@/services/userService';
 import { UserType } from '@/types';
 import { CheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
@@ -93,15 +93,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
           const allRoleNames = new Set<string>();
           usersArray.forEach((user: User, index: number) => {
-            const roleNames = (user.roles || [])
-              .map(r =>
-                typeof r === 'string'
-                  ? r
-                  : typeof (r as any).role === 'string'
-                    ? (r as any).role
-                    : (r as any)?.role?.name
-              )
-              .filter((v): v is string => typeof v === 'string');
+            const roleNames = user.role ? [user.role] : [];
             roleNames.forEach(name => allRoleNames.add(name));
           });
 
@@ -153,30 +145,11 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     });
 
     const leads = usersData.filter((user: User) => {
-      // Try different role matching approaches
-      const hasProposalManagerRole = (user.roles || []).some((userRole: any) => {
-        const roleName =
-          typeof userRole === 'string'
-            ? userRole
-            : typeof userRole?.role === 'string'
-              ? (userRole.role as string)
-              : typeof userRole?.role?.name === 'string'
-                ? (userRole.role.name as string)
-                : undefined;
-        return roleName === UserType.PROPOSAL_MANAGER;
-      });
-
-      const hasDirectRole = user.role === UserType.PROPOSAL_MANAGER;
-
-      logDebug('User role check', {
-        userName: user.name || user.email,
-        hasProposalManagerRole,
-        hasDirectRole,
-        finalResult: hasProposalManagerRole || hasDirectRole,
-        component: 'TeamAssignmentStep',
-      });
-
-      return hasProposalManagerRole || hasDirectRole;
+      return (
+        user.role === 'Proposal Manager' ||
+        user.role === 'System Administrator' ||
+        user.role === 'Administrator'
+      );
     });
 
     logDebug('Team leads found', {
@@ -197,31 +170,16 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
     const reps = usersData.filter((user: User) => {
       console.log(`[DEBUG] Checking user ${user.name || user.email} for SME role:`, {
-        roles: user.roles,
+        roles: user.role ? [user.role] : [],
         role: user.role,
       });
 
-      const hasSMERole = (user.roles || []).some((userRole: any) => {
-        const roleName =
-          typeof userRole === 'string'
-            ? userRole
-            : typeof userRole?.role === 'string'
-              ? (userRole.role as string)
-              : typeof userRole?.role?.name === 'string'
-                ? (userRole.role.name as string)
-                : (userRole?.name as string | undefined);
-        return roleName === 'SME' || roleName === 'Senior SME' || roleName === UserType.SME;
-      });
-
-      const hasDirectRole = user.role === UserType.SME;
-
-      console.log(`[DEBUG] User ${user.name || user.email} SME check:`, {
-        hasSMERole,
-        hasDirectRole,
-        finalResult: hasSMERole || hasDirectRole,
-      });
-
-      return hasSMERole || hasDirectRole;
+      return (
+        user.role === 'Subject Matter Expert (SME)' ||
+        user.role === 'Technical SME' ||
+        user.role === 'System Administrator' ||
+        user.role === 'Administrator'
+      );
     });
 
     console.log(
@@ -239,31 +197,15 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
     const execs = usersData.filter((user: User) => {
       console.log(`[DEBUG] Checking user ${user.name || user.email} for Executive role:`, {
-        roles: user.roles,
+        roles: user.role ? [user.role] : [],
         role: user.role,
       });
 
-      const hasExecRole = (user.roles || []).some((userRole: any) => {
-        const roleName =
-          typeof userRole === 'string'
-            ? userRole
-            : typeof userRole?.role === 'string'
-              ? (userRole.role as string)
-              : typeof userRole?.role?.name === 'string'
-                ? (userRole.role.name as string)
-                : (userRole?.name as string | undefined);
-        return roleName === 'Executive' || roleName === UserType.EXECUTIVE;
-      });
-
-      const hasDirectRole = user.role === UserType.EXECUTIVE;
-
-      console.log(`[DEBUG] User ${user.name || user.email} Executive check:`, {
-        hasExecRole,
-        hasDirectRole,
-        finalResult: hasExecRole || hasDirectRole,
-      });
-
-      return hasExecRole || hasDirectRole;
+      return (
+        user.role === 'Executive' ||
+        user.role === 'System Administrator' ||
+        user.role === 'Administrator'
+      );
     });
 
     console.log(
@@ -293,7 +235,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       { value: '', label: 'Select team lead...' },
       ...teamLeads.map(user => ({
         value: user.id,
-        label: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        label: user.name || user.email,
       })),
     ];
   }, [teamLeads]);
@@ -305,7 +247,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       { value: '', label: 'Select sales representative...' },
       ...salesReps.map(user => ({
         value: user.id,
-        label: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        label: user.name || user.email,
       })),
     ];
   }, [salesReps]);
@@ -328,7 +270,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       { value: '', label: 'Select SME...' },
       ...uniqueUsers.map(user => ({
         value: user.id,
-        label: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        label: user.name || user.email,
       })),
     ];
   }, [usersData, teamLeads, salesReps]);
@@ -589,9 +531,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h4 className="font-medium text-gray-900">{executive.name}</h4>
-                    <p className="text-sm text-gray-500">
-                      {executive.roles?.map(r => r.role).join(', ') || 'Executive'}
-                    </p>
+                    <p className="text-sm text-gray-500">{executive.role || 'Executive'}</p>
                     {executive.department && (
                       <p className="text-xs text-gray-400">{executive.department}</p>
                     )}
