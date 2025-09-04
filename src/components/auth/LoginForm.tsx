@@ -8,12 +8,10 @@
 
 import { useLoginAnalytics } from '@/hooks/auth/useLoginAnalytics';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { StandardError } from '@/lib/errors/StandardError';
 import { logDebug } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, ChevronDown, CircleAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { getSession, signIn } from 'next-auth/react';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FieldErrors, useForm } from 'react-hook-form';

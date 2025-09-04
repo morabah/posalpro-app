@@ -532,7 +532,7 @@ export function AuthProvider({ children, session }: AuthProviderProps) {
     <SessionProvider
       session={session}
       refetchOnWindowFocus={false}
-      refetchInterval={false} // Disable automatic polling to prevent 429 errors
+      // refetchInterval disabled to prevent 429 errors
     >
       <AuthContextProvider>{children}</AuthContextProvider>
     </SessionProvider>
