@@ -255,7 +255,6 @@ export const PUT = createRoute(
         data: {
           ...body!,
           metadata: {
-            ...(body!.metadata || {}),
             lastUpdatedBy: user.id,
             lastUpdatedAt: new Date().toISOString(),
             updateHistory: {

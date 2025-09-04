@@ -82,6 +82,7 @@ interface AuthUserRecord {
   email: string;
   name: string;
   department: string;
+  tenantId: string;
   status: string;
   password: string | null;
   createdAt: Date;
@@ -102,7 +103,12 @@ export type UserWithoutPassword = Omit<User, 'password'>;
 export async function createUser(data: CreateUserData): Promise<UserWithoutPassword> {
   // Check for existing user
   const existing = await prisma.user.findUnique({
-    where: { email: data.email },
+    where: {
+      tenantId_email: {
+        tenantId: 'tenant_default',
+        email: data.email,
+      },
+    },
     select: { id: true },
   });
   if (existing) {
@@ -118,6 +124,7 @@ export async function createUser(data: CreateUserData): Promise<UserWithoutPassw
 
   const created = await prisma.user.create({
     data: {
+      tenantId: 'tenant_default',
       email: data.email,
       name: data.name,
       password: passwordHash,
@@ -143,13 +150,16 @@ export async function getUserByEmail(email: string): Promise<AuthUserRecord | nu
     logDebug(`🔍 [User Service] Fetching user from database: ${email}`);
 
     // ✅ PERFORMANCE: Avoid transaction for single read to reduce auth latency
-    const result = await prisma.user.findUnique({
+    // NOTE: Using findFirst instead of findUnique because we changed the unique constraint
+    // to tenantId_email compound key. During authentication, we don't know tenantId yet.
+    const result = await prisma.user.findFirst({
       where: { email },
       select: {
         id: true,
         email: true,
         name: true,
         department: true,
+        tenantId: true,
         status: true,
         password: true,
         createdAt: true,
@@ -168,11 +178,25 @@ export async function getUserByEmail(email: string): Promise<AuthUserRecord | nu
 
     if (result) {
       // ✅ CRITICAL: Cache the result
-      cacheUser(email, result);
+      const authUser = {
+        id: result.id,
+        email: result.email,
+        name: result.name,
+        department: result.department,
+        tenantId: result.tenantId,
+        status: result.status,
+        password: result.password,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+        lastLogin: result.lastLogin,
+        roles: result.roles,
+      };
+      await cacheUser(email, authUser);
       logDebug(`📦 [User Cache] Cached user: ${email}`);
+      return authUser;
     }
 
-    return result;
+    return null;
   } catch (error) {
     ErrorHandlingService.getInstance().processError(
       error,

@@ -5,8 +5,8 @@
 
 import { assertIdempotent } from '@/server/api/idempotency';
 import { NextRequest, NextResponse } from 'next/server';
-import { logError } from '@/lib/logger';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError, logInfo } from '@/lib/logger';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 
 // Simulate a database/storage for this example
 let processedRequests = new Map<string, any>();
@@ -41,7 +41,11 @@ export async function POST(request: NextRequest) {
 
     processedRequests.set(requestId, processedData);
 
-    console.log(`✅ Processed ${action} request: ${requestId}`);
+    logInfo('Processed idempotency request', {
+      action: action,
+      requestId: requestId,
+      component: 'IdempotencyExample'
+    });
 
     return NextResponse.json({
       success: true,
@@ -57,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle unexpected errors
-    const processedError = ErrorHandlingService.processError(error, 'Unexpected error in idempotency example');
+    const processedError = ErrorHandlingService.getInstance().processError(error, 'Unexpected error in idempotency example', ErrorCodes.SYSTEM.UNKNOWN);
     logError('Unexpected error in idempotency example', processedError, {
       component: 'idempotency-example',
       operation: 'POST',

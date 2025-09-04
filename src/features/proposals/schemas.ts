@@ -296,6 +296,7 @@ export const ProposalSchema = z.object({
   title: z.string().optional().default('Untitled Proposal'),
   description: z.string().nullable(),
   customerId: z.string(),
+  createdBy: z.string(),
   customer: z
     .object({
       id: z.string(),
@@ -307,9 +308,21 @@ export const ProposalSchema = z.object({
   status: ProposalStatusSchema,
   priority: ProposalPrioritySchema,
   dueDate: z
-    .union([z.string(), z.date()])
+    .union([z.string(), z.date(), z.null()])
     .optional()
-    .transform(val => (val instanceof Date ? val.toISOString() : val)),
+    .transform(val => (val instanceof Date ? val.toISOString() : val || null)),
+  submittedAt: z
+    .union([z.string(), z.date(), z.null()])
+    .optional()
+    .transform(val => (val instanceof Date ? val.toISOString() : val || null)),
+  approvedAt: z
+    .union([z.string(), z.date(), z.null()])
+    .optional()
+    .transform(val => (val instanceof Date ? val.toISOString() : val || null)),
+  validUntil: z
+    .union([z.string(), z.date(), z.null()])
+    .optional()
+    .transform(val => (val instanceof Date ? val.toISOString() : val || null)),
   value: z.number().min(0).optional(),
   currency: z.string().length(3).default('USD'),
   projectType: z.string().optional(),

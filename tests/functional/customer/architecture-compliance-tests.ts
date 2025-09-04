@@ -184,7 +184,7 @@ export class ArchitectureComplianceTests {
                 endpoint: test.endpoint,
                 status: 'error',
                 hasErrorResponse: true,
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
               });
             }
           }
@@ -245,7 +245,7 @@ export class ArchitectureComplianceTests {
               results.push({
                 endpoint: test.endpoint,
                 cachingEffective: false,
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
               });
             }
           }
@@ -275,13 +275,14 @@ export class ArchitectureComplianceTests {
         results.push({ test: name, status: 'PASS', duration: Date.now() - start, result });
         console.log(`✅ ${name} - ${Date.now() - start}ms`);
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         results.push({
           test: name,
           status: 'FAIL',
           duration: Date.now() - start,
-          error: error.message,
+          error: errorMessage,
         });
-        console.log(`❌ ${name} - ${Date.now() - start}ms - ${error.message}`);
+        console.log(`❌ ${name} - ${Date.now() - start}ms - ${errorMessage}`);
       }
     }
 

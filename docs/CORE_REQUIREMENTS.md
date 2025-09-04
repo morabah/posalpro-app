@@ -37,10 +37,103 @@ src/features/[domain]/
 ├── hooks/           # React Query hooks
 └── index.ts         # Feature exports
 
-src/services/        # Service layer (stateless, HTTP client)
-src/lib/store/       # Zustand stores (UI state only)
+src/services/        # Service layer (HTTP client services for frontend)
+src/lib/services/   # Database services (Prisma-based for API routes)
+src/lib/store/       # Zustand stores (UI state only) - CANONICAL LOCATION
 src/hooks/          # Shared React Query hooks
 ```
+
+### **🗂️ Store Location Rules**
+
+**CANONICAL STORE LOCATION (MANDATORY)**
+
+- **✅ ONLY use**: `src/lib/store/` for ALL Zustand stores
+- **❌ NEVER use**: `src/stores/` or any other location
+- **Import pattern**: `@/lib/store/[storeName]`
+
+**Why this location?**
+
+- Consistent with the overall `src/lib/` architecture pattern
+- Clear separation of UI state (stores) from server state (React Query)
+- Follows established project structure conventions
+- Prevents confusion about where state management code belongs
+
+---
+
+### **🔧 Service Layer Architecture**
+
+**TWO-DISTINCT SERVICE LAYERS (MANDATORY)**
+
+The application uses **two separate service layers** serving different
+architectural purposes:
+
+#### **1. Frontend Services: `src/services/`**
+
+**Purpose**: HTTP client services for React Query integration **Architecture**:
+Stateless, HTTP-based API communication **Usage**: Frontend components via React
+Query hooks **Pattern**: Follows CORE_REQUIREMENTS.md service patterns
+
+```typescript
+// ✅ CORRECT: Frontend service usage
+import { useProducts } from '@/features/products/hooks/useProducts';
+import { productService } from '@/services/productService';
+
+// In React component:
+const { data: products } = useProducts();
+```
+
+**Characteristics:**
+
+- Uses HTTP client (`@/lib/http`)
+- Returns unwrapped domain data
+- Imports from `@/features/*/schemas`
+- Integrates with React Query
+- Error handling via `ErrorHandlingService`
+
+#### **2. Database Services: `src/lib/services/`**
+
+**Purpose**: Direct database access for API routes **Architecture**:
+Prisma-based data access layer **Usage**: Server-side API routes and database
+operations **Pattern**: Direct Prisma operations with caching
+
+```typescript
+// ✅ CORRECT: Database service usage
+import { productService } from '@/lib/services/productService';
+
+// In API route:
+const products = await productService.getProducts(filters);
+```
+
+**Characteristics:**
+
+- Uses Prisma ORM directly
+- Complex database queries and relationships
+- Server-side caching and optimization
+- Specialized services (DatabaseOptimizationService, etc.)
+- Centralized exports via `index.ts`
+
+#### **Entity Overlap (Expected)**
+
+Both directories contain services for core entities:
+
+- `customerService.ts` (both directories)
+- `productService.ts` (both directories)
+- `proposalService.ts` (both directories)
+- `userService.ts` (both directories)
+
+**This is by design**: Frontend needs HTTP services, backend needs database
+services.
+
+#### **Import Guidelines**
+
+- **Frontend Components**:
+  `import { Customer } from '@/services/customerService'`
+- **API Routes**:
+  `import { customerService } from '@/lib/services/customerService'`
+- **Specialized Services**:
+  `import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService'`
+
+---
 
 **📊 Data Flow Architecture:**
 

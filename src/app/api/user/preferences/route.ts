@@ -4,8 +4,8 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import { ErrorCodes } from '@/lib/errors';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logInfo } from '@/lib/logger';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -30,16 +30,39 @@ export async function GET() {
     }
 
     // First check if user exists, create if not
-    let user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, name: true },
-    });
+    // Use tenant-scoped lookup if tenantId is available in session
+    let user;
+    if (session.user.tenantId) {
+      user = await prisma.user.findUnique({
+        where: {
+          tenantId_email: {
+            tenantId: session.user.tenantId,
+            email: session.user.email,
+          },
+        },
+        select: { id: true, name: true },
+      });
+    } else {
+      // Fallback for backward compatibility during migration
+      user = await prisma.user.findFirst({
+        where: { email: session.user.email },
+        select: { id: true, name: true },
+      });
+    }
 
     // Auto-sync: Create user in database if authenticated but not found
     if (!user) {
-      console.log(`🔄 Auto-syncing authenticated user: ${session.user.email}`);
+      logInfo('Auto-syncing authenticated user', {
+  email: session.user.email,
+  component: 'UserPreferencesAPI'
+});
+
+      // Use tenantId from session, or default tenant for auto-synced users
+      const tenantId = session.user.tenantId || process.env.DEFAULT_TENANT_ID || 'tenant_default';
+
       user = await prisma.user.create({
         data: {
+          tenantId: tenantId,
           email: session.user.email,
           name: session.user.name || session.user.email?.split('@')[0] || 'User',
           department: 'General',
@@ -47,7 +70,12 @@ export async function GET() {
         },
         select: { id: true, name: true },
       });
-      console.log(`✅ Created user in database: ${user.name} (${session.user.email})`);
+      logInfo('Created user in database', {
+        name: user.name,
+        email: session.user.email,
+        tenantId: tenantId,
+        component: 'UserPreferencesAPI'
+      });
     }
 
     // Get user preferences using Prisma transaction (UserPreferences relation)
@@ -120,15 +148,24 @@ export async function PUT(request: NextRequest) {
 
     // First check if user exists, create if not
     let user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: {
+        tenantId_email: {
+          tenantId: 'tenant_default',
+          email: session.user.email,
+        },
+      },
       select: { id: true, name: true },
     });
 
     // Auto-sync: Create user in database if authenticated but not found
     if (!user) {
-      console.log(`🔄 Auto-syncing authenticated user: ${session.user.email}`);
+      logInfo('Auto-syncing authenticated user', {
+  email: session.user.email,
+  component: 'UserPreferencesAPI'
+});
       user = await prisma.user.create({
         data: {
+          tenantId: 'tenant_default',
           email: session.user.email,
           name: session.user.name || session.user.email?.split('@')[0] || 'User',
           department: 'General',
@@ -136,7 +173,11 @@ export async function PUT(request: NextRequest) {
         },
         select: { id: true, name: true },
       });
-      console.log(`✅ Created user in database: ${user.name} (${session.user.email})`);
+      logInfo('Created user in database', {
+        name: user.name,
+        email: session.user.email,
+        component: 'UserPreferencesAPI'
+      });
     }
 
     // Update user preferences using Prisma transaction (UserPreferences relation)

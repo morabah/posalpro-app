@@ -205,7 +205,7 @@ export class ApiClient {
 
       // Set a mock session token for testing
       const mockToken = `test-session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      this.setCookie('next-auth.session-token', mockToken);
+      this.cookies.set('next-auth.session-token', mockToken);
 
       // Test the session endpoint to verify bypass works
       const sessionRes = await this.request('GET', '/api/auth/session');

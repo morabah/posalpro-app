@@ -9,6 +9,7 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { Download, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCallback, useRef, useState } from 'react';
 
 interface PDFExportButtonProps {
@@ -152,7 +153,7 @@ export default function PDFExportButton({
       );
 
       // Show user-friendly error
-      alert('Failed to export PDF. Please try again.');
+      toast.error('Failed to export PDF. Please try again.');
     } finally {
       setIsExporting(false);
     }

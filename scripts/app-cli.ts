@@ -247,9 +247,11 @@ class CookieJar {
 class ApiClient {
   private baseUrl: string;
   private jar: CookieJar;
+  private tenantId: string | null;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, tenantId: string | null = null) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.tenantId = tenantId;
     const defaultSessionPath = path.resolve(process.cwd(), '.posalpro-cli-session.json');
     const storage = process.env.APP_CLI_SESSION_FILE || defaultSessionPath;
     this.jar = new CookieJar(storage);
@@ -259,6 +261,10 @@ class ApiClient {
     const safe = slugify(tag || 'default');
     const sessionPath = path.resolve(process.cwd(), `.posalpro-cli-session-${safe}.json`);
     this.jar = new CookieJar(sessionPath);
+  }
+
+  getTenantId(): string | null {
+    return this.tenantId;
   }
 
   async login(email: string, password: string, role?: string) {
@@ -624,6 +630,11 @@ function printHelp() {
   --base https://localhost:3000            # Local HTTPS
   --base https://staging.posalpro.com      # Staging HTTPS
   --base posalpro.com                      # Auto-detects HTTPS
+
+🏢 Multi-Tenant Support:
+  --tenant tenant_default                  # Default tenant
+  --tenant tenant_company_a                # Company A tenant
+  --tenant tenant_enterprise_xyz           # Enterprise tenant
 
 💡 Tips:
   - Use single quotes around JSON to avoid shell escaping
@@ -2301,16 +2312,19 @@ async function main() {
   const args = process.argv.slice(2);
   const baseIdx = args.indexOf('--base');
   const base = baseIdx >= 0 && args[baseIdx + 1] ? args[baseIdx + 1] : BASE_URL;
+  const tenantIdx = args.indexOf('--tenant');
+  const tenantId = tenantIdx >= 0 && args[tenantIdx + 1] ? args[tenantIdx + 1] : null;
   const normalizedBase = normalizeBaseUrl(base);
-  const api = new ApiClient(normalizedBase);
+  const api = new ApiClient(normalizedBase, tenantId);
 
-  // Log the base URL being used
-  logInfo('CLI: Base URL configured', {
+  // Log the base URL and tenant being used
+  logInfo('CLI: Base URL and tenant configured', {
     component: 'AppCLI',
     operation: 'main',
     originalBase: base,
     normalizedBase,
     isHttps: normalizedBase.startsWith('https://'),
+    tenantId,
   });
 
   const cmdIdx = args.indexOf('--command');

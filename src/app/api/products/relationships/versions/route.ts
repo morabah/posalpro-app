@@ -56,7 +56,12 @@ export async function GET(request: NextRequest) {
     if (!/^[a-z0-9]{25,}$/i.test(productIdParam)) {
       // Likely SKU; try lookup
       const prod = await prisma.product.findUnique({
-        where: { sku: productIdParam },
+        where: {
+          tenantId_sku: {
+            tenantId: 'tenant_default',
+            sku: productIdParam,
+          },
+        },
         select: { id: true },
       });
       if (prod?.id) resolvedProductId = prod.id;

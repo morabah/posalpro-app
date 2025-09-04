@@ -112,6 +112,7 @@ export class ProposalTransactionsService {
         // 1. Create the main proposal
         const proposal = await tx.proposal.create({
           data: {
+            tenantId: 'tenant_default',
             title: data.proposal.title,
             description: data.proposal.description,
             customerId: data.proposal.customerId,

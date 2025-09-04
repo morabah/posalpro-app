@@ -123,7 +123,12 @@ export async function PUT(request: NextRequest) {
     try {
       // First check if user exists, create if not
       let existingUser = await prisma.user.findUnique({
-        where: { email: session.user.email },
+        where: {
+          tenantId_email: {
+            tenantId: 'tenant_default',
+            email: session.user.email,
+          },
+        },
         include: { preferences: true },
       });
 
@@ -132,6 +137,7 @@ export async function PUT(request: NextRequest) {
         logger.info(`🔄 Auto-syncing authenticated user for profile update: ${session.user.email}`);
         existingUser = await prisma.user.create({
           data: {
+            tenantId: 'tenant_default',
             email: session.user.email,
             name: session.user.name || session.user.email?.split('@')[0] || 'User',
             department: 'General',
@@ -146,7 +152,12 @@ export async function PUT(request: NextRequest) {
       const result = await prisma.$transaction(async prisma => {
         // Update basic User fields that exist in schema
         const updatedUser = await prisma.user.update({
-          where: { email: session.user.email },
+          where: {
+            tenantId_email: {
+              tenantId: 'tenant_default',
+              email: session.user.email,
+            },
+          },
           data: {
             name: `${profileData.firstName} ${profileData.lastName}`,
             department: profileData.department || existingUser.department || 'Unassigned',

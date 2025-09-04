@@ -1,4 +1,4 @@
-import { logger } from '@/lib/logger';/**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Database Synchronization API
  * Enables controlled synchronization between local and cloud databases
  * Follows platform engineering best practices for separation of environments
@@ -372,16 +372,25 @@ const syncTableData = async (
         const users = await sourcePrisma.user.findMany();
         for (const user of users) {
           try {
-            // For users, sync by email since IDs might be different between databases
-            // but emails are unique and represent the same logical user
+            // For users, sync by tenantId + email since it's unique
             const existingUser = await targetPrisma.user.findUnique({
-              where: { email: user.email },
+              where: {
+                tenantId_email: {
+                  tenantId: 'tenant_default',
+                  email: user.email,
+                },
+              },
             });
 
             if (existingUser) {
               // Update existing user (keeping the target database's ID)
               await targetPrisma.user.update({
-                where: { email: user.email },
+                where: {
+                  tenantId_email: {
+                    tenantId: 'tenant_default',
+                    email: user.email,
+                  },
+                },
                 data: {
                   name: user.name,
                   password: user.password,
@@ -566,9 +575,14 @@ const syncTableData = async (
         const products = await sourcePrisma.product.findMany();
         for (const product of products) {
           try {
-            // For products, sync by SKU since it's unique
+            // For products, sync by tenantId + SKU since it's unique
             const existingProduct = await targetPrisma.product.findUnique({
-              where: { sku: product.sku },
+              where: {
+                tenantId_sku: {
+                  tenantId: 'tenant_default',
+                  sku: product.sku,
+                },
+              },
             });
 
             if (existingProduct) {
@@ -578,7 +592,12 @@ const syncTableData = async (
               void usageAnalytics;
 
               await targetPrisma.product.update({
-                where: { sku: product.sku },
+                where: {
+                  tenantId_sku: {
+                    tenantId: 'tenant_default',
+                    sku: product.sku,
+                  },
+                },
                 data: {
                   name: productData.name,
                   description: productData.description,
@@ -595,13 +614,24 @@ const syncTableData = async (
               });
             } else {
               // Create new product with source data
-              const { attributes, usageAnalytics, ...productData } = product;
-              void attributes;
-              void usageAnalytics;
-
               await targetPrisma.product.create({
                 data: {
-                  ...productData,
+                  tenantId: 'tenant_default',
+                  name: product.name,
+                  description: product.description,
+                  price: product.price,
+                  currency: product.currency,
+                  sku: product.sku,
+                  category: product.category,
+                  tags: product.tags,
+                  attributes: product.attributes as any,
+                  images: product.images,
+                  isActive: product.isActive,
+                  stockQuantity: product.stockQuantity,
+                  status: product.status,
+                  version: product.version,
+                  usageAnalytics: product.usageAnalytics as any,
+                  userStoryMappings: product.userStoryMappings,
                   updatedAt: new Date(),
                 },
               });

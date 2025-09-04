@@ -167,9 +167,10 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
       });
 
       try {
-        console.log('🔍 DEBUG: About to refetch proposal data', {
+        logDebug('About to refetch proposal data', {
           proposalId: proposalId,
           queryKey: qk.proposals.byId(proposalId),
+          component: 'EditProposalPage',
         });
 
         await queryClient.refetchQueries({
@@ -177,13 +178,15 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
           exact: true,
         });
 
-        console.log('🔍 DEBUG: Proposal data refetch completed', {
+        logDebug('Proposal data refetch completed', {
           proposalId: proposalId,
+          component: 'EditProposalPage',
         });
 
         // ✅ CREATE VERSION SNAPSHOT after successful update
-        console.log('🔍 DEBUG: About to create version snapshot', {
+        logDebug('About to create version snapshot', {
           proposalId: proposalId,
+          component: 'EditProposalPage',
         });
 
         try {
@@ -199,27 +202,36 @@ function EditProposalContent({ proposalId }: { proposalId: string }) {
           });
 
           if (response.ok) {
-            console.log('🔍 DEBUG: Version snapshot created successfully', {
+            logDebug('Version snapshot created successfully', {
               proposalId: proposalId,
               status: response.status,
+              component: 'EditProposalPage',
             });
           } else {
-            logError('Version snapshot creation failed', new Error(`HTTP ${response.status}: ${response.statusText}`), {
-              component: 'EditProposalPage',
-              operation: 'versionSnapshot',
-              proposalId,
-              status: response.status,
-              statusText: response.statusText,
-            });
+            logError(
+              'Version snapshot creation failed',
+              new Error(`HTTP ${response.status}: ${response.statusText}`),
+              {
+                component: 'EditProposalPage',
+                operation: 'versionSnapshot',
+                proposalId,
+                status: response.status,
+                statusText: response.statusText,
+              }
+            );
           }
         } catch (versionError) {
           const isError = versionError instanceof Error;
-          logError('Version snapshot creation failed', isError ? versionError : new Error(String(versionError)), {
-            component: 'EditProposalPage',
-            operation: 'versionSnapshot',
-            proposalId,
-            error: isError ? versionError.message : String(versionError),
-          });
+          logError(
+            'Version snapshot creation failed',
+            isError ? versionError : new Error(String(versionError)),
+            {
+              component: 'EditProposalPage',
+              operation: 'versionSnapshot',
+              proposalId,
+              error: isError ? versionError.message : String(versionError),
+            }
+          );
           // Don't fail the entire operation if version creation fails
         }
 

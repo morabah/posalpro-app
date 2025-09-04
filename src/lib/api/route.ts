@@ -132,7 +132,12 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           throw unauthorized('Authentication required');
         }
 
-        const user = session.user as { id: string; email: string; roles?: string[] };
+        const user = session.user as {
+          id: string;
+          email: string;
+          roles?: string[];
+          tenantId: string;
+        };
 
         // Role-based access control
         if (

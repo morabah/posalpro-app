@@ -7,7 +7,7 @@
 'use client';
 
 import { logError } from '@/lib/logger';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 
 /**
  * Global Error Boundary for Next.js App Router
@@ -23,7 +23,7 @@ export default function GlobalError({
   // Log the error using structured logging
   try {
     const errorHandlingService = ErrorHandlingService.getInstance();
-    errorHandlingService.processError(error, 'Global error boundary triggered', {
+    errorHandlingService.processError(error, 'Global error boundary triggered', ErrorCodes.SYSTEM.UNKNOWN, {
       component: 'GlobalErrorBoundary',
       operation: 'global_error',
       digest: error.digest,

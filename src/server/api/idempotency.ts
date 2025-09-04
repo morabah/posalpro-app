@@ -5,7 +5,7 @@
  */
 
 import { prisma } from '@/lib/db/prisma';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 import { logError } from '@/lib/logger';
 
 interface IdempotencyOptions {
@@ -194,9 +194,10 @@ export async function cleanupExpiredIdempotencyKeys(): Promise<number> {
 
     return result.count;
   } catch (error) {
-    const processedError = ErrorHandlingService.processError(
+    const processedError = ErrorHandlingService.getInstance().processError(
       error,
-      'Failed to cleanup expired idempotency keys'
+      'Failed to cleanup expired idempotency keys',
+      ErrorCodes.SYSTEM.UNKNOWN
     );
     logError('Failed to cleanup expired idempotency keys', processedError, {
       component: 'idempotency',
@@ -229,9 +230,10 @@ export async function isRequestProcessed(
 
     return !!existing;
   } catch (error) {
-    const processedError = ErrorHandlingService.processError(
+    const processedError = ErrorHandlingService.getInstance().processError(
       error,
-      'Failed to check request processing status'
+      'Failed to check request processing status',
+      ErrorCodes.SYSTEM.UNKNOWN
     );
     logError('Failed to check request processing status', processedError, {
       component: 'idempotency',
@@ -274,9 +276,10 @@ export async function getIdempotencyStats() {
       })),
     };
   } catch (error) {
-    const processedError = ErrorHandlingService.processError(
+    const processedError = ErrorHandlingService.getInstance().processError(
       error,
-      'Failed to get idempotency stats'
+      'Failed to get idempotency stats',
+      ErrorCodes.SYSTEM.UNKNOWN
     );
     logError('Failed to get idempotency stats', processedError, {
       component: 'idempotency',

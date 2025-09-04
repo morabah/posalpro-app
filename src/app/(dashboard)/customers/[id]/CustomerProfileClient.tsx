@@ -45,15 +45,13 @@ import { toast } from 'sonner';
 
 // ✅ TYPES
 enum CustomerTier {
-  BRONZE = 'bronze',
-  SILVER = 'silver',
-  GOLD = 'gold',
-  PLATINUM = 'platinum',
-  ENTERPRISE = 'enterprise',
+  STANDARD = 'STANDARD',
+  PREMIUM = 'PREMIUM',
+  ENTERPRISE = 'ENTERPRISE',
 }
 
 interface CustomerStatistics {
-  healthScore?: number;
+  riskScore?: number;
   engagementLevel?: 'low' | 'medium' | 'high';
   [key: string]: unknown;
 }
@@ -61,17 +59,26 @@ interface CustomerStatistics {
 interface CustomerApiResponse {
   id?: string | number;
   name?: string;
-  industry?: string | null;
+  industry?: 'TECHNOLOGY' | 'HEALTHCARE' | 'FINANCE' | 'RETAIL' | 'MANUFACTURING' | 'EDUCATION' | 'GOVERNMENT' | 'OTHER' | null;
   address?: string | null;
   phone?: string | null;
   website?: string | null;
   email?: string | null;
   revenue?: number | null;
-  employeeCount?: number;
-  statistics?: CustomerStatistics;
-  lastContact?: string;
-  nextActionDue?: string;
+  companySize?: string | null;
+  status?: 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
+  tier?: 'STANDARD' | 'PREMIUM' | 'ENTERPRISE';
   tags?: string[];
+  metadata?: Record<string, unknown> | null;
+  segmentation?: Record<string, unknown> | null;
+  riskScore?: number | null;
+  ltv?: number | null;
+  lastContact?: string | null;
+  cloudId?: string | null;
+  lastSyncedAt?: string | null;
+  syncStatus?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 }
 
@@ -121,17 +128,25 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       id: String(raw.id ?? previous?.id ?? ''),
       name: String(raw.name ?? previous?.name ?? ''),
       email: String(raw.email ?? previous?.email ?? ''),
-      phone: raw.phone ? String(raw.phone) : (previous?.phone ?? null),
-      website: raw.website ? String(raw.website) : (previous?.website ?? null),
-      address: raw.address ? String(raw.address) : (previous?.address ?? null),
-      industry: (raw.industry as any) ?? previous?.industry ?? null,
-      companySize: raw.employeeCount ? String(raw.employeeCount) : (previous?.companySize ?? null),
+      phone: raw.phone ?? (previous?.phone ?? undefined),
+      website: raw.website ?? (previous?.website ?? undefined),
+      address: raw.address ?? (previous?.address ?? undefined),
+      industry: raw.industry ?? (previous?.industry ?? undefined),
+      companySize: raw.companySize ?? (previous?.companySize ?? null),
       revenue: typeof raw.revenue === 'number' ? raw.revenue : (previous?.revenue ?? null),
-      status: 'ACTIVE',
-      tier: 'STANDARD',
+      status: raw.status ?? (previous?.status ?? 'ACTIVE'),
+      tier: raw.tier ?? (previous?.tier ?? undefined),
       tags: Array.isArray(raw.tags) ? raw.tags : (previous?.tags ?? []),
-      createdAt: '',
-      updatedAt: '',
+      metadata: raw.metadata ?? (previous?.metadata ?? null),
+      segmentation: raw.segmentation ?? (previous?.segmentation ?? null),
+      riskScore: raw.riskScore ?? (previous?.riskScore ?? null),
+      ltv: raw.ltv ?? (previous?.ltv ?? null),
+      lastContact: raw.lastContact ?? (previous?.lastContact ?? null),
+      cloudId: raw.cloudId ?? (previous?.cloudId ?? null),
+      lastSyncedAt: raw.lastSyncedAt ?? (previous?.lastSyncedAt ?? null),
+      syncStatus: raw.syncStatus ?? (previous?.syncStatus ?? null),
+      createdAt: raw.createdAt ?? (previous?.createdAt ?? ''),
+      updatedAt: raw.updatedAt ?? (previous?.updatedAt ?? ''),
     }),
     []
   );
@@ -152,15 +167,15 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     if (!isEditing && customer) {
       const initialData: CustomerEditData = {
         name: customer.name,
-        industry: customer.industry,
-        address: customer.address,
-        phone: customer.phone,
-        website: customer.website,
-        email: customer.email,
-        tier: customer.tier,
+        industry: customer.industry ?? undefined,
+        address: customer.address ?? undefined,
+        phone: customer.phone ?? undefined,
+        website: customer.website ?? undefined,
+        email: customer.email as string,
+        tier: customer.tier as any,
         revenue: customer.revenue ?? undefined,
         companySize: customer.companySize ?? '',
-        tags: [...customer.tags],
+        tags: customer.tags ? [...customer.tags] : [],
       };
       validation.resetForm(initialData);
       setIsEditing(true);
@@ -283,13 +298,11 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   // ✅ UI HELPERS
   const getTierDisplay = (tier: CustomerTier) => {
     const displays = {
-      [CustomerTier.BRONZE]: { label: 'Bronze', color: 'text-orange-600', bg: 'bg-orange-100' },
-      [CustomerTier.SILVER]: { label: 'Silver', color: 'text-gray-600', bg: 'bg-gray-100' },
-      [CustomerTier.GOLD]: { label: 'Gold', color: 'text-yellow-600', bg: 'bg-yellow-100' },
-      [CustomerTier.PLATINUM]: { label: 'Platinum', color: 'text-purple-600', bg: 'bg-purple-100' },
-      [CustomerTier.ENTERPRISE]: { label: 'Enterprise', color: 'text-blue-600', bg: 'bg-blue-100' },
+      [CustomerTier.STANDARD]: { label: 'Standard', color: 'text-gray-600', bg: 'bg-gray-100' },
+      [CustomerTier.PREMIUM]: { label: 'Premium', color: 'text-blue-600', bg: 'bg-blue-100' },
+      [CustomerTier.ENTERPRISE]: { label: 'Enterprise', color: 'text-purple-600', bg: 'bg-purple-100' },
     } as const;
-    return displays[tier] || displays[CustomerTier.BRONZE]; // Fallback to BRONZE if tier not found
+    return displays[tier] || displays[CustomerTier.STANDARD]; // Fallback to STANDARD if tier not found
   };
 
   const getHealthColor = (score: number) => {
@@ -343,7 +356,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     );
   }
 
-  const tierDisplay = getTierDisplay(customer.tier || CustomerTier.BRONZE);
+  const tierDisplay = getTierDisplay((customer.tier as CustomerTier) || CustomerTier.STANDARD);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -427,10 +440,10 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                 <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                   <span>{customer.industry}</span>
                   <span>•</span>
-                  <span>{customer.employeeCount?.toLocaleString() || 'N/A'} employees</span>
+                  <span>{customer.companySize || 'N/A'} employees</span>
                   <span>•</span>
                   <span>
-                    {customer.annualRevenue ? formatLargeNumber(customer.annualRevenue) : 'N/A'}{' '}
+                    {customer.revenue ? formatLargeNumber(customer.revenue) : 'N/A'}{' '}
                     revenue
                   </span>
                 </div>
@@ -645,21 +658,21 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Health Score</span>
                     <span
-                      className={`text-lg font-bold ${getHealthColor(customer?.healthScore || 0)}`}
+                      className={`text-lg font-bold ${getHealthColor(customer?.riskScore ? Number(customer.riskScore) : 50)}`}
                     >
-                      {customer?.healthScore || 0}%
+                      {customer?.riskScore ? Number(customer.riskScore) : 50}%
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
-                        (customer?.healthScore || 0) >= 80
+                        (customer?.riskScore ? Number(customer.riskScore) : 50) >= 80
                           ? 'bg-green-500'
-                          : (customer?.healthScore || 0) >= 60
+                          : (customer?.riskScore ? Number(customer.riskScore) : 50) >= 60
                             ? 'bg-yellow-500'
                             : 'bg-red-500'
                       }`}
-                      style={{ width: `${customer?.healthScore || 0}%` }}
+                      style={{ width: `${customer?.riskScore ? Number(customer.riskScore) : 50}%` }}
                     ></div>
                   </div>
                 </div>

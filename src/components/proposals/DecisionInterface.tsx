@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Progress } from '@/components/ui/Progress';
+import { toast } from 'sonner';
 import {
   CheckCircleIcon,
   ClockIcon,
@@ -224,12 +225,12 @@ export function DecisionInterface({
   const handleDecisionSubmit = useCallback(() => {
     // Validate required fields
     if (!decisionForm.comments.trim() && decisionForm.decision !== 'approve') {
-      alert('Comments are required for this decision type.');
+      toast.error('Comments are required for this decision type.');
       return;
     }
 
     if (decisionForm.decision === 'delegate' && !decisionForm.delegateTo) {
-      alert('Please select someone to delegate to.');
+      toast.error('Please select someone to delegate to.');
       return;
     }
 
@@ -237,7 +238,7 @@ export function DecisionInterface({
       decisionForm.decision === 'escalate' &&
       (!decisionForm.escalationReason || !decisionForm.escalationReason.trim())
     ) {
-      alert('Please provide an escalation reason.');
+      toast.error('Please provide an escalation reason.');
       return;
     }
 

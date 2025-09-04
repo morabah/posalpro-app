@@ -48,6 +48,7 @@ export interface CustomerSelection {
 // Main state interface
 export interface CustomerState {
   // State
+  tenantId: string | null;
   filters: CustomerFilters;
   sorting: CustomerSorting;
   view: CustomerView;
@@ -55,6 +56,7 @@ export interface CustomerState {
   selection: CustomerSelection;
 
   // Actions
+  setTenantId: (tenantId: string) => void;
   setFilters: (filters: Partial<CustomerFilters>) => void;
   setSorting: (sorting: Partial<CustomerSorting>) => void;
   setView: (view: Partial<CustomerView>) => void;
@@ -69,6 +71,7 @@ export interface CustomerState {
 
 // Initial state
 const initialState = {
+  tenantId: null,
   filters: {
     search: '',
     status: undefined,
@@ -97,6 +100,12 @@ export const useCustomerStore = create<CustomerState>()(
     persist(
       (set, get) => ({
         ...initialState,
+
+        // Tenant actions
+        setTenantId: (tenantId: string) =>
+          set(state => ({
+            tenantId,
+          })),
 
         // Filter actions
         setFilters: filters =>

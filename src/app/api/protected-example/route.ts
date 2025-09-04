@@ -6,7 +6,7 @@
 import { assertApiKey } from '@/server/api/apiKeyGuard';
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/logger';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Handle unexpected errors
-    const processedError = ErrorHandlingService.processError(error, 'Unexpected error in protected endpoint');
+    const processedError = ErrorHandlingService.getInstance().processError(error, 'Unexpected error in protected endpoint', ErrorCodes.SYSTEM.UNKNOWN);
     logError('Unexpected error in protected endpoint', processedError, {
       component: 'protected-example',
       operation: 'GET',
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       return error;
     }
 
-    const processedError = ErrorHandlingService.processError(error, 'Unexpected error in protected POST endpoint');
+    const processedError = ErrorHandlingService.getInstance().processError(error, 'Unexpected error in protected POST endpoint', ErrorCodes.SYSTEM.UNKNOWN);
     logError('Unexpected error in protected POST endpoint', processedError, {
       component: 'protected-example',
       operation: 'POST',

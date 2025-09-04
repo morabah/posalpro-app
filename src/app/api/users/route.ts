@@ -400,22 +400,18 @@ export async function PUT(request: NextRequest) {
     try {
       await prisma.auditLog.create({
         data: {
-          userId: session.user.id,
+          actorId: session.user.id, // Use actorId instead of userId
           action: 'PROFILE_UPDATED',
-          entity: 'User',
-          entityId: session.user.id,
-          changes: {
+          model: 'User', // Use model instead of entity
+          targetId: session.user.id, // Use targetId instead of entityId
+          diff: {
             updatedFields: Object.keys({
               ...basicUserData,
               ...validatedUserPreferences,
               ...validatedCommPreferences,
             }),
           },
-          ipAddress: 'unknown', // Could extract from request headers
-          userAgent: 'unknown', // Could extract from request headers
-          success: true,
-          severity: 'LOW',
-          category: 'DATA',
+          ip: 'unknown', // Use ip instead of ipAddress
         },
       });
     } catch (auditError) {

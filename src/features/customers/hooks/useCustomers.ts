@@ -47,7 +47,7 @@ export function useInfiniteCustomers({
         sortOrder,
         status,
         tier,
-        industry,
+        industry: industry as any,
         cursor: (pageParam ?? null) as string | null,
       }),
     initialPageParam: null as string | null,

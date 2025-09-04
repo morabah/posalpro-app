@@ -184,10 +184,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       ...product,
       // Handle null values from database
       description: product.description || '',
-      price: product.price ?? 0,
+      price:
+        typeof product.price === 'object' && product.price !== null
+          ? Number(product.price.toString())
+          : Number(product.price ?? 0),
       category: Array.isArray(product.category)
-        ? product.category.join(', ')
-        : String(product.category || ''),
+        ? product.category
+        : product.category
+          ? [product.category]
+          : [],
       stockQuantity: product.stockQuantity || 0,
       status: product.status || 'ACTIVE',
       attributes: product.attributes || undefined,
@@ -388,10 +393,15 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const transformedProduct = {
       ...updatedProduct,
       description: updatedProduct.description || '',
-      price: updatedProduct.price ?? 0,
+      price:
+        typeof updatedProduct.price === 'object' && updatedProduct.price !== null
+          ? Number(updatedProduct.price.toString())
+          : Number(updatedProduct.price ?? 0),
       category: Array.isArray(updatedProduct.category)
-        ? updatedProduct.category.join(', ')
-        : String(updatedProduct.category || ''),
+        ? updatedProduct.category
+        : updatedProduct.category
+          ? [updatedProduct.category]
+          : [],
       stockQuantity: updatedProduct.stockQuantity || 0,
       status: updatedProduct.status || 'ACTIVE',
       attributes: updatedProduct.attributes || undefined,
@@ -527,10 +537,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       const transformedProduct = {
         ...archivedProduct,
         description: (archivedProduct as any).description || '',
-        price: (archivedProduct as any).price ?? 0,
+        price:
+          typeof (archivedProduct as any).price === 'object' &&
+          (archivedProduct as any).price !== null
+            ? Number((archivedProduct as any).price.toString())
+            : Number((archivedProduct as any).price ?? 0),
         category: Array.isArray((archivedProduct as any).category)
-          ? (archivedProduct as any).category.join(', ')
-          : String((archivedProduct as any).category || ''),
+          ? (archivedProduct as any).category
+          : (archivedProduct as any).category
+            ? [(archivedProduct as any).category]
+            : [],
         stockQuantity: (archivedProduct as any).stockQuantity || 0,
         status: (archivedProduct as any).status || 'ACTIVE',
         attributes: (archivedProduct as any).attributes || undefined,

@@ -206,19 +206,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         // Recent audit logs
         prisma.auditLog.findMany({
           where: {
-            userId: id,
-            timestamp: { gte: daysAgo },
+            actorId: id, // Use actorId instead of userId
+            at: { gte: daysAgo }, // Use 'at' instead of timestamp
           },
           select: {
             id: true,
             action: true,
-            entity: true,
-            entityId: true,
-            success: true,
-            timestamp: true,
-            severity: true,
+            model: true, // Use model instead of entity
+            targetId: true, // Use targetId instead of entityId
+            // success and severity don't exist in AuditLog
+            at: true, // Use 'at' instead of timestamp
+            // severity doesn't exist
           },
-          orderBy: { timestamp: 'desc' },
+          orderBy: { at: 'desc' },
           take: Math.min(validatedQuery.limit, 50),
         }),
 
@@ -264,11 +264,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           id: log.id,
           type: 'audit',
           action: log.action,
-          entity: log.entity,
-          entityId: log.entityId,
-          success: log.success,
-          severity: log.severity,
-          timestamp: log.timestamp,
+          entity: log.model, // Use model instead of entity
+          entityId: log.targetId, // Use targetId instead of entityId
+          success: true, // Default success since it doesn't exist
+          severity: 'info', // Default severity since it doesn't exist
+          timestamp: log.at, // Use 'at' instead of timestamp
         })),
         ...hypothesisEvents.map(event => ({
           id: event.id,

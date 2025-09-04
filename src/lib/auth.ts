@@ -35,6 +35,7 @@ declare module 'next-auth' {
     department: string;
     roles: string[];
     permissions: string[];
+    tenantId: string;
   }
 
   interface Session {
@@ -45,6 +46,7 @@ declare module 'next-auth' {
       department: string;
       roles: string[];
       permissions: string[];
+      tenantId: string;
     };
   }
 }
@@ -57,6 +59,7 @@ declare module 'next-auth/jwt' {
     department: string;
     roles: string[];
     permissions: string[];
+    tenantId: string;
     sessionId?: string;
   }
 }
@@ -219,6 +222,7 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             name: user.name,
             department: user.department,
+            tenantId: user.tenantId,
             roles: roles,
             permissions: permissions,
           };
@@ -238,6 +242,7 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.name = user.name;
         token.department = user.department;
+        token.tenantId = user.tenantId;
         token.roles = user.roles;
         token.permissions = user.permissions;
 
@@ -294,6 +299,7 @@ export const authOptions: NextAuthOptions = {
       session.user.email = token.email;
       session.user.name = token.name;
       session.user.department = token.department;
+      session.user.tenantId = token.tenantId;
       session.user.roles = token.roles;
       session.user.permissions = token.permissions;
       // Expose sessionId only if needed on client; keep server-side by default

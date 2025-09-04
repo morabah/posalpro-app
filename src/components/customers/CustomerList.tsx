@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/features/customers/hooks';
 import { analytics } from '@/lib/analytics';
 import { logError } from '@/lib/logger';
+import { toast } from 'sonner';
 import {
   customerSelectors,
   CustomerSortBy,
@@ -32,25 +33,32 @@ function CustomerListHeader() {
     const selectedIds = useCustomerStore.getState().selection.selectedIds;
     if (selectedIds.length === 0) return;
 
-    if (confirm(`Are you sure you want to delete ${selectedIds.length} customers?`)) {
-      try {
-        await deleteBulk.mutateAsync(selectedIds);
-        analytics.trackOptimized(
-          'customers_bulk_deleted',
-          {
-            count: selectedIds.length,
-          },
-          'US-3.4',
-          'H4'
-        );
-      } catch (error) {
-        logError('Bulk delete failed', error instanceof Error ? error : new Error(String(error)), {
-          component: 'CustomerList',
-          operation: 'bulkDelete',
-          selectedIdsCount: selectedIds.length,
-        });
-      }
-    }
+    // Show warning about bulk delete
+    toast.warning(`Deleting ${selectedIds.length} customers...`, {
+      description: 'This action cannot be undone.',
+      action: {
+        label: 'Proceed',
+        onClick: async () => {
+          try {
+            await deleteBulk.mutateAsync(selectedIds);
+            analytics.trackOptimized(
+              'customers_bulk_deleted',
+              {
+                count: selectedIds.length,
+              },
+              'US-3.4',
+              'H4'
+            );
+          } catch (error) {
+            logError('Bulk delete failed', error instanceof Error ? error : new Error(String(error)), {
+              component: 'CustomerList',
+              operation: 'bulkDelete',
+              selectedIdsCount: selectedIds.length,
+            });
+          }
+        },
+      },
+    });
   }, [deleteBulk]);
 
   return (

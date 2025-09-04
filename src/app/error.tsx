@@ -9,7 +9,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { logError } from '@/lib/logger';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -22,7 +22,7 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
   useEffect(() => {
     // Log the error with structured logging
     const errorHandlingService = ErrorHandlingService.getInstance();
-    errorHandlingService.processError(error, 'Route error boundary triggered', {
+    errorHandlingService.processError(error, 'Route error boundary triggered', ErrorCodes.SYSTEM.UNKNOWN, {
       component: 'ErrorBoundary',
       operation: 'route_error',
       digest: error.digest,

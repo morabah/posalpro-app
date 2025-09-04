@@ -203,7 +203,7 @@ function CustomerCreationPageComponent() {
         handleAsyncError(
           new StandardError({
             message: 'Please wait for email validation to complete',
-            code: ErrorCodes.VALIDATION.OPERATION_IN_PROGRESS,
+            code: ErrorCodes.VALIDATION.OPERATION_FAILED,
             metadata: {
               component: 'CustomerCreationPage',
               operation: 'email_validation_in_progress',
@@ -436,20 +436,13 @@ function CustomerCreationPageComponent() {
                           error={
                             validation.getFieldError('email') ||
                             emailValidation.error ||
-                            (emailValidation.exists ? 'Email already exists' : null)
+                            (emailValidation.exists ? 'Email already exists' : undefined)
                           }
                           touched={validation.isFieldTouched('email') || emailValidation.exists}
                           required
                           placeholder="customer@example.com"
                           className="min-h-[44px]"
-                          isLoading={emailValidation.isValidating}
-                          helperText={
-                            emailValidation.isValidating
-                              ? 'Checking email availability...'
-                              : emailValidation.isValid
-                                ? 'Email is available'
-                                : null
-                          }
+
                         />
 
                         <FormField

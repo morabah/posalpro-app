@@ -302,7 +302,7 @@ export class VersionHistoryService {
           changeType: true,
           changesSummary: true,
           createdAt: true,
-          updatedAt: true,
+          // updatedAt doesn't exist in ProposalVersion model
           createdBy: true,
           snapshot: true,
           productIds: true,
@@ -562,7 +562,7 @@ export class VersionHistoryService {
           changeType: true,
           changesSummary: true,
           createdAt: true,
-          updatedAt: true,
+          // updatedAt doesn't exist in ProposalVersion model
           createdBy: true,
           snapshot: true,
           productIds: true,
@@ -589,7 +589,7 @@ export class VersionHistoryService {
         changeType: versionEntry.changeType as any,
         changesSummary: versionEntry.changesSummary || undefined,
         createdAt: versionEntry.createdAt,
-        updatedAt: versionEntry.updatedAt,
+        // updatedAt doesn't exist in ProposalVersion model, using createdAt
         createdBy: versionEntry.createdBy || undefined,
         proposal: versionEntry.proposal
           ? {

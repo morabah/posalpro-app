@@ -95,7 +95,11 @@ export const GET = createRoute(
           title: true,
           description: true,
           customerId: true,
+          createdBy: true,
           dueDate: true,
+          submittedAt: true,
+          approvedAt: true,
+          validUntil: true,
           priority: true,
           value: true,
           currency: true,
@@ -146,6 +150,11 @@ export const GET = createRoute(
             }
           : undefined,
         title: item.title || 'Untitled Proposal', // Handle empty titles
+        // Handle nullable date fields
+        dueDate: item.dueDate || null,
+        submittedAt: item.submittedAt || null,
+        approvedAt: item.approvedAt || null,
+        validUntil: item.validUntil || null,
       }));
 
       logInfo('Proposals fetched successfully', {
@@ -221,6 +230,7 @@ export const POST = createRoute(
         // Create the main proposal
         const proposal = await tx.proposal.create({
           data: {
+            tenantId: 'tenant_default',
             title: body!.basicInfo.title,
             description: body!.basicInfo.description,
             customerId: body!.basicInfo.customerId,

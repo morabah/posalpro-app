@@ -14,6 +14,7 @@ import {
 } from '../../types/entities/customer';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
+import { getCurrentTenant } from '../tenant';
 import { toPrismaJson } from '../utils/prismaUtils';
 
 // Helper function to check if error is a Prisma error
@@ -78,8 +79,11 @@ export class CustomerService {
   // Customer CRUD operations
   async createCustomer(data: CreateCustomerData): Promise<Customer> {
     try {
+      const tenant = getCurrentTenant();
+
       return await prisma.customer.create({
         data: {
+          tenantId: tenant.tenantId,
           name: data.name,
           email: data.email,
           phone: data.phone,
@@ -128,6 +132,8 @@ export class CustomerService {
   async updateCustomer(data: UpdateCustomerData): Promise<Customer> {
     try {
       const { id, ...updateData } = data;
+      const tenant = getCurrentTenant();
+
       // Handle JSON fields with proper type conversion
       const prismaData = {
         ...updateData,
@@ -135,7 +141,10 @@ export class CustomerService {
       };
 
       return await prisma.customer.update({
-        where: { id },
+        where: {
+          id,
+          tenantId: tenant.tenantId,
+        },
         data: prismaData,
       });
     } catch (error) {
@@ -171,8 +180,13 @@ export class CustomerService {
 
   async deleteCustomer(id: string): Promise<void> {
     try {
+      const tenant = getCurrentTenant();
+
       await prisma.customer.delete({
-        where: { id },
+        where: {
+          id,
+          tenantId: tenant.tenantId,
+        },
       });
     } catch (error) {
       // Log the error using ErrorHandlingService
@@ -207,8 +221,13 @@ export class CustomerService {
 
   async getCustomerById(id: string): Promise<Customer | null> {
     try {
+      const tenant = getCurrentTenant();
+
       return await prisma.customer.findUnique({
-        where: { id },
+        where: {
+          id,
+          tenantId: tenant.tenantId,
+        },
       });
     } catch (error) {
       // Log the error using ErrorHandlingService
@@ -315,7 +334,10 @@ export class CustomerService {
     limit?: number
   ): Promise<{ customers: Customer[]; total: number; page: number; totalPages: number }> {
     try {
-      const where: CustomerWhereInput = {};
+      const tenant = getCurrentTenant();
+      const where: any = {
+        tenantId: tenant.tenantId,
+      };
 
       if (filters) {
         if (filters.status) where.status = { in: filters.status };

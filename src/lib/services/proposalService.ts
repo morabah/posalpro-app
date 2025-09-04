@@ -24,6 +24,7 @@ import {
 } from '../../types/entities/proposal';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
+import { getCurrentTenant } from '../tenant';
 
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
@@ -243,9 +244,14 @@ export class ProposalService {
   // Proposal CRUD operations
   async createProposal(data: CreateProposalData): Promise<Proposal> {
     try {
-      // Explicitly check for customer existence
+      const tenant = getCurrentTenant();
+
+      // Explicitly check for customer existence (tenant-scoped)
       const customer = await prisma.customer.findUnique({
-        where: { id: data.customerId },
+        where: {
+          id: data.customerId,
+          tenantId: tenant.tenantId,
+        },
         select: { id: true }, // Only select id for existence check
       });
       if (!customer) {
@@ -257,13 +263,17 @@ export class ProposalService {
             component: 'ProposalService',
             operation: 'createProposal',
             customerId: data.customerId,
+            tenantId: tenant.tenantId,
           },
         });
       }
 
-      // Explicitly check for creator (user) existence
+      // Explicitly check for creator (user) existence (tenant-scoped)
       const creator = await prisma.user.findUnique({
-        where: { id: data.createdBy },
+        where: {
+          id: data.createdBy,
+          tenantId: tenant.tenantId,
+        },
         select: { id: true }, // Only select id for existence check
       });
       if (!creator) {
@@ -280,6 +290,7 @@ export class ProposalService {
 
       return await prisma.proposal.create({
         data: {
+          tenantId: tenant.tenantId,
           title: data.title,
           description: data.description,
           customerId: data.customerId, // FK, checked above

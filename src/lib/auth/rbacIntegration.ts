@@ -10,7 +10,7 @@ import { secureSessionManager } from './secureSessionManager';
 import { securityAuditManager } from './securityAudit';
 // import { validateApiPermission } from './apiAuthorization';
 import { logger } from '@/lib/logger';
-import { RiskLevel, SecurityEventType } from '@prisma/client';
+import { RiskLevel, SecurityEventType } from './securityAudit';
 
 export interface RBACContext {
   userId: string;
@@ -176,7 +176,7 @@ export class RBACIntegrationManager {
       // Validate session - skip in development for System Administrator
       const isDev = process.env.NODE_ENV === 'development';
       const isSystemAdmin = rbacContext.roles.includes('System Administrator');
-      
+
       // Debug logging for authentication bypass
       logger.info('[RBAC] Authentication debug', {
         isDev,
@@ -186,7 +186,7 @@ export class RBACIntegrationManager {
         pathname,
         willSkipValidation: isDev && isSystemAdmin
       });
-      
+
       if (!(isDev && isSystemAdmin)) {
         const sessionValid = await secureSessionManager.validateSession(
           rbacContext.sessionId

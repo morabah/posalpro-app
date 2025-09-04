@@ -145,6 +145,7 @@ export const POST = createRoute(
 
       const product = await prisma.product.create({
         data: {
+          tenantId: 'tenant_default',
           name: body!.name,
           description: body!.description,
           price: body!.price,

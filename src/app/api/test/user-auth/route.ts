@@ -18,7 +18,12 @@ export async function GET(request: NextRequest) {
       await logDebug('Test 1: Simple user query');
     }
     const simpleUser = await prisma.user.findUnique({
-      where: { email: testEmail },
+      where: {
+        tenantId_email: {
+          tenantId: 'tenant_default',
+          email: testEmail,
+        },
+      },
       select: { id: true, email: true, name: true }
     });
 
@@ -27,7 +32,12 @@ export async function GET(request: NextRequest) {
       await logDebug('Test 2: User with roles (no transaction)');
     }
     const userWithRoles = await prisma.user.findUnique({
-      where: { email: testEmail },
+      where: {
+        tenantId_email: {
+          tenantId: 'tenant_default',
+          email: testEmail,
+        },
+      },
       include: {
         roles: {
           where: { isActive: true },
@@ -44,7 +54,12 @@ export async function GET(request: NextRequest) {
     }
     const transactionUser = await prisma.$transaction(async tx => {
       return await tx.user.findUnique({
-        where: { email: testEmail },
+        where: {
+          tenantId_email: {
+            tenantId: 'tenant_default',
+            email: testEmail,
+          },
+        },
         include: {
           roles: {
             where: { isActive: true },

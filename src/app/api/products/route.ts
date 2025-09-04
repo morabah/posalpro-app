@@ -141,7 +141,12 @@ export const POST = createRoute(
 
       // Check for duplicate SKU
       const existingProduct = await prisma.product.findUnique({
-        where: { sku: body!.sku },
+        where: {
+          tenantId_sku: {
+            tenantId: 'tenant_default',
+            sku: body!.sku,
+          },
+        },
         select: { id: true },
       });
 
@@ -152,7 +157,22 @@ export const POST = createRoute(
       // Create product
       const product = await prisma.product.create({
         data: {
-          ...body!,
+          tenantId: 'tenant_default',
+          name: body!.name,
+          description: body!.description,
+          price: body!.price,
+          currency: body!.currency,
+          sku: body!.sku,
+          category: body!.category,
+          tags: body!.tags,
+          attributes: body!.attributes ? JSON.parse(JSON.stringify(body!.attributes)) : undefined,
+          images: body!.images,
+          isActive: body!.isActive,
+          stockQuantity: body!.stockQuantity,
+          status: body!.status,
+          version: body!.version,
+          usageAnalytics: body!.usageAnalytics ? JSON.parse(JSON.stringify(body!.usageAnalytics)) : undefined,
+          userStoryMappings: body!.userStoryMappings,
         },
         select: {
           id: true,

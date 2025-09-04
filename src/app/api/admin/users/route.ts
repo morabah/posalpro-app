@@ -312,7 +312,12 @@ export const POST = createRoute(
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: userData.email },
+      where: {
+        tenantId_email: {
+          tenantId: 'tenant_default',
+          email: userData.email,
+        },
+      },
     });
 
     if (existingUser) {
@@ -346,6 +351,7 @@ export const POST = createRoute(
     // Create user in database
     const newUser = await prisma.user.create({
       data: {
+        tenantId: 'tenant_default',
         name: userData.name,
         email: userData.email,
         password: hashedPassword,

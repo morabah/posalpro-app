@@ -29,8 +29,10 @@ export const GET = createRoute(
         params: query,
       });
 
-      // Build where clause
-      const where: Prisma.CustomerWhereInput = {};
+      // Build where clause with tenant isolation
+      const where: Prisma.CustomerWhereInput = {
+        tenantId: (user as any).tenantId,
+      };
 
       if (query!.search) {
         where.OR = [
@@ -141,6 +143,7 @@ export const GET = createRoute(
 
 // POST /api/customers - Create a new customer (Direct Next.js route for testing)
 export const POST = async (request: Request) => {
+  let body: any = null;
   try {
     structuredLogInfo('Customer API route called', {
       component: 'CustomerAPI',
@@ -148,7 +151,7 @@ export const POST = async (request: Request) => {
       endpoint: '/api/customers',
     });
 
-    const body = await request.json();
+    body = await request.json();
     structuredLogInfo('Processing customer creation request', {
       component: 'CustomerAPI',
       operation: 'POST',
@@ -172,6 +175,7 @@ export const POST = async (request: Request) => {
 
     // Transform and prepare data for database insertion
     const customerData = {
+      tenantId: 'tenant_default',
       name: body.name,
       email: body.email || null,
       phone: body.phone || null,

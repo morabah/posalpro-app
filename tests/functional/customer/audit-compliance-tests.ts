@@ -122,7 +122,7 @@ export class AuditComplianceTests {
                 itemsAudited: 0,
                 completeAudits: 0,
                 auditCompleteness: 0,
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
               });
             }
           }

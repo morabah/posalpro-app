@@ -11,21 +11,26 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 
-import { useAdminUsers, useAdminSystemMetrics, useUpdateAdminUser, useDeleteAdminUser } from '@/features/admin/hooks';
+import {
+  useAdminSystemMetrics,
+  useAdminUsers,
+  useDeleteAdminUser,
+  useUpdateAdminUser,
+} from '@/features/admin/hooks';
 
 // Logging
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { logDebug } from '@/lib/logger';
 
 // Zustand store selectors
-import {
-  useAdminUsersFilters,
-  useAdminActions,
-} from '@/lib/store/adminStore';
+import { useAdminActions, useAdminUsersFilters } from '@/lib/store/adminStore';
 
 // Analytics
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+
+// UI Feedback
+import { toast } from 'sonner';
 
 // UI Components
 import { Card } from '@/components/ui/Card';
@@ -46,7 +51,14 @@ import {
 import RoleManager from '@/features/admin/components/RoleManager';
 
 // Types
-type AdminTabType = 'overview' | 'users' | 'roles' | 'permissions' | 'integration' | 'config' | 'backup';
+type AdminTabType =
+  | 'overview'
+  | 'users'
+  | 'roles'
+  | 'permissions'
+  | 'integration'
+  | 'config'
+  | 'backup';
 
 enum SystemHealth {
   OPERATIONAL = 'Operational',
@@ -90,13 +102,16 @@ export function AdminSystemClient() {
   const actions = useAdminActions();
 
   // Memoize hook parameters to prevent unnecessary re-renders
-  const usersQueryParams = useMemo(() => ({
-    search: usersFilters.search,
-    role: usersFilters.role || '',
-    status: usersFilters.status === 'all' ? '' : usersFilters.status,
-    page: String(usersFilters.page),
-    limit: '10',
-  }), [usersFilters.search, usersFilters.role, usersFilters.status, usersFilters.page]);
+  const usersQueryParams = useMemo(
+    () => ({
+      search: usersFilters.search,
+      role: usersFilters.role || '',
+      status: usersFilters.status === 'all' ? '' : usersFilters.status,
+      page: String(usersFilters.page),
+      limit: '10',
+    }),
+    [usersFilters.search, usersFilters.role, usersFilters.status, usersFilters.page]
+  );
 
   // Feature-based hooks
   const {
@@ -132,12 +147,10 @@ export function AdminSystemClient() {
         hasUsers: 'users' in users,
         usersCount: users.users?.length || 0,
         pagination: users.pagination,
-        dataPreview: JSON.stringify(users).substring(0, 300)
+        dataPreview: JSON.stringify(users).substring(0, 300),
       });
     }
   }, [users, usersLoading, usersError, usersQueryParams]);
-
-
 
   const {
     data: metrics,
@@ -201,7 +214,7 @@ export function AdminSystemClient() {
     analytics('admin_edit_user_started', {
       userId: user.id,
       userStory: 'US-8.1',
-      hypothesis: 'H8'
+      hypothesis: 'H8',
     });
   };
 
@@ -226,7 +239,7 @@ export function AdminSystemClient() {
       analytics('admin_edit_user_completed', {
         userId: editingUser.id,
         userStory: 'US-8.1',
-        hypothesis: 'H8'
+        hypothesis: 'H8',
       });
     } catch (error) {
       // Error handling is done by the mutation hook
@@ -234,18 +247,28 @@ export function AdminSystemClient() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      try {
-        await deleteUserMutation.mutateAsync(userId);
-        analytics('admin_delete_user_completed', {
-          userId,
-          userStory: 'US-8.1',
-          hypothesis: 'H8'
-        });
-      } catch (error) {
-        // Error handling is done by the mutation hook
-      }
-    }
+    toast.warning('Delete User', {
+      description: 'Are you sure you want to delete this user? This action cannot be undone.',
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          try {
+            await deleteUserMutation.mutateAsync(userId);
+            analytics('admin_delete_user_completed', {
+              userId,
+              userStory: 'US-8.1',
+              hypothesis: 'H8',
+            });
+          } catch (error) {
+            // Error handling is done by the mutation hook
+          }
+        },
+      },
+      cancel: {
+        label: 'Cancel',
+        onClick: () => {},
+      },
+    });
   };
 
   const closeEditModal = () => {
@@ -261,7 +284,7 @@ export function AdminSystemClient() {
     analytics('admin_edit_user_cancelled', {
       userId: editingUser?.id,
       userStory: 'US-8.1',
-      hypothesis: 'H8'
+      hypothesis: 'H8',
     });
   };
 
@@ -272,7 +295,8 @@ export function AdminSystemClient() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Admin System</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Comprehensive admin dashboard with user management, system monitoring, and configuration tools.
+            Comprehensive admin dashboard with user management, system monitoring, and configuration
+            tools.
           </p>
         </div>
         <div className="flex items-center space-x-3">
@@ -323,7 +347,7 @@ export function AdminSystemClient() {
                   analytics('admin_tab_changed', {
                     tab: id,
                     userStory: 'US-8.1',
-                    hypothesis: 'H8'
+                    hypothesis: 'H8',
                   });
                 }}
                 className={`flex items-center px-1 py-2 border-b-2 font-medium text-sm ${
@@ -371,9 +395,7 @@ export function AdminSystemClient() {
                     <UsersIcon className="h-8 w-8 text-blue-600" />
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Total Users</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {metrics?.totalUsers || 0}
-                      </p>
+                      <p className="text-2xl font-bold text-gray-900">{metrics?.totalUsers || 0}</p>
                     </div>
                   </div>
                 </Card>
@@ -451,7 +473,9 @@ export function AdminSystemClient() {
                       type="text"
                       placeholder="Search users..."
                       value={usersFilters.search}
-                      onChange={(e) => actions.setUsersFilters({ ...usersFilters, search: e.target.value })}
+                      onChange={e =>
+                        actions.setUsersFilters({ ...usersFilters, search: e.target.value })
+                      }
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -486,56 +510,60 @@ export function AdminSystemClient() {
                           userStory: 'US-8.1',
                           hypothesis: 'H8',
                           usersCount: users?.users?.length || 0,
-                          firstUser: users?.users?.[0] ? {
-                            id: users.users[0].id,
-                            email: users.users[0].email,
-                            status: users.users[0].status
-                          } : null
+                          firstUser: users?.users?.[0]
+                            ? {
+                                id: users.users[0].id,
+                                email: users.users[0].email,
+                                status: users.users[0].status,
+                              }
+                            : null,
                         });
                         return null;
                       })()}
-                      {users?.users?.map((user) => (
-                            <tr key={user.id}>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="h-10 w-10 flex-shrink-0">
-                                    <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                      <UsersIcon className="h-5 w-5 text-gray-600" />
-                                    </div>
-                                  </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {user.name || user.email}
-                                    </div>
-                                    <div className="text-sm text-gray-500">{user.email}</div>
-                                  </div>
+                      {users?.users?.map(user => (
+                        <tr key={user.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 flex-shrink-0">
+                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                  <UsersIcon className="h-5 w-5 text-gray-600" />
                                 </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                  {user.role || 'User'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  user.status === 'ACTIVE'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {user.status || 'Active'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <Button
-                                  onClick={() => actions.openModal('userEdit')}
-                                  variant="outline"
-                                  size="sm"
-                                >
-                                  Edit
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {user.name || user.email}
+                                </div>
+                                <div className="text-sm text-gray-500">{user.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                              {user.role || 'User'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                user.status === 'ACTIVE'
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {user.status || 'Active'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <Button
+                              onClick={() => actions.openModal('userEdit')}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Edit
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -543,20 +571,28 @@ export function AdminSystemClient() {
                 {/* Pagination */}
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-700">
-                    Showing {usersFilters.page * 10 - 9} to {Math.min(usersFilters.page * 10, users?.users?.length || 0)} of {users?.pagination?.total || 0} results
+                    Showing {usersFilters.page * 10 - 9} to{' '}
+                    {Math.min(usersFilters.page * 10, users?.users?.length || 0)} of{' '}
+                    {users?.pagination?.total || 0} results
                   </div>
                   <div className="flex items-center space-x-2">
                     <Button
                       disabled={usersFilters.page <= 1}
-                      onClick={() => actions.setUsersFilters({ ...usersFilters, page: usersFilters.page - 1 })}
+                      onClick={() =>
+                        actions.setUsersFilters({ ...usersFilters, page: usersFilters.page - 1 })
+                      }
                       variant="outline"
                       size="sm"
                     >
                       Previous
                     </Button>
                     <Button
-                      disabled={usersFilters.page >= Math.ceil((users?.pagination?.total || 0) / 10)}
-                      onClick={() => actions.setUsersFilters({ ...usersFilters, page: usersFilters.page + 1 })}
+                      disabled={
+                        usersFilters.page >= Math.ceil((users?.pagination?.total || 0) / 10)
+                      }
+                      onClick={() =>
+                        actions.setUsersFilters({ ...usersFilters, page: usersFilters.page + 1 })
+                      }
                       variant="outline"
                       size="sm"
                     >

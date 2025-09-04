@@ -13,6 +13,7 @@ import {
 } from '../../types/entities/product';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
+import { getCurrentTenant } from '../tenant';
 import { toPrismaJson } from '../utils/prismaUtils';
 
 // Helper function to check if error is a Prisma error
@@ -105,10 +106,13 @@ export class ProductService {
   // Product CRUD operations
   async createProduct(data: CreateProductData, _createdBy: string): Promise<Product> {
     try {
+      const tenant = getCurrentTenant();
+
       // Mark parameter as used without altering behavior
       void _createdBy;
       return await prisma.product.create({
         data: {
+          tenantId: tenant.tenantId,
           name: data.name,
           description: data.description,
           sku: data.sku,
@@ -153,6 +157,7 @@ export class ProductService {
   async updateProduct(data: UpdateProductData): Promise<Product> {
     try {
       const { id, ...updateData } = data;
+      const tenant = getCurrentTenant();
 
       // Handle JSON fields with proper type conversion
       const prismaData: Prisma.ProductUpdateInput = {
@@ -161,7 +166,10 @@ export class ProductService {
       };
 
       return await prisma.product.update({
-        where: { id },
+        where: {
+          id,
+          tenantId: tenant.tenantId,
+        },
         data: prismaData,
       });
     } catch (error) {
@@ -210,9 +218,16 @@ export class ProductService {
 
   async deleteProduct(id: string): Promise<void> {
     try {
+      const tenant = getCurrentTenant();
+
       // Check if product is used in any proposals
       const proposalCount = await prisma.proposalProduct.count({
-        where: { productId: id },
+        where: {
+          productId: id,
+          proposal: {
+            tenantId: tenant.tenantId,
+          },
+        },
       });
 
       if (proposalCount > 0) {
@@ -229,7 +244,10 @@ export class ProductService {
       }
 
       await prisma.product.delete({
-        where: { id },
+        where: {
+          id,
+          tenantId: tenant.tenantId,
+        },
       });
     } catch (error) {
       errorHandlingService.processError(error);
@@ -262,8 +280,13 @@ export class ProductService {
 
   async getProductById(id: string): Promise<Product | null> {
     try {
+      const tenant = getCurrentTenant();
+
       return await prisma.product.findUnique({
-        where: { id },
+        where: {
+          id,
+          tenantId: tenant.tenantId,
+        },
       });
     } catch (error) {
       errorHandlingService.processError(error);
@@ -350,7 +373,10 @@ export class ProductService {
     limit?: number
   ): Promise<{ products: Product[]; total: number; page: number; totalPages: number }> {
     try {
-      const where: ProductWhereInput = {};
+      const tenant = getCurrentTenant();
+      const where: any = {
+        tenantId: tenant.tenantId,
+      };
 
       if (filters) {
         if (filters.isActive !== undefined) where.isActive = filters.isActive;

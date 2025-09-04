@@ -47,7 +47,12 @@ export async function GET(request: NextRequest) {
     try {
       // First check if user exists, create if not
       let user = await prisma.user.findUnique({
-        where: { email: session.user.email },
+        where: {
+          tenantId_email: {
+            tenantId: 'tenant_default',
+            email: session.user.email,
+          },
+        },
         select: {
           id: true,
           name: true,
@@ -65,6 +70,7 @@ export async function GET(request: NextRequest) {
         logger.info(`🔄 Auto-syncing authenticated user for profile: ${session.user.email}`);
         user = await prisma.user.create({
           data: {
+            tenantId: 'tenant_default',
             email: session.user.email,
             name: session.user.name || session.user.email?.split('@')[0] || 'User',
             department: 'General',
@@ -88,7 +94,12 @@ export async function GET(request: NextRequest) {
 
       // Get full user data including preferences and roles
       const fullUser = await prisma.user.findUnique({
-        where: { email: session.user.email },
+        where: {
+          tenantId_email: {
+            tenantId: 'tenant_default',
+            email: session.user.email,
+          },
+        },
         select: {
           id: true,
           name: true,

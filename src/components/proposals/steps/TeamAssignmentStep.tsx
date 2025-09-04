@@ -52,7 +52,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
   } = useQuery<User[]>({
     queryKey: ['users', 'proposal-wizard'],
     queryFn: async () => {
-      console.log('[DEBUG] Fetching users from API...');
+      logDebug('Fetching users from API', { component: 'TeamAssignmentStep' });
 
       try {
         const response = await apiClient.get<{
@@ -67,33 +67,32 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
           'users?search=&isActive=true&sortBy=name&sortOrder=asc&fields=id,firstName,lastName,name,email,department,status,lastLogin,createdAt,updatedAt,role,roles'
         );
 
-        console.log('[DEBUG] Raw API response structure:', JSON.stringify(response, null, 2));
+        logDebug('Raw API response structure', {
+          responseStructure: response,
+          component: 'TeamAssignmentStep',
+        });
 
         // Handle API response structure with data.users
         let usersArray: User[] = [];
         if (response?.data?.users) {
           // Standard API response format
           usersArray = response.data.users;
-          console.log('[DEBUG] Using response.data.users format');
+          logDebug('Using response.data.users format', { component: 'TeamAssignmentStep' });
         } else if (Array.isArray(response?.data?.users)) {
           // Alternative format check
           usersArray = response.data.users;
-          console.log('[DEBUG] Using response.data.users array format');
+          logDebug('Using response.data.users array format', { component: 'TeamAssignmentStep' });
         }
 
         if (usersArray.length > 0) {
-          console.log('[DEBUG] Users loaded successfully:', usersArray.length);
-          console.log('[DEBUG] First user structure:', JSON.stringify(usersArray[0], null, 2));
-          console.log('[DEBUG] All users roles check:');
+          logDebug('Users loaded successfully', {
+            userCount: usersArray.length,
+            firstUser: usersArray[0],
+            component: 'TeamAssignmentStep',
+          });
+
           const allRoleNames = new Set<string>();
           usersArray.forEach((user: User, index: number) => {
-            console.log(
-              `[DEBUG] User ${index}: ${user.name || user.email}, roles:`,
-              user.roles,
-              'role:',
-              user.role
-            );
-            // Also log the role names for easier debugging
             const roleNames = (user.roles || [])
               .map(r =>
                 typeof r === 'string'
@@ -103,26 +102,33 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
                     : (r as any)?.role?.name
               )
               .filter((v): v is string => typeof v === 'string');
-            console.log(`[DEBUG] User ${index} role names:`, roleNames);
             roleNames.forEach(name => allRoleNames.add(name));
           });
-          console.log('[DEBUG] All unique role names in system:', Array.from(allRoleNames));
-          console.log('[DEBUG] Expected UserType values:', {
-            PROPOSAL_MANAGER: UserType.PROPOSAL_MANAGER,
-            SME: UserType.SME,
-            EXECUTIVE: UserType.EXECUTIVE,
+
+          logDebug('User roles analysis complete', {
+            allRoleNames: Array.from(allRoleNames),
+            expectedUserTypes: {
+              PROPOSAL_MANAGER: UserType.PROPOSAL_MANAGER,
+              SME: UserType.SME,
+              EXECUTIVE: UserType.EXECUTIVE,
+            },
+            component: 'TeamAssignmentStep',
           });
           return usersArray;
         } else {
-          logError('Failed to load users - no users found in response', new Error('No users found in API response'), {
-            component: 'TeamAssignmentStep',
-            operation: 'loadUsers',
-            hasResponse: !!response,
-            hasData: !!response?.data,
-            hasUsers: !!response?.data?.users,
-            dataKeys: response?.data ? Object.keys(response.data) : [],
-            responseKeys: response ? Object.keys(response) : [],
-          });
+          logError(
+            'Failed to load users - no users found in response',
+            new Error('No users found in API response'),
+            {
+              component: 'TeamAssignmentStep',
+              operation: 'loadUsers',
+              hasResponse: !!response,
+              hasData: !!response?.data,
+              hasUsers: !!response?.data?.users,
+              dataKeys: response?.data ? Object.keys(response.data) : [],
+              responseKeys: response ? Object.keys(response) : [],
+            }
+          );
           throw new Error('No users found in API response');
         }
       } catch (error) {
@@ -140,17 +146,13 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
   // Filter users by role
   const teamLeads = useMemo<User[]>(() => {
     if (!usersData) return [];
-    console.log('[DEBUG] UserType.PROPOSAL_MANAGER:', UserType.PROPOSAL_MANAGER);
-    console.log('[DEBUG] Filtering for team leads from', usersData.length, 'users');
+    logDebug('Filtering for team leads', {
+      userType: UserType.PROPOSAL_MANAGER,
+      userCount: usersData.length,
+      component: 'TeamAssignmentStep',
+    });
 
     const leads = usersData.filter((user: User) => {
-      console.log(`[DEBUG] Checking user ${user.name || user.email}:`, {
-        roles: user.roles,
-        role: user.role,
-        hasRolesArray: Array.isArray(user.roles),
-        rolesLength: user.roles?.length,
-      });
-
       // Try different role matching approaches
       const hasProposalManagerRole = (user.roles || []).some((userRole: any) => {
         const roleName =
@@ -166,27 +168,32 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
       const hasDirectRole = user.role === UserType.PROPOSAL_MANAGER;
 
-      console.log(`[DEBUG] User ${user.name || user.email} role check:`, {
+      logDebug('User role check', {
+        userName: user.name || user.email,
         hasProposalManagerRole,
         hasDirectRole,
         finalResult: hasProposalManagerRole || hasDirectRole,
+        component: 'TeamAssignmentStep',
       });
 
       return hasProposalManagerRole || hasDirectRole;
     });
 
-    console.log(
-      '[DEBUG] Team leads found:',
-      leads.length,
-      leads.map(u => u.name)
-    );
+    logDebug('Team leads found', {
+      count: leads.length,
+      names: leads.map(u => u.name),
+      component: 'TeamAssignmentStep',
+    });
     return leads;
   }, [usersData]);
 
   const salesReps = useMemo<User[]>(() => {
     if (!usersData) return [];
-    console.log('[DEBUG] UserType.SME:', UserType.SME);
-    console.log('[DEBUG] Filtering for sales reps from', usersData.length, 'users');
+    logDebug('Filtering for sales reps (SMEs)', {
+      userType: UserType.SME,
+      userCount: usersData.length,
+      component: 'TeamAssignmentStep',
+    });
 
     const reps = usersData.filter((user: User) => {
       console.log(`[DEBUG] Checking user ${user.name || user.email} for SME role:`, {

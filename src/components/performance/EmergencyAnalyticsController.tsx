@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logError, logWarn, logInfo } from '@/lib/logger';
 
 export const EmergencyAnalyticsController: React.FC = () => {
   const [violationCount, setViolationCount] = useState(0);
@@ -14,12 +15,12 @@ export const EmergencyAnalyticsController: React.FC = () => {
   // Emergency disable function for analytics
   const emergencyDisable = useCallback(() => {
     if (typeof window !== 'undefined') {
-      console.log('Analytics emergency disabled');
+      logWarn('Analytics emergency disabled', { component: 'EmergencyAnalyticsController' });
       localStorage.setItem('analytics_disabled', 'true');
-      
+
       // Also disable the optimized analytics by setting a flag
       localStorage.setItem('optimized_analytics_disabled', 'true');
-      
+
       // Track this critical event
       trackOptimized('analytics_emergency_disabled', {
         reason: 'performance_violations',
@@ -33,24 +34,27 @@ export const EmergencyAnalyticsController: React.FC = () => {
     let violationDetected = false;
 
     const originalWarn = console.warn;
-    console.warn = (...args) => {
+    const customWarn = (...args: unknown[]) => {
       const message = args.join(' ');
-      
+
       if (message.includes('[Violation]')) {
         setViolationCount(prev => {
           const newCount = prev + 1;
-          
+
           // Auto-disable after 2 violations
           if (newCount >= 2 && !violationDetected) {
             violationDetected = true;
             emergencyDisable();
-            console.log('🚨 EMERGENCY: Analytics disabled due to performance violations');
+            logError('EMERGENCY: Analytics disabled due to performance violations', new Error('Performance violations exceeded threshold'), {
+              component: 'EmergencyAnalyticsController',
+              violationCount: newCount
+            });
           }
-          
+
           return newCount;
         });
       }
-      
+
       originalWarn.apply(console, args);
     };
 

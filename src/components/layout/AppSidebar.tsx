@@ -267,13 +267,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     icon: DocumentTextIcon,
   },
   {
-    id: 'bridge-demo',
-    name: 'Bridge Demo',
-    href: '/bridge-example',
-    icon: DocumentTextIcon,
-    badge: 1,
-  },
-  {
     id: 'validation-demo',
     name: 'Validation Demo',
     href: '/validation-demo',

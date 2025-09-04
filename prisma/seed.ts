@@ -31,6 +31,39 @@ async function main() {
   console.log('🌱 Starting PosalPro MVP2 production database seeding...');
 
   // ========================================
+  // TENANT SETUP: Create default tenant
+  // ========================================
+  console.log('🏢 Setting up multi-tenant structure...');
+
+  const existingTenant = await prisma.tenant.findUnique({
+    where: { id: 'tenant_default' },
+  });
+
+  if (!existingTenant) {
+    await prisma.tenant.create({
+      data: {
+        id: 'tenant_default',
+        name: 'Default Tenant',
+        domain: 'posalpro.com',
+        subdomain: 'app',
+        status: 'ACTIVE',
+        settings: {
+          theme: 'default',
+          features: ['basic', 'advanced'],
+          limits: {
+            users: 100,
+            customers: 1000,
+            products: 500,
+          },
+        },
+      },
+    });
+    console.log('✅ Created default tenant');
+  } else {
+    console.log('ℹ️ Default tenant already exists');
+  }
+
+  // ========================================
   // PRE-FLIGHT: Seed only if database is empty
   // ========================================
   const [userCount, roleCount, customerCount, productCount, contentCount, proposalCount] =
@@ -171,6 +204,7 @@ async function main() {
         const sku = `${pick(baseSkus)}-${randomInt(1, 9)}.${randomInt(0, 9)}-${Date.now()}-${i}`;
         await prisma.product.create({
           data: {
+            tenantId: 'tenant_default',
             name,
             description: `${name} for ${pick(['scalability', 'security', 'analytics', 'productivity'])}`,
             sku,
@@ -225,10 +259,19 @@ async function main() {
           const dueDate = new Date(Date.now() + randomInt(-60, 120) * 24 * 60 * 60 * 1000);
           const rfp = `RFP-${new Date().getFullYear()}-${String(currentProposals + i + 1).padStart(3, '0')}`;
           const selectedProducts = Array.from({ length: randomInt(1, 3) }, () => pick(products));
-          const value = selectedProducts.reduce(
-            (sum, p) => sum + Number(p.price) * randomInt(1, 3),
-            0
-          );
+
+          // Calculate adjusted prices for each product (same multiplier for consistency)
+          const productPricing = selectedProducts.map(p => {
+            const multiplier = randomInt(1, 3);
+            return {
+              product: p,
+              multiplier,
+              adjustedPrice: Number(p.price) * multiplier,
+              quantity: 1,
+            };
+          });
+
+          const value = productPricing.reduce((sum, pp) => sum + pp.adjustedPrice, 0);
 
           const teamLead = pickUserId(['pm1@posalpro.com', 'pm2@posalpro.com']);
           const salesRep = pickUserId(['pm2@posalpro.com', 'pm1@posalpro.com']);
@@ -257,6 +300,7 @@ async function main() {
 
           const newProposal = await prisma.proposal.create({
             data: {
+              tenantId: 'tenant_default',
               title: `${pick(['Cloud', 'Analytics', 'Security', 'IoT', 'Data'])} ${pick([
                 'Transformation',
                 'Implementation',
@@ -341,15 +385,15 @@ async function main() {
             },
           });
 
-          // Link products
-          for (const prod of selectedProducts) {
+          // Link products with consistent pricing
+          for (const pp of productPricing) {
             await prisma.proposalProduct.create({
               data: {
                 proposalId: newProposal.id,
-                productId: prod.id,
-                quantity: randomInt(1, 3),
-                unitPrice: prod.price,
-                total: prod.price,
+                productId: pp.product.id,
+                quantity: pp.quantity,
+                unitPrice: pp.adjustedPrice,
+                total: pp.adjustedPrice,
               },
             });
           }
@@ -668,6 +712,7 @@ async function main() {
           const value = selectedProducts.reduce((sum, p) => sum + Number(p.price), 0);
           await prisma.proposal.create({
             data: {
+              tenantId: 'tenant_default',
               title: `Won Proposal ${i + 1} for ${customer?.name || 'Unknown Customer'}`,
               description: 'Seeded accepted proposal for reporting metrics.',
               status: ProposalStatus.ACCEPTED,
@@ -709,6 +754,7 @@ async function main() {
           const value = selectedProducts.reduce((sum, p) => sum + Number(p.price), 0);
           await prisma.proposal.create({
             data: {
+              tenantId: 'tenant_default',
               title: `Overdue Proposal ${i + 1} for ${customer?.name || 'Unknown Customer'}`,
               description: 'Seeded overdue proposal for reporting metrics.',
               status: pick([
@@ -797,6 +843,7 @@ async function main() {
             const dueDate = new Date(Date.now() + randomInt(-30, 60) * 24 * 60 * 60 * 1000);
             await prisma.proposal.create({
               data: {
+                tenantId: 'tenant_default',
                 title: `${String(entry.status)} Proposal for ${customer?.name || 'Unknown Customer'}`,
                 description: 'Balanced status seed entry',
                 status: entry.status,
@@ -858,13 +905,14 @@ async function main() {
           if (customer && product && user) {
             await prisma.proposal.create({
               data: {
+                tenantId: 'tenant_default',
                 title: `Overdue ${String(pr)} Priority for ${customer?.name || 'Unknown Customer'}`,
                 status: ProposalStatus.IN_REVIEW,
                 priority: pr,
                 customerId: customer?.id || 'unknown-customer',
                 createdBy: user.id,
                 dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-                value: product.price,
+                value: Number(product.price.toString()),
                 currency: 'USD',
                 customerName: customer?.name || 'Unknown Customer',
                 creatorEmail: user.email,
@@ -873,8 +921,8 @@ async function main() {
                     {
                       productId: product.id,
                       quantity: 1,
-                      unitPrice: product.price,
-                      total: product.price,
+                      unitPrice: Number(product.price.toString()),
+                      total: Number(product.price.toString()),
                     },
                   ],
                 },
@@ -906,9 +954,10 @@ async function main() {
           const selected = Array.from(
             new Set([pick(products), pick(products), pick(products)])
           ).slice(0, 3);
-          const value = selected.reduce((sum, p) => sum + Number(p.price), 0);
+          const value = selected.reduce((sum, p) => sum + Number(p.price.toString()), 0);
           const proposal = await prisma.proposal.create({
             data: {
+              tenantId: 'tenant_default',
               title: `Bundle Combo ${i + 1} for ${customer?.name || 'Unknown Customer'}`,
               status: ProposalStatus.SUBMITTED,
               priority: pick([Priority.LOW, Priority.MEDIUM, Priority.HIGH]),
@@ -1141,7 +1190,7 @@ async function main() {
       }
       if (changed.length) await Promise.allSettled(changed);
       const updates: Array<Promise<any>> = [];
-      for (const [pid, sum] of sumByProposal.entries()) {
+      for (const [pid, sum] of Array.from(sumByProposal.entries())) {
         updates.push(
           prisma.proposal.update({ where: { id: pid }, data: { value: sum, totalValue: sum } })
         );
@@ -1579,6 +1628,7 @@ async function main() {
   for (const userData of usersData) {
     const user = await prisma.user.create({
       data: {
+        tenantId: 'tenant_default',
         email: userData.email,
         name: userData.name,
         password: userData.password,
@@ -1738,6 +1788,7 @@ async function main() {
   for (const customerData of customersData) {
     const customer = await prisma.customer.create({
       data: {
+        tenantId: 'tenant_default',
         name: customerData.name,
         email: customerData.email,
         industry: customerData.industry,
@@ -1836,6 +1887,7 @@ async function main() {
   for (const productData of productsData) {
     const product = await prisma.product.create({
       data: {
+        tenantId: 'tenant_default',
         name: productData.name,
         description: productData.description,
         sku: productData.sku,
@@ -2277,6 +2329,7 @@ async function main() {
 
     const newProposal = await prisma.proposal.create({
       data: {
+        tenantId: 'tenant_default',
         title: proposalData.title,
         description: proposalData.description,
         status: proposalData.status,
@@ -2287,43 +2340,6 @@ async function main() {
         value: proposalData.value,
         currency: proposalData.currency,
         tags: proposalData.tags,
-        // Build wizard-compatible product snapshot for step 4
-        wizardProducts: (() => {
-          const wizardProducts = proposalData.products
-            .map(productName => {
-              const product = createdProducts[productName];
-              if (!product) return null;
-              return {
-                id: product.id,
-                name: product.name,
-                included: true,
-                quantity: 1,
-                unitPrice: product.price,
-                totalPrice: product.price,
-                category: product.category?.[0] ?? 'General',
-                configuration: {},
-                customizations: [],
-                notes: '',
-              };
-            })
-            .filter(
-              (
-                p
-              ): p is {
-                id: string;
-                name: string;
-                included: boolean;
-                quantity: number;
-                unitPrice: number;
-                totalPrice: number;
-                category: string;
-                configuration: Record<string, unknown>;
-                customizations: string[];
-                notes: string;
-              } => p !== null
-            );
-          return wizardProducts;
-        })(),
 
         metadata: toPrismaJson({
           createdBy: creator.id,
@@ -2335,7 +2351,27 @@ async function main() {
             salesRepresentative: salesRepId,
             subjectMatterExperts: smeIds,
           },
-
+          wizardProducts: (() => {
+            const wizardProducts = proposalData.products
+              .map(productName => {
+                const product = createdProducts[productName];
+                if (!product) return null;
+                return {
+                  id: product.id,
+                  name: product.name,
+                  included: true,
+                  quantity: 1,
+                  unitPrice: Number(product.price.toString()),
+                  totalPrice: Number(product.price.toString()),
+                  category: product.category?.[0] ?? 'General',
+                  configuration: {},
+                  customizations: [],
+                  notes: '',
+                };
+              })
+              .filter((p): p is NonNullable<typeof p> => p !== null);
+            return wizardProducts;
+          })(),
           wizardData: {
             step1: {
               client: {
@@ -2368,7 +2404,29 @@ async function main() {
                 },
               ],
             },
-            step4: { products: wizardProducts },
+            step4: {
+              products: (() => {
+                const wizardProducts = proposalData.products
+                  .map(productName => {
+                    const product = createdProducts[productName];
+                    if (!product) return null;
+                    return {
+                      id: product.id,
+                      name: product.name,
+                      included: true,
+                      quantity: 1,
+                      unitPrice: Number(product.price.toString()),
+                      totalPrice: Number(product.price.toString()),
+                      category: product.category?.[0] ?? 'General',
+                      configuration: {},
+                      customizations: [],
+                      notes: '',
+                    };
+                  })
+                  .filter((p): p is NonNullable<typeof p> => p !== null);
+                return wizardProducts;
+              })(),
+            },
             step5: {
               sections: [
                 { id: '1', title: 'Executive Summary', required: true, estimatedHours: 8 },

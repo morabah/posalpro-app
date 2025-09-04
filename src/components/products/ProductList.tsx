@@ -13,7 +13,7 @@ import { useSuggestions } from '@/features/search/hooks/useSuggestions';
 import { useProductStatsMigrated, useProductCategories } from '@/features/products/hooks/useProducts';
 import { logError, logInfo } from '@/lib/logger';
 import type { Product } from '@/services/productService';
-import useProductStore from '@/stores/productStore';
+import useProductStore from '@/lib/store/productStore';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 

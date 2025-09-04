@@ -10,9 +10,31 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model Tenant {
+  id           String   @id @default(cuid())
+  name         String
+  domain       String   @unique
+  subdomain    String?  @unique
+  status       String   @default("ACTIVE")
+  settings     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  customers    Customer[]
+  products     Product[]
+  proposals    Proposal[]
+  users        User[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("tenants")
+}
+
 model User {
   id                       String                           @id @default(cuid())
-  email                    String                           @unique
+  tenantId                 String
+  email                    String
   name                     String
   password                 String?
   department               String
@@ -32,6 +54,7 @@ model User {
   createdRules             ProductRelationshipRule[]        @relation("RuleCreator")
   updatedRules             ProductRelationshipRule[]        @relation("RuleUpdater")
   productRelationships     ProductRelationship[]
+  tenant                   Tenant                            @relation(fields: [tenantId], references: [id])
   createdProposals         Proposal[]                       @relation("ProposalCreator")
   securityEvents           SecurityEvent[]
   temporaryAccess          TemporaryAccess[]
@@ -45,12 +68,15 @@ model User {
   validationRules          ValidationRule[]
   assignedProposals        Proposal[]                       @relation("ProposalAssignees")
 
+  @@unique([tenantId, email])
   @@index([name])
   @@index([department])
   @@index([status])
+  @@index([tenantId])
   @@index([createdAt])
   @@index([updatedAt])
   @@index([lastLogin])
+  @@index([tenantId, email], map: "idx_users_tenant_email")
   @@index([department], map: "idx_users_department")
   @@index([status], map: "idx_users_status")
   @@index([createdAt], map: "idx_users_created_at")
@@ -542,8 +568,9 @@ model BaselineMetrics {
 
 model Customer {
   id           String            @id @default(cuid())
+  tenantId     String
   name         String
-  email        String            @unique
+  email        String
   phone        String?
   website      String?
   address      String?
@@ -565,19 +592,21 @@ model Customer {
   syncStatus   String?           @default("PENDING")
   contacts     CustomerContact[]
   proposals    Proposal[]
+  tenant       Tenant @relation(fields: [tenantId], references: [id])
 
+  @@unique([tenantId, email])
   @@index([status, tier])
   @@index([industry])
   @@index([cloudId])
+  @@index([tenantId])
   @@index([name])
-  @@index([email])
   @@index([createdAt])
   @@index([updatedAt])
   @@index([lastContact])
   @@index([lastSyncedAt])
   @@index([tier])
   @@index([status])
-  @@index([email], map: "idx_customers_email")
+  @@index([tenantId, email], map: "idx_customers_tenant_email")
   @@index([industry], map: "idx_customers_industry")
   @@index([createdAt], map: "idx_customers_created_at")
   @@index([updatedAt], map: "idx_customers_updated_at")
@@ -613,6 +642,7 @@ model CustomerContact {
 
 model Proposal {
   id                String              @id @default(cuid())
+  tenantId          String
   title             String
   description       String?
   customerId        String
@@ -656,11 +686,13 @@ model Proposal {
   customer          Customer            @relation(fields: [customerId], references: [id])
   validationIssues  ValidationIssue[]
   assignedTo        User[]              @relation("ProposalAssignees")
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
 
   @@index([status, dueDate])
   @@index([customerId, status])
   @@index([createdBy])
   @@index([cloudId])
+  @@index([tenantId])
   @@index([createdAt])
   @@index([updatedAt])
   @@index([submittedAt])
@@ -673,6 +705,7 @@ model Proposal {
   @@index([status])
   @@index([priority])
   @@index([projectType])
+  @@index([tenantId, customerId], map: "idx_proposals_tenant_customer")
   @@index([createdBy], map: "idx_proposals_created_by")
   @@index([customerId, status], map: "idx_proposals_customer_status")
   @@index([createdAt], map: "idx_proposals_created_at")
@@ -744,9 +777,10 @@ model ProposalProduct {
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Product {
   id                String                    @id @default(cuid())
+  tenantId          String
   name              String
   description       String?
-  sku               String                    @unique
+  sku               String
   price             Decimal
   currency          String                    @default("USD")
   category          String[]
@@ -766,16 +800,19 @@ model Product {
   relatedFrom       ProductRelationship[]     @relation("TargetProduct")
   proposalProducts  ProposalProduct[]
   validationRules   ValidationRule[]
+  tenant            Tenant @relation(fields: [tenantId], references: [id])
 
+  @@unique([tenantId, sku])
   @@index([isActive, createdAt(sort: Desc)])
   @@index([isActive, price])
-  @@index([sku])
+  @@index([tenantId])
   @@index([category], type: Gin)
   @@index([tags], type: Gin)
   @@index([createdAt])
   @@index([updatedAt])
   @@index([status])
   @@index([currency])
+  @@index([tenantId, sku], map: "idx_products_tenant_sku")
   @@index([createdAt], map: "idx_products_created_at")
   @@index([updatedAt], map: "idx_products_updated_at")
   @@map("products")

@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@/lib/db/prisma';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 import { logError } from '@/lib/logger';
 import { createHash } from 'crypto';
 
@@ -98,7 +98,7 @@ export async function assertApiKey(req: Request, scope: string): Promise<void> {
     }
 
     // Handle unexpected database or other errors
-    const processedError = ErrorHandlingService.processError(error, 'API key validation error');
+    const processedError = ErrorHandlingService.getInstance().processError(error, 'API key validation error', ErrorCodes.SYSTEM.UNKNOWN);
     logError('API key validation error', processedError, {
       component: 'apiKeyGuard',
       operation: 'assertApiKey',

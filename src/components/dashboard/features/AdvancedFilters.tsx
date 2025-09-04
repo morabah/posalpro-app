@@ -75,12 +75,13 @@ export const AdvancedFilters = memo(
     };
 
     const handleSaveView = () => {
-      const name = prompt('Enter a name for this view:');
-      if (name) {
-        const newView = { name, filters };
-        setSavedViews([...savedViews, newView]);
-        onSaveView(name);
-      }
+      // TODO: Implement modal form for saving filter views
+      // For now, use a default name
+      const timestamp = new Date().toLocaleString();
+      const name = `View ${timestamp}`;
+      const newView = { name, filters };
+      setSavedViews([...savedViews, newView]);
+      onSaveView(name);
     };
 
     const handleLoadView = (viewName: string) => {

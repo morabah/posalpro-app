@@ -488,8 +488,6 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                             return sum + productTotal;
                           }, 0);
 
-                          // ✅ REMOVED: Debug logging to prevent excessive console output
-
                           return total;
                         }
                         const productData = getProductData(proposal?.metadata);
@@ -500,15 +498,6 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                           );
                         }
                         const displayValue = productData?.totalValue || proposal?.value || 59760;
-
-                        // Debug logging for proposal value display
-                        console.log('🔍 DEBUG: ProposalDetailView value calculation', {
-                          proposalId: proposal?.id,
-                          productDataTotalValue: productData?.totalValue,
-                          proposalValue: proposal?.value,
-                          displayValue: displayValue,
-                          fallbackUsed: displayValue === 59760,
-                        });
 
                         return displayValue;
                       })(),
@@ -562,7 +551,7 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                   <p className="text-2xl font-bold text-gray-900">
                     {proposal?.products?.length ||
                       getProductData(proposal?.metadata)?.products?.length ||
-                      3}
+                      0}
                   </p>
                 </div>
               </div>
@@ -578,8 +567,8 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Sections</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {getSectionData(proposal?.metadata)?.sections?.length ||
-                      proposal?.sections?.length ||
+                    {proposal?.sections?.length ||
+                      getSectionData(proposal?.metadata)?.sections?.length ||
                       0}
                   </p>
                 </div>
@@ -710,20 +699,6 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                                 hasProducts && calculatedTotal > 0
                                   ? calculatedTotal
                                   : estimatedValue;
-
-                              // Debug logging for estimated value section
-                              console.log(
-                                '🔍 DEBUG: ProposalDetailView estimated value calculation',
-                                {
-                                  proposalId: proposal?.id,
-                                  hasProducts: hasProducts,
-                                  calculatedTotal: calculatedTotal,
-                                  estimatedValue: estimatedValue,
-                                  displayValue: displayValue,
-                                  usingCalculatedTotal: hasProducts && calculatedTotal > 0,
-                                  usingEstimatedValue: !hasProducts || calculatedTotal <= 0,
-                                }
-                              );
 
                               return formatCurrency(displayValue, proposal?.currency || 'USD');
                             })()}

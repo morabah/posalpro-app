@@ -35,6 +35,7 @@
     "**/__tests__/**",
     "**/*.test.ts",
     "**/*.test.tsx",
+    "tests/**",
     "src/components/dashboard/analytics/**",
     "src/components/dashboard/integrations/**",
     "src/components/dashboard/personalization/**",

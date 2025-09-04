@@ -5,7 +5,36 @@
 
 import prisma from '@/lib/db/prisma';
 import { logger } from '@/lib/logger';
-import { AuditCategory, AuditSeverity, RiskLevel, SecurityEventType } from '@prisma/client';
+// Define enums locally since they might not be available from @prisma/client
+export enum AuditCategory {
+  DATA = 'DATA',
+  ACCESS = 'ACCESS',
+  CONFIGURATION = 'CONFIGURATION',
+  SECURITY = 'SECURITY',
+  SYSTEM = 'SYSTEM',
+}
+
+export enum AuditSeverity {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+export enum RiskLevel {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+export enum SecurityEventType {
+  LOGIN_ATTEMPT = 'LOGIN_ATTEMPT',
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  DATA_ACCESS = 'DATA_ACCESS',
+  CONFIG_CHANGE = 'CONFIG_CHANGE',
+  SUSPICIOUS_ACTIVITY = 'SUSPICIOUS_ACTIVITY',
+}
 
 export interface SecurityEvent {
   type: SecurityEventType;
@@ -140,19 +169,12 @@ export class SecurityAuditManager {
       try {
         await prisma.auditLog.create({
           data: {
-            userId: event.userId ?? undefined,
-            userRole: event.userRole ?? undefined,
+            actorId: event.userId ?? undefined,
             action: event.action,
-            entity: event.entity,
-            entityId: event.entityId,
-            changes: event.changes as unknown as any,
-            ipAddress: event.ipAddress,
-            userAgent: event.userAgent,
-            severity: event.severity,
-            category: event.category,
-            success: true,
-            errorMessage: undefined,
-            timestamp: new Date(),
+            model: event.entity, // Use model instead of entity
+            targetId: event.entityId, // Use targetId instead of entityId
+            diff: event.changes as unknown as any,
+            ip: event.ipAddress, // Use ip instead of ipAddress
           },
         });
 

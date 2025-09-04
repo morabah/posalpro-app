@@ -51,14 +51,15 @@ export const GET = createRoute(
         prisma.content.count(),
         prisma.auditLog.findMany({
           take: 10,
-          orderBy: { timestamp: 'desc' },
-          include: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-              },
-            },
+          orderBy: { at: 'desc' },
+          select: {
+            id: true,
+            actorId: true,
+            model: true,
+            action: true,
+            targetId: true,
+            ip: true,
+            at: true,
           },
         }),
       ]);
@@ -103,13 +104,13 @@ export const GET = createRoute(
       // Recent Activity
       recentAuditLogs: recentAuditLogs.map(log => ({
         id: log.id,
-        timestamp: log.timestamp,
-        user: log.user?.name || 'System',
+        timestamp: log.at,
+        user: 'System', // AuditLog doesn't have user relation
         action: log.action,
-        type: log.category,
-        severity: log.severity,
-        details: log.entity ? `${log.action} on ${log.entity}` : log.action,
-        ipAddress: log.ipAddress,
+        type: log.model, // Use model instead of category
+        severity: 'info', // Default severity since AuditLog doesn't have severity
+        details: log.targetId ? `${log.action} on ${log.targetId}` : log.action,
+        ipAddress: log.ip || 'unknown',
       })),
 
       // Performance
