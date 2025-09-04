@@ -197,7 +197,15 @@ check_environment() {
         print_check "warn" "JWT_SECRET not set" "Token validation may fail"
     fi
 
-    # Check Node version
+    # Check Node version (use NVM if available)
+    if command -v nvm &> /dev/null && [ -n "$NVM_DIR" ]; then
+        # Load NVM and use the version from .nvmrc if available
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+        if [ -f ".nvmrc" ]; then
+            nvm use $(cat .nvmrc) >/dev/null 2>&1
+        fi
+    fi
     local node_version=$(node --version | sed 's/v//')
     local major_version=$(echo $node_version | cut -d. -f1)
     if [ "$major_version" -ge 18 ]; then
